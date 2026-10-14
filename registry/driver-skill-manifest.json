@@ -5,7 +5,7 @@
       "id": "atlas",
       "scope": "driver",
       "sha256": "c18e56fcc56abf80903e2fc6829cd94b44f42947724a26318ebcbf1ac5e1b35b",
-      "tree-sha256": "4950054d884eb15a90aed2b159313e40dba09971d2d108ac029956aed7d074f7",
+      "tree-sha256": "8ae884d514e202ef777cafed965b4696f71f54ec89d54e639401321acb3784af",
       "files": [
         {
           "path": "SKILL.md",
@@ -24,7 +24,7 @@
         },
         {
           "path": "assets/seed/catalog.json",
-          "sha256": "ab187cb105677147fc2dc49d08ae1646feeeb4070bacaa251676945049bbd2ee",
+          "sha256": "1f4346d2154b8ebd30ae7c11b2ec45c6d88345e6a7f6f66809e20f9d2bead5d5",
           "executable": false
         },
         {
@@ -75,6 +75,11 @@
         {
           "path": "assets/seed/records/1945f527afc3c2930ec4d7fa57ebb2ef7dd6321c0dd3ab9233c9963e9e613165.json",
           "sha256": "1945f527afc3c2930ec4d7fa57ebb2ef7dd6321c0dd3ab9233c9963e9e613165",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/1ec9445b242d2a2e149fe71c67bf13d8c0e4ebe5a6ed7b022656b9941973909d.json",
+          "sha256": "1ec9445b242d2a2e149fe71c67bf13d8c0e4ebe5a6ed7b022656b9941973909d",
           "executable": false
         },
         {
@@ -719,7 +724,7 @@
         },
         {
           "path": "references/lifecycle.md",
-          "sha256": "e661efad5335bedf8dcfe7312e8ce8229b7a43ff75e4db6112ab1c8adc2dae82",
+          "sha256": "96611e4834b3215b841e26c5c85ee0dee4fecc434077f6efd2d1f8e74958f8fc",
           "executable": false
         },
         {
@@ -728,8 +733,13 @@
           "executable": false
         },
         {
+          "path": "references/root-guidance.md",
+          "sha256": "74fb4879935b3808bee12bb3dcfebcb0c46078b1e0abca3c4fad2271e24be826",
+          "executable": false
+        },
+        {
           "path": "scripts/atlas.py",
-          "sha256": "a80a3d3842c69d4d18b5daa506180acea651a9c8ad32f4fa874e1b43b5293f37",
+          "sha256": "3a5f5e7c1e9e239152b3ef39f9dd80b5ffc30c32ce5ae1f453ff4090d4f4f5e5",
           "executable": false
         }
       ],

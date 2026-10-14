@@ -67,18 +67,29 @@ every driver member, and fails loud on a byte that does not match its recorded `
 
 ## Atlas guidance adoption
 
-The driver payload carries the Atlas skill/helper and historical seed; the workspace
-payload carries `.fsgg/atlas.json`. Owner workflow entrypoints such as `work-roadmap`
-route project investigation through Atlas. To adopt the central root guidance, an
-owner uses the Atlas helper's `guidance --root . --check` from the receiving repository
-and refreshes the marked blocks within its authorized guidance change when needed.
-The check and lifecycle instructions are in the delivered Atlas skill.
+The driver payload carries the Atlas skill/helper, its authored
+`references/root-guidance.md`, and the historical seed. The existing workspace transport
+carries `.fsgg/atlas.json`, the optional `.fsgg/owner-guidance.json` descriptor, and
+`.fsgg/atlas-guidance.md`. The fragment is staged directly from the authored reference;
+the helper reads that same reference rather than maintaining another prose copy.
 
-Workspace staging is transport, not automatic activation. The generic SDD scaffold
-currently seeds `.fsgg/knowledge-guide.md` for its separate `fsgg-sdd knowledge` product
-API; its agent configuration parser does not consume `knowledgePolicy`, and driver
-materialization does not invoke the Atlas guidance helper. Automatic root activation
-therefore still requires a supported owner/provider guidance hook and an installed
-consumer readback. Neither this package's source checks nor its packaged seed proves
-that adoption. Preserve the generic product Knowledge API and existing guidance;
-Atlas indexes curated project knowledge with citations rather than replacing that API.
+The descriptor uses `fsgg.owner-guidance/1` and declares an `atlas` block for the `claude`
+and `codex` agent IDs. Its required paths identify the policy and both skill-root copies
+of the Atlas skill, helper and reference. A compatible generic SDD receiver verifies those
+selected owner bytes before merging the fragment into the root agent files. Existing
+`<!-- atlas:begin -->` / `<!-- atlas:end -->` markers keep the manual and automatic routes
+aligned. The descriptor contains no executable hook and changes no workspace-manifest version.
+
+Check agreement from the receiving repository root with
+`python3 .agents/skills/atlas/scripts/atlas.py guidance --root . --check`. An authorized
+manual update omits `--check` and preserves instructions outside the marked blocks.
+A compatible receiver activates during ordinary scaffold, reports drift through read-only
+doctor, and repairs retained blocks through confirmed upgrade. These are receiver obligations,
+not proof supplied by staging: producer publication, compatible receiver publication and exact
+installed fresh/retained readback remain separate acceptance outcomes. Older receivers retain
+their existing behavior, and `knowledgePolicy` alone does not activate guidance.
+
+Owner workflow entrypoints such as `work-roadmap` route investigation through Atlas.
+Preserve the generic SDD product Knowledge API and its records: Atlas stores curated
+project knowledge with citations, while a packaged seed is historical knowledge and grants
+no current operational authority.

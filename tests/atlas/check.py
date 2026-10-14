@@ -191,7 +191,7 @@ class AtlasControls(unittest.TestCase):
                     atlas.guidance(self.root, check=check)
                 self.assertEqual({path: path.read_bytes() for path in before}, before)
         # A valid first target makes --check reach the reversed second target.
-        agents.write_text('# Owner instructions\n\n<!-- atlas:begin -->\n' + atlas.GUIDANCE + '<!-- atlas:end -->\n')
+        agents.write_text('# Owner instructions\n\n<!-- atlas:begin -->\n' + atlas.guidance_text() + '<!-- atlas:end -->\n')
         before = {path: path.read_bytes() for path in (agents, claude)}
         with self.assertRaisesRegex(ValueError, 'ambiguous Atlas guidance'):
             atlas.guidance(self.root, check=True)
@@ -220,6 +220,86 @@ class AtlasControls(unittest.TestCase):
             self.assertEqual(atlas.default_archives(), [owner, shared])
         finally:
             os.chdir(previous)
+
+    def test_guidance_reads_the_authored_reference_without_a_second_text_copy(self):
+        reference = ROOT / '.agents/skills/atlas/references/root-guidance.md'
+        self.assertEqual(atlas.guidance_text().encode('utf-8'), reference.read_bytes())
+        for skill_root in ('.agents/skills', '.claude/skills'):
+            for suffix in ('scripts/atlas.py', 'references/root-guidance.md'):
+                self.assertEqual((ROOT / skill_root / 'atlas' / suffix).read_bytes(),
+                                 (ROOT / '.agents/skills/atlas' / suffix).read_bytes())
+        # Read at invocation, rather than caching a prose copy at import time.
+        staged_skill = self.root / 'atlas'
+        shutil.copytree(HELPER.parents[1], staged_skill)
+        staged_reference = staged_skill / 'references/root-guidance.md'
+        staged_reference.write_text('Updated owner guidance.\n', encoding='utf-8')
+        spec = importlib.util.spec_from_file_location('installed_atlas', staged_skill / 'scripts/atlas.py')
+        installed = importlib.util.module_from_spec(spec); spec.loader.exec_module(installed)
+        self.assertEqual(installed.guidance_text(), 'Updated owner guidance.\n')
+        for raw in (b'<!-- atlas:begin -->\n', b'\xff\n', b'x' * (atlas.RECORD_CAP + 1)):
+            with self.subTest(raw=raw[:20]):
+                staged_reference.write_bytes(raw)
+                with self.assertRaises((ValueError, UnicodeDecodeError)):
+                    installed.guidance_text()
+        staged_reference.unlink(); staged_reference.symlink_to(ROOT / '.agents/skills/atlas/references/root-guidance.md')
+        with self.assertRaises(ValueError):
+            installed.guidance_text()
+
+    def test_staged_owner_descriptor_fragment_prerequisites_and_manual_convergence(self):
+        stage_path = ROOT / 'src/FS.GG.Drivers/stage-drivers.py'
+        spec = importlib.util.spec_from_file_location('owner_guidance_stage', stage_path)
+        stage = importlib.util.module_from_spec(spec); spec.loader.exec_module(stage)
+        out = self.root / 'package'
+        self.assertEqual(stage.main([str(out)]), 0)
+        files = out / 'workspace/files'
+        descriptor = json.loads((files / '.fsgg/owner-guidance.json').read_text())
+        self.assertEqual(descriptor['schema'], 'fsgg.owner-guidance/1')
+        self.assertEqual(len(descriptor['guidance']), 1)
+        row = descriptor['guidance'][0]
+        self.assertEqual(row['id'], 'atlas'); self.assertEqual(row['targets'], ['claude', 'codex'])
+        fragment = (files / row['sourcePath']).read_bytes()
+        self.assertEqual(fragment, atlas.guidance_text().encode('utf-8'))
+        self.assertNotIn(b'<!--', fragment)
+        manifest = json.loads((out / 'workspace/workspace-files.json').read_text())
+        selected = {item['path']: item for item in manifest['files']}
+        for path in ('.fsgg/owner-guidance.json', row['sourcePath'], '.fsgg/atlas.json'):
+            self.assertEqual(selected[path]['sha256'], hashlib.sha256((files / path).read_bytes()).hexdigest())
+            self.assertEqual((files / path).read_bytes(),
+                             (ROOT / next(item['source'] for item in json.loads(Path(stage.WORKSPACE_INVENTORY_PATH).read_text())['files'] if item['path'] == path)).read_bytes())
+        receiver = self.root / 'receiver'; shutil.copytree(files, receiver)
+        driver_manifest = json.loads((out / 'driver-skill-manifest.json').read_text())
+        atlas_row = next(item for item in driver_manifest['skills'] if item['id'] == 'atlas')
+        for skill_root in ('.agents/skills', '.claude/skills'):
+            destination = receiver / skill_root / 'atlas'
+            shutil.copytree(out / 'skills/atlas', destination)
+            for item in atlas_row['files']:
+                selected[skill_root + '/atlas/' + item['path']] = item
+                self.assertEqual(hashlib.sha256((destination / item['path']).read_bytes()).hexdigest(), item['sha256'])
+        for path in row['requiredPaths']:
+            self.assertIn(path, selected, 'prerequisite must be a verified selected owner file')
+            self.assertEqual(hashlib.sha256((receiver / path).read_bytes()).hexdigest(), selected[path]['sha256'])
+        for name in ('AGENTS.md', 'CLAUDE.md'):
+            (receiver / name).write_text('# Authored café instructions\nKeep this.\n', encoding='utf-8')
+        expected_block = '<!-- atlas:begin -->\n' + fragment.decode('utf-8') + '<!-- atlas:end -->\n'
+        helper = receiver / '.agents/skills/atlas/scripts/atlas.py'
+        result = subprocess.run([sys.executable, '-B', str(helper), 'guidance', '--root', str(receiver)],
+                                cwd=receiver, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        before = {name: (receiver / name).read_bytes() for name in ('AGENTS.md', 'CLAUDE.md')}
+        for name in before:
+            self.assertTrue(before[name].decode('utf-8').startswith('# Authored café instructions\nKeep this.'))
+            self.assertEqual(before[name].decode('utf-8').count(expected_block), 1)
+        for skill_root in ('.agents/skills', '.claude/skills'):
+            helper = receiver / skill_root / 'atlas/scripts/atlas.py'
+            result = subprocess.run([sys.executable, '-B', str(helper), 'guidance', '--root', str(receiver), '--check'],
+                                    cwd=receiver, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            # With no local/shared archive this exercises only the shipped historical seed.
+            result = subprocess.run([sys.executable, '-B', str(helper), 'get', 'atlas/storage-authority'],
+                                    cwd=receiver, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(json.loads(result.stdout))
+        self.assertEqual({name: (receiver / name).read_bytes() for name in before}, before)
 
     def test_installed_workspace_stages_exact_knowledge_policy(self):
         stage_path = ROOT / 'src/FS.GG.Drivers/stage-drivers.py'
