@@ -65,6 +65,14 @@ empty required inputs refuse before the transaction. Pacman still performs the f
 conflict, replacement, scriptlet and hook transaction; the complete resulting inventory must match the
 frozen expectation. An incomplete package set cannot be repaired over a network.
 
+Both sorted path population and complete installed inventory comparisons use `sha256sum` on standard
+input, with each hash captured in a separate assignment under `set -e` before equality is tested.
+An unreadable input or failed hash command refuses even when it emits matching output. These comparisons
+reuse the donor's checksum tooling and require no `cmp` or diffutils installation. Before installing
+packages, the recipe requires shell builtins, coreutils (`cut`, `sort`, `sha256sum`, `rm`), grep,
+findutils (`find`) and packaged `pacman-key`; actual donor/tool and trust reconciliation remains part
+of native admission.
+
 ## Build and qualify through the maintained seam
 
 Coordination owns operation identity, original deadlines, custody, helper accounting, storage and
