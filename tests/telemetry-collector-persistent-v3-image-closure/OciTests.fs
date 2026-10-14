@@ -3,6 +3,7 @@ module OciTests
 open System
 open System.IO
 open System.Formats.Tar
+open System.IO.Compression
 open System.Text
 open System.Text.Json
 open System.Threading
@@ -92,12 +93,19 @@ let run selected prepared trusted =
     let prepared=match ImageClosure.prepare selected with ClosureResult.Prepared value->value|value->raise(InvalidOperationException(sprintf "synthetic prepare: %A" value))
     File.WriteAllBytes(selectionPath,JsonSerializer.SerializeToUtf8Bytes selected)
     File.WriteAllBytes(trustedPath,JsonSerializer.SerializeToUtf8Bytes trusted)
-    let expected=RootlessPolicy.inputIdentity selected selectionPath trustedPath original prepared (String('c',64))
-    let inputs={CustodyIdentity=String('c',64);Selection=selected;Trusted=trusted;SelectionPath=selectionPath;TrustedPath=trustedPath;ParentOci=original;WorkRoot=Path.Combine(root,"work");EvidenceRoot=Path.Combine(root,"evidence");ExpectedInput=expected;Prepared=prepared}
+    let withRoots target work evidence=
+        let custody=String('c',64)
+        let program=CommandRecipe.prepare selected trusted prepared custody target original work evidence (String('a',32)) (String('b',32)) 32
+        let expected=RootlessPolicy.inputIdentity selected selectionPath trustedPath original prepared custody program
+        {CustodyIdentity=custody;Selection=selected;Trusted=trusted;SelectionPath=selectionPath;TrustedPath=trustedPath;ParentOci=original;WorkRoot=work;EvidenceRoot=evidence;ExpectedInput=expected;Prepared=prepared;Program=program}
+    let inputs=withRoots "run-c4" (Path.Combine(root,"work")) (Path.Combine(root,"evidence"))
+    let expected=inputs.ExpectedInput
     // This fixture substitutes command effects, not production custody. Actual lease/process
     // qualification belongs to the separately admitted private caller controls.
     let mutable actualBuilds=0
+    let commands=ResizeArray<ProcessCommand>()
     let runFixture archivePath (command:ProcessCommand)=
+        commands.Add command
         require(command.Executable=RootlessPolicy.Builder) "mechanism selected arbitrary production executable"
         require(command.Arguments|>Array.contains "--remote=false") "remote builder"
         require(command.Environment|>Map.containsKey "CONTAINER_HOST"|>not) "provider environment"
@@ -128,7 +136,7 @@ let run selected prepared trusted =
       member _.Start command=runFixture original command}
     // Hosted CI capacity is unrelated to this synthetic process/OCI fixture. Production still
     // reads the real drive and requires the same 128 GiB reserve before acquiring any resources.
-    let lowCapacityInputs={inputs with WorkRoot=Path.Combine(root,"low-capacity-work");EvidenceRoot=Path.Combine(root,"low-capacity-evidence")}
+    let lowCapacityInputs=withRoots "run-c4" (Path.Combine(root,"low-capacity-work")) (Path.Combine(root,"low-capacity-evidence"))
     let mutable lowCapacityStarts=0
     let mutable capacityObserved=false
     let lowCapacity={new IProcessBackend with
@@ -144,7 +152,7 @@ let run selected prepared trusted =
         raise(InvalidOperationException "capacity refusal started a process")}
     let lowCapacityMechanism=RootlessMechanism(lowCapacityInputs,lowCapacity):>IRunnerMechanism
     let mutable capacityRefused=false
-    try lowCapacityMechanism.Execute(AcquireInputs expected,CancellationToken.None).GetAwaiter().GetResult()|>ignore
+    try lowCapacityMechanism.Execute(AcquireInputs lowCapacityInputs.ExpectedInput,CancellationToken.None).GetAwaiter().GetResult()|>ignore
     with :? InvalidDataException as error->
         require(error.Message="capacity-reserve-unavailable") "capacity fixture refused for an unrelated reason"
         capacityRefused<-true
@@ -152,10 +160,12 @@ let run selected prepared trusted =
     let mechanism=RootlessMechanism(inputs,synthetic)
     let final,trace=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None mechanism (Runner.initialC4 expected)
     require(Runner.c4Ready final&&not(Runner.qualificationAccepted final)&&actualBuilds=2&&trace.Length=12) (sprintf "synthetic OCI mechanism did not reach narrower C4Ready: %A" final)
+    require(JsonSerializer.SerializeToUtf8Bytes(commands.ToArray())=JsonSerializer.SerializeToUtf8Bytes(inputs.Program.Steps|>Array.map _.Command)) "actual C4 caller stream differs from selected program"
+    printfn "PASS actual C4 Runner/RootlessMechanism stream matches all selected normal/cleanup commands"
     mechanism.SealTerminal(final,trace)
     require(File.Exists(Path.Combine(inputs.EvidenceRoot,"terminal.json"))&&not(Directory.Exists(Path.Combine(inputs.WorkRoot,"bundle-a")))&&not(Directory.Exists(Path.Combine(inputs.WorkRoot,"bundle-b")))) "synthetic terminal evidence or scoped cleanup absent"
     for name in ["a-build.oci.tar";"b-build.oci.tar";"a-reload.oci.tar";"b-reload.oci.tar"] do require(File.Exists(Path.Combine(inputs.EvidenceRoot,name))) "external OCI archive lost during cleanup"
-    let failedInputs={inputs with WorkRoot=Path.Combine(root,"unack-work");EvidenceRoot=Path.Combine(root,"unack-evidence")}
+    let failedInputs=withRoots "run-c4" (Path.Combine(root,"unack-work")) (Path.Combine(root,"unack-evidence"))
     let unacknowledged={new IProcessBackend with
       member _.ReadBuilderIdentity()=RootlessPolicy.BuilderSha256
       member _.ReadSupervisorIdentity()=RootlessPolicy.SupervisorSha256
@@ -165,9 +175,9 @@ let run selected prepared trusted =
         if command.Arguments|>Array.contains "build" then raise(IOException "synthetic-lost-start-ack")
         synthetic.Start command}
     let failedMechanism=RootlessMechanism(failedInputs,unacknowledged)
-    let failed,_=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None failedMechanism (Runner.initialC4 expected)
+    let failed,_=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None failedMechanism (Runner.initialC4 failedInputs.ExpectedInput)
     require(not(Runner.c4Ready failed)&&failed.CleanupFailed&&failed.UnknownBuilds=set["a"]&&failed.Owned.Count=2) "unacknowledged child allowed successful cleanup or C4Ready"
-    let changedInputs={inputs with WorkRoot=Path.Combine(root,"mismatch-work");EvidenceRoot=Path.Combine(root,"mismatch-evidence")}
+    let changedInputs=withRoots "run-c4" (Path.Combine(root,"mismatch-work")) (Path.Combine(root,"mismatch-evidence"))
     let mismatched={new IProcessBackend with
       member _.ReadBuilderIdentity()=RootlessPolicy.BuilderSha256
       member _.ReadSupervisorIdentity()=RootlessPolicy.SupervisorSha256
@@ -179,7 +189,7 @@ let run selected prepared trusted =
             runFixture changed command
         else synthetic.Start command}
     let mismatchMechanism=RootlessMechanism(changedInputs,mismatched)
-    let mismatch,_=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None mismatchMechanism (Runner.initialC4 expected)
+    let mismatch,_=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None mismatchMechanism (Runner.initialC4 changedInputs.ExpectedInput)
     require(not(Runner.c4Ready mismatch)&&mismatch.Phase=Refused&&mismatch.Owned.IsEmpty&&mismatch.Refusal=Some "BuildMismatch") "different OCI config did not refuse and clean owned bundles"
     // The unacknowledged backend above demonstrably never spawned its failing build.
     // Only the fixture owns this explicit reconciliation; production may not infer absence.
@@ -187,6 +197,130 @@ let run selected prepared trusted =
     File.Delete authorityPath
     // Only exact test-owned paths; no production namespace, Podman or native executable was invoked.
     Directory.Delete(root,true)
+
+/// Actual C5 file/package/receipt/cleanup control flow with only external Podman effects substituted.
+/// The package and outputs are synthetic and cannot supply production provider/caller authority.
+let inactive (source:Selection) (trusted:TrustedNativeSelection)=
+    let root=Directory.CreateTempSubdirectory("p2c4-inactive-recipe-").FullName
+    let acquired=Path.Combine(root,"acquired")
+    let manifests=Path.Combine(root,"manifests")
+    for path in [acquired;manifests] do Directory.CreateDirectory(path)|>ignore;File.SetUnixFileMode(path,enum<UnixFileMode> 0o700)
+    try
+        for row in source.Files do
+            let destination=Path.Combine(acquired,row.SourcePath)
+            Directory.CreateDirectory(Path.GetDirectoryName destination)|>ignore
+            File.Copy(Path.Combine(source.AcquisitionRoot,row.SourcePath),destination)
+            File.SetUnixFileMode(destination,enum<UnixFileMode>(Convert.ToInt32(row.Mode,8)))
+        let payload=Encoding.UTF8.GetBytes "synthetic-host-payload-not-an-executable"
+        let payloadName="tools/net10.0/any/FS.GG.Telemetry.Host.dll"
+        use memory=new MemoryStream()
+        use zip=new ZipArchive(memory,ZipArchiveMode.Create,true)
+        use entry=zip.CreateEntry(payloadName).Open()
+        entry.Write payload;entry.Dispose();zip.Dispose()
+        let package=memory.ToArray()
+        let host=source.Files|>Array.find(fun row->row.SourceClass="host")
+        File.SetUnixFileMode(Path.Combine(acquired,host.SourcePath),enum<UnixFileMode> 0o600)
+        File.WriteAllBytes(Path.Combine(acquired,host.SourcePath),package)
+        File.SetUnixFileMode(Path.Combine(acquired,host.SourcePath),enum<UnixFileMode> 0o444)
+        // C5's actual pure preparation requires its canonical verifier bytes even
+        // for synthetic input. Preserve that gate; the copied module is not run.
+        let verifier=source.Files|>Array.find(fun row->row.TargetPath="/opt/fsgg/verifier/learn_01_native_source.py")
+        let verifierBytes=File.ReadAllBytes(Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__,"../../tools/learn_01_native_source.py")))
+        require(OciEvidence.shaBytes verifierBytes=ImageClosure.CanonicalVerifierSha256) "canonical verifier source bytes differ"
+        let verifierPath=Path.Combine(acquired,verifier.SourcePath)
+        File.SetUnixFileMode(verifierPath,enum<UnixFileMode> 0o600)
+        File.WriteAllBytes(verifierPath,verifierBytes)
+        File.SetUnixFileMode(verifierPath,enum<UnixFileMode> 0o444)
+        let rows=source.Files|>Array.map(fun row->
+            if row=host then {row with Bytes=int64 package.Length;Sha256=OciEvidence.shaBytes package}
+            elif row=verifier then {row with Bytes=int64 verifierBytes.Length;Sha256=OciEvidence.shaBytes verifierBytes}
+            else row)
+        let selected={source with IdentityClass="synthetic-test";AcquisitionRoot=acquired;ManifestRoot=manifests;Files=rows;HostArchiveSha256=OciEvidence.shaBytes package;
+                                  HostPayloadSha256=OciEvidence.shaBytes(JsonSerializer.SerializeToUtf8Bytes(Map.ofList[payloadName,OciEvidence.shaBytes payload]));InventorySha256=OciEvidence.shaBytes(JsonSerializer.SerializeToUtf8Bytes rows);CanonicalVerifierSha256=OciEvidence.shaBytes verifierBytes;NativeInventoryPath="native-inventory.json"}
+        let refs=[|"host";"manager";"native";"runtime"|]|>Array.map(fun role->
+            let authority=match role with "host"->selected.HostManifestSha256|"manager"->selected.ManagerManifestSha256|"runtime"->selected.RuntimeTreeSha256|_->selected.NativeProfileSha256
+            let files=rows|>Array.filter(fun row->row.SourceClass=role)|>Array.map(fun row->{SourcePath=row.SourcePath;TargetPath=row.TargetPath;Bytes=row.Bytes;Sha256=row.Sha256;Mode=row.Mode}:ManifestFile)
+            let value={Schema="fsgg.telemetry.persistent-v3-role-closure/1";Role=role;AuthoritySha256=authority;SearchRoots=[|"/opt/fsgg/image/"+role|];Argv=(if role="native" then [|"/opt/fsgg/codex/codex"|] else [||]);LoaderPaths=(if role="native" then [|"/usr/share/dotnet/dotnet"|] else [||]);Files=files}
+            let bytes=JsonSerializer.SerializeToUtf8Bytes value
+            let path=role+".json"
+            File.WriteAllBytes(Path.Combine(manifests,path),bytes);File.SetUnixFileMode(Path.Combine(manifests,path),enum<UnixFileMode> 0o444)
+            {Role=role;Path=path;Sha256=OciEvidence.shaBytes bytes})
+        File.WriteAllText(Path.Combine(manifests,"native-inventory.json"),"{\"syntheticOnly\":true}")
+        let image=Path.Combine(root,"parent.oci.tar")
+        let imageFiles=rows|>Array.map(fun row->row.TargetPath.TrimStart('/'),File.ReadAllBytes(Path.Combine(acquired,row.SourcePath)),Convert.ToInt32(row.Mode,8))
+        let manifest,config=archive image imageFiles "synthetic-inactive" "amd64" false false false false
+        let selected={selected with RoleManifests=refs;RuntimeImageDigest=manifest}
+        let prepared=match ImageClosure.prepare selected with ClosureResult.Prepared value->value|other->failwith(sprintf "inactive source prepare refused: %A" other)
+        RecipeControls.run selected trusted prepared
+        let selectionPath=Path.Combine(root,"selection.json")
+        let trustedPath=Path.Combine(root,"trusted.json")
+        File.WriteAllBytes(selectionPath,JsonSerializer.SerializeToUtf8Bytes selected)
+        File.WriteAllBytes(trustedPath,JsonSerializer.SerializeToUtf8Bytes trusted)
+        let custody=String('c',64)
+        let work=Path.Combine(root,"work")
+        let evidence=Path.Combine(root,"evidence")
+        let program=CommandRecipe.prepare selected trusted prepared custody "run-inactive" image work evidence (String('a',32)) (String('b',32)) 32
+        let expected=RootlessPolicy.inputIdentity selected selectionPath trustedPath image prepared custody program
+        let inputs={CustodyIdentity=custody;Selection=selected;Trusted=trusted;SelectionPath=selectionPath;TrustedPath=trustedPath;ParentOci=image;WorkRoot=work;EvidenceRoot=evidence;ExpectedInput=expected;Prepared=prepared;Program=program}
+        let actual=ResizeArray<ProcessCommand>()
+        let removals=Collections.Generic.HashSet<string>()
+        let writeFixture (path:string) (bytes:byte array)=
+            File.WriteAllBytes(path,bytes)
+            require(InactiveQualification.chown(path,32768u,32768u)=0) "inert Manager fixture ownership"
+            File.SetUnixFileMode(path,enum<UnixFileMode> 0o600)
+        let backend={new IProcessBackend with
+            member _.ReadBuilderIdentity()=RootlessPolicy.BuilderSha256
+            member _.ReadSupervisorIdentity()=RootlessPolicy.SupervisorSha256
+            member _.ReadAvailableCapacity _=128L*1024L*1024L*1024L
+            member _.RetainCommandEvidence _=()
+            member _.Start command=
+                actual.Add command
+                let args=command.Arguments
+                let has value=Array.contains value args
+                let after value=args[Array.findIndex((=)value)args+1]
+                let mutable output=""
+                if has "save" then File.Copy(image,after "--output")
+                elif has "inspect" then output<-JsonSerializer.Serialize [|{|Digest=manifest;Id=config;Os="linux";Architecture="amd64"|}|]
+                elif has "ps"&&has "--no-trunc" then output<-OciEvidence.shaBytes(Encoding.UTF8.GetBytes(after "--root"))+"\n"
+                elif has "rm" then require(removals.Add(after "--force")) "inert cleanup ID replay"
+                elif has "run"&&has "/opt/fsgg/telemetry-host-manager/TelemetryHostManager.dll" then
+                    let fixture=Path.Combine(command.WorkingDirectory,"inactive-fixture")
+                    let receipt=Encoding.UTF8.GetBytes "{\"syntheticOnly\":true}"
+                    writeFixture (Path.Combine(fixture,"host.json.native-collector.json")) receipt
+                    writeFixture (Path.Combine(fixture,"host.json.native-collector.receipt.json")) receipt
+                    output<-Encoding.UTF8.GetString(receipt)+"\n"
+                elif has "read-inactive-preparation" then
+                    let fixture=Path.Combine(command.WorkingDirectory,"inactive-fixture")
+                    let _,native,_,manifestHash,_=InactiveQualification.prepareInputs selected trusted
+                    output<-JsonSerializer.Serialize({|schema="fsgg.telemetry.inactive-preparation-read/1";status="prepared-inactive";
+                        hostConfigSha256=OciEvidence.shaFile(Path.Combine(fixture,"host.json"));managerReceiptSha256=OciEvidence.shaFile(Path.Combine(fixture,"host.json.native-collector.receipt.json"));sidecarSha256=OciEvidence.shaFile(Path.Combine(fixture,"host.json.native-collector.json"));executableSha256=native.Sha256;sourceReferenceSha256=OciEvidence.shaFile(Path.Combine(fixture,"source-reference.json"));readerProfileSha256=selected.ReaderProfileSha256;verifierRuntimeManifestSha256=manifestHash;
+                        sourceVerification="unknown";snapshotOrigin="unknown";sharedCostCompleteness="unknown";captureQualified=false;nativeAcceptanceClaimed=false;activationAuthorized=false|})+"\n"
+                elif has "run" then
+                    output<-match after "--entrypoint" with "/usr/share/dotnet/dotnet"->"Microsoft.NETCore.App 10.0.12\nMicrosoft.AspNetCore.App 10.0.12"|entry when entry.Contains "python"->"Python 3.14.0"|_->"codex-cli 0.158.0"
+                let mutable retired=false
+                let identity="synthetic-full:"+string actual.Count
+                {new IOwnedProcess with
+                    member _.Identity=identity
+                    member _.Wait token=token.ThrowIfCancellationRequested();retired<-true;{ExitCode=0;Stdout=output;Stderr=""}
+                    member _.Cancel token=token.ThrowIfCancellationRequested();retired<-true
+                    member _.HasExited=retired
+                    member _.Dispose()=()}}
+        let mechanism=RootlessMechanism(inputs,backend)
+        let state,trace=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None mechanism (Runner.initial expected)
+        require(Runner.qualificationAccepted state&&state.Owned.IsEmpty&&removals.Count=4) (sprintf "actual inactive source flow refused: %A" state)
+        let expectedCommands=program.Steps|>Array.collect(fun step->
+            if step.Step.EndsWith("-census",StringComparison.Ordinal) then
+                let logical=step.Step.Substring(0,1)
+                let reload=step.Step.Contains("cleanup-reload-",StringComparison.Ordinal)
+                let args=step.Command.Arguments
+                let graph=args[Array.findIndex((=)"--root")args+1]
+                [|step.Command;CommandRecipe.removal program logical reload (OciEvidence.shaBytes(Encoding.UTF8.GetBytes graph))|]
+            else [|step.Command|])
+        require(JsonSerializer.SerializeToUtf8Bytes(actual.ToArray())=JsonSerializer.SerializeToUtf8Bytes expectedCommands) "actual full caller stream differs from selected program and captured cleanup IDs"
+        mechanism.SealTerminal(state,trace)
+        require(not(Directory.Exists(Path.Combine(work,"bundle-a")))&&not(Directory.Exists(Path.Combine(work,"bundle-b")))) "inactive source flow retained owned fixtures"
+        printfn "PASS actual full Runner/RootlessMechanism/InactiveQualification stream, package/receipt validation and four captured-result cleanup removals; native acceptance NOT_RUN"
+    finally Directory.Delete(root,true)
 
 let processBoundaries()=
     // Pure schema controls; no legacy process backend or native acceptance.

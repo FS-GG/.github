@@ -15,10 +15,20 @@ Separate root-selected inputs enter preparation through:
 
 ```console
 persistent-v3-image-closure prepare --selection /private/selection.json --trusted-native-selection /private/trusted-native.json
-persistent-v3-image-closure run-c4 --selection /private/selection.json --trusted-native-selection /private/trusted-native.json --parent-oci /private/parent.oci.tar --work-root /private/new-work --evidence-root /private/new-evidence
+persistent-v3-image-closure run-c4 --selection /private/selection.json --trusted-native-selection /private/trusted-native.json --parent-oci /private/parent.oci.tar --work-root /private/new-work --evidence-root /private/new-evidence --command-recipe /private/root-selected-recipe.json
 ```
 
 Run preparation in the admitted rootless user namespace: production custody is observed as UID 0 there. The CLI accepts production identity only for execution and always selects the pinned Podman 6.1.2 executable; it exposes no test backend or builder override. Public images and genuine closed Python/native/reader inventory must be acquired before this command. Both work and evidence destinations must be fresh absolute paths. Native acquisition remains unavailable; this source does not close P2-C.4.
+
+[CommandRecipe](CommandRecipe.fs) produces the exact command rows from the selected
+inputs, target, custody identity, parent/work/evidence paths, two root-selected
+nonces and a cleanup-removal ceiling. The CLI requires canonical, closed recipe
+bytes in the protected `--command-recipe` input and binds their digest into the
+operation input before requesting its acknowledgment. Store creation uses those
+nonces; the actual mechanism and C5 preparation share the same command producer.
+Only cleanup container IDs come from runtime results. The production root caller
+must independently authenticate those captured results and bind deferred directory
+capabilities; the recipe supplies no such authority or native qualification.
 
 `C4Only` is an immutable modeled runner target. It compares two actual exports, reloads each in a distinct private store, performs bounded inert version/runtime probes, revalidates inputs, and requires acknowledged cleanup before returning `C4Ready`. Qualification remains unknown and `qualificationAccepted` is false. Full qualification retains its separate served Manager-to-Host acceptance; this mechanism refuses that missing adapter. The Host archive copied into the image is not a runnable Host distribution. C5 must extract/execute the exact GitHub archive, distinct from the signed NuGet archive.
 
@@ -30,7 +40,7 @@ Focused tests use explicitly synthetic OCI bytes and fixed Python subprocesses b
 
 ### Inactive served-code qualification
 
-`run-inactive` accepts the same five input/root flags as `run-c4` and selects
+`run-inactive` accepts the same six input/root flags as `run-c4` and selects
 the existing full inactive runner. It reuses the two cold builds and comparison,
 then runs a synthetic disposable Manager preparation and the read-only Host
 `read-inactive-preparation` command against each verified reload image. Only
@@ -135,7 +145,12 @@ open.
 
 The callable `native/custody_adapter.c` prepares the next root-owned command-custody boundary around the accepted core. It copies a closed root operation and exact ordered command slots, duplicates retained capabilities, joins actual namespace/maps/cgroup/peer facts before birth, and uses atomic clone3 cgroup placement plus pidfds. Capture runs while the client is idle and shares the original allowance with retained evidence. Retirement requires the retained leader result, recursive cgroup emptiness, output EOF and joined adopted-child reaping. Neither requests nor external callbacks supply retirement.
 
-This is source preparation, pending warning-clean compilation, regression checks and root effect review. The production caller and exact dynamic full-run command producer remain unavailable. Outer root admission must authenticate the actual caller/source/profile, immutable ELF/loader visibility and exclusive control paths; digest-shaped fields are joins, not authority. Native or Podman/host acceptance is not established by source controls.
+The finite command recipe source is shared by the mechanism and C5 preparation.
+The production root caller, deferred directory-capability binding and trusted
+captured-result cleanup interpreter remain open. Outer root admission must
+authenticate the actual caller/source/profile, immutable ELF/loader visibility
+and exclusive control paths; digest-shaped fields are joins, not authority.
+Native or Podman/host acceptance is not established by source controls.
 
 The existing test route compiles the focused `CustodyAdapterTests.c` and invokes its production match/capture guards through a pinned F# ABI. Its fixed test-only native controller also prepares disposable namespaces and cgroups, starts the current F# inherited-channel client, and exercises inert workload children, descendants, deny probes, allowance/refusal and loss cleanup. It requires a root-admitted delegated parent and original controller-home cgroup as inherited descriptors (`FSGG_LEARN_NATIVE_PARENT_FD` and `FSGG_LEARN_NATIVE_HOME_FD`). Their actual 32-task/512MiB/one-CPU parent limits include setup and CLR overhead. The original native deadline is 120 seconds with 15 seconds for cleanup, at most eight serial slots, 2MiB aggregate capture and 128MiB fresh copied files. The controller does not use sudo, provision privileges, replace host Podman or take over a system cgroup.
 

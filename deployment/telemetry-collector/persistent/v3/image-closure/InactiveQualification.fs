@@ -178,18 +178,9 @@ module InactiveQualification =
         for KeyValue(name,digest) in expected do require(r.GetProperty(name).GetString()=digest) "inactive-result-hash-drift"
         for name in ["sourceVerification";"snapshotOrigin";"sharedCostCompleteness"] do require(r.GetProperty(name).GetString()="unknown") "inactive-result-claim"
         for name in ["captureQualified";"nativeAcceptanceClaimed";"activationAuthorized"] do require(not(r.GetProperty(name).GetBoolean())) "inactive-result-activation"
-    /// Prepares and runs one served Manager/Host pair; the owner retires children before removal.
-    let run (selection:Selection) (trusted:TrustedNativeSelection) root (invoke:string array->CancellationToken->string) (token:CancellationToken)=
-        let fixture=Path.Combine(root,"inactive-fixture")
-        let staging=Path.Combine(root,"inactive-host")
-        create fixture
-        for name in ["codex-home";"evidence"] do create(Path.Combine(fixture,name))
-        write (Path.Combine(fixture,"placeholder")) (Encoding.UTF8.GetBytes "inactive-fixture-not-a-credential\n")
+    /// Pure fixture and argument preparation shared by the root recipe and actual C5 caller.
+    let prepareInputs (selection:Selection) (trusted:TrustedNativeSelection)=
         let config=json {|Schema="fsgg.telemetry.host-config/2";Credentials=[|{|Reference="inactive-fixture";SecretFile="/qualification/placeholder";WorkspaceId="inactive-workspace";ProducerId="inactive-producer";StreamId="inactive-stream";Role="native-collector";GrantId="inactive-fixture-grant";GrantGeneration=1L;Revoked=false|}|]|}
-        write (Path.Combine(fixture,"host.json")) config
-        let profile=readSelected selection (selected selection "/opt/fsgg/profile/reader-profile.json") (1024L*1024L)
-        require(OciEvidence.shaBytes profile=selection.ReaderProfileSha256) "inactive-profile-drift"
-        write (Path.Combine(fixture,"evidence/fixed-native-capability-profile.json")) profile
         let native=selected selection "/opt/fsgg/codex/codex"
         require(native.Sha256=trusted.NativeExecutableSha256) "inactive-native-selection-drift"
         let python=selected selection trusted.PythonExecutable
@@ -207,16 +198,38 @@ module InactiveQualification =
                         verifierRuntime={|schema="fsgg.telemetry.native-verifier-runtime/1";sourceRevision=selection.HostSourceRevision;runtimeImageDigest=selection.RuntimeImageDigest;runtimeExecutablePath=python.TargetPath;runtimeExecutableSha256=python.Sha256;modulePath=moduleRow.TargetPath;moduleSha256=moduleRow.Sha256;manifestPath="/qualification/verifier-runtime.json";manifestSha256=manifestHash;files=files|};
                         recovery={|coverage=[|"configuration";"credentials";"evidence";"manager-receipt";"manager-sidecar";"quiesced-store";"retained-native-source";"source-references";"verifier-runtime"|];requiredPrivateInputs=[|"credential-secret";"evidence";"host-configuration";"persistent-store";"retained-native-source"|]|}|}
         let prepared=match Preparation.prepare input with Ok bytes->bytes|Error reason->raise(InvalidDataException reason)
+        config,native,runtimeManifest,manifestHash,prepared
+    let commands (selection:Selection) (trusted:TrustedNativeSelection) root=
+        let fixture=Path.Combine(root,"inactive-fixture")
+        let staging=Path.Combine(root,"inactive-host")
+        let _,_,_,_,prepared=prepareInputs selection trusted
+        let baseArgs readonlyFixture entrypoint=
+            [|"run";"--rm";"--network";"none";"--read-only";"--cap-drop";"ALL";"--security-opt";"no-new-privileges";"--cpus";"1";"--memory";"512m";"--pids-limit";"64";"--user";"32768:32768";"--tmpfs";"/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777";"--env";"DOTNET_EnableDiagnostics=0";"--env";"DOTNET_ROLL_FORWARD=Disable";"--env";"HOME=/qualification/codex-home";"--volume";fixture+":/qualification:"+(if readonlyFixture then "ro" else "rw");"--volume";staging+":/qualification-host:ro";"--entrypoint";entrypoint;"localhost/learn-p2c4:inert"|]
+        let manager=[|"exec";"--fx-version";"10.0.12";"/opt/fsgg/telemetry-host-manager/TelemetryHostManager.dll"|]
+        use preparation=JsonDocument.Parse prepared
+        let p=preparation.RootElement
+        let arguments=p.GetProperty("managerArguments").EnumerateArray()|>Seq.map _.GetString()|>Seq.toArray
+        Array.concat[baseArgs false "/usr/share/dotnet/dotnet";manager;arguments],
+        Array.concat[baseArgs true "/usr/share/dotnet/dotnet";[|"exec";"--fx-version";"10.0.12";"/qualification-host/FS.GG.Telemetry.Host.dll";"read-inactive-preparation";"--config";"/qualification/host.json"|]]
+    /// Prepares and runs one served Manager/Host pair; the owner retires children before removal.
+    let run (selection:Selection) (trusted:TrustedNativeSelection) root (invoke:string array->CancellationToken->string) (token:CancellationToken)=
+        let fixture=Path.Combine(root,"inactive-fixture")
+        let staging=Path.Combine(root,"inactive-host")
+        create fixture
+        for name in ["codex-home";"evidence"] do create(Path.Combine(fixture,name))
+        write (Path.Combine(fixture,"placeholder")) (Encoding.UTF8.GetBytes "inactive-fixture-not-a-credential\n")
+        let config,native,_,manifestHash,prepared=prepareInputs selection trusted
+        write (Path.Combine(fixture,"host.json")) config
+        let profile=readSelected selection (selected selection "/opt/fsgg/profile/reader-profile.json") (1024L*1024L)
+        require(OciEvidence.shaBytes profile=selection.ReaderProfileSha256) "inactive-profile-drift"
+        write (Path.Combine(fixture,"evidence/fixed-native-capability-profile.json")) profile
         use preparation=JsonDocument.Parse prepared
         let p=preparation.RootElement
         write (Path.Combine(fixture,"source-reference.json")) (Convert.FromBase64String(p.GetProperty("sourceReferenceBytesBase64").GetString()))
         write (Path.Combine(fixture,"verifier-runtime.json")) (Convert.FromBase64String(p.GetProperty("verifierRuntimeManifestBytesBase64").GetString()))
         let payload=package selection staging token
-        let baseArgs readonlyFixture entrypoint=
-            [|"run";"--rm";"--network";"none";"--read-only";"--cap-drop";"ALL";"--security-opt";"no-new-privileges";"--cpus";"1";"--memory";"512m";"--pids-limit";"64";"--user";"32768:32768";"--tmpfs";"/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777";"--env";"DOTNET_EnableDiagnostics=0";"--env";"DOTNET_ROLL_FORWARD=Disable";"--env";"HOME=/qualification/codex-home";"--volume";fixture+":/qualification:"+(if readonlyFixture then "ro" else "rw");"--volume";staging+":/qualification-host:ro";"--entrypoint";entrypoint;"localhost/learn-p2c4:inert"|]
-        let manager=[|"exec";"--fx-version";"10.0.12";"/opt/fsgg/telemetry-host-manager/TelemetryHostManager.dll"|]
-        let arguments=p.GetProperty("managerArguments").EnumerateArray()|>Seq.map _.GetString()|>Seq.toArray
-        let managerOutput=invoke (Array.concat[baseArgs false "/usr/share/dotnet/dotnet";manager;arguments]) token
+        let managerCommand,hostCommand=commands selection trusted root
+        let managerOutput=invoke managerCommand token
         token.ThrowIfCancellationRequested()
         let receiptPath=Path.Combine(fixture,"host.json.native-collector.receipt.json")
         require(FileInfo(receiptPath).Length<=65536L) "inactive-manager-receipt-size"
@@ -225,7 +238,7 @@ module InactiveQualification =
         let before=census fixture
         let expectedPaths=set["codex-home";"evidence";"evidence/fixed-native-capability-profile.json";"placeholder";"host.json";"host.json.native-collector.json";"host.json.native-collector.receipt.json";"source-reference.json";"verifier-runtime.json"]
         require((before|>Array.map(fun(path,_,_,_)->path)|>Set.ofArray)=expectedPaths) "inactive-manager-unexpected-file"
-        let hostOutput=invoke (Array.concat[baseArgs true "/usr/share/dotnet/dotnet";[|"exec";"--fx-version";"10.0.12";"/qualification-host/FS.GG.Telemetry.Host.dll";"read-inactive-preparation";"--config";"/qualification/host.json"|]]) token
+        let hostOutput=invoke hostCommand token
         token.ThrowIfCancellationRequested()
         require(census fixture=before) "inactive-host-mutated-fixture"
         let expected=Map.ofList["hostConfigSha256",OciEvidence.shaBytes config;"managerReceiptSha256",OciEvidence.shaBytes receipt;"sidecarSha256",OciEvidence.shaFile(Path.Combine(fixture,"host.json.native-collector.json"));"executableSha256",native.Sha256;"sourceReferenceSha256",OciEvidence.shaFile(Path.Combine(fixture,"source-reference.json"));"readerProfileSha256",selection.ReaderProfileSha256;"verifierRuntimeManifestSha256",manifestHash]
