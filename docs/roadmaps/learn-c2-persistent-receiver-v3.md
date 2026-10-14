@@ -692,3 +692,26 @@ child also cannot traverse the private mode-0700 bundle. Those checks remain unc
 The engine UID profile and authentic provisioner remain required, with supplying
 owner still unresolved. No phase-2/phase-3 effects, native replay, cold-image build,
 receiver installation or activation are accepted by this source window.
+
+
+The first hosted source run compiled successfully but refused the full inactive
+fixture at `inactive-fixture-owner`: the ordinary runner could not create the real
+UID-32768 fixture required by the maintained implementation. Preserve that failure;
+changing the owner predicate would invalidate this test. The maintained source
+launcher now executes its focused recipe controls in a disposable SDK 10.0.401
+container selected by immutable manifest and config digest. The checkout is read-only,
+network access is disabled during the fixture, and root UID has only CHOWN,
+DAC_OVERRIDE and FOWNER within the container. The actual ownership, package, receipt
+and full inactive checks execute there; the ordinary nonroot source suite retains
+its remaining coverage. This test namespace supplies no production provider profile.
+
+The additional acquisition, fixture and independently authenticated exact-container
+cleanup are bounded within the unchanged 20-minute hosted job. Acquisition and
+fixture outputs cap at 16 MiB, inspection output at 64 KiB; cleanup refuses an
+unreadable or mismatched object instead of removing an unproven CID. Measured prior
+source-job duration was 607 seconds. The tightened new maximum is 385 seconds,
+leaving 208 seconds to the original job deadline; cold acquisition and stage
+variation remain unmeasured. Missing Docker refuses before expensive source work.
+Static adversarial cleanup controls refuse identity, mount, namespace, capability,
+resource and command drift before removal. Required hosted qualification of this
+fixture repair remains pending.
