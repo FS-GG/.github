@@ -21,7 +21,8 @@ import zipfile
 from release_successor_admission import SingleOperatorAdmission
 from release_successor_execution import Refused, advance, ordered_effects
 from release_successor_journal import ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical
-from release_successor_provider import GitHubAPI, LiveProvider, NotFound, sanitized_dispatch_diagnostic
+from release_successor_provider import (GitHubAPI, LiveProvider, NotFound, sanitized_dispatch_diagnostic,
+                                       VerifiedOriginalTagTransport, approved_original_tag_transport)
 
 REPOSITORY = "FS-GG/.github"
 SUCCESSOR_VERSION = "0.103.0"
@@ -48,6 +49,15 @@ def require(condition: bool, reason: str) -> None:
 
 # Fixed original bytes; these pins grant compatibility, never effect authority.
 ORIGINAL_0103_PROFILE = "utel-rel-21/original-candidate/1"
+ORIGINAL_0103_TAG_PROFILE = "utel-rel-21/original-tag-intent/1"
+ORIGINAL_0103_TAG_CHECKPOINT = {
+    "logicalHead": "80bf2bace917316c79032542660a5c00519a828c",
+    "stateSHA256": "67018515b0e6b49f96986d7844729461099e950058d20d0a9fa0b8ba3f3864d4",
+    "originalPhysicalHead": "9691196bfd169fef57d93389764fdea77e7be2d8",
+    "runId": 38580684077, "publisher": "6c2747248b9d757316b93d7efe8aaf797a080549",
+    "artifactId": 11902876694, "archiveBytes": 1511,
+    "archiveSha256": "edff2d42ad2bde96317073e066ac1e813a90023b4dacda0d2e12d3c198c30ea9",
+    "memberSha256": "9be16e4e8f96ae1990ce2a4f52acc4274089d2c2f87942c0aa80e71626728620"}
 ORIGINAL_0103_CANDIDATE = {
     "sourceSha": "4d136d5450a7032d0b87c4b8a37f69f020144792",
     "runId": 38290966724,
@@ -134,8 +144,11 @@ class VerifiedOriginal0103(tuple):
 
 
 def validate_original_0103_request(args):
-    selected = bool(getattr(args, "original_0103_candidate", False))
+    tag_recovery = bool(getattr(args, "recover_original_0103_tag_intent", False))
+    selected = bool(getattr(args, "original_0103_candidate", False)) or tag_recovery
     if selected:
+        require(not (tag_recovery and getattr(args, "original_0103_candidate", False)),
+                "original tag selector conflicts with ordinary original candidate selector")
         require(not any(getattr(args, name, False) for name in
                         ("recovery_checkpoint", "repeat_original_nuget_kit_intent",
                          "recover_original_runtime_intent", "recover_original_successor_checkpoint")),
@@ -351,12 +364,14 @@ def classify_journal_destination(api, logical_ref):
 
 def prepare_release_journal(journal, ledger_api, admission, provider, api, manifest, intent,
                             candidate_source, publisher_sha, preflight_only, uniqueness, *,
-                            recovery_checkpoint=False, original_0103_selection=None):
+                            recovery_checkpoint=False, original_0103_selection=None, original_tag_recovery=False):
     """Qualify the physical route before genesis or original-intent recovery."""
     if original_0103_selection is not None:
         require(not recovery_checkpoint, "original .103 selection conflicts with recovery checkpoint")
         validate_original_0103_seam(original_0103_selection, manifest, intent, candidate_source, publisher_sha, journal.ref)
     fresh, physical = classify_journal_destination(ledger_api, journal.ref)
+    require(not original_tag_recovery or (original_0103_selection is not None and not fresh),
+            "original tag recovery requires the existing original journal; no genesis")
     if fresh:
         require(not recovery_checkpoint, "recovery checkpoint requires the existing original journal")
         require(candidate_source == publisher_sha or original_0103_selection is not None,
@@ -379,7 +394,8 @@ def prepare_release_journal(journal, ledger_api, admission, provider, api, manif
         require(authority_main(ledger_api) == physical, "Authority main moved before journal recovery")
         journal.read()
         require(authority_main(ledger_api) == physical, "Authority main moved during journal recovery")
-        require(not preflight_only, "preflight requires an unused release journal and version")
+        require(not preflight_only or original_tag_recovery,
+                "preflight requires an unused release journal and version")
         if candidate_source != publisher_sha:
             comparison = api.get(f"repos/{REPOSITORY}/compare/{candidate_source}...{publisher_sha}")
             require(comparison.get("status") == "ahead", "recovery publisher does not descend from candidate source")
@@ -533,6 +549,222 @@ class RuntimePublisherAPI:
     def report(self):
         return {"attempted": self.attempted, "succeeded": self.succeeded, "ceiling": 256,
                 "scope": "publisher API application entries; candidate gh ZIP, feed downloads/subprocesses and redirects are separate"}
+
+
+class OriginalTagPublisherAPI:
+    """Finite read-only publisher entry budget plus the separately capped tag send."""
+    def __init__(self, api, deadline, clock=time.monotonic):
+        self.api, self.deadline, self.clock = api, deadline, clock
+        self.attempted, self.succeeded = {}, {}
+
+    def claim(self, name):
+        require(self.clock() < self.deadline and sum(self.attempted.values()) < 256,
+                "original tag publisher deadline or256entry budget exhausted")
+        self.attempted[name] = self.attempted.get(name, 0) + 1
+
+    def get(self, path):
+        require(path == f"repos/{REPOSITORY}" or path.startswith(f"repos/{REPOSITORY}/"),
+                "original tag reader repository differs")
+        self.claim("get")
+        value = self.api.get(path)
+        require(self.clock() < self.deadline, "original tag publisher deadline expired during read")
+        self.succeeded["get"] = self.succeeded.get("get", 0) + 1
+        return value
+
+    def download_original_tag_result(self):
+        self.claim("originalResultArchive")
+        value = self.api.download_original_tag_result()
+        require(self.clock() < self.deadline, "original tag result download expired")
+        self.succeeded["originalResultArchive"] = 1
+        return value
+
+    def report(self):
+        return {"attempted": self.attempted, "succeeded": self.succeeded, "ceiling": 256,
+                "scope": "publisher application entries including candidate gh ZIP and one tag POST; redirects are not wire-count claims"}
+
+
+def authenticate_original_tag_result(api):
+    """Use only the pinned genuine original run/artifact/member, never a supplied receipt."""
+    fixed = ORIGINAL_0103_TAG_CHECKPOINT
+    run = api.get(f"repos/{REPOSITORY}/actions/runs/{fixed['runId']}")
+    require(run.get("id") == fixed["runId"] and run.get("workflow_id") == 362181999
+            and run.get("run_attempt") == 1 and run.get("head_sha") == fixed["publisher"]
+            and run.get("path") == ".github/workflows/release-successor-publish.yml"
+            and run.get("head_branch") == "main" and run.get("event") == "workflow_dispatch"
+            and run.get("actor", {}).get("login") == "EHotwagner"
+            and run.get("repository", {}).get("id") == 1269292704
+            and run.get("repository", {}).get("full_name") == REPOSITORY
+            and run.get("status") == "completed" and run.get("conclusion") == "success",
+            "original tag publisher native identity differs")
+    artifact = api.get(f"repos/{REPOSITORY}/actions/artifacts/{fixed['artifactId']}")
+    require(artifact.get("id") == fixed["artifactId"] and artifact.get("name") == "release-successor-result"
+            and artifact.get("size_in_bytes") == fixed["archiveBytes"] and artifact.get("expired") is False
+            and artifact.get("digest") == "sha256:" + fixed["archiveSha256"]
+            and artifact.get("workflow_run", {}).get("id") == fixed["runId"]
+            and artifact.get("workflow_run", {}).get("head_sha") == fixed["publisher"],
+            "original tag result artifact identity differs")
+    expiry = datetime.datetime.fromisoformat(artifact["expires_at"].replace("Z", "+00:00"))
+    require(expiry.tzinfo is not None and expiry > datetime.datetime.now(datetime.timezone.utc),
+            "original tag result artifact expired")
+    raw = api.download_original_tag_result()
+    require(len(raw) == fixed["archiveBytes"] and hashlib.sha256(raw).hexdigest() == fixed["archiveSha256"],
+            "original tag result archive differs")
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        entries = archive.infolist()
+        require(len(entries) == 1 and entries[0].filename == "release-successor-result.json"
+                and not entries[0].flag_bits & 1 and not entries[0].is_dir()
+                and stat.S_IFMT(entries[0].external_attr >> 16) in (0, stat.S_IFREG)
+                and 0 < entries[0].file_size <= 16384, "original tag result member differs")
+        body = archive.read(entries[0])
+    require(hashlib.sha256(body).hexdigest() == fixed["memberSha256"], "original tag result member bytes differ")
+    value = json.loads(body)
+    require(value.get("execution") == {"operator": "EHotwagner", "runAttempt": "1", "runId": fixed["runId"],
+                                       "sourceSha": fixed["publisher"]}
+            and value.get("schema") == "fsgg.release-successor-result/1" and value.get("profile") == ORIGINAL_0103_PROFILE
+            and value.get("candidate") == {"runId": ORIGINAL_0103_CANDIDATE["runId"],
+                "artifactId": ORIGINAL_0103_CANDIDATE["artifactId"], "archiveSha256": ORIGINAL_0103_CANDIDATE["archiveSha256"],
+                "contentId": ORIGINAL_0103_CANDIDATE["contentId"], "sourceSha": ORIGINAL_0103_CANDIDATE["sourceSha"],
+                "version": "0.103.0"}
+            and value.get("disposition") == "checkpoint" and value.get("publicationComplete") is False
+            and value.get("failure") is None and value.get("journalRef") == SUCCESSOR_REF
+            and value.get("lastDispatch") == {"attempted": True, "effect": "tag", "state": "unknown"}
+            and value.get("lastObservedJournal", {}).get("generation") == 2
+            and value["lastObservedJournal"].get("effects") == {"tag": "intent"}
+            and value["lastObservedJournal"].get("logicalHead") == fixed["logicalHead"]
+            and value["lastObservedJournal"].get("stateSHA256") == fixed["stateSHA256"],
+            "original tag uncertainty result binding differs")
+    return {"runId": fixed["runId"], "attempt": 1, "publisher": fixed["publisher"],
+            "artifactId": fixed["artifactId"], "archiveSha256": fixed["archiveSha256"],
+            "memberSha256": fixed["memberSha256"], "historicalPhysicalHead": fixed["originalPhysicalHead"],
+            "historicalNonDispatchProved": False}
+
+
+def validate_original_tag_state(manifest, journal):
+    validate_original_0103_manifest(manifest)
+    observed = journal._observed
+    fixed = ORIGINAL_0103_TAG_CHECKPOINT
+    require(journal.ref == SUCCESSOR_REF and journal.main_directory and observed is not None
+            and observed.head == fixed["logicalHead"] and observed.state["generation"] == 2
+            and observed.state["effects"] == {"tag": "intent"}
+            and observed.state["contentId"] == manifest["contentId"]
+            and hashlib.sha256(canonical(observed.state)).hexdigest() == fixed["stateSHA256"],
+            "original tag requires exact retained generation2/logical state")
+    return ordered_effects(manifest)[0]
+
+
+def exact_original_tag_observation(api):
+    repository = api.get(f"repos/{REPOSITORY}")
+    require(repository.get("id") == 1269292704 and repository.get("full_name") == REPOSITORY,
+            "original tag observation repository differs")
+    try:
+        reference = api.get(f"repos/{REPOSITORY}/git/ref/tags/coherent-set/v0.103.0")
+    except NotFound:
+        return "absent"
+    require(isinstance(reference, dict) and reference.get("ref") == "refs/tags/coherent-set/v0.103.0"
+            and isinstance(reference.get("object"), dict) and reference["object"].get("type") == "commit"
+            and reference["object"].get("sha") == ORIGINAL_0103_CANDIDATE["sourceSha"],
+            "original tag reference is mismatched, malformed, or annotated")
+    return "matched"
+
+
+def verify_original_tag_candidate(manifest, provider, manifest_bytes, archive):
+    validate_original_0103_manifest(manifest)
+    require(provider.manifest_path.read_bytes() == manifest_bytes and provider.manifest == manifest
+            and provider.version == "0.103.0" and provider.source == ORIGINAL_0103_CANDIDATE["sourceSha"]
+            and not archive.is_symlink() and stat.S_ISREG(archive.stat().st_mode),
+            "original tag candidate/provider archive binding moved")
+    require(hashlib.sha256(manifest_bytes).hexdigest() == ORIGINAL_0103_CANDIDATE["manifestSha256"]
+            and archive.stat().st_size == ORIGINAL_0103_CANDIDATE["archiveBytes"]
+            and hashlib.sha256(archive.read_bytes()).hexdigest() == ORIGINAL_0103_CANDIDATE["archiveSha256"],
+            "original tag retained archive/manifest bytes moved")
+    for name, pin in ORIGINAL_0103_PACKAGES.items():
+        path = provider.root / f"{name}.0.103.0.nupkg"
+        require(not path.is_symlink() and stat.S_ISREG(path.stat().st_mode) and path.stat().st_size == pin["archiveBytes"]
+                and hashlib.sha256(path.read_bytes()).hexdigest() == pin["archiveSha256"],
+                "original tag retained package bytes moved")
+    return {"contentId": manifest["contentId"], "archiveSha256": ORIGINAL_0103_CANDIDATE["archiveSha256"],
+            "manifestSha256": ORIGINAL_0103_CANDIDATE["manifestSha256"]}
+
+
+def run_original_tag_recovery(manifest, journal, admission, provider, ledger_api, publisher_api,
+                              report, deadline, verify_candidate, attempt_path, *, preflight=False,
+                              factory=approved_original_tag_transport, clock=time.monotonic):
+    """One matched settlement OR one explicit original create, never a later effect."""
+    effect = validate_original_tag_state(manifest, journal)
+    original = authenticate_original_tag_result(publisher_api)
+    observed, physical = journal._observed, journal._physical_head
+    guarded = UnchangedKitJournal(journal, observed, physical)
+    report["originalTagRecovery"] = {"profile": ORIGINAL_0103_TAG_PROFILE, "original": original,
+        "maxDispatchesThisInvocation": 1, "historicalNonDispatchProved": False, "globalOnceClaim": False,
+        "observation": None, "branch": "independent-observation", "attemptRecord": None,
+        "productionCapability": "unavailable; no approved credential factory"}
+    require(clock() < deadline, "original tag deadline expired")
+    observation = exact_original_tag_observation(publisher_api)
+    report["originalTagRecovery"]["observation"] = observation
+    guarded.read()
+    require(clock() < deadline, "original tag observation expired")
+    require(admission.authorize(manifest["contentId"], "tag", "intent", effect.request_digest),
+            "original tag current publisher observation admission denied")
+    if preflight:
+        report["originalTagRecovery"]["branch"] = "non-writing-existing-intent-preflight"
+        return "preflight"
+    if observation == "matched":
+        require(exact_original_tag_observation(publisher_api) == "matched",
+                "original tag match moved before settlement")
+        current = guarded.read()
+        require(admission.authorize(manifest["contentId"], "tag", "settle", effect.request_digest),
+                "original tag matched settlement denied")
+        require(guarded.compare_and_swap(current, "tag", "verified"), "original tag settlement CAS conflict")
+        report["originalTagRecovery"]["branch"] = "matched-one-settlement-no-send"
+        return "checkpoint"
+    transport = factory()  # Native factory unavailable: this branch refuses before any tag send.
+    require(type(transport) is VerifiedOriginalTagTransport, "original tag verified transport unavailable")
+    capability = transport.identity()
+    candidate = verify_candidate()
+    require(candidate == {"contentId": ORIGINAL_0103_CANDIDATE["contentId"],
+                          "archiveSha256": ORIGINAL_0103_CANDIDATE["archiveSha256"],
+                          "manifestSha256": ORIGINAL_0103_CANDIDATE["manifestSha256"]},
+            "original tag candidate binding changed")
+    require(admission.authorize(manifest["contentId"], "tag", "dispatch", effect.request_digest),
+            "original tag uncertainty dispatch admission denied")
+    ledger_api.admit_quota()
+    require(authority_main(ledger_api) == physical and clock() < deadline
+            and sum(ledger_api.attempted.values()) < ORDINARY_AUTHORITY_CALL_CEILING
+            and ledger_api.quota is not None and ledger_api.quota["reset"] > time.time(),
+            "original tag current physical head/quota/deadline changed")
+    record = {"schema": "fsgg.original-tag-intent-attempt/1", "profile": ORIGINAL_0103_TAG_PROFILE,
+              "execution": report.get("execution"), "original": original, "candidate": candidate,
+              "journal": {"logicalHead": observed.head, "physicalHead": physical, "generation": 2,
+                          "stateSHA256": ORIGINAL_0103_TAG_CHECKPOINT["stateSHA256"]},
+              "request": {"method": "POST", "path": f"repos/{REPOSITORY}/git/refs",
+                          "ref": "refs/tags/coherent-set/v0.103.0", "sha": ORIGINAL_0103_CANDIDATE["sourceSha"],
+                          "requestDigest": effect.request_digest}, "capabilityIdentity": capability,
+              "historicalNonDispatchProved": False, "globalOnceClaim": False, "maxDispatchesThisInvocation": 1}
+    write_kit_repeat_attempt(attempt_path, record)
+    report["originalTagRecovery"]["attemptRecord"] = {"path": str(attempt_path),
+        "sha256": hashlib.sha256(attempt_path.read_bytes()).hexdigest()}
+    guarded.read()
+    require(verify_candidate() == candidate and transport.identity() == capability,
+            "original tag candidate/capability moved before send")
+    require(exact_original_tag_observation(publisher_api) == "absent",
+            "original tag appeared before the explicit create")
+    require(admission.authorize(manifest["contentId"], "tag", "dispatch", effect.request_digest)
+            and authority_main(ledger_api) == physical and clock() < deadline
+            and sum(ledger_api.attempted.values()) < ORDINARY_AUTHORITY_CALL_CEILING
+            and ledger_api.quota is not None and ledger_api.quota["reset"] > time.time(),
+            "original tag final source/physical/deadline admission denied")
+    publisher_api.claim("tagPost")
+    report["originalTagRecovery"]["branch"] = "one-explicit-create-no-settlement"
+    report["lastDispatch"] = {"effect": "tag", "attempted": True, "state": "unknown"}
+    outcome = transport.dispatch(effect, deadline, clock)
+    report["lastDispatch"]["state"] = outcome.state
+    try:
+        diagnostic = sanitized_dispatch_diagnostic({"category": "protocol-failure", "request": transport.last_dispatch_diagnostic})
+    except BaseException:
+        diagnostic = {"diagnosticUnavailable": True}
+    if diagnostic is not None:
+        report["lastDispatch"]["diagnostic"] = diagnostic
+    return "checkpoint"  # No journal mutation or second effect after the sole send, including201.
 
 
 class ReportingJournal:
@@ -1112,6 +1344,7 @@ def execute_publisher(args, report):
     version, predecessor, selected_ref = selected_release_binding(args)
     forward_deadline = time.monotonic() + 45 * 60
     original_0103 = validate_original_0103_request(args)
+    original_tag_recovery = bool(getattr(args, "recover_original_0103_tag_intent", False))
     runtime_recovery = getattr(args, "recover_original_runtime_intent", False)
     runtime_deadline = time.monotonic() + 45 * 60 if runtime_recovery else None
     report["stage"] = "publisher-context"
@@ -1147,6 +1380,9 @@ def execute_publisher(args, report):
     ledger_token = os.environ["ORDINARY_LEDGER_TOKEN"]
     nuget_key = os.environ["NUGET_API_KEY"]
     api = GitHubAPI(github_token)
+    if original_tag_recovery:
+        api = OriginalTagPublisherAPI(api, forward_deadline)
+        report["publisherCounter"] = api
     if runtime_recovery:
         api = RuntimePublisherAPI(api)
         report["publisherCounter"] = api
@@ -1164,6 +1400,8 @@ def execute_publisher(args, report):
     artifact_json.write_text(json.dumps(artifact))
     run_json.write_text(json.dumps(run))
     with archive.open("xb") as stream:
+        if original_tag_recovery:
+            api.claim("candidateArchive")
         subprocess.run(
             ["gh", "api", f"repos/{REPOSITORY}/actions/artifacts/{args.candidate_artifact_id}/zip"],
             stdout=stream, check=True,
@@ -1244,11 +1482,17 @@ def execute_publisher(args, report):
     if prepare_release_journal(journal, ledger_api, admission, provider, api, manifest, intent,
                                candidate_source, publisher_sha, args.preflight_only, uniqueness,
                                recovery_checkpoint=args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery or successor_checkpoint,
-                               original_0103_selection=original_selection):
+                               original_0103_selection=original_selection, original_tag_recovery=original_tag_recovery):
         print("Release successor preflight passed; no journal, tag, feed or release was changed.")
         return "preflight"
     journal.capture()
     report["lastSuccessfulStage"] = "journal-preparation"
+    if original_tag_recovery:
+        return run_original_tag_recovery(
+            manifest, journal, admission, provider, ledger_api, api, report, forward_deadline,
+            lambda: verify_original_tag_candidate(manifest, provider, manifest_bytes, archive),
+            args.result_path.with_name(args.result_path.stem + "-original-tag-attempt.json"),
+            preflight=args.preflight_only)
     if successor_checkpoint:
         validate_successor_checkpoint(manifest, journal, json.loads(expected_checkpoint))
     deadline = time.monotonic() + 45 * 60
@@ -1286,6 +1530,8 @@ def main() -> int:
     parser.add_argument("--workdir", required=True, type=pathlib.Path)
     parser.add_argument("--result-path", type=pathlib.Path)
     profile = parser.add_mutually_exclusive_group()
+    profile.add_argument("--recover-original-0103-tag-intent", action="store_true",
+                         help="Fixed original generation2 tag intent; one matched settlement or approved create, never a later effect")
     profile.add_argument("--original-0103-candidate", action="store_true",
                          help="Select only the accepted original .103 bytes on a compatible publisher")
     profile.add_argument("--recovery-checkpoint", action="store_true",
@@ -1304,10 +1550,10 @@ def main() -> int:
     result_path = args.result_path or args.workdir.with_name(args.workdir.name + "-result.json")
     args.result_path = result_path
     report = {"schema": "fsgg.release-successor-result/1",
-              "profile": ORIGINAL_0103_PROFILE if args.original_0103_candidate else SUCCESSOR_CHECKPOINT_PROFILE if args.recover_original_successor_checkpoint else RUNTIME_RECOVERY_PROFILE if args.recover_original_runtime_intent else KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
+              "profile": ORIGINAL_0103_TAG_PROFILE if args.recover_original_0103_tag_intent else ORIGINAL_0103_PROFILE if args.original_0103_candidate else SUCCESSOR_CHECKPOINT_PROFILE if args.recover_original_successor_checkpoint else RUNTIME_RECOVERY_PROFILE if args.recover_original_runtime_intent else KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
               "candidate": {"runId": args.candidate_run_id, "artifactId": args.candidate_artifact_id,
                             "archiveSha256": args.candidate_archive_sha256},
-              "execution": None, "originalPublisher": {"runId": 38133108945, "runAttempt": 1, "jobId": 114451349714} if args.recover_original_successor_checkpoint else {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214} if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or args.recover_original_runtime_intent else None,
+              "execution": None, "originalPublisher": {"runId": ORIGINAL_0103_TAG_CHECKPOINT["runId"], "runAttempt": 1} if args.recover_original_0103_tag_intent else {"runId": 38133108945, "runAttempt": 1, "jobId": 114451349714} if args.recover_original_successor_checkpoint else {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214} if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or args.recover_original_runtime_intent else None,
               "journalRef": selected_release_binding(args)[2], "startingJournal": None, "lastObservedJournal": None,
               "iterationsAttempted": 0, "lastAdvanceResult": None, "lastDispatch": None,
               "journalMutationMayHaveOccurred": False, "stage": "preparation",
