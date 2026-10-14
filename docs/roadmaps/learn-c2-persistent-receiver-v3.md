@@ -616,3 +616,29 @@ Hosted compiler/full source qualification remains required. Because the caller
 changed, the next exact protected-source correspondence must include
 `OciTests.fs` as a sixth leaf alongside the previous five leaves; any native
 successor still requires its own root review and effect admission.
+
+### Descriptor metadata source qualification, 2026-10-14
+
+Acquisition, revalidation and rootless context/evidence ownership checks previously
+started `/usr/bin/stat` outside the inherited command-custody channel. The maintained
+image-closure implementation now reads owner/type metadata through one retained
+`O_PATH|O_NOFOLLOW|O_CLOEXEC` descriptor and Linux `statx`. It requires returned
+UID/type/mode fields and the declared Linux x64 process profile, refuses final
+symlinks and special files, and closes the descriptor on success and refusal.
+Parent-directory custody checks remain applicable; this change does not turn a
+metadata observation into custody of a later path-based read.
+
+Ordinary SDK 10.0.401 source qualification at
+`276d13694bafe68692099064b6203466b91e461b` passed locked restore and compilation with
+zero warnings/errors. Actual descriptor controls passed for owner UID, regular and
+empty files, directories, UTF-8 paths, final file/directory/dangling links, a FIFO,
+missing and NUL-containing paths, replacement refusal and repeated descriptor
+cleanup. The existing pure path/inactive-result controls and actual CLI placeholder
+and sixteen historical Host/Manager release-pin refusals also passed. The ordinary
+container exited zero and its exact removal and empty selected store were observed.
+Full required hosted source checks and protected source delivery remain pending.
+
+The production command producer/root caller, authentic provider profile, native
+custody, two cold-image builds/reloads, installed receiver, grants/capture/recovery,
+usage completeness and activation remain open. Existing unknown historical effects
+retain their original holds; no native replay or activation occurred.
