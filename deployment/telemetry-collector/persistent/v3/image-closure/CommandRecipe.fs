@@ -14,8 +14,8 @@ module CommandRecipe=
     let Builder="/usr/sbin/podman"
     let private require condition reason=if not condition then raise(InvalidDataException reason)
     let private digest value=OciEvidence.shaBytes(JsonSerializer.SerializeToUtf8Bytes value)
-    let bytes program=JsonSerializer.SerializeToUtf8Bytes program
-    let identity program=OciEvidence.shaBytes(bytes program)
+    let bytes (program:CommandProgram)=JsonSerializer.SerializeToUtf8Bytes program
+    let identity (program:CommandProgram)=OciEvidence.shaBytes(bytes program)
     let parse (raw:byte array)=
         require(raw.Length>0&&raw.Length<=2*1024*1024) "recipe-byte-bound"
         use document=JsonDocument.Parse raw
@@ -47,14 +47,14 @@ module CommandRecipe=
     let private path value=
         require(not(String.IsNullOrWhiteSpace value)&&Path.IsPathFullyQualified value&&Path.GetFullPath value=value&&
                 System.Text.RegularExpressions.Regex.IsMatch(value,"^/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")) "recipe-path"
-    let bundleRoot program logical=
+    let bundleRoot (program:CommandProgram) logical=
         require(logical="a"||logical="b") "recipe-bundle"
         Path.Combine(program.Selection.WorkRoot,"bundle-"+logical)
-    let nonce program logical=match logical with "a"->program.Selection.NonceA|"b"->program.Selection.NonceB|_->raise(InvalidDataException "recipe-bundle")
+    let nonce (program:CommandProgram) logical=match logical with "a"->program.Selection.NonceA|"b"->program.Selection.NonceB|_->raise(InvalidDataException "recipe-bundle")
     let environment root=Map.ofList[
         "PATH","/usr/sbin:/usr/bin:/bin";"HOME",root;"XDG_RUNTIME_DIR",Path.Combine(root,"runtime");"TMPDIR",Path.Combine(root,"tmp");
         "REGISTRY_AUTH_FILE",Path.Combine(root,"auth.json");"CONTAINERS_CONF",Path.Combine(root,"containers.conf");"CONTAINERS_STORAGE_CONF",Path.Combine(root,"storage.conf")]
-    let private command root reload arguments=
+    let private command (root:string) reload (arguments:string array)=
         let prefix=if reload then "reload-" else "build-"
         {Executable=Builder;Arguments=Array.append [|"--remote=false";"--events-backend=none";"--storage-driver=vfs";"--root";Path.Combine(root,prefix+"graph");"--runroot";Path.Combine(root,prefix+"run");"--tmpdir";Path.Combine(root,prefix+"tmp")|] arguments;
          Environment=environment root;WorkingDirectory=root;OutputLimit=1024*1024}
