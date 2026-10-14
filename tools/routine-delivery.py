@@ -41,6 +41,31 @@ PRODUCER_PATHS = (
     "scripts/lib/gate.py",
 )
 
+BAR_REPOSITORY = "FS-GG/FSBarV2"
+BAR_REPOSITORY_ID = 1393512699
+BAR_PREARM = ".github/workflows/prearm-source-controls.yml"
+BAR_PREARM_ID = 374109740
+BAR_PREARM_BASE_SHA256 = "9e8d89d5b6ab434a13765980dfdf58f53a734e41b07357c3e7318a68f1f36274"
+BAR_PREARM_TECHNICAL_STEPS = (
+    "Set up job", "Check out the exact candidate", "Bind the checked-out candidate",
+    "Set up the exact .NET SDK", "Set up the exact Node.js runtime",
+    "Run the fourteen JavaScript source controls", "Run the one-unit and compiler-capture source controls",
+    "Restore and build the live boundary source", "Run exactly three synthetic compiled controls",
+)
+BAR_PREARM_NATIVE_TAIL = ("Post Set up the exact Node.js runtime", "Post Set up the exact .NET SDK",
+                         "Post Check out the exact candidate", "Complete job")
+
+
+def installation_bar_workflow(base: bytes) -> bytes:
+    """Derive only the five literal path additions from the authenticated BAR job."""
+    if hashlib.sha256(base).hexdigest() != BAR_PREARM_BASE_SHA256:
+        raise RuntimeError("installation BAR prearm baseline is not the reviewed source")
+    boundary = b"  workflow_dispatch:\n"
+    if base.count(boundary) != 1 or any(("      - " + path + "\n").encode() in base for path in PRODUCER_PATHS):
+        raise RuntimeError("installation BAR prearm path-list boundary is ambiguous")
+    additions = b"".join(("      - " + path + "\n").encode() for path in PRODUCER_PATHS)
+    return base.replace(boundary, additions + boundary, 1)
+
 
 def installation_registration(base: bytes, workflow: bytes) -> bytes:
     """Append only the derived workflow record while preserving every original byte."""
@@ -419,11 +444,23 @@ class GhApi:
             if self.installation_blob(repo, refreshed) != derived:
                 raise RuntimeError("assertion pin refresh must preserve every byte except the selected source SHA")
             expected.add(TEMPLATES_ASSERTION_PIN)
+        if BAR_PREARM in changed:
+            if repo != BAR_REPOSITORY or metadata["id"] != BAR_REPOSITORY_ID:
+                raise RuntimeError("derived prearm edit belongs only to the native BAR receiver")
+            original, expanded = old.get(BAR_PREARM), candidate.get(BAR_PREARM)
+            if (original is None or expanded is None or original.get("type") != "blob" or original.get("mode") != "100644"
+                    or expanded.get("type") != "blob" or expanded.get("mode") != "100644"):
+                raise RuntimeError("installation BAR prearm must modify an existing regular100644 file")
+            if self.installation_blob(repo, expanded) != installation_bar_workflow(self.installation_blob(repo, original)):
+                raise RuntimeError("installation BAR prearm must append exactly the five canonical paths")
+            expected.add(BAR_PREARM)
+        if repo == BAR_REPOSITORY and BAR_PREARM not in changed:
+            raise RuntimeError("installation BAR requires the reviewed derived sixth prearm edit")
         if changed != expected or pr.get("changed_files") != len(expected):
             raise RuntimeError("installation must add canonical five files with only a receiver-specific derived sixth edit")
         files = self.installation_read(f"repos/{repo}/pulls/{number}/files?per_page=100")
         if (not isinstance(files, list) or len(files) != len(expected)
-                or any(not isinstance(r, dict) or r.get("status") != ("modified" if r.get("filename") in (PRODUCER_REGISTRATION, TEMPLATES_ASSERTION_PIN) else "added")
+                or any(not isinstance(r, dict) or r.get("status") != ("modified" if r.get("filename") in (PRODUCER_REGISTRATION, TEMPLATES_ASSERTION_PIN, BAR_PREARM) else "added")
                        or r.get("previous_filename") is not None for r in files)
                 or {r.get("filename") for r in files} != expected
                 or any(r.get("sha") != candidate[r["filename"]]["sha"] for r in files)):
@@ -471,7 +508,7 @@ class GhApi:
         api = WatchGhApi(time.monotonic() + 31)
         command = ["gh", "pr", "checks", str(number), "--repo", repo,
                    "--required", "--json", WATCH_FIELDS]
-        if repo == "FS-GG/FsQuint":
+        if repo in ("FS-GG/FsQuint", BAR_REPOSITORY):
             stderr = bytearray()
             code, raw = bounded_watch_query(command, time.monotonic() + 31, stderr_output=stderr)
             absent = (code == 1 and raw == b"" and bytes(stderr) ==
@@ -525,6 +562,10 @@ class GhApi:
                     or job.get("run_attempt") != run["run_attempt"]):
                 raise RuntimeError("installation required check exact-head/run/attempt differs")
 
+        if repo == BAR_REPOSITORY:
+            self.installation_bar_empty_policy(repo, head, roster, metadata, base, candidate,
+                                               coherent_workflow, branch, require_empty=False)
+
     def installation_policy_read(self, endpoint: str) -> tuple[int, Any]:
         """Observe authenticated HTTP status and complete policy body together."""
         code, raw = bounded_watch_query(["gh", "api", "--include", endpoint],
@@ -552,6 +593,9 @@ class GhApi:
     def installation_empty_policy(self, repo: str, head: str, roster: list[dict],
                                   metadata: dict, base: str, candidate: dict,
                                   coherent_workflow: str | None, branch: str) -> None:
+        if repo == BAR_REPOSITORY:
+            self.installation_bar_empty_policy(repo, head, roster, metadata, base, candidate, coherent_workflow, branch)
+            return
         # This reviewed exception is only for the authentic first-install FsQuint receiver.
         if (type(metadata.get("id")) is not int or metadata.get("id") != 1375501179 or metadata.get("private") is not False
                 or metadata.get("default_branch") != "main"
@@ -640,6 +684,104 @@ class GhApi:
                 or (check.get("check_suite") or {}).get("id") != run["check_suite_id"]
                 or check.get("status") != "completed" or check.get("conclusion") != "success"):
             raise RuntimeError("installation full CI check/app/job/run/attempt provenance differs")
+
+    def installation_bar_empty_policy(self, repo: str, head: str, roster: list[dict],
+                                  metadata: dict, base: str, candidate: dict,
+                                  coherent_workflow: str | None, branch: str, *, require_empty: bool = True) -> None:
+        # Authentically empty policy is never sufficient without this nonempty BAR source cohort.
+        if (type(metadata.get("id")) is not int or metadata.get("id") != BAR_REPOSITORY_ID or metadata.get("private") is not False
+                or metadata.get("default_branch") != "main"
+                or not isinstance(metadata.get("permissions"), dict)
+                or metadata["permissions"].get("admin") is not True
+                or metadata["permissions"].get("push") is not True
+                or metadata["permissions"].get("pull") is not True
+                or repo != BAR_REPOSITORY or coherent_workflow != "prearm-source-controls.yml"):
+            raise RuntimeError("installation empty-policy receiver/capability/coherent selector differs")
+        default = self.installation_read(f"repos/{repo}/git/ref/heads/main")
+        if (not isinstance(default, dict) or default.get("ref") != "refs/heads/main"
+                or (default.get("object") or {}).get("type") != "commit"
+                or (default.get("object") or {}).get("sha") != base):
+            raise RuntimeError("installation empty-policy current default/base identity differs")
+        if require_empty:
+            classic_status, classic = self.installation_policy_read(f"repos/{repo}/branches/main/protection/required_status_checks")
+            rules_status, rules = self.installation_policy_read(f"repos/{repo}/rules/branches/main?per_page=100")
+            sets_status, sets = self.installation_policy_read(f"repos/{repo}/rulesets?includes_parents=true&per_page=100")
+            if (classic_status != 404 or not isinstance(classic, dict)
+                    or set(classic) != {"message", "documentation_url", "status"}
+                    or classic.get("message") != "Branch not protected" or classic.get("status") != "404"
+                    or classic.get("documentation_url") != "https://docs.github.com/rest/branches/branch-protection#get-status-checks-protection"
+                    or rules_status != 200 or rules != [] or sets_status != 200 or sets != []):
+                raise RuntimeError("installation required policy is not authentically empty")
+        workflow = self.installation_read(f"repos/{repo}/actions/workflows/prearm-source-controls.yml")
+        if (not isinstance(workflow, dict) or type(workflow.get("id")) is not int or workflow.get("id") != BAR_PREARM_ID
+                or workflow.get("path") != BAR_PREARM or workflow.get("state") != "active" or workflow.get("name") != "prearm-source-controls"):
+            raise RuntimeError("installation BAR prearm source-control workflow differs")
+        path = workflow["path"]
+        baseline = self.installation_tree(repo, base).get(path)
+        if (baseline is None or baseline.get("type") != "blob" or baseline.get("mode") != "100644"
+                or candidate.get(path, {}).get("type") != "blob" or candidate[path].get("mode") != "100644"):
+            raise RuntimeError("installation BAR prearm source-control source differs from protected base")
+        # Bind the source job and every step to only the reviewed path-filter derivation.
+        if self.installation_blob(repo, candidate[path]) != installation_bar_workflow(self.installation_blob(repo, baseline)):
+            raise RuntimeError("installation BAR prearm source-control source is not the reviewed technical cohort")
+        population = self.installation_read(f"repos/{repo}/actions/workflows/{BAR_PREARM_ID}/runs?head_sha={head}&per_page=100")
+        if (not isinstance(population, dict) or type(population.get("total_count")) is not int or population.get("total_count") != 1
+                or not isinstance(population.get("workflow_runs"), list) or len(population["workflow_runs"]) != 1):
+            raise RuntimeError("installation BAR prearm source-control exact-head run population is incomplete or ambiguous")
+        run = population["workflow_runs"][0]
+        if (not isinstance(run, dict) or type(run.get("id")) is not int or run["id"] < 1
+                or run.get("workflow_id") != workflow["id"] or run.get("path") != path
+                or run.get("head_sha") != head or run.get("head_branch") != branch
+                or run.get("event") != "pull_request" or type(run.get("run_attempt")) is not int or run.get("run_attempt") != 1
+                or run.get("status") != "completed" or run.get("conclusion") != "success"
+                or (run.get("repository") or {}).get("id") != metadata["id"]
+                or (run.get("repository") or {}).get("full_name") != repo
+                or type(run.get("check_suite_id")) is not int or run["check_suite_id"] < 1):
+            raise RuntimeError("installation BAR prearm source-control run identity/attempt/success differs")
+        detail = self.installation_read(f"repos/{repo}/actions/runs/{run['id']}")
+        if any(detail.get(key) != run.get(key) for key in ("id", "workflow_id", "path", "head_sha", "head_branch", "event", "run_attempt", "status", "conclusion", "check_suite_id", "repository")):
+            raise RuntimeError("installation BAR prearm source-control run readback differs")
+        jobs = self.installation_read(f"repos/{repo}/actions/runs/{run['id']}/attempts/1/jobs?per_page=100")
+        if (not isinstance(jobs, dict) or type(jobs.get("total_count")) is not int or jobs.get("total_count") != 1
+                or not isinstance(jobs.get("jobs"), list) or len(jobs["jobs"]) != 1
+                or not isinstance(jobs["jobs"][0], dict) or jobs["jobs"][0].get("name") != "prearm-source-controls"):
+            raise RuntimeError("installation BAR prearm source-control job cohort is incomplete")
+        statuses = self.installation_read(f"repos/{repo}/commits/{head}/status?per_page=100")
+        if (not isinstance(statuses, dict) or statuses.get("sha") != head
+                or type(statuses.get("total_count")) is not int or statuses.get("total_count") != 0 or statuses.get("statuses") != []):
+            raise RuntimeError("installation exact-head status provenance is unknown")
+        if not roster or len({r.get("id") for r in roster}) != len(roster):
+            raise RuntimeError("installation complete technical check cohort is missing or duplicated")
+        cohort = jobs["jobs"][0]
+        # Empty policy binds this complete source cohort; ordinary required contexts are independently verified.
+        technical = [check for check in roster if check.get("name") == "prearm-source-controls"]
+        if len(technical) != 1 or (require_empty and len(roster) != 1) or cohort.get("id") != technical[0].get("id"):
+            raise RuntimeError("installation native check/job population differs")
+        check = technical[0]
+        steps = cohort.get("steps")
+        if (not isinstance(steps, list) or not len(BAR_PREARM_TECHNICAL_STEPS) <= len(steps) <= len(BAR_PREARM_TECHNICAL_STEPS) + len(BAR_PREARM_NATIVE_TAIL)
+                or any(not isinstance(step, dict) or step.get("status") != "completed" or step.get("conclusion") != "success"
+                       or type(step.get("number")) is not int or step["number"] < 1 for step in steps)
+                or [step.get("number") for step in steps] != sorted(set(step.get("number") for step in steps))
+                or tuple(step.get("name") for step in steps[:len(BAR_PREARM_TECHNICAL_STEPS)]) != BAR_PREARM_TECHNICAL_STEPS):
+            raise RuntimeError("installation BAR prearm source-control technical steps are absent, skipped or failed")
+        tail = [step["name"] for step in steps[len(BAR_PREARM_TECHNICAL_STEPS):]]
+        if (any(name not in BAR_PREARM_NATIVE_TAIL for name in tail) or len(set(tail)) != len(tail)
+                or tail != sorted(tail, key=BAR_PREARM_NATIVE_TAIL.index)):
+            raise RuntimeError("installation BAR native setup/post cohort differs")
+        link = f"https://github.com/{repo}/actions/runs/{run['id']}/job/{cohort.get('id')}"
+        job = self.installation_read(f"repos/{repo}/actions/jobs/{cohort.get('id')}")
+        if (job != cohort or type(job.get("id")) is not int or job["id"] < 1
+                or job.get("run_id") != run["id"] or type(job.get("run_attempt")) is not int or job.get("run_attempt") != 1
+                or job.get("head_sha") != head or job.get("name") != "prearm-source-controls"
+                or job.get("status") != "completed" or job.get("conclusion") != "success"
+                or not job.get("completed_at")
+                or job.get("check_run_url") != f"https://api.github.com/repos/{repo}/check-runs/{job['id']}"
+                or check.get("head_sha") != head or check.get("name") != "prearm-source-controls"
+                or check.get("details_url") != link or (check.get("app") or {}).get("id") != 15368
+                or (check.get("check_suite") or {}).get("id") != run["check_suite_id"]
+                or check.get("status") != "completed" or check.get("conclusion") != "success"):
+            raise RuntimeError("installation BAR prearm source-control check/app/job/run/attempt provenance differs")
 
     @staticmethod
     def _run(
