@@ -2263,6 +2263,50 @@ class OriginalTagIntentControls(unittest.TestCase):
         self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
         self.assertIsNone(self.rows['lastDispatch'])
 
+    def test_existing_preflight_authenticates_original_archive_through_actual_http_reader(self):
+        url = 'https://api.github.com/repos/FS-GG/.github/actions/artifacts/11902876694/zip'
+        build, requests, handlers = OriginalRuntimeRecoveryControls.runtime_request_fixture(self, {url: self.raw})
+        self.native.download_original_tag_result = GitHubAPI('inert-fixture-token').download_original_tag_result
+        before = self.authority.head
+        with patch('urllib.request.build_opener', side_effect=build):
+            result = publisher.run_original_tag_recovery(self.candidate, self.journal, self.admission, None,
+                self.counter, self.api, self.rows, 100, forbidden_effect, self.path,
+                preflight=True, factory=forbidden_effect, clock=lambda: 0)
+        self.assertEqual(result, 'preflight')
+        self.assertEqual(len(requests), 1)
+        self.assertIsNone(requests[0].get_header('Accept'))
+        self.assertEqual(self.rows['originalTagRecovery']['original']['archiveSha256'], self.fixed['archiveSha256'])
+        self.assertEqual(self.api.succeeded['originalResultArchive'], 1)
+        self.assertEqual(self.authority.head, before)
+        self.assertFalse(any(method != 'get' for method, *_ in self.authority.calls))
+        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
+        self.assertIsNone(self.rows['lastDispatch'])
+        redirected = handlers[0].redirect_request(requests[0], None, 302, 'Found', {},
+            'https://retained-artifact.invalid/owned.zip')
+        self.assertIsNone(redirected.get_header('Authorization'))
+        self.assertIsNone(redirected.get_header('Accept'))
+
+    def test_original_archive_http_refusal_stops_actual_preflight_without_fallback_or_effect(self):
+        requests = []
+        def fail(request, **kwargs):
+            requests.append(request)
+            raise urllib.error.HTTPError(request.full_url, 415, 'Unsupported Media Type', {}, None)
+        self.native.download_original_tag_result = GitHubAPI('inert-fixture-token').download_original_tag_result
+        before = self.authority.head
+        with patch('urllib.request.build_opener', return_value=types.SimpleNamespace(open=fail)), \
+             self.assertRaises(urllib.error.HTTPError) as failure:
+            publisher.run_original_tag_recovery(self.candidate, self.journal, self.admission, None,
+                self.counter, self.api, self.rows, 100, forbidden_effect, self.path,
+                preflight=True, factory=forbidden_effect, clock=lambda: 0)
+        self.assertEqual(failure.exception.code, 415)
+        self.assertEqual(len(requests), 1)
+        self.assertIsNone(requests[0].get_header('Accept'))
+        self.assertEqual(self.authority.head, before)
+        self.assertFalse(any(method != 'get' for method, *_ in self.authority.calls))
+        self.assertNotIn('originalTagRecovery', self.rows)
+        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
+        self.assertIsNone(self.rows['lastDispatch'])
+
     def test_matched_lightweight_tag_settles_exactly_once_without_send_or_next_effect(self):
         self.tag = self.reply
         self.assertEqual(self.recover(factory=forbidden_effect), 'checkpoint')
