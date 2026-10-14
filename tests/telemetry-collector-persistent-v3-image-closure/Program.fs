@@ -7,6 +7,10 @@ open System.Threading
 open System.Threading.Tasks
 open FSGG.Telemetry.PersistentV3.ImageClosure
 
+if Environment.GetEnvironmentVariable "PERSISTENT_V3_METADATA_CONTROLS_ONLY" = "1" then
+    PathControls.metadata()
+    Environment.Exit 0
+
 // The admitted fixed root C controller owns all native setup/capabilities.
 if Environment.GetEnvironmentVariable "PERSISTENT_V3_CUSTODY_NATIVE_FIXTURE" = "1" then
     OciTests.custodyAdapterNativeFixture()
@@ -24,6 +28,8 @@ PathControls.run()
 InactiveControls.run()
 if Environment.GetEnvironmentVariable "PERSISTENT_V3_PATH_CONTROLS_ONLY" = "1" then
     Environment.Exit 0
+
+PathControls.metadata()
 
 type DelegateMechanism(handler:Effect*CancellationToken->Task<Observation>)=
   interface IRunnerMechanism with member _.Execute(effect,token)=handler(effect,token)

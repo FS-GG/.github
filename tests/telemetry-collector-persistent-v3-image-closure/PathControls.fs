@@ -2,6 +2,8 @@ module PathControls
 
 open System
 open System.Reflection
+open System.IO
+open System.Runtime.InteropServices
 open FSGG.Telemetry.PersistentV3.ImageClosure
 
 // Invoke the actual private constructor helpers without filesystem or process effects.
@@ -78,3 +80,44 @@ let run () =
     let over4096=at4096+"/a"
     if not(absolute at4096) || absolute over4096 then failwith "path byte bound differs"
     printfn "PASS pure actual constructor path helpers: retained29, unsafe paths, UTF8/count/total bounds"
+
+[<DllImport("libc",SetLastError=true)>]
+extern uint32 private getuid()
+[<DllImport("libc",SetLastError=true)>]
+extern int private mkfifo(string path,uint32 mode)
+
+// Ordinary local files/descriptors only; the FIFO must be inspected without
+// opening it for data, so this also detects a blocking replacement for O_PATH.
+let metadata () =
+    let root=Directory.CreateTempSubdirectory("p2c4-metadata-").FullName
+    try
+        let regular=invoke "regularFile"
+        let expected=int(getuid())
+        let file=Path.Combine(root,"file")
+        let empty=Path.Combine(root,"empty")
+        File.WriteAllText(file,"retained metadata")
+        File.WriteAllBytes(empty,Array.empty<byte>)
+        for path in [root;file;empty] do
+            if ImageClosure.ownerUid path<>expected then failwith "descriptor owner differs from actual UID"
+        if not(regular file&&regular empty)||regular root then failwith "descriptor regular/empty/directory distinction lost"
+        let link=Path.Combine(root,"file-link")
+        let directoryLink=Path.Combine(root,"directory-link")
+        let dangling=Path.Combine(root,"dangling-link")
+        File.CreateSymbolicLink(link,file)|>ignore
+        Directory.CreateSymbolicLink(directoryLink,root)|>ignore
+        File.CreateSymbolicLink(dangling,Path.Combine(root,"absent"))|>ignore
+        let fifo=Path.Combine(root,"fifo")
+        if mkfifo(fifo,0x180u)<>0 then failwith "metadata FIFO fixture creation failed"
+        for path in [link;directoryLink;dangling;fifo;Path.Combine(root,"absent");file+string(char 0)+"suffix";""] do
+            if ImageClosure.ownerUid path<> -1||regular path then failwith "metadata followed link or accepted invalid/special path"
+        // Replacement is re-read, never cached by path, and no descriptor leaks
+        // survive repeated success/refusal observations.
+        File.Delete file
+        File.CreateSymbolicLink(file,empty)|>ignore
+        let descriptors=Directory.GetFiles("/proc/self/fd").Length
+        for _ in 1..256 do
+            if ImageClosure.ownerUid file<> -1||not(regular empty) then failwith "metadata replacement was cached or descriptor failed"
+        if Directory.GetFiles("/proc/self/fd").Length<>descriptors then failwith "metadata success/refusal leaked retained descriptors"
+        printfn "PASS actual descriptor metadata: UID, regular/empty/directory, final links, FIFO, missing/NUL paths and repeated replacement refusal"
+    finally
+        Directory.Delete(root,true)
