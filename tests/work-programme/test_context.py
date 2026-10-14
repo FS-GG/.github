@@ -262,6 +262,117 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(code, 3)
         self.assertNotIn('DO-NOT-EXPOSE', stdout.getvalue())
 
+    def restart_spec(self):
+        packet = self.file('packet', 'complete governing packet; do not expose')
+        row = dict(schema='fsgg.programme.lane-return/1', campaign='campaign', lane='lane', owner='owner',
+                   attempt='attempt', sourceRevision='a'*40, candidate='a'*40,
+                   feature='feature', item='item', originalItem='original-item', originalAttempt='original-attempt',
+                   revision=2, supersedes=1, inputPacketSha256=packet['sha256'])
+        prior = {**row, 'revision': 1, 'supersedes': 0, 'candidate': 'b'*40, 'sourceRevision': 'b'*40}
+        watch = dict(schema='fsgg.routine-check-watch/v1', repository='FS-GG/Example', pullRequest=1,
+                     expectedHead='a'*40, revision=1, event='terminal', readiness='not-evaluated', applyAuthorized=False)
+        spec = dict(schema='fsgg.programme.context-restart-input/1', campaign='campaign', lane='lane', owner='owner',
+                    attempt='attempt', sourceRevision='a'*40, repository='FS-GG/Example', pullRequest=1,
+                    packet=packet, currentReturn=self.file('return.json', json.dumps(row)),
+                    previousReturn=self.file('previous.json', json.dumps(prior)),
+                    reservations=self.file('holds.md', 'operation439 original effect unknown; missing members remain held'),
+                    reservationCompleteness='unknown', watcher=self.file('watch.json', json.dumps(watch)), maximumBytes=4096)
+        return spec, row
+
+    def test_restart_keeps_complete_opaque_inventory_and_original_identity(self):
+        spec, row = self.restart_spec()
+        result = ctx.restart(spec)
+        self.assertEqual(result['reservations'], spec['reservations'])
+        self.assertEqual(result['lineage']['originalAttempt'], row['originalAttempt'])
+        self.assertEqual(result['holds'], ['reservation-inventory-incomplete-or-unverified'])
+        self.assertEqual(result['continuation'], 'reconcile-holds')
+        self.assertNotIn('complete governing packet', json.dumps(result))
+        self.assertIn('no dispatch', result['authority'])
+
+    def test_restart_watch_local_revision_never_supersedes_owner_revision(self):
+        spec, _ = self.restart_spec()
+        result = ctx.restart(spec)
+        self.assertEqual((result['ownerReturnRevision'], result['watcherRevision']), (2, 1))
+        self.assertEqual(result['nativeObservation'], 'fresh-exact-head-observation-required')
+
+    def test_restart_same_owner_source_repair_retains_original_attempt(self):
+        spec, _ = self.restart_spec()
+        spec['reservationCompleteness'] = 'declared-complete'
+        spec['watcher'] = None
+        result = ctx.restart(spec)
+        self.assertEqual(result['continuation'], 'same-owner-fresh-native-readback')
+        self.assertEqual(result['lineage']['originalAttempt'], 'original-attempt')
+
+    def test_restart_missing_base_resynchronizes_without_dropping_holds(self):
+        spec, _ = self.restart_spec()
+        spec['previousReturn'] = None
+        result = ctx.restart(spec)
+        self.assertIn('missing-return-base-resynchronize', result['holds'])
+        self.assertEqual(result['reservations'], spec['reservations'])
+
+    def test_restart_missing_original_is_unknown_not_reconstructed(self):
+        spec, row = self.restart_spec()
+        del row['originalAttempt']
+        spec.update(previousReturn=None, currentReturn=self.file('unknown-return.json', json.dumps(row)))
+        result = ctx.restart(spec)
+        self.assertIsNone(result['lineage']['originalAttempt'])
+        self.assertIn('missing-originalAttempt', result['holds'])
+
+    def test_restart_conflicting_return_joins_refuse(self):
+        for key, value in [('owner', 'other'), ('attempt', 'new'), ('campaign', 'other'),
+                           ('candidate', 'b'*40), ('sourceRevision', 'b'*40), ('inputPacketSha256', 'b'*64)]:
+            with self.subTest(key=key):
+                spec, row = self.restart_spec()
+                row[key] = value
+                spec['currentReturn'] = self.file('bad-return.json', json.dumps(row))
+                with self.assertRaises(ctx.Refusal):
+                    ctx.restart(spec)
+
+    def test_restart_conflicting_base_or_missed_revision_refuses(self):
+        for key, value in [('owner', 'other'), ('originalAttempt', 'other'), ('revision', 0),
+                           ('inputPacketSha256', 'b'*64)]:
+            with self.subTest(key=key):
+                spec, _ = self.restart_spec()
+                previous = json.loads(Path(spec['previousReturn']['path']).read_text())
+                previous[key] = value
+                spec['previousReturn'] = self.file('bad-base.json', json.dumps(previous))
+                with self.assertRaises(ctx.Refusal):
+                    ctx.restart(spec)
+
+    def test_restart_watcher_wrong_head_or_authority_refuses(self):
+        for key, value in [('expectedHead', 'b'*40), ('repository', 'FS-GG/Other'),
+                           ('pullRequest', 2), ('applyAuthorized', True), ('readiness', 'ready')]:
+            with self.subTest(key=key):
+                spec, _ = self.restart_spec()
+                watch = json.loads(Path(spec['watcher']['path']).read_text())
+                watch[key] = value
+                spec['watcher'] = self.file('bad-watch.json', json.dumps(watch))
+                with self.assertRaises(ctx.Refusal):
+                    ctx.restart(spec)
+
+    def test_restart_pinned_inventory_drift_refuses(self):
+        spec, _ = self.restart_spec()
+        Path(spec['reservations']['path']).write_text('all clear')
+        with self.assertRaisesRegex(ctx.Refusal, 'pin-drift'):
+            ctx.restart(spec)
+
+    def test_restart_overflow_refuses_without_partial_inventory(self):
+        spec, _ = self.restart_spec()
+        spec['maximumBytes'] = 1
+        with self.assertRaisesRegex(ctx.Refusal, 'restart-oversize'):
+            ctx.restart(spec)
+
+    def test_restart_cli_retains_result_privately(self):
+        spec, _ = self.restart_spec()
+        source = self.file('restart-input.json', json.dumps(spec))
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = ctx.main(['restart', source['path'], str(self.root/'private'), '--input-sha256', source['sha256']])
+        self.assertEqual(code, 0)
+        envelope = json.loads(stdout.getvalue())
+        self.assertEqual(envelope['result']['reservations'], spec['reservations'])
+        self.assertEqual(Path(envelope['artifact']['path']).stat().st_mode & 0o777, 0o600)
+
 
 if __name__ == '__main__':
     unittest.main()

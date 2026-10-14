@@ -399,6 +399,24 @@ private retention and command identity joins. Native session diagnostics remain 
 dispatch/item attribution. These components do not close .4–.6 or establish whole-family savings;
 actual programme use and the controlled comparison retain their original acceptance boundaries.
 
+### Bounded restart navigation joins, 2026-10-14
+
+The existing dependency-free context helper adds opt-in `restart` navigation verification. It checks
+complete packet bytes and current owner/source joins, adjacent return revision and original-lineage
+correspondence, and optional exact-head watcher identity. Watch-local revisions remain separate from
+owner-return revisions. Full reservation artifacts remain opaque pinned pointers; unknown member
+completeness or missing original identities hold continuation instead of creating helper lanes. Missing
+bases request resynchronization. The command always requires fresh exact-head native observation and
+canonical return/delta/routine validation; it grants no dispatch, retry, release or acceptance authority.
+
+Eleven focused controls extend the existing context suite to41 passing cases. They cover changed owner,
+source, packet, original attempt, missing base, watcher authority/head drift, reservation drift and overflow,
+plus private CLI retention. The17 runner controls and routine eligibility/operation-boundary fixtures pass.
+Retained genuine settlement packet and adjacent returns from the ordinary2026-10-14 window also verify
+navigation correspondence, preserving the explicit missing439-member inventory hold. This read-only
+retained-record check is not an actual interrupted dispatch/restart experiment, a qualified complete
+inventory, a cost comparison or closure of .4–.6. The previous command route remains available for rollback.
+
 ## Validation, risks and rollback
 
 Extend the existing focused F# suite and adapter fixtures rather than inventing a broad new gate.
