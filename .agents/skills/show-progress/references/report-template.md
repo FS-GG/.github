@@ -89,6 +89,24 @@ bounds with coverage stated. Show new, recurring, resolved and ongoing complicat
 “no new complications observed in the reviewed evidence” only for adequately covered items.
 Health and proposed corrective steps do not authorize resuming execution.
 
+## Development process recommendations
+
+Use this section for evidence-backed changes to the development process, rather than
+routine tasks that complete an item. State the observed failure or wait and its
+coverage; propose a concrete change and identify **where** it belongs (repository
+and path, skill, workflow, or named operating practice) and who owns that surface.
+Explain the expected effect and tradeoff, how to check whether the change helped,
+and whether it is proposed or already adopted. Consolidate one shared cause across
+affected outcomes. A recommendation is analysis, not authority to edit or dispatch.
+
+| Evidence and affected outcomes | Recommended change | Where and owner | Expected effect / tradeoff | Check and status |
+|---|---|---|---|---|
+| [observed process gap, dates and coverage; IDs] | [specific process change] | [repository + path/practice; accountable owner] | [expected improvement and cost/risk] | [observable measure or acceptance check; proposed/adopted] |
+
+If the evidence warrants no process change, replace the table with “No development
+process change recommended” and briefly state the coverage limit or reason. Do not
+repeat item-specific corrective tasks as recommendations.
+
 ## Item detail — repeat for each selected item
 
 ### [Stable ID — name]

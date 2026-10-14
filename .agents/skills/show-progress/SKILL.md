@@ -115,6 +115,18 @@ For every in-scope item provide:
   insufficient churn evidence, not healthy or zero rework. Health is a work-item assessment,
   not a worker score, and reporting does not authorize corrective execution.
 
+Add a **Development process recommendations** section after the complications and churn
+summary. Recommend a change to how work is planned, reviewed, built, qualified or
+delivered only when observed evidence supports a material process gap. Distinguish a
+process change from the next technical task needed to finish an item. For each
+recommendation, name the concrete change, the repository and file/skill/workflow or
+operating practice where it belongs, its accountable owner, the observations and
+affected outcomes, the expected effect and tradeoff, and a check for whether it helped.
+Mark proposed versus already adopted changes and link an existing owning plan or
+decision when available. Consolidate shared causes instead of repeating one change
+per item. When no process change is warranted, state that conclusion with its evidence
+coverage. Reporting a recommendation does not authorize its execution.
+
 Always account for a shared dependency once in programme effort and scheduling, while
 showing all affected outcomes. Never extrapolate an ETA from a readiness percentage or
 assume parallel agent count translates into equivalent delivery capacity.
@@ -135,7 +147,8 @@ then show concrete changes since the previous report, work done overall, and rem
 tasks, effort/complexity and health in the main table. Put optional readiness
 percentages and detailed evidence in item sections; do not fill the overview with repeated
 “Unknown → Unknown” cells. Summarize shared evidence gaps once while retaining item-specific
-uncertainty beside the affected claim. Include a visible complications and churn summary.
+uncertainty beside the affected claim. Include a visible complications and churn summary
+and the development process recommendations verdict.
 
 Save as `docs/reports/progressReports/YYYY-MM-DD-HHMMSSZ-unified-v3-progress.md`, using the
 actual generation UTC time. Create the directory if absent. Use exclusive creation; on

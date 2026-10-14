@@ -56,7 +56,7 @@
     "physicalHostPageCache": "not claimed cold"
   },
   "consumerPreparation": {
-    "framework": "Coordination clean exact source; separately acquired and qualified .NET 10.0.401 linux-x64 profile",
+    "framework": "Coordination clean exact source; separately acquired and qualified .NET 10.0.400 linux-x64 profile matching global.json rollForward=disable",
     "ordinaryProduct": "Templates examples/language-routes/typescript-todo compile/unit/domain/storage with separately pinned Node 24.8.0 and TypeScript 5.9.2",
     "browser": "excluded from first Arch profile; existing Playwright Noble qualification remains separate",
     "workspaceSelection": "future published digest-pinned opt-in selection; explicit retaining upgrade and predecessor rollback"

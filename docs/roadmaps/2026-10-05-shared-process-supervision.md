@@ -467,6 +467,8 @@ requirements; describe its actual weaker guarantees accurately. Genuine runtime/
 closure, retry safety, custody, capacity and cleanup remain required unknowns until
 observed. Lost original controller/grant files cannot be recreated as renewed authority.
 
+PROC.6-R2 runtime qualification exhausted original ordinals 1–3. After the evidence-grounded complete support-closure repair, select one successor slot at global ordinal 4 under the existing qualification operation and fixed lineage. Retain every original result and hold. Source admits at most ordinal 4; one fresh root admission may run it for at most 90 seconds of work plus 10 seconds cleanup, using the unchanged one-CPU, sampled 512 MiB RSS profile and existing output/disk limits. No credentials, native API GET, publication or automatic further attempt is authorized. Failure or uncertainty consumes the launched slot and stops runtime work pending a new bounded decision. Success accepts only the established non-effect client qualification assertions; R3–R6 and whole PROC remain open.
+
 No generated workspace/default/provider/lifecycle change is selected. Receiver
 adoption, remaining Linux containment and consolidation retain their own acceptance.
 Preserve missing prospective telemetry attribution; do not manufacture usage joins,
