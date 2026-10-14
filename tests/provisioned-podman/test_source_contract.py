@@ -2,6 +2,7 @@
 """Inert common-base source controls; no package/container/network execution."""
 import json
 import hashlib
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -41,7 +42,51 @@ class CommonBaseSource(unittest.TestCase):
                                   "fuse-overlayfs", "git", "ca-certificates", "python"])
         self.assertNotRegex(self.recipe, r"pacman\s.*(?:-U\b|--nodeps|--overwrite|--assume-installed)")
         self.assertIn("LC_ALL=C pacman -Q | LC_ALL=C sort", self.recipe)
-        self.assertIn("cmp package-inventory.expected /opt/fsgg/package-inventory.txt", self.recipe)
+        self.assertIn('test "$expected_inventory_sha256" = "$actual_inventory_sha256"', self.recipe)
+
+    def test_hash_comparisons_propagate_read_and_hash_failures(self):
+        # Execute both literal comparison blocks, independently of package commands.
+        for name in ("paths", "inventory"):
+            block = self.recipe.split(f"expected_{name}_sha256=", 1)[1].split(";", 3)
+            template = "set -eu; expected_" + name + "_sha256=" + ";".join(block[:3])
+            paths = re.findall(r"sha256sum < ([^);]+)", template)
+            self.assertEqual(len(paths), 2)
+            for case in ("equal", "different", "missing-first", "missing-second", "hash-first", "hash-second"):
+                with self.subTest(comparison=name, case=case), tempfile.TemporaryDirectory() as temporary:
+                    directory = Path(temporary)
+                    guard = template
+                    for index, original in enumerate(paths):
+                        path = directory / str(index)
+                        path.write_bytes(b"same\n" if index == 0 or case != "different" else b"different\n")
+                        if case == ("missing-first" if index == 0 else "missing-second"):
+                            path.unlink()
+                        guard_path = str(path)
+                        guard = guard.replace(original, guard_path)
+                    environment = os.environ.copy()
+                    if case.startswith("hash-"):
+                        # A failed hash may emit plausible output; its exit must still refuse.
+                        wrapper = directory / "sha256sum"
+                        wrapper.write_text("#!/bin/sh\n"
+                                           'count=0; test ! -f "$HASH_COUNT" || read -r count < "$HASH_COUNT"\n'
+                                           'count=$((count + 1)); printf "%s\\n" "$count" > "$HASH_COUNT"\n'
+                                           'printf "same hash\\n"\n'
+                                           'test "$count" != "$HASH_FAIL_AT"\n')
+                        wrapper.chmod(0o700)
+                        environment.update(PATH=str(directory), HASH_COUNT=str(directory / "count"),
+                                           HASH_FAIL_AT="1" if case == "hash-first" else "2")
+                    result = subprocess.run(["/bin/sh", "-c", guard], env=environment,
+                                            capture_output=True, timeout=5)
+                    if case == "equal":
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    else:
+                        self.assertNotEqual(result.returncode, 0)
+
+    def test_preinstall_tools_do_not_require_diffutils(self):
+        preinstall = self.recipe.split("pacman --config", 1)[0]
+        self.assertNotRegex(self.recipe, r"\b(?:cmp|diff)\b")
+        # Shell builtins plus the donor's existing coreutils, grep, findutils and pacman.
+        for tool in ("grep", "find", "cut", "sort", "sha256sum", "rm", "pacman-key"):
+            self.assertRegex(preinstall, r"\b" + tool + r"\b")
 
     def test_local_repositories_have_no_fetch_fallback(self):
         self.assertEqual(self.inputs["snapshot"]["date"], "2026-10-12")

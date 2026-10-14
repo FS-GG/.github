@@ -28,7 +28,9 @@ RUN set -eu; \
     find repositories -type f -print > /opt/fsgg/actual-input-paths; \
     printf '%s\n' package-inventory.expected >> /opt/fsgg/actual-input-paths; \
     LC_ALL=C sort /opt/fsgg/actual-input-paths > /opt/fsgg/sorted-input-paths; \
-    cmp /opt/fsgg/expected-input-paths /opt/fsgg/sorted-input-paths; \
+    expected_paths_sha256=$(sha256sum < /opt/fsgg/expected-input-paths); \
+    actual_paths_sha256=$(sha256sum < /opt/fsgg/sorted-input-paths); \
+    test "$expected_paths_sha256" = "$actual_paths_sha256"; \
     sha256sum --strict --check SHA256SUMS; \
     rm -f /opt/fsgg/invalid-input-paths /opt/fsgg/expected-input-paths \
       /opt/fsgg/actual-input-paths /opt/fsgg/sorted-input-paths; \
@@ -37,7 +39,9 @@ RUN set -eu; \
     pacman --config /opt/fsgg/pacman.conf --noconfirm -Syu --needed \
       podman crun conmon containers-common shadow passt fuse-overlayfs git ca-certificates python; \
     LC_ALL=C pacman -Q | LC_ALL=C sort > /opt/fsgg/package-inventory.txt; \
-    cmp package-inventory.expected /opt/fsgg/package-inventory.txt; \
+    expected_inventory_sha256=$(sha256sum < package-inventory.expected); \
+    actual_inventory_sha256=$(sha256sum < /opt/fsgg/package-inventory.txt); \
+    test "$expected_inventory_sha256" = "$actual_inventory_sha256"; \
     groupadd --gid 32768 fsgg; \
     useradd --uid 32768 --gid 32768 --create-home --shell /bin/bash \
       --key SUB_UID_COUNT=0 --key SUB_GID_COUNT=0 fsgg; \
