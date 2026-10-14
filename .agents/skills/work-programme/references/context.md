@@ -1,7 +1,7 @@
 # Parent context operations
 
 Use `scripts/context.py COMMAND INPUT PRIVATE_ROOT --input-sha256 SHA` for parent reads and context
-diagnostics. Commands are `view`, `review`, `report`, and `command`. Python standard library only; no CLR,
+diagnostics. Commands are `view`, `review`, `report`, `command`, and `restart`. Python standard library only; no CLR,
 GitHub, model, workload launch or daemon. Fresh native admission still governs every actual effect.
 Inputs are pinned JSON of at most256KiB; duplicate keys/unknown fields refuse. Results use unique0600
 files under a dedicated0700 private root. Exit0 means the projection succeeded; exit3 means refusal.
@@ -101,3 +101,34 @@ Keep the dispatch index focused on current navigation; replace superseded entrie
 A delegated recovery owner reads the full handoff once. Parent recovery consumes its compact decision view,
 complete reservations and unresolved decisions. With delegation prohibited/unavailable, the parent performs
 the same bounded recovery directly. Preserve every unknown reservation and unresolved operation.
+
+## Compact restart joins
+
+`restart` verifies navigation for an existing owner without dispatching, retrying or releasing a reservation.
+Its input schema is `fsgg.programme.context-restart-input/1`, with `campaign`, `lane`, `owner`, `attempt`,
+exact40-hex `sourceRevision`, `repository`, positive `pullRequest`, `maximumBytes` (1–65536), and pins
+`packet`, `currentReturn`, `reservations`. `previousReturn` and `watcher` are pins or null.
+`reservationCompleteness` is `declared-complete` or `unknown`; the declaration is not authenticated.
+Pins use the existing `{path,bytes,sha256}` contract and2MiB artifact bound.
+
+The current artifact uses the existing `fsgg.programme.lane-return/1` field names. Its campaign/lane/owner/
+attempt/source must match the input, candidate must equal that source, and packet digest must match the
+complete packet bytes. Adjacent owner revisions retain campaign/lane/feature/item/original item/original
+attempt/owner/attempt/packet identity; source repair may advance candidate bytes. Conflicting joins refuse.
+A missing base above revision1 requests resynchronization. Missing original identities remain null and hold
+continuation; they are never inferred from the current item or attempt. Canonical return/delta/routine
+validation remains required: this command verifies navigation joins and does not replace those contracts.
+
+The reservation artifact is verified and retained as an opaque pin, including inventories whose missing
+member fields prevent conversion to helper lanes. Unknown completeness holds continuation. The command
+cannot discover omitted reservations or authorize global routing from a complete declaration. Preserve the
+original missing-inventory pointer and custodian gap in that artifact; a successful projection clears no hold.
+
+An optional single existing `fsgg.routine-check-watch/v1` record must match repository/PR/exact head and
+retain `readiness:not-evaluated` and `applyAuthorized:false`. Retain a stable copy of one JSONL record if
+needed, linking its original watch artifact in existing evidence. Watch-local revisions remain separate
+from owner-return revisions. Terminal events, restored notifications and matching pins still require fresh
+exact-head native observation; they grant no effect or acceptance authority. Results retain the current and
+previous return pins, full reservation pin, original lineage, separate revisions and holds. Oversize results
+refuse without partial inventory. This source helper does not establish actual interruption recovery or
+V2-CTX-01.4–.6 operational acceptance.

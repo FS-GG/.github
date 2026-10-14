@@ -308,6 +308,73 @@ def command(spec):
                 windowRenewed=False, executed=False, completeness='launcher support, runtime and source closure remain root prerequisites')
 
 
+def restart(spec):
+    """Verify compact restart navigation; never reconstruct missing owner facts."""
+    shape(spec, 'schema campaign lane owner attempt sourceRevision packet currentReturn previousReturn reservations reservationCompleteness watcher repository pullRequest maximumBytes')
+    require(spec['schema'] == 'fsgg.programme.context-restart-input/1', 'invalid-restart-schema')
+    for key in ('campaign', 'lane', 'owner', 'attempt', 'repository'):
+        require(isinstance(spec[key], str) and 0 < len(spec[key]) <= 256, 'missing-restart-identity')
+    require(isinstance(spec['sourceRevision'], str) and
+            re.fullmatch('[0-9a-f]{40}', spec['sourceRevision']), 'invalid-restart-source')
+    require(type(spec['pullRequest']) is int and spec['pullRequest'] > 0, 'invalid-restart-pr')
+    require(spec['reservationCompleteness'] in ('declared-complete', 'unknown'), 'invalid-reservation-completeness')
+    # Inventory is deliberately opaque: historical incomplete holds must never be
+    # normalized into invented helper lanes or dropped because they lack fields.
+    for key in ('packet', 'reservations'):
+        pin_body(spec[key])
+    current = decode(pin_body(spec['currentReturn']))
+    require(isinstance(current, dict) and current.get('schema') == 'fsgg.programme.lane-return/1', 'invalid-restart-return')
+    for key in ('campaign', 'lane', 'owner', 'attempt', 'sourceRevision'):
+        require(current.get(key) == spec[key], 'restart-return-identity-conflict')
+    require(current.get('candidate') == spec['sourceRevision'] and
+            current.get('inputPacketSha256') == spec['packet']['sha256'], 'restart-source-or-packet-conflict')
+    require(type(current.get('revision')) is int and current['revision'] > 0 and
+            type(current.get('supersedes')) is int and current['supersedes'] == current['revision'] - 1,
+            'invalid-restart-return-revision')
+    holds = []
+    for key in ('feature', 'item', 'originalItem', 'originalAttempt'):
+        require(current.get(key) is None or isinstance(current[key], str), 'invalid-restart-lineage')
+        if not current.get(key):
+            holds.append('missing-' + key)
+    previous_pin = spec['previousReturn']
+    if previous_pin is None:
+        if current['revision'] != 1:
+            holds.append('missing-return-base-resynchronize')
+    else:
+        previous = decode(pin_body(previous_pin))
+        require(isinstance(previous, dict) and previous.get('schema') == current['schema'], 'invalid-restart-base')
+        for key in ('campaign', 'lane', 'feature', 'item', 'originalItem', 'originalAttempt', 'owner', 'attempt', 'inputPacketSha256'):
+            require(previous.get(key) == current.get(key), 'restart-base-lineage-conflict')
+        require(type(previous.get('revision')) is int and previous['revision'] == current['supersedes'],
+                'restart-base-revision-conflict')
+    if spec['reservationCompleteness'] == 'unknown':
+        holds.append('reservation-inventory-incomplete-or-unverified')
+    watch_pin = spec['watcher']
+    watch = None
+    if watch_pin is not None:
+        watch = decode(pin_body(watch_pin))
+        require(isinstance(watch, dict) and watch.get('schema') == 'fsgg.routine-check-watch/v1' and
+                watch.get('repository') == spec['repository'] and watch.get('pullRequest') == spec['pullRequest'] and
+                watch.get('expectedHead') == spec['sourceRevision'], 'restart-watcher-identity-conflict')
+        require(watch.get('applyAuthorized') is False and watch.get('readiness') == 'not-evaluated',
+                'restart-watcher-authority-conflict')
+        # Watch-local revision1 after interruption is not owner revision1. No
+        # event, timestamp or terminal state grants freshness or execution rights.
+    result = dict(schema='fsgg.programme.context-restart/1',
+                  identity={key: spec[key] for key in ('campaign', 'lane', 'owner', 'attempt', 'sourceRevision')},
+                  lineage={key: current.get(key) for key in ('feature', 'item', 'originalItem', 'originalAttempt')},
+                  ownerReturnRevision=current['revision'], ownerReturnSupersedes=current['supersedes'],
+                  packet=spec['packet'], currentReturn=spec['currentReturn'], previousReturn=previous_pin,
+                  reservations=spec['reservations'], reservationCompleteness=spec['reservationCompleteness'],
+                  watcher=watch_pin, watcherRevision=watch.get('revision') if watch else None,
+                  holds=holds, continuation='reconcile-holds' if holds else 'same-owner-fresh-native-readback',
+                  nativeObservation='fresh-exact-head-observation-required',
+                  validation='navigation joins only; canonical delta/routine validation remains required',
+                  authority='none; no dispatch, retry, reservation release or acceptance')
+    require(len(encode(result)) <= bound(spec['maximumBytes']), 'restart-oversize')
+    return result
+
+
 def retain(root, value):
     root = no_links(root)
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -324,7 +391,7 @@ def retain(root, value):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('view', 'review', 'report', 'command'))
+    parser.add_argument('command', choices=('view', 'review', 'report', 'command', 'restart'))
     parser.add_argument('input')
     parser.add_argument('private_root')
     parser.add_argument('--input-sha256', required=True)
@@ -335,7 +402,7 @@ def main(argv=None):
         require(1024 <= args.stdout_bytes <= 65536, 'invalid-stdout-bound')
         body = read(args.input, 262144)
         require(hashlib.sha256(body).hexdigest() == args.input_sha256, 'input-pin-drift')
-        value = dict(view=view, review=review, report=usage, command=command)[args.command](decode(body))
+        value = dict(view=view, review=review, report=usage, command=command, restart=restart)[args.command](decode(body))
         value['elapsedMs'] = int((time.monotonic()-started)*1000)
         artifact = retain(args.private_root, value)
         envelope = dict(status='passed', artifact=artifact, result=value)
