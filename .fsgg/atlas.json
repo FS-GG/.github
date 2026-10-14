@@ -1,0 +1,10 @@
+{
+  "schema": "fsgg.atlas/1",
+  "primaryKnowledgeStore": "Atlas",
+  "archive": "docs/atlas",
+  "authority": "curated knowledge; cited source and live systems retain their own authority",
+  "warningBytes": 52428800,
+  "ceilingBytes": 104857600,
+  "recordBytes": 32768,
+  "retrievalBytes": 65536
+}

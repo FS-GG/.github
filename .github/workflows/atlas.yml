@@ -1,0 +1,46 @@
+name: Atlas knowledge
+on:
+  pull_request:
+    paths:
+      - 'docs/atlas/**'
+      - '.agents/skills/atlas/**'
+      - '.claude/skills/atlas/**'
+      - 'tests/atlas/**'
+      - '.fsgg/atlas.json'
+      - '.fsgg/agents.yml'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - '.github/workflows/atlas.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/atlas/**'
+      - '.agents/skills/atlas/**'
+      - '.claude/skills/atlas/**'
+      - 'tests/atlas/**'
+      - '.fsgg/atlas.json'
+      - '.fsgg/agents.yml'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - '.github/workflows/atlas.yml'
+permissions:
+  contents: read
+jobs:
+  atlas:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate knowledge, history, guidance and actual SQLite retrieval
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ && "$BASE_SHA" != 0000000000000000000000000000000000000000 ]]; then
+            python3 -B tests/atlas/check.py --baseline "$BASE_SHA"
+          else
+            python3 -B tests/atlas/check.py
+          fi

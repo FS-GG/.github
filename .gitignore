@@ -49,3 +49,7 @@ obj/
 **/test-results/
 TestResults/
 **/*.trx
+
+# Atlas indexes are rebuildable local caches, never authoritative knowledge.
+.atlas-cache/
+docs/atlas/*.sqlite*

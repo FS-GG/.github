@@ -2,14 +2,54 @@
   "schemaVersion": 2,
   "skills": [
     {
-      "id": "work-roadmap",
+      "id": "atlas",
       "scope": "driver",
-      "sha256": "d01bc0a70e7d0edb807ef6bfde030d34db567ad5849cb8e8e249ae34cc19e05c",
-      "tree-sha256": "fbc3c3cc261cc2489c7292a6497aec91a76c75b9cfaf6e5d1cfb31261cb389e3",
+      "sha256": "ecf864c81179f122660e6bba77601bdc87fe0cf6ba87852e6a076b675cf3077a",
+      "tree-sha256": "55c485981c9157f6bf145cab4818890f0d7b7fee748adf5faa9c43ad4ecbc51a",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "d01bc0a70e7d0edb807ef6bfde030d34db567ad5849cb8e8e249ae34cc19e05c",
+          "sha256": "ecf864c81179f122660e6bba77601bdc87fe0cf6ba87852e6a076b675cf3077a",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "29956460372a7dc6fb29ee58bf0208e52c7f5409f0a2d8196d7cc1d601e11730",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/README.md",
+          "sha256": "f572d30e4189c025765b3093b7fea2ddff1f63a560d13535aa76790b220d8ec6",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/catalog.json",
+          "sha256": "aaf0c74713942491e30ee7fe86632e2533651aceee3183dd199a18f8d5d51112",
+          "executable": false
+        },
+        {
+          "path": "references/records.md",
+          "sha256": "a05783aeb00081a0bdb227ff330dff2402567cdf282e133d3acf313c9ee65acf",
+          "executable": false
+        },
+        {
+          "path": "scripts/atlas.py",
+          "sha256": "9a1d47e05d9e867f03e6878b0feca612a72b2a0abe6b440f383740a79b048dd2",
+          "executable": false
+        }
+      ],
+      "supplied-by": ".claude/skills/atlas",
+      "materializes-when": "always"
+    },
+    {
+      "id": "work-roadmap",
+      "scope": "driver",
+      "sha256": "24190433bb138e022e169c381c2f5449b2fe68d335bf2936df92a461e88d705c",
+      "tree-sha256": "a237eb326a4b048de41de92d292b32e2bd3d3543ead0410b0cd4b2a51c072f7f",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "24190433bb138e022e169c381c2f5449b2fe68d335bf2936df92a461e88d705c",
           "executable": false
         },
         {

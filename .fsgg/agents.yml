@@ -9,5 +9,6 @@ agents:
 sourceModel:
   workModel: readiness/{workId}/work-model.json
 policy:
+  knowledgePolicy: .fsgg/atlas.json
   generatedGuidanceIsAuthority: false
   requireEquivalentClaudeAndCodexBehavior: true
