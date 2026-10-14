@@ -99,8 +99,10 @@ are an opt-in mode and cannot satisfy cold acceptance. Do not clear host caches 
 page-cache state. No writable engine store, credentials, socket or automatic service is embedded.
 
 The first framework pilot is Coordination's exact clean source using a separately declared .NET
-10.0.401 linux-x64 profile. Its portable SDK archive and native dependency closure remain unacquired;
-the existing SDK401 consumer image supplies no common-base or profile acceptance. Templates/SDD own
+10.0.400 linux-x64 profile, matching the selected Coordination source's `global.json` with
+`rollForward: disable`. The consumer pin controls this pilot; another receiver's SDK401 profile does not
+satisfy it. Its portable SDK archive and Arch native dependency closure remain unacquired;
+existing SDK consumer lanes supply no common-base or profile acceptance. Templates/SDD own
 toolchain materialization and exact digest selection.
 
 The first ordinary product receiver is Templates' `examples/language-routes/typescript-todo` with

@@ -181,6 +181,10 @@ class CommonBaseSource(unittest.TestCase):
         for excluded in ("dotnet", "nodejs", "typescript", "rust", "go", "base-devel", "playwright"):
             self.assertNotIn(excluded, self.inputs["targets"])
         self.assertIn("separately", self.inputs["consumerPreparation"]["framework"])
+        self.assertIn("10.0.400", self.inputs["consumerPreparation"]["framework"])
+        self.assertIn("global.json rollForward=disable", self.inputs["consumerPreparation"]["framework"])
+        self.assertNotIn("10.0.401", self.inputs["consumerPreparation"]["framework"])
+        self.assertIn("`rollForward: disable`", self.readme)
         self.assertIn("typescript-todo", self.inputs["consumerPreparation"]["ordinaryProduct"])
         self.assertIn("excluded", self.inputs["consumerPreparation"]["browser"])
         self.assertIn("opt-in", self.inputs["consumerPreparation"]["workspaceSelection"])
