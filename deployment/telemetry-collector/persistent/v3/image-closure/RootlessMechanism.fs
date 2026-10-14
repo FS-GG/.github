@@ -19,7 +19,7 @@ type RealProcessBackend(custody:CustodyChannel)=
         member _.RetainCommandEvidence bytes=custody.Retain bytes
         member _.Start command=custody.Start command
 
-type RootlessInputs={CustodyIdentity:string;Selection:Selection;Trusted:TrustedNativeSelection;SelectionPath:string;TrustedPath:string;ParentOci:string;WorkRoot:string;EvidenceRoot:string;ExpectedInput:string;Prepared:byte array}
+type RootlessInputs={CustodyIdentity:string;Selection:Selection;Trusted:TrustedNativeSelection;SelectionPath:string;TrustedPath:string;ParentOci:string;WorkRoot:string;EvidenceRoot:string;ExpectedInput:string;Prepared:byte array;Program:CommandProgram}
 type private Bundle={Logical:string;Root:string;Nonce:string;Environment:Map<string,string>;Contexts:string array;Children:Dictionary<string,IOwnedProcess>;mutable Build:IOwnedProcess option;mutable Result:OciResult option;mutable UnacknowledgedChild:bool;Gate:obj;mutable C5Active:bool;mutable C5Retired:bool;mutable C5Residue:bool}
 
 module RootlessPolicy=
@@ -48,21 +48,24 @@ module RootlessPolicy=
         if not file.Exists||not(String.IsNullOrEmpty file.LinkTarget)||ImageClosure.ownerUid path<>0||((File.GetUnixFileMode path)&&&(UnixFileMode.GroupWrite|||UnixFileMode.OtherWrite))<>enum 0 then fail "root-selected-input-custody"
         let parent=file.Directory
         if not parent.Exists||not(String.IsNullOrEmpty parent.LinkTarget)||ImageClosure.ownerUid parent.FullName<>0||((File.GetUnixFileMode parent.FullName)&&&(UnixFileMode.GroupWrite|||UnixFileMode.OtherWrite))<>enum 0 then fail "root-selected-parent-custody"
-    let inputIdentity (selection:Selection) selectionPath trustedPath parent prepared custodyIdentity=
-        let hashes=Array.concat[[|OciEvidence.shaFile selectionPath;OciEvidence.shaFile trustedPath;OciEvidence.shaFile parent;OciEvidence.shaBytes prepared;custodyIdentity;commandPolicy;InactiveQualification.Policy;BuilderSha256;SupervisorSha256|];selection.RoleManifests|>Array.map(fun item->OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,item.Path)));[|OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,selection.NativeInventoryPath))|]]
+    let inputIdentity (selection:Selection) selectionPath trustedPath parent prepared custodyIdentity program=
+        let hashes=Array.concat[[|OciEvidence.shaFile selectionPath;OciEvidence.shaFile trustedPath;OciEvidence.shaFile parent;OciEvidence.shaBytes prepared;custodyIdentity;CommandRecipe.identity program;commandPolicy;InactiveQualification.Policy;BuilderSha256;SupervisorSha256|];selection.RoleManifests|>Array.map(fun item->OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,item.Path)));[|OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,selection.NativeInventoryPath))|]]
         OciEvidence.shaBytes(Encoding.UTF8.GetBytes(String.concat "\n" hashes))
-    let select selection trusted selectionPath trustedPath parent work evidence prepared custodyIdentity=
+    let select selection trusted selectionPath trustedPath parent work evidence prepared custodyIdentity target program=
         if selection.IdentityClass<>"production" then fail "run-requires-production-identity"
+        CommandRecipe.validate selection trusted prepared custodyIdentity target parent work evidence program
         requireRootlessNamespace()
         for path in [selectionPath;trustedPath;parent] do requirePrivateInput path
         privateDirectory work;privateDirectory evidence
         if work=evidence||work.StartsWith(evidence+"/",StringComparison.Ordinal)||evidence.StartsWith(work+"/",StringComparison.Ordinal) then fail "roots-overlap"
-        {CustodyIdentity=custodyIdentity;Selection=selection;Trusted=trusted;SelectionPath=selectionPath;TrustedPath=trustedPath;ParentOci=parent;WorkRoot=work;EvidenceRoot=evidence;ExpectedInput=inputIdentity selection selectionPath trustedPath parent prepared custodyIdentity;Prepared=prepared}
+        {CustodyIdentity=custodyIdentity;Selection=selection;Trusted=trusted;SelectionPath=selectionPath;TrustedPath=trustedPath;ParentOci=parent;WorkRoot=work;EvidenceRoot=evidence;ExpectedInput=inputIdentity selection selectionPath trustedPath parent prepared custodyIdentity program;Prepared=prepared;Program=program}
 
 /// One acknowledged bundle owns context, build store, reload store and all subprocess descendants.
 type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
     let bundles=Dictionary<string,Bundle>()
     let mutable comparisonSealed=false
+    let program=JsonSerializer.Deserialize<CommandProgram>(CommandRecipe.bytes inputs.Program)
+    let mutable removals=0
     let require condition reason=if not condition then raise(InvalidDataException reason)
     let checkBuilder (token:CancellationToken)=
         token.ThrowIfCancellationRequested()
@@ -90,14 +93,12 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
         File.SetUnixFileMode(path,UnixFileMode.UserRead)
     let validate (token:CancellationToken)=
         token.ThrowIfCancellationRequested()
+        CommandRecipe.validate inputs.Selection inputs.Trusted inputs.Prepared inputs.CustodyIdentity program.Selection.Target inputs.ParentOci inputs.WorkRoot inputs.EvidenceRoot program
         match ImageClosure.prepareWithTrustedNative (Some inputs.Trusted) inputs.Selection with
         | Prepared bytes->require(bytes=inputs.Prepared) "prepared-input-changed"
         | _->raise(InvalidDataException "closed-input-no-longer-admitted")
-        require(RootlessPolicy.inputIdentity inputs.Selection inputs.SelectionPath inputs.TrustedPath inputs.ParentOci inputs.Prepared inputs.CustodyIdentity=inputs.ExpectedInput) "input-bytes-changed"
+        require(RootlessPolicy.inputIdentity inputs.Selection inputs.SelectionPath inputs.TrustedPath inputs.ParentOci inputs.Prepared inputs.CustodyIdentity program=inputs.ExpectedInput) "input-bytes-changed"
         token.ThrowIfCancellationRequested()
-    let globalArgs (bundle:Bundle) reload=
-        let prefix=if reload then "reload-" else "build-"
-        [|"--remote=false";"--events-backend=none";"--storage-driver=vfs";"--root";Path.Combine(bundle.Root,prefix+"graph");"--runroot";Path.Combine(bundle.Root,prefix+"run");"--tmpdir";Path.Combine(bundle.Root,prefix+"tmp")|]
     let validateContext (bundle:Bundle) (token:CancellationToken)=
         let context=bundle.Contexts[0]
         let expected=inputs.Selection.Files|>Array.map _.SourcePath|>Set.ofArray|>Set.add "Containerfile"
@@ -117,9 +118,10 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
         use prepared=JsonDocument.Parse inputs.Prepared
         require(File.ReadAllText(Path.Combine(context,"Containerfile"))=prepared.RootElement.GetProperty("containerfile").GetString()) "context-recipe-changed"
         token.ThrowIfCancellationRequested()
-    let start (bundle:Bundle) reload arguments (token:CancellationToken)=
+    let start (bundle:Bundle) (selectedCommand:ProcessCommand) (token:CancellationToken)=
         checkBuilder token
-        let command={Executable=RootlessPolicy.Builder;Arguments=Array.append(globalArgs bundle reload)arguments;Environment=bundle.Environment;WorkingDirectory=bundle.Root;OutputLimit=1024*1024}
+        require(selectedCommand.WorkingDirectory=bundle.Root&&selectedCommand.Environment=bundle.Environment) "recipe-bundle-command-join"
+        let command={selectedCommand with Arguments=Array.copy selectedCommand.Arguments}
         let ordinal=bundle.Children.Count+1
         seal ($"{bundle.Logical}-command-{ordinal}.json") {|selectedCommand=command;supervisor="/usr/bin/setsid";supervisorArguments=Array.concat[[|"--wait";"--";command.Executable|];command.Arguments];supervisorSha256=RootlessPolicy.SupervisorSha256|}
         token.ThrowIfCancellationRequested()
@@ -130,42 +132,42 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
         bundle.UnacknowledgedChild<-false
         seal ($"{bundle.Logical}-process-{ordinal}.json") {|identity=child.Identity;input=inputs.ExpectedInput|}
         child
-    let invoke bundle reload arguments token=
-        let child=start bundle reload arguments token
+    let invokeCommand bundle command token=
+        let child=start bundle command token
         let output=child.Wait token
         seal ($"{bundle.Logical}-output-{bundle.Children.Count}.json") output
         require(output.ExitCode=0) "podman-command-failed"
         require child.HasExited "process-not-quiescent"
         output.Stdout
-    let inspect bundle reload token=
-        let raw=invoke bundle reload [|"image";"inspect";"localhost/learn-p2c4:inert"|] token
+    let invoke bundle step token=invokeCommand bundle (CommandRecipe.step program bundle.Logical step) token
+    let inspect bundle step token=
+        let raw=invoke bundle step token
         use doc=JsonDocument.Parse raw
         require(doc.RootElement.ValueKind=JsonValueKind.Array&&doc.RootElement.GetArrayLength()=1) "reload-image-ambiguous"
         let item=doc.RootElement[0]
         let result=bundle.Result.Value
         require(item.GetProperty("Digest").GetString()=result.ManifestDigest&&item.GetProperty("Id").GetString()=result.ConfigDigest&&item.GetProperty("Os").GetString()="linux"&&item.GetProperty("Architecture").GetString()="amd64") "reload-identity-changed"
-    let export bundle reload label token=
+    let export bundle label token=
         let archive=Path.Combine(inputs.EvidenceRoot,bundle.Logical+"-"+label+".oci.tar")
-        invoke bundle reload [|"save";"--format";"oci-archive";"--output";archive;"localhost/learn-p2c4:inert"|] token|>ignore
+        invoke bundle (label+"-save") token|>ignore
         let result=OciEvidence.read token archive (Path.Combine(bundle.Root,"oci-"+label))
         OciEvidence.verifySelected inputs.Selection result
         File.SetUnixFileMode(archive,UnixFileMode.UserRead)
         result,archive
-    let probe bundle executable arguments token=
-        // --rm is scoped to the acknowledged bundle; named IDs remain enumerable there on interruption.
-        let name="learn-p2c4-"+bundle.Nonce
-        invoke bundle true (Array.concat[[|"run";"--name";name;"--rm";"--network";"none";"--read-only";"--cap-drop";"ALL";"--security-opt";"no-new-privileges";"--cpus";"1";"--memory";"512m";"--pids-limit";"64";"--user";"32768:32768";"--entrypoint";executable;"localhost/learn-p2c4:inert"|];arguments]) token
     let cleanup (bundle:Bundle) (token:CancellationToken)=
         require(lock bundle.Gate (fun()->not bundle.C5Active&&bundle.C5Retired&&not bundle.C5Residue)) "cleanup-c5-effect-not-retired"
         require(not bundle.UnacknowledgedChild) "cleanup-unacknowledged-child"
         require(bundle.Children.Values|>Seq.forall _.HasExited) "cleanup-outstanding-child"
         for reload in [false;true] do
-            let containers=invoke bundle reload [|"ps";"--all";"--quiet";"--no-trunc"|] token
+            let prefix=if reload then "cleanup-reload-" else "cleanup-build-"
+            let containers=invoke bundle (prefix+"census") token
             for id in containers.Split('\n',StringSplitOptions.RemoveEmptyEntries) do
                 require(System.Text.RegularExpressions.Regex.IsMatch(id,"^[0-9a-f]{64}$")) "cleanup-container-identity"
-                invoke bundle reload [|"rm";"--force";id|] token|>ignore
-            require(String.IsNullOrWhiteSpace(invoke bundle reload [|"ps";"--all";"--quiet"|] token)) "cleanup-containers-remain"
-            let mounts=invoke bundle reload [|"mount";"--notruncate"|] token
+                require(removals<program.Selection.CleanupRemovalLimit) "cleanup-removal-bound"
+                removals<-removals+1
+                invokeCommand bundle (CommandRecipe.removal program bundle.Logical reload id) token|>ignore
+            require(String.IsNullOrWhiteSpace(invoke bundle (prefix+"empty") token)) "cleanup-containers-remain"
+            let mounts=invoke bundle (prefix+"mount") token
             require(String.IsNullOrWhiteSpace mounts) "cleanup-mounts-remain"
         require(bundle.Children.Values|>Seq.forall _.HasExited) "cleanup-process-remains"
         require(File.ReadAllText(Path.Combine(bundle.Root,"owner"))=bundle.Nonce) "cleanup-owner-changed"
@@ -203,14 +205,14 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
                 let root=Path.Combine(inputs.WorkRoot,"bundle-"+logical)
                 require(not(Directory.Exists root)) "store-not-fresh"
                 Directory.CreateDirectory(root,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)|>ignore
-                let nonce=Guid.NewGuid().ToString("N")
+                let nonce=CommandRecipe.nonce program logical
                 File.WriteAllText(Path.Combine(root,"owner"),nonce)
                 let directories=[|"build-graph";"build-run";"build-tmp";"reload-graph";"reload-run";"reload-tmp";"context";"runtime";"tmp"|]
                 for name in directories do token.ThrowIfCancellationRequested();Directory.CreateDirectory(Path.Combine(root,name))|>ignore
                 File.WriteAllText(Path.Combine(root,"auth.json"),"{\"auths\":{}}")
                 File.WriteAllText(Path.Combine(root,"containers.conf"),"[engine]\nevents_logger=\"none\"\n")
                 File.WriteAllText(Path.Combine(root,"storage.conf"),$"[storage]\ndriver=\"vfs\"\ngraphroot=\"{root}/build-graph\"\nrunroot=\"{root}/build-run\"\n")
-                let env=Map.ofList["PATH","/usr/sbin:/usr/bin:/bin";"HOME",root;"XDG_RUNTIME_DIR",Path.Combine(root,"runtime");"TMPDIR",Path.Combine(root,"tmp");"REGISTRY_AUTH_FILE",Path.Combine(root,"auth.json");"CONTAINERS_CONF",Path.Combine(root,"containers.conf");"CONTAINERS_STORAGE_CONF",Path.Combine(root,"storage.conf")]
+                let env=CommandRecipe.environment root
                 let context=Path.Combine(root,"context")
                 for row in inputs.Selection.Files do
                     token.ThrowIfCancellationRequested()
@@ -236,12 +238,11 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
                 require(expected=inputs.ExpectedInput&&(bundles.Values|>Seq.forall(fun b->b.Children.Values|>Seq.forall _.HasExited))) "build-concurrency-or-input"
                 let bundle=bundles[logical]
                 validateContext bundle token
-                invoke bundle false [|"load";"--input";inputs.ParentOci|] token|>ignore
-                let inspectRaw=invoke bundle false [|"image";"inspect";inputs.Selection.RuntimeImageDigest|] token
+                invoke bundle "parent-load" token|>ignore
+                let inspectRaw=invoke bundle "parent-inspect" token
                 use parentDoc=JsonDocument.Parse inspectRaw
                 require(parentDoc.RootElement.GetArrayLength()=1&&parentDoc.RootElement[0].GetProperty("Digest").GetString()=inputs.Selection.RuntimeImageDigest) "loaded-parent-identity"
-                let args=[|"build";"--platform";"linux/amd64";"--format";"oci";"--no-cache";"--pull";"never";"--network";"none";"--isolation";"rootless";"--timestamp";"1790899200";"--compression-format";"gzip";"--compression-level";"6";"--force-compression";"--file";Path.Combine(bundle.Contexts[0],"Containerfile");"--tag";"localhost/learn-p2c4:inert";bundle.Contexts[0]|]
-                let child=start bundle false args token
+                let child=start bundle (CommandRecipe.step program logical "build") token
                 bundle.Build<-Some child
                 BuildStarted(logical,child.Identity)
             | AwaitBuild(logical,identity,expected)->
@@ -251,7 +252,7 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
                 let output=child.Wait token
                 seal (logical+"-build-output.json") output
                 require(output.ExitCode=0&&child.HasExited) "build-exit-not-success"
-                let result,_=export bundle false "build" token
+                let result,_=export bundle "build" token
                 bundle.Result<-Some result
                 seal (logical+"-build.json") result
                 BuildCompleted(logical,identity,result.ManifestDigest,inputs.ExpectedInput)
@@ -267,15 +268,15 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
                 if not(OciEvidence.equivalent first.Result.Value second.Result.Value) then BuildsCompared false
                 else
                     for bundle in [first;second] do
-                        invoke bundle true [|"load";"--input";Path.Combine(inputs.EvidenceRoot,bundle.Logical+"-build.oci.tar")|] token|>ignore
-                        inspect bundle true token
-                        let reloaded,_=export bundle true "reload" token
+                        invoke bundle "reload-load" token|>ignore
+                        inspect bundle "reload-inspect" token
+                        let reloaded,_=export bundle "reload" token
                         require(OciEvidence.equivalent bundle.Result.Value reloaded) "reload-evidence-changed"
-                        let dotnet=probe bundle "/usr/share/dotnet/dotnet" [|"--list-runtimes"|] token
+                        let dotnet=invoke bundle "probe-dotnet" token
                         require(dotnet.Contains("Microsoft.NETCore.App 10.0.12")&&dotnet.Contains("Microsoft.AspNetCore.App 10.0.12")) "runtime-probe-version"
-                        let python=probe bundle inputs.Trusted.PythonExecutable [|"-I";"-S";"-B";"--version"|] token
+                        let python=invoke bundle "probe-python" token
                         require(python.Trim()="Python 3.14.0") "python-probe-version"
-                        let native=probe bundle "/opt/fsgg/codex/codex" [|"--version"|] token
+                        let native=invoke bundle "probe-native" token
                         require(native.Trim()="codex-cli 0.158.0") "native-probe-version"
                         seal (bundle.Logical+"-probes.json") {|dotnet=dotnet;python=python;native=native|}
                     token.ThrowIfCancellationRequested()
@@ -295,8 +296,15 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
                 try
                     for bundle in owned do
                         token.ThrowIfCancellationRequested()
-                        inspect bundle true token
-                        let result=InactiveQualification.run inputs.Selection inputs.Trusted bundle.Root (fun arguments cancellation->invoke bundle true arguments cancellation) token
+                        inspect bundle "inactive-inspect" token
+                        let mutable inactiveOrdinal=0
+                        let result=InactiveQualification.run inputs.Selection inputs.Trusted bundle.Root (fun arguments cancellation->
+                            let step=match inactiveOrdinal with 0->"inactive-manager"|1->"inactive-host"|_->raise(InvalidDataException "inactive-command-count")
+                            inactiveOrdinal<-inactiveOrdinal+1
+                            let selected=CommandRecipe.step program bundle.Logical step
+                            require(selected.Arguments.Length>=arguments.Length&&selected.Arguments[selected.Arguments.Length-arguments.Length..]=arguments) "inactive-recipe-command-drift"
+                            invoke bundle step cancellation) token
+                        require(inactiveOrdinal=2) "inactive-command-count"
                         results.Add(bundle.Logical,result)
                     validate token
                     token.ThrowIfCancellationRequested()
