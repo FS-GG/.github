@@ -1017,3 +1017,12 @@ credential job, so admit that exact automatic settlement path before merging the
 replacement publisher. Qualify its full exact-main workflow and all native gates,
 then select the new compatible immutable publisher while preserving the accepted
 original .103 candidate.
+
+The ordinary observer correction also covers a native merge whose target advanced
+after the associated PR base was selected. It authenticates the actual first parent
+as that base or a strict descendant, retains the exact PR head as second parent,
+and independently proves fetched ancestry and complete clean three-way source-tree
+composition. Original failed observation `38571428924`, attempt 1, remains evidence;
+source controls do not qualify replacement hosted ordinary settlement, the full
+exact-main workflow or publication. The accepted original `.103` archive and all
+release-effect boundaries remain fixed.
