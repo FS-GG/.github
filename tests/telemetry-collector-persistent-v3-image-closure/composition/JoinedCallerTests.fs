@@ -24,6 +24,8 @@ extern int fsgg_caller_source_serve()
 extern int fsgg_caller_source_trace(uint32& slots,uint32& births,uint32& signals,int& aborted)
 [<DllImport("learn_caller_source",CallingConvention=CallingConvention.Cdecl)>]
 extern int fsgg_caller_source_close()
+[<DllImport("learn_caller_source",CallingConvention=CallingConvention.Cdecl)>]
+extern nativeint fsgg_caller_source_failure()
 
 let private view (value:RootRecipeBinding.NativeView)=
     require(value.Length<=32768un) "source-command-view-bound"
@@ -78,7 +80,7 @@ let private exercise target failFirst=
                 ProductionCaller.runSourceBoundary inputs target custody boundary CancellationToken.None
             require(peer.Value.Wait(TimeSpan.FromSeconds 5.)) "source-peer-not-retired"
             callbackFailure|>Option.iter raise
-            require(peer.Value.Result=1) "source-native-terminal-refused"
+            require(peer.Value.Result=1) ("source-native-terminal-refused:"+Marshal.PtrToStringUTF8(fsgg_caller_source_failure()))
             let mutable slots,births,signals,aborted=0u,0u,0u,0
             require(fsgg_caller_source_trace(&slots,&births,&signals,&aborted)=1&&slots=births&&signals=0u) "source-native-retirement-trace"
             if failFirst then

@@ -1,6 +1,8 @@
 open System
 
-// No production resources, kernel callbacks or native library are opened by
-// this entry. The full joined source fixture is added only in its admitted scope.
-if Environment.GetCommandLineArgs().Length<>1 then invalidArg "args" "caller source identity controls take no arguments"
-CallerCompositionTests.testIdentity()
+match Environment.GetCommandLineArgs() |> Array.skip 1 with
+| [||]->CallerCompositionTests.testIdentity()
+| [|"--joined-inert"|]->
+    CallerCompositionTests.testIdentity()
+    JoinedCallerTests.run()
+| _->invalidArg "args" "expected no arguments or --joined-inert"

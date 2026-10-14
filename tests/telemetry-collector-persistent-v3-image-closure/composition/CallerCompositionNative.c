@@ -161,6 +161,9 @@ int fsgg_caller_source_eof(void) {
  for(unsigned i=0;i<a->next_slot;i++)if(!a->owned[i].born||!a->owned[i].settled)return 0;
  return !a->failure&&lr_terminal(&a->root_state);
 }
+const char *fsgg_caller_source_failure(void) {
+ return source_current?lc_failure(source_current->adapter):"source-fixture-unopened";
+}
 int fsgg_caller_source_close(void) {
  struct source_fixture *f=source_current;if(!f)return 1;if(atomic_load(&f->serving))return 0;
  /* No actual process was born by this distinct translation unit. Its callback
