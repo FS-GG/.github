@@ -688,9 +688,9 @@ client=[docker,'--host=unix:///var/run/docker.sock','--config',str(evidence/(nam
 pathlib.Path(client[-1]).mkdir(mode=0o700)
 def bounded(argv,seconds,destination,kill=30,cap=16777216):
     # Timeout encloses the entire pipefail pipeline; a cap+1 byte result refuses.
-    pipeline=shlex.join(argv)+' 2>&1 | head -c '+str(cap+1)+' > '+shlex.quote(str(destination))
+    pipeline=shlex.join(argv)+' 2>&1 | head -c '+str(cap+1)+' > '+shlex.quote(str(destination))  # discarded-status-ok: cap+1 truncation refuses overflow; pipefail preserves writer failure
     result=subprocess.run([timeout,'--signal=TERM','--kill-after='+str(kill)+'s',str(seconds)+'s','/usr/bin/bash','-c','set -o pipefail; '+pipeline])
-    if destination.stat().st_size>cap: raise RuntimeError('inactive source output exceeded16MiB')
+    if destination.stat().st_size>cap: raise RuntimeError('inactive source output exceeded '+str(cap)+' bytes')
     return result.returncode
 pull=evidence/(name+'.pull.log')
 if bounded(client+['pull','--platform=linux/amd64',image],120,pull,15)!=0: raise RuntimeError('inactive source immutable SDK acquisition failed')
@@ -703,30 +703,39 @@ if selected['Id']!=config or selected['Architecture']!='amd64' or selected['Os']
 if image not in selected['RepoDigests']: raise RuntimeError('inactive source immutable manifest correspondence')
 loaded=repo/'tests/telemetry-collector-persistent-v3-image-closure/bin/Debug/net10.0/PersistentV3.ImageClosure.Tests.dll'
 argv=client+['run','--pull=never','--name',name,'--cidfile',str(cidfile),'--label=fsgg.inactive-source='+name,
-      '--user=0:0','--read-only','--network=none','--ipc=private',
+      '--user=0:0','--read-only','--network=none','--ipc=private','--cgroupns=private','--runtime=runc','--init=false','--restart=no','--no-healthcheck',
       '--cap-drop=ALL','--cap-add=CAP_CHOWN','--cap-add=CAP_DAC_OVERRIDE','--cap-add=CAP_FOWNER',
       '--security-opt=no-new-privileges','--cpus=2','--memory=6g','--memory-swap=6g','--pids-limit=512',
       '--tmpfs=/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777',
-      '--mount','type=bind,src='+str(repo)+',dst='+str(repo)+',readonly',
+      '--mount','type=bind,src='+str(repo)+',dst='+str(repo)+',readonly,bind-propagation=rprivate,bind-recursive=readonly',
       '--workdir',str(repo),'--env=HOME=/tmp','--env=DOTNET_CLI_HOME=/tmp',
       '--env=DOTNET_PROCESSOR_COUNT=2','--env=DOTNET_CLI_TELEMETRY_OPTOUT=1',
       '--env=PERSISTENT_V3_RECIPE_CONTROLS_ONLY=1','--entrypoint=/usr/share/dotnet/dotnet',image,str(loaded)]
 def authenticate(observed,cid):
     host=observed['HostConfig']; config_row=observed['Config']; mounts=observed['Mounts']
     binding=[row for row in mounts if row['Destination']==str(repo)]
+    declared=host['Mounts']
+    bind_options=declared[0].get('BindOptions',{}) if len(declared)==1 else {}
     if (observed['Id']!=cid or observed['Name']!='/'+name or observed['Image']!=config or
         config_row['Labels'].get('fsgg.inactive-source')!=name or config_row['User']!='0:0' or
         config_row['Entrypoint']!=['/usr/share/dotnet/dotnet'] or config_row['Cmd']!=[str(loaded)] or
-        'PERSISTENT_V3_RECIPE_CONTROLS_ONLY=1' not in config_row['Env'] or
+        'PERSISTENT_V3_RECIPE_CONTROLS_ONLY=1' not in config_row['Env'] or config_row.get('Healthcheck',{}).get('Test')!=['NONE'] or
+        host['Privileged'] or host['Devices'] or host.get('DeviceRequests') or host.get('Binds') or host.get('VolumesFrom') or
         not host['ReadonlyRootfs'] or host['NetworkMode']!='none' or host['PidMode']!='' or host['IpcMode']!='private' or
+        host['UTSMode']!='' or host['UsernsMode']!='' or host['CgroupnsMode']!='private' or host['Runtime']!='runc' or
+        host['Init'] is not False or host['AutoRemove'] or host['RestartPolicy']!={'Name':'no','MaximumRetryCount':0} or
+        host.get('PortBindings') or host.get('Links') or host['PublishAllPorts'] or
         host['CapDrop']!=['ALL'] or host['CapAdd']!=['CAP_CHOWN','CAP_DAC_OVERRIDE','CAP_FOWNER'] or
         host['SecurityOpt']!=['no-new-privileges'] or host['NanoCpus']!=2000000000 or
         host['Memory']!=6442450944 or host['MemorySwap']!=6442450944 or host['PidsLimit']!=512 or
         host['Tmpfs']!={'/tmp':'rw,exec,nosuid,nodev,size=1g,mode=1777'} or
-        len(binding)!=1 or binding[0]['Type']!='bind' or binding[0]['Source']!=str(repo) or binding[0]['RW'] or
+        len(declared)!=1 or declared[0]['Type']!='bind' or declared[0]['Source']!=str(repo) or declared[0]['Target']!=str(repo) or not declared[0]['ReadOnly'] or
+        bind_options.get('Propagation')!='rprivate' or bind_options.get('ReadOnlyForceRecursive') is not True or bind_options.get('NonRecursive',False) or bind_options.get('ReadOnlyNonRecursive',False) or
+        len(binding)!=1 or binding[0]['Type']!='bind' or binding[0]['Source']!=str(repo) or binding[0]['RW'] or binding[0]['Propagation']!='rprivate' or
         any(row['Destination'] not in [str(repo),'/tmp'] or (row['Destination']=='/tmp' and row['Type']!='tmpfs') for row in mounts)):
         raise RuntimeError('inactive source container scope/identity mismatch')
 def retire(cid):
+    if len(cid)!=64 or any(c not in '0123456789abcdef' for c in cid): raise RuntimeError('inactive source cleanup CID shape')
     # Authentication is independent of the work result and CID-file recovery.
     authenticate(inspect(['container','inspect',cid],'cleanup-inspect',15),cid)
     if bounded(client+['container','rm','--force',cid],65,evidence/(name+'.remove.log'),10,65536)!=0:
@@ -742,7 +751,7 @@ try:
     if len(cid)!=64 or any(c not in '0123456789abcdef' for c in cid): raise RuntimeError('inactive source CID shape')
     observed=inspect(['container','inspect',cid],'work-inspect')
     authenticate(observed,cid)
-    if result!=0 or observed['State']['Running'] or observed['State']['ExitCode']!=0: raise RuntimeError('inactive source fixture failed')
+    if result!=0 or observed['State']['Running'] or observed['State']['ExitCode']!=0 or observed['State']['OOMKilled'] or observed['State']['Dead']: raise RuntimeError('inactive source fixture failed')
 except BaseException as error: first=error
 finally:
     # A CID file survives run (no --rm); only this invocation owns its object.

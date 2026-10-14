@@ -715,3 +715,15 @@ variation remain unmeasured. Missing Docker refuses before expensive source work
 Static adversarial cleanup controls refuse identity, mount, namespace, capability,
 resource and command drift before removal. Required hosted qualification of this
 fixture repair remains pending.
+
+
+The reviewed hosted variant passed the full source job in 590 seconds, including
+actual full inactive controls and authenticated exact-container removal. A connected
+cleanup review additionally requires nonprivileged execution, no host devices,
+private mount propagation and recursively read-only source, fixed namespaces/runtime,
+no init/health/restart worker, and no extra mounts or network publication. Fifty-two
+actual helper adversarial controls reject scope/identity/inspection drift before
+removal. The intentional cap-plus-one pipeline is annotated because truncation
+refuses overflow and `pipefail` retains writer failure; its repository fixture passes
+all 25 controls. Final exact-source hosted qualification retains the original failure
+and these stronger safeguards.
