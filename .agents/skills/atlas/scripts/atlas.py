@@ -208,12 +208,29 @@ def guidance(root, check=False):
         if not check:
             path.write_text(updated)
 
+def default_archives():
+    local = Path.cwd() / 'docs/atlas'
+    shared = Path.cwd().parent / '.github/docs/atlas'
+    seed = Path(__file__).resolve().parents[1] / 'assets/seed'
+    candidates = [local, shared if (shared / 'catalog.json').is_file() else seed]
+    selected = []
+    catalogs = set()
+    for path in candidates:
+        if not (path / 'catalog.json').is_file():
+            continue
+        _, raw = read_json(path / 'catalog.json', CATALOG_CAP)
+        # Identical packaged/current catalogs are one logical source, not two budgets.
+        if digest(raw) not in catalogs:
+            selected.append(path); catalogs.add(digest(raw))
+    require(selected, 'Atlas archive unavailable; provide --archive')
+    return selected
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--archive', action='append', type=Path, help='curated archive; repeat to aggregate repositories')
     parser.add_argument('--database', type=Path, help='explicit SQLite cache; queries verify archive freshness')
     sub = parser.add_subparsers(dest='command', required=True)
-    sub.add_parser('validate'); sub.add_parser('restore')
+    sub.add_parser('validate'); sub.add_parser('restore'); sub.add_parser('init')
     search = sub.add_parser('search'); search.add_argument('query'); search.add_argument('--limit', type=int, default=8); search.add_argument('--repository'); search.add_argument('--history', action='store_true')
     get = sub.add_parser('get'); get.add_argument('id'); get.add_argument('--history', action='store_true')
     add = sub.add_parser('capture'); add.add_argument('record', type=Path)
@@ -222,7 +239,12 @@ def main(argv=None):
     try:
         if args.command == 'guidance':
             guidance(args.root, args.check); emit({'guidance': 'current'}); return 0
-        paths = args.archive or [Path.cwd() / 'docs/atlas' if (Path.cwd() / 'docs/atlas/catalog.json').is_file() else Path(__file__).resolve().parents[1] / 'assets/seed']
+        paths = args.archive or ([Path.cwd() / 'docs/atlas'] if args.command in {'init', 'capture'} else default_archives())
+        if args.command == 'init':
+            require(len(paths) == 1 and not paths[0].exists() and not paths[0].is_symlink(), 'init requires one fresh owner archive')
+            (paths[0] / 'records').mkdir(parents=True)
+            (paths[0] / 'catalog.json').write_bytes(canonical({'schema': SCHEMA, 'records': []}))
+            emit({'archive': str(paths[0]), 'initialized': True}); return 0
         if args.command == 'capture':
             require(len(paths) == 1, 'capture selects one owner archive'); emit(capture(paths[0], args.record)); return 0
         records, hidden, fingerprint, total = load_archives(paths)

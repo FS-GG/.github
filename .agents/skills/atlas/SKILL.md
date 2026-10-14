@@ -22,8 +22,8 @@ python3 .agents/skills/atlas/scripts/atlas.py --archive docs/atlas --database /t
 python3 .agents/skills/atlas/scripts/atlas.py --archive docs/atlas --database /tmp/atlas.sqlite search 'wasm'
 ```
 
-The Claude root carries identical helper bytes. Prefer a repository's `docs/atlas` archive;
-otherwise the packaged seed supplies explicitly historical, cited starting knowledge.
+The Claude root carries identical helper bytes. Default retrieval combines the repository's `docs/atlas` with a sibling `.github/docs/atlas`
+when available, otherwise the packaged historical seed. Identical catalogs are deduplicated.
 Repeat `--archive` to aggregate repository-owned archives. Explicit databases are opened read-only
 and must match current archive fingerprints; rebuild stale caches to a fresh path. Queries return
 active records by default; `--history` includes superseded versions. Conflicting active records
@@ -40,7 +40,9 @@ architecture, decisions, contracts, dependencies, verified findings, useful fail
 unresolved questions. Explain scope/relevance, cite evidence, distinguish observation from proposal,
 and retain original failure and uncertainty. Do not publish private evidence from private repositories.
 
-Capture a prepared record into its owner archive with the helper's `capture RECORD.json` command.
+Initialize a missing owner archive with `--archive docs/atlas init`, then capture a prepared record
+with `--archive docs/atlas capture RECORD.json`. Capture defaults to the local owner archive,
+while retrieval aggregates shared knowledge.
 It appends a content-addressed immutable version. Explicit `supersedes` resolves same-owner history;
 `conflictsWith` preserves competing accounts. Never rewrite old records or select truth by timestamp.
 Keep existing ADRs and owning plans canonical; store the useful finding and reference, not another

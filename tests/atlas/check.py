@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -69,6 +70,15 @@ class AtlasControls(unittest.TestCase):
         newer=fixture('Updated'); newer['supersedes']=[atlas.digest(atlas.canonical(fixture()))];self.add(newer)
         result=self.query('--database',str(db),'search','governance')
         self.assertEqual(result.returncode,2);self.assertIn('stale cache',result.stderr)
+    def test_cache_cannot_replace_archived_truth_or_hide_population(self):
+        self.add(fixture()); db=self.root/'cache';atlas.build_database([self.archive],db)
+        with sqlite3.connect(db) as connection:
+            connection.execute('UPDATE records SET payload=?', ('{}',))
+        result=self.query('--database',str(db),'search','governance')
+        self.assertEqual(result.returncode,2);self.assertIn('differs from cited archive',result.stderr)
+        with sqlite3.connect(db) as connection:connection.execute('DELETE FROM records')
+        result=self.query('--database',str(db),'search','governance')
+        self.assertEqual(result.returncode,2);self.assertIn('population differs',result.stderr)
     def test_reject_bulk_logs_credentials_and_large_records(self):
         for name in ['run.log','report.html','image.zip','source.fs','store.sqlite']:
             path=self.archive/name;path.write_bytes(b'payload')
@@ -133,6 +143,12 @@ def delivery_checks(baseline=None):
             if citation['repository']!='FS-GG/.github':continue
             key=(citation['revision'],citation['path'],citation['sha256'])
             if key in checked:continue
+            available=subprocess.run(['git','cat-file','-e',key[0]+'^{commit}'],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            if available.returncode:
+                # Closed-PR commit citations remain valid immutable GitHub references, but
+                # a default-branch clone does not necessarily contain those Git objects.
+                print('Atlas citation not locally available; verify at retrieval: '+key[0]+':'+key[1])
+                continue
             raw=subprocess.check_output(['git','show',key[0]+':'+key[1]],cwd=ROOT)
             assert hashlib.sha256(raw).hexdigest()==key[2], 'pinned citation drift'
             checked.add(key)
