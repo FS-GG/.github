@@ -95,11 +95,13 @@ let metadata () =
         let expected=int(getuid())
         let file=Path.Combine(root,"file")
         let empty=Path.Combine(root,"empty")
+        let unicode=Path.Combine(root,"Főtanúsítvány.pem")
         File.WriteAllText(file,"retained metadata")
         File.WriteAllBytes(empty,Array.empty<byte>)
-        for path in [root;file;empty] do
+        File.WriteAllText(unicode,"UTF-8 native path")
+        for path in [root;file;empty;unicode] do
             if ImageClosure.ownerUid path<>expected then failwith "descriptor owner differs from actual UID"
-        if not(regular file&&regular empty)||regular root then failwith "descriptor regular/empty/directory distinction lost"
+        if not(regular file&&regular empty&&regular unicode)||regular root then failwith "descriptor regular/empty/directory/UTF8 distinction lost"
         let link=Path.Combine(root,"file-link")
         let directoryLink=Path.Combine(root,"directory-link")
         let dangling=Path.Combine(root,"dangling-link")
