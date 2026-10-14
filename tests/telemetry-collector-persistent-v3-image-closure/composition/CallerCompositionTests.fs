@@ -28,4 +28,11 @@ let testIdentity ()=
     let moduleType=typeof<ProductionCaller.Outcome>.DeclaringType
     require(not(isNull moduleType)&&not(isNull(moduleType.GetMethod("runSourceBoundary")))) "caller-test-boundary-missing"
     require(not(isNull(moduleType.GetMethod("run")))) "caller-shared-production-entry-missing"
-    printfn "PASS distinct linked-source caller assembly; supplying controller/native effects NOT_RUN"
+    let productionPath=Environment.GetEnvironmentVariable "PERSISTENT_V3_CALLER_PRODUCTION_ASSEMBLY"
+    require(not(String.IsNullOrWhiteSpace productionPath)&&Path.IsPathFullyQualified productionPath) "caller-production-assembly-required"
+    let production=Assembly.LoadFile productionPath
+    require(production.GetName().Name="PersistentV3.ImageClosure") "caller-production-assembly-identity"
+    let productionType=production.GetType("FSGG.Telemetry.PersistentV3.ImageClosure.ProductionCaller",true)
+    require(isNull(productionType.GetMethod("runSourceBoundary"))&&isNull(production.GetType("FSGG.Telemetry.PersistentV3.ImageClosure.ProductionCaller+SourceBoundary"))) "caller-test-injection-present-in-production"
+    require(not(isNull(productionType.GetMethod("run")))) "caller-production-entry-missing"
+    printfn "PASS distinct linked-source caller assembly and production hook absence; supplying controller/native effects NOT_RUN"
