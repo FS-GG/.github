@@ -205,6 +205,181 @@ def approved_original_tag_transport():
     raise Refused("approved original tag credential factory unavailable; no tag send")
 
 
+class AuthenticationOnlyOriginalTagTransport(VerifiedOriginalTagTransport):
+    """A real factory construction that cannot issue a publication request."""
+    def dispatch(self, *args, **kwargs):
+        raise Refused("authentication qualification forbids every tag dispatch")
+
+
+class OriginalTagAuthenticationSession:
+    """One bounded, same-process App issuance and owned-token cleanup.
+
+    This is source preparation, not a selected credential owner or an enabled
+    production route. The caller supplies an owner-issued App JWT, never claimed
+    effective identity. Identity comes from authenticated API responses. No
+    credential is read from the environment, persisted or included in diagnostics.
+    The opener seam permits inert tests of the actual Request/read control flow.
+    """
+    REPOSITORY_ID = 1269292704
+    PERMISSIONS = {"contents": "write", "workflows": "write"}
+
+    def __init__(self, app_jwt, app_id, installation_id, *, opener=None,
+                 clock=time.monotonic, wall_clock=time.time):
+        if (not isinstance(app_jwt, str) or not app_jwt or "\n" in app_jwt or "\r" in app_jwt
+                or type(app_id) is not int or app_id <= 0
+                or type(installation_id) is not int or installation_id <= 0):
+            raise Refused("authentication qualification configuration differs")
+        self._jwt, self._token = app_jwt, None
+        self.app_id, self.installation_id = app_id, installation_id
+        self.clock, self.wall_clock = clock, wall_clock
+        self.deadline = clock() + 300
+        self._used = False
+        self._gets = self._issues = self._revokes = 0
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args, **kwargs):
+                raise Refused("authentication qualification refuses redirects")
+        self._opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+
+    def _request(self, method, path, credential, body=None, cleanup=False):
+        installation = f"/app/installations/{self.installation_id}"
+        allowed_gets = {"/app", installation, f"/repos/{REPOSITORY}/installation",
+                        "/installation/repositories?per_page=100&page=1"}
+        allowed = ((method == "GET" and path in allowed_gets and self._gets < 8)
+                   or (method == "POST" and path == installation + "/access_tokens" and self._issues == 0
+                       and body == {"repository_ids": [self.REPOSITORY_ID], "permissions": self.PERMISSIONS})
+                   or (method == "DELETE" and path == "/installation/token" and self._revokes == 0
+                       and credential is self._token and self._token is not None))
+        if not allowed or self.clock() >= self.deadline - (0 if cleanup else 15):
+            raise Refused("authentication qualification request or deadline bound")
+        if method == "GET": self._gets += 1
+        if method == "POST": self._issues += 1
+        if method == "DELETE": self._revokes += 1
+        url = "https://api.github.com" + path
+        request = urllib.request.Request(url, method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Authorization": "Bearer " + credential, "Accept": "application/vnd.github+json",
+                     "Content-Type": "application/json", "User-Agent": "fsgg-release-successor-auth-only",
+                     "X-GitHub-Api-Version": "2022-11-28"})
+        try:
+            with self._opener.open(request, timeout=min(15, self.deadline - self.clock())) as response:
+                if (response.status != {"GET": 200, "POST": 201, "DELETE": 204}[method]
+                        or response.geturl() != url or response.headers.get("Link") is not None):
+                    raise Refused("authentication qualification response identity differs")
+                # read1 plus an absolute deadline prevents a slow response from
+                # renewing the five-minute ceiling with each received byte.
+                sock = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
+                if sock is None:
+                    raise Refused("authentication qualification response timeout unavailable")
+                raw = bytearray()
+                while True:
+                    left = self.deadline - self.clock()
+                    if left <= 0:
+                        raise Refused("authentication qualification deadline")
+                    sock.settimeout(min(15, left))
+                    part = response.read1(min(65537 - len(raw), 8192))
+                    raw.extend(part)
+                    if len(raw) > 65536 or self.clock() >= self.deadline:
+                        raise Refused("authentication qualification response bound")
+                    if not part:
+                        break
+                if method == "DELETE":
+                    if raw: raise Refused("authentication cleanup response differs")
+                    return None
+                return json.loads(raw)
+        except Exception:
+            # Provider bodies, exception messages, JWTs and token bytes are private.
+            raise Refused("authentication qualification request failed") from None
+
+    @classmethod
+    def _permissions(cls, value):
+        if not isinstance(value, dict):
+            raise Refused("authentication qualification permissions missing")
+        normalized = dict(value)
+        if normalized.get("metadata") == "read": normalized.pop("metadata")
+        if normalized != cls.PERMISSIONS:
+            raise Refused("authentication qualification effective permissions differ")
+        return normalized
+
+    def qualify(self, report):
+        if self._used:
+            raise Refused("authentication qualification session already consumed")
+        self._used = True
+        report.update({"profile": "utel-rel-21/original-tag-authentication-only/1",
+            "qualified": False, "publicationComplete": False,
+            "publicationEffects": {"tag": 0, "journal": 0, "feed": 0, "release": 0, "asset": 0, "channel": 0},
+            "cleanup": "not-issued", "failure": None, "stage": "authenticated-app-installation"})
+        transport = None
+        try:
+            app = self._request("GET", "/app", self._jwt)
+            installation = self._request("GET", f"/app/installations/{self.installation_id}", self._jwt)
+            selected = self._request("GET", f"/repos/{REPOSITORY}/installation", self._jwt)
+            if (not isinstance(app, dict) or type(app.get("id")) is not int or app["id"] != self.app_id
+                    or not isinstance(installation, dict)
+                    or type(installation.get("id")) is not int or installation["id"] != self.installation_id
+                    or type(installation.get("app_id")) is not int or installation["app_id"] != self.app_id
+                    or "suspended_at" not in installation or installation["suspended_at"] is not None
+                    or installation.get("account", {}).get("login") != "FS-GG"
+                    or installation.get("repository_selection") not in {"all", "selected"}
+                    or not isinstance(selected, dict) or selected.get("id") != self.installation_id
+                    or selected.get("app_id") != self.app_id or selected.get("suspended_at", True) is not None):
+                raise Refused("authentication qualification App or installation differs")
+            grants = installation.get("permissions", {})
+            if not isinstance(grants, dict) or any(grants.get(k) != v for k, v in self.PERMISSIONS.items()):
+                raise Refused("authentication qualification installation grant missing")
+            report["stage"] = "narrowed-token-issuance"
+            report["cleanup"] = "issuance-unknown"
+            issued = self._request("POST", f"/app/installations/{self.installation_id}/access_tokens", self._jwt,
+                {"repository_ids": [self.REPOSITORY_ID], "permissions": dict(self.PERMISSIONS)})
+            # Capture ownership before validating other fields so malformed
+            # issuance metadata still follows the owned-token cleanup path.
+            if isinstance(issued, dict) and isinstance(issued.get("token"), str) and issued["token"]:
+                self._token = issued.pop("token")
+                report["cleanup"] = "pending"
+            if self._token is None:
+                report["cleanup"] = "issuance-unknown"
+                raise Refused("authentication qualification issuance token missing")
+            permissions = self._permissions(issued.get("permissions"))
+            report["stage"] = "issuance-expiry"
+            expiry = issued.get("expires_at")
+            if not isinstance(expiry, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", expiry):
+                raise Refused("authentication qualification expiry missing")
+            expires = int(dt.datetime.strptime(expiry, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc).timestamp())
+            if not self.wall_clock() + 15 < expires <= self.wall_clock() + 3600:
+                raise Refused("authentication qualification expiry bound")
+            report["stage"] = "minted-token-repository-census"
+            census = self._request("GET", "/installation/repositories?per_page=100&page=1", self._token)
+            if (not isinstance(census, dict) or type(census.get("total_count")) is not int or census["total_count"] != 1
+                    or not isinstance(census.get("repositories"), list) or len(census["repositories"]) != 1
+                    or census["repositories"][0].get("id") != self.REPOSITORY_ID
+                    or census["repositories"][0].get("full_name") != REPOSITORY):
+                raise Refused("authentication qualification minted repository census differs")
+            report["stage"] = "sealed-transport-construction"
+            identity = {"appId": self.app_id, "installationId": self.installation_id,
+                        "repositoryId": self.REPOSITORY_ID, "permissions": permissions, "expiresAtUnix": expires}
+            transport = AuthenticationOnlyOriginalTagTransport(_ORIGINAL_TAG_TRANSPORT_SEAL, self._token, identity)
+            report["identity"] = transport.identity()
+            report["observedAtUnix"] = int(self.wall_clock())
+            report["issuancePathVersion"] = "github-rest/2022-11-28/exact-repository-permissions/1"
+        except Exception:
+            report["failure"] = "authentication-qualification-failed"
+        finally:
+            if self._token is not None:
+                try:
+                    self._request("DELETE", "/installation/token", self._token, cleanup=True)
+                    report["cleanup"] = "revoked"
+                except Exception:
+                    report["cleanup"] = "revocation-failed"
+                self._token = None
+            self._jwt = None
+            report["requests"] = {"metadataGets": self._gets, "issuancePosts": self._issues, "revocationDeletes": self._revokes}
+            if transport is not None:
+                transport._token = None  # Qualification returns no live credential.
+        report["qualified"] = transport is not None and report["failure"] is None and report["cleanup"] == "revoked"
+        if report["qualified"]:
+            report["stage"] = "authentication-qualified-credential-revoked"
+        return transport if report["qualified"] else None
+
+
 class GitHubAPI:
     def __init__(self, token: str):
         if not token:

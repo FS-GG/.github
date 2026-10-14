@@ -1522,7 +1522,30 @@ def diagnostic(report, message, phase):
             rows.append({"phase": phase, "type": type(error).__name__})
 
 
+def authentication_only_main():
+    """Select before candidate, credential, journal or publication preparation.
+
+    Native activation requires the accountable App owner, authenticated grants,
+    reviewed issuance custody and separate protected-operation admission. Source
+    qualification alone does not select that owner or admit credential effects.
+    """
+    parser = argparse.ArgumentParser(description="Inactive original-tag authentication-only qualification")
+    parser.add_argument("--qualify-original-tag-authentication-only", action="store_true", required=True)
+    parser.add_argument("--result-path", type=pathlib.Path, required=True)
+    args = parser.parse_args()
+    report = {"schema": "fsgg.release-successor-result/1",
+              "profile": "utel-rel-21/original-tag-authentication-only/1",
+              "disposition": "blocked-authentication-route-inactive", "qualified": False,
+              "publicationComplete": False, "credentialAcquisitionAttempted": False,
+              "publicationEffects": {"tag": 0, "journal": 0, "feed": 0, "release": 0, "asset": 0, "channel": 0},
+              "cleanup": "not-issued", "failure": "accountable-owner-and-native-custody-qualification-required"}
+    write_result(args.result_path, report)
+    return 1
+
+
 def main() -> int:
+    if "--qualify-original-tag-authentication-only" in sys.argv[1:]:
+        return authentication_only_main()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate-run-id", required=True, type=int)
     parser.add_argument("--candidate-artifact-id", required=True, type=int)
