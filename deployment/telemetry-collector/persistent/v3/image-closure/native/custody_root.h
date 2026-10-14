@@ -64,5 +64,8 @@ typedef struct {
  lc_capability work_parent,evidence_parent;
  cc_view work_parent_path,evidence_parent_path,work_name,evidence_name;
 } lr_binding;
+/* Custody outcome only; aborted is explicit and neither value certifies C4 or
+ * inactive qualification. Root still verifies the actual Runner terminal evidence. */
+int lc_root_custody_outcome(lc_adapter *,int *aborted);
 lc_adapter *lc_open_root(const lc_operation *,const lr_binding *,cc_workspace,cc_lease *,size_t,const char **);
 #endif

@@ -57,7 +57,7 @@ struct lc_adapter {
  int served,terminal,partial_acknowledgment;
  lr_recipe_copy *root_recipe; lr_state root_state; lr_binding root_binding;
  int root_parent[2],root_directory[2],bundle_directory[2];
- uint32_t root_uid,root_gid; unsigned root_bound[LC_SLOT_MAX],root_reported[LC_SLOT_MAX];
+ uint32_t root_uid,root_gid,root_census_slot[LR_STORE_COUNT]; unsigned root_bound[LC_SLOT_MAX],root_reported[LC_SLOT_MAX];
 };
 static int refuse(const char **failure,const char *reason) { if(failure)*failure=reason;
  return 0;
@@ -590,6 +590,7 @@ static lc_adapter *open_adapter(const lc_operation *o,const lr_binding *binding,
   return NULL;
   }
  for(unsigned r=0;r<2;r++)a->root_parent[r]=a->root_directory[r]=a->bundle_directory[r]=-1;
+ for(unsigned r=0;r<LR_STORE_COUNT;r++)a->root_census_slot[r]=LC_NONE;
  a->operation=*o;
  a->active=LC_NONE;
  a->channel=a->user_ns=a->mount_ns=a->keeper=a->requester_pidfd=-1;
@@ -821,6 +822,10 @@ static int root_prepare_start(lc_adapter *a,uint32_t slot) {
  if(!normal) {
   next=a->root_state;
   if(!lr_select(&next,1,&selected)||!root_slot_command(a,slot,&selected,0))return fail(a,"root-finite-command-mismatch");
+ }
+ if(selected.removal_id.size) {
+  uint32_t origin=a->root_census_slot[next.pending_store];
+  if(origin>=slot||!a->root_reported[origin]||!a->owned[origin].settled||a->owned[origin].exit_code||a->owned[origin].signal||!a->owned[origin].out_eof||!a->owned[origin].err_eof)return fail(a,"root-original-retired-census-lease");
  }
  if(!root_slot_command(a,slot,&selected,1))return 0;
  a->root_state=next;return 1;
@@ -1095,7 +1100,9 @@ static int pump(lc_adapter *a,uint32_t slot) {
  }
  o->settled=o->exit_known&&o->empty&&o->out_eof&&o->err_eof&&o->exec_error<0&&o->orphan_count==o->orphan_reaped;
  if(a->root_recipe&&o->settled&&!a->root_reported[slot]) {
+  unsigned census=a->root_state.pending_kind==1;uint32_t store=a->root_state.pending_store;
   if(!lr_retired(&a->root_state,o->signal?128+o->signal:o->exit_code,(cc_view){o->out_bytes,o->out_size},o->out_eof,o->err_eof))return fail(a,a->root_state.failure?a->root_state.failure:"root-retired-result-refused");
+  if(census)a->root_census_slot[store]=slot;
   a->root_reported[slot]=1;
  }
  return 1;
@@ -1254,6 +1261,10 @@ int lc_serve(lc_adapter *a) {
  int settled=cleanup(a);
  return settled&&!a->failure;
  /* Only kernel-derived completed commands and clean frame EOF. */
+}
+int lc_root_custody_outcome(lc_adapter *a,int *aborted) {
+ if(!a||!aborted||!a->root_recipe||!a->served||!a->terminal||a->failure||!lr_terminal(&a->root_state)||!root_bundles_absent(a))return 0;
+ *aborted=a->root_state.aborting!=0;return 1;
 }
 const char *lc_failure(const lc_adapter *a){return a?a->failure:"missing-adapter";
  }
