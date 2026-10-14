@@ -64,11 +64,17 @@ class Opener:
     def open(self, request, timeout):
         index = len(self.calls)
         self.calls.append(request)
+        assert 0 < timeout <= 15
         if request.method == 'DELETE':
             self.assert_cleanup(request)
             if self.fail_cleanup: raise RuntimeError('secret diagnostic inert-owned-token inert-jwt')
             return Response(request, None, 204)
         if index > 4: forbidden()
+        paths = ['/app', '/app/installations/123', '/repos/FS-GG/.github/installation',
+                 '/app/installations/123/access_tokens', '/installation/repositories?per_page=100&page=1']
+        assert request.full_url == 'https://api.github.com' + paths[index]
+        assert request.get_header('Authorization') == ('Bearer inert-owned-token' if index == 4 else 'Bearer inert-jwt')
+        assert request.method == ('POST' if index == 3 else 'GET')
         value = copy.deepcopy(self.rows[index])
         response = Response(request, value, 201 if request.method == 'POST' else 200)
         if self.mutate: self.mutate(index, response)
