@@ -381,12 +381,96 @@ still refuses. Two exact guard/test paths extend the source allowance from nine 
 there is no wildcard. Package bytes, original candidate/archive, #974 executor and the
 accepted four-receiver cohort above remain unchanged; no package is repacked.
 
-This accepts publisher source delivery, not the publisher operation. Dispatch/publication
-still require separate final protected root admission against the delivered publisher.
-Publisher dispatch, publication, original feed readbacks and downstream adoption remain
-pending. Historical failures and unknown custody survive; ordinary known-input/source
-exclusion proves no hard containment, full custody/provider teardown or public adoption.
+This accepts publisher source delivery. The consumed original operation and its source
+successor are recorded below; source admission does not renew publication authority.
+Historical failures and unknown custody survive; ordinary known-input/source exclusion
+proves no hard containment, full custody/provider teardown or public adoption.
 The whole V2-PROC-01 outcome remains **Done: No**.
+
+### Original publisher failure and complete-policy repair — 2026-10-14
+
+Original [publisher `38495729817/a1`](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38495729817)
+ran once at `0ccfb6d067d912bbd8a1e26c4b56449358443b2e`. Native
+job `115630940784` failed at the protection parser because the job token's ruleset
+21633398 response omitted `bypass_actors`. Missing actors are unknown, not an empty
+list. The ordered native steps confirm original archive/four-proof authentication,
+attestation and candidate provenance/install verification passed; credential acquisition,
+package pushes, feed readbacks, public installed load and component tag/release
+finalization were skipped. Preservation passed. The attestation is a retained effect;
+no historical post-run feed-unchanged proof is claimed. Original dispatch authority and
+its 90+10 clock are consumed; no rerun or renewed original grant is selected.
+
+[Coordination #976](https://github.com/FS-GG/FS.GG.Coordination/pull/976) merged at
+`76e722b5dce2afeec59c367e24f166286b0f39b3` at 04:30:17 UTC. Protected tree
+`1707fa8554b97ec945a6d6cf7e9e082c57b6f226` matches reviewed candidate
+`dfebe30902bd102a7b6dcdb611a592f82e99b260`; required and full coherent checks
+passed. This **PROC.6-R1** source repair uses the existing App credential route,
+scoped to Coordination and solely to the complete ruleset GET, and rejects
+missing/null/nonempty actor evidence. It retains exact normalized policy SHA256
+`5182bb35a6dd682cef84ac9ce4210cfd09f38b7410d8c9cf9bae42866bcb81da`
+and all original package/consumer safeguards. The first ShellCheck failure at
+`9067048f` remains retained: Bootstrap `38507938594/a1` and independent coherent
+`38507938600/a1`, partition 4 job `115670817127` (SC2015), with consequential
+aggregate job `115678705420`. The repaired `dfebe309` full coherent pass resolves
+that obligation without erasing the original failure. The [successful App grant diagnostic](https://github.com/FS-GG/.github/actions/runs/38504850839)
+proves capability, not the actual scoped-App GET or publication.
+
+Original candidate artifact `11842360725` and failed publisher observation artifact
+`11863691435` were recovered with their exact native/raw ZIP identities. The canonical
+attestation verifier accepted original B, the publisher workflow/main ref, original
+invocation `38495729817/a1` and both original package subject digests. Fresh recovery
+must authenticate those retained bytes and consume verified claims; decoded payloads
+alone are insufficient. No package is repacked or substituted. Account-owner policy
+evidence SHA256 `47a06f26b2bbd9924df2a9778cfdeb8bf29ee618c88908f652dbe2cbb5019fcb`
+remains accepted through its protected binding; the lost private blob is a historical
+omission, not a new policy blocker or a reason to reconstruct or re-request it.
+The [protected handoff](../handoffs/2026-10-14-024655-unified-roadmap-handoff.md)
+retains original hashes, failures, owners and unresolved effects.
+
+### Bounded original-pair recovery window
+
+The selected window extends milestone .6 under campaign `unified-roadmap-20261003`,
+source chain `V2-PROC-01-pair-preflight` and accountable owner `process_resume`.
+Root integrates shared source and owns protected admission. Original/current items,
+attempts, A/E/B and receiver identities remain unchanged. These stages describe
+remaining acceptance in this owning plan, not a new completion ledger.
+
+| Stage | Required boundary and acceptance |
+|---|---|
+| **PROC.6-R1 Complete-policy source** | Delivered through #976 above. Actual scoped-App policy observation remains unqualified. |
+| **PROC.6-R2 Maintained recovery source** | Implement explicit pair recovery and consumed-original refusal, original terminal/artifact/verified-attestation joins, categorical no-repeat-attestation behavior, scoped-App preflight and pair recovery readback. [Coordination #977](https://github.com/FS-GG/FS.GG.Coordination/pull/977), prepared at `a0044`, is pending hosted qualification/merge, with all enable flags false; it is not delivered or runtime-qualified. Extend the existing publisher, admission, harness/readback/tests, derived pins and `eng/retain-choreo-c2-diagnostics.py`; reuse `eng/shared_process_owner.py`. Keep the eight-path scope inside the reviewed eleven-path A-to-publisher allowance and the exact three-path A-to-E allowance. No new launcher, ledger or general command bypass. |
+| **PROC.6-R3 Genuine scoped-App observation** | Separately root-admit one bounded existing preflight route: scoped token, complete ruleset21633398 GET, exact policy equality/hash, sanitized native result and independently observed revocation/cleanup. Keep publication flags false; no package, attestation, feed/tag/release effect. Credential mint and workflow send still require admission. |
+| **PROC.6-R4 Original reconciliation and fresh admission** | Machine-validate the root-observed original run/job/ordered steps, exact ZIPs/four proofs and verified signed claims; refresh all four package/feed cells and component tag/release. All must be authentically absent for this before-push window. Populated/conflicting/unknown cells refuse effects and return to original-identity readback. Establish actual source/runtime/support closure, custody, quota and independent resources before root reviews a fresh operation descriptor. |
+| **PROC.6-R5 One bounded recovery send** | After qualified R2, genuine R3 and current R4, atomically refresh prerequisites and reserve exact mutation surfaces. Persist the canonical fixed operation input/result slot and send intent before at most one send; alternate output paths cannot evade a consumed slot. Reuse originals and verified attestation, skip attestation creation, perform only admitted skipped publication effects. Lost/202/ambiguous responses remain consumed or unknown and permit observation only. No automatic resend, rerun or second recovery identity. |
+| **PROC.6-R6 Publication acceptance and receiver join** | Independently accept native terminal jobs, both feeds, applicable signatures, downloaded-only public pair load, tag target and exact release assets/readback. Partial effects remain partial originals. Accepted publication unlocks existing SDD/FsQuint adoption gates; normal provider/Core/runtime/upgrade/rollback qualification remains separate. Whole PROC stays **Done: No**. |
+
+R2's maintained command profiles must consume the root-approved exact source/input
+pins, fixed operation path, allowed endpoint/method/argv, interpreter/import/config
+closure and strict source-read allowlist; hashes alone do not prove hidden-read exclusion.
+Keep the fixed producer namespace, actual `optimize=0` guard and root-prepared
+canonical operation input/result state. The runner never recreates a lost slot;
+missing state permits reconciliation only. Bind original monotonic deadlines, cleanup,
+request/output/disk/RSS/CPU limits and private exclusive roots beside launch freshness. Qualify actual controller plus inert
+transport, refusal of replay/alternate paths, drift/unexpected reads, timeout, child
+failure/escape, uncertain send and independent partial terminal evidence collection.
+Keep the existing Quint route's meaning and sampled ordinary child-owner limits.
+Static controls or a fresh path do not admit genuine credential/dispatch operations.
+
+All **439 inherited reservations** remain held; missing member inventory and unknown
+owners keep global automatic routing off. Independently approved ordinary source work
+may continue within its existing boundary. An operation-local runtime/source/custody
+and resource fence can qualify without releasing those reservations, but is not yet
+qualified. Local CLR/containers remain held. The user allowance of 12 CPU/32 GiB is
+an upper bound, not evidence of availability or enforcement. This ordinary profile
+does not add systemd, delegated-cgroup, hard-containment or whole-descendant-teardown
+requirements; describe its actual weaker guarantees accurately. Genuine runtime/read
+closure, retry safety, custody, capacity and cleanup remain required unknowns until
+observed. Lost original controller/grant files cannot be recreated as renewed authority.
+
+No generated workspace/default/provider/lifecycle change is selected. Receiver
+adoption, remaining Linux containment and consolidation retain their own acceptance.
+Preserve missing prospective telemetry attribution; do not manufacture usage joins,
+baselines or savings claims.
 
 [Coordination #970](https://github.com/FS-GG/FS.GG.Coordination/pull/970) delivers read-only original-pair publisher/preflight provenance controls, with native source checks passing. This prerequisite mechanism establishes no original-pair publication, selected 0.3 candidate/source freeze, first-consumer adoption or .3–.8 completion. [.1 bounded evaluation decision](../reports/2026-10-11-shared-process-supervision-evaluation.md) retains existing routine and contained implementations. Accepted BCL scopes, the failed deadline, inconclusive CliWrap heldpipe and blocked sink remain distinct; unresolved original custody is not cleared by the decision. Contract selection precedes routine/Linux implementation; native containment retains separate admission.
 
