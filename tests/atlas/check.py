@@ -152,6 +152,87 @@ class AtlasControls(unittest.TestCase):
         path=self.root/'other.json';path.write_bytes(atlas.canonical(row));atlas.capture(other,path)
         records,_,_,_=atlas.load_archives([self.archive,other]);self.assertEqual(len(records),2)
 
+    def test_guidance_policy_generation_preserves_other_instructions(self):
+        (self.root / '.fsgg').mkdir()
+        policy = json.loads((ROOT / '.fsgg/atlas.json').read_text())
+        policy_path = self.root / '.fsgg/atlas.json'
+        policy_path.write_text(json.dumps(policy))
+        for name in ('AGENTS.md', 'CLAUDE.md'):
+            (self.root / name).write_text('# Owner instructions\nKeep this instruction.\n')
+        atlas.guidance(self.root)
+        atlas.guidance(self.root, check=True)
+        for name in ('AGENTS.md', 'CLAUDE.md'):
+            text = (self.root / name).read_text()
+            self.assertTrue(text.startswith('# Owner instructions\nKeep this instruction.'))
+            self.assertEqual(text.count('<!-- atlas:begin -->'), 1)
+            (self.root / name).write_text(text.replace('Memory stores', 'Stale memory stores'))
+            with self.assertRaisesRegex(ValueError, 'stale Atlas guidance'):
+                atlas.guidance(self.root, check=True)
+            atlas.guidance(self.root)
+        policy['memory'] = 'copied-facts'
+        policy_path.write_text(json.dumps(policy))
+        before = (self.root / 'AGENTS.md').read_bytes()
+        with self.assertRaisesRegex(ValueError, 'lifecycle/memory policy'):
+            atlas.guidance(self.root)
+        self.assertEqual((self.root / 'AGENTS.md').read_bytes(), before)
+
+    def test_reversed_guidance_markers_refuse_without_partial_updates(self):
+        (self.root / '.fsgg').mkdir()
+        policy_path = self.root / '.fsgg/atlas.json'
+        policy = json.loads((ROOT / '.fsgg/atlas.json').read_text())
+        policy_path.write_text(json.dumps(policy))
+        agents = self.root / 'AGENTS.md'; claude = self.root / 'CLAUDE.md'
+        agents.write_text('# Owner instructions\nNeeds its first Atlas block.\n')
+        claude.write_text('# Other owner\n<!-- atlas:end -->\nKeep this.\n<!-- atlas:begin -->\n')
+        before = {path: path.read_bytes() for path in (agents, claude)}
+        for check in (False, True):
+            with self.subTest(check=check):
+                with self.assertRaises(ValueError):
+                    atlas.guidance(self.root, check=check)
+                self.assertEqual({path: path.read_bytes() for path in before}, before)
+        # A valid first target makes --check reach the reversed second target.
+        agents.write_text('# Owner instructions\n\n<!-- atlas:begin -->\n' + atlas.GUIDANCE + '<!-- atlas:end -->\n')
+        before = {path: path.read_bytes() for path in (agents, claude)}
+        with self.assertRaisesRegex(ValueError, 'ambiguous Atlas guidance'):
+            atlas.guidance(self.root, check=True)
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+        policy['memory'] = 'copied-facts'; policy_path.write_text(json.dumps(policy))
+        with self.assertRaisesRegex(ValueError, 'lifecycle/memory policy'):
+            atlas.guidance(self.root)
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+
+    def test_nested_workspace_uses_current_owner_and_shared_archives(self):
+        repo = self.root / 'Product'; repo.mkdir(); (repo / '.git').write_text('gitdir: private-worktree')
+        owner = repo / 'docs/atlas'; archive(owner)
+        shared = self.root / '.github/docs/atlas'; archive(shared)
+        row = fixture(); input_path = self.root / 'shared.json'
+        input_path.write_bytes(atlas.canonical(row)); atlas.capture(shared, input_path)
+        nested = repo / 'src/deep'; nested.mkdir(parents=True)
+        previous = Path.cwd()
+        try:
+            os.chdir(nested)
+            self.assertEqual(atlas.default_archives(), [owner, shared])
+            result = subprocess.run([sys.executable, '-B', str(HELPER), 'get', 'fixture/boundary'],
+                                    cwd=nested, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)[0]['id'], 'fixture/boundary')
+            (repo / '.git').unlink(); (repo / '.git').mkdir()
+            self.assertEqual(atlas.default_archives(), [owner, shared])
+        finally:
+            os.chdir(previous)
+
+    def test_installed_workspace_stages_exact_knowledge_policy(self):
+        stage_path = ROOT / 'src/FS.GG.Drivers/stage-drivers.py'
+        spec = importlib.util.spec_from_file_location('atlas_driver_stage', stage_path)
+        stage = importlib.util.module_from_spec(spec); spec.loader.exec_module(stage)
+        out = self.root / 'installed'
+        stage.stage_workspace(str(out))
+        raw = (ROOT / '.fsgg/atlas.json').read_bytes()
+        self.assertEqual((out / 'workspace/files/.fsgg/atlas.json').read_bytes(), raw)
+        manifest = json.loads((out / 'workspace/workspace-files.json').read_text())
+        row = next(row for row in manifest['files'] if row['path'] == '.fsgg/atlas.json')
+        self.assertEqual(row['sha256'], hashlib.sha256(raw).hexdigest())
+
 def delivery_checks(baseline=None):
     records,_,_,size=atlas.load_archives([ROOT/'docs/atlas'])
     for skill_root in ['.agents/skills','.claude/skills']:

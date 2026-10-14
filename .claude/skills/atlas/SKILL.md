@@ -23,7 +23,9 @@ python3 .agents/skills/atlas/scripts/atlas.py --archive docs/atlas --database /t
 ```
 
 The Claude root carries identical helper bytes. Default retrieval combines the repository's `docs/atlas` with a sibling `.github/docs/atlas`
-when available, otherwise the packaged historical seed. Identical catalogs are deduplicated.
+when available, otherwise the packaged historical seed. Nested invocations resolve the nearest
+Git checkout/worktree root; outside a checkout, use explicit archives for current knowledge.
+Identical catalogs are deduplicated.
 Repeat `--archive` to aggregate repository-owned archives. Explicit databases are opened read-only
 and their complete record/search content must match current archives; rebuild stale caches to a fresh path.
 Queries rebuild a temporary archive-derived FTS index so damaged cache indexes cannot hide knowledge. Queries return
@@ -60,3 +62,9 @@ same delivery when available; handoffs reference stable Atlas IDs and evidence r
 history. The skill permits local curated edits for the authorized task, not unrelated publication or
 live-store mutation. Skill manifests/package staging establish source delivery, not installed fleet
 adoption; current consumers require their normal update and readback.
+
+## Delivery, recovery and memory
+
+Apply [the knowledge lifecycle](references/lifecycle.md) at delivery and handoff/recovery.
+Persistent memory keeps repository and stable Atlas-ID pointers with retrieval instructions;
+never copy changing project facts, versions, heads or authority into a rival knowledge store.

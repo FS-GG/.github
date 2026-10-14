@@ -14,7 +14,7 @@ python3 .agents/skills/atlas/scripts/atlas.py validate
 ```
 
 Repository owners can add their own `docs/atlas` archives and aggregate them with repeated
-`--archive` arguments. This initial shared corpus records the component boundaries and cross-repository
+`--archive` arguments. This shared corpus records the component boundaries and cross-repository
 contracts, plus selected reusable BAR knowledge. Its citations pin the inspected revisions; query
 results are historical knowledge until verified against the relevant source and live state.
 
@@ -36,43 +36,23 @@ change makes no fleet installation claim. Operator guidance and programme/roadma
 immediately in this checkout. Framework repos using only Kit need a deliberate Atlas delivery/update,
 rather than a false claim that a new driver was already installed everywhere.
 
-# Initial Atlas coverage
+## Coverage and freshness
 
-The seed was curated from immutable public component READMEs, organization architecture/ADRs,
-contract and repository registries, product roadmaps and selected existing BAR knowledge.
-It covers all24 organization repositories observed during this analysis. Private source interiors,
-logs, reports, credentials and runtime assets were not imported. Empty/future repositories and
-qualification fixtures are represented by their public owning-plan boundaries.
+The [2026-10-14 project audit](https://github.com/FS-GG/.github/blob/main/docs/reports/2026-10-14-atlas-project-audit.md)
+reviews all24 organization repositories and the externally rostered `EHotwagner/S.I.R.`.
+It follows selected implementation, contracts, dependency graphs, workflows and owning
+acceptance evidence beyond the initial README-based seed. Empty repositories are
+reservations, and public records about private products retain public owning-plan scope.
+Private findings live in a separate access-restricted archive, never in this seed.
 
-| Repository | Knowledge boundary | Evidence approach |
-| --- | --- | --- |
-| FS-GG/FS.GG.Rendering | `repo/fs.gg.rendering/overview` | Pinned public README |
-| FS-GG/.github | `repo/.github/overview` | Pinned public README |
-| FS-GG/FS.GG.Governance | `repo/fs.gg.governance/overview` | Pinned public README |
-| FS-GG/FS.GG.SDD | `repo/fs.gg.sdd/overview` | Pinned public README |
-| FS-GG/FS.GG.Templates | `repo/fs.gg.templates/overview` | Pinned public README |
-| FS-GG/FS.GG.Game | `repo/fs.gg.game/overview` | Pinned public README |
-| FS-GG/FS.GG.Audio | `repo/fs.gg.audio/overview` | Pinned public README |
-| FS-GG/FS.GG.Net | `repo/fs.gg.net/overview` | Pinned public README |
-| FS-GG/FS.GG.Coordination | `repo/fs.gg.coordination/overview` | Pinned public README |
-| FS-GG/FS.GG.Coordination.Authority | `repo/fs.gg.coordination.authority/overview` | Pinned public README |
-| FS-GG/FS.GG.GitHub.Substrate.Sandbox | `repo/fs.gg.github.substrate.sandbox/overview` | Public organization owning plan; no private source imported |
-| FS-GG/svg-workspace-qualification-clean-20260914 | `repo/svg-workspace-qualification-clean-20260914/overview` | Public organization owning plan; no private source imported |
-| FS-GG/svg-workspace-qualification-retained-20260914 | `repo/svg-workspace-qualification-retained-20260914/overview` | Public organization owning plan; no private source imported |
-| FS-GG/svg-workspace-public-clean-20260914 | `repo/svg-workspace-public-clean-20260914/overview` | Pinned public README |
-| FS-GG/svg-workspace-public-retained-20260914 | `repo/svg-workspace-public-retained-20260914/overview` | Pinned public README |
-| FS-GG/FsQuint | `repo/fsquint/overview` | Pinned public README |
-| FS-GG/FS.GG.Coordination.Authority.Sandbox | `repo/fs.gg.coordination.authority.sandbox/overview` | Pinned public README |
-| FS-GG/FS.GG.SC2.Client | `repo/fs.gg.sc2.client/overview` | Public organization owning plan; no private source imported |
-| FS-GG/FS.GG.FourD | `repo/fs.gg.fourd/overview` | Public organization owning plan; no private source imported |
-| FS-GG/FSBarV2 | `repo/fsbarv2/overview` | Pinned public README |
-| FS-GG/HighBarV3 | `repo/highbarv3/overview` | Pinned public README |
-| FS-GG/FS.GG.Unity.Client | `repo/fs.gg.unity.client/overview` | Public organization owning plan; no private source imported |
-| FS-GG/RecoilEngine | `repo/recoilengine/overview` | Public organization owning plan; no private source imported |
-| FS-GG/specairn | `repo/specairn/overview` | Public proposed v3 roadmap; repository reservation only |
+The archive preserves the original records and explicitly supersedes inaccurate
+summaries. Records distinguish implementation, public package availability, installed
+acceptance and current operations. Historical citations authenticate the source bytes;
+they do not make a stale interpretation current. Open questions remain searchable.
+The original dependency seed covers29 declared contracts without becoming a version registry.
 
-The dependency seed covers all29 contracts declared at the inspected registry revision.
-It records ownership and surface relevance, not a second version registry or feed status.
-Atlas also retains the Coordination activation documentation discrepancy as disputed knowledge.
-Other unknowns—loaded runtime identity, private custody, native acceptance and consenting-player
-feedback—remain with their existing owning plans; no new completion claims are created.
+The [knowledge lifecycle](https://github.com/FS-GG/.github/blob/main/.agents/skills/atlas/references/lifecycle.md)
+requires retrieval before substantial work and reconciliation before delivery or handoff.
+Memory stores repository and stable Atlas-ID pointers rather than changing project facts.
+Use source and live systems to verify current claims, then capture a concise cited change,
+explicit supersession/conflict, or an owned gap. There is no unattended freshness guarantee.

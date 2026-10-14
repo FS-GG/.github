@@ -7,6 +7,9 @@ description: "Coordinate agent handoffs and mailboxes: verify status, name next 
 
 Keep a shared task moving across agents without losing the current truth or the next owner. For FS-GG worker handoffs, read the [worker channel directory](https://github.com/FS-GG/.github/blob/main/docs/coordination/worker-channels.md) on protected `.github/main` to find the active channel. Use a channel explicitly chosen by the user when one is named. If another skill defines the channel's mechanics, follow it; this skill governs message content and follow-up.
 
+Use [$atlas](../atlas/SKILL.md) for reusable project knowledge: hand off stable IDs and
+explicit capture gaps; verify current records and live facts rather than copying stale history.
+
 ## Read before acting
 
 - Read the latest messages and enough prior context to identify the task, current owner, outstanding request, and last verified state. Check the live source when a message's claim would justify a consequential action.
