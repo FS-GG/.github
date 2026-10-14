@@ -11,7 +11,7 @@ open FSGG.Telemetry.PersistentV3.ImageClosure
 
 let private require condition reason=if not condition then raise(InvalidDataException reason)
 [<UnmanagedFunctionPointer(CallingConvention.Cdecl)>]
-type private Effect=delegate of uint32*nativeint*nativeint*nativeint*nativeint*nativeint*nativeint->int
+type Effect=delegate of uint32*nativeint*nativeint*nativeint*nativeint*nativeint*nativeint->int
 [<DllImport("libc",SetLastError=true)>]
 extern int socketpair(int domain,int kind,int protocol,int[] pair)
 [<DllImport("libc")>]
@@ -86,7 +86,8 @@ let private exercise target failFirst=
             else
                 require(aborted=0&&actual.Count=recipe.NormalCount+16&&removals.Count=4) "source-command-stream-count"
                 require((if target="run-c4" then Runner.c4Ready outcome.State else outcome.QualificationAccepted)) "source-caller-outcome"
-            require(not(Directory.Exists inputs.WorkRoot)||not(Directory.Exists(Path.Combine(inputs.WorkRoot,"bundle-a")))&&not(Directory.Exists(Path.Combine(inputs.WorkRoot,"bundle-b"))))) "source-bundles-retained"
+            let bundleAbsent name=not(Directory.Exists(Path.Combine(inputs.WorkRoot,name)))
+            require(bundleAbsent "bundle-a"&&bundleAbsent "bundle-b") "source-bundles-retained"
             printfn "PASS joined caller/C ABI/wire/finite policy/capture/cleanup target=%s failed-first=%b slots=%d; native acceptance NOT_RUN" target failFirst slots
         finally
             Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_FD",oldFd)
