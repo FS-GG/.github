@@ -16,6 +16,34 @@ module CommandRecipe=
     let private digest value=OciEvidence.shaBytes(JsonSerializer.SerializeToUtf8Bytes value)
     let bytes program=JsonSerializer.SerializeToUtf8Bytes program
     let identity program=OciEvidence.shaBytes(bytes program)
+    let parse (raw:byte array)=
+        require(raw.Length>0&&raw.Length<=2*1024*1024) "recipe-byte-bound"
+        use document=JsonDocument.Parse raw
+        let exact (kind:Type) node=CustodyProtocol.exact (kind.GetProperties()|>Array.map _.Name|>Array.toList) node
+        let rec closed (node:JsonElement)=
+            match node.ValueKind with
+            | JsonValueKind.Object->
+                let names=Collections.Generic.HashSet<string>()
+                for item in node.EnumerateObject() do
+                    require(names.Add item.Name) "recipe-duplicate-field"
+                    closed item.Value
+            | JsonValueKind.Array->
+                require(node.GetArrayLength()<=8192) "recipe-array-bound"
+                for item in node.EnumerateArray() do closed item
+            | JsonValueKind.Null|JsonValueKind.Undefined->raise(InvalidDataException "recipe-null")
+            | _->()
+        let root=document.RootElement
+        closed root
+        exact typeof<CommandProgram> root
+        exact typeof<RecipeSelection> (root.GetProperty("Selection"))
+        let steps=root.GetProperty("Steps")
+        require(steps.ValueKind=JsonValueKind.Array&&steps.GetArrayLength()>0&&steps.GetArrayLength()<=256) "recipe-step-bound"
+        for step in steps.EnumerateArray() do
+            exact typeof<RecipeStep> step
+            exact typeof<ProcessCommand> (step.GetProperty("Command"))
+        let program=JsonSerializer.Deserialize<CommandProgram> raw
+        require(bytes program=raw) "recipe-noncanonical-bytes"
+        program
     let private path value=
         require(not(String.IsNullOrWhiteSpace value)&&Path.IsPathFullyQualified value&&Path.GetFullPath value=value&&
                 System.Text.RegularExpressions.Regex.IsMatch(value,"^/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")) "recipe-path"
