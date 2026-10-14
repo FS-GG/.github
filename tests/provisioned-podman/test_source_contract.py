@@ -110,18 +110,22 @@ class CommonBaseSource(unittest.TestCase):
                       "repositories/extra/os/x86_64/extra.db": b"extra",
                       "repositories/core/os/x86_64/inert-1.pkg.tar.zst": b"package",
                       "repositories/core/os/x86_64/inert-1.pkg.tar.zst.sig": b"signature"}
-        cases = ["valid", "missing-db-row", "missing-package-row", "missing-signature-row",
+        cases = ["valid", "valid-epoch", "epoch-parent-escape", "epoch-control-character", "missing-db-row", "missing-package-row", "missing-signature-row",
                  "missing-inventory-row", "extra-file", "duplicate-row", "parent-escape",
                  "absolute-path", "symlink", "byte-drift"]
         for case in cases:
             with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
                 context = Path(temporary) / "acquired"
                 context.mkdir()
-                for relative, content in population.items():
+                fixture = dict(population)
+                if case.startswith("epoch-") or case == "valid-epoch":
+                    fixture["repositories/core/os/x86_64/conmon-1:2.2.1-1-x86_64.pkg.tar.zst"] = fixture.pop("repositories/core/os/x86_64/inert-1.pkg.tar.zst")
+                    fixture["repositories/core/os/x86_64/conmon-1:2.2.1-1-x86_64.pkg.tar.zst.sig"] = fixture.pop("repositories/core/os/x86_64/inert-1.pkg.tar.zst.sig")
+                for relative, content in fixture.items():
                     path = context / relative
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(content)
-                rows = [hashlib.sha256(content).hexdigest() + "  " + relative for relative, content in population.items()]
+                rows = [hashlib.sha256(content).hexdigest() + "  " + relative for relative, content in fixture.items()]
                 omitted = {"missing-db-row": "core.db", "missing-package-row": "inert-1.pkg.tar.zst",
                            "missing-signature-row": "inert-1.pkg.tar.zst.sig",
                            "missing-inventory-row": "package-inventory.expected"}
@@ -133,6 +137,10 @@ class CommonBaseSource(unittest.TestCase):
                     rows.append(rows[0])
                 if case == "parent-escape":
                     rows.append("0" * 64 + "  ../outside")
+                if case == "epoch-parent-escape":
+                    rows.append("0" * 64 + "  repositories/core/os/x86_64/../conmon-1:2.2.1-1-x86_64.pkg.tar.zst")
+                if case == "epoch-control-character":
+                    rows.append("0" * 64 + "  repositories/core/os/x86_64/conmon-1:2.2.1-1\tx86_64.pkg.tar.zst")
                 if case == "absolute-path":
                     rows.append("0" * 64 + "  /outside")
                 if case == "symlink":
@@ -144,7 +152,7 @@ class CommonBaseSource(unittest.TestCase):
                 (context / "SHA256SUMS").write_text("\n".join(rows) + "\n")
                 bounded = guard.replace("/opt/fsgg/acquired", str(context)).replace("/opt/fsgg", str(context.parent))
                 result = subprocess.run(["/bin/sh", "-c", bounded], capture_output=True, timeout=5)
-                if case == "valid":
+                if case in ("valid", "valid-epoch"):
                     self.assertEqual(result.returncode, 0, result.stderr.decode())
                 else:
                     self.assertNotEqual(result.returncode, 0, "unbound population reached transaction boundary")
