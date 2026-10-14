@@ -263,8 +263,10 @@ class GitHubAPI:
         return json.loads(self._request(url, "POST", path.read_bytes(), "application/octet-stream"))
 
     def download_original_tag_result(self):
+        # Actions archive redirects use the existing artifact-reader header set,
+        # rather than the release-asset octet-stream media type.
         return self._runtime_read(
-            "https://api.github.com/repos/FS-GG/.github/actions/artifacts/11902876694/zip", 65536)
+            "https://api.github.com/repos/FS-GG/.github/actions/artifacts/11902876694/zip", 65536, None)
 
     def download_asset(self, asset_id: int) -> bytes:
         url = f"https://api.github.com/repos/{REPOSITORY}/releases/assets/{asset_id}"
