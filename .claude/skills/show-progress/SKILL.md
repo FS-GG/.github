@@ -1,29 +1,61 @@
 ---
 name: show-progress
-description: Report roadmap progress, complications, effort and forecasts; explicit invocations save and PR/merge timestamped reports.
+description: Delegate roadmap process-health and expectation checks, progress, effort and forecasts; explicit invocations save and PR/merge timestamped reports.
 ---
 
 # showProgress
 
-Report how far the selected roadmap outcomes have progressed, what changed, what became
-harder, and when completion is plausible. The canonical invocation is `$show-progress`;
+Assess whether roadmap development is healthy, progress matches recorded expectations,
+and recurring failures or rework signal a process problem. Then report what changed,
+what is accepted, what remains and when completion is plausible. The canonical
+invocation is `$show-progress`;
 `showProgress` is the display name. Reporting does not resume roadmap execution.
+
+Lead the report with a concise process-health verdict. Compare actual acceptance,
+rework, waiting and forecast movement with the recorded plan or previous forecast;
+name material deviations, their causes or unknowns, the affected outcomes and the
+next corrective step. Distinguish a productive repair from repeated activity without
+acceptance progress. If no comparable baseline or sufficient observations exist,
+say so before judging health. Place concrete progress and item details after this
+opening assessment; do not let percentages or PR counts stand in for process health.
+
+## Delegate an explicit report
+
+On an explicit reporting invocation, first start one dedicated subagent and give it the
+requested scope, this full skill and its references, the repository location, and any
+current source or reservation pointers. The subagent owns the entire report: evidence
+collection, estimates, validation, saving, and, when authorized below, PR delivery and
+merge readback. The main thread continues its existing work without waiting for or
+polling the report. Do not start another reporting worker or interrupt an active owner.
+If delegation is unavailable, state that the report has not started; do not silently run
+this reporting workflow in the main thread.
+
+The subagent should send no progress messages or separate completion report to the
+main thread. It must still return the minimal terminal response required by the agent
+runtime, with the saved path and actual delivery state. The runtime may deliver that
+completion to the parent automatically; this skill cannot suppress or guarantee that
+such a notification will not affect the parent's turn. The parent need not react to
+the completion unless it contains a blocking exception or the user asks for status.
+An ordinary chat question about progress stays in the current conversation; do not
+spawn a worker or save a report unless the user invokes reporting or requests saving.
 
 ## Scope and evidence
 
 1. Resolve the FS-GG `.github` repository from the workspace or its existing configuration.
    `/docs/reports/progressReports` means that path **inside the repository**, never the
    operating-system `/docs`. Preserve the active branch, index and other workers' files.
-2. Default to Unified Roadmap v3's declared outcomes. Lead with changes since the newest
-   earlier report; separately show the trailing 24-hour comparison when its cutoff differs. Keep
+2. Default to Unified Roadmap v3's declared outcomes. After the opening health verdict,
+   show changes since the newest earlier report; separately show the trailing 24-hour
+   comparison when its cutoff differs. Keep
    games and conditional scope separate unless selected. Use stable feature IDs, owners,
    acceptance boundaries and original operation identities; do not hard-code a row count.
 3. Record one UTC `as_of` cutoff, window start, generation time and display timezone.
    Read the current roadmap, relevant owning-plan sections, accepted owner evidence and
    existing native results. Use available read-only sources for material current claims.
    Record each source's revision, observation time and coverage. A local ref or handoff
-   may be stale: say which source was used. Do not launch tests, jobs, releases or workers
-   to produce a status report, and do not interrupt an active owner for reporting alone.
+   may be stale: say which source was used. Beyond the dedicated reporting subagent,
+   do not launch tests, jobs, releases or workers to produce status evidence, and do not
+   interrupt an active owner for reporting alone.
 4. Find the newest earlier progress report by its embedded UTC cutoff, not filesystem
    mtime. For a 24-hour comparison use evidence at or before the window start; separately
    show change since the previous report when its cutoff differs. A later observation
@@ -98,8 +130,9 @@ landing. A request to modify this skill does not itself invoke reporting or sche
 
 Use [report-template.md](references/report-template.md) for the saved report. Fill every
 selected item; use explicit unknown/not-applicable states instead of silently omitting
-inconvenient fields. Lead with concrete changes since the previous report, work done overall,
-and remaining tasks, effort/complexity and health in the main table. Put optional readiness
+inconvenient fields. Open with process health against expectations and material pathologies,
+then show concrete changes since the previous report, work done overall, and remaining
+tasks, effort/complexity and health in the main table. Put optional readiness
 percentages and detailed evidence in item sections; do not fill the overview with repeated
 “Unknown → Unknown” cells. Summarize shared evidence gaps once while retaining item-specific
 uncertainty beside the affected claim. Include a visible complications and churn summary.
@@ -128,6 +161,7 @@ Fix report-related failures in the same PR. If delivery is blocked by access, an
 failure or a conversation-specific limit, retain the saved report and any PR, report the blocker
 and actual delivery state, and stop rather than claiming a merge or retrying indefinitely.
 
-Return the saved path, actual PR/merge result, overall accepted status, defensible approximate
-movement, the most important forecast revisions and blockers. Reporting does not authorize
+The delegated owner retains the saved path, actual PR/merge result, overall accepted
+status, defensible approximate movement, important forecast revisions and blockers in
+the report and its minimal terminal response. Reporting does not authorize
 notifications, roadmap status changes or resuming roadmap execution.

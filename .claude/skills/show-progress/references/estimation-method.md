@@ -5,11 +5,14 @@ value management system. The percentages and forecasts describe explicitly named
 populations. A scope change, a new uncertainty or additional necessary work may reduce
 readiness while accepted work remains unchanged.
 
-## Concrete progress before percentages
+## Process health before detail; concrete progress before percentages
 
-Lead with evidenced before → after capabilities since the previous report, accumulated
-completed work and named remaining tasks. Preserve intermediate implementation, repair,
-qualification and publication milestones while whole outcomes remain open. A missing
+Start with whether accepted delivery, effort and elapsed time match the recorded
+expectations, and identify material rework or failure patterns with their evidence
+coverage. Where the baseline or observations are missing, mark the judgement
+uncertain. Then show evidenced before → after capabilities since the previous report,
+accumulated completed work and named remaining tasks. Preserve intermediate
+implementation, repair, qualification and publication milestones while whole outcomes remain open. A missing
 historical percentage or effort baseline does not prevent a concrete milestone comparison.
 Use the trailing 24-hour window as a separate comparison when its baseline differs.
 
