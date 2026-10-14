@@ -24,6 +24,10 @@ from release_successor_execution import Dispatch, Effect, Observation
 
 REPOSITORY = "FS-GG/.github"
 PACKAGES = ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers")
+ORIGINAL_TAG_REF = "refs/tags/coherent-set/v0.103.0"
+ORIGINAL_TAG_SOURCE = "4d136d5450a7032d0b87c4b8a37f69f020144792"
+ORIGINAL_TAG_CONTENT = "sha256:0615d0d776f06b824b98193233c749f0ae6983e811d900cc5a166ede5e7e5007"
+_ORIGINAL_TAG_TRANSPORT_SEAL = object()
 
 
 class NotFound(RuntimeError):
@@ -135,6 +139,72 @@ def best_effort_request_diagnostic(*args, **kwargs):
         return {"diagnosticUnavailable": True}
 
 
+class VerifiedOriginalTagTransport:
+    """One exact create-only send from an approved, authenticated credential factory.
+
+    The production factory is deliberately unavailable until its actual credential
+    issuance/repository/permission/expiry route is separately approved and verified.
+    The private seal is an in-process construction fence, not provider authorization.
+    """
+    def __init__(self, seal, token, identity):
+        if seal is not _ORIGINAL_TAG_TRANSPORT_SEAL:
+            raise Refused("original tag transport was not produced by the approved factory")
+        if (not isinstance(token, str) or not token or not isinstance(identity, dict)
+                or set(identity) != {"appId", "installationId", "repositoryId", "permissions", "expiresAtUnix"}
+                or any(type(identity[key]) is not int or identity[key] <= 0 for key in ("appId", "installationId"))
+                or identity["repositoryId"] != 1269292704
+                or identity["permissions"] != {"contents": "write", "workflows": "write"}
+                or type(identity["expiresAtUnix"]) is not int or identity["expiresAtUnix"] <= time.time()):
+            raise Refused("original tag authenticated capability binding differs")
+        self._token, self._identity = token, json.loads(json.dumps(identity))
+        self._consumed = False
+        self.last_dispatch_diagnostic = None
+
+    def identity(self):
+        if self._identity["expiresAtUnix"] <= time.time():
+            raise Refused("original tag capability expired")
+        return json.loads(json.dumps(self._identity))
+
+    def dispatch(self, effect, deadline, clock=time.monotonic):
+        if (self._consumed or effect != Effect("tag", ORIGINAL_TAG_SOURCE, ORIGINAL_TAG_CONTENT)
+                or clock() >= deadline):
+            raise Refused("original tag transport dispatch differs, expired, or already consumed")
+        self.identity()
+        self._consumed = True  # Exceptions and ambiguous replies consume the sole invocation slot.
+        url = f"https://api.github.com/repos/{REPOSITORY}/git/refs"
+        request = urllib.request.Request(url, method="POST", data=json.dumps({
+            "ref": ORIGINAL_TAG_REF, "sha": ORIGINAL_TAG_SOURCE}).encode(), headers={
+            "Authorization": "Bearer " + self._token, "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json", "User-Agent": "fsgg-release-successor",
+            "X-GitHub-Api-Version": "2022-11-28"})
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args, **kwargs):
+                raise Refused("original tag create transport refuses redirects")
+        self.last_dispatch_diagnostic = best_effort_request_diagnostic(url, "POST")
+        try:
+            with urllib.request.build_opener(NoRedirect).open(request, timeout=min(60, deadline - clock())) as response:
+                self.last_dispatch_diagnostic = best_effort_request_diagnostic(
+                    url, "POST", getattr(response, "status", None), getattr(response, "headers", None))
+                raw = response.read(16385)
+                if len(raw) > 16384:
+                    raise Refused("original tag create response exceeds bound")
+                result = json.loads(raw)
+                valid = (response.status == 201 and isinstance(result, dict) and result.get("ref") == ORIGINAL_TAG_REF
+                         and result.get("object") == {"type": "commit", "sha": ORIGINAL_TAG_SOURCE,
+                             "url": f"https://api.github.com/repos/{REPOSITORY}/git/commits/{ORIGINAL_TAG_SOURCE}"})
+                return Dispatch("applied" if valid else "unknown")
+        except urllib.error.HTTPError as error:
+            self.last_dispatch_diagnostic = best_effort_request_diagnostic(url, "POST", error.code, error.headers, error)
+        except (Refused, OSError, urllib.error.URLError, ValueError):
+            pass
+        return Dispatch("unknown")  # 201 still needs independent observation; no settlement happens here.
+
+
+def approved_original_tag_transport():
+    """No credential/environment fallback: native capability remains an explicit gap."""
+    raise Refused("approved original tag credential factory unavailable; no tag send")
+
+
 class GitHubAPI:
     def __init__(self, token: str):
         if not token:
@@ -191,6 +261,10 @@ class GitHubAPI:
             + urllib.parse.urlencode({"name": name})
         )
         return json.loads(self._request(url, "POST", path.read_bytes(), "application/octet-stream"))
+
+    def download_original_tag_result(self):
+        return self._runtime_read(
+            "https://api.github.com/repos/FS-GG/.github/actions/artifacts/11902876694/zip", 65536)
 
     def download_asset(self, asset_id: int) -> bytes:
         url = f"https://api.github.com/repos/{REPOSITORY}/releases/assets/{asset_id}"

@@ -1974,7 +1974,8 @@ class Original0103Controls(unittest.TestCase):
 
     def test_actual_parser_conflicts_refuse_and_original_selection_cannot_be_mutated(self):
         for other in ('--recovery-checkpoint', '--repeat-original-nuget-kit-intent',
-                      '--recover-original-runtime-intent', '--recover-original-successor-checkpoint'):
+                      '--recover-original-runtime-intent', '--recover-original-successor-checkpoint',
+                      '--recover-original-0103-tag-intent'):
             argv = ['publisher', '--preflight-only', '--candidate-run-id', '38290966724',
                     '--candidate-artifact-id', '11766710761', '--candidate-archive-sha256', self.fixed['archiveSha256'],
                     '--workdir', str(self.root / 'unused'), '--original-0103-candidate', other]
@@ -1988,6 +1989,61 @@ class Original0103Controls(unittest.TestCase):
         with self.assertRaises(publisher.Refused):
             publisher.VerifiedOriginal0103(True, self.publisher_sha)
         self.assertFalse((self.root / 'unused').exists()); self.assert_no_writes()
+
+    def test_actual_tag_selector_existing_preflight_and_unavailable_send(self):
+        # Only the changed source-dependency pin is proposed in this fixture;
+        # production keeps the reviewed old pin until explicit compatibility review.
+        proposed = copy.deepcopy(publisher.ORIGINAL_0103_DEPENDENCIES)
+        for name in proposed:
+            body = (ROOT / name).read_bytes()
+            proposed[name] = {'bytes': len(body), 'sha256': hashlib.sha256(body).hexdigest()}
+        _, self.authority, _, _ = fixture(2, self.candidate, self.fixed['archiveSha256'], publisher.SUCCESSOR_REF)
+        journal = ProtectedReleaseJournal(self.authority, ref=publisher.SUCCESSOR_REF, main_directory=True)
+        journal.read()
+        checkpoint = {**publisher.ORIGINAL_0103_TAG_CHECKPOINT,
+            'logicalHead': journal._observed.head,
+            'stateSHA256': hashlib.sha256(canonical(journal._observed.state)).hexdigest()}
+        result = {'schema': 'fsgg.release-successor-result/1', 'profile': publisher.ORIGINAL_0103_PROFILE,
+            'execution': {'operator': 'EHotwagner', 'runAttempt': '1', 'runId': checkpoint['runId'],
+                          'sourceSha': checkpoint['publisher']},
+            'candidate': {key: self.fixed[key] for key in ('runId', 'artifactId', 'archiveSha256',
+                                                        'contentId', 'sourceSha', 'version')},
+            'disposition': 'checkpoint', 'publicationComplete': False, 'failure': None,
+            'journalRef': publisher.SUCCESSOR_REF,
+            'lastDispatch': {'attempted': True, 'effect': 'tag', 'state': 'unknown'},
+            'lastObservedJournal': {'generation': 2, 'effects': {'tag': 'intent'},
+                'logicalHead': checkpoint['logicalHead'], 'stateSHA256': checkpoint['stateSHA256']}}
+        body = json.dumps(result).encode(); stream = io.BytesIO()
+        with zipfile.ZipFile(stream, 'w') as archive: archive.writestr('release-successor-result.json', body)
+        raw = stream.getvalue()
+        checkpoint.update(archiveBytes=len(raw), archiveSha256=hashlib.sha256(raw).hexdigest(),
+                          memberSha256=hashlib.sha256(body).hexdigest())
+        native_get = self.native_get
+        def get(path):
+            if path.endswith('/actions/runs/' + str(checkpoint['runId'])):
+                return {'id': checkpoint['runId'], 'workflow_id': 362181999, 'run_attempt': 1,
+                    'head_sha': checkpoint['publisher'], 'path': '.github/workflows/release-successor-publish.yml',
+                    'head_branch': 'main', 'event': 'workflow_dispatch', 'actor': {'login': 'EHotwagner'},
+                    'repository': {'id': 1269292704, 'full_name': 'FS-GG/.github'},
+                    'status': 'completed', 'conclusion': 'success'}
+            if path.endswith('/actions/artifacts/' + str(checkpoint['artifactId'])):
+                return {'id': checkpoint['artifactId'], 'name': 'release-successor-result', 'expired': False,
+                    'size_in_bytes': len(raw), 'digest': 'sha256:' + checkpoint['archiveSha256'],
+                    'expires_at': '2099-01-01T00:00:00Z',
+                    'workflow_run': {'id': checkpoint['runId'], 'head_sha': checkpoint['publisher']}}
+            return native_get(path)
+        self.native_get = get
+        self.native.download_original_tag_result = lambda: raw
+        before = self.authority.head
+        with patch.object(publisher, 'ORIGINAL_0103_DEPENDENCIES', proposed), \
+             patch.object(publisher, 'ORIGINAL_0103_TAG_CHECKPOINT', checkpoint):
+            self.assertEqual(self.execute(selected=False, recover_original_0103_tag_intent=True), 'preflight')
+            self.assertEqual(self.rows['originalTagRecovery']['branch'], 'non-writing-existing-intent-preflight')
+            self.assertEqual(self.rows['publisherCounter'].report()['attempted']['candidateArchive'], 1)
+            with self.assertRaisesRegex(ProviderRefused, 'factory unavailable'):
+                self.execute(publish=True, selected=False, recover_original_0103_tag_intent=True)
+        self.assertEqual(self.authority.head, before)
+        self.assert_no_writes()
 
     def test_production_tuple_and_real_retained_manifest_are_fixed(self):
         candidate = json.loads((pathlib.Path(__file__).parent / 'original-0103-manifest.json').read_bytes())
@@ -2103,6 +2159,252 @@ class Original0103Controls(unittest.TestCase):
         self.authority.controls = copy.deepcopy(BINDING['rulesets']); self.versions = ['0.102.0', '0.103.0']
         with self.assertRaises(self.uniqueness.GateError): self.execute()
         self.assert_no_writes()
+
+class OriginalTagIntentControls(unittest.TestCase):
+    """Synthetic authenticated archives exercise the real journal/admission/transport rails.
+
+    Fixed operational archive pins are replaced only inside each inert fixture.
+    These controls establish no native credential capability or repeat admission.
+    """
+    def setUp(self):
+        import release_successor_provider as live
+        self.live = live
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = pathlib.Path(self.tmp.name) / 'attempt.json'
+        self.candidate = json.loads((pathlib.Path(__file__).parent / 'original-0103-manifest.json').read_bytes())
+        _, self.authority, self.intent, _ = fixture(2, self.candidate,
+            publisher.ORIGINAL_0103_CANDIDATE['archiveSha256'], publisher.SUCCESSOR_REF)
+        self.counter = publisher.CountedAuthorityAPI(self.authority,
+            ceiling=publisher.ORDINARY_AUTHORITY_CALL_CEILING, quota_floor=publisher.ORDINARY_AUTHORITY_QUOTA_FLOOR)
+        self.counter.admit_quota()
+        self.rows = report()
+        self.journal = publisher.ReportingJournal(ProtectedReleaseJournal(self.counter,
+            ref=publisher.SUCCESSOR_REF, main_directory=True), self.rows, detailed=True)
+        self.journal.read()
+        self.native = MemoryPublisher()
+        self.admission = publisher.ProtectedPublisherAdmission(SingleOperatorAdmission(
+            self.native, self.candidate, self.native.head, 1, 'EHotwagner', 'refs/heads/main'),
+            self.counter, publisher.SUCCESSOR_REF)
+        self.fixed = {**publisher.ORIGINAL_0103_TAG_CHECKPOINT,
+            'logicalHead': self.journal._observed.head,
+            'stateSHA256': hashlib.sha256(canonical(self.journal._observed.state)).hexdigest()}
+        result = {'schema': 'fsgg.release-successor-result/1', 'profile': publisher.ORIGINAL_0103_PROFILE,
+            'execution': {'operator': 'EHotwagner', 'runAttempt': '1', 'runId': self.fixed['runId'], 'sourceSha': self.fixed['publisher']},
+            'candidate': {key: publisher.ORIGINAL_0103_CANDIDATE[key] for key in
+                          ('runId', 'artifactId', 'archiveSha256', 'contentId', 'sourceSha', 'version')},
+            'disposition': 'checkpoint', 'publicationComplete': False, 'failure': None,
+            'journalRef': publisher.SUCCESSOR_REF, 'lastDispatch': {'attempted': True, 'effect': 'tag', 'state': 'unknown'},
+            'lastObservedJournal': {'generation': 2, 'effects': {'tag': 'intent'},
+                'logicalHead': self.fixed['logicalHead'], 'stateSHA256': self.fixed['stateSHA256']}}
+        body = json.dumps(result).encode()
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, 'w') as z:
+            z.writestr('release-successor-result.json', body)
+        self.raw = stream.getvalue()
+        self.fixed.update(archiveBytes=len(self.raw), archiveSha256=hashlib.sha256(self.raw).hexdigest(),
+                          memberSha256=hashlib.sha256(body).hexdigest())
+        self.run = {'id': self.fixed['runId'], 'workflow_id': 362181999, 'run_attempt': 1,
+            'head_sha': self.fixed['publisher'], 'path': '.github/workflows/release-successor-publish.yml',
+            'head_branch': 'main', 'event': 'workflow_dispatch', 'actor': {'login': 'EHotwagner'},
+            'repository': {'id': 1269292704, 'full_name': 'FS-GG/.github'}, 'status': 'completed', 'conclusion': 'success'}
+        self.artifact = {'id': self.fixed['artifactId'], 'name': 'release-successor-result',
+            'size_in_bytes': len(self.raw), 'expired': False, 'expires_at': '2099-01-01T00:00:00Z',
+            'digest': 'sha256:' + self.fixed['archiveSha256'],
+            'workflow_run': {'id': self.fixed['runId'], 'head_sha': self.fixed['publisher']}}
+        self.tag = None
+        self.native_get = self.native.get
+        self.native.get = self.get
+        self.native.download_original_tag_result = lambda: self.raw
+        self.api = publisher.OriginalTagPublisherAPI(self.native, 100, clock=lambda: 0)
+        self.pin_patch = patch.object(publisher, 'ORIGINAL_0103_TAG_CHECKPOINT', self.fixed)
+        self.pin_patch.start(); self.addCleanup(self.pin_patch.stop)
+        self.candidate_proof = {key: publisher.ORIGINAL_0103_CANDIDATE[key]
+                                for key in ('contentId', 'archiveSha256', 'manifestSha256')}
+        self.posts = []
+        self.reply = {'ref': self.live.ORIGINAL_TAG_REF, 'object': {'type': 'commit',
+            'sha': self.live.ORIGINAL_TAG_SOURCE,
+            'url': 'https://api.github.com/repos/FS-GG/.github/git/commits/' + self.live.ORIGINAL_TAG_SOURCE}}
+
+    def get(self, path):
+        if path.endswith('/actions/runs/' + str(self.fixed['runId'])): return copy.deepcopy(self.run)
+        if path.endswith('/actions/artifacts/' + str(self.fixed['artifactId'])): return copy.deepcopy(self.artifact)
+        if path.endswith('/git/ref/tags/coherent-set/v0.103.0'):
+            if isinstance(self.tag, BaseException): raise self.tag
+            if self.tag is None: raise NotFound(path)
+            return copy.deepcopy(self.tag)
+        return self.native_get(path)
+
+    def transport(self):
+        return self.live.VerifiedOriginalTagTransport(self.live._ORIGINAL_TAG_TRANSPORT_SEAL, 'inert-token',
+            {'appId': 1, 'installationId': 2, 'repositoryId': 1269292704,
+             'permissions': {'contents': 'write', 'workflows': 'write'}, 'expiresAtUnix': 4102444800})
+
+    def open(self, request, **kwargs):
+        self.posts.append(request)
+        if isinstance(self.reply, BaseException): raise self.reply
+        class Reply(io.BytesIO):
+            status = 201
+            headers = {}
+        return Reply(json.dumps(self.reply).encode())
+
+    def recover(self, **changes):
+        kwargs = dict(factory=self.transport, clock=lambda: 0)
+        kwargs.update(changes)
+        with patch.object(urllib.request, 'build_opener', return_value=types.SimpleNamespace(open=self.open)):
+            return publisher.run_original_tag_recovery(self.candidate, self.journal, self.admission, None,
+                self.counter, self.api, self.rows, 100, lambda: copy.deepcopy(self.candidate_proof), self.path, **kwargs)
+
+    def test_existing_intent_preflight_is_read_only_and_does_not_require_factory(self):
+        before = self.authority.head
+        self.assertEqual(self.recover(preflight=True, factory=forbidden_effect), 'preflight')
+        self.assertEqual(self.authority.head, before)
+        self.assertFalse(any(method != 'get' for method, *_ in self.authority.calls))
+        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
+        self.assertIsNone(self.rows['lastDispatch'])
+
+    def test_matched_lightweight_tag_settles_exactly_once_without_send_or_next_effect(self):
+        self.tag = self.reply
+        self.assertEqual(self.recover(factory=forbidden_effect), 'checkpoint')
+        self.assertEqual(self.journal.read().generation, 3)
+        self.assertEqual(self.journal.read().effects, {'tag': 'verified'})
+        self.assertEqual(sum(method == 'patch' for method, *_ in self.authority.calls), 1)
+        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
+        with self.assertRaises(publisher.Refused): self.recover()
+
+    def test_create_is_exact_one_post_with_durable_entry_and_no_settlement_even_201(self):
+        before = self.authority.head
+        self.assertEqual(self.recover(), 'checkpoint')
+        self.assertEqual(self.authority.head, before)
+        self.assertTrue(all(method == 'get' for method, *_ in self.authority.calls))
+        self.assertEqual(len(self.posts), 1)
+        request = self.posts[0]
+        self.assertEqual(request.full_url, 'https://api.github.com/repos/FS-GG/.github/git/refs')
+        self.assertEqual(request.get_method(), 'POST')
+        self.assertEqual(json.loads(request.data), {'ref': self.live.ORIGINAL_TAG_REF, 'sha': self.live.ORIGINAL_TAG_SOURCE})
+        attempt = json.loads(self.path.read_bytes())
+        self.assertFalse(attempt['historicalNonDispatchProved']); self.assertFalse(attempt['globalOnceClaim'])
+        self.assertEqual(attempt['journal']['physicalHead'], before)
+        self.assertEqual(self.rows['lastDispatch']['state'], 'applied')
+        with self.assertRaises(FileExistsError): self.recover()
+        self.assertEqual(len(self.posts), 1)
+
+    def test_unavailable_production_factory_refuses_before_entry_or_send(self):
+        with self.assertRaisesRegex(ProviderRefused, 'factory unavailable'):
+            self.recover(factory=self.live.approved_original_tag_transport)
+        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
+
+    def test_unsealed_wrong_permissions_expired_or_wrong_repo_transport_refuses(self):
+        identity = self.transport().identity()
+        with self.assertRaises(ProviderRefused): self.live.VerifiedOriginalTagTransport(True, 'fixture', identity)
+        for change in ({'repositoryId': 1}, {'expiresAtUnix': 1}, {'permissions': {'contents': 'write'}}, {'appId': True}):
+            with self.subTest(change=change), self.assertRaises(ProviderRefused):
+                self.live.VerifiedOriginalTagTransport(self.live._ORIGINAL_TAG_TRANSPORT_SEAL, 'fixture', {**identity, **change})
+        with self.assertRaises(publisher.Refused): self.recover(factory=lambda: types.SimpleNamespace())
+        self.assertEqual(self.posts, [])
+
+    def test_malformed_annotated_wrong_tag_and_unreadable_observation_refuse(self):
+        for tag in ({}, {'ref': 'wrong', 'object': self.reply['object']},
+                    {'ref': self.live.ORIGINAL_TAG_REF, 'object': {'type': 'tag', 'sha': self.live.ORIGINAL_TAG_SOURCE}},
+                    {'ref': self.live.ORIGINAL_TAG_REF, 'object': None}, RuntimeError('unreadable')):
+            self.tag = tag
+            with self.subTest(tag=tag), self.assertRaises((publisher.Refused, RuntimeError)): self.recover()
+        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
+
+    def test_original_native_artifact_member_tamper_refuses_without_send(self):
+        for row, field, value in ((self.run, 'run_attempt', 2), (self.run, 'conclusion', 'failure'),
+                                 (self.artifact, 'expired', True), (self.artifact, 'digest', 'sha256:' + 'f' * 64)):
+            old = row[field]; row[field] = value
+            with self.subTest(field=field), self.assertRaises(publisher.Refused): self.recover()
+            row[field] = old
+        self.raw += b'tamper'
+        with self.assertRaises(publisher.Refused): self.recover()
+        self.assertEqual(self.posts, []); self.assertFalse(self.path.exists())
+
+    def test_source_candidate_quota_and_clock_guards_refuse(self):
+        self.native.head = 'f' * 40
+        with self.assertRaises(publisher.Refused): self.recover()
+        self.native.head = 'b' * 40
+        self.candidate_proof['archiveSha256'] = 'f' * 64
+        with self.assertRaises(publisher.Refused): self.recover()
+        self.candidate_proof['archiveSha256'] = publisher.ORIGINAL_0103_CANDIDATE['archiveSha256']
+        self.authority.quota.update(remaining=1700, used=3300)
+        with self.assertRaises(publisher.AuthorityQuotaWaiting): self.recover()
+        with self.assertRaises(publisher.Refused): self.recover(clock=lambda: 101)
+        self.assertEqual(self.posts, []); self.assertFalse(self.path.exists())
+
+    def test_ambiguous_http_transport_or_malformed_reply_never_settles_or_retries(self):
+        for reply in ({}, None, urllib.error.URLError('fixture timeout'),
+                      urllib.error.HTTPError('https://api.github.com/repos/FS-GG/.github/git/refs', 422,
+                            'fixture', {}, io.BytesIO(b'{"message":"Reference already exists"}'))):
+            self.reply = reply
+            self.path.unlink(missing_ok=True)
+            before = self.authority.head
+            with self.subTest(reply=type(reply).__name__):
+                self.assertEqual(self.recover(), 'checkpoint')
+                self.assertEqual(self.rows['lastDispatch']['state'], 'unknown')
+                self.assertEqual(self.authority.head, before)
+        self.assertEqual(len(self.posts), 4)
+        self.assertTrue(all(method == 'get' for method, *_ in self.authority.calls))
+
+    def test_transport_consumed_on_exception_and_diagnostics_are_best_effort(self):
+        transport = self.transport()
+        self.reply = urllib.error.URLError('fixture timeout')
+        effect = ordered_effects(self.candidate)[0]
+        with patch.object(urllib.request, 'build_opener', return_value=types.SimpleNamespace(open=self.open)), \
+             patch.object(self.live, 'request_diagnostic', side_effect=RuntimeError('reporter')):
+            self.assertEqual(transport.dispatch(effect, 100, lambda: 0).state, 'unknown')
+            with self.assertRaises(ProviderRefused): transport.dispatch(effect, 100, lambda: 0)
+        self.assertEqual(len(self.posts), 1)
+        self.reply = {}
+        with patch.object(publisher, 'sanitized_dispatch_diagnostic', side_effect=RuntimeError('reporter')):
+            self.assertEqual(self.recover(), 'checkpoint')
+        self.assertEqual(self.rows['lastDispatch']['diagnostic'], {'diagnosticUnavailable': True})
+
+    def test_late_candidate_or_source_move_preserves_entry_and_refuses_send(self):
+        transport = self.transport()
+        calls = []
+        def identity():
+            calls.append(True)
+            if len(calls) == 2: self.native.head = 'f' * 40
+            return {'appId': 1, 'installationId': 2, 'repositoryId': 1269292704,
+                    'permissions': {'contents': 'write', 'workflows': 'write'}, 'expiresAtUnix': 4102444800}
+        transport.identity = identity
+        with self.assertRaisesRegex(publisher.Refused, 'final source'):
+            self.recover(factory=lambda: transport)
+        self.assertTrue(self.path.exists()); self.assertEqual(self.posts, [])
+        self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
+
+    def test_ref_appearing_after_entry_refuses_without_overwriting(self):
+        transport = self.transport()
+        identity = transport.identity
+        calls = []
+        def read_identity():
+            calls.append(True)
+            if len(calls) == 2: self.tag = self.reply
+            return identity()
+        transport.identity = read_identity
+        with self.assertRaisesRegex(publisher.Refused, 'appeared'):
+            self.recover(factory=lambda: transport)
+        self.assertTrue(self.path.exists()); self.assertEqual(self.posts, [])
+        self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
+
+    def test_attempt_entry_failure_and_redirect_are_not_retried(self):
+        with patch.object(publisher, 'write_kit_repeat_attempt', side_effect=OSError('disk')):
+            with self.assertRaises(OSError): self.recover()
+        self.assertEqual(self.posts, []); self.assertFalse(self.path.exists())
+        self.reply = ProviderRefused('original tag create transport refuses redirects')
+        self.assertEqual(self.recover(), 'checkpoint')
+        self.assertEqual(self.rows['lastDispatch']['state'], 'unknown')
+        self.assertEqual(len(self.posts), 1)
+        self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
+
+    def test_repository_namespace_and_publisher_budget_are_closed(self):
+        with self.assertRaises(publisher.Refused): self.api.get('repos/FS-GG/.github-evil')
+        self.api.attempted = {'get': 256}
+        with self.assertRaises(publisher.Refused): self.recover()
+        self.assertEqual(self.posts, [])
+
 
 if __name__ == "__main__":
     unittest.main()
