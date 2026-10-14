@@ -2,7 +2,8 @@ namespace FSGG.Telemetry.PersistentV3.ImageClosure
 
 open System
 open System.IO
-open System.Diagnostics
+open System.Runtime.InteropServices
+open Microsoft.Win32.SafeHandles
 open System.Security.Cryptography
 open System.Text.Json
 open System.Text.RegularExpressions
@@ -77,26 +78,32 @@ module ImageClosure =
     let private fixedProduction selection = selection.Platform="linux/amd64"&&selection.OwnerUid=0&&selection.HostSourceRevision=HostSourceRevision&&selection.HostReleaseId=403127331L&&selection.HostRunId=37220419362L&&selection.HostArchiveSha256=HostArchiveSha256&&selection.HostPackageSha256=HostPackageSha256&&selection.HostPayloadSha256=HostPayloadSha256&&selection.HostManifestSha256=HostManifestSha256&&selection.HostJournalSha256=HostJournalSha256&&selection.ManagerSourceRevision=ManagerSourceRevision&&selection.ManagerSourceTree=ManagerSourceTree&&selection.ManagerArtifactSha256=ManagerArtifactSha256&&selection.ManagerManifestSha256=ManagerManifestSha256&&selection.ManagerPreparedSha256=ManagerPreparedSha256&&selection.ManagerArchiveSha256=ManagerArchiveSha256&&selection.ManagerRunId=37224476786L&&selection.ManagerArtifactId=11311024262L&&selection.RuntimeImageDigest=RuntimeImageDigest&&selection.RuntimeTreeSha256=RuntimeTreeSha256&&selection.NativeElfSha256=NativeElfSha256&&selection.NativeProfileSha256=NativeProfileSha256&&selection.CanonicalVerifierSha256=CanonicalVerifierSha256
     let private modeText (path:string) = Convert.ToString(int(File.GetUnixFileMode path),8).PadLeft(4,'0')
     let private noLink (info:FileSystemInfo)=String.IsNullOrEmpty info.LinkTarget
-    let ownerUid (path:string) =
-        let start=ProcessStartInfo("/usr/bin/stat")
-        start.ArgumentList.Add("--format=%u")
-        start.ArgumentList.Add(path)
-        start.RedirectStandardOutput<-true
-        start.UseShellExecute<-false
-        use child=Process.Start start
-        let output=child.StandardOutput.ReadToEnd().Trim()
-        child.WaitForExit()
-        match child.ExitCode,Int32.TryParse output with 0,(true,value)->value|_-> -1
-    let private regularFile (path:string) =
-        let start=ProcessStartInfo("/usr/bin/stat")
-        start.ArgumentList.Add("--format=%F")
-        start.ArgumentList.Add(path)
-        start.RedirectStandardOutput<-true
-        start.UseShellExecute<-false
-        use child=Process.Start start
-        let output=child.StandardOutput.ReadToEnd().Trim()
-        child.WaitForExit()
-        child.ExitCode=0&&(output="regular file"||output="regular empty file")
+    [<DllImport("libc",EntryPoint="open",SetLastError=true)>]
+    extern int private openMetadata(string path,int flags)
+    [<DllImport("libc",EntryPoint="statx",SetLastError=true)>]
+    extern int private descriptorMetadata(int descriptor,string path,int flags,uint32 mask,byte[] result)
+    // Read metadata through one retained O_PATH descriptor, without spawning an
+    // unowned stat process or following a final symlink. Linux statx has a fixed
+    // 256-byte ABI; no platform-specific struct stat layout is assumed.
+    let private metadata (path:string) =
+        if not(OperatingSystem.IsLinux())||RuntimeInformation.ProcessArchitecture<>Architecture.X64||
+           String.IsNullOrEmpty path||path.Contains(char 0) then None
+        else
+            let fd=openMetadata(path,0x200000|||0x80000|||0x20000) // O_PATH|O_CLOEXEC|O_NOFOLLOW
+            if fd<0 then None
+            else
+                use handle=new SafeFileHandle(nativeint fd,true)
+                let bytes=Array.zeroCreate<byte> 256
+                let mask=0xbu // STATX_TYPE|STATX_MODE|STATX_UID
+                if descriptorMetadata(fd,"",0x1000|||0x100,mask,bytes)<>0||
+                   (BitConverter.ToUInt32(bytes,0)&&&mask)<>mask then None
+                else
+                    let kind=BitConverter.ToUInt16(bytes,28)&&&0xf000us
+                    let uid=BitConverter.ToUInt32(bytes,20)
+                    if (kind<>0x8000us&&kind<>0x4000us)||uid>uint32 Int32.MaxValue then None
+                    else Some(int uid,kind)
+    let ownerUid path=metadata path|>Option.map fst|>Option.defaultValue -1
+    let private regularFile path=metadata path|>Option.exists(fun(_,kind)->kind=0x8000us)
     let private custody root source expectedUid =
         let rec directories current =
             let info=DirectoryInfo current
