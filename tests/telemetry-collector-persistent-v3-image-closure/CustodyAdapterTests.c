@@ -357,6 +357,7 @@ static void root_program_controls(void) {
   check(!root_bundles_absent(a),"present owned bundle blocks retirement");
   check(unlinkat(bundle,"owner",0)==0&&unlinkat(work,"bundle-a",AT_REMOVEDIR)==0,"exact owned bundle teardown");
   check(root_bundles_absent(a),"absent selected bundle permits directory retirement");
+  check(root_eof_terminal(a)&&a->root_state.aborting&&lr_terminal(&a->root_state),"unused EOF settles abort custody only after actual absence");
   check(renameat(parent,"work",parent,"old-work")==0&&mkdirat(parent,"work",0700)==0,"replace selected work root after retirement");
   check(!root_bundles_absent(a),"replacement work root cannot authenticate terminal absence");
   if(bundle>=0)close(bundle);
@@ -418,6 +419,10 @@ static void source_channel_controls(void) {
   memcpy(wire+4,body,n);
   check(cc_feed(&a->core,wire,n+4,utc)==CC_READY,"actual start parse");
   check(command_match(a,&a->slots[0])==(i==0),"complete ordered command match");
+  lr_command selected_command={f.slots[0].executable,f.slots[0].working_directory,f.slots[0].arguments,f.slots[0].argument_count,f.slots[0].environment,f.slots[0].environment_count,f.slots[0].output_limit};
+  lr_selection selected={.command=&selected_command};
+  check(root_slot_command(a,0,&selected,0)==(i==0),"root selected command uses actual protocol parser");
+  selected.removal_id=sha();check(!root_slot_command(a,0,&selected,0),"caller command without selected census ID cannot match dynamic removal");
   if(i==1){size_t reply=0;
    a->next_slot=0;
    a->failure=NULL;
