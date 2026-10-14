@@ -141,7 +141,11 @@ int fsgg_caller_source_open(const lr_recipe *recipe,uint64_t deadline_utc_ms,int
 }
 int fsgg_caller_source_serve(void) {
  struct source_fixture *f=source_current;if(!f||atomic_exchange(&f->serving,1))return 0;
- int ok=lc_serve(f->adapter);atomic_store(&f->serving,0);return ok;
+ int ok=lc_serve(f->adapter);
+ /* A terminal failed peer must publish transport loss to its waiting caller.
+  * This closes only the factory-owned local socketpair endpoint. */
+ if(!ok)shutdown(f->adapter->caps[f->adapter->channel].descriptor,SHUT_RDWR);
+ atomic_store(&f->serving,0);return ok;
 }
 int fsgg_caller_source_trace(uint32_t *slots,uint32_t *births,uint32_t *signals,int *aborted) {
  struct source_fixture *f=source_current;if(!f||!slots||!births||!signals||!aborted||atomic_load(&f->serving))return 0;
