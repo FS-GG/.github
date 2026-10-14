@@ -292,9 +292,10 @@ retain the explicit Firefox content-sandbox exception. Container network isolati
 read-only/non-root execution and dropped capabilities remain in force. Wrapper termination
 is not native Worker exit acknowledgment; this qualification makes no strong-security claim.
 
-This accepts source delivery only. Coherent publication, empty-cache downloaded-only
-Fable/Vite/Worker/ESM qualification, clean creation and promised retaining upgrades remain
-pending. The complete GAME-TEMPLATE-01 / FABLE-ADOPT-01 outcome remains **Done: No**.
+This accepts source delivery only. At that source milestone, coherent publication,
+empty-cache downloaded-only Fable/Vite/Worker/ESM qualification, clean creation and
+promised retaining upgrades were pending. The publication successor is recorded below;
+the complete GAME-TEMPLATE-01 / FABLE-ADOPT-01 outcome remains **Done: No**.
 The keyboard/screen-reader journey, full-site/example composition and historical escaped
 custody below remain separate unresolved assertions.
 
@@ -318,13 +319,31 @@ retains the exact source scope, original failures, publisher route and acceptanc
 
 The GET-only occupancy observation found no 0.19.0 GitHub active/deleted version or NuGet
 index at 2026-10-13 23:44:46–47 UTC. This point-in-time absence is neither a publication
-reservation nor OIDC proof. Packing/publication were skipped; fresh protected publication
-admission and original archive/feed evidence remain required. Publication, genuine clean
-installed WASM runtime, promised retaining upgrades, provider/AT journeys and remaining
-composition stay open. This milestone neither resolves historical unknown holds nor accepts
+reservation nor OIDC proof. At this source milestone, packing/publication were skipped
+and protected publication admission and original archive/feed evidence were still required.
+The publication successor below leaves genuine clean installed WASM runtime, promised
+retaining upgrades, provider/AT journeys and remaining composition open. This milestone neither resolves historical unknown holds nor accepts
 native Worker exit, full custody or strong security. The prior #713 source-consumer browser
 scope above remains accepted; the whole GAME-TEMPLATE-01 / FABLE-ADOPT-01 outcome remains
 **Done: No**.
+
+### Workspace 0.19.0 dual publication — 2026-10-14
+
+Original [publication run `38489621342/a1`](https://github.com/FS-GG/FS.GG.Templates/actions/runs/38489621342)
+succeeded at 00:43:08 UTC on protected #714 source `8952e1c5753b0abc972154c7596ddc8da772b271`
+and the immutable `fs-gg-templates/v0.19.0` tag. All five jobs passed, including full
+composition, the producer-owned NuGet OIDC exchange, both feed pushes and readbacks.
+GitHub Packages and the [GitHub release](https://github.com/FS-GG/FS.GG.Templates/releases/tag/fs-gg-templates/v0.19.0)
+contain the exact original archive. The signed NuGet archive differs in packaging bytes
+but matches all 504 signature-excluded payload entries. This accepts actual dual publication
+of the original 0.19.0 package, retaining the source and checker scope above.
+
+Fresh NuGet CLI `verify --all` remains pending. Genuine clean installed WASM runtime has
+not run; downloaded-template acceptance, promised retaining upgrades, provider/AT journeys
+and remaining composition remain open. Publication does not accept native Worker exit,
+full custody, strong security or the whole GAME-TEMPLATE-01 / FABLE-ADOPT-01 outcome.
+All historical unknown holds survive; fresh runtime admission remains required and
+**Done: No** remains unchanged.
 
 ### Reference delivery history and holds
 
