@@ -102,8 +102,8 @@ ORIGINAL_0103_DEPENDENCIES = {
         "sha256": "14104ca72087c79412d7fe3828a197bb2f0ea6e70e3675a9e2d70d98c5e9202c"
     },
     "scripts/release_successor_provider.py": {
-        "bytes": 30795,
-        "sha256": "7073071f75e95ff38426a5b0772530c4e31b52216b4cda8c6250455e9bcac925"
+        "bytes": 43569,
+        "sha256": "f1d25b4e1bc1ac94bae3db3476a511366e80b64f657d8789057eb194ef9957b6"
     },
     "scripts/release-successor-artifact.py": {
         "bytes": 7264,
