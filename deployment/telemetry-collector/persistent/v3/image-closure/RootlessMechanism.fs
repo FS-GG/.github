@@ -51,7 +51,7 @@ module RootlessPolicy=
     let inputIdentity (selection:Selection) selectionPath trustedPath parent prepared custodyIdentity program=
         let hashes=Array.concat[[|OciEvidence.shaFile selectionPath;OciEvidence.shaFile trustedPath;OciEvidence.shaFile parent;OciEvidence.shaBytes prepared;custodyIdentity;CommandRecipe.identity program;commandPolicy;InactiveQualification.Policy;BuilderSha256;SupervisorSha256|];selection.RoleManifests|>Array.map(fun item->OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,item.Path)));[|OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,selection.NativeInventoryPath))|]]
         OciEvidence.shaBytes(Encoding.UTF8.GetBytes(String.concat "\n" hashes))
-    let select selection trusted selectionPath trustedPath parent work evidence prepared custodyIdentity target program=
+    let select (selection:Selection) (trusted:TrustedNativeSelection) selectionPath trustedPath parent work evidence prepared custodyIdentity target (program:CommandProgram)=
         if selection.IdentityClass<>"production" then fail "run-requires-production-identity"
         CommandRecipe.validate selection trusted prepared custodyIdentity target parent work evidence program
         requireRootlessNamespace()
