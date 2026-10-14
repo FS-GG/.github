@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import fcntl
 import hashlib
 import importlib.util
 import io
@@ -22,7 +23,8 @@ from release_successor_admission import SingleOperatorAdmission
 from release_successor_execution import Refused, advance, ordered_effects
 from release_successor_journal import ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical
 from release_successor_provider import (GitHubAPI, LiveProvider, NotFound, sanitized_dispatch_diagnostic,
-                                       VerifiedOriginalTagTransport, approved_original_tag_transport)
+                                       VerifiedOriginalTagTransport, approved_original_tag_transport,
+                                       AUTH_PROTOCOL, AUTH_PROFILE, decode_auth_frame, validate_auth_binding, validate_auth_payload)
 
 REPOSITORY = "FS-GG/.github"
 SUCCESSOR_VERSION = "0.103.0"
@@ -966,6 +968,91 @@ def write_result(path, report):
         stream.write(body)
 
 
+def persist_authentication_snapshot(path, report, binding, frame):
+    """Retain the optional operation projection, then independently read it back.
+
+    Called outside the producer custody loop. This synchronous local sink is not
+    a hard deadline mechanism; its task and cleanup belong to that producer.
+    No ACK is created here, and an uncertain write/readback cannot permit an ACK.
+    """
+    # Lock the stable existing directory, not the result inode replaced below.
+    # This serializes late callbacks and independent writers using this sink;
+    # waiting/fsync remain producer-accounted tasks outside the custody loop.
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        fcntl.flock(directory, fcntl.LOCK_EX)
+        return _persist_authentication_snapshot_locked(path, report, binding, frame)
+    finally:
+        os.close(directory)
+
+
+def _persist_authentication_snapshot_locked(path, report, binding, frame):
+    row = decode_auth_frame(frame)
+    require(set(row) == {'v', 'b', 'n', 'k', 'p'} and row['v'] == AUTH_PROTOCOL
+            and row['b'] == validate_auth_binding(binding) and type(row['n']) is int,
+            'authentication snapshot binding differs')
+    prior = report.get('authenticationSession')
+    if prior is None:
+        require(not path.exists() and not path.is_symlink(),
+                'authentication destination already exists; reconcile retained evidence')
+    else:
+        require(path.exists() and not path.is_symlink() and stat.S_ISREG(path.stat().st_mode),
+                'authentication durable prior unavailable')
+        with path.open('rb') as stream:
+            previous_bytes = stream.read(16385)
+        require(len(previous_bytes) <= 16384, 'authentication durable prior exceeds bound')
+        durable = json.loads(previous_bytes)
+        require(type(durable) is dict and durable.get('authenticationSession') == prior
+                and json.dumps(durable.get('authenticationSession'), sort_keys=True, separators=(',', ':'))
+                    == json.dumps(prior, sort_keys=True, separators=(',', ':'))
+                and (json.dumps(durable, sort_keys=True, separators=(',', ':')) + '\n').encode('ascii') == previous_bytes,
+                'authentication durable prior differs; reconcile original evidence')
+        require(type(prior) is dict and set(prior) == {'binding', 'ordinal', 'frameDigest', 'frame'}
+                and prior['binding'] == row['b'] and type(prior['ordinal']) is int and 1 <= prior['ordinal'] <= 6,
+                'authentication prior identity differs')
+        previous_row = prior['frame']
+        require(type(previous_row) is dict and set(previous_row) == {'v', 'b', 'n', 'k', 'p'}
+                and previous_row['v'] == AUTH_PROTOCOL and previous_row['b'] == row['b']
+                and type(previous_row['n']) is int and previous_row['n'] == prior['ordinal'],
+                'authentication prior frame binding differs')
+        validate_auth_payload(previous_row['k'], previous_row['p'], binding)
+        canonical = json.dumps(previous_row, sort_keys=True, separators=(',', ':')).encode('ascii')
+        require(hashlib.sha256(len(canonical).to_bytes(4, 'big') + canonical).hexdigest() == prior['frameDigest'],
+                'authentication prior frame digest differs')
+    previous = prior['frame']['p'].get('facts') if prior is not None else None
+    allowed = {None: {'ready'}, 'ready': {'issuance-possible', 'terminal'},
+               'issuance-possible': {'token-owned', 'terminal'}, 'token-owned': {'revocation-possible'},
+               'revocation-possible': {'revoked', 'terminal'}, 'revoked': {'terminal'}, 'terminal': set()}
+    require(row['n'] == (prior['ordinal'] + 1 if prior else 1)
+            and row['k'] in allowed[prior['frame']['k'] if prior else None], 'authentication snapshot order differs')
+    validate_auth_payload(row['k'], row['p'], binding, previous)
+    projection = {'binding': row['b'], 'ordinal': row['n'],
+                  'frameDigest': hashlib.sha256(frame).hexdigest(), 'frame': row}
+    retained = dict(report, authenticationSession=projection)
+    body = (json.dumps(retained, sort_keys=True, separators=(',', ':')) + '\n').encode('ascii')
+    require(len(body) <= 16384, 'authentication result exceeds existing result bound')
+    temporary = path.with_name(path.name + '.authentication-pending')
+    if path.exists() or path.is_symlink():
+        require(not path.is_symlink() and stat.S_ISREG(path.stat().st_mode), 'authentication result is not regular')
+    with temporary.open('xb') as stream:
+        os.chmod(temporary, 0o600)
+        stream.write(body); stream.flush(); os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    require(not path.is_symlink() and stat.S_ISREG(path.stat().st_mode), 'authentication readback is not regular')
+    with path.open('rb') as stream:
+        actual = stream.read(16385)
+    require(actual == body, 'authentication retained readback differs')
+    observed = json.loads(actual)['authenticationSession']
+    require(observed == projection, 'authentication snapshot readback differs')
+    report['authenticationSession'] = projection
+    return {name: projection[name] for name in ('binding', 'ordinal', 'frameDigest')}
+
+
 class KitObservationProvider(ReportingProvider):
     """Record ordinary observations; only the explicit repeat seam enables one send."""
     def __init__(self, provider, report, effect):
@@ -1522,7 +1609,30 @@ def diagnostic(report, message, phase):
             rows.append({"phase": phase, "type": type(error).__name__})
 
 
+def authentication_only_main():
+    """Select before candidate, credential, journal or publication preparation.
+
+    Native activation requires the accountable App owner, authenticated grants,
+    reviewed issuance custody and separate protected-operation admission. Source
+    qualification alone does not select that owner or admit credential effects.
+    """
+    parser = argparse.ArgumentParser(description="Inactive original-tag authentication-only qualification")
+    parser.add_argument("--qualify-original-tag-authentication-only", action="store_true", required=True)
+    parser.add_argument("--result-path", type=pathlib.Path, required=True)
+    args = parser.parse_args()
+    report = {"schema": "fsgg.release-successor-result/1",
+              "profile": AUTH_PROFILE,
+              "disposition": "blocked-authentication-route-inactive", "qualified": False,
+              "publicationComplete": False, "credentialAcquisitionAttempted": False,
+              "publicationEffects": {"tag": 0, "journal": 0, "feed": 0, "release": 0, "asset": 0, "channel": 0},
+              "cleanup": "not-issued", "failure": "accountable-owner-and-native-custody-qualification-required"}
+    write_result(args.result_path, report)
+    return 1
+
+
 def main() -> int:
+    if "--qualify-original-tag-authentication-only" in sys.argv[1:]:
+        return authentication_only_main()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate-run-id", required=True, type=int)
     parser.add_argument("--candidate-artifact-id", required=True, type=int)

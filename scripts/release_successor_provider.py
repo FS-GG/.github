@@ -205,6 +205,538 @@ def approved_original_tag_transport():
     raise Refused("approved original tag credential factory unavailable; no tag send")
 
 
+class AuthenticationOnlyOriginalTagTransport(VerifiedOriginalTagTransport):
+    """A real factory construction that cannot issue a publication request."""
+    def dispatch(self, *args, **kwargs):
+        raise Refused("authentication qualification forbids every tag dispatch")
+
+
+# Canonical UTEL v2 payload contract. Portable framing/custody belongs to Coordination.
+AUTH_PROTOCOL = 'fsgg.execution.phase-result/1'
+AUTH_PROFILE = 'utel-rel-21/original-tag-authentication-only/2'
+AUTH_PHASES = ('ready', 'issuance-possible', 'token-owned', 'revocation-possible', 'revoked', 'terminal')
+AUTH_PUBLICATION = {name: 0 for name in ('tag', 'journal', 'feed', 'release', 'asset', 'channel')}
+_AUTH_STATUSES = {'unknown', 'verified', 'failed'}
+_AUTH_PERMISSION_VALUES = {'absent', 'read', 'write', 'unknown'}
+
+
+def _auth_require(condition):
+    if not condition:
+        raise Refused('authentication protocol assertion differs')
+
+
+def _auth_keys(value, keys):
+    _auth_require(type(value) is dict and set(value) == set(keys.split()))
+
+
+def _auth_uint(value, maximum=(1 << 64) - 1, nullable=False, positive=False):
+    _auth_require((nullable and value is None) or
+                  (type(value) is int and (1 if positive else 0) <= value <= maximum))
+
+
+def _auth_bool(value, nullable=False):
+    _auth_require((nullable and value is None) or type(value) is bool)
+
+
+def _auth_canonical(value):
+    # ASCII-only strings and canonical compact encoding are part of the wire contract.
+    def closed(item):
+        if type(item) is dict:
+            for key, child in item.items():
+                _auth_require(type(key) is str)
+                key.encode('ascii'); closed(child)
+        elif type(item) is str:
+            item.encode('ascii')
+        elif type(item) is int:
+            _auth_uint(item)
+        else:
+            _auth_require(item is None or type(item) is bool)
+    closed(value)
+    raw = json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('ascii')
+    return raw
+
+
+def validate_auth_binding(binding):
+    _auth_keys(binding, 'mode profile operation originalGeneration invocation process source workflow clock app')
+    _auth_require(binding['mode'] in {'inert', 'native'} and binding['profile'] == AUTH_PROFILE
+                  and binding['operation'] == 'utel-rel-21' and type(binding['originalGeneration']) is int
+                  and binding['originalGeneration'] == 2)
+    uuid = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    _auth_require(type(binding['invocation']) is str and re.fullmatch(uuid, binding['invocation']) is not None)
+    process = binding['process']; _auth_keys(process, 'pid birth')
+    _auth_uint(process['pid'], positive=True)
+    _auth_require(type(process['birth']) is str and re.fullmatch(r'[0-9a-f]{1,64}', process['birth']) is not None)
+    source = binding['source']; _auth_keys(source, 'childRevision childClosure runnerRevision runnerClosure contract')
+    for name, value in source.items():
+        _auth_require(type(value) is str and re.fullmatch('[0-9a-f]{' + ('40' if name.endswith('Revision') else '64') + '}', value) is not None)
+    workflow = binding['workflow']; _auth_keys(workflow, 'repositoryId path revision run attempt')
+    _auth_require(type(workflow['repositoryId']) is int and workflow['repositoryId'] == 1269292704
+                  and workflow['path'] == '.github/workflows/release-successor-publish.yml'
+                  and type(workflow['revision']) is str and re.fullmatch(r'[0-9a-f]{40}', workflow['revision']) is not None)
+    _auth_uint(workflow['run']); _auth_uint(workflow['attempt'], (1 << 32) - 1)
+    _auth_require((workflow['run'] == workflow['attempt'] == 0) if binding['mode'] == 'inert'
+                  else (workflow['run'] > 0 and workflow['attempt'] > 0))
+    clock = binding['clock']; _auth_keys(clock, 'domain frequency start normal work total')
+    _auth_require(type(clock['domain']) is str and re.fullmatch(uuid, clock['domain']) is not None)
+    for name in ('frequency', 'start', 'normal', 'work', 'total'):
+        value = clock[name]
+        _auth_require(type(value) is str and re.fullmatch(r'0|[1-9][0-9]{0,18}', value) is not None
+                      and int(value) <= (1 << 63) - 1)
+    _auth_require(int(clock['frequency']) > 0 and int(clock['start']) <= int(clock['normal'])
+                  <= int(clock['work']) <= int(clock['total']))
+    _auth_keys(binding['app'], 'id installation')
+    for value in binding['app'].values(): _auth_uint(value, positive=True)
+    return hashlib.sha256(_auth_canonical(binding)).hexdigest()
+
+
+def empty_auth_facts():
+    return {'app': {'status': 'unknown', 'id': None},
+            'installation': {'status': 'unknown', 'id': None, 'appId': None, 'active': None,
+                'selection': None, 'repositoryAssociation': 'unknown', 'requiredGrants': 'unknown'},
+            'issuance': {'state': 'not-started', 'tokenSlot': None},
+            'permissions': {'status': 'unknown', 'contents': 'unknown', 'workflows': 'unknown',
+                            'metadata': 'unknown', 'extra': None},
+            'expiry': {'status': 'unknown', 'unix': None, 'observedUnix': None},
+            'census': {'status': 'unknown', 'total': None, 'repositoryId': None, 'nameMatches': None},
+            'revocation': {'state': 'not-started', 'tokenSlot': None, 'status': None},
+            'counters': {'getsStarted': 0, 'issuanceReservations': 0, 'revocationReservations': 0},
+            'firstCause': None}
+
+
+def validate_auth_facts(facts, binding, previous=None):
+    shape = empty_auth_facts(); _auth_keys(facts, ' '.join(shape))
+    for name in shape:
+        if name != 'firstCause': _auth_keys(facts[name], ' '.join(shape[name]))
+    for name in ('app', 'installation', 'permissions', 'expiry', 'census'):
+        _auth_require(facts[name]['status'] in _AUTH_STATUSES)
+    app, installation = facts['app'], facts['installation']
+    _auth_uint(app['id'], nullable=True); _auth_uint(installation['id'], nullable=True)
+    _auth_uint(installation['appId'], nullable=True); _auth_bool(installation['active'], nullable=True)
+    _auth_require(installation['selection'] in {'all', 'selected', None}
+                  and installation['repositoryAssociation'] in _AUTH_STATUSES
+                  and installation['requiredGrants'] in _AUTH_STATUSES)
+    if app['status'] == 'verified': _auth_require(app['id'] == binding['app']['id'])
+    if installation['status'] == 'verified':
+        _auth_require(installation['id'] == binding['app']['installation']
+                      and installation['appId'] == binding['app']['id'] and installation['active'] is True
+                      and installation['selection'] in {'all', 'selected'}
+                      and installation['repositoryAssociation'] == installation['requiredGrants'] == 'verified')
+    issuance = facts['issuance']; revocation = facts['revocation']
+    _auth_require(issuance['state'] in {'not-started', 'possible', 'response-owned', 'unknown'}
+                  and (issuance['tokenSlot'] is None or type(issuance['tokenSlot']) is int and issuance['tokenSlot'] == 1)
+                  and (issuance['tokenSlot'] == 1) == (issuance['state'] == 'response-owned'))
+    permissions = facts['permissions']
+    for name in ('contents', 'workflows', 'metadata'): _auth_require(permissions[name] in _AUTH_PERMISSION_VALUES)
+    _auth_bool(permissions['extra'], nullable=True)
+    if permissions['status'] == 'verified':
+        _auth_require(permissions['contents'] == permissions['workflows'] == 'write'
+                      and permissions['metadata'] in {'absent', 'read'} and permissions['extra'] is False)
+    expiry = facts['expiry']
+    for name in ('unix', 'observedUnix'): _auth_uint(expiry[name], (1 << 63) - 1, nullable=True)
+    if expiry['status'] == 'verified':
+        _auth_require(type(expiry['unix']) is int and type(expiry['observedUnix']) is int
+                      and expiry['observedUnix'] + 15 < expiry['unix'] <= expiry['observedUnix'] + 3600)
+    census = facts['census']
+    _auth_uint(census['total'], nullable=True); _auth_uint(census['repositoryId'], nullable=True)
+    _auth_bool(census['nameMatches'], nullable=True)
+    if census['status'] == 'verified':
+        _auth_require(census['total'] == 1 and census['repositoryId'] == 1269292704 and census['nameMatches'] is True)
+    _auth_require(revocation['state'] in {'not-started', 'possible', 'verified', 'unknown'}
+                  and (revocation['tokenSlot'] is None or type(revocation['tokenSlot']) is int and revocation['tokenSlot'] == 1)
+                  and (revocation['status'] is None or type(revocation['status']) is int and revocation['status'] == 204))
+    if revocation['state'] != 'not-started':
+        _auth_require(revocation['tokenSlot'] == 1 and issuance['state'] == 'response-owned')
+    _auth_require((revocation['status'] == 204) == (revocation['state'] == 'verified'))
+    counters = facts['counters']
+    for name, maximum in [('getsStarted', 8), ('issuanceReservations', 1), ('revocationReservations', 1)]:
+        _auth_uint(counters[name], maximum)
+    _auth_require(counters['issuanceReservations'] == (0 if issuance['state'] == 'not-started' else 1)
+                  and counters['revocationReservations'] == (0 if revocation['state'] == 'not-started' else 1))
+    _auth_require((app['status'] != 'verified' or counters['getsStarted'] >= 1)
+                  and (installation['status'] != 'verified' or counters['getsStarted'] >= 3)
+                  and (census['status'] != 'verified' or counters['getsStarted'] >= 4))
+    cause = facts['firstCause']
+    if cause is not None:
+        _auth_keys(cause, 'stage code')
+        _auth_require(cause['stage'] in set(AUTH_PHASES) | {'metadata', 'issuance', 'permissions', 'expiry', 'census', 'cleanup', 'protocol'}
+                      and cause['code'] in {'identity', 'grant', 'scope', 'expiry', 'transport', 'response', 'deadline',
+                                           'cancelled', 'credential-input', 'protocol', 'reporting', 'child-loss'})
+    if previous is not None:
+        for name in ('app', 'installation', 'permissions', 'expiry', 'census'):
+            if previous[name]['status'] != 'unknown': _auth_require(facts[name] == previous[name])
+            for key, old in previous[name].items():
+                if key != 'status' and old is not None and old != 'unknown':
+                    _auth_require(facts[name][key] == old)
+        for name in counters: _auth_require(counters[name] >= previous['counters'][name])
+        if previous['firstCause'] is not None: _auth_require(cause == previous['firstCause'])
+        for name in ('issuance', 'revocation'):
+            before, after = previous[name]['state'], facts[name]['state']
+            allowed = ({'not-started': {'not-started', 'possible'}, 'possible': {'possible', 'response-owned', 'unknown'},
+                        'response-owned': {'response-owned'}, 'unknown': {'unknown'}} if name == 'issuance' else
+                       {'not-started': {'not-started', 'possible'}, 'possible': {'possible', 'verified', 'unknown'},
+                        'verified': {'verified'}, 'unknown': {'unknown'}})
+            _auth_require(after in allowed[before])
+    return facts
+
+
+def validate_auth_payload(kind, payload, binding, previous=None):
+    _auth_require(kind in AUTH_PHASES)
+    if kind == 'ready':
+        _auth_keys(payload, 'binding'); _auth_require(payload['binding'] == binding)
+        validate_auth_binding(payload['binding']); return
+    keys = 'facts request' if kind in {'issuance-possible', 'revocation-possible'} else (
+        'facts publication publicationComplete qualified credentialReferencesDropped' if kind == 'terminal' else 'facts')
+    _auth_keys(payload, keys)
+    facts = validate_auth_facts(payload['facts'], binding, previous)
+    if kind == 'issuance-possible':
+        _auth_require(facts['app']['status'] == facts['installation']['status'] == 'verified'
+                      and facts['issuance'] == {'state': 'possible', 'tokenSlot': None}
+                      and facts['revocation']['state'] == 'not-started'
+                      and all(facts[name]['status'] == 'unknown' for name in ('permissions', 'expiry', 'census'))
+                      and payload['request'] == {'method': 'POST',
+                          'path': f"/app/installations/{binding['app']['installation']}/access_tokens",
+                          'repositoryId': 1269292704, 'contents': 'write', 'workflows': 'write'})
+    if kind == 'token-owned':
+        _auth_require(facts['issuance'] == {'state': 'response-owned', 'tokenSlot': 1}
+                      and facts['revocation']['state'] == 'not-started'
+                      and all(facts[name]['status'] == 'unknown' for name in ('permissions', 'expiry', 'census')))
+    if kind == 'revocation-possible':
+        _auth_keys(payload['request'], 'method path tokenSlot')
+        _auth_uint(payload['request']['tokenSlot'], 1, positive=True)
+        _auth_require(facts['revocation'] == {'state': 'possible', 'tokenSlot': 1, 'status': None}
+                      and payload['request'] == {'method': 'DELETE', 'path': '/installation/token', 'tokenSlot': 1})
+    if kind == 'revoked': _auth_require(facts['revocation'] == {'state': 'verified', 'tokenSlot': 1, 'status': 204})
+    if kind == 'terminal':
+        _auth_require(facts['issuance']['state'] != 'possible' and facts['revocation']['state'] != 'possible')
+        _auth_keys(payload['publication'], 'tag journal feed release asset channel')
+        for value in payload['publication'].values(): _auth_uint(value, 0)
+        _auth_bool(payload['publicationComplete']); _auth_require(payload['publicationComplete'] is False)
+        _auth_bool(payload['qualified']); _auth_bool(payload['credentialReferencesDropped'])
+        success = (all(facts[name]['status'] == 'verified' for name in ('app', 'installation', 'permissions', 'expiry', 'census'))
+                   and facts['issuance']['state'] == 'response-owned' and facts['revocation']['state'] == 'verified'
+                   and facts['firstCause'] is None and payload['credentialReferencesDropped'])
+        _auth_require(not payload['qualified'] or success)
+
+
+def encode_auth_frame(binding, ordinal, kind, payload):
+    digest = validate_auth_binding(binding)
+    _auth_uint(ordinal, 6, positive=True)
+    validate_auth_payload(kind, payload, binding)
+    raw = _auth_canonical({'v': AUTH_PROTOCOL, 'b': digest, 'n': ordinal, 'k': kind, 'p': payload})
+    _auth_require(len(raw) + 4 <= 2048)
+    return len(raw).to_bytes(4, 'big') + raw
+
+
+def decode_auth_frame(raw, maximum=2048):
+    _auth_require(type(raw) is bytes and 4 <= len(raw) <= maximum
+                  and int.from_bytes(raw[:4], 'big') == len(raw) - 4)
+    def unique(pairs):
+        row = {}
+        for key, value in pairs:
+            _auth_require(key not in row); row[key] = value
+        return row
+    try:
+        row = json.loads(raw[4:].decode('ascii'), object_pairs_hook=unique)
+        _auth_require(_auth_canonical(row) == raw[4:])
+        return row
+    except Exception:
+        raise Refused('authentication protocol encoding differs') from None
+
+
+class AuthenticationPhaseAdapter:
+    """Inert child-side domain adapter; no FD construction or native custody claim.
+
+    exchange receives immutable exact bytes. A gate ACK is valid only after the
+    maintained result sink durably retains and independently reads back this frame.
+    That producer-owned contract is qualified separately; Python cannot mint it.
+    """
+    def __init__(self, binding, exchange, ticks):
+        _auth_require(binding['mode'] == 'inert')  # Native profile is deliberately unavailable.
+        self.binding = json.loads(_auth_canonical(binding))
+        self.digest = validate_auth_binding(self.binding)
+        self.exchange, self.ticks = exchange, ticks
+        self.normal, self.work = (int(binding['clock'][name]) for name in ('normal', 'work'))
+        self.frequency = int(binding['clock']['frequency'])
+        self.ordinal, self.previous, self.last_kind = 0, None, None
+        self.last_frame = None
+        self.charged_bytes = 0
+        self.failed = False
+
+    def check(self, cleanup=False):
+        value = self.ticks()
+        _auth_uint(value, (1 << 63) - 1)
+        _auth_require(value < (self.work if cleanup else self.normal))
+        return value
+
+    def emit(self, kind, payload):
+        _auth_require(not self.failed)
+        allowed = {None: {'ready'}, 'ready': {'issuance-possible', 'terminal'},
+                   'issuance-possible': {'token-owned', 'terminal'}, 'token-owned': {'revocation-possible'},
+                   'revocation-possible': {'revoked', 'terminal'}, 'revoked': {'terminal'}, 'terminal': set()}
+        _auth_require(kind in allowed[self.last_kind])
+        validate_auth_payload(kind, payload, self.binding, self.previous)
+        self.check(cleanup=kind in {'revocation-possible', 'revoked', 'terminal'})
+        raw = encode_auth_frame(self.binding, self.ordinal + 1, kind, payload)
+        # The generic codec owns complete bidirectional accounting including rejected
+        # and partial bytes. This local check additionally reserves terminal capacity.
+        reserve = 2048 + (512 if kind not in {'terminal', 'revoked'} else 0)
+        _auth_require(self.charged_bytes + len(raw) + (0 if kind == 'terminal' else reserve) <= 16384)
+        self.charged_bytes += len(raw)
+        # Any uncertain exchange is terminal for this one-shot channel. Never
+        # overwrite a possibly retained frame or retry an ACK after readback loss.
+        self.failed = True
+        ack = self.exchange(raw)
+        if kind in {'ready', 'issuance-possible', 'revocation-possible'}:
+            _auth_require(type(ack) is bytes)
+            self.charged_bytes += len(ack)
+            _auth_require(self.charged_bytes <= 16384)
+            actual = decode_auth_frame(ack, maximum=512)
+            _auth_keys(actual, 'v k b n h')
+            _auth_uint(actual['n'], 6, positive=True)
+            _auth_require(actual == {'v': AUTH_PROTOCOL, 'k': 'ack', 'b': self.digest,
+                                    'n': self.ordinal + 1, 'h': hashlib.sha256(raw).hexdigest()})
+            self.check(cleanup=kind == 'revocation-possible')
+        else:
+            _auth_require(ack is None)
+        self.ordinal += 1; self.last_kind = kind
+        self.last_frame = raw
+        self.previous = json.loads(_auth_canonical(payload.get('facts'))) if 'facts' in payload else None
+        self.failed = False
+        return raw
+
+
+class OriginalTagAuthenticationSession:
+    """One bounded, same-process App issuance and owned-token cleanup.
+
+    This is source preparation, not a selected credential owner or an enabled
+    production route. The caller supplies an owner-issued App JWT, never claimed
+    effective identity. Identity comes from authenticated API responses. No
+    credential is read from the environment, persisted or included in diagnostics.
+    The opener seam permits inert tests of the actual Request/read control flow.
+    """
+    REPOSITORY_ID = 1269292704
+    PERMISSIONS = {"contents": "write", "workflows": "write"}
+
+    def __init__(self, app_jwt, app_id, installation_id, *, phase_adapter, opener=None,
+                 wall_clock=time.time):
+        if (not isinstance(app_jwt, str) or not app_jwt or "\n" in app_jwt or "\r" in app_jwt
+                or type(app_id) is not int or app_id <= 0
+                or type(installation_id) is not int or installation_id <= 0):
+            raise Refused("authentication qualification configuration differs")
+        self._jwt, self._token = app_jwt, None
+        self.app_id, self.installation_id = app_id, installation_id
+        _auth_require(isinstance(phase_adapter, AuthenticationPhaseAdapter)
+                      and phase_adapter.binding["app"] == {"id": app_id, "installation": installation_id}
+                      and opener is not None)
+        self.adapter, self.wall_clock = phase_adapter, wall_clock
+        self.facts = empty_auth_facts()
+        self._used = False
+        self._gets = self._issues = self._revokes = 0
+        # Only an explicitly supplied inert transport is admitted in this source
+        # window. Native descriptor/opener construction remains unavailable.
+        self._opener = opener
+
+    def _request(self, method, path, credential, body=None, cleanup=False):
+        installation = f"/app/installations/{self.installation_id}"
+        allowed_gets = {"/app", installation, f"/repos/{REPOSITORY}/installation",
+                        "/installation/repositories?per_page=100&page=1"}
+        allowed = ((method == "GET" and path in allowed_gets and self._gets < 8)
+                   or (method == "POST" and path == installation + "/access_tokens" and self._issues == 0
+                       and body == {"repository_ids": [self.REPOSITORY_ID], "permissions": self.PERMISSIONS})
+                   or (method == "DELETE" and path == "/installation/token" and self._revokes == 0
+                       and credential is self._token and self._token is not None))
+        if not allowed:
+            raise Refused("authentication qualification request or deadline bound")
+        self.adapter.check(cleanup=cleanup)
+        if method == "GET":
+            self._gets += 1
+            self.facts["counters"]["getsStarted"] = self._gets
+        if method == "POST": self._issues += 1
+        if method == "DELETE": self._revokes += 1
+        url = "https://api.github.com" + path
+        request = urllib.request.Request(url, method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Authorization": "Bearer " + credential, "Accept": "application/vnd.github+json",
+                     "Content-Type": "application/json", "User-Agent": "fsgg-release-successor-auth-only",
+                     "X-GitHub-Api-Version": "2022-11-28"})
+        try:
+            cutoff = self.adapter.work if cleanup else self.adapter.normal
+            remaining = (cutoff - self.adapter.check(cleanup=cleanup)) / self.adapter.frequency
+            with self._opener.open(request, timeout=min(15, remaining)) as response:
+                if (response.status != {"GET": 200, "POST": 201, "DELETE": 204}[method]
+                        or response.geturl() != url or response.headers.get("Link") is not None):
+                    raise Refused("authentication qualification response identity differs")
+                # Cooperative checks do not bound urllib header/chunk parsing.
+                # Only independently qualified producer custody can close R1.
+                sock = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
+                if sock is None:
+                    raise Refused("authentication qualification response timeout unavailable")
+                raw = bytearray()
+                while True:
+                    left = (cutoff - self.adapter.check(cleanup=cleanup)) / self.adapter.frequency
+                    sock.settimeout(min(15, left))
+                    part = response.read1(min(65537 - len(raw), 8192))
+                    raw.extend(part)
+                    self.adapter.check(cleanup=cleanup)
+                    if len(raw) > 65536:
+                        raise Refused("authentication qualification response bound")
+                    if not part:
+                        break
+                if method == "DELETE":
+                    if raw: raise Refused("authentication cleanup response differs")
+                    return None
+                return json.loads(raw)
+        except Exception:
+            # Provider bodies, exception messages, JWTs and token bytes are private.
+            raise Refused("authentication qualification request failed") from None
+
+    @classmethod
+    def _permissions(cls, value):
+        if not isinstance(value, dict):
+            raise Refused("authentication qualification permissions missing")
+        normalized = dict(value)
+        if normalized.get("metadata") == "read": normalized.pop("metadata")
+        if normalized != cls.PERMISSIONS:
+            raise Refused("authentication qualification effective permissions differ")
+        return normalized
+
+    def _cause(self, stage, code):
+        if self.facts['firstCause'] is None:
+            self.facts['firstCause'] = {'stage': stage, 'code': code}
+
+    def _emit(self, kind, request=None, qualified=False):
+        payload = {'facts': json.loads(_auth_canonical(self.facts))}
+        if request is not None: payload['request'] = request
+        if kind == 'terminal':
+            payload.update({'publication': dict(AUTH_PUBLICATION), 'publicationComplete': False,
+                            'qualified': qualified, 'credentialReferencesDropped': self._token is None and self._jwt is None})
+        return self.adapter.emit(kind, payload)
+
+    def qualify(self, report):
+        if self._used:
+            raise Refused('authentication qualification session already consumed')
+        self._used = True
+        report.update({'profile': AUTH_PROFILE, 'qualified': False, 'publicationComplete': False,
+                       'publicationEffects': dict(AUTH_PUBLICATION), 'cleanup': 'not-issued', 'failure': None})
+        stage, transport = 'metadata', None
+        try:
+            self.adapter.emit('ready', {'binding': self.adapter.binding})
+            app = self._request('GET', '/app', self._jwt)
+            value = app.get('id') if type(app) is dict else None
+            self.facts['app'] = {'status': 'verified' if type(value) is int and value == self.app_id else 'failed',
+                                 'id': value if type(value) is int and 0 < value < (1 << 64) else None}
+            if self.facts['app']['status'] != 'verified':
+                self._cause('metadata', 'identity'); raise Refused('App identity differs')
+            installation = self._request('GET', f'/app/installations/{self.installation_id}', self._jwt)
+            row = self.facts['installation']
+            if type(installation) is dict:
+                for key, source in [('id', 'id'), ('appId', 'app_id')]:
+                    value = installation.get(source)
+                    row[key] = value if type(value) is int and 0 < value < (1 << 64) else None
+                row['active'] = installation['suspended_at'] is None if 'suspended_at' in installation else None
+                selection = installation.get('repository_selection')
+                row['selection'] = selection if type(selection) is str and selection in {'all', 'selected'} else None
+            identity_ok = (row['id'] == self.installation_id and row['appId'] == self.app_id
+                           and row['active'] is True and row['selection'] is not None
+                           and type(installation.get('account')) is dict and installation['account'].get('login') == 'FS-GG') if type(installation) is dict else False
+            grants = installation.get('permissions') if type(installation) is dict else None
+            row['requiredGrants'] = 'verified' if type(grants) is dict and all(grants.get(k) == v for k, v in self.PERMISSIONS.items()) else 'failed'
+            selected = self._request('GET', f'/repos/{REPOSITORY}/installation', self._jwt)
+            row['repositoryAssociation'] = 'verified' if (type(selected) is dict
+                and type(selected.get('id')) is int and selected['id'] == self.installation_id
+                and type(selected.get('app_id')) is int and selected['app_id'] == self.app_id
+                and selected.get('suspended_at', True) is None) else 'failed'
+            row['status'] = 'verified' if identity_ok and row['requiredGrants'] == row['repositoryAssociation'] == 'verified' else 'failed'
+            if row['status'] != 'verified':
+                self._cause('metadata', 'grant' if row['requiredGrants'] == 'failed' else 'identity')
+                raise Refused('installation metadata differs')
+            stage = 'issuance'
+            self.facts['issuance'] = {'state': 'possible', 'tokenSlot': None}
+            self.facts['counters']['issuanceReservations'] = 1
+            self._emit('issuance-possible', {'method': 'POST', 'path': f'/app/installations/{self.installation_id}/access_tokens',
+                'repositoryId': self.REPOSITORY_ID, 'contents': 'write', 'workflows': 'write'})
+            issued = self._request('POST', f'/app/installations/{self.installation_id}/access_tokens', self._jwt,
+                {'repository_ids': [self.REPOSITORY_ID], 'permissions': dict(self.PERMISSIONS)})
+            if type(issued) is dict and type(issued.get('token')) is str and issued['token']:
+                self._token = issued.pop('token')
+            if self._token is None: raise Refused('issuance response unavailable')
+            self.facts['issuance'] = {'state': 'response-owned', 'tokenSlot': 1}
+            self._emit('token-owned')
+            stage = 'permissions'
+            values = issued.get('permissions')
+            permission = self.facts['permissions']
+            if type(values) is dict:
+                for name in ('contents', 'workflows', 'metadata'):
+                    value = values.get(name, 'absent')
+                    permission[name] = value if type(value) is str and value in {'absent', 'read', 'write'} else 'unknown'
+                permission['extra'] = bool(set(values) - {'contents', 'workflows', 'metadata'})
+            try:
+                permissions = self._permissions(values)
+                permission['status'] = 'verified'
+            except Exception:
+                permission['status'] = 'failed'; self._cause(stage, 'scope'); raise
+            stage = 'expiry'
+            expiry = issued.get('expires_at'); observed = int(self.wall_clock())
+            self.facts['expiry']['observedUnix'] = observed if 0 <= observed < (1 << 63) else None
+            try:
+                if type(expiry) is not str or not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', expiry):
+                    raise Refused('expiry shape differs')
+                expires = int(dt.datetime.strptime(expiry, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=dt.timezone.utc).timestamp())
+                self.facts['expiry']['unix'] = expires if 0 <= expires < (1 << 63) else None
+                _auth_require(observed + 15 < expires <= observed + 3600)
+                self.facts['expiry']['status'] = 'verified'
+            except Exception:
+                self.facts['expiry']['status'] = 'failed'; self._cause(stage, 'expiry'); raise
+            stage = 'census'
+            census = self._request('GET', '/installation/repositories?per_page=100&page=1', self._token)
+            row = self.facts['census']; repositories = census.get('repositories') if type(census) is dict else None
+            total = census.get('total_count') if type(census) is dict else None
+            row['total'] = total if type(total) is int and 0 <= total < (1 << 64) else None
+            if type(repositories) is list and len(repositories) == 1 and type(repositories[0]) is dict:
+                value = repositories[0].get('id')
+                row['repositoryId'] = value if type(value) is int and 0 < value < (1 << 64) else None
+                row['nameMatches'] = repositories[0].get('full_name') == REPOSITORY
+            row['status'] = 'verified' if row['total'] == 1 and row['repositoryId'] == self.REPOSITORY_ID and row['nameMatches'] is True else 'failed'
+            if row['status'] != 'verified': self._cause(stage, 'scope'); raise Refused('census differs')
+            identity = {'appId': self.app_id, 'installationId': self.installation_id,
+                'repositoryId': self.REPOSITORY_ID, 'permissions': permissions, 'expiresAtUnix': expires}
+            transport = AuthenticationOnlyOriginalTagTransport(_ORIGINAL_TAG_TRANSPORT_SEAL, self._token, identity)
+            report['identity'] = transport.identity()
+        except Exception:
+            self._cause(stage, 'protocol' if self.adapter.failed else 'transport')
+            if self.facts['issuance']['state'] == 'possible': self.facts['issuance']['state'] = 'unknown'
+            report['failure'] = 'authentication-qualification-failed'
+        finally:
+            if self._token is not None:
+                self.facts['revocation'] = {'state': 'possible', 'tokenSlot': 1, 'status': None}
+                self.facts['counters']['revocationReservations'] = 1
+                try:
+                    self._emit('revocation-possible', {'method': 'DELETE', 'path': '/installation/token', 'tokenSlot': 1})
+                    self._request('DELETE', '/installation/token', self._token, cleanup=True)
+                    self.facts['revocation'] = {'state': 'verified', 'tokenSlot': 1, 'status': 204}
+                    self._emit('revoked')
+                except Exception:
+                    if self.facts['revocation']['state'] != 'verified': self.facts['revocation']['state'] = 'unknown'
+                    self._cause('cleanup', 'protocol' if self._revokes == 0 else 'transport')
+                self._token = None
+            self._jwt = None
+            if transport is not None: transport._token = None
+        report['qualified'] = transport is not None and self.facts['firstCause'] is None and self.facts['revocation']['state'] == 'verified'
+        report['requests'] = {'metadataGets': self._gets, 'issuancePosts': self._issues, 'revocationDeletes': self._revokes}
+        report['cleanup'] = ('revoked' if self.facts['revocation']['state'] == 'verified' else
+                             'revocation-unknown' if self.facts['revocation']['state'] != 'not-started' else
+                             'issuance-unknown' if self.facts['issuance']['state'] == 'unknown' else 'not-issued')
+        if self.facts['firstCause'] is not None:
+            report['failure'] = 'authentication-qualification-failed'
+        try:
+            self._emit('terminal', qualified=report['qualified'])
+        except Exception:
+            self._cause('protocol', 'reporting'); report['qualified'] = False
+        # authenticationSession belongs to the retained sink; never replace its
+        # exact pre-ACK/terminal projection with a final-only summary.
+        return report['qualified']  # No credential-bearing object crosses the boundary.
+
+
 class GitHubAPI:
     def __init__(self, token: str):
         if not token:
