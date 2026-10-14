@@ -176,6 +176,31 @@ class AtlasControls(unittest.TestCase):
             atlas.guidance(self.root)
         self.assertEqual((self.root / 'AGENTS.md').read_bytes(), before)
 
+    def test_reversed_guidance_markers_refuse_without_partial_updates(self):
+        (self.root / '.fsgg').mkdir()
+        policy_path = self.root / '.fsgg/atlas.json'
+        policy = json.loads((ROOT / '.fsgg/atlas.json').read_text())
+        policy_path.write_text(json.dumps(policy))
+        agents = self.root / 'AGENTS.md'; claude = self.root / 'CLAUDE.md'
+        agents.write_text('# Owner instructions\nNeeds its first Atlas block.\n')
+        claude.write_text('# Other owner\n<!-- atlas:end -->\nKeep this.\n<!-- atlas:begin -->\n')
+        before = {path: path.read_bytes() for path in (agents, claude)}
+        for check in (False, True):
+            with self.subTest(check=check):
+                with self.assertRaises(ValueError):
+                    atlas.guidance(self.root, check=check)
+                self.assertEqual({path: path.read_bytes() for path in before}, before)
+        # A valid first target makes --check reach the reversed second target.
+        agents.write_text('# Owner instructions\n\n<!-- atlas:begin -->\n' + atlas.GUIDANCE + '<!-- atlas:end -->\n')
+        before = {path: path.read_bytes() for path in (agents, claude)}
+        with self.assertRaisesRegex(ValueError, 'ambiguous Atlas guidance'):
+            atlas.guidance(self.root, check=True)
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+        policy['memory'] = 'copied-facts'; policy_path.write_text(json.dumps(policy))
+        with self.assertRaisesRegex(ValueError, 'lifecycle/memory policy'):
+            atlas.guidance(self.root)
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+
     def test_nested_workspace_uses_current_owner_and_shared_archives(self):
         repo = self.root / 'Product'; repo.mkdir(); (repo / '.git').write_text('gitdir: private-worktree')
         owner = repo / 'docs/atlas'; archive(owner)

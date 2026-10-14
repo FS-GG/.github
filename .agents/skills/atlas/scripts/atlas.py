@@ -215,12 +215,20 @@ def guidance(root, check=False):
     require(policy.get('memory') == 'repository-and-atlas-id-pointers-only' and
             policy.get('lifecycle') == 'retrieve-verify-capture-or-explicit-gap', 'Atlas lifecycle/memory policy missing')
     block = '<!-- atlas:begin -->\n' + GUIDANCE + '<!-- atlas:end -->\n'
+    updates = []
     for name in ('AGENTS.md', 'CLAUDE.md'):
         path = root / name; text = path.read_text()
-        require(text.count('<!-- atlas:begin -->') == text.count('<!-- atlas:end -->') <= 1, 'ambiguous Atlas guidance')
-        updated = re.sub(r'<!-- atlas:begin -->.*?<!-- atlas:end -->\n?', block, text, flags=re.S) if '<!-- atlas:begin -->' in text else text.rstrip() + '\n\n' + block
+        begin = text.count('<!-- atlas:begin -->'); end = text.count('<!-- atlas:end -->')
+        require(begin == end <= 1, 'ambiguous Atlas guidance')
+        pattern = r'<!-- atlas:begin -->.*?<!-- atlas:end -->\n?'
+        if begin:
+            require(len(re.findall(pattern, text, flags=re.S)) == 1, 'ambiguous Atlas guidance')
+        updated = re.sub(pattern, block, text, flags=re.S) if begin else text.rstrip() + '\n\n' + block
         require(not check or updated == text, 'stale Atlas guidance: ' + name)
-        if not check:
+        updates.append((path, updated))
+    # Validate both targets before changing either owner's instructions.
+    if not check:
+        for path, updated in updates:
             path.write_text(updated)
 
 def default_archives():
