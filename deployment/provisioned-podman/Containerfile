@@ -17,7 +17,7 @@ RUN set -eu; \
     test -s package-inventory.expected; \
     test -s repositories/core/os/x86_64/core.db; \
     test -s repositories/extra/os/x86_64/extra.db; \
-    if LC_ALL=C grep -Ev '^[0-9a-f]{64}  (package-inventory.expected|repositories/(core|extra)/os/x86_64/[A-Za-z0-9_+.-]+)$' SHA256SUMS; then \
+    if LC_ALL=C grep -Ev '^[0-9a-f]{64}  (package-inventory.expected|repositories/(core|extra)/os/x86_64/[A-Za-z0-9_+.:-]+)$' SHA256SUMS; then \
       exit 1; \
     else \
       test "$?" = 1; \
