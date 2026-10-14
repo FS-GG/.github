@@ -100,7 +100,7 @@ the decision records linked throughout.
                            FS.GG.Net.* → nothing either (a third bottom layer, ADR-0052; consumed by
                            apps — SC2/BAR clients — not by the template).
                            Rendering's template reaches UP to the game + audio bottom layers
-                           (game-sim-core, fs-gg-audio) and to nothing else; none reaches back. One-way preserved.
+                           (game-sim-core, fs-gg-audio); neither core reaches back. One-way preserved.
 ```
 
 The selected components below are independently owned and released. This table

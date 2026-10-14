@@ -67,7 +67,7 @@ Rendering's dependency independence to its portable core, describes Kit
 materialization instead of retired byte-copy synchronization, and replaces stale
 Creator release prose with the owning receiver evidence.
 
-Atlas's original `platform/dependency-direction` summary incorrectly equated
+Atlas's original [platform/dependency-direction](../atlas/records/be75cc1ee935f783be39978de91ae196c16141d4096e16eb6d07f59583296b4b.json) summary incorrectly equated
 optional Governance enforcement with absence of a Governance.Config build dependency.
 The cited architecture already contained that distinction. The corrected record
 explicitly supersedes the inaccurate summary without rewriting its history.
@@ -111,9 +111,9 @@ Public package availability observed at 2026-10-14T11:45:02.817514+00:00. Each o
 
 Two public source-derived counterexamples deserve focused reproduction and resolution:
 
-- `game/session-refusal-accumulator-gap`: failed elapsed-time advancement can retain
+- [game/session-refusal-accumulator-gap](../atlas/records/48d094622ada1806cb30335926007c1abc476b1f7b45a2e250c490afa25e847b.json): failed elapsed-time advancement can retain
   a changed clock accumulator despite the public refusal-preserves-state contract.
-- `net/multiplexed-terminal-admission-gap`: a late multiplexed request can register
+- [net/multiplexed-terminal-admission-gap](../atlas/records/2591526ddabbea03fbdc38bf172bc54f42df9bc51eba7ad2b70d6e67215f08f1.json): a late multiplexed request can register
   after receive termination without the sequential path's terminal-admission guard.
 
 These are open source-review findings, not newly executed CLR reproductions or fixes.
@@ -169,10 +169,29 @@ the supported Atlas paths. Automatic generic scaffold activation needs an owner/
 hook and installed-consumer verification. This source update and host configuration
 do not assert a package publication or fleet-wide installation.
 
+## Evidence entry points
+
+These active Atlas records carry the immutable source citations behind the findings.
+Use their stable IDs for later retrieval so explicit supersessions remain visible.
+
+| Topic | Atlas record |
+| --- | --- |
+| Foundation and lifecycle | [sdd/project-knowledge-and-atlas-boundary](../atlas/records/d0df3068db679e24d9487ee09a6462ac5cf3df30f46ee466b66feb6dd5ff71e2.json) |
+| Templates acceptance | [templates/0.19-publication-and-receiver-scope](../atlas/records/e7c9175fbfd9fd84bed95d552bc0a439b07a233c3e91fb39ae2f23197ee53f1b.json) |
+| Generic replay | [fsquint/automata-qualified-and-deferred-scope](../atlas/records/a0ff0d0bb3a3c801b637d091293f2eeaac68e934274e4116d298ba60ec3461cc.json) |
+| Component versions | [game/component-source-and-consumer-pin-snapshot](../atlas/records/cc24c3770587f2421514fa399d2617201752bdca145ac39058de91d45d3d19c1.json) |
+| WASM producer acceptance | [game/wasm-supervisor-source-publication-boundary](../atlas/records/b25c41f19ba40e646fd9b6f82051ee4c38985539e445b26bd628eae98537df53.json) |
+| Coordination consumer scope | [coordination/fsquint-test-production-joins](../atlas/records/69edc4285578313d1dd2f914d69add075a7b354f7fba717606d1abe15292576b.json) |
+| Coordination execution boundaries | [coordination/ordinary-cli-execution-pair-publication](../atlas/records/d6077d547aa21ea10a9bdf6c752b8d1a0a6382b4b43a0fdf790f245e66a609fc.json) |
+| BAR native lineage | [bar/stock-engine-and-fork-lineages](../atlas/records/8629fddeb4f273b35df69d4d28923adc14eff59d919b1a495d1a68818137c561.json) |
+| Public fixture provenance | [svg-fixtures/public-retained-preserving-adoption](../atlas/records/b0ecfca0d114bae34ffa62ac3ea05159a4415fc6eb73ab1fcc4d79f657268f19.json) |
+| S.I.R. product boundaries | [sir/actual-project-and-package-boundaries](../atlas/records/ba7d7464da8e13722232c8f86273774054693681becc450a68aea21a5a0e9b91.json) |
+| Knowledge and memory authority | [atlas/storage-authority](../atlas/records/800060d7b4934508d0277f90a464e3112fd2fc99af4ef23825d09b0ff53f91c3.json) |
+
 ## Validation and follow-up
 
-The audit adds 58 public record versions to the original 75, preserving every
-original byte: 133 public records in total. Seven detailed private records remain
+The audit adds 61 public record versions to the original 75, preserving every
+original byte: 136 public records in total. Seven detailed private records remain
 in the restricted local archive with separate local Git history and no remote.
 The public seed contains no private-source interiors.
 
