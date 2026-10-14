@@ -1,0 +1,6 @@
+interface:
+  display_name: "Atlas"
+  short_description: "Retrieve and preserve curated FS.GG project knowledge"
+  default_prompt: "Use $atlas to retrieve cited FS.GG knowledge and capture reusable findings."
+policy:
+  allow_implicit_invocation: true

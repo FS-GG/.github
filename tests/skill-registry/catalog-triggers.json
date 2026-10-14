@@ -187,5 +187,12 @@
     "incomplete": "Reconcile routine programme decisions from the current lane view.",
     "negative": "Create a personal weekly planner for an unrelated project.",
     "boundary": "Replay these recorded programme observations without dispatching or admitting any protected effect."
+  },
+  "atlas": {
+    "positive": "Use $atlas to retrieve FS.GG architecture and capture a verified lesson.",
+    "indirect": "Find the retained reason for this cross-repository contract and preserve the new finding.",
+    "incomplete": "What do we already know about this FS.GG component?",
+    "negative": "Execute a package publication or a live game operation.",
+    "boundary": "Retrieve cited knowledge; do not treat a historical record as live authorization."
   }
 }

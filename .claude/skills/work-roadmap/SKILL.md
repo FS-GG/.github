@@ -3,6 +3,10 @@ name: work-roadmap
 description: Use when explicitly asked to complete a markdown roadmap milestone by milestone. Routine delivery is the default; use heavyweight ceremony only for human-named scope.
 ---
 
+
+Use [$atlas](../atlas/SKILL.md) first for relevant project knowledge before substantial work.
+Capture reusable findings in the owning Atlas archive during delivery; cite stable IDs in handoffs.
+Verify source and live state before action; unavailable Atlas does not block authorized development.
 # work-roadmap
 
 Burn down a markdown roadmap milestone by milestone. The roadmap—not a project board—is the ledger.

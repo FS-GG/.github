@@ -107,7 +107,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-10-13"
+updated: "2026-10-14"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -345,7 +345,7 @@ skills:
   # it was built for. registry = manifest = bytes: sha256 is the canonical-body digest of the authored
   # SKILL.md, reconciled from the driver manifest (predicate flip + re-digest: .github#1247).
   # ------------------------------------------------------------------------------------------------
-  - { id: work-roadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: daa61bc2daca32683191e33d61e798adf4d56624197fd29af8f7854348aca2cb, materializes-when: "always" }
+  - { id: work-roadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: 24190433bb138e022e169c381c2f5449b2fe68d335bf2936df92a461e88d705c, materializes-when: "always" }
   # work-board — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
@@ -362,6 +362,10 @@ skills:
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
   - { id: work-board-normal,      scope: driver,  owner: .github,         source: .github/.claude/skills/work-board-normal/SKILL.md, sha256: 55f96951dc04fd02cdc3411dd72ce0f6fcaca9c64a2daafd6270fc0d45adf05b, materializes-when: always }
+  # atlas — homed beside its owner+predicate siblings and reconciled verbatim from
+  # .github's producer manifest by `--write` (.github#299/.github#1200). The position
+  # and this annotation are generated; the row's bytes are the manifest's.
+  - { id: atlas,                  scope: driver,  owner: .github,         source: .github/.claude/skills/atlas/SKILL.md, sha256: 341bb5129dc34c1dfbee86ed57762eb387f48ff1da6b4df0604f149eaa5c4b98, materializes-when: always }
 
   # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
   #

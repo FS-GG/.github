@@ -75,6 +75,8 @@ This is source guidance delivery, not a claim of a new package or installed rece
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-10-14** — RECONCILE (Atlas; .github): add the always-materialized `atlas` driver and complete offline knowledge seed from the owner manifest; update `work-roadmap` for Atlas-first retrieval and capture. Registry digests are emitted from the authored skill directories.
+
 - **2026-10-05** — Reconcile publishing-and-deployment operator digest after Creator016 source-only projection; published015 and Kit/Drivers unchanged.
 
 - **2026-10-05** — Reconcile publishing-and-deployment operator digest after accepted Creator0.15 publication inventory; scope/materialization unchanged, no Kit/Drivers release.

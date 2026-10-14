@@ -3,6 +3,10 @@ name: work-programme
 description: "Advance the FS-GG Unified Roadmap with typed decisions, worker recovery, pinned lane packets and bounded check watchers."
 ---
 
+
+Use [$atlas](../atlas/SKILL.md) first for relevant project knowledge before substantial work.
+Capture reusable findings in the owning Atlas archive during delivery; cite stable IDs in handoffs.
+Verify source and live state before action; unavailable Atlas does not block authorized development.
 # Work Programme
 
 Temporary replacement for `work-unified-roadmap`. The

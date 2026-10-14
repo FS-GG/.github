@@ -155,3 +155,5 @@ The rendering and SDD projects may be customers of governance tooling, but they
 must not depend on that tooling to do ordinary component work. If governance
 tooling becomes heavy, brittle, or distracting, the component repositories should
 continue on standard Spec Kit and normal build/test/release practices.
+
+[Atlas](atlas/README.md) is the primary curated project-knowledge archive and retrieval path.
