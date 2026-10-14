@@ -2399,6 +2399,25 @@ class OriginalTagIntentControls(unittest.TestCase):
         self.assertEqual(len(self.posts), 1)
         self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
 
+    def test_actual_redirect_handler_rejects_before_following_authorized_request(self):
+        def build(handler):
+            instance = handler()
+            with self.assertRaises(ProviderRefused):
+                instance.redirect_request(None, None, 307, 'fixture', {}, 'https://other.invalid')
+            return types.SimpleNamespace(open=self.open)
+        transport = self.transport()
+        with patch.object(urllib.request, 'build_opener', side_effect=build):
+            self.assertEqual(transport.dispatch(ordered_effects(self.candidate)[0], 100, lambda: 0).state, 'applied')
+        self.assertEqual(len(self.posts), 1)
+        self.assertEqual(self.posts[0].get_header('Authorization'), 'Bearer inert-token')
+
+    def test_malformed_native_nested_objects_fail_closed(self):
+        for row, key in ((self.run, 'actor'), (self.run, 'repository'), (self.artifact, 'workflow_run')):
+            old = row[key]; row[key] = None
+            with self.subTest(key=key), self.assertRaises((publisher.Refused, AttributeError)): self.recover()
+            row[key] = old
+        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
+
     def test_repository_namespace_and_publisher_budget_are_closed(self):
         with self.assertRaises(publisher.Refused): self.api.get('repos/FS-GG/.github-evil')
         self.api.attempted = {'get': 256}
