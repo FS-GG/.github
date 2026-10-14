@@ -774,7 +774,7 @@ state after actual absence. The observational outcome explicitly distinguishes a
 custody completion; only actual Runner terminal evidence establishes C4Ready or
 InactiveQualified. Unknown program or directory retirement holds the original handles.
 
-Strict C11 executable and shared-library compilation passed, with 375 ordinary source
+Strict C11 executable and shared-library compilation passed, with 378 ordinary source
 controls and zero failures. Controls use the actual parser and directory helpers for
 nonce, owner, mount, symlink, escape, replacement and terminal-absence refusals; pure
 policy fixtures exercise both targets and bounded cleanup without claiming kernel
