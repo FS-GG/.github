@@ -156,7 +156,7 @@ def graph_run(arguments: list[str], **kwargs) -> subprocess.CompletedProcess:
 
 
 def prove_graph(repository: str, head: str, source: str, parent: str,
-                base: str, trees: dict[str, str]) -> str:
+                base: str, trees: dict[str, str], *, merge_commit: bool = False) -> str:
     """Reproduce S from a complete frontier above the unique common graph base.
 
     B's ancestors cannot be additional maximal common ancestors after B is proven
@@ -198,8 +198,9 @@ def prove_graph(repository: str, head: str, source: str, parent: str,
                 raise QUALIFICATION.Refusal("fetched commit identity differs")
             if git("rev-parse", oid + "^{tree}") != tree:
                 raise QUALIFICATION.Refusal("fetched native tree differs")
-        if git("show", "-s", "--format=%P", source) != parent:
-            raise QUALIFICATION.Refusal("fetched squash parent differs")
+        expected_parents = f"{parent} {head}" if merge_commit else parent
+        if git("show", "-s", "--format=%P", source) != expected_parents:
+            raise QUALIFICATION.Refusal("fetched source parents differ")
         git("merge-base", "--is-ancestor", base, parent)
         git("merge-base", "--is-ancestor", base, head)
         frontier = set(git("rev-list", parent, head, "^" + base).splitlines())
@@ -214,7 +215,7 @@ def prove_graph(repository: str, head: str, source: str, parent: str,
         return trees[source]
 
 
-def equivalent_tree(repository: str, head: str, source: str) -> str:
+def equivalent_tree(repository: str, head: str, source: str, pr_base: str) -> str:
     """Bind exact native commit identities, then prove source byte composition."""
     commits = {}
     trees = {}
@@ -226,12 +227,21 @@ def equivalent_tree(repository: str, head: str, source: str) -> str:
             raise QUALIFICATION.Refusal("native commit identity/tree is malformed")
         commits[sha], trees[sha] = commit, tree
     parents = commits[source].get("parents")
-    if not isinstance(parents, list) or len(parents) != 1:
-        raise QUALIFICATION.Refusal("merged source has no unique squash parent")
+    if not isinstance(parents, list) or len(parents) not in (1, 2):
+        raise QUALIFICATION.Refusal("merged source has no supported squash or merge parents")
+    merge_commit = len(parents) == 2
+    if merge_commit:
+        # A native merge must retain the exact authenticated target/head order.
+        # Unlike squash equivalence, even equal trees require composition proof.
+        if (not isinstance(pr_base, str) or not QUALIFICATION.SHA.fullmatch(pr_base)
+                or not all(isinstance(value, dict) for value in parents)
+                or [value.get("sha") for value in parents] != [pr_base, head]
+                or pr_base == head):
+            raise QUALIFICATION.Refusal("native merge parents differ from associated PR base/head")
     parent = parents[0].get("sha") if isinstance(parents[0], dict) else None
     if not isinstance(parent, str) or not QUALIFICATION.SHA.fullmatch(parent):
         raise QUALIFICATION.Refusal("merged source parent is malformed")
-    if trees[source] == trees[head]:
+    if not merge_commit and trees[source] == trees[head]:
         return trees[source]
     comparison = api(f"repos/{repository}/compare/{parent}...{head}")
     base = comparison.get("merge_base_commit", {}).get("sha") if isinstance(comparison, dict) else None
@@ -245,6 +255,8 @@ def equivalent_tree(repository: str, head: str, source: str) -> str:
                 or not isinstance(tree, str) or not QUALIFICATION.SHA.fullmatch(tree)):
             raise QUALIFICATION.Refusal("native graph commit identity/tree is malformed")
         trees[sha] = tree
+    if merge_commit:
+        return prove_graph(repository, head, source, parent, base, trees, merge_commit=True)
     return prove_graph(repository, head, source, parent, base, trees)
 
 
@@ -313,7 +325,12 @@ def observe(environ: dict[str, str], rehearsal: bool = False,
     head = current_pull["head"]["sha"]
     if not QUALIFICATION.SHA.fullmatch(head):
         raise QUALIFICATION.Refusal("invalid associated PR head")
-    tree = equivalent_tree(repository, head, source)
+    if (current_pull.get("state") != "closed" or current_pull.get("merged_at") is None
+            or current_pull.get("merge_commit_sha") != source
+            or current_pull.get("base", {}).get("ref") != "main"
+            or current_pull.get("base", {}).get("repo", {}).get("full_name") != repository):
+        raise QUALIFICATION.Refusal("associated merge commit/PR does not authenticate the merged source")
+    tree = equivalent_tree(repository, head, source, current_pull["base"]["sha"])
     required_checks(repository, selected_source)
 
     checks_response = api(f"repos/{repository}/commits/{head}/check-runs?per_page=100")

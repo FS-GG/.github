@@ -145,11 +145,11 @@ class NativeObservationTests(unittest.TestCase):
             elif "/git/commits/" in path:
                 body = {"sha": path.rsplit("/", 1)[1], "tree": {"sha": self.tree if path.endswith(SOURCE) else getattr(self, "head_tree", self.tree)}}
                 if path.endswith(SOURCE):
-                    body["parents"] = [{"sha": self.parent}]
+                    body["parents"] = getattr(self, "source_parents", [{"sha": self.parent}])
             else:
                 raise AssertionError(path)
             return subprocess.CompletedProcess(args, 0, json.dumps(body), "")
-        def fake_graph(_repo, _head, _source, _parent, base, _trees):
+        def fake_graph(_repo, _head, _source, _parent, base, _trees, **kwargs):
             if base != getattr(self, "expected_graph_base", self.pull["base"]["sha"]):
                 raise MODULE.QUALIFICATION.Refusal("native merge base disagrees")
             if self.merge_status:
@@ -168,7 +168,7 @@ class NativeObservationTests(unittest.TestCase):
                 body["parents"] = []
             return body
         with patch.object(MODULE, "api", side_effect=invalid_parent):
-            with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "unique squash parent"):
+            with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "supported squash or merge parents"):
                 self.run_observation()
         calls = 0
         def moving_pull(path):
@@ -183,6 +183,45 @@ class NativeObservationTests(unittest.TestCase):
         with patch.object(MODULE, "api", side_effect=moving_pull):
             with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "during graph/check"):
                 self.run_observation()
+
+    def select_merge_commit(self):
+        self.pull["base"]["sha"] = self.parent
+        self.source_parents = [{"sha": self.parent}, {"sha": HEAD}]
+        self.expected_graph_base = self.merge_base
+        self.merged_tree = self.tree
+
+    def test_exact_native_merge_parents_require_composition_proof(self):
+        self.select_merge_commit()
+        self.assertEqual(self.tree, self.run_observation()["qualifiedTreeSha"])
+        self.head_tree = "d" * 40
+        self.assertEqual(self.tree, self.run_observation()["qualifiedTreeSha"])
+        self.head_tree = self.tree
+        self.merged_tree = "e" * 40
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "three-way merge"):
+            self.run_observation()
+
+    def test_native_merge_parent_population_order_and_identity_refuse(self):
+        self.select_merge_commit()
+        for parents in ([], [{"sha": self.parent}, {"sha": HEAD}, {"sha": SOURCE}],
+                        [{"sha": HEAD}, {"sha": self.parent}],
+                        [{"sha": "f" * 40}, {"sha": HEAD}],
+                        [{"sha": self.parent}, {"sha": "f" * 40}],
+                        [{"sha": self.parent}, None]):
+            with self.subTest(parents=parents):
+                self.source_parents = parents
+                with self.assertRaises(MODULE.QUALIFICATION.Refusal):
+                    self.run_observation()
+
+    def test_unmerged_or_wrong_native_merge_association_refuses_before_graph(self):
+        self.select_merge_commit()
+        for key, value in (("state", "open"), ("merged_at", None),
+                           ("merge_commit_sha", HEAD)):
+            with self.subTest(key=key):
+                original = self.pull[key]
+                self.pull[key] = value
+                with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "authenticate"):
+                    self.run_observation()
+                self.pull[key] = original
 
     def test_current_target_base_is_distinct_from_graph_base(self):
         self.head_tree = "d" * 40
@@ -538,7 +577,7 @@ class RealGraphTests(unittest.TestCase):
     def commit(self, tree, parents):
         return self.command("commit-tree", tree, *[x for p in parents for x in ("-p", p)], input="fixture\n")
 
-    def proof(self, base=None):
+    def proof(self, base=None, *, merge_commit=False):
         base = base or self.base
         trees = {x: self.command("rev-parse", x + "^{tree}")
                  for x in (self.parent, self.head, self.source, base)}
@@ -571,11 +610,25 @@ class RealGraphTests(unittest.TestCase):
             return native_graph_run(args, **kwargs)
         native_graph_run = MODULE.graph_run
         with patch.object(MODULE, "graph_run", side_effect=transport):
-            return MODULE.prove_graph("FS-GG/.github", self.head, self.source, self.parent, base, trees)
+            return MODULE.prove_graph("FS-GG/.github", self.head, self.source, self.parent, base, trees, merge_commit=merge_commit)
 
     def test_real_concurrent_clean_squash_returns_source_tree(self):
         self.assertEqual(self.command("rev-parse", self.source + "^{tree}"), self.proof())
         self.assertNotEqual(self.command("rev-parse", self.head + "^{tree}"), self.proof())
+
+    def test_real_native_merge_proves_tree_and_exact_ordered_parents(self):
+        merged = self.command("merge-tree", "--write-tree", self.parent, self.head)
+        self.source = self.commit(merged, [self.parent, self.head])
+        self.assertEqual(merged, self.proof(merge_commit=True))
+        for parents in ([self.head, self.parent], [self.parent],
+                        [self.parent, self.head, self.base]):
+            with self.subTest(parents=parents):
+                self.source = self.commit(merged, parents)
+                with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "source parents"):
+                    self.proof(merge_commit=True)
+        self.source = self.commit(self.tree({"extra": "unqualified"}), [self.parent, self.head])
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "three-way merge"):
+            self.proof(merge_commit=True)
 
     def test_shallow_only_at_common_base_is_complete_enough(self):
         self.depth = "1"

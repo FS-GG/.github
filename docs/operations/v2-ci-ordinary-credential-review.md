@@ -99,3 +99,30 @@ owned children were terminal. Fixture transport copies local objects and constru
 real shallow metadata, so no network/native credential path was executed. Hosted
 coherent qualification, source delivery and original-identity native readback remain
 pending; these controls establish no production settlement or receiver adoption.
+
+## Exact native merge parents — 2026-10-14
+
+The original [predecessor `38564648933/a1`](https://github.com/FS-GG/.github/actions/runs/38564648933)
+at `afc7401dc6c8db66bbcd2658e06629c95abb43b9` refused with
+`merged source has no unique squash parent`. [PR4492](https://github.com/FS-GG/.github/pull/4492)
+used a native merge to preserve immutable cited revisions: its ordered source parents
+were target `14a9311393b80906548595c2373b55aaa6cb7f4d` and qualified head
+`2bd4bc97867ed05cbf162a6e1a5c3301c1d4d092`, matching the native PR base/head.
+That failed attempt remains failed; source repair does not retry it.
+
+The observer now admits exactly that two-parent shape alongside existing squash
+semantics. It authenticates the merged PR/source/repository association before
+graph collection, requires ordered parents `[native PR base, qualified head]`,
+and independently rechecks fetched parents. Every two-parent source, including
+one whose tree equals the head tree, must reproduce the source tree through the
+existing complete-frontier, unique-base, clean three-way merge proof. Reversed,
+unrelated, missing or extra parents and changed/extra source contents refuse.
+Squash commits retain their existing equal-tree fast path and concurrent-base proof.
+
+Preflight uses existing static workflow controls and focused native graph fixtures;
+unchanged topology and operation authority do not warrant a custom model. Local
+observer, qualification, routine eligibility and operation-boundary controls passed
+in the isolated source-test profile. Fixture fetches copy local Git objects;
+qualification API/signing transport is inert. Hosted coherent qualification,
+protected-source delivery and production settlement remain separate pending
+outcomes; no credential, publication, workflow dispatch or history rewrite ran.
