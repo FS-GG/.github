@@ -56,8 +56,11 @@ acquired/
 `SHA256SUMS` covers the complete staged repository/package/signature population and expected inventory;
 paths are relative to `acquired/`. The maintained admission seam must validate complete population,
 safe relative regular-file paths, identity, signature/trust reconciliation and the acquired lock against
-the actual context before launch. The Containerfile's checksum check detects byte drift; it does not
-authenticate a supplied checksum list or establish acquisition completeness. Missing COPY inputs or
+the actual context before launch. Before the transaction, the Containerfile rejects unsafe checksum
+paths and non-regular repository inputs, and compares checksum rows with every staged file plus the
+expected final inventory. Missing, extra or duplicate rows refuse before hash verification. This checks
+complete coverage of the supplied population; it does not authenticate a supplied checksum list or
+prove that the supplied population is the complete maintained transaction. Missing COPY inputs or
 empty required inputs refuse before the transaction. Pacman still performs the full offline dependency,
 conflict, replacement, scriptlet and hook transaction; the complete resulting inventory must match the
 frozen expectation. An incomplete package set cannot be repaired over a network.

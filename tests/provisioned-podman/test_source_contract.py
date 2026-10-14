@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Inert common-base source controls; no package/container/network execution."""
 import json
+import hashlib
 from pathlib import Path
 import re
 import subprocess
@@ -83,10 +84,10 @@ class CommonBaseSource(unittest.TestCase):
     def test_actual_shell_prerequisites_refuse_empty_or_missing_bytes(self):
         # Exercise only the recipe's checks before keyring/package commands.
         guard = self.recipe.split("RUN ", 1)[1].split("pacman-key --init", 1)[0].replace("\\\n", " ")
-        self.assertEqual([command.strip().split()[0] for command in guard.split(";") if command.strip()],
-                         ["set", "cd", "test", "test", "test", "test", "sha256sum"])
+        self.assertNotRegex(guard, r"\b(?:podman|pacman|gpg|curl|wget)\b")
         with tempfile.TemporaryDirectory() as temporary:
-            context = Path(temporary)
+            context = Path(temporary) / "acquired"
+            context.mkdir()
             for relative in ("repositories/core/os/x86_64/core.db", "repositories/extra/os/x86_64/extra.db"):
                 path = context / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -94,14 +95,59 @@ class CommonBaseSource(unittest.TestCase):
             (context / "package-inventory.expected").write_bytes(b"inert 1\n")
             checks = context / "SHA256SUMS"
             checks.write_text("0" * 64 + "  repositories/core/os/x86_64/missing.pkg.tar.zst\n")
-            bounded = guard.replace("/opt/fsgg/acquired", str(context))
+            bounded = guard.replace("/opt/fsgg/acquired", str(context)).replace("/opt/fsgg", str(context.parent))
             failed = subprocess.run(["/bin/sh", "-c", bounded], capture_output=True, timeout=5)
             self.assertNotEqual(failed.returncode, 0)
-            self.assertIn(b"missing.pkg.tar.zst", failed.stderr)
             checks.write_bytes(b"")
             empty = subprocess.run(["/bin/sh", "-c", bounded], capture_output=True, timeout=5)
             self.assertNotEqual(empty.returncode, 0)
             self.assertEqual(empty.stderr, b"")
+
+    def test_actual_complete_population_guard_and_adversarial_controls(self):
+        guard = self.recipe.split("RUN ", 1)[1].split("pacman-key --init", 1)[0].replace("\\\n", " ")
+        population = {"package-inventory.expected": b"inert 1\n",
+                      "repositories/core/os/x86_64/core.db": b"core",
+                      "repositories/extra/os/x86_64/extra.db": b"extra",
+                      "repositories/core/os/x86_64/inert-1.pkg.tar.zst": b"package",
+                      "repositories/core/os/x86_64/inert-1.pkg.tar.zst.sig": b"signature"}
+        cases = ["valid", "missing-db-row", "missing-package-row", "missing-signature-row",
+                 "missing-inventory-row", "extra-file", "duplicate-row", "parent-escape",
+                 "absolute-path", "symlink", "byte-drift"]
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                context = Path(temporary) / "acquired"
+                context.mkdir()
+                for relative, content in population.items():
+                    path = context / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(content)
+                rows = [hashlib.sha256(content).hexdigest() + "  " + relative for relative, content in population.items()]
+                omitted = {"missing-db-row": "core.db", "missing-package-row": "inert-1.pkg.tar.zst",
+                           "missing-signature-row": "inert-1.pkg.tar.zst.sig",
+                           "missing-inventory-row": "package-inventory.expected"}
+                if case in omitted:
+                    rows = [row for row in rows if not row.endswith("  " + omitted[case]) and not row.endswith("/" + omitted[case])]
+                if case == "extra-file":
+                    (context / "repositories/core/os/x86_64/unlisted.pkg.tar.zst").write_bytes(b"unlisted")
+                if case == "duplicate-row":
+                    rows.append(rows[0])
+                if case == "parent-escape":
+                    rows.append("0" * 64 + "  ../outside")
+                if case == "absolute-path":
+                    rows.append("0" * 64 + "  /outside")
+                if case == "symlink":
+                    path = context / "repositories/core/os/x86_64/inert-1.pkg.tar.zst"
+                    path.unlink()
+                    path.symlink_to(context / "package-inventory.expected")
+                if case == "byte-drift":
+                    (context / "package-inventory.expected").write_bytes(b"drift\n")
+                (context / "SHA256SUMS").write_text("\n".join(rows) + "\n")
+                bounded = guard.replace("/opt/fsgg/acquired", str(context)).replace("/opt/fsgg", str(context.parent))
+                result = subprocess.run(["/bin/sh", "-c", bounded], capture_output=True, timeout=5)
+                if case == "valid":
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                else:
+                    self.assertNotEqual(result.returncode, 0, "unbound population reached transaction boundary")
 
     def test_ordinary_user_cold_store_and_no_implicit_capabilities(self):
         for line in ("USER 32768:32768", "WORKDIR /workspace", "ENTRYPOINT []", "CMD []", "ENV HOME=/home/fsgg"):

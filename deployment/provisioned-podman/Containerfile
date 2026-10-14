@@ -17,7 +17,21 @@ RUN set -eu; \
     test -s package-inventory.expected; \
     test -s repositories/core/os/x86_64/core.db; \
     test -s repositories/extra/os/x86_64/extra.db; \
+    if LC_ALL=C grep -Ev '^[0-9a-f]{64}  (package-inventory.expected|repositories/(core|extra)/os/x86_64/[A-Za-z0-9_+.-]+)$' SHA256SUMS; then \
+      exit 1; \
+    else \
+      test "$?" = 1; \
+    fi; \
+    find repositories ! -type d ! -type f -print > /opt/fsgg/invalid-input-paths; \
+    test ! -s /opt/fsgg/invalid-input-paths; \
+    cut -c 67- SHA256SUMS | LC_ALL=C sort > /opt/fsgg/expected-input-paths; \
+    find repositories -type f -print > /opt/fsgg/actual-input-paths; \
+    printf '%s\n' package-inventory.expected >> /opt/fsgg/actual-input-paths; \
+    LC_ALL=C sort /opt/fsgg/actual-input-paths > /opt/fsgg/sorted-input-paths; \
+    cmp /opt/fsgg/expected-input-paths /opt/fsgg/sorted-input-paths; \
     sha256sum --strict --check SHA256SUMS; \
+    rm -f /opt/fsgg/invalid-input-paths /opt/fsgg/expected-input-paths \
+      /opt/fsgg/actual-input-paths /opt/fsgg/sorted-input-paths; \
     pacman-key --init; \
     pacman-key --populate archlinux; \
     pacman --config /opt/fsgg/pacman.conf --noconfirm -Syu --needed \
