@@ -31,8 +31,8 @@ onboarded as a standalone component under
 render-independent transport component (protobuf over WebSocket / gRPC) onboarded under
 [ADR-0052](adr/0052-onboard-fs-gg-net-transport-component.md). All three are **published**
 to the org feed and nuget.org — [§5](#5-the-contract-registry--the-single-source-of-truth) carries
-the versions, generated from the registry. A ninth organization repository,
-**FS.GG.Coordination**, is the independently qualified new-only v2 product approved by
+the declared selections, generated from the registry.
+**FS.GG.Coordination** is the independently qualified new-only v2 product approved by
 ADR-0078; it is rostered and active at its selected clean-path boundary, but is not a framework or
 v1-fabric participant.
 [ADR-0091](adr/0091-speed-first-clean-v2-start.md) enables the clean-start ordinary V2 settlement path
@@ -54,17 +54,14 @@ source design delivery does not establish the new providers' public installed su
 This page is a map. Authoritative detail lives in each component repository and in
 the decision records linked throughout.
 
-> **Terms (ADR-0020).** The **platform** is FS-GG as a whole — the current nine
-> organization repositories below (seven framework components + `.github` + the selected v2 product; the sixth,
-> **FS.GG.Game**, was extracted under ADR-0022 and published at P5; the seventh,
-> **FS.GG.Audio**, was onboarded as a standalone component under ADR-0023; the eighth,
-> **FS.GG.Net**, the transport component, under ADR-0052). ADR-0078 approved the
-> early-provisioned **FS.GG.Coordination** component; ADR-0091 now governs its selected clean-path
-> activation as the ninth repository and independently qualified v2 coordination runtime. Each repository is a
-> **component**. What a consumer *scaffolds* with the platform is a **workspace** —
-> the generated repo with a runnable **app**, the `.fsgg/` lifecycle, skills, and
-> optional governance. This page uses those words precisely; see
-> [ADR-0020](adr/0020-platform-workspace-component-vocabulary.md).
+> **Terms (ADR-0020).** The **platform** is FS-GG as a whole. The component map
+> below describes selected framework and coordination repositories; it is not an
+> organization census. The [repository roster](../registry/repos.yml) declares fabric
+> participation, including owner-qualified external repositories. Product repositories,
+> independent package owners and qualification fixtures have their own scopes.
+> What a consumer *scaffolds* with the platform is a **workspace** — the generated
+> repo with a runnable **app**, the `.fsgg/` lifecycle, skills and optional governance.
+> See [ADR-0020](adr/0020-platform-workspace-component-vocabulary.md).
 
 ---
 
@@ -81,7 +78,7 @@ the decision records linked throughout.
                          │  • the org CLIs: new-sdd-workspace, and the    │
                          │    coordination engine (fsgg-coord; ADR-0034)  │
                          └───────────────────────────────────────────────┘
-                                   │ syncs build config to ▼ all repos
+                                   │ Kit materialization to ▼ declared receivers
    ┌───────────────────────────────┼───────────────────────────────────────┐
    │                               │                                        │
 ┌──┴───────────────┐   ┌───────────┴──────────┐   ┌──────────────────┐   ┌──┴──────────────┐
@@ -106,28 +103,22 @@ the decision records linked throughout.
                            (game-sim-core, fs-gg-audio) and to nothing else; none reaches back. One-way preserved.
 ```
 
-Nine repositories under [github.com/FS-GG](https://github.com/FS-GG) (seven framework
-components + `.github` + the inert `FS.GG.Coordination` v2 product; **FS.GG.Game** was extracted under ADR-0022 — its packages
-`FS.GG.Game.Core` + `.Render` are **published** to the org feed + nuget.org;
-`game-extraction` **`coherent: true`** since P5, 2026-07-06; **FS.GG.Audio** was onboarded
-as a standalone render-independent component under ADR-0023, its `FS.GG.Audio.*` set
-**published** — promoted off the `-preview` channel on 2026-07-09 (FS.GG.Audio#4), which made it
-the **last `FS.GG.*` producer to go stable**; and **FS.GG.Net** was onboarded under ADR-0052, its
-six-package `FS.GG.Net.*` set **published** at `0.1.0` (v0.1.0, 2026-07-19) on both feeds — every
-producer in the org ships on a stable channel). [§5](#5-the-contract-registry--the-single-source-of-truth) carries what each is
-published *at*:
+The selected components below are independently owned and released. This table
+is a role map, not the complete organization inventory. [§5](#5-the-contract-registry--the-single-source-of-truth)
+projects the registry's declared versions; publication and installed acceptance
+remain grounded in each producer's release evidence and owning plan.
 
 | Repository | Role | Ships |
 |---|---|---|
 | [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework — Scene, layout, input, viewer/host, controls, themes; Elmish/MVU over SkiaSharp/OpenGL. | `FS.GG.UI.*` packages + the `fs-gg-ui` `dotnet new` template |
 | [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI + the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / gate tooling — a pure inference kernel, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
-| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + framework producers into one workspace at scaffold time. ADR-0071/0072/0073 define the `console`, `web`, `fable-game`, and `fable-bindings` providers; `FS.GG.Workspace.Template` 0.18.2 is published and registry-active (see the versions table in §5 for the current pin), and `new-sdd-workspace` 0.12.0 selects each through `--template`, including the fable-game bundle matrix. | the `rendering` scaffold provider + `fs-gg-governance` overlay; `FS.GG.Workspace.Template` package (`fs-gg-console`, `fs-gg-web`, `fs-gg-governance`, `fs-gg-fable-game`, `fs-gg-fable-bindings`, `fs-gg-project-knowledge`, `fs-gg-python`), on the org feed + nuget.org |
+| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | Scaffold-time composition of SDD and framework producers. ADR-0071/0072/0073 define the console, web and Fable provider families. The registry selects package pins; the owning publication and installed-reference plans establish their separate acceptance. | Provider descriptors, composition tooling and the `FS.GG.Workspace.Template` package |
 | [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(extracted, ADR-0022; published P5)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter), on the org feed + nuget.org |
 | [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) *(onboarded, ADR-0023)* | The render-independent game-audio component — pure `AudioEffect` vocabulary, an `IAudioBackend` device seam, a mixing Engine (buses / fades / ducking / 3D), and an Elmish `Cmd` bridge. Depends on no FS-GG component — a BCL-only bottom layer, sibling to Rendering and `FS.GG.Game.Core`. First consumed cross-repo by Rendering's template `game`/`sample-pack` profiles ([ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3, [.github#238](https://github.com/FS-GG/.github/issues/238)), shipped in `fs-gg-ui-template` 0.3.1-preview.1. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Audio.Core` / `.Host` / `.Engine` / `.Elmish`, on the org feed + nuget.org |
 | [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) *(onboarded, ADR-0052; published 0.1.0)* | The render-independent, domain-neutral transport component — an `ITransport` / `IMessageChannel` seam with `Sequential` / `Multiplexed` client correlation and `serve` / `ServerEcho` on the server side, a client + Kestrel-server WebSocket transport, Google.Protobuf + protobuf-net codecs, a thin gRPC lifecycle bridge, and an Elmish `Cmd` / `Sub` bridge. Depends on no FS-GG component — a BCL-first bottom layer, sibling to `FS.GG.Game.Core` and `FS.GG.Audio`. Consumers are app repos (SC2 / BAR clients), not FS-GG components. Verified against a real SC2 server + an in-process gRPC service. | `FS.GG.Net.Core` / `.WebSocket` / `.WebSocket.Server` / `.Protobuf` / `.Grpc` / `.Elmish`, on the org feed + nuget.org |
-| [**FS.GG.Coordination**](https://github.com/FS-GG/FS.GG.Coordination) *(approved by ADR-0078; inert repository created early by explicit operator authorization; rostered by GS2-01.2)* | The new-only GitHub Substrate v2 coordination component. It consumes the published FS.GG.SDD Quint-profile/compiled-contract producer, owns the canonical coordination model and GitHub adapters, and qualifies independently of v1. GS2-01 owns its active bootstrap and qualification; its roster row is a `non-participant` with zero legacy capabilities and no production authority before the protected `OpenV2` transition. | Planned v2 CLI/qualification packages; nothing published or production-authorized during GS2-01.2 |
-| [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. **Also a producer** — it owns the two org-level CLIs, and their release workflows live here because the tools do ([ADR-0016](adr/0016-retire-templates-local-new-fullstack-single-scaffolder.md), [ADR-0034](adr/0034-typed-coordination-engine.md)). | `FS.GG.NewSddWorkspace` (`new-sdd-workspace`) + `FS.GG.Coord.Cli` (the ADR-0034 engine) — **both published**, org feed + nuget.org |
+| [**FS.GG.Coordination**](https://github.com/FS-GG/FS.GG.Coordination) | The independently qualified new-only GitHub Substrate v2 component. It owns its coordination model and GitHub adapters and consumes FsQuint for generic correspondence ([ADR-0085](adr/0085-fsquint-single-owner-package-boundary.md)). Its zero legacy-fabric capabilities do not make the selected ADR-0091 runtime inactive. | V2 coordination tooling and contracts; operational acceptance remains limited to the selected qualified profiles |
+| [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. **Also a producer** — it owns organization tooling and delivery packages, and their release workflows live here because the tools do ([ADR-0016](adr/0016-retire-templates-local-new-fullstack-single-scaffolder.md), [ADR-0034](adr/0034-typed-coordination-engine.md)). | `FS.GG.NewSddWorkspace` (`new-sdd-workspace`) + `FS.GG.Coord.Cli` (the ADR-0034 engine) — **both published**, org feed + nuget.org |
 
 ---
 
@@ -165,7 +156,11 @@ layering rules live in [`docs/design-and-controls.md`](design-and-controls.md).
 > Running the Governance CLI or enforcement remains optional. Its Config library
 > can be a declared build dependency without requiring Governance enforcement.
 
-**FS.GG.Rendering depends on no other FS-GG component** — never on Governance.
+Rendering's [portable Scene core](https://github.com/FS-GG/FS.GG.Rendering/blob/d73e17ba529ef22f0d5155bdceac8ece68aeb3ef/src/Scene/Scene.fsproj)
+has no Game, Audio or Governance dependency. Its
+[generated profiles](https://github.com/FS-GG/FS.GG.Rendering/blob/d73e17ba529ef22f0d5155bdceac8ece68aeb3ef/template/base/Directory.Packages.props)
+compose explicit published component packages; the core boundary does not imply
+that every repository sample or profile is dependency-free.
 SDD Commands now references the published `FS.GG.Governance.Config` **0.3.0**
 library for configuration parsing and capability-binding resolution, adopted in
 [SDD #1104](https://github.com/FS-GG/FS.GG.SDD/pull/1104). The Governance CLI handoff
@@ -379,8 +374,11 @@ one versioned source of truth the Templates overlay diffs against.
 
 ### 4.4 FS.GG.Templates — the scaffold-time composition
 
-Deliberately tiny: **no `src/`, no compiled code** — a `dotnet new` overlay, a
-provider descriptor, helper scripts, and a shell composition harness.
+Templates owns template payloads, provider descriptors and composition/qualification
+tooling. This includes the compiled
+[ProviderTool](https://github.com/FS-GG/FS.GG.Templates/blob/5acf3bba234595fc6404545777c687140b4390be/src/FS.GG.Templates.ProviderTool/FS.GG.Templates.ProviderTool.fsproj),
+a non-packable .NET 10 executable. Runtime component ownership remains with the
+composed producers.
 
 **Composition by scaffold, not vendoring** (ADR-0002). `dotnet new` cannot depend
 on another template, so rather than vendoring a rendering copy that goes stale,
@@ -397,14 +395,14 @@ for meaningful values: it follows default-on coordination without a second confi
 offer the normally redundant immediate `fsgg-sdd upgrade`. The explicit CLI escape hatches remain
 `--no-coordination` and `--upgrade`.
 
-The Creator's 0.15 source candidate reuses the accepted coordination 0.97 binaries
-for product-scoped board preparation. Its eleven-project graph remains intact;
-the [dependency manifest](../scripts/creator-frozen-coord-dependencies.json) pins
-the published archive and all 81 selected files, and candidate checks require exact
-source and packaged-file closure. This independently versioned Creator release
-does not republish the coordination coherent set. Creator 0.14 remains published;
-0.15 publication and fresh/retained workspace adoption are pending in the
-[board integration plan](coordination/2026-09-29-coordination-v2-board-design.md).
+Creator is independently versioned from the coordination coherent set. Its
+[dependency manifest](../scripts/creator-frozen-coord-dependencies.json) records
+the selected published dependency files; source and packaged-file closure do not
+republish that dependency. The
+[published receiver report](reports/2026-10-11-product-board-published-receiver-qualification.md)
+records Creator 0.16.0 with installed coordination 0.99.0 for the selected fresh
+Rendering and newly retained Game fixtures. That acceptance does not establish
+migration of arbitrary production checkouts or adoption across the fleet.
 
 **The `fs-gg-governance` overlay** ships a **populated** gate set (real
 build/test/evidence checks wired to tooling commands), authored to Governance's
@@ -602,7 +600,7 @@ The contracts that hold the system together:
 | `game-scene-adapter` | Game | the `FS.GG.Game.Render` package (projects sim state onto `FS.GG.UI.Scene` drawables — the one edge back down) | Rendering |
 | `fs-gg-audio` | Audio | the `FS.GG.Audio.Core`/`.Host`/`.Engine`/`.Elmish` packages (BCL-only audio bottom layer, `$(FsGgAudioVersion)` axis) | Rendering (template `game`/`sample-pack`, gated) |
 | `keyboard-input` | Rendering | the `FS.GG.UI.KeyboardInput` `Keymap` surface (value type + rebind + `Keymap.resolve`/conflict diagnostics; ships in the fs-gg-ui coherent set @ `0.5.0`, [ADR-0028](adr/0028-keyboard-input-config-mechanism-policy-boundary.md)) | Game (`FS.GG.Game.Render` default command→key keymap) |
-| `shared-build-config` | **.github** | `dist/dotnet/*` + `sync-build-config.sh` (+ the receiver's `.config/fsgg-build-config.sha` pin, ADR-0036) | all component repos |
+| `shared-build-config` | **.github** | Versioned `FS.GG.Kit` package and receiver materialization/verification ([ADR-0062](adr/0062-versioned-kit-package-replaces-byte-copy-sync.md)) | Receivers declaring the build-config capability |
 | `registry-schema` | SDD | the `registry/dependencies.yml` document schema (`schemaVersion` + field vocabulary), modeled by `Fsgg.Registry` | **.github** (the contract-coherence gate) |
 | `skill-registry` | **.github** | [`registry/skills.yml`](../registry/skills.yml) — the org's authoritative skill catalog (process + product + driver + operator; `id`, `scope`, `owner`, `source`, canonical-body `sha256`, and `materializes-when`), reconciled from the producer skill-manifests (ADR-0017). The former ADR-0022 §6 frozen-mirror classification was retired by [.github#1862](https://github.com/FS-GG/.github/issues/1862) after Rendering removed its second copies; the catalog now records one authoritative owner and source per body. | **.github** (the union gate + registry validation) |
 
