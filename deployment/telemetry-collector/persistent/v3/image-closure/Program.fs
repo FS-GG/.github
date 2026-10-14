@@ -74,17 +74,12 @@ try
                 let program=CommandRecipe.parse(load flags["--command-recipe"])
                 use custody=CustodyChannel.BindInherited()
                 let inputs=RootlessPolicy.select selected rootTrusted flags["--selection"] flags["--trusted-native-selection"] flags["--parent-oci"] flags["--work-root"] flags["--evidence-root"] prepared custody.Identity command program
-                custody.BindInput inputs.ExpectedInput
                 use cancellation=new CancellationTokenSource()
                 Console.CancelKeyPress.Add(fun event->event.Cancel<-true;cancellation.Cancel())
-                let mechanism=RootlessMechanism(inputs,RealProcessBackend(custody))
-                let deadline=custody.Deadline
-                let state,trace=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 deadline cancellation.Token mechanism (if command="run-c4" then Runner.initialC4 inputs.ExpectedInput else Runner.initial inputs.ExpectedInput)
-                if Runner.c4Ready state||Runner.qualificationAccepted state then
-                    mechanism.SealTerminal(state,trace)
-                    cancellation.Token.ThrowIfCancellationRequested()
-                    require(DateTimeOffset.UtcNow<deadline) "terminal-seal-deadline"
-                    let accepted=Runner.qualificationAccepted state
+                let outcome=ProductionCaller.run inputs command custody cancellation.Token
+                let state=outcome.State
+                if Runner.c4Ready state||outcome.QualificationAccepted then
+                    let accepted=outcome.QualificationAccepted
                     printfn "%s" (JsonSerializer.Serialize {|schema=(if accepted then "fsgg.telemetry.persistent-v3-inactive-result/1" else "fsgg.telemetry.persistent-v3-c4-result/1");status=(if accepted then "InactiveQualified" else "C4Ready");input=inputs.ExpectedInput;qualificationAccepted=accepted;evidence=inputs.EvidenceRoot|})
                     Environment.ExitCode<-0
                 else

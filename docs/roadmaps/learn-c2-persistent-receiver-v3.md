@@ -788,3 +788,36 @@ wire/core through an explicitly inert test transport boundary. The authenticated
 production controller/profile, native8, cold image closure, native C5 and receiver
 acceptance remain separate unresolved outcomes. Source success cannot settle a
 historical unknown operation or establish publication, installation or activation.
+
+### Joined production caller source qualification, 2026-10-14
+
+`ProductionCaller.run` now owns the actual root caller orchestration used by the
+CLI. `RootRecipeBinding` validates and copies the shared command program into the
+bounded native recipe ABI. A distinct linked-source test assembly exercises that
+caller through `CustodyChannel`, the actual C wire/core, finite selector, capture,
+retirement and cleanup. Its separate C factory substitutes namespace, cgroup,
+command birth, wait and signal facts using only local socketpair, eventfd, memfd
+and private directory fixtures. It supplies no production controller authority.
+
+Ordinary SDK 10.0.401 qualification of the source at `9f874da2` passed locked
+restore and compilation with zero warnings/errors. The joined C4 and full inactive
+flows completed 36 and 42 selected slots; failed first build completed abort custody
+through 17 slots without accepting qualification. Input drift refused with zero
+consumed slots and births; command drift consumed its first slot and refused before
+birth. Neither refusal manufactured cleanup or qualification. The callback remains
+rooted until peer retirement is observed; the managed GC control verifies retention
+through an unknown peer and release after retirement. Production PE metadata and an
+ordinary production ELF contain no test boundary or source hook.
+
+The maintained source launcher builds and executes the joined suite inside its
+existing SDK fixture, binding the two exact assemblies and library directory in
+its authenticated command. Shell/Python preparation and 52 existing adversarial
+cleanup controls passed. The original compiler syntax and linked-source name
+collision failures remain retained. The final source qualification still requires
+the exact hosted check. Its original 20-minute job, image acquisition, namespace,
+resource and cleanup limits remain applicable; no new image acquisition was added.
+
+These results establish inert caller/native-selector composition. An authentic
+supplying controller and provider profile, mapped engine isolation, native8,
+cold image closure, native C5, receiver acceptance and activation remain open.
+Historical unknown operations retain their original custody holds.

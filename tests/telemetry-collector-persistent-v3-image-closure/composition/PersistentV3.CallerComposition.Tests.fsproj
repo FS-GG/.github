@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><TreatWarningsAsErrors>true</TreatWarningsAsErrors><IsPackable>false</IsPackable><AssemblyName>PersistentV3.CallerComposition.Tests</AssemblyName><DefineConstants>$(DefineConstants);LEARN_SOURCE_COMPOSITION_TEST</DefineConstants></PropertyGroup>
+  <ItemGroup><PackageReference Include="FSharp.Core" /><ProjectReference Include="../../../deployment/telemetry-collector/persistent/v3/PersistentV3.Preparation.fsproj" /></ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../../deployment/telemetry-collector/persistent/v3/image-closure/Runner.fs" Link="Runner.fs" />
+    <Compile Include="../../../deployment/telemetry-collector/persistent/v3/image-closure/ImageClosure.fs" Link="ImageClosure.fs" />
+    <Compile Include="../../../deployment/telemetry-collector/persistent/v3/image-closure/OciEvidence.fs" Link="OciEvidence.fs" />
+    <Compile Include="../../../deployment/telemetry-collector/persistent/v3/image-closure/InactiveQualification.fs" Link="InactiveQualification.fs" />
+    <Compile Include="../../../deployment/telemetry-collector/persistent/v3/image-closure/CustodyChannel.fs" Link="CustodyChannel.fs" />
+    <Compile Include="../../../deployment/telemetry-collector/persistent/v3/image-closure/CommandRecipe.fs" Link="CommandRecipe.fs" />
+    <Compile Include="../../../deployment/telemetry-collector/persistent/v3/image-closure/RootlessMechanism.fs" Link="RootlessMechanism.fs" />
+    <Compile Include="../../../deployment/telemetry-collector/persistent/v3/image-closure/RootRecipeBinding.fs" Link="RootRecipeBinding.fs" />
+    <Compile Include="../../../deployment/telemetry-collector/persistent/v3/image-closure/ProductionCaller.fs" Link="ProductionCaller.fs" />
+    <Compile Include="../RecipeControls.fs" Link="RecipeControls.fs" /><Compile Include="../OciTests.fs" Link="OciTests.fs" /><Compile Include="CallerSourceFixtures.fs" /><Compile Include="CallerCompositionTests.fs" /><Compile Include="JoinedCallerTests.fs" /><Compile Include="Program.fs" />
+  </ItemGroup>
+</Project>

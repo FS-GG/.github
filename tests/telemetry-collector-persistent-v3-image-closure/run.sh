@@ -54,7 +54,10 @@ custody_source="$repo_root/deployment/telemetry-collector/persistent/v3/image-cl
 custody_adapter_tests="$repo_root/tests/telemetry-collector-persistent-v3-image-closure/CustodyAdapterTests.c"
 custody_root_source="$repo_root/deployment/telemetry-collector/persistent/v3/image-closure/native/custody_root.c"
 custody_tests="$repo_root/tests/telemetry-collector-persistent-v3-image-closure/CustodyCoreTests.c"
-# One original deadline covers four serial compiles and ordinary C controls.
+caller_source="$repo_root/tests/telemetry-collector-persistent-v3-image-closure/composition/CallerCompositionNative.c"
+caller_bin="$repo_root/tests/telemetry-collector-persistent-v3-image-closure/composition/bin/Debug/net10.0"
+mkdir -p -- "$caller_bin"
+# One original deadline covers six serial compiles and ordinary C controls.
 # The enclosing admitted source profile must separately enforce RSS/census and
 # complete descendant retirement; timeout alone supplies no custody acceptance.
 # The maintained owner predicates below run only against mocked kernel and
@@ -648,16 +651,22 @@ timeout --kill-after=15s 120s bash -c '
   set -euo pipefail
   unset LD_PRELOAD LD_LIBRARY_PATH GCC_EXEC_PREFIX COMPILER_PATH LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH DEPENDENCIES_OUTPUT SUNPRO_DEPENDENCIES
   export PATH=/usr/bin:/bin LC_ALL=C LANG=C TZ=UTC
-  compiler="$1"; source="$2"; controls="$3"; destination="$4"; adapter_controls="$5"; root_source="$6"
+  compiler="$1"; source="$2"; controls="$3"; destination="$4"; adapter_controls="$5"; root_source="$6"; caller_source="$7"; caller_bin="$8"
   headers=(-nostdinc -isystem /usr/lib/gcc/x86_64-linux-gnu/13/include -isystem /usr/include/x86_64-linux-gnu -isystem /usr/include)
   "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" "$source" "$controls" -o "$destination/custody-core-tests"
   "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" -fPIC -shared -DCC_TEST_LIBRARY -Wl,-z,relro,-z,now -Wl,--no-undefined "$source" "$controls" -o "$destination/libfsgg-learn-custody-core-tests.so"
   "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" -Wl,-z,relro,-z,now "$source" "$root_source" "$adapter_controls" -o "$destination/custody-adapter-tests"
   "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" -fPIC -shared -DLC_TEST_LIBRARY -Wl,-z,relro,-z,now -Wl,--no-undefined "$source" "$root_source" "$adapter_controls" -o "$destination/libfsgg-learn-custody-adapter-tests.so"
+  "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" -fPIC -shared -DFSGG_CALLER_SOURCE_LIBRARY -Wl,-z,relro,-z,now -Wl,--no-undefined "$source" "$root_source" "$caller_source" -o "$caller_bin/liblearn_caller_source.so"
+  "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" -fPIC -shared -Wl,-z,relro,-z,now -Wl,--no-undefined "$source" "$root_source" "$(dirname "$root_source")/custody_adapter.c" -o "$destination/liblearn-production-adapter.so"
+  readelf --wide --symbols "$destination/liblearn-production-adapter.so" > "$destination/production-adapter-symbols.txt"
+  if grep -E "fsgg_caller_source_|source_(namespace_join|limits_unchanged|birth|waitid|signal|population)" "$destination/production-adapter-symbols.txt"; then
+    printf "FAIL inert caller hook present in production ELF\n" >&2; exit 1
+  fi
   "$destination/custody-adapter-tests"
   "$destination/custody-core-tests"
   sha256sum -- "$destination/custody-core-tests" "$destination/libfsgg-learn-custody-core-tests.so" "$destination/custody-adapter-tests" "$destination/libfsgg-learn-custody-adapter-tests.so"
-' custody-core-source "$custody_compiler" "$custody_source" "$custody_tests" "$itf_root" "$custody_adapter_tests" "$custody_root_source"
+' custody-core-source "$custody_compiler" "$custody_source" "$custody_tests" "$itf_root" "$custody_adapter_tests" "$custody_root_source" "$caller_source" "$caller_bin"
 export FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY="$itf_root/libfsgg-learn-custody-adapter-tests.so"
 FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY_SHA256="$(sha256sum -- "$FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY" | cut -d' ' -f1)"
 export FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY_SHA256
@@ -672,6 +681,8 @@ grep -E '^  16 passing \(' "$itf_root/quint-tests.log"
 test "$(find "$itf_root" -maxdepth 1 -name '*.itf.json' -type f | wc -l)" -eq 16
 dotnet restore "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/PersistentV3.ImageClosure.Tests.fsproj" --locked-mode --disable-build-servers -m:1 /nodeReuse:false
 dotnet build "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/PersistentV3.ImageClosure.Tests.fsproj" --no-restore --disable-build-servers -m:1 /nodeReuse:false -p:UseSharedCompilation=false
+dotnet restore "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/composition/PersistentV3.CallerComposition.Tests.fsproj" --locked-mode --disable-build-servers -m:1 /nodeReuse:false
+dotnet build "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/composition/PersistentV3.CallerComposition.Tests.fsproj" --no-restore --disable-build-servers -m:1 /nodeReuse:false -p:UseSharedCompilation=false
 # The actual inactive source fixture must create/check UID32768 files. Keep the
 # ordinary caller nonroot; execute only the finite inert recipe route in a
 # disposable namespace. This source fixture cannot select the native route.
@@ -703,7 +714,11 @@ selected=inspect(['image','inspect',image],'image')
 if selected['Id']!=config or selected['Architecture']!='amd64' or selected['Os']!='linux' or selected['Size']>1073741824: raise RuntimeError('inactive source SDK image correspondence')
 if image not in selected['RepoDigests']: raise RuntimeError('inactive source immutable manifest correspondence')
 loaded=repo/'tests/telemetry-collector-persistent-v3-image-closure/bin/Debug/net10.0/PersistentV3.ImageClosure.Tests.dll'
-argv=client+['run','--pull=never','--name',name,'--cidfile',str(cidfile),'--label=fsgg.inactive-source='+name,
+caller=repo/'tests/telemetry-collector-persistent-v3-image-closure/composition/bin/Debug/net10.0/PersistentV3.CallerComposition.Tests.dll'
+production=repo/'deployment/telemetry-collector/persistent/v3/image-closure/bin/Debug/net10.0/PersistentV3.ImageClosure.dll'
+# Fixed commands in one already bounded namespace; no added image acquisition.
+command='set -euo pipefail; '+shlex.join(['/usr/share/dotnet/dotnet',str(loaded)])+'; '+shlex.join(['/usr/share/dotnet/dotnet',str(caller),'--joined-inert'])
+argv=client+['run' ,'--pull=never','--name',name,'--cidfile',str(cidfile),'--label=fsgg.inactive-source='+name,
       '--user=0:0','--read-only','--network=none','--ipc=private','--cgroupns=private','--runtime=runc','--init=false','--restart=no','--no-healthcheck',
       '--cap-drop=ALL','--cap-add=CAP_CHOWN','--cap-add=CAP_DAC_OVERRIDE','--cap-add=CAP_FOWNER',
       '--security-opt=no-new-privileges','--cpus=2','--memory=6g','--memory-swap=6g','--pids-limit=512',
@@ -711,7 +726,8 @@ argv=client+['run','--pull=never','--name',name,'--cidfile',str(cidfile),'--labe
       '--mount','type=bind,src='+str(repo)+',dst='+str(repo)+',readonly,bind-propagation=rprivate,bind-recursive=readonly',
       '--workdir',str(repo),'--env=HOME=/tmp','--env=DOTNET_CLI_HOME=/tmp',
       '--env=DOTNET_PROCESSOR_COUNT=2','--env=DOTNET_CLI_TELEMETRY_OPTOUT=1',
-      '--env=PERSISTENT_V3_RECIPE_CONTROLS_ONLY=1','--entrypoint=/usr/share/dotnet/dotnet',image,str(loaded)]
+      '--env=PERSISTENT_V3_RECIPE_CONTROLS_ONLY=1','--env=PERSISTENT_V3_CALLER_PRODUCTION_ASSEMBLY='+str(production),
+      '--env=LD_LIBRARY_PATH='+str(caller.parent),'--entrypoint=/usr/bin/bash',image,'-c',command]
 def authenticate(observed,cid):
     host=observed['HostConfig']; config_row=observed['Config']; mounts=observed['Mounts']
     binding=[row for row in mounts if row['Destination']==str(repo)]
@@ -719,7 +735,8 @@ def authenticate(observed,cid):
     bind_options=declared[0].get('BindOptions',{}) if len(declared)==1 else {}
     if (observed['Id']!=cid or observed['Name']!='/'+name or observed['Image']!=config or
         config_row['Labels'].get('fsgg.inactive-source')!=name or config_row['User']!='0:0' or
-        config_row['Entrypoint']!=['/usr/share/dotnet/dotnet'] or config_row['Cmd']!=[str(loaded)] or
+        config_row['Entrypoint']!=['/usr/bin/bash'] or config_row['Cmd']!=['-c',command] or
+        'PERSISTENT_V3_CALLER_PRODUCTION_ASSEMBLY='+str(production) not in config_row['Env'] or 'LD_LIBRARY_PATH='+str(caller.parent) not in config_row['Env'] or
         'PERSISTENT_V3_RECIPE_CONTROLS_ONLY=1' not in config_row['Env'] or config_row.get('Healthcheck',{}).get('Test')!=['NONE'] or
         host['Privileged'] or host['Devices'] or host.get('DeviceRequests') or host.get('Binds') or host.get('VolumesFrom') or
         not host['ReadonlyRootfs'] or host['NetworkMode']!='none' or host['PidMode']!='' or host['IpcMode']!='private' or

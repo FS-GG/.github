@@ -25,6 +25,19 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifdef FSGG_CALLER_SOURCE_TEST
+/* Only the distinct source-composition translation unit supplies these leaves.
+ * Normal adapter builds contain neither hooks nor a selectable injection path.
+ * Recipe/core/START/FD ownership/capture/retirement/cleanup logic stays below;
+ * namespace/controller resources and kernel child effects remain inert test facts. */
+static int source_namespace_join(lc_adapter *,int);
+static int source_limits_unchanged(lc_adapter *);
+static long source_birth(lc_adapter *,uint32_t,int [2],int [2],int [2],int *);
+static int source_waitid(idtype_t,id_t,siginfo_t *,int);
+static int source_signal(int,int);
+static int source_population(int,int *);
+#endif
+
 #define LC_FD_MAX 65536u
 #define LC_NS_UID 32768u
 #define LC_NONE UINT32_MAX
@@ -242,6 +255,9 @@ static int events_populated(const char *text,int *value) {
  return 1;
 }
 static int populated(int fd,int *value) {
+#ifdef FSGG_CALLER_SOURCE_TEST
+ int handled=source_population(fd,value);if(handled>=0)return handled;
+#endif
  char b[256];
  return read_at(fd,"cgroup.events",b,sizeof b)&&events_populated(b,value);
 }
@@ -327,7 +343,13 @@ static int root_parent_visible(lc_adapter *a,int proc) {
  }
  close(root);return ok;
 }
+static int slot_requires_visibility(const lc_adapter *a,uint32_t slot) {
+ return !a->root_recipe||(a->root_bound[slot]&&(slot==a->next_slot-1||(a->owned[slot].born&&!a->owned[slot].settled)));
+}
 static int namespace_join(lc_adapter *a,int visible_slots) {
+#ifdef FSGG_CALLER_SOURCE_TEST
+ if(a->root_recipe)return source_namespace_join(a,visible_slots);
+#endif
  char path[64],info[1024],uid[512],gid[512];
  int fd=-1,proc=-1,ns=-1,ok=0;
  long pid=0;
@@ -361,7 +383,7 @@ static int namespace_join(lc_adapter *a,int visible_slots) {
   if(!root_parent_visible(a,proc))goto done;
  }
  if(visible_slots)for(uint32_t i=0;i<a->operation.command_count;i++) {
-  if(a->root_recipe&&(!a->root_bound[i]||(i!=a->next_slot-1&&(!a->owned[i].born||a->owned[i].settled))))continue;
+  if(!slot_requires_visibility(a,i))continue;
   if(!visible(a,proc,i))goto done;
  }
  ok=pidfd_alive(a->caps[a->keeper].descriptor);
@@ -882,6 +904,9 @@ static void child(lc_adapter *a,uint32_t slot,int out,int err,int handshake) {
  __builtin_unreachable();
 }
 static int limits_unchanged(lc_adapter *a) {
+#ifdef FSGG_CALLER_SOURCE_TEST
+ if(a->root_recipe)return source_limits_unchanged(a);
+#endif
  char expected[128];
  int group=a->caps[a->operation_group].descriptor;
  if(snprintf(expected,sizeof expected,"%llu %llu\n",(unsigned long long)a->operation.cpu_max_micros,(unsigned long long)a->operation.cpu_period_micros)<0)return 0;
@@ -906,6 +931,10 @@ static int launch(lc_adapter *a,uint32_t slot) {
  args.exit_signal=SIGCHLD;
  args.cgroup=(uint64_t)a->caps[a->slots[slot].cgroup_handle].descriptor;
  args.pidfd=(uint64_t)(uintptr_t)&pidfd;
+#ifdef FSGG_CALLER_SOURCE_TEST
+ if(a->root_recipe)pid=source_birth(a,slot,out,err,handshake,&pidfd);
+ else
+#endif
  pid=syscall(SYS_clone3,&args,sizeof args);
  if(pid==0)child(a,slot,out[1],err[1],handshake[1]);
  if(pid<0)goto failed;
@@ -1037,7 +1066,13 @@ static int pump(lc_adapter *a,uint32_t slot) {
  if(!o->exit_known) {
   siginfo_t info;
   memset(&info,0,sizeof info);
-  if(waitid(P_PIDFD,(id_t)o->pidfd,&info,WEXITED|WNOHANG)<0)return fail(a,"pidfd-leader-wait-unknown");
+  if(
+#ifdef FSGG_CALLER_SOURCE_TEST
+    (a->root_recipe?source_waitid(P_PIDFD,(id_t)o->pidfd,&info,WEXITED|WNOHANG):waitid(P_PIDFD,(id_t)o->pidfd,&info,WEXITED|WNOHANG))
+#else
+    waitid(P_PIDFD,(id_t)o->pidfd,&info,WEXITED|WNOHANG)
+#endif
+    <0)return fail(a,"pidfd-leader-wait-unknown");
   if(info.si_pid){o->exit_known=1;
    if(info.si_code==CLD_EXITED)o->exit_code=info.si_status;
    else{o->signal=info.si_status;
@@ -1110,7 +1145,13 @@ static int pump(lc_adapter *a,uint32_t slot) {
 static int cancel(lc_adapter *a,uint32_t slot) {
  struct lc_owned *o=&a->owned[slot];
  if(!o->born||o->settled)return 1;
- if(o->pidfd>=0&&syscall(SYS_pidfd_send_signal,o->pidfd,SIGTERM,NULL,0)<0&&errno!=ESRCH)fail(a,"pidfd-signal-unknown");
+ if(o->pidfd>=0&&
+#ifdef FSGG_CALLER_SOURCE_TEST
+    (a->root_recipe?source_signal(o->pidfd,SIGTERM):syscall(SYS_pidfd_send_signal,o->pidfd,SIGTERM,NULL,0))
+#else
+    syscall(SYS_pidfd_send_signal,o->pidfd,SIGTERM,NULL,0)
+#endif
+    <0&&errno!=ESRCH)fail(a,"pidfd-signal-unknown");
  if(pwrite(o->kill,"1",1,0)!=1)return fail(a,"recursive-kill-unknown");
  return 1;
 }

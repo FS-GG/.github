@@ -190,7 +190,7 @@ let run selected prepared trusted =
         else synthetic.Start command}
     let mismatchMechanism=RootlessMechanism(changedInputs,mismatched)
     let mismatch,_=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None mismatchMechanism (Runner.initialC4 changedInputs.ExpectedInput)
-    require(not(Runner.c4Ready mismatch)&&mismatch.Phase=Refused&&mismatch.Owned.IsEmpty&&mismatch.Refusal=Some "BuildMismatch") "different OCI config did not refuse and clean owned bundles"
+    require(not(Runner.c4Ready mismatch)&&mismatch.Phase=Phase.Refused&&mismatch.Owned.IsEmpty&&mismatch.Refusal=Some "BuildMismatch") "different OCI config did not refuse and clean owned bundles"
     // The unacknowledged backend above demonstrably never spawned its failing build.
     // Only the fixture owns this explicit reconciliation; production may not infer absence.
     for directory in Directory.EnumerateDirectories(failedInputs.WorkRoot,"*",SearchOption.AllDirectories) do File.SetUnixFileMode(directory,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)
@@ -200,7 +200,7 @@ let run selected prepared trusted =
 
 /// Actual C5 file/package/receipt/cleanup control flow with only external Podman effects substituted.
 /// The package and outputs are synthetic and cannot supply production provider/caller authority.
-let inactive (source:Selection) (trusted:TrustedNativeSelection)=
+let withInactiveInputs (source:Selection) (trusted:TrustedNativeSelection) target exercise=
     let root=Directory.CreateTempSubdirectory("p2c4-inactive-recipe-").FullName
     let acquired=Path.Combine(root,"acquired")
     let manifests=Path.Combine(root,"manifests")
@@ -259,7 +259,7 @@ let inactive (source:Selection) (trusted:TrustedNativeSelection)=
         let custody=String('c',64)
         let work=Path.Combine(root,"work")
         let evidence=Path.Combine(root,"evidence")
-        let program=CommandRecipe.prepare selected trusted prepared custody "run-inactive" image work evidence (String('a',32)) (String('b',32)) 32
+        let program=CommandRecipe.prepare selected trusted prepared custody target image work evidence (String('a',32)) (String('b',32)) 32
         let expected=RootlessPolicy.inputIdentity selected selectionPath trustedPath image prepared custody program
         let inputs={CustodyIdentity=custody;Selection=selected;Trusted=trusted;SelectionPath=selectionPath;TrustedPath=trustedPath;ParentOci=image;WorkRoot=work;EvidenceRoot=evidence;ExpectedInput=expected;Prepared=prepared;Program=program}
         let actual=ResizeArray<ProcessCommand>()
@@ -268,40 +268,51 @@ let inactive (source:Selection) (trusted:TrustedNativeSelection)=
             File.WriteAllBytes(path,bytes)
             require(InactiveQualification.chown(path,32768u,32768u)=0) "inert Manager fixture ownership"
             File.SetUnixFileMode(path,enum<UnixFileMode> 0o600)
+        let runEffect (command:ProcessCommand)=
+            actual.Add command
+            let args=command.Arguments
+            let has value=Array.contains value args
+            let after value=args[Array.findIndex((=)value)args+1]
+            let mutable output=""
+            if has "save" then File.Copy(image,after "--output")
+            elif has "inspect" then output<-JsonSerializer.Serialize [|{|Digest=manifest;Id=config;Os="linux";Architecture="amd64"|}|]
+            elif has "ps"&&has "--no-trunc" then output<-OciEvidence.shaBytes(Encoding.UTF8.GetBytes(after "--root"))+"\n"
+            elif has "rm" then require(removals.Add(after "--force")) "inert cleanup ID replay"
+            elif has "run"&&has "/opt/fsgg/telemetry-host-manager/TelemetryHostManager.dll" then
+                let fixture=Path.Combine(command.WorkingDirectory,"inactive-fixture")
+                let receipt=Encoding.UTF8.GetBytes "{\"syntheticOnly\":true}"
+                writeFixture (Path.Combine(fixture,"host.json.native-collector.json")) receipt
+                writeFixture (Path.Combine(fixture,"host.json.native-collector.receipt.json")) receipt
+                output<-Encoding.UTF8.GetString(receipt)+"\n"
+            elif has "read-inactive-preparation" then
+                let fixture=Path.Combine(command.WorkingDirectory,"inactive-fixture")
+                let _,native,_,manifestHash,_=InactiveQualification.prepareInputs selected trusted
+                output<-JsonSerializer.Serialize({|schema="fsgg.telemetry.inactive-preparation-read/1";status="prepared-inactive";
+                    hostConfigSha256=OciEvidence.shaFile(Path.Combine(fixture,"host.json"));managerReceiptSha256=OciEvidence.shaFile(Path.Combine(fixture,"host.json.native-collector.receipt.json"));sidecarSha256=OciEvidence.shaFile(Path.Combine(fixture,"host.json.native-collector.json"));executableSha256=native.Sha256;sourceReferenceSha256=OciEvidence.shaFile(Path.Combine(fixture,"source-reference.json"));readerProfileSha256=selected.ReaderProfileSha256;verifierRuntimeManifestSha256=manifestHash;
+                    sourceVerification="unknown";snapshotOrigin="unknown";sharedCostCompleteness="unknown";captureQualified=false;nativeAcceptanceClaimed=false;activationAuthorized=false|})+"\n"
+            elif has "run" then
+                output<-match after "--entrypoint" with "/usr/share/dotnet/dotnet"->"Microsoft.NETCore.App 10.0.12\nMicrosoft.AspNetCore.App 10.0.12"|entry when entry.Contains "python"->"Python 3.14.0"|_->"codex-cli 0.158.0"
+            {ExitCode=0;Stdout=output;Stderr=""}
+        exercise inputs runEffect actual removals
+    finally Directory.Delete(root,true)
+
+let inactive (source:Selection) (trusted:TrustedNativeSelection)=
+    withInactiveInputs source trusted "run-inactive" (fun inputs runEffect (actual:ResizeArray<ProcessCommand>) (removals:Collections.Generic.HashSet<string>)->
+        let work=inputs.WorkRoot
+        let program=inputs.Program
+        let expected=inputs.ExpectedInput
         let backend={new IProcessBackend with
             member _.ReadBuilderIdentity()=RootlessPolicy.BuilderSha256
             member _.ReadSupervisorIdentity()=RootlessPolicy.SupervisorSha256
             member _.ReadAvailableCapacity _=128L*1024L*1024L*1024L
             member _.RetainCommandEvidence _=()
             member _.Start command=
-                actual.Add command
-                let args=command.Arguments
-                let has value=Array.contains value args
-                let after value=args[Array.findIndex((=)value)args+1]
-                let mutable output=""
-                if has "save" then File.Copy(image,after "--output")
-                elif has "inspect" then output<-JsonSerializer.Serialize [|{|Digest=manifest;Id=config;Os="linux";Architecture="amd64"|}|]
-                elif has "ps"&&has "--no-trunc" then output<-OciEvidence.shaBytes(Encoding.UTF8.GetBytes(after "--root"))+"\n"
-                elif has "rm" then require(removals.Add(after "--force")) "inert cleanup ID replay"
-                elif has "run"&&has "/opt/fsgg/telemetry-host-manager/TelemetryHostManager.dll" then
-                    let fixture=Path.Combine(command.WorkingDirectory,"inactive-fixture")
-                    let receipt=Encoding.UTF8.GetBytes "{\"syntheticOnly\":true}"
-                    writeFixture (Path.Combine(fixture,"host.json.native-collector.json")) receipt
-                    writeFixture (Path.Combine(fixture,"host.json.native-collector.receipt.json")) receipt
-                    output<-Encoding.UTF8.GetString(receipt)+"\n"
-                elif has "read-inactive-preparation" then
-                    let fixture=Path.Combine(command.WorkingDirectory,"inactive-fixture")
-                    let _,native,_,manifestHash,_=InactiveQualification.prepareInputs selected trusted
-                    output<-JsonSerializer.Serialize({|schema="fsgg.telemetry.inactive-preparation-read/1";status="prepared-inactive";
-                        hostConfigSha256=OciEvidence.shaFile(Path.Combine(fixture,"host.json"));managerReceiptSha256=OciEvidence.shaFile(Path.Combine(fixture,"host.json.native-collector.receipt.json"));sidecarSha256=OciEvidence.shaFile(Path.Combine(fixture,"host.json.native-collector.json"));executableSha256=native.Sha256;sourceReferenceSha256=OciEvidence.shaFile(Path.Combine(fixture,"source-reference.json"));readerProfileSha256=selected.ReaderProfileSha256;verifierRuntimeManifestSha256=manifestHash;
-                        sourceVerification="unknown";snapshotOrigin="unknown";sharedCostCompleteness="unknown";captureQualified=false;nativeAcceptanceClaimed=false;activationAuthorized=false|})+"\n"
-                elif has "run" then
-                    output<-match after "--entrypoint" with "/usr/share/dotnet/dotnet"->"Microsoft.NETCore.App 10.0.12\nMicrosoft.AspNetCore.App 10.0.12"|entry when entry.Contains "python"->"Python 3.14.0"|_->"codex-cli 0.158.0"
+                let output=runEffect command
                 let mutable retired=false
                 let identity="synthetic-full:"+string actual.Count
                 {new IOwnedProcess with
                     member _.Identity=identity
-                    member _.Wait token=token.ThrowIfCancellationRequested();retired<-true;{ExitCode=0;Stdout=output;Stderr=""}
+                    member _.Wait token=token.ThrowIfCancellationRequested();retired<-true;output
                     member _.Cancel token=token.ThrowIfCancellationRequested();retired<-true
                     member _.HasExited=retired
                     member _.Dispose()=()}}
@@ -320,7 +331,7 @@ let inactive (source:Selection) (trusted:TrustedNativeSelection)=
         mechanism.SealTerminal(state,trace)
         require(not(Directory.Exists(Path.Combine(work,"bundle-a")))&&not(Directory.Exists(Path.Combine(work,"bundle-b")))) "inactive source flow retained owned fixtures"
         printfn "PASS actual full Runner/RootlessMechanism/InactiveQualification stream, package/receipt validation and four captured-result cleanup removals; native acceptance NOT_RUN"
-    finally Directory.Delete(root,true)
+    )
 
 let processBoundaries()=
     // Pure schema controls; no legacy process backend or native acceptance.
