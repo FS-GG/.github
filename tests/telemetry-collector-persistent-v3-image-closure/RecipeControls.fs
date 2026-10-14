@@ -9,7 +9,7 @@ open FSGG.Telemetry.PersistentV3.ImageClosure
 let private require condition reason=if not condition then failwith reason
 let private refused action=
     let mutable rejected=false
-    try action() with :? InvalidDataException|:? IOException|:? JsonException->rejected<-true
+    try action() with :? InvalidDataException | :? IOException | :? JsonException -> rejected<-true
     require rejected "recipe accepted changed input/command bytes"
 
 let run selection trusted prepared=
