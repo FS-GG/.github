@@ -1298,11 +1298,18 @@ jobs:
         assertion_pin.parent.mkdir(parents=True, exist_ok=True)
         cls.assertion_pin_base = b'# retained header\nSKILL_ASSERT_REF="' + cls.assertion_old_pin.encode() + b'"\n# retained 14d alarm\n'
         assertion_pin.write_bytes(cls.assertion_pin_base)
+        # Authenticated BAR base workflow retained verbatim; synthetic Git objects are not native evidence.
+        cls.bar_prearm_base = MODULE.base64.b64decode('bmFtZTogcHJlYXJtLXNvdXJjZS1jb250cm9scwoKb246CiAgcHVsbF9yZXF1ZXN0OgogICAgcGF0aHM6CiAgICAgIC0gLmdpdGh1Yi93b3JrZmxvd3MvcHJlYXJtLXNvdXJjZS1jb250cm9scy55bWwKICAgICAgLSBEaXJlY3RvcnkuQnVpbGQucHJvcHMKICAgICAgLSAuY29uZmlnL2RvdG5ldC10b29scy5qc29uCiAgICAgIC0gZW5nLyoqCiAgICAgIC0gc3JjL0Jyb2tlci5Db250cmFjdHMvKioKICAgICAgLSBzcmMvQnJva2VyLkNvcmUvKioKICAgICAgLSBzcmMvQnJva2VyLlByb3RvY29sLyoqCiAgICAgIC0gc3JjL0Jyb2tlci5Ccm93c2VyLkNvbnRyYWN0cy8qKgogICAgICAtIHNyYy9Ccm9rZXIuQnJvd3Nlci5MaXZlLyoqCiAgICAgIC0gc3JjL0Jyb2tlci5Ccm93c2VyLkdhdGV3YXkvKioKICAgICAgLSBzcmMvQnJva2VyLkJyb3dzZXIuQ2xpZW50L2xpdmUtcnVudGltZS5qcwogICAgICAtIHRlc3RzL0Jyb2tlci5Ccm93c2VyLkxpdmUuVGVzdHMvKioKICAgICAgLSB0ZXN0cy9Ccm9rZXIuTmF0aXZlUHJvb2YvdGFjdGljYWwtbmF0aXZlLWpvdXJuZXkuc3BlYy5qcwogICAgICAtIHRlc3RzL0Jyb2tlci5OYXRpdmVQcm9vZi90YWN0aWNhbC1uYXRpdmUtcmVhZGluZXNzLnRlc3QubWpzCiAgICAgIC0gdGVzdHMvQnJva2VyLk5hdGl2ZVByb29mL29uZS11bml0LXByZWFybS50ZXN0Lm1qcwogICAgICAtIHRlc3RzL0Jyb2tlci5OYXRpdmVQcm9vZi9Qb2xpY3kvYnVpbGQtc3RvY2stc2VsZWN0aW9uLm1qcwogICAgICAtIHRlc3RzL0Jyb2tlci5OYXRpdmVQcm9vZi9Qb2xpY3kvYnVpbGQtc3RvY2stc2VsZWN0aW9uLnRlc3QubWpzCiAgd29ya2Zsb3dfZGlzcGF0Y2g6CgpwZXJtaXNzaW9uczoKICBjb250ZW50czogcmVhZAoKY29uY3VycmVuY3k6CiAgZ3JvdXA6IHByZWFybS1zb3VyY2UtY29udHJvbHMtJHt7IGdpdGh1Yi5ldmVudC5wdWxsX3JlcXVlc3QubnVtYmVyIHx8IGdpdGh1Yi5yZWYgfX0KICBjYW5jZWwtaW4tcHJvZ3Jlc3M6IHRydWUKCmpvYnM6CiAgcHJlYXJtLXNvdXJjZS1jb250cm9sczoKICAgIHJ1bnMtb246IHVidW50dS0yNC4wNAogICAgdGltZW91dC1taW51dGVzOiAxMAogICAgZW52OgogICAgICBDSTogJ3RydWUnCiAgICAgIERPVE5FVF9QUk9DRVNTT1JfQ09VTlQ6ICcxJwogICAgc3RlcHM6CiAgICAgIC0gbmFtZTogQ2hlY2sgb3V0IHRoZSBleGFjdCBjYW5kaWRhdGUKICAgICAgICB1c2VzOiBhY3Rpb25zL2NoZWNrb3V0QDNkM2M0MmU1YWFjNWJhODA1ODI1ZGE3NjQxMGMxODEyNzNiYTkwYjEgIyB2NwogICAgICAgIHdpdGg6CiAgICAgICAgICByZWY6ICR7eyBnaXRodWIuZXZlbnQucHVsbF9yZXF1ZXN0LmhlYWQuc2hhIHx8IGdpdGh1Yi5zaGEgfX0KICAgICAgICAgIGZldGNoLWRlcHRoOiAyCiAgICAgICAgICBwZXJzaXN0LWNyZWRlbnRpYWxzOiBmYWxzZQoKICAgICAgLSBuYW1lOiBCaW5kIHRoZSBjaGVja2VkLW91dCBjYW5kaWRhdGUKICAgICAgICBzaGVsbDogYmFzaAogICAgICAgIGVudjoKICAgICAgICAgIEVYUEVDVEVEX1NIQTogJHt7IGdpdGh1Yi5ldmVudC5wdWxsX3JlcXVlc3QuaGVhZC5zaGEgfHwgZ2l0aHViLnNoYSB9fQogICAgICAgIHJ1bjogfAogICAgICAgICAgc2V0IC1ldW8gcGlwZWZhaWwKICAgICAgICAgIHRlc3QgIiQoZ2l0IHJldi1wYXJzZSBIRUFEKSIgPSAiJEVYUEVDVEVEX1NIQSIKICAgICAgICAgIHRlc3QgLXogIiQoZ2l0IHN0YXR1cyAtLXBvcmNlbGFpbiAtLXVudHJhY2tlZC1maWxlcz1hbGwpIgoKICAgICAgLSBuYW1lOiBTZXQgdXAgdGhlIGV4YWN0IC5ORVQgU0RLCiAgICAgICAgdXNlczogYWN0aW9ucy9zZXR1cC1kb3RuZXRAYTk4YjU2ODUyYzM1YjhlMzE5MGFjMjhjOGMyMjcxZGE1OTEwNmM2OCAjIHY2CiAgICAgICAgd2l0aDoKICAgICAgICAgIGRvdG5ldC12ZXJzaW9uOiAxMC4wLjQwMQoKICAgICAgLSBuYW1lOiBTZXQgdXAgdGhlIGV4YWN0IE5vZGUuanMgcnVudGltZQogICAgICAgIHVzZXM6IGFjdGlvbnMvc2V0dXAtbm9kZUAyNDk5NzA3MjljYjBlZjM1ODk2NDRlMjg5NjY0NWU1ZGM1YmE5YzM4ICMgdjYKICAgICAgICB3aXRoOgogICAgICAgICAgbm9kZS12ZXJzaW9uOiAyNC44LjAKCiAgICAgIC0gbmFtZTogUnVuIHRoZSBmb3VydGVlbiBKYXZhU2NyaXB0IHNvdXJjZSBjb250cm9scwogICAgICAgIHNoZWxsOiBiYXNoCiAgICAgICAgcnVuOiBub2RlIC0tdGVzdCB0ZXN0cy9Ccm9rZXIuTmF0aXZlUHJvb2YvdGFjdGljYWwtbmF0aXZlLXJlYWRpbmVzcy50ZXN0Lm1qcwoKICAgICAgLSBuYW1lOiBSdW4gdGhlIG9uZS11bml0IGFuZCBjb21waWxlci1jYXB0dXJlIHNvdXJjZSBjb250cm9scwogICAgICAgIHNoZWxsOiBiYXNoCiAgICAgICAgcnVuOiBub2RlIC0tdGVzdCB0ZXN0cy9Ccm9rZXIuTmF0aXZlUHJvb2Yvb25lLXVuaXQtcHJlYXJtLnRlc3QubWpzIHRlc3RzL0Jyb2tlci5OYXRpdmVQcm9vZi9Qb2xpY3kvYnVpbGQtc3RvY2stc2VsZWN0aW9uLnRlc3QubWpzCgogICAgICAtIG5hbWU6IFJlc3RvcmUgYW5kIGJ1aWxkIHRoZSBsaXZlIGJvdW5kYXJ5IHNvdXJjZQogICAgICAgIHNoZWxsOiBiYXNoCiAgICAgICAgZW52OgogICAgICAgICAgIyBncnBjLWZzaGFycCAwLjIgdGFyZ2V0cyBuZXQ2LjA7IHJldGFpbiB0aGUgTGF0ZXN0TWFqb3IgcG9saWN5IGluCiAgICAgICAgICAjIHNwZWNzLzAwMS10dWktZ3JwYy1icm9rZXIvcmVhZGluZXNzL2ZlYXR1cmUtYmFzZWxpbmUubWQuCiAgICAgICAgICBET1RORVRfUk9MTF9GT1JXQVJEOiBMYXRlc3RNYWpvcgogICAgICAgIHJ1bjogfAogICAgICAgICAgc2V0IC1ldW8gcGlwZWZhaWwKICAgICAgICAgIHByb2plY3Q9dGVzdHMvQnJva2VyLkJyb3dzZXIuTGl2ZS5UZXN0cy9Ccm9rZXIuQnJvd3Nlci5MaXZlLlRlc3RzLmZzcHJvagogICAgICAgICAgZG90bmV0IHJlc3RvcmUgIiRwcm9qZWN0IiAtLWRpc2FibGUtcGFyYWxsZWwKICAgICAgICAgIGRvdG5ldCBidWlsZCAiJHByb2plY3QiIC0tY29uZmlndXJhdGlvbiBSZWxlYXNlIC0tbm8tcmVzdG9yZSAtLW1heGNwdWNvdW50OjEKCiAgICAgIC0gbmFtZTogUnVuIGV4YWN0bHkgdGhyZWUgc3ludGhldGljIGNvbXBpbGVkIGNvbnRyb2xzCiAgICAgICAgc2hlbGw6IGJhc2gKICAgICAgICBydW46IHwKICAgICAgICAgIHNldCAtZXVvIHBpcGVmYWlsCiAgICAgICAgICByZXN1bHRzPSQobWt0ZW1wIC1kKQogICAgICAgICAgdHJhcCAncm0gLXJmICIkcmVzdWx0cyInIEVYSVQKICAgICAgICAgIGRvdG5ldCB0ZXN0IHRlc3RzL0Jyb2tlci5Ccm93c2VyLkxpdmUuVGVzdHMvQnJva2VyLkJyb3dzZXIuTGl2ZS5UZXN0cy5mc3Byb2ogXAogICAgICAgICAgICAtLWNvbmZpZ3VyYXRpb24gUmVsZWFzZSAtLW5vLXJlc3RvcmUgLS1uby1idWlsZCBcCiAgICAgICAgICAgIC0tZmlsdGVyICdGdWxseVF1YWxpZmllZE5hbWV+cHJlLWFybSBwYWlyaW5nfEZ1bGx5UXVhbGlmaWVkTmFtZX5uYXRpdmUgcmVwb3J0LCBhdXRoZW50aWNhdGVkIFdlYlNvY2tldCwgYXV0aG9yaXR5IEFDSywgYW5kIElEMCBjb21tYW5kIHNoYXJlIGV4YWN0IGlkZW50aXRpZXMnIFwKICAgICAgICAgICAgLS1yZXN1bHRzLWRpcmVjdG9yeSAiJHJlc3VsdHMiIC0tbG9nZ2VyICd0cng7TG9nRmlsZU5hbWU9Y29udHJvbHMudHJ4JwogICAgICAgICAgcHl0aG9uMyAtICIkcmVzdWx0cy9jb250cm9scy50cngiIDw8J1BZJwogICAgICAgICAgaW1wb3J0IHN5cwogICAgICAgICAgaW1wb3J0IHhtbC5ldHJlZS5FbGVtZW50VHJlZSBhcyBFVAogICAgICAgICAgbnMgPSB7InQiOiAiaHR0cDovL21pY3Jvc29mdC5jb20vc2NoZW1hcy9WaXN1YWxTdHVkaW8vVGVhbVRlc3QvMjAxMCJ9CiAgICAgICAgICByb290ID0gRVQucGFyc2Uoc3lzLmFyZ3ZbMV0pLmdldHJvb3QoKQogICAgICAgICAgZXhwZWN0ZWQgPSB7CiAgICAgICAgICAgICAgImdhdGV3YXkgZGlhZ25vc3RpYyBjbGFzc2lmaWNhdGlvbi5wcmUtYXJtIHBhaXJpbmcgcmVhc29ucyBhcmUgZmluaXRlIGFuZCBjYWxsYmFja3MgY2Fubm90IGV4cG9zZSBwcml2YXRlIG1hdGVyaWFsIiwKICAgICAgICAgICAgICAicHJvZHVjdGlvbiBsaXZlIGJvdW5kYXJ5LnByZS1hcm0gcGFpcmluZyBlbWl0cyBjbG9zZWQgcmVhc29ucyBhbmQgcHJlc2VydmVzIHJlZnVzYWwgd2l0aG91dCBhdXRob3JpdHkiLAogICAgICAgICAgICAgICJwcm9kdWN0aW9uIGxpdmUgYm91bmRhcnkubmF0aXZlIHJlcG9ydCwgYXV0aGVudGljYXRlZCBXZWJTb2NrZXQsIGF1dGhvcml0eSBBQ0ssIGFuZCBJRDAgY29tbWFuZCBzaGFyZSBleGFjdCBpZGVudGl0aWVzIiwKICAgICAgICAgIH0KICAgICAgICAgIHJlc3VsdHMgPSByb290LmZpbmRhbGwoInQ6UmVzdWx0cy90OlVuaXRUZXN0UmVzdWx0IiwgbnMpCiAgICAgICAgICBpZiBsZW4ocmVzdWx0cykgIT0gMyBvciB7ci5hdHRyaWJbInRlc3ROYW1lIl0gZm9yIHIgaW4gcmVzdWx0c30gIT0gZXhwZWN0ZWQgb3IgYW55KHIuYXR0cmliWyJvdXRjb21lIl0gIT0gIlBhc3NlZCIgZm9yIHIgaW4gcmVzdWx0cyk6CiAgICAgICAgICAgICAgcmFpc2UgU3lzdGVtRXhpdCgiRXhwZWN0ZWQgZXhhY3RseSB0aGUgdGhyZWUgcGFzc2luZyBzeW50aGV0aWMgY29udHJvbHM7IHplcm8sIG1pc3NpbmcsIHNraXBwZWQgb3IgZXh0cmEgdGVzdHMgcmVmdXNlIHF1YWxpZmljYXRpb24iKQogICAgICAgICAgcHJpbnQoIlBBU1M6IGV4YWN0IHRocmVlIHN5bnRoZXRpYyBjb21waWxlZCBzb3VyY2UgY29udHJvbHMiKQogICAgICAgICAgUFkK')
+        prearm = cls.receiver / MODULE.BAR_PREARM
+        prearm.write_bytes(cls.bar_prearm_base)
         base = commit(cls.receiver)
         for path in MODULE.PRODUCER_PATHS:
             target = cls.receiver / path; target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((cls.owner / path).read_bytes()); target.chmod((cls.owner / path).stat().st_mode & 0o777)
         head = commit(cls.receiver)
+        prearm.write_bytes(MODULE.installation_bar_workflow(cls.bar_prearm_base))
+        cls.bar_head = commit(cls.receiver)
+        prearm.write_bytes(cls.bar_prearm_base)
         assertion_pin.write_bytes(cls.assertion_pin_base.replace(cls.assertion_old_pin.encode(), source.encode()))
         cls.templates_head = commit(cls.receiver)
         assertion_pin.write_bytes(cls.assertion_pin_base)
@@ -1330,6 +1337,7 @@ jobs:
         responses[f"repos/FS-GG/.github/compare/{cls.assertion_old_pin}...{source}?per_page=1&page=2"] = dict(status="ahead", base_commit={"sha":cls.assertion_old_pin}, merge_base_commit={"sha":cls.assertion_old_pin})
         objects("FS-GG/.github", cls.owner, owner_head)
         objects("FS-GG/FS.GG.Coordination", cls.receiver, base); rows, tree = objects("FS-GG/FS.GG.Coordination", cls.receiver, head)
+        cls.bar_rows,cls.bar_tree=objects("FS-GG/FS.GG.Coordination",cls.receiver,cls.bar_head)
         cls.registered_rows,cls.registered_tree=objects("FS-GG/FS.GG.Coordination",cls.receiver,cls.registered_head)
         cls.templates_rows,cls.templates_tree=objects("FS-GG/FS.GG.Coordination",cls.receiver,cls.templates_head)
         objects("FS-GG/FS.GG.Coordination",cls.receiver,cls.successor)
@@ -1367,32 +1375,51 @@ jobs:
                 apply=apply, coherent_workflow="CI.yml", producer_source=source or self.fixture["source"], installation_prior=prior)
 
     def fsquint_transport(self, *, apply=False, change=None, drift=None, prior=None,
-                           selector="ci.yml", merged=False, uncertain=False, required=None, fresh=None):
-        repo = "FS-GG/FsQuint"
-        alias = lambda value: json.loads(json.dumps(value).replace("FS-GG/FS.GG.Coordination", repo).replace("1346720714", "1375501179"))
+                           selector="ci.yml", merged=False, uncertain=False, required=None, fresh=None, receiver="FS-GG/FsQuint"):
+        repo = receiver
+        repo_id = MODULE.BAR_REPOSITORY_ID if repo == MODULE.BAR_REPOSITORY else 1375501179
+        workflow_id = MODULE.BAR_PREARM_ID if repo == MODULE.BAR_REPOSITORY else 361154226
+        workflow_file = "prearm-source-controls.yml" if repo == MODULE.BAR_REPOSITORY else "ci.yml"
+        job_name = "prearm-source-controls" if repo == MODULE.BAR_REPOSITORY else "qualify"
+        alias = lambda value: json.loads(json.dumps(value).replace("FS-GG/FS.GG.Coordination", repo).replace("1346720714", str(repo_id)))
         fixture = alias(self.fixture)
         responses = fixture["responses"]
         pr = alias(self.pr)
         pr["head"]["ref"] = "routine/install-routine-producer-90ccedb7"
         after = alias(self.after)
         after["head"]["ref"] = pr["head"]["ref"]
+        if repo == MODULE.BAR_REPOSITORY:
+            old_head = fixture['head']; fixture['head'] = self.bar_head
+            for value in (pr, after):
+                value['head']['sha'] = self.bar_head; value['changed_files'] = 6
+                value['body'] = value['body'].replace(old_head, self.bar_head)
+            after['merge_commit_sha'] = self.bar_head
+            responses[f"repos/{repo}/pulls/1/files?per_page=100"] = [dict(filename=row['path'],sha=row['sha'],status='modified' if row['path']==MODULE.BAR_PREARM else 'added') for row in self.bar_rows if row['path'] in (*MODULE.PRODUCER_PATHS,MODULE.BAR_PREARM)]
+            checks = responses.pop(f"repos/{repo}/commits/{old_head}/check-runs?per_page=100")
+            checks['check_runs'][0]['head_sha'] = self.bar_head
+            responses[f"repos/{repo}/commits/{self.bar_head}/check-runs?per_page=100"] = checks
+            responses[f"repos/{repo}/actions/runs/7"]['head_sha'] = self.bar_head
+            responses[f"repos/{repo}/actions/jobs/8"]['head_sha'] = self.bar_head
+            responses[f"repos/{repo}/compare/{self.bar_head}...{self.bar_head}"] = dict(status='identical',merge_base_commit={'sha':self.bar_head})
         head = fixture["head"]
         responses[f"repos/{repo}/git/ref/heads/main"] = dict(ref="refs/heads/main",object=dict(type="commit",sha=fixture['base']))
         metadata = responses[f"repos/{repo}"]
         metadata.update(private=False, permissions=dict(admin=True, push=True, pull=True))
-        wf = dict(id=361154226, path=".github/workflows/ci.yml", state="active")
-        responses[f"repos/{repo}/actions/workflows/ci.yml"] = wf
+        wf = dict(id=workflow_id, path=".github/workflows/"+workflow_file, state="active",name=workflow_file[:-4])
+        responses[f"repos/{repo}/actions/workflows/{workflow_file}"] = wf
         responses[f"repos/{repo}/actions/workflows?per_page=100"] = dict(total_count=1, workflows=[wf])
         run = responses[f"repos/{repo}/actions/runs/7"]
-        run.update(workflow_id=361154226, path=wf['path'], event="pull_request", head_branch=pr['head']['ref'])
-        run['repository']['id'] = 1375501179
-        responses[f"repos/{repo}/actions/workflows/361154226/runs?head_sha={head}&per_page=100"] = dict(total_count=1,workflow_runs=[copy.deepcopy(run)])
+        run.update(workflow_id=workflow_id, path=wf['path'], event="pull_request", head_branch=pr['head']['ref'])
+        run['repository']['id'] = repo_id
+        responses[f"repos/{repo}/actions/workflows/{workflow_id}/runs?head_sha={head}&per_page=100"] = dict(total_count=1,workflow_runs=[copy.deepcopy(run)])
         job = responses[f"repos/{repo}/actions/jobs/8"]
-        job.update(name="qualify",completed_at="2026-10-13T00:00:00Z",steps=[dict(name=name,status="completed",conclusion="success") for name in
+        job.update(name=job_name,completed_at="2026-10-13T00:00:00Z",steps=[dict(name=name,status="completed",conclusion="success") for name in
             ["Set up job", "Run actions/checkout@v7", "Run actions/setup-dotnet@v6", "Provision pinned Quint",
              "Check independent CI preflight example", "Qualify core, tooling and external package consumer"]])
+        if repo == MODULE.BAR_REPOSITORY:
+            job['steps'] = [dict(number=index,name=name,status='completed',conclusion='success') for index,name in enumerate((*MODULE.BAR_PREARM_TECHNICAL_STEPS,'Complete job'),1)]
         responses[f"repos/{repo}/actions/runs/7/attempts/1/jobs?per_page=100"] = dict(total_count=1,jobs=[copy.deepcopy(job)])
-        responses[f"repos/{repo}/commits/{head}/check-runs?per_page=100"]['check_runs'][0]['name'] = "qualify"
+        responses[f"repos/{repo}/commits/{head}/check-runs?per_page=100"]['check_runs'][0]['name'] = job_name
         responses[f"repos/{repo}/commits/{head}/status?per_page=100"] = dict(sha=head,total_count=0,statuses=[])
         policy = {
             f"repos/{repo}/branches/main/protection/required_status_checks": (1,404,dict(message="Branch not protected",documentation_url="https://docs.github.com/rest/branches/branch-protection#get-status-checks-protection",status="404")),
@@ -1446,6 +1473,82 @@ jobs:
             code,result = MODULE.summarize(api,repo=repo,pr_number=1,expected_head=head,merge_method="squash",
                 publication_required=False,apply=apply,coherent_workflow=selector,producer_source=fixture['source'],installation_prior=prior)
         return code,result,api,reads
+
+    def bar_transport(self, **kwargs):
+        return self.fsquint_transport(receiver=MODULE.BAR_REPOSITORY,selector=kwargs.pop('selector','prearm-source-controls.yml'),**kwargs)
+
+    def test_bar_authentic_empty_policy_nonempty_technical_cohort_and_expected_head_merge(self):
+        for apply in (False,True):
+            code,result,api,reads=self.bar_transport(apply=apply)
+            self.assertEqual((code,api.attempts,result.routineEligibility),(0,int(apply),'unavailable-first-install'))
+            self.assertEqual(result.producerInstallation,'delivered-activation-pending' if apply else 'ready')
+            self.assertEqual(sum(c[-1].endswith('required_status_checks') for c in reads),2 if apply else 1)
+            self.assertEqual(result.reason,'required-policy-observed-empty')
+            self.assertTrue(any(f'/actions/workflows/{MODULE.BAR_PREARM_ID}/runs?' in c[-1] for c in reads))
+
+    def test_bar_exact_source_derivation_modes_and_file_population(self):
+        base=self.bar_prearm_base;derived=MODULE.installation_bar_workflow(base)
+        appended=b''.join(('      - '+path+'\n').encode() for path in MODULE.PRODUCER_PATHS)
+        self.assertEqual(derived,base.replace(b'  workflow_dispatch:\n',appended+b'  workflow_dispatch:\n',1))
+        for changed in (base+b' ',base.replace(b'contents: read',b'contents: write'),base.replace(b'timeout-minutes: 10',b'timeout-minutes: 11')):
+            with self.assertRaises(RuntimeError):MODULE.installation_bar_workflow(changed)
+        repo=MODULE.BAR_REPOSITORY
+        tree_path=f"repos/{repo}/git/trees/{self.bar_tree}?recursive=1"
+        def edit_tree(r,p,pr,change):
+            row=next(row for row in r[tree_path]['tree'] if row['path']==MODULE.BAR_PREARM);change(row)
+        for change in (lambda row:row.update(mode='100755'),lambda row:row.update(mode='120000'),lambda row:row.update(type='commit'),lambda row:row.update(path='.github/workflows/renamed.yml')):
+            code,_,api,_=self.bar_transport(apply=True,change=lambda r,p,pr:edit_tree(r,p,pr,change))
+            self.assertEqual((code,api.attempts),(2,0))
+        def extra_byte(r,p,pr):
+            row=next(row for row in r[tree_path]['tree'] if row['path']==MODULE.BAR_PREARM)
+            original=MODULE.base64.b64decode(r[f"repos/{repo}/git/blobs/{row['sha']}"]['content'])+b' '
+            sha=hashlib.sha1(b'blob '+str(len(original)).encode()+b'\0'+original).hexdigest();row['sha']=sha
+            r[f"repos/{repo}/git/blobs/{sha}"]=dict(sha=sha,encoding='base64',size=len(original),content=MODULE.base64.b64encode(original).decode())
+        code,_,api,_=self.bar_transport(apply=True,change=extra_byte);self.assertEqual((code,api.attempts),(2,0))
+        for change in (lambda r,p,pr:pr.update(changed_files=5),lambda r,p,pr:r[f'repos/{repo}/pulls/1/files?per_page=100'][0].update(previous_filename='renamed'),lambda r,p,pr:next(row for row in r[f'repos/{repo}/pulls/1/files?per_page=100'] if row['filename']==MODULE.BAR_PREARM).update(status='added')):
+            code,_,api,_=self.bar_transport(apply=True,change=change);self.assertEqual((code,api.attempts),(2,0))
+
+    def test_bar_denied_truncated_nonempty_policy_and_empty_native_checks_refuse(self):
+        repo=MODULE.BAR_REPOSITORY
+        endpoints=(f'repos/{repo}/branches/main/protection/required_status_checks',f'repos/{repo}/rules/branches/main?per_page=100',f'repos/{repo}/rulesets?includes_parents=true&per_page=100')
+        changes=[lambda r,p,pr:p.update({endpoints[0]:(1,404,dict(message='Not Found',status='404'))}),
+                 lambda r,p,pr:p.update({endpoints[0]:(1,403,dict(message='denied'))}),
+                 lambda r,p,pr:p.update({endpoints[1]:(0,200,'[')}),lambda r,p,pr:p.update({endpoints[1]:(0,200,[dict(type='required_status_checks')])}),
+                 lambda r,p,pr:p.update({endpoints[2]:(0,200,[dict(id=1)])}),
+                 lambda r,p,pr:r[f'repos/{repo}'].update(permissions=dict(push=True,pull=True)),
+                 lambda r,p,pr:r[f'repos/{repo}/commits/{self.bar_head}/check-runs?per_page=100'].update(total_count=0,check_runs=[])]
+        for change in changes:
+            code,_,api,_=self.bar_transport(apply=True,change=change);self.assertEqual((code,api.attempts),(2,0))
+        for required in ((0,b'[]'),(1,b'',b'denied'),(1,b'[]'),(4,b'')):
+            code,_,api,_=self.bar_transport(apply=True,required=required);self.assertEqual((code,api.attempts),(2,0))
+
+    def test_bar_native_cohort_source_run_step_and_check_provenance_refuse(self):
+        repo=MODULE.BAR_REPOSITORY;head=self.bar_head;runs=f'repos/{repo}/actions/workflows/{MODULE.BAR_PREARM_ID}/runs?head_sha={head}&per_page=100';jobs=f'repos/{repo}/actions/runs/7/attempts/1/jobs?per_page=100';checks=f'repos/{repo}/commits/{head}/check-runs?per_page=100'
+        mutations=[lambda r:r[f'repos/{repo}'].update(id=42),lambda r:r[f'repos/{repo}/actions/workflows/prearm-source-controls.yml'].update(id=42),lambda r:r[f'repos/{repo}/actions/workflows/prearm-source-controls.yml'].update(state='disabled'),lambda r:r[runs].update(total_count=0,workflow_runs=[]),lambda r:r[runs].update(total_count=2),lambda r:r[jobs].update(total_count=0,jobs=[]),lambda r:r[checks].update(total_count=0,check_runs=[])]
+        for field,value in (('head_sha','f'*40),('head_branch','foreign'),('event','workflow_dispatch'),('workflow_id',42),('run_attempt',2),('run_attempt',True),('conclusion','skipped'),('status','in_progress')):
+            mutations.append(lambda r,f=field,v=value:r[runs]['workflow_runs'][0].update({f:v}))
+        for field,value in (('head_sha','f'*40),('run_id',42),('run_attempt',2),('name','trivial'),('steps',[]),('conclusion','skipped')):
+            mutations.append(lambda r,f=field,v=value:r[jobs]['jobs'][0].update({f:v}))
+        mutations.extend([lambda r:r[jobs]['jobs'][0]['steps'][8].update(conclusion='skipped'),lambda r:r[jobs]['jobs'][0]['steps'][2].update(name='changed binding'),lambda r:r[jobs]['jobs'][0]['steps'][-1].update(name='foreign setup'),lambda r:r[jobs]['jobs'][0]['steps'][1].update(number=True),lambda r:r[checks]['check_runs'][0].update(app=dict(id=42)),lambda r:r[checks]['check_runs'][0].update(check_suite=dict(id=42)),lambda r:r[f'repos/{repo}/actions/runs/7'].update(head_branch='foreign')])
+        for mutation in mutations:
+            code,_,api,_=self.bar_transport(apply=True,change=lambda r,p,pr:mutation(r));self.assertEqual((code,api.attempts),(2,0))
+        code,_,api,_=self.bar_transport(apply=True,selector='renamed.yml');self.assertEqual((code,api.attempts),(2,0))
+
+    def test_bar_fresh_policy_and_prior_uncertain_result_never_renew_merge(self):
+        rules=f'repos/{MODULE.BAR_REPOSITORY}/rules/branches/main?per_page=100'
+        code,_,api,_=self.bar_transport(apply=True,drift=lambda r,p,pr:p.update({rules:(0,200,[dict(type='required_status_checks')])}));self.assertEqual((code,api.attempts),(2,0))
+        code,ready,_,_=self.bar_transport()
+        prior=asdict(ready);prior.update(outcome='indeterminate',codeDelivery='unknown',attempts=1,producerInstallation='indeterminate',routineEligibility='unresolved')
+        code,result,api,reads=self.bar_transport(apply=True,prior=prior)
+        self.assertEqual((code,api.attempts,result.attempts),(3,0,1));self.assertIn('readback-only',result.reason)
+        self.assertFalse(reads)
+
+    def test_bar_nonempty_real_required_checks_keep_native_predicate_and_prearm_cohort(self):
+        row=dict(name='prearm-source-controls',bucket='pass',state='SUCCESS',completedAt='2026-10-13T00:00:00Z',event='pull_request',workflow='prearm-source-controls',startedAt='2026-10-13T00:00:00Z',link=f'https://github.com/{MODULE.BAR_REPOSITORY}/actions/runs/7/job/8')
+        code,result,api,reads=self.bar_transport(required=(0,json.dumps([row]).encode()))
+        self.assertEqual((code,api.attempts,result.reason),(0,0,None));self.assertFalse(any('--include' in c for c in reads))
+        row['bucket']='fail';row['state']='FAILURE'
+        code,_,api,_=self.bar_transport(apply=True,required=(0,json.dumps([row]).encode()));self.assertEqual((code,api.attempts),(2,0))
 
     def test_fsquint_authenticated_empty_policy_full_transport_ready_and_cas(self):
         for apply in (False,True):
