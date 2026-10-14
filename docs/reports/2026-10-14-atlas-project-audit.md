@@ -195,8 +195,14 @@ original byte: 136 public records in total. Seven detailed private records remai
 in the restricted local archive with separate local Git history and no remote.
 The public seed contains no private-source interiors.
 
-The audit updates curated knowledge and guidance, with the original archive history
-preserved. Final archive, citation, privacy, mirrored-source and package-staging
-checks are recorded with the accompanying PR. Product defect questions and remaining
-installed/native gates retain their owning repositories and plans; this report is an
-audit snapshot, not a second mutable roadmap.
+Validation passes for all 16 executable Python/SQLite controls, canonical archive
+structure, immutable history, seed correspondence, guidance and actual policy staging.
+The public archive contains 212,105 curated bytes. Independent review verified all
+259 distinct citation hashes, public visibility for all 18 cited repositories and
+reachability of all 28 cited repository/revision pairs. All 142 relative links in
+changed Markdown resolve. The seven private records pass separate validation and
+25 source-citation checks; private content is excluded from public delivery.
+
+Generated-manifest and required CI results belong to the accompanying PR. Product
+defect questions and remaining installed/native gates retain their owning repositories
+and plans; this report is an audit snapshot, not a second mutable roadmap.

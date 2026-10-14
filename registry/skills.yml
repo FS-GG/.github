@@ -365,7 +365,7 @@ skills:
   # atlas — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: atlas,                  scope: driver,  owner: .github,         source: .github/.claude/skills/atlas/SKILL.md, sha256: 99db8aa942a7361afd52b943967b931a57c683545312e0e3814a1f12a673d10a, materializes-when: always }
+  - { id: atlas,                  scope: driver,  owner: .github,         source: .github/.claude/skills/atlas/SKILL.md, sha256: c18e56fcc56abf80903e2fc6829cd94b44f42947724a26318ebcbf1ac5e1b35b, materializes-when: always }
 
   # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
   #
