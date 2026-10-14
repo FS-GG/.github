@@ -1358,11 +1358,13 @@ coherence:
       Workspace 0.18.2 with unchanged provider and packed Fable Rendering 0.32.1 pins. Original
       publisher 38014935496/a1 verifies both feeds with 480 signature-excluded payload
       entries. Public direct A accepted (operation932c8bd5; receipt cf966a11). Retained B preservation/apply/remove/recovery accepted (4789d3ea); ordinary Server.Tests accepted20/20 (receipt52d18d42). Installed public Portal provider C accepted (03c0b1a7). Prior 0.18.1 publication stays historical. Fresh installed/default Workspace adoption and full Wizard
-      adoption remain open; the coherent Wizard successor waits for genuine 0.99
-      publication, while its original frozen 0.97.1 predecessor remains historical.
+      adoption were separate at that historical checkpoint. The later published Creator
+      0.16.0 with coordination 0.99.0 qualified selected fresh Rendering and newly retained
+      Game fixtures (docs/reports/2026-10-11-product-board-published-receiver-qualification.md);
+      those receivers do not establish arbitrary production checkout or fleet adoption.
       The axis stays incomplete until current protected defaults and actual
       installed receivers qualify that remaining scope. Lifecycle defaults are unchanged.
-    resolved_by: "Current producer facts: SDD 2.1.0 promotion 37114843541 / .github #4146; Rendering 0.32.1 publisher 37461402933 and accepted full public-input receiver 37506865594; Current Workspace 0.19.0 source 8952e1c5753b0abc972154c7596ddc8da772b271 and original both-feed publisher 38489621342/a1; historical Templates 0.18.2 source 20c009bc6728302f9ed06fdf49cb2e8bd19e417d and publisher 38014935496/a1; public direct A accepted (operation932c8bd5; receipt cf966a11). Prior 0.18.1 publisher 37521553159/a1 and protected d9fe65ea8a456f59d663f20c647a38a195e13c2c remain historical. Historical Workspace 0.18.0 release 37138971862 and earlier axis closures remain preserved."
+    resolved_by: "Selected axis evidence: SDD 2.1.0 promotion 37114843541 / .github #4146; Rendering 0.32.1 publisher 37461402933 and accepted full public-input receiver 37506865594; Current Workspace 0.19.0 source 8952e1c5753b0abc972154c7596ddc8da772b271 and original both-feed publisher 38489621342/a1; historical Templates 0.18.2 source 20c009bc6728302f9ed06fdf49cb2e8bd19e417d and publisher 38014935496/a1; public direct A accepted (operation932c8bd5; receipt cf966a11). Prior 0.18.1 publisher 37521553159/a1 and protected d9fe65ea8a456f59d663f20c647a38a195e13c2c remain historical. Historical Workspace 0.18.0 release 37138971862 and earlier axis closures remain preserved."
     impact: "Declared capability floor remains 2.1.0. Workspace source and published package are 0.19.0 with Rendering 0.32.1 provider/Fable pins. Scoped public Xantham receivers are accepted; clean installed WASM and broader defaults/retained upgrades remain separate. Fresh installed/default Workspace and full Wizard acceptance remain pending; no complete coherence or installed-use claim follows from publication."
     tracking: "https://github.com/FS-GG/FS.GG.Templates/pull/676; SVG-COHERENCE-01.8; TSDD-KNOWLEDGE-01; ADR-0008; historical Templates#667/#673, .github#2928, SDD#916, Templates#432 and original .github#85/#87"
 
