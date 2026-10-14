@@ -14,7 +14,8 @@ harder, and when completion is plausible. The canonical invocation is `$show-pro
 1. Resolve the FS-GG `.github` repository from the workspace or its existing configuration.
    `/docs/reports/progressReports` means that path **inside the repository**, never the
    operating-system `/docs`. Preserve the active branch, index and other workers' files.
-2. Default to Unified Roadmap v3's declared outcomes and a trailing 24-hour window. Keep
+2. Default to Unified Roadmap v3's declared outcomes. Lead with changes since the newest
+   earlier report; separately show the trailing 24-hour comparison when its cutoff differs. Keep
    games and conditional scope separate unless selected. Use stable feature IDs, owners,
    acceptance boundaries and original operation identities; do not hard-code a row count.
 3. Record one UTC `as_of` cutoff, window start, generation time and display timezone.
@@ -41,6 +42,10 @@ refresh research when the method changes, rather than browsing anew on every rep
 
 For every in-scope item provide:
 
+- **Concrete work:** what changed since the last report (before → after and practical effect),
+  what is already done overall, and named remaining tasks. Retain evidenced implementation,
+  repair, qualification and publication milestones even when whole-outcome closure is unchanged
+  or percentage baselines are missing. Distinguish prepared work from accepted capabilities.
 - **Accepted status:** completed acceptance assertions and the remaining boundary; distinguish
   source, qualification, publication, installed use, activation and whole-outcome closure.
 - **Readiness:** a supported percentage/range with its method, denominator, weights and
@@ -62,6 +67,21 @@ For every in-scope item provide:
   prior assumption contradicted, evidence, cause, response, owner, effort impact and delay.
   Classify surprise relative to the recorded baseline; use “newly observed; surprise
   unknown” if no earlier risk record exists. Explain estimates that fall as well as rise.
+- **Complexity and uncertainty:** rate each remaining task low/medium/high with a technical
+  reason. Give a working effort range and a plausible adverse scenario with assumptions,
+  confidence and evidence coverage directly beside the estimate. Missing earlier estimates
+  mean “first estimate,” not unchanged. Unknown actual totals do not prevent a supported
+  remaining-work estimate; when even that is unsupported, name the bounded investigation
+  needed to estimate it. Do not invent probability percentages for judgement ranges.
+- **Health / estimate change:** use On track, At risk, Blocked, Recovering, Churning, Done
+  or Insufficient evidence, with reason, assessment confidence, effort/forecast revision and
+  next corrective step. Assess process churn as well as delivery: repeated repair/review
+  rounds, recurring failures, reopened decisions and unplanned fixes against newly accepted
+  milestones. Report available counts, periods and rework effort/coverage. Multiple small
+  fixes are productive iteration when each removes a verified obstacle; activity without
+  acceptance advancement is a churn signal, not proof by itself. Missing telemetry means
+  insufficient churn evidence, not healthy or zero rework. Health is a work-item assessment,
+  not a worker score, and reporting does not authorize corrective execution.
 
 Always account for a shared dependency once in programme effort and scheduling, while
 showing all affected outcomes. Never extrapolate an ETA from a readiness percentage or
@@ -78,8 +98,11 @@ landing. A request to modify this skill does not itself invoke reporting or sche
 
 Use [report-template.md](references/report-template.md) for the saved report. Fill every
 selected item; use explicit unknown/not-applicable states instead of silently omitting
-inconvenient fields. Keep the overview scannable and put detailed estimates and evidence
-in each item's section. Include a visible complications summary even when none was observed.
+inconvenient fields. Lead with concrete changes since the previous report, work done overall,
+and remaining tasks, effort/complexity and health in the main table. Put optional readiness
+percentages and detailed evidence in item sections; do not fill the overview with repeated
+“Unknown → Unknown” cells. Summarize shared evidence gaps once while retaining item-specific
+uncertainty beside the affected claim. Include a visible complications and churn summary.
 
 Save as `docs/reports/progressReports/YYYY-MM-DD-HHMMSSZ-unified-v3-progress.md`, using the
 actual generation UTC time. Create the directory if absent. Use exclusive creation; on

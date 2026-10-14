@@ -1,9 +1,17 @@
-# Estimation method
+# Estimation method — show-progress/2
 
 This is a lightweight reporting method, not a replacement for owning plans or an earned
 value management system. The percentages and forecasts describe explicitly named
 populations. A scope change, a new uncertainty or additional necessary work may reduce
 readiness while accepted work remains unchanged.
+
+## Concrete progress before percentages
+
+Lead with evidenced before → after capabilities since the previous report, accumulated
+completed work and named remaining tasks. Preserve intermediate implementation, repair,
+qualification and publication milestones while whole outcomes remain open. A missing
+historical percentage or effort baseline does not prevent a concrete milestone comparison.
+Use the trailing 24-hour window as a separate comparison when its baseline differs.
 
 ## Progress and its denominator
 
@@ -74,6 +82,48 @@ calendar time; it changes effort only when work such as diagnosis or repeated se
 Record risk contingency separately and avoid adding it again when the forecast already
 includes the same historical failures or risks. Do not apply cost CPI/SPI formulae without
 the corresponding planned value, earned value, actual cost and a valid baseline.
+
+## Complexity, uncertainty and process health
+
+For each remaining task, use low/medium/high complexity with a technical explanation:
+local well-understood change; interacting components with known boundaries; or unfamiliar
+integration/qualification with unresolved contracts. Complexity is not duration: a short
+credential check can have high uncertainty. Use owner evidence and actual task structure,
+not a fixed complexity-to-hours multiplier.
+
+State a working effort range and plausible adverse scenario, assumptions and confidence
+inline. High confidence needs well-bounded scope and relevant observed examples; medium
+has a concrete path with material integration uncertainty; low has sparse evidence or
+unresolved scope. These labels are judgement, not calibrated probabilities. Quantify
+coverage when countable (for example, 6/9 assertions verified, 2 pending, 1 unobserved),
+and identify whether those assertions are equal or effort-weighted. Unknown actual effort
+or an absent previous forecast does not invalidate a supported prospective task estimate.
+Unknown external waiting does not invalidate an estimate of active effort after unblock.
+
+Assess health using delivery, flow, rework and estimate movement together:
+
+| Label | Evidence needed |
+|---|---|
+| On track | Concrete advancement consistent with the supported current plan; no material observed divergence in covered evidence |
+| At risk | Specific unresolved risk threatens an acceptance boundary or working estimate |
+| Blocked | Required dependency prevents the next step; identify supplier/unblock condition |
+| Recovering | Prior failure is being resolved with verified gains; state remaining boundary |
+| Churning | Recurring repair/review cycles, reopened decisions or unplanned fix sequences with weak acceptance advancement; explain the pattern |
+| Done | Named scope accepted, with evidence |
+| Insufficient evidence | Coverage cannot support a health judgement; identify what is missing |
+
+Combine labels when appropriate, for example “Blocked; churning before the block.” State
+assessment confidence and the observation period. Report repair/review rounds, repeat failure
+families, reopenings, rework effort and newly accepted milestones where observable; partial
+counts are lower bounds. A rework share needs attributed rework/total effort in compatible
+units and covered scope. Avoid universal churn thresholds, invented zero counts and
+cross-item ratios that treat milestones as equal value. Repeated small fixes can be healthy
+if each demonstrably removes an obstacle. Lack of whole-outcome closure alone is not churn.
+
+Explain effort and calendar changes separately, including downward revisions and first
+estimates. A churn finding should name whether the root cause is known or hypothesized and
+a next step that can resolve it, such as an end-to-end reproduction or a contract decision.
+This reports process health; it neither scores individuals nor dispatches remediation.
 
 ## Completion forecasting
 

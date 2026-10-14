@@ -41,3 +41,14 @@ maintained primary sources, inspect the actual relevant content, and record publ
 and access dates. Update the method and report its revision when changing assumptions;
 do not reinterpret older reports silently. Extensive research is needed for method design,
 not repeated for every routine progress snapshot.
+
+## Revision 2 — concrete work and process health
+
+On 2026-10-14, rechecked the [GAO Agile Assessment Guide landing page](https://www.gao.gov/products/gao-24-105506)
+(reissued 15 December 2023). Its incremental delivery and functionality/quality evaluation
+support keeping concrete gains visible while whole outcomes remain open. Revision 2 adds
+local presentation and judgement rules: milestone comparisons first, inline working/adverse
+effort scenarios and complexity, and health based on acceptance advancement plus observed
+repair/review patterns. The health labels, confidence meanings and churn interpretation are
+local decisions, not GAO thresholds or calibrated probability models. Earlier reports retain
+their original methods; missing historical measurements are not retroactively invented.
