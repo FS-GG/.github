@@ -819,11 +819,26 @@ class GhApi:
 
     def routine_eligibility(self, repo: str, head: str, branch: str) -> None:
         """Require a complete bounded roster and authenticate every named producer."""
-        value = self._run([f"repos/{repo}/commits/{head}/check-runs?per_page=100"])
+        endpoint = f"repos/{repo}/commits/{head}/check-runs?per_page=100"
+        value = self._run([endpoint])
         count = value.get("total_count") if isinstance(value, dict) else None
         checks = value.get("check_runs") if isinstance(value, dict) else None
-        if (type(count) is not int or not 0 <= count <= 100 or not isinstance(checks, list)
-                or len(checks) != count or any(not isinstance(check, dict) for check in checks)):
+        if (type(count) is not int or not 0 <= count <= 1000 or not isinstance(checks, list)
+                or len(checks) != min(count, 100) or any(not isinstance(check, dict) for check in checks)):
+            raise RuntimeError("routine eligibility check population is incomplete")
+        checks = list(checks)
+        for page in range(2, (count + 99) // 100 + 1):
+            value = self._run([endpoint + f"&page={page}"])
+            rows = value.get("check_runs") if isinstance(value, dict) else None
+            if (not isinstance(value, dict) or type(value.get("total_count")) is not int
+                    or value["total_count"] != count or not isinstance(rows, list)
+                    or len(rows) != min(100, count - (page - 1) * 100)
+                    or any(not isinstance(check, dict) for check in rows)):
+                raise RuntimeError("routine eligibility check population is incomplete")
+            checks.extend(rows)
+        identities = [check.get("id") for check in checks]
+        if (len(checks) != count or any(type(identity) is not int or identity < 1 for identity in identities)
+                or len(set(identities)) != count):
             raise RuntimeError("routine eligibility check population is incomplete")
         matches = [check for check in checks if check.get("name") == "routine-eligibility"]
         if not matches or len({check.get("id") for check in matches}) != len(matches):

@@ -1,0 +1,57 @@
+FROM docker.io/library/archlinux@sha256:363129b67b2bc6c5a634f8fb4961a7e2eba213a2ec075d159127b1260290a722
+
+LABEL org.opencontainers.image.title="FS.GG provisioned development common base" \
+      org.opencontainers.image.source="https://github.com/FS-GG/.github" \
+      org.opencontainers.image.description="Arch common engine and qualification tools; separately selected language profiles"
+
+# These are genuine outputs of the admitted acquisition/transaction preparation.
+# They are intentionally absent from source. Missing inputs fail at COPY, before RUN.
+COPY acquired/SHA256SUMS /opt/fsgg/acquired/SHA256SUMS
+COPY acquired/package-inventory.expected /opt/fsgg/acquired/package-inventory.expected
+COPY acquired/repositories/ /opt/fsgg/acquired/repositories/
+COPY pacman.conf /opt/fsgg/pacman.conf
+
+RUN set -eu; \
+    cd /opt/fsgg/acquired; \
+    test -s SHA256SUMS; \
+    test -s package-inventory.expected; \
+    test -s repositories/core/os/x86_64/core.db; \
+    test -s repositories/extra/os/x86_64/extra.db; \
+    if LC_ALL=C grep -Ev '^[0-9a-f]{64}  (package-inventory.expected|repositories/(core|extra)/os/x86_64/[A-Za-z0-9_+.-]+)$' SHA256SUMS; then \
+      exit 1; \
+    else \
+      test "$?" = 1; \
+    fi; \
+    find repositories ! -type d ! -type f -print > /opt/fsgg/invalid-input-paths; \
+    test ! -s /opt/fsgg/invalid-input-paths; \
+    cut -c 67- SHA256SUMS | LC_ALL=C sort > /opt/fsgg/expected-input-paths; \
+    find repositories -type f -print > /opt/fsgg/actual-input-paths; \
+    printf '%s\n' package-inventory.expected >> /opt/fsgg/actual-input-paths; \
+    LC_ALL=C sort /opt/fsgg/actual-input-paths > /opt/fsgg/sorted-input-paths; \
+    cmp /opt/fsgg/expected-input-paths /opt/fsgg/sorted-input-paths; \
+    sha256sum --strict --check SHA256SUMS; \
+    rm -f /opt/fsgg/invalid-input-paths /opt/fsgg/expected-input-paths \
+      /opt/fsgg/actual-input-paths /opt/fsgg/sorted-input-paths; \
+    pacman-key --init; \
+    pacman-key --populate archlinux; \
+    pacman --config /opt/fsgg/pacman.conf --noconfirm -Syu --needed \
+      podman crun conmon containers-common shadow passt fuse-overlayfs git ca-certificates python; \
+    LC_ALL=C pacman -Q | LC_ALL=C sort > /opt/fsgg/package-inventory.txt; \
+    cmp package-inventory.expected /opt/fsgg/package-inventory.txt; \
+    groupadd --gid 32768 fsgg; \
+    useradd --uid 32768 --gid 32768 --create-home --shell /bin/bash \
+      --key SUB_UID_COUNT=0 --key SUB_GID_COUNT=0 fsgg; \
+    install -d -m 0700 -o 32768 -g 32768 /home/fsgg; \
+    install -d -m 0755 -o 32768 -g 32768 /workspace; \
+    test ! -e /var/lib/containers/storage; \
+    test ! -e /run/containers/storage; \
+    test ! -e /home/fsgg/.local/share/containers; \
+    rm -rf /opt/fsgg/acquired /var/cache/pacman/pkg \
+      /etc/pacman.d/gnupg/private-keys-v1.d /etc/pacman.d/gnupg/secring.gpg; \
+    rm -f /opt/fsgg/pacman.conf
+
+ENV HOME=/home/fsgg
+USER 32768:32768
+WORKDIR /workspace
+ENTRYPOINT []
+CMD []

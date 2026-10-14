@@ -1,0 +1,27 @@
+name: provisioned-podman-source
+on:
+  pull_request:
+    paths:
+      - 'deployment/provisioned-podman/**'
+      - 'tests/provisioned-podman/**'
+      - '.github/workflows/provisioned-podman-source.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'deployment/provisioned-podman/**'
+      - 'tests/provisioned-podman/**'
+      - '.github/workflows/provisioned-podman-source.yml'
+permissions:
+  contents: read
+jobs:
+  source-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check the common-base source and actual pretransaction guards
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 tests/provisioned-podman/test_source_contract.py

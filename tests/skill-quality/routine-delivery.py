@@ -232,6 +232,72 @@ class RoutineDeliveryTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError,'current run attempt/branch'):
                         api.routine_eligibility(repo,HEAD,'routine/fixture')
 
+    def test_native_routine_producer_on_second_page_is_authenticated(self):
+        repo = 'FS-GG/.github'
+        workflow = {'id':352355034, 'path':'.github/workflows/routine-eligibility.yml'}
+        check = {'id':11, 'name':'routine-eligibility', 'app':{'id':15368}, 'head_sha':HEAD,
+            'details_url':f'https://github.com/{repo}/actions/runs/7/job/11',
+            'check_suite':{'id':13}, 'status':'completed', 'conclusion':'success',
+            'started_at':'2026-10-13T00:00:00Z'}
+        native_run = {'id':7, 'workflow_id':352355034, 'path':workflow['path'], 'event':'pull_request_target',
+            'head_sha':HEAD, 'head_branch':'routine/fixture', 'status':'completed', 'conclusion':'success',
+            'check_suite_id':13, 'repository':{'full_name':repo}, 'run_attempt':1}
+        job = {'id':11, 'run_id':7, 'head_sha':HEAD, 'name':'routine-eligibility',
+            'check_run_url':f'https://api.github.com/repos/{repo}/check-runs/11',
+            'run_attempt':1, 'status':'completed', 'conclusion':'success'}
+        filler = [{'id':1000+i, 'name':'source-fixture'} for i in range(100)]
+        endpoint = f'repos/{repo}/commits/{HEAD}/check-runs?per_page=100'
+        for corrupted in (False, True):
+            producer = copy.deepcopy(check)
+            if corrupted: producer['app']['id'] = 1
+            api = MODULE.GhApi()
+            with mock.patch.object(api, '_run', side_effect=[
+                    {'total_count':101, 'check_runs':filler}, {'total_count':101, 'check_runs':[producer]},
+                    workflow, native_run, job]) as reads:
+                if corrupted:
+                    with self.assertRaisesRegex(RuntimeError, 'native producer'):
+                        api.routine_eligibility(repo, HEAD, 'routine/fixture')
+                else:
+                    api.routine_eligibility(repo, HEAD, 'routine/fixture')
+                self.assertEqual(reads.call_args_list[:2], [mock.call([endpoint]), mock.call([endpoint+'&page=2'])])
+        for conclusion in ('failure', 'cancelled'):
+            latest = {**check, 'id':12, 'conclusion':conclusion,
+                'started_at':'2026-10-13T00:01:00Z',
+                'details_url':f'https://github.com/{repo}/actions/runs/7/job/12'}
+            latest_job = {**job, 'id':12, 'conclusion':conclusion,
+                'check_run_url':f'https://api.github.com/repos/{repo}/check-runs/12'}
+            api = MODULE.GhApi()
+            with mock.patch.object(api, '_run', side_effect=[
+                    {'total_count':101, 'check_runs':[check, *filler[:99]]},
+                    {'total_count':101, 'check_runs':[latest]},
+                    workflow, native_run, job, native_run, latest_job]):
+                with self.assertRaisesRegex(RuntimeError, 'latest routine eligibility'):
+                    api.routine_eligibility(repo, HEAD, 'routine/fixture')
+
+    def test_native_routine_pagination_refuses_incomplete_or_changed_population(self):
+        first = {'total_count':101, 'check_runs':[{'id':1000+i, 'name':'source-fixture'} for i in range(100)]}
+        variants = [
+            {'total_count':101, 'check_runs':[]},
+            {'total_count':102, 'check_runs':[{'id':12}]},
+            {'total_count':True, 'check_runs':[{'id':12}]},
+            {'total_count':101, 'check_runs':[{'id':1000}]},
+            {'total_count':101, 'check_runs':[{'id':12}, {'id':13}]},
+            {'total_count':101, 'check_runs':[None]},
+            {'total_count':101, 'check_runs':[{'id':True}]},
+        ]
+        for second in variants:
+            with self.subTest(second=second):
+                api = MODULE.GhApi()
+                with mock.patch.object(api, '_run', side_effect=[first, second]) as reads:
+                    with self.assertRaisesRegex(RuntimeError, 'population is incomplete'):
+                        api.routine_eligibility('FS-GG/.github', HEAD, 'routine/fixture')
+                    self.assertEqual(reads.call_count, 2)
+        api = MODULE.GhApi()
+        with mock.patch.object(api, '_run', return_value={**first, 'total_count':1001}) as reads:
+            with self.assertRaisesRegex(RuntimeError, 'population is incomplete'):
+                api.routine_eligibility('FS-GG/.github', HEAD, 'routine/fixture')
+            self.assertEqual(reads.call_count, 1)
+
     def test_native_merge_is_head_conditioned_and_uses_no_bypass(self):
         api = MODULE.GhApi()
         completed = subprocess.CompletedProcess([], 0, json.dumps({"merged": True, "sha": MERGE}), "")

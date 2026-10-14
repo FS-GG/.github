@@ -32,6 +32,24 @@ Final scoped readback found no containers, including external build containers, 
 
 This accepts the narrow ordinary-profile assertion under .1, rather than completing .1's whole profile/baseline population or V3-ENV-01. The storage is memory-backed: .2 host-backed allocation and independent teardown, .3 measured storage benefit, .4 strong containment, .6 other-machine/reboot recovery, public delivery and installed adoption remain pending. Whole-item Done remains No.
 
+## Common-base source preparation — 2026-10-14
+
+The [common-base recipe](../../deployment/provisioned-podman/README.md) reconstructs the protected
+Arch amd64 donor decision as reviewable source. Its fixed donor, October 12 core/extra snapshot,
+maintained full-system offline transaction and ordinary user defaults are explicit. Before keyring or
+package commands, the recipe binds every staged regular repository file and the expected complete
+final inventory to exactly one safe checksum row. Inert controls cover complete population and
+missing/extra/duplicate/path-escape/symlink/byte-drift refusals. This verifies supplied-input coverage,
+not authentic package closure or native image acceptance.
+
+The acquired lock is absent; donor policy, trusted complete transaction, maintained common-base
+helper join and native build/export/cleanup remain pending. Separate Coordination .NET and Templates
+TypeScript compile/unit pilot preparations preserve profile ownership, opt-in digest selection and
+explicit retaining upgrades. OCI publication permissions/integration, actual installed journeys,
+external host-backed allocation/independent cleanup, containment and the second compatible machine
+remain open. Original ordinary-profile acceptance, failures and unknown operations remain unchanged;
+.1/.2 and whole-item Done remain incomplete.
+
 ## Delivery milestones
 
 - [ ] **V3-ENV-01.1 — Freeze the profile, storage baseline and finite pilot population.**

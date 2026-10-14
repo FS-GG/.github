@@ -1,0 +1,64 @@
+{
+  "classification": "source-specification-not-acquired-input-lock",
+  "platform": "linux/amd64",
+  "donor": {
+    "tag": "docker.io/library/archlinux:base-20261011.0.609700",
+    "reference": "docker.io/library/archlinux@sha256:363129b67b2bc6c5a634f8fb4961a7e2eba213a2ec075d159127b1260290a722",
+    "indexDigest": "sha256:3c64b538588416593f69a1aebd2f2ec0f2541b29159f32556fa7def2167147a0",
+    "configDigest": "sha256:5a30b4acc83ff841682eb21795e00f7ff030796f5e6fd2a127decd7a45ba7cef",
+    "layers": [
+      {"sha256": "d2cc54e7adee435a81c8b997d4346ca05a3a9639d71e1169d6cd9fb959bedaac", "bytes": 134054341},
+      {"sha256": "55924c9eac0db11dd02b15ee1743734f402b3b22b794909b72b93f7afb7d64b6", "bytes": 8724}
+    ],
+    "officialImagesSource": {
+      "repository": "docker-library/official-images",
+      "revision": "cf21f1e1b466b6e2f4b3140a063d6dd76ce79db7",
+      "path": "library/archlinux",
+      "sha256": "04d08e24a8f1007ee3e14b1a301801f12ae7d8976e88041e0d9a53333212940a"
+    },
+    "dockerfileSource": {
+      "repository": "archlinux/archlinux-docker",
+      "revision": "1e7d9a2d495ffe76934a775b6bd68ac892a14c1b",
+      "path": "Dockerfile.base",
+      "inspection": "not-inspected-access-denied"
+    }
+  },
+  "snapshot": {
+    "date": "2026-10-12",
+    "acquisitionServer": "https://archive.archlinux.org/repos/2026/10/12/$repo/os/x86_64",
+    "repositories": ["core", "extra"]
+  },
+  "targets": ["podman", "crun", "conmon", "containers-common", "shadow", "passt", "fuse-overlayfs", "git", "ca-certificates", "python"],
+  "transaction": "pacman full-system -Syu --needed against exact donor database and staged snapshot",
+  "trust": {
+    "candidateSigLevel": "Required DatabaseOptional",
+    "candidateLocalFileSigLevel": "Required",
+    "donorPolicyReconciliation": "pending",
+    "archiveSignatureVerification": "pending",
+    "databaseSignatureAvailability": "pending-core-db-sig-historical-404-retained"
+  },
+  "acquiredInputs": null,
+  "unresolved": [
+    "Acquire and verify donor manifest/config/layers and inspect actual package database, pacman/keyring and hooks",
+    "Freeze complete maintained transaction, providers, replacements/removals, repository bytes, archive versions/sizes/digests/signatures and trust results",
+    "Reconcile candidate signature policy with donor without weakening stricter trust",
+    "Produce SHA256SUMS covering every staged repository/archive/signature and package-inventory.expected",
+    "Extend existing Coordination image seam for this explicit common-base input population before native build",
+    "Qualify actual offline build/export/load, package inventory and scoped cleanup",
+    "Confirm existing authorized OCI publication route and permissions"
+  ],
+  "coldDefault": {
+    "immutableVerifiedInputs": "declared acquisition inputs; acquisition accounted separately",
+    "writableState": "fresh graphroot/runroot/workspace/home/config/cache/tmp/named-volume population supplied by launcher",
+    "assemblyNetwork": "none",
+    "receiverNetwork": "none",
+    "optionalCaches": "opt-in bounded verified mode; cannot satisfy cold acceptance",
+    "physicalHostPageCache": "not claimed cold"
+  },
+  "consumerPreparation": {
+    "framework": "Coordination clean exact source; separately acquired and qualified .NET 10.0.401 linux-x64 profile",
+    "ordinaryProduct": "Templates examples/language-routes/typescript-todo compile/unit/domain/storage with separately pinned Node 24.8.0 and TypeScript 5.9.2",
+    "browser": "excluded from first Arch profile; existing Playwright Noble qualification remains separate",
+    "workspaceSelection": "future published digest-pinned opt-in selection; explicit retaining upgrade and predecessor rollback"
+  }
+}
