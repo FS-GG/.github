@@ -92,8 +92,13 @@ let run selected prepared trusted =
     let prepared=match ImageClosure.prepare selected with ClosureResult.Prepared value->value|value->raise(InvalidOperationException(sprintf "synthetic prepare: %A" value))
     File.WriteAllBytes(selectionPath,JsonSerializer.SerializeToUtf8Bytes selected)
     File.WriteAllBytes(trustedPath,JsonSerializer.SerializeToUtf8Bytes trusted)
-    let expected=RootlessPolicy.inputIdentity selected selectionPath trustedPath original prepared (String('c',64))
-    let inputs={CustodyIdentity=String('c',64);Selection=selected;Trusted=trusted;SelectionPath=selectionPath;TrustedPath=trustedPath;ParentOci=original;WorkRoot=Path.Combine(root,"work");EvidenceRoot=Path.Combine(root,"evidence");ExpectedInput=expected;Prepared=prepared}
+    let withRoots target work evidence=
+        let custody=String('c',64)
+        let program=CommandRecipe.prepare selected trusted prepared custody target original work evidence (String('a',32)) (String('b',32)) 32
+        let expected=RootlessPolicy.inputIdentity selected selectionPath trustedPath original prepared custody program
+        {CustodyIdentity=custody;Selection=selected;Trusted=trusted;SelectionPath=selectionPath;TrustedPath=trustedPath;ParentOci=original;WorkRoot=work;EvidenceRoot=evidence;ExpectedInput=expected;Prepared=prepared;Program=program}
+    let inputs=withRoots "run-c4" (Path.Combine(root,"work")) (Path.Combine(root,"evidence"))
+    let expected=inputs.ExpectedInput
     // This fixture substitutes command effects, not production custody. Actual lease/process
     // qualification belongs to the separately admitted private caller controls.
     let mutable actualBuilds=0
@@ -128,7 +133,7 @@ let run selected prepared trusted =
       member _.Start command=runFixture original command}
     // Hosted CI capacity is unrelated to this synthetic process/OCI fixture. Production still
     // reads the real drive and requires the same 128 GiB reserve before acquiring any resources.
-    let lowCapacityInputs={inputs with WorkRoot=Path.Combine(root,"low-capacity-work");EvidenceRoot=Path.Combine(root,"low-capacity-evidence")}
+    let lowCapacityInputs=withRoots "run-c4" (Path.Combine(root,"low-capacity-work")) (Path.Combine(root,"low-capacity-evidence"))
     let mutable lowCapacityStarts=0
     let mutable capacityObserved=false
     let lowCapacity={new IProcessBackend with
@@ -144,7 +149,7 @@ let run selected prepared trusted =
         raise(InvalidOperationException "capacity refusal started a process")}
     let lowCapacityMechanism=RootlessMechanism(lowCapacityInputs,lowCapacity):>IRunnerMechanism
     let mutable capacityRefused=false
-    try lowCapacityMechanism.Execute(AcquireInputs expected,CancellationToken.None).GetAwaiter().GetResult()|>ignore
+    try lowCapacityMechanism.Execute(AcquireInputs lowCapacityInputs.ExpectedInput,CancellationToken.None).GetAwaiter().GetResult()|>ignore
     with :? InvalidDataException as error->
         require(error.Message="capacity-reserve-unavailable") "capacity fixture refused for an unrelated reason"
         capacityRefused<-true
@@ -155,7 +160,7 @@ let run selected prepared trusted =
     mechanism.SealTerminal(final,trace)
     require(File.Exists(Path.Combine(inputs.EvidenceRoot,"terminal.json"))&&not(Directory.Exists(Path.Combine(inputs.WorkRoot,"bundle-a")))&&not(Directory.Exists(Path.Combine(inputs.WorkRoot,"bundle-b")))) "synthetic terminal evidence or scoped cleanup absent"
     for name in ["a-build.oci.tar";"b-build.oci.tar";"a-reload.oci.tar";"b-reload.oci.tar"] do require(File.Exists(Path.Combine(inputs.EvidenceRoot,name))) "external OCI archive lost during cleanup"
-    let failedInputs={inputs with WorkRoot=Path.Combine(root,"unack-work");EvidenceRoot=Path.Combine(root,"unack-evidence")}
+    let failedInputs=withRoots "run-c4" (Path.Combine(root,"unack-work")) (Path.Combine(root,"unack-evidence"))
     let unacknowledged={new IProcessBackend with
       member _.ReadBuilderIdentity()=RootlessPolicy.BuilderSha256
       member _.ReadSupervisorIdentity()=RootlessPolicy.SupervisorSha256
@@ -165,9 +170,9 @@ let run selected prepared trusted =
         if command.Arguments|>Array.contains "build" then raise(IOException "synthetic-lost-start-ack")
         synthetic.Start command}
     let failedMechanism=RootlessMechanism(failedInputs,unacknowledged)
-    let failed,_=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None failedMechanism (Runner.initialC4 expected)
+    let failed,_=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None failedMechanism (Runner.initialC4 failedInputs.ExpectedInput)
     require(not(Runner.c4Ready failed)&&failed.CleanupFailed&&failed.UnknownBuilds=set["a"]&&failed.Owned.Count=2) "unacknowledged child allowed successful cleanup or C4Ready"
-    let changedInputs={inputs with WorkRoot=Path.Combine(root,"mismatch-work");EvidenceRoot=Path.Combine(root,"mismatch-evidence")}
+    let changedInputs=withRoots "run-c4" (Path.Combine(root,"mismatch-work")) (Path.Combine(root,"mismatch-evidence"))
     let mismatched={new IProcessBackend with
       member _.ReadBuilderIdentity()=RootlessPolicy.BuilderSha256
       member _.ReadSupervisorIdentity()=RootlessPolicy.SupervisorSha256
@@ -179,7 +184,7 @@ let run selected prepared trusted =
             runFixture changed command
         else synthetic.Start command}
     let mismatchMechanism=RootlessMechanism(changedInputs,mismatched)
-    let mismatch,_=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None mismatchMechanism (Runner.initialC4 expected)
+    let mismatch,_=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None mismatchMechanism (Runner.initialC4 changedInputs.ExpectedInput)
     require(not(Runner.c4Ready mismatch)&&mismatch.Phase=Refused&&mismatch.Owned.IsEmpty&&mismatch.Refusal=Some "BuildMismatch") "different OCI config did not refuse and clean owned bundles"
     // The unacknowledged backend above demonstrably never spawned its failing build.
     // Only the fixture owns this explicit reconciliation; production may not infer absence.
