@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = Path(os.environ["FSGG_COORD_ENGINE_BIN"])
 RUNTIMES = (".claude", ".agents")
-DRIVERS = ("work-roadmap", "work-board", "padd-item")
+DRIVERS = ("work-roadmap", "work-board", "padd-item", "atlas")
 LINK = re.compile(r"\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)")
 
 
@@ -161,6 +161,9 @@ match argv with
                 directory = workspace / runtime / "skills" / driver
                 for markdown in directory.rglob("*.md"):
                     for raw in LINK.findall(markdown.read_text()):
+                        # External citations are not materialized filesystem links.
+                        if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", raw):
+                            continue
                         target = (markdown.parent / raw).resolve()
                         check(target.exists(), f"{markdown}: dangling materialized link {raw}")
 
