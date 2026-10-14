@@ -27,6 +27,27 @@ extern int fsgg_caller_source_close()
 [<DllImport("learn_caller_source",CallingConvention=CallingConvention.Cdecl)>]
 extern nativeint fsgg_caller_source_failure()
 
+// Unknown peer retirement must keep the reverse-P/Invoke target alive.
+type private CallbackRoot(callback:Effect)=
+    let mutable handle=GCHandle.Alloc callback
+    member _.Retire(observed:bool)=if observed&&handle.IsAllocated then handle.Free()
+    member _.IsRetained=handle.IsAllocated
+
+let private callbackRetention()=
+    let root,weak=
+        let callback=Effect(fun _ _ _ _ _ _ _->17)
+        CallbackRoot(callback),WeakReference(callback)
+    root.Retire false
+    GC.Collect();GC.WaitForPendingFinalizers();GC.Collect()
+    require(root.IsRetained&&weak.IsAlive) "source-unknown-peer-callback-not-retained"
+    let callback=weak.Target :?> Effect
+    require(callback.Invoke(0u,0n,0n,0n,0n,0n,0n)=17) "source-retained-callback-unusable"
+    root.Retire true
+    require(not root.IsRetained) "source-retired-peer-callback-root-leaked"
+    root.Retire true
+    GC.KeepAlive callback
+    printfn "PASS reverse callback GC root survives unknown peer retirement and releases only after observed retirement"
+
 let private view (value:RootRecipeBinding.NativeView)=
     require(value.Length<=32768un) "source-command-view-bound"
     Marshal.PtrToStringUTF8(value.Pointer,int value.Length)
@@ -60,7 +81,7 @@ let private exercise target failFirst=
             with error->callbackFailure<-Some error;0)
         // An unretired native peer keeps its callback rooted even after refusal.
         // Unknown cleanup retains the handle and unmanaged output allocations.
-        let callbackRoot=GCHandle.Alloc callback
+        let callbackRoot=CallbackRoot(callback)
         let pair=[|-1;-1|]
         let deadline=DateTimeOffset.UtcNow.AddSeconds 90.
         let mutable opened=false
@@ -102,11 +123,12 @@ let private exercise target failFirst=
             if opened&&retired then require(fsgg_caller_source_close()=1) "source-native-close"
             if retired then
                 for memory in allocations do Marshal.FreeHGlobal memory
-                callbackRoot.Free()
+            callbackRoot.Retire retired
             GC.KeepAlive callback
             require retired "source-peer-cleanup-unknown"))
 
 let run()=
+    callbackRetention()
     exercise "run-c4" false
     exercise "run-inactive" false
     exercise "run-c4" true
