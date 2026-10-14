@@ -75,9 +75,12 @@ explicitly supersedes the inaccurate summary without rewriting its history.
 ### Source, published and consumed identities
 
 Registry selections, producer source versions, served packages and installed
-acceptance are separate evidence. Templates' registry selection remains distinct
-from its accepted 0.19 public receiver journeys; clean installed WASM acceptance
-is still a separate outcome. FsQuint's current source identity differs from its
+acceptance are separate evidence. The live feed check exposed a stale Templates
+registry selection: both feeds served accepted 0.19.0 while the registry still
+declared 0.18.2. This delivery reconciles that declaration and its projections to
+0.19.0 using the original producer evidence; it does not publish a new package.
+The accepted public receiver journeys and clean installed WASM acceptance remain
+separate outcomes. FsQuint's current source identity differs from its
 accepted public release. Rendering deliberately uses a local-pack sentinel distinct
 from its publication/profile version axis.
 
