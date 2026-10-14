@@ -3,8 +3,14 @@
 Programme execution is **paused and incomplete** following `$stop-with-handoff`.
 The timestamp is the first observed save time, not an inferred request-arrival time.
 All nine workers were terminal and were told to preserve files and resume no work.
-No worker was restarted. Only this handoff's preparation and normal delivery are
-authorized after shutdown. No runtime goal exists; no monitoring continues after save.
+No worker was restarted. At shutdown, only this handoff's preparation and normal
+delivery were authorized. No runtime goal exists; no monitoring continues after save.
+
+Post-save prerequisite update, 2026-10-14: the user requested this handoff-only
+amendment after supplying the TUN report and confirming secret access. The
+original save landed through [PR4479](https://github.com/FS-GG/.github/pull/4479)
+at `ae44cc302171376f841ee456cf315a34e4febbeb`. Programme execution remains paused;
+these inputs neither renew consumed operations nor admit publication or installed C.
 
 The objective remains completing the [Unified Roadmap v3](../roadmaps/2026-10-07-unified-development-roadmap-v3.md)
 and [games roadmap](../roadmaps/2026-10-07-games-development-roadmap.md) through
@@ -25,6 +31,39 @@ intact. The supplied host now supports ordinary nested Podman; the older Arch
 provisioning request is not the current next step. No systemd or delegated-cgroup
 provisioning is needed for the selected ordinary publication/installed paths.
 
+## Post-save prerequisite evidence
+
+**Host-owner report:** `/dev/net/tun` was enabled in the running fsdev container
+without restarting or replacing it. Nested rootless Podman/pasta HTTPS returned200;
+no extra capabilities or privileged mode were added. Future launches include TUN
+read/write access; the host owner reported passing checks and a committed/pushed
+launch change `096d9f7`. This is supplied host evidence, not a new execution of the
+agent's installed-C probe. Refresh the changed network boundary on continuation.
+
+**Existing App credentials:** the user confirmed both organization secrets
+`FSGG_DISPATCH_APP_ID` and `FSGG_DISPATCH_APP_PRIVATE_KEY` are accessible to
+`FS-GG/FS.GG.Coordination` among their eleven selected repositories. No secret
+values were supplied or committed. Coordination is public, so the displayed
+private-repository plan restriction does not apply to it.
+
+**Fresh native permission check:** the existing
+[permission-coherence workflow](https://github.com/FS-GG/.github/blob/ae44cc302171376f841ee456cf315a34e4febbeb/.github/workflows/permission-coherence.yml)
+ran once at source `ae44cc302171376f841ee456cf315a34e4febbeb` as
+[38504850839/a1](https://github.com/FS-GG/.github/actions/runs/38504850839).
+The [installation check](https://github.com/FS-GG/.github/actions/runs/38504850839/job/115659885805)
+authenticated using the existing secret pair and observed the live
+`fs-gg-cross-repo-dispatch` installation grant matching the pinned inventory,
+including **Administration: write**. Its token-mint and grant-comparison steps
+passed; the complete diagnostic run succeeded, updated03:12:45 UTC. The diagnostic
+changed no App permissions, repository source or publication state.
+
+The two requested external inputs are supplied. Remaining acceptance still needs
+an actual complete ruleset21633398 read using a correctly scoped App token, the
+reviewed publisher repair, and fresh installed-C network/profile qualification.
+The generic job token's omitted actor list remains unknown; its old failure is
+not converted into a pass. The App permission check does not itself demonstrate
+that complete ruleset read or authorize a retry.
+
 ## Verified delivered frontier
 
 Protected `.github/main` before this save is
@@ -41,7 +80,7 @@ These bounded observations do not establish global process or external-job clear
 | Execution publisher source | [Coordination #975](https://github.com/FS-GG/FS.GG.Coordination/pull/975), B `0ccfb6d067d912bbd8a1e26c4b56449358443b2e`, tree `4a713363d99d38267100546ff9b3aaca3cc6df1c`, sole parent E2. Whole tree and eight changed native files equal accepted candidate `ba3dbfa0229e68ea43b7a88b2cb2f43c21c15f6d`. Fresh coherent `38490686861/a1`: 69 passes/two skips, including repaired formal-base. | Original publisher `38495729817/a1` failed before package pushes; complete protection evidence is missing. Source admission stays enabled for its exact operation; it is not a retry grant. |
 | Templates WASM source | [#713](https://github.com/FS-GG/FS.GG.Templates/pull/713), protected `09d2f866565c81b1486ff4996d635510ad95acb1`: genuine compile/guest/Vite and 27 browser cases passed. [#714](https://github.com/FS-GG/FS.GG.Templates/pull/714), published source `8952e1c5753b0abc972154c7596ddc8da772b271`, tree `1da373ff0f40ec7f87edfea98991557fa686cdc9`, delivers 0.19.0 pins and direct installed-WASM checker; coherent `38485384861` passed. | Source-consumer browser evidence does not establish clean public-package creation. Firefox content-sandbox exception and Worker-exit/custody limits remain explicit. |
 | Templates 0.19.0 publication | Original [run38489621342/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/38489621342), workflow306006609/repository1281961814, push at published source8952, terminal success00:43:08 UTC. One annotated unsigned tag `fs-gg-templates/v0.19.0`, object `49b52e100bc373ad33647ffac27e41f737a4a33b`, and one nonforce push. Full composition and its own NuGet OIDC route succeeded. Both feeds' 504 payload entries match; GitHub package/release asset match the original raw archive. Fresh SDK401/runtime10.0.12 `nuget verify --all` also succeeded. | Clean installed WASM, retaining upgrades, provider/Wizard/AT and other whole-GAME outcomes remain open. No new publication or tag replay is needed. |
-| Templates tool compatibility and owning records | Ten actual tool versions and seven library checks passed in the existing nonroot Ubuntu Podman image, with owned cleanup. [#715](https://github.com/FS-GG/FS.GG.Templates/pull/715), current main `c61fcf69afc23663b58d37bfc0ac3a809c8aa5e0`, lands accepted frontier and failures in the existing report/plan. | Public-network probe failed because `/dev/net/tun` is absent. Full installed C remains unrun and unadmitted. Published source remains8952, not the docs successor. |
+| Templates tool compatibility and owning records | Ten actual tool versions and seven library checks passed in the existing nonroot Ubuntu Podman image, with owned cleanup. [#715](https://github.com/FS-GG/FS.GG.Templates/pull/715), current main `c61fcf69afc23663b58d37bfc0ac3a809c8aa5e0`, lands accepted frontier and failures in the existing report/plan. | The original probe failed on absent TUN; post-save host evidence reports TUN enabled and pasta HTTPS200. Fresh network/profile qualification is still needed. Full installed C remains unrun and unadmitted. Published source remains8952, not the docs successor. |
 
 Immediate `.github` projections #4473–4478 are landed. #4475 records accepted
 four-receiver qualification; #4476 records Templates714 source; #4477 records
@@ -98,10 +137,14 @@ incomplete-evidence refusals. Minimum proposed scope is publisher workflow, its
 existing release tests and derived publisher registry hash. No source edit or
 integration occurred. Four inert real-record controls passed: full policy accepted;
 missing/nonempty/null actors refused. Repository secret-name metadata for
-`FSGG_PACKAGES_PAT` returned404; organization metadata returned403. Usable existing
-credential and full-policy capability remain **unknown**, not globally absent.
-The user was asked for an existing Actions secret name and confirmed capability,
-never its value; no answer or new credential/permission change was observed.
+`FSGG_PACKAGES_PAT` returned404; organization metadata returned403. Those historical
+observations did not establish global absence. The later user confirmation and
+native diagnostic identify the existing `FSGG_DISPATCH_APP_ID` /
+`FSGG_DISPATCH_APP_PRIVATE_KEY` route with Administration: write. Refresh the
+staged credential proposal to mint a token scoped to Coordination and use it only
+for the ruleset GET, retaining explicit complete actors and exact5182 validation.
+The actual complete-policy read remains unqualified. No permission upgrade or
+new secret was made; no publisher repair has been integrated.
 
 Recovery requires actual capability, root review of changed safeguard logic,
 normal source PR/check/merge/native correspondence, fresh live prerequisites and
@@ -111,7 +154,7 @@ the consumed original. A-to-E allowance stays exact three paths; reviewed A-to-B
 allowance is exact eleven paths, including the narrowly repaired custody guard
 and its test. All original package and four-receiver safeguards remain.
 
-## Templates: accepted publication, blocked installed C
+## Templates: accepted publication, pending installed C
 
 Original pack artifact11861003262, 915152 bytes, raw/server SHA256
 `f7283650372bc58a70c2e3158a31693e1792509cb9998c90138851445b40ef31`.
@@ -140,15 +183,16 @@ permission denial; cleanup also passed. Attempt03 mapping repair succeeded in
 12.074 seconds and was cleaned. Both failures remain. No public HEAD, template
 install/restore, guest or browser execution occurred in these probes.
 
-The user/host was asked to expose `/dev/net/tun` for rootless pasta networking.
-No availability confirmation was observed. Do not substitute host networking,
-privilege, systemd or cgroup changes. Full installed C900+30 profile is prepared
-only, not admitted. After actual network/tool facts, review the concrete profile
-and run the genuine downloaded-template default/Complete journey and27 browser
+The original missing-device hold now has the post-save host report above: TUN is
+enabled and rootless pasta HTTPS200 was observed by the host owner. The agent's
+fresh network/profile qualification remains pending. Do not substitute host
+networking, privilege, systemd or cgroup changes. Full installed C900+30 profile
+is prepared only, not admitted. After actual network/tool facts, review the
+concrete profile and run the genuine downloaded-template default/Complete journey and27 browser
 cases. Preserve generated-byte closure and package/source exclusions. A staged
 network-none phase-split alternative is proposal only; it needs semantic selection
 and maintained checker changes, not mocked curl or source fallback. Reuse current
-valid planning; a missing device is not a new architecture mandate.
+valid planning; the supplied TUN route avoids requiring a checker phase split.
 
 ## Owners, preserved work and evidence
 
@@ -158,8 +202,8 @@ not live monitoring or new authority.
 | Owner | Preserved location/state | Next action and unlock |
 |---|---|---|
 | Root | `.github/main` clean at6edf before save; handoff-only isolated branch | On explicit continuation, recover compact current views and refresh native prerequisites; retain protected admission ownership. |
-| `process_resume` | `/tmp/proc-pubb9-on-e2-44kuxg7_/worktree`, branch `routine/proc-pubb9-on-e2-44kuxg7_`, clean at accepted source; sole Coordination integrator | Confirm existing complete-policy credential capability; review/land only qualified safeguard repair, then reconcile original publisher and separately admit recovery. |
-| `template_wasm_reference` | `/tmp/templates-wasm-A-0b808ff1e703-rnhmbz90/`; C checkout `C-source019-hd7uixjo/worktree`, branch `routine/templates-wasm-c-019-hd7uixjo`; report checkout `C-source019-hd7uixjo/accepted-frontier-docs-j7nemp9c/worktree`; source/715 documents delivered | Host device availability unlocks fresh network probe; actual profile admission unlocks installed C. Preserve published8952 identity despite docs main advancement. |
+| `process_resume` | `/tmp/proc-pubb9-on-e2-44kuxg7_/worktree`, branch `routine/proc-pubb9-on-e2-44kuxg7_`, clean at accepted source; sole Coordination integrator | Qualify the complete policy read through the existing App pair; review/land only the qualified safeguard repair, then reconcile the original publisher and separately admit recovery. |
+| `template_wasm_reference` | `/tmp/templates-wasm-A-0b808ff1e703-rnhmbz90/`; C checkout `C-source019-hd7uixjo/worktree`, branch `routine/templates-wasm-c-019-hd7uixjo`; report checkout `C-source019-hd7uixjo/accepted-frontier-docs-j7nemp9c/worktree`; source/715 documents delivered | Refresh the host-reported TUN/network facts in a fresh bounded probe; actual profile admission unlocks installed C. Preserve published8952 identity despite docs main advancement. |
 | `template_projection` | `/tmp/fsgg-proc975-publisher-source-projection` and prior Templates projection worktrees | Immediate future owning projections for failed publisher and later signature/runtime status; none was open at shutdown. |
 | `fsquint_adapter` | `/tmp/fsgg-fsquint-clean-rebind-ynylhxzs/worktree`; `/tmp/fsgg-fsquint-postpublication-adoption-i5m6oams/proposal.json` | Accepted Execution publication unlocks existing candidate708 PR admission, full normal CI/provider/Core/runtime checks; no speculative lock fix. |
 | `proc_publication_plan` | `/tmp/proc-custody-leader-pkaui5kr/worktree`, detached with two modified guard/test files; accepted patch already integrated through975 | Preserve dirty preparation; use only bounded role-aware evidence preparation after restart. No new source authority. |
@@ -243,9 +287,10 @@ fabricated private-observation finish was started for shutdown.
 1. Invoke continue-from-handoff explicitly. Refresh protected sources, actual
    resources, original-effect terminal facts and owner views; use the improved
    skill and genuine bounded packets. This report grants no expired operation.
-2. Resolve the two independent external inputs: host `/dev/net/tun` availability
-   for Templates, and an existing native-readable complete-policy credential for
-   Coordination. Do not request secret values or silently broaden authority.
+2. Reuse the supplied inputs: host-reported TUN/pasta HTTPS200 and the confirmed
+   App secret pair with fresh Administration: write evidence. Independently
+   refresh the changed network boundary and verify a complete ruleset21633398 GET
+   through the scoped App token. Do not request secret values or broaden authority.
 3. For Execution, review and qualify the strict credential-bound guard repair,
    land through full required/coherent checks, refresh correspondence and original
    custody, then select a reconciled one-shot recovery. Accept both feed readbacks,
