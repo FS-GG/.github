@@ -60,6 +60,11 @@ static int lr_command_shape(const lr_command *c) {
  }
  return 1;
 }
+static int lr_bundle_cwd(const lr_recipe *r,const lr_command *c,unsigned bundle) {
+ const char *suffix=bundle?"/bundle-b":"/bundle-a";
+ if(bundle>1||r->work_root.size>LC_STRING_MAX-10||c->working_directory.size!=r->work_root.size+9)return 0;
+ return !memcmp(c->working_directory.data,r->work_root.data,r->work_root.size)&&!memcmp(c->working_directory.data+r->work_root.size,suffix,9);
+}
 static int lr_expected_step(size_t index,size_t normal,char *out,size_t capacity) {
  static const char *build[]={"parent-load","parent-inspect","build","build-save"};
  static const char *reload[]={"reload-load","reload-inspect","reload-save","probe-dotnet","probe-python","probe-native"};
@@ -87,6 +92,8 @@ int lr_validate(const lr_recipe *r,const char **failure) {
  for(size_t i=0;i<r->step_count+LR_STORE_COUNT;i++) {
   const lr_command *c=i<r->step_count?&r->steps[i].command:&r->removal_prefix[i-r->step_count];
   why="root-recipe-command";if(!lr_command_shape(c))goto bad;
+  unsigned bundle=i<8?(unsigned)i/4:i<20?(unsigned)(i-8)/6:i<normal?(unsigned)(i-20)/3:i<r->step_count?(unsigned)(i-normal)/6:(unsigned)(i-r->step_count)/2;
+  why="root-recipe-selected-cwd";if(!lr_bundle_cwd(r,c,bundle))goto bad;
   if(i<r->step_count){char step[64];why="root-recipe-step";if(!lr_expected_step(i,normal,step,sizeof step)||!lr_same(r->steps[i].step,step))goto bad;}
   size_t bytes=c->executable.size+c->working_directory.size+2;
   if(bytes>LC_STRING_MAX)goto bad;
@@ -189,7 +196,7 @@ struct lr_recipe_copy {
 };
 static cc_view lr_copy_text(lr_recipe_copy *c,cc_view x) {
  if(x.size>=LC_STRING_MAX-c->bytes)return (cc_view){0};
- cc_view r={c->text+c->bytes,x.size};memcpy(c->text+c->bytes,x.data,x.size);c->text[c->bytes+x.size]=0;c->bytes+=x.size+1;return r;
+ cc_view r={c->text+c->bytes,x.size};if(x.size)memcpy(c->text+c->bytes,x.data,x.size);c->text[c->bytes+x.size]=0;c->bytes+=x.size+1;return r;
 }
 static int lr_copy_command(lr_recipe_copy *c,lr_command *to,const lr_command *from) {
  *to=*from;to->executable=lr_copy_text(c,from->executable);to->working_directory=lr_copy_text(c,from->working_directory);
@@ -207,7 +214,8 @@ lr_recipe_copy *lr_copy_recipe(const lr_recipe *r) {
  c->recipe.expected_input_sha256=lr_copy_text(c,r->expected_input_sha256);c->recipe.custody_identity=lr_copy_text(c,r->custody_identity);
  c->recipe.work_root=lr_copy_text(c,r->work_root);c->recipe.evidence_root=lr_copy_text(c,r->evidence_root);
  for(unsigned i=0;i<2;i++)c->recipe.bundle_nonce[i]=lr_copy_text(c,r->bundle_nonce[i]);
- if(!c->recipe.bundle_nonce[1].data)goto bad;
+ if(!c->recipe.schema.data||!c->recipe.recipe_sha256.data||!c->recipe.expected_input_sha256.data||!c->recipe.custody_identity.data||
+  !c->recipe.work_root.data||!c->recipe.evidence_root.data||!c->recipe.bundle_nonce[0].data||!c->recipe.bundle_nonce[1].data)goto bad;
  for(size_t i=0;i<r->step_count;i++){c->steps[i].step=lr_copy_text(c,r->steps[i].step);if(!c->steps[i].step.data||!lr_copy_command(c,&c->steps[i].command,&r->steps[i].command))goto bad;}
  for(unsigned i=0;i<LR_STORE_COUNT;i++)if(!lr_copy_command(c,&c->recipe.removal_prefix[i],&r->removal_prefix[i]))goto bad;
  return c;

@@ -323,6 +323,9 @@ static void root_program_controls(void) {
  lr_recipe_copy *copy_recipe=lr_copy_recipe(&r);check(copy_recipe!=NULL,"bounded recipe immutable copy");
  names[0][0]='x';check(copy_recipe&&lr_copied_recipe(copy_recipe)->steps[0].step.data[0]=='a',"recipe source mutation cannot alter retained copy");lr_free_recipe(copy_recipe);
  root_recipe_shape(&r,steps,names,0);steps[0].command.working_directory=view("/tmp/../learn-work");check(!lr_validate(&r,&why),"noncanonical cwd refuses");
+ root_recipe_shape(&r,steps,names,0);steps[0].command.working_directory=view("/tmp/learn-work/bundle-b");check(!lr_validate(&r,&why),"normal step cannot borrow another selected cwd");
+ root_recipe_shape(&r,steps,names,0);r.removal_prefix[0].working_directory=view("/tmp/learn-work/bundle-b");check(!lr_validate(&r,&why),"cleanup prefix cannot borrow another selected cwd");
+ check(!root_join(view("/tmp"),(cc_view){(const unsigned char *)"a",SIZE_MAX},view("/tmp/a")),"oversized root basename refuses before subtraction or text scan");
  root_recipe_shape(&r,steps,names,0);unsigned char invalid[]={0xc0,0x80};cc_view invalid_arg={invalid,2};steps[0].command.arguments=&invalid_arg;steps[0].command.argument_count=1;check(!lr_validate(&r,&why),"overlong UTF8 refuses");
  uint32_t uid=0;
  check(lr_mapped_uid0("         0       1000          1\n     32768       2000          1\n",&uid)&&uid==1000,"actual kernel padded UID map shape");

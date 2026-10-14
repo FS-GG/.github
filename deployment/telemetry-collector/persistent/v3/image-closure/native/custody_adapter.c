@@ -510,7 +510,7 @@ static void dispose_storage(lc_adapter *a) {
  free(a);
 }
 static int root_join(cc_view parent,cc_view name,cc_view full) {
- if(!string(parent)||parent.size<2||parent.data[0]!='/'||parent.data[parent.size-1]=='/'||
+ if(parent.size>=LC_STRING_MAX||name.size>=LC_STRING_MAX||full.size>=LC_STRING_MAX||!string(parent)||parent.size<2||parent.data[0]!='/'||parent.data[parent.size-1]=='/'||
   !string(name)||!name.size||memchr(name.data,'/',name.size)||literal(name,".")||literal(name,".."))return 0;
  if(parent.size>LC_STRING_MAX-name.size-1||full.size!=parent.size+name.size+1)return 0;
  return !memcmp(full.data,parent.data,parent.size)&&full.data[parent.size]=='/'&&!memcmp(full.data+parent.size+1,name.data,name.size);
