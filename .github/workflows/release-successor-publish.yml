@@ -105,6 +105,7 @@ jobs:
           python3 tests/release-successor-journal/run.py
           python3 tests/release-successor-live/run.py
           python3 tests/release-successor-recovery/run.py
+          python3 tests/release-successor-authentication/run.py
       - name: Select the inactive authentication-only route before credential acquisition
         if: inputs.qualify_original_tag_authentication_only == true
         run: |
