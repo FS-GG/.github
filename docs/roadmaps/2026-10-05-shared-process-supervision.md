@@ -359,11 +359,34 @@ accept only the selected ordinary Linux downloaded-package cohort with evaluated
 workspace/temp/source exclusion, network reachability and native-guard runtime bytes.
 They establish no hard containment, full process custody, provider teardown or public adoption.
 
-The existing publisher preparation remains private and disabled, with its protected root
-publication gate pending. Original candidate/archive, publication/policy gates and all
+At that cohort milestone, publisher preparation was private and disabled, with its
+protected root publication gate pending. The delivered source successor is recorded below. Original candidate/archive, publication/policy gates and all
 historical custody holds remain unchanged. Coherent publication, public installed adoption,
 remaining containment and consolidation still require their own acceptance; the full
 V2-PROC-01 outcome remains **Done: No**.
+
+### Exact-operation publisher source — 2026-10-14
+
+[Coordination #975](https://github.com/FS-GG/FS.GG.Coordination/pull/975) merged at
+`0ccfb6d067d912bbd8a1e26c4b56449358443b2e` at 01:16:43 UTC. The accepted candidate,
+protected tree and eight changed paths match. Fresh [full coherent run `38490686861`](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38490686861)
+and the repaired formal-base profile passed; 69 native checks passed with two expected skips.
+Original failed coherent attempt `38487383309` remains retained.
+
+Publisher source admission is enabled only for
+`publish-execution-pair-030-b11fb121-four38484632631`. Its narrowly reviewed custody
+repair accepts only the exact original adapter-leader departure with the same sole proved
+server and a fresh complete observation; unknown, foreign, replaced or incomplete ownership
+still refuses. Two exact guard/test paths extend the source allowance from nine to eleven;
+there is no wildcard. Package bytes, original candidate/archive, #974 executor and the
+accepted four-receiver cohort above remain unchanged; no package is repacked.
+
+This accepts publisher source delivery, not the publisher operation. Dispatch/publication
+still require separate final protected root admission against the delivered publisher.
+Publisher dispatch, publication, original feed readbacks and downstream adoption remain
+pending. Historical failures and unknown custody survive; ordinary known-input/source
+exclusion proves no hard containment, full custody/provider teardown or public adoption.
+The whole V2-PROC-01 outcome remains **Done: No**.
 
 [Coordination #970](https://github.com/FS-GG/FS.GG.Coordination/pull/970) delivers read-only original-pair publisher/preflight provenance controls, with native source checks passing. This prerequisite mechanism establishes no original-pair publication, selected 0.3 candidate/source freeze, first-consumer adoption or .3–.8 completion. [.1 bounded evaluation decision](../reports/2026-10-11-shared-process-supervision-evaluation.md) retains existing routine and contained implementations. Accepted BCL scopes, the failed deadline, inconclusive CliWrap heldpipe and blocked sink remain distinct; unresolved original custody is not cleared by the decision. Contract selection precedes routine/Linux implementation; native containment retains separate admission.
 
