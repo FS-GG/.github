@@ -10,6 +10,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import types
 import unittest
@@ -250,6 +251,78 @@ class FactoryControls(unittest.TestCase):
         self.assertIn('--qualify-original-tag-authentication-only', inactive)
 
 class ProtocolControls(unittest.TestCase):
+    def test_blocked_older_persistence_serializes_before_terminal_without_late_overwrite(self):
+        vectors = protocol_vectors(); bound = vectors['binding']
+        frames = [bytes.fromhex(x) for x in vectors['children']]
+        with tempfile.TemporaryDirectory() as root:
+            path = pathlib.Path(root) / 'result.json'; report = {'schema': 'fsgg.release-successor-result/1'}
+            for raw in frames[:3]: publisher.persist_authentication_snapshot(path, report, bound, raw)
+            payload = copy.deepcopy(provider.decode_auth_frame(frames[3])['p'])
+            payload.pop('request'); payload['facts']['revocation']['state'] = 'unknown'
+            payload['facts']['firstCause'] = {'stage': 'cleanup', 'code': 'cancelled'}
+            payload.update({'publication': dict(provider.AUTH_PUBLICATION), 'publicationComplete': False,
+                            'qualified': False, 'credentialReferencesDropped': True})
+            terminal = provider.encode_auth_frame(bound, 5, 'terminal', payload)
+            blocked, release, started, done = (threading.Event() for _ in range(4)); failures = []
+            actual_fsync = publisher.os.fsync
+            def delay(fd):
+                if threading.current_thread().name == 'older-snapshot' and not blocked.is_set():
+                    blocked.set()
+                    if not release.wait(1): raise RuntimeError('bounded fixture wait expired')
+                return actual_fsync(fd)
+            def write(raw, terminal_writer=False):
+                if terminal_writer: started.set()
+                try: publisher.persist_authentication_snapshot(path, report, bound, raw)
+                except BaseException as error: failures.append(error)
+                finally:
+                    if terminal_writer: done.set()
+            older = threading.Thread(target=write, args=(frames[3],), name='older-snapshot')
+            later = threading.Thread(target=write, args=(terminal, True), name='terminal-snapshot')
+            with patch.object(publisher.os, 'fsync', delay):
+                older.start()
+                try:
+                    self.assertTrue(blocked.wait(1)); later.start()
+                    self.assertTrue(started.wait(1)); self.assertFalse(done.wait(0.01))
+                finally:
+                    release.set(); older.join(1)
+                    if later.ident is not None: later.join(1)
+            self.assertFalse(older.is_alive()); self.assertFalse(later.is_alive()); self.assertEqual(failures, [])
+            retained = json.loads(path.read_bytes())['authenticationSession']
+            self.assertEqual(retained['ordinal'], 5); self.assertEqual(retained['frame']['k'], 'terminal')
+            self.assertEqual(retained['frame']['p']['facts']['revocation']['state'], 'unknown')
+
+    def test_fresh_report_cannot_reset_either_durable_possible_effect(self):
+        vectors = protocol_vectors(); bound = vectors['binding']
+        frames = [bytes.fromhex(x) for x in vectors['children']]
+        for last in (1, 3):
+            with self.subTest(phase=provider.decode_auth_frame(frames[last])['k']), tempfile.TemporaryDirectory() as root:
+                path = pathlib.Path(root) / 'result.json'
+                report = {'schema': 'fsgg.release-successor-result/1'}
+                for raw in frames[:last + 1]:
+                    publisher.persist_authentication_snapshot(path, report, bound, raw)
+                preserved = path.read_bytes()
+                reset = RetainedChannel(root, bound); reset.path = path
+                subject = adapter(reset)
+                with self.assertRaises(publisher.Refused): subject.emit('ready', {'binding': bound})
+                self.assertEqual(path.read_bytes(), preserved)
+                self.assertEqual(reset.acks, [])
+                self.assertTrue(subject.failed)
+
+    def test_late_lower_ordinal_cannot_replace_retained_terminal(self):
+        vectors = protocol_vectors(); bound = vectors['binding']
+        frames = [bytes.fromhex(x) for x in vectors['children']]
+        with tempfile.TemporaryDirectory() as root:
+            path = pathlib.Path(root) / 'result.json'; report = {'schema': 'fsgg.release-successor-result/1'}
+            stale = None
+            for index, raw in enumerate(frames):
+                publisher.persist_authentication_snapshot(path, report, bound, raw)
+                if index == 2: stale = copy.deepcopy(report)
+            preserved = path.read_bytes()
+            for caller in (stale, report):
+                with self.assertRaises(publisher.Refused):
+                    publisher.persist_authentication_snapshot(path, caller, bound, frames[3])
+                self.assertEqual(path.read_bytes(), preserved)
+
     def test_loss_after_each_retained_phase_preserves_facts_and_stops_all_later_calls(self):
         for phase in provider.AUTH_PHASES:
             with self.subTest(phase=phase), tempfile.TemporaryDirectory() as root:
