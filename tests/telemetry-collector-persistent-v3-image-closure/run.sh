@@ -52,6 +52,7 @@ if test "${GITHUB_ACTIONS:-}" = true; then
 fi
 custody_source="$repo_root/deployment/telemetry-collector/persistent/v3/image-closure/native/custody_core.c"
 custody_adapter_tests="$repo_root/tests/telemetry-collector-persistent-v3-image-closure/CustodyAdapterTests.c"
+custody_root_source="$repo_root/deployment/telemetry-collector/persistent/v3/image-closure/native/custody_root.c"
 custody_tests="$repo_root/tests/telemetry-collector-persistent-v3-image-closure/CustodyCoreTests.c"
 # One original deadline covers four serial compiles and ordinary C controls.
 # The enclosing admitted source profile must separately enforce RSS/census and
@@ -647,16 +648,16 @@ timeout --kill-after=15s 120s bash -c '
   set -euo pipefail
   unset LD_PRELOAD LD_LIBRARY_PATH GCC_EXEC_PREFIX COMPILER_PATH LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH DEPENDENCIES_OUTPUT SUNPRO_DEPENDENCIES
   export PATH=/usr/bin:/bin LC_ALL=C LANG=C TZ=UTC
-  compiler="$1"; source="$2"; controls="$3"; destination="$4"; adapter_controls="$5"
+  compiler="$1"; source="$2"; controls="$3"; destination="$4"; adapter_controls="$5"; root_source="$6"
   headers=(-nostdinc -isystem /usr/lib/gcc/x86_64-linux-gnu/13/include -isystem /usr/include/x86_64-linux-gnu -isystem /usr/include)
   "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" "$source" "$controls" -o "$destination/custody-core-tests"
   "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" -fPIC -shared -DCC_TEST_LIBRARY -Wl,-z,relro,-z,now -Wl,--no-undefined "$source" "$controls" -o "$destination/libfsgg-learn-custody-core-tests.so"
-  "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" -Wl,-z,relro,-z,now "$source" "$adapter_controls" -o "$destination/custody-adapter-tests"
-  "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" -fPIC -shared -DLC_TEST_LIBRARY -Wl,-z,relro,-z,now -Wl,--no-undefined "$source" "$adapter_controls" -o "$destination/libfsgg-learn-custody-adapter-tests.so"
+  "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" -Wl,-z,relro,-z,now "$source" "$root_source" "$adapter_controls" -o "$destination/custody-adapter-tests"
+  "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" -fPIC -shared -DLC_TEST_LIBRARY -Wl,-z,relro,-z,now -Wl,--no-undefined "$source" "$root_source" "$adapter_controls" -o "$destination/libfsgg-learn-custody-adapter-tests.so"
   "$destination/custody-adapter-tests"
   "$destination/custody-core-tests"
   sha256sum -- "$destination/custody-core-tests" "$destination/libfsgg-learn-custody-core-tests.so" "$destination/custody-adapter-tests" "$destination/libfsgg-learn-custody-adapter-tests.so"
-' custody-core-source "$custody_compiler" "$custody_source" "$custody_tests" "$itf_root" "$custody_adapter_tests"
+' custody-core-source "$custody_compiler" "$custody_source" "$custody_tests" "$itf_root" "$custody_adapter_tests" "$custody_root_source"
 export FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY="$itf_root/libfsgg-learn-custody-adapter-tests.so"
 FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY_SHA256="$(sha256sum -- "$FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY" | cut -d' ' -f1)"
 export FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY_SHA256

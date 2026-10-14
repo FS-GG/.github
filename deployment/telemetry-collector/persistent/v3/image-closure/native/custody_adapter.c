@@ -1,10 +1,12 @@
 #define _GNU_SOURCE
 #include "custody_adapter.h"
+#include "custody_root.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
 #include <linux/magic.h>
 #include <linux/nsfs.h>
+#include <linux/openat2.h>
 #include <linux/sched.h>
 #include <poll.h>
 #include <signal.h>
@@ -53,6 +55,9 @@ struct lc_adapter {
  unsigned char *reply;
  const char *failure;
  int served,terminal,partial_acknowledgment;
+ lr_recipe_copy *root_recipe; lr_state root_state; lr_binding root_binding;
+ int root_parent[2],root_directory[2],bundle_directory[2];
+ uint32_t root_uid,root_gid,root_census_slot[LR_STORE_COUNT]; unsigned root_bound[LC_SLOT_MAX],root_reported[LC_SLOT_MAX];
 };
 static int refuse(const char **failure,const char *reason) { if(failure)*failure=reason;
  return 0;
@@ -282,7 +287,9 @@ static int visible(lc_adapter *a,int proc,uint32_t slot) {
  if(root<0)return 0;
  for(unsigned i=0;i<3;i++){struct stat seen;
   struct statvfs mount;
-  int fd=openat(root,paths[i],O_RDONLY|O_CLOEXEC|(i==2?O_DIRECTORY:0));
+  int fd;
+  if(a->root_recipe){struct open_how how={.flags=O_RDONLY|O_CLOEXEC|(i==2?O_DIRECTORY:0),.resolve=RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS|RESOLVE_NO_MAGICLINKS};fd=(int)syscall(SYS_openat2,root,paths[i],&how,sizeof how);}
+  else fd=openat(root,paths[i],O_RDONLY|O_CLOEXEC|(i==2?O_DIRECTORY:0));
   if(fd<0){close(root);
    return 0;
    }
@@ -296,6 +303,29 @@ static int visible(lc_adapter *a,int proc,uint32_t slot) {
  }
  close(root);
  return 1;
+}
+static int verify_root_parent(const lc_capability *c,uint32_t uid,uint32_t gid) {
+ struct stat s;struct statfs fs;struct statx x;int flags=fcntl(c->descriptor,F_GETFL);
+ return flags>=0&&(flags&O_ACCMODE)==O_RDONLY&&fstat(c->descriptor,&s)==0&&fstatfs(c->descriptor,&fs)==0&&
+  S_ISDIR(s.st_mode)&&s.st_uid==uid&&s.st_gid==gid&&!(s.st_mode&0022)&&
+  (uint64_t)s.st_dev==c->device&&(uint64_t)s.st_ino==c->inode&&(uint64_t)fs.f_type==c->expected_file_system&&
+  statx(c->descriptor,"",AT_EMPTY_PATH,STATX_MNT_ID,&x)==0&&(x.stx_mask&STATX_MNT_ID)&&x.stx_mnt_id==c->mount_identity;
+}
+static int root_parent_visible(lc_adapter *a,int proc) {
+ const lc_capability *caps[]={&a->root_binding.work_parent,&a->root_binding.evidence_parent};
+ const cc_view paths[]={a->root_binding.work_parent_path,a->root_binding.evidence_parent_path};
+ int root=openat(proc,"root",O_RDONLY|O_DIRECTORY|O_CLOEXEC);if(root<0)return 0;
+ int ok=1;
+ for(unsigned i=0;i<2;i++) {
+  struct stat st;struct statx x;struct statfs fs;
+  struct open_how how={.flags=O_RDONLY|O_DIRECTORY|O_CLOEXEC,.resolve=RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS|RESOLVE_NO_MAGICLINKS};
+  int fd=(int)syscall(SYS_openat2,root,(const char *)paths[i].data+1,&how,sizeof how);
+  if(fd<0||fstat(fd,&st)||fstatfs(fd,&fs)||statx(fd,"",AT_EMPTY_PATH,STATX_MNT_ID,&x)||
+   st.st_uid!=a->root_uid||st.st_gid!=a->root_gid||(st.st_mode&0022)||(uint64_t)st.st_dev!=caps[i]->device||(uint64_t)st.st_ino!=caps[i]->inode||
+   (uint64_t)fs.f_type!=caps[i]->expected_file_system||(x.stx_mask&STATX_MNT_ID)==0||x.stx_mnt_id!=caps[i]->mount_identity)ok=0;
+  if(fd>=0)close(fd);
+ }
+ close(root);return ok;
 }
 static int namespace_join(lc_adapter *a,int visible_slots) {
  char path[64],info[1024],uid[512],gid[512];
@@ -324,7 +354,16 @@ static int namespace_join(lc_adapter *a,int visible_slots) {
  if(ns<0||fstat(ns,&observed)||fstat(a->caps[a->mount_ns].descriptor,&given)||given.st_ino!=observed.st_ino||given.st_dev!=observed.st_dev)goto done;
  if(!read_at(proc,"uid_map",uid,sizeof uid)||!read_at(proc,"gid_map",gid,sizeof gid)||!maps(uid)||!maps(gid))goto done;
  if(!membership(pid,a->caps[a->control_leaf].descriptor))goto done;
- if(visible_slots)for(uint32_t i=0;i<a->operation.command_count;i++)if(!visible(a,proc,i))goto done;
+ if(a->root_recipe){uint32_t u,g;
+  if(!lr_mapped_uid0(uid,&u)||!lr_mapped_uid0(gid,&g)||
+   (a->root_uid&&(a->root_uid!=u||a->root_gid!=g)))goto done;
+  a->root_uid=u;a->root_gid=g;
+  if(!root_parent_visible(a,proc))goto done;
+ }
+ if(visible_slots)for(uint32_t i=0;i<a->operation.command_count;i++) {
+  if(a->root_recipe&&(!a->root_bound[i]||(i!=a->next_slot-1&&(!a->owned[i].born||a->owned[i].settled))))continue;
+  if(!visible(a,proc,i))goto done;
+ }
  ok=pidfd_alive(a->caps[a->keeper].descriptor);
  done:if(ns>=0)close(ns);
  close(proc);
@@ -460,25 +499,98 @@ static void dispose_storage(lc_adapter *a) {
   free(o->out_bytes);
   free(o->err_bytes);
  }
+ for(unsigned i=0;i<2;i++) {
+  if(a->root_parent[i]>=0)close(a->root_parent[i]);
+  if(a->root_directory[i]>=0)close(a->root_directory[i]);
+  if(a->bundle_directory[i]>=0)close(a->bundle_directory[i]);
+ }
+ lr_free_recipe(a->root_recipe);
  free(a->reply);
  free(a->strings);
  free(a);
 }
-lc_adapter *lc_open(const lc_operation *o,cc_workspace workspace,cc_lease *leases,size_t lease_capacity,const char **failure) {
+static int root_join(cc_view parent,cc_view name,cc_view full) {
+ if(parent.size>=LC_STRING_MAX||name.size>=LC_STRING_MAX||full.size>=LC_STRING_MAX||!string(parent)||parent.size<2||parent.data[0]!='/'||parent.data[parent.size-1]=='/'||
+  !string(name)||!name.size||memchr(name.data,'/',name.size)||literal(name,".")||literal(name,".."))return 0;
+ if(parent.size>LC_STRING_MAX-name.size-1||full.size!=parent.size+name.size+1)return 0;
+ return !memcmp(full.data,parent.data,parent.size)&&full.data[parent.size]=='/'&&!memcmp(full.data+parent.size+1,name.data,name.size);
+}
+static int root_binding_shape(const lc_operation *o,const lr_binding *b,const char **failure) {
+ if(b->version!=LR_VERSION||b->size!=sizeof *b||b->engine_profile!=LR_MAPPED_UID0_ENGINE||o->identity_class!=LC_PRODUCTION||
+  !lr_validate(b->recipe,failure)||!same(o->expected_input_sha256,b->recipe->expected_input_sha256)||!same(o->custody_identity,b->recipe->custody_identity)||
+  o->maximum_commands!=b->recipe->maximum_commands||
+  !root_join(b->work_parent_path,b->work_name,b->recipe->work_root)||!root_join(b->evidence_parent_path,b->evidence_name,b->recipe->evidence_root))return refuse(failure,"root-binding-correspondence");
+ const lc_capability *parents[]={&b->work_parent,&b->evidence_parent};
+ for(unsigned i=0;i<2;i++) {
+  const lc_capability *c=parents[i];
+  if(c->version!=LC_VERSION||c->size!=sizeof *c||c->role!=LC_DIRECTORY||c->slot!=LC_NONE||c->descriptor<3||c->descriptor>=(int)LC_FD_MAX||c->access!=O_RDONLY||!c->inode||!c->mount_identity)return refuse(failure,"root-parent-layout");
+ }
+ if(same(b->recipe->work_root,b->recipe->evidence_root)||
+  (b->recipe->work_root.size<b->recipe->evidence_root.size&&
+   !memcmp(b->recipe->work_root.data,b->recipe->evidence_root.data,b->recipe->work_root.size)&&b->recipe->evidence_root.data[b->recipe->work_root.size]=='/')||
+  (b->recipe->evidence_root.size<b->recipe->work_root.size&&
+   !memcmp(b->recipe->evidence_root.data,b->recipe->work_root.data,b->recipe->evidence_root.size)&&b->recipe->work_root.data[b->recipe->evidence_root.size]=='/'))return refuse(failure,"root-roots-overlap");
+ for(size_t i=0;i<o->command_count;i++) {
+  const lc_command_slot *slot=&o->command_slots[i];const lc_capability *c=&o->handles[slot->directory_handle];
+  if(slot->argument_count||slot->environment_count||!same(slot->working_directory,b->work_parent_path)||c->device!=b->work_parent.device||c->inode!=b->work_parent.inode||c->mount_identity!=b->work_parent.mount_identity)return refuse(failure,"root-slot-pool-anchor");
+ }
+ return 1;
+}
+static int root_open_beneath(int parent,const char *path,int flags) {
+ struct open_how how={.flags=(uint64_t)(flags|O_CLOEXEC),.resolve=RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS|RESOLVE_NO_MAGICLINKS|RESOLVE_NO_XDEV};
+ return (int)syscall(SYS_openat2,parent,path,&how,sizeof how);
+}
+static int root_same_directory(int fd,int original,uint32_t uid,uint32_t gid) {
+ struct stat a,b;struct statx x,y;
+ return fstat(fd,&a)==0&&S_ISDIR(a.st_mode)&&a.st_uid==uid&&a.st_gid==gid&&(a.st_mode&0777)==0700&&
+  (original<0||(fstat(original,&b)==0&&a.st_dev==b.st_dev&&a.st_ino==b.st_ino&&
+   statx(fd,"",AT_EMPTY_PATH,STATX_MNT_ID,&x)==0&&statx(original,"",AT_EMPTY_PATH,STATX_MNT_ID,&y)==0&&
+   (x.stx_mask&STATX_MNT_ID)&&(y.stx_mask&STATX_MNT_ID)&&x.stx_mnt_id==y.stx_mnt_id));
+}
+static int root_refresh(lc_adapter *a,int discover) {
+ const cc_view names[]={a->root_binding.work_name,a->root_binding.evidence_name};
+ for(unsigned i=0;i<2;i++) {
+  int fd=root_open_beneath(a->root_parent[i],(const char *)names[i].data,O_RDONLY|O_DIRECTORY);
+  if(fd<0||!root_same_directory(fd,a->root_directory[i],a->root_uid,a->root_gid)){if(fd>=0)close(fd);return fail(a,"root-selected-root-directory-changed");}
+  if(a->root_directory[i]<0)a->root_directory[i]=fd;else close(fd);
+ }
+ if(discover)for(unsigned i=0;i<2;i++) {
+  int fd=root_open_beneath(a->root_directory[0],i?"bundle-b":"bundle-a",O_RDONLY|O_DIRECTORY);
+  if(fd<0){if(errno==ENOENT)continue;return fail(a,"root-bundle-path-unknown");}
+  if(!root_same_directory(fd,a->bundle_directory[i],a->root_uid,a->root_gid)){close(fd);return fail(a,"root-bundle-directory-changed");}
+  int owner=root_open_beneath(fd,"owner",O_RDONLY|O_NOFOLLOW);struct stat st;unsigned char nonce[33];
+  int ok=owner>=0&&fstat(owner,&st)==0&&S_ISREG(st.st_mode)&&st.st_nlink==1&&st.st_uid==a->root_uid&&st.st_gid==a->root_gid&&!(st.st_mode&0022)&&st.st_size==32&&read(owner,nonce,sizeof nonce)==32&&
+   !memcmp(nonce,a->root_state.recipe->bundle_nonce[i].data,32);
+  if(owner>=0)close(owner);
+  if(!ok||!lr_note_bundle(&a->root_state,i)){close(fd);return fail(a,"root-bundle-owner-or-lifecycle-changed");}
+  if(a->bundle_directory[i]<0)a->bundle_directory[i]=fd;else close(fd);
+ }
+ return 1;
+}
+static lc_adapter *open_adapter(const lc_operation *o,const lr_binding *binding,cc_workspace workspace,cc_lease *leases,size_t lease_capacity,const char **failure) {
  lc_adapter *a;
  size_t i,j;
  int operation=-1,control=-1,requester=-1;
  uint64_t utc;
- if(!lc_validate(o,failure))return NULL;
+ if(!lc_validate(o,failure)||(binding&&!root_binding_shape(o,binding,failure)))return NULL;
  if(!workspace.frame||!workspace.text||!workspace.nodes||!workspace.node_capacity||!leases||
   workspace.frame_capacity!=CC_FRAME_MAX||workspace.text_capacity!=CC_FRAME_MAX||workspace.node_capacity>16384||
   lease_capacity!=o->maximum_commands){refuse(failure,"bounded-caller-workspace");
   return NULL;
   }
+ if(binding) {
+  uint64_t storage=(uint64_t)sizeof(lc_adapter)+lr_recipe_storage_bound()+LC_STRING_MAX+CC_FRAME_MAX+4u+
+   (uint64_t)o->maximum_commands*2u*CC_OUTPUT_MAX+(uint64_t)LC_VECTOR_MAX*3u*sizeof(char *)+
+   (uint64_t)o->maximum_commands*6u*sizeof(char *)+workspace.frame_capacity+workspace.text_capacity+
+   (uint64_t)workspace.node_capacity*sizeof(cc_node)+(uint64_t)lease_capacity*sizeof(cc_lease);
+  if(!binding->reserved_other_bytes||storage>o->memory_max_bytes||binding->reserved_other_bytes>o->memory_max_bytes-storage){refuse(failure,"root-full-retained-memory-reservation");return NULL;}
+ }
  a=calloc(1,sizeof *a);
  if(!a){refuse(failure,"adapter-storage");
   return NULL;
   }
+ for(unsigned r=0;r<2;r++)a->root_parent[r]=a->root_directory[r]=a->bundle_directory[r]=-1;
+ for(unsigned r=0;r<LR_STORE_COUNT;r++)a->root_census_slot[r]=LC_NONE;
  a->operation=*o;
  a->active=LC_NONE;
  a->channel=a->user_ns=a->mount_ns=a->keeper=a->requester_pidfd=-1;
@@ -497,10 +609,31 @@ lc_adapter *lc_open(const lc_operation *o,cc_workspace workspace,cc_lease *lease
  a->operation.adapter_binary_sha256=copy(a,o->adapter_binary_sha256);
  a->operation.toolchain_closure_sha256=copy(a,o->toolchain_closure_sha256);
  a->operation.native_profile_sha256=copy(a,o->native_profile_sha256);
+ if(binding) {
+  a->root_binding=*binding;
+  a->root_recipe=lr_copy_recipe(binding->recipe);
+  if(!a->root_recipe||!lr_init(&a->root_state,lr_copied_recipe(a->root_recipe),failure))goto storage;
+  a->root_binding.recipe=a->root_state.recipe;
+  a->root_binding.work_parent_path=copy(a,binding->work_parent_path);
+  a->root_binding.evidence_parent_path=copy(a,binding->evidence_parent_path);
+  a->root_binding.work_name=copy(a,binding->work_name);
+  a->root_binding.evidence_name=copy(a,binding->evidence_name);
+  if(!a->root_binding.work_parent_path.data||!a->root_binding.evidence_parent_path.data||!a->root_binding.work_name.data||!a->root_binding.evidence_name.data)goto storage;
+  const lc_capability *parents[]={&binding->work_parent,&binding->evidence_parent};
+  for(unsigned r=0;r<2;r++) {
+   a->root_parent[r]=fcntl(parents[r]->descriptor,F_DUPFD_CLOEXEC,3);
+   lc_capability c=*parents[r];c.descriptor=a->root_parent[r];
+   if(c.descriptor<0)goto capability;
+   const cc_view name=r?a->root_binding.evidence_name:a->root_binding.work_name;
+   int present=root_open_beneath(c.descriptor,(const char *)name.data,O_PATH|O_NOFOLLOW);
+   if(present>=0){close(present);goto capability;}
+   if(errno!=ENOENT)goto capability;
+  }
+ }
  for(i=0;i<o->handle_count;i++) {
   a->caps[i]=o->handles[i];
   a->caps[i].descriptor=fcntl(o->handles[i].descriptor,F_DUPFD_CLOEXEC,3);
-  if(a->caps[i].descriptor<0||!verify_cap(&a->caps[i]))goto capability;
+  if(a->caps[i].descriptor<0||(!(binding&&a->caps[i].role==LC_DIRECTORY)&&!verify_cap(&a->caps[i])))goto capability;
   switch(a->caps[i].role){case LC_OPERATION_CGROUP:operation=(int)i;
    break;
    case LC_CONTROL_LEAF:control=(int)i;
@@ -528,6 +661,11 @@ lc_adapter *lc_open(const lc_operation *o,cc_workspace workspace,cc_lease *lease
  a->operation_group=operation;
  a->control_leaf=control;
  if(!namespace_join(a,0)||!membership((long)getpid(),a->caps[control].descriptor))goto capability;
+ if(binding) {
+  const lc_capability *parents[]={&binding->work_parent,&binding->evidence_parent};
+  for(unsigned r=0;r<2;r++){lc_capability c=*parents[r];c.descriptor=a->root_parent[r];if(!verify_root_parent(&c,a->root_uid,a->root_gid))goto capability;}
+  for(i=0;i<o->handle_count;i++)if(a->caps[i].role==LC_DIRECTORY&&!verify_root_parent(&a->caps[i],a->root_uid,a->root_gid))goto capability;
+ }
  {struct ucred peer;
   socklen_t size=sizeof peer;
   int peerfd;
@@ -583,16 +721,17 @@ lc_adapter *lc_open(const lc_operation *o,cc_workspace workspace,cc_lease *lease
    ancestor(group,a->caps[requester].descriptor)||ancestor(a->caps[requester].descriptor,group))goto capability;
   for(size_t prior=0;prior<i;prior++)if(ancestor(group,a->caps[a->slots[prior].cgroup_handle].descriptor)||ancestor(a->caps[a->slots[prior].cgroup_handle].descriptor,group))goto capability;
   if(!ancestor(a->caps[s->cgroup_handle].descriptor,a->caps[operation].descriptor)||!populated(a->caps[s->cgroup_handle].descriptor,&population)||population)goto capability;
-  a->owned[i].out_bytes=malloc(CC_OUTPUT_MAX);
-  a->owned[i].err_bytes=malloc(CC_OUTPUT_MAX);
-  if(!a->owned[i].out_bytes||!a->owned[i].err_bytes)goto storage;
+  if(!binding) {
+   a->owned[i].out_bytes=malloc(CC_OUTPUT_MAX);a->owned[i].err_bytes=malloc(CC_OUTPUT_MAX);
+   if(!a->owned[i].out_bytes||!a->owned[i].err_bytes)goto storage;
+  }
   a->owned[i].events=openat(a->caps[s->cgroup_handle].descriptor,"cgroup.events",O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
   a->owned[i].kill=openat(a->caps[s->cgroup_handle].descriptor,"cgroup.kill",O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
   if(a->owned[i].events<0||a->owned[i].kill<0)goto capability;
  }
  a->operation.command_slots=a->slots;
  a->operation.handles=a->caps;
- if(!namespace_join(a,1))goto capability;
+ if(!namespace_join(a,binding?0:1))goto capability;
  if(!alive(a,0,&utc)||!cc_init(&a->core,workspace,leases,lease_capacity,a->operation.custody_identity,a->operation.admission_sha256,a->operation.expected_input_sha256,utc,o->deadline_utc_ms,o->aggregate_output_bytes))goto capability;
  if(prctl(PR_GET_CHILD_SUBREAPER,&a->old_subreaper)||prctl(PR_SET_CHILD_SUBREAPER,1))goto capability;
  a->subreaper_changed=1;
@@ -603,6 +742,13 @@ lc_adapter *lc_open(const lc_operation *o,cc_workspace workspace,cc_lease *lease
  capability:refuse(failure,"actual-capability-protection-or-deadline");
  failed:dispose_storage(a);
  return NULL;
+}
+lc_adapter *lc_open(const lc_operation *o,cc_workspace w,cc_lease *l,size_t n,const char **f) {
+ return open_adapter(o,NULL,w,l,n,f);
+}
+lc_adapter *lc_open_root(const lc_operation *o,const lr_binding *b,cc_workspace w,cc_lease *l,size_t n,const char **f) {
+ if(!b){refuse(f,"missing-root-binding");return NULL;}
+ return open_adapter(o,b,w,l,n,f);
 }
 static int command_match(lc_adapter *a,const lc_command_slot *s) {
  const cc_core *c=&a->core;
@@ -632,6 +778,83 @@ static int command_match(lc_adapter *a,const lc_command_slot *s) {
   }
  return n==s->environment_count;
 }
+static int root_slot_command(lc_adapter *a,uint32_t slot,const lr_selection *selection,int retain) {
+ const lr_command *c=selection->command;lc_command_slot candidate=a->slots[slot];
+ cc_view arguments[LC_VECTOR_MAX];
+ if(c->argument_count>LC_VECTOR_MAX-(selection->removal_id.size?1u:0u))return 0;
+ memcpy(arguments,c->arguments,c->argument_count*sizeof *arguments);
+ candidate.executable=c->executable;candidate.working_directory=c->working_directory;
+ candidate.argument_count=c->argument_count;candidate.arguments=arguments;candidate.environment=c->environment;candidate.environment_count=c->environment_count;candidate.output_limit=c->output_limit;
+ if(selection->removal_id.size)arguments[candidate.argument_count++]=selection->removal_id;
+ if(!command_match(a,&candidate))return 0;
+ if(!retain)return 1;
+ a->owned[slot].out_bytes=malloc(CC_OUTPUT_MAX);a->owned[slot].err_bytes=malloc(CC_OUTPUT_MAX);
+ if(!a->owned[slot].out_bytes||!a->owned[slot].err_bytes)return fail(a,"root-selected-output-storage");
+ if(candidate.argument_count>LC_VECTOR_MAX-a->vector_used||candidate.environment_count>LC_VECTOR_MAX-a->environment_used)return fail(a,"root-selected-vector-bound");
+ lc_command_slot *s=&a->slots[slot];
+ free(a->argv[slot]);free(a->envp[slot]);
+ a->argv[slot]=calloc(candidate.argument_count+5,sizeof(char *));a->envp[slot]=calloc(candidate.environment_count+1,sizeof(char *));
+ if(!a->argv[slot]||!a->envp[slot])return fail(a,"root-selected-exec-storage");
+ s->executable=copy(a,candidate.executable);s->working_directory=copy(a,candidate.working_directory);
+ s->arguments=a->vectors+a->vector_used;s->argument_count=candidate.argument_count;s->environment=a->environment+a->environment_used;s->environment_count=candidate.environment_count;
+ if(!s->executable.data||!s->working_directory.data)return fail(a,"root-selected-string-bound");
+ a->argv[slot][0]=(char *)"/usr/bin/setsid";a->argv[slot][1]=(char *)"--wait";a->argv[slot][2]=(char *)"--";a->argv[slot][3]=(char *)"/usr/sbin/podman";
+ for(size_t i=0;i<s->argument_count;i++){cc_view v=copy(a,arguments[i]);if(!v.data)return fail(a,"root-selected-argument-bound");a->vectors[a->vector_used++]=v;a->argv[slot][i+4]=(char *)v.data;}
+ for(size_t i=0;i<s->environment_count;i++) {
+  lc_environment *e=&a->environment[a->environment_used++];size_t n=candidate.environment[i].name.size,v=candidate.environment[i].value.size;
+  e->name=copy(a,candidate.environment[i].name);e->value=copy(a,candidate.environment[i].value);
+  if(!e->name.data||!e->value.data||n>LC_STRING_MAX-v-2||a->string_used>LC_STRING_MAX-n-v-2)return fail(a,"root-selected-environment-bound");
+  char *text=a->strings+a->string_used;memcpy(text,e->name.data,n);text[n]='=';memcpy(text+n+1,e->value.data,v);text[n+v+1]=0;
+  a->envp[slot][i]=text;a->string_used+=n+v+2;
+ }
+ unsigned bundle=selection->bundle;
+ if(bundle>1||a->bundle_directory[bundle]<0)return fail(a,"root-selected-bundle-not-acquired");
+ lc_capability *cap=&a->caps[s->directory_handle];
+ int fd=fcntl(a->bundle_directory[bundle],F_DUPFD_CLOEXEC,3);struct stat st;struct statfs fs;struct statx x;
+ if(fd<0||fstat(fd,&st)||fstatfs(fd,&fs)||statx(fd,"",AT_EMPTY_PATH,STATX_MNT_ID,&x)||(x.stx_mask&STATX_MNT_ID)==0){if(fd>=0)close(fd);return fail(a,"root-selected-directory-metadata");}
+ close(cap->descriptor);cap->descriptor=fd;cap->device=st.st_dev;cap->inode=st.st_ino;cap->mount_identity=x.stx_mnt_id;cap->expected_file_system=fs.f_type;
+ a->root_bound[slot]=1;return 1;
+}
+static int root_prepare_start(lc_adapter *a,uint32_t slot) {
+ if(!namespace_join(a,0)||!root_refresh(a,1))return 0;
+ lr_state next=a->root_state;lr_selection selected;
+ int normal=lr_select(&next,0,&selected)&&root_slot_command(a,slot,&selected,0);
+ if(!normal) {
+  next=a->root_state;
+  if(!lr_select(&next,1,&selected)||!root_slot_command(a,slot,&selected,0))return fail(a,"root-finite-command-mismatch");
+ }
+ if(selected.removal_id.size) {
+  uint32_t origin=a->root_census_slot[next.pending_store];
+  if(origin>=slot||!a->root_reported[origin]||!a->owned[origin].settled||a->owned[origin].exit_code||a->owned[origin].signal||!a->owned[origin].out_eof||!a->owned[origin].err_eof)return fail(a,"root-original-retired-census-lease");
+ }
+ if(!root_slot_command(a,slot,&selected,1))return 0;
+ a->root_state=next;return 1;
+}
+static int root_bundles_absent(lc_adapter *a) {
+ const cc_view names[]={a->root_binding.work_name,a->root_binding.evidence_name};
+ for(unsigned i=0;i<2;i++) {
+  int fd=root_open_beneath(a->root_parent[i],(const char *)names[i].data,O_RDONLY|O_DIRECTORY);
+  if(fd<0){if(errno==ENOENT&&a->root_directory[i]<0)continue;return 0;}
+  if(!root_same_directory(fd,a->root_directory[i],a->root_uid,a->root_gid)){close(fd);return 0;}
+  if(i==0)for(unsigned bundle=0;bundle<2;bundle++) {
+   int present=root_open_beneath(fd,bundle?"bundle-b":"bundle-a",O_PATH|O_NOFOLLOW);
+   if(present>=0){close(present);close(fd);return 0;}
+   if(errno!=ENOENT){close(fd);return 0;}
+  }
+  close(fd);
+ }
+ return 1;
+}
+static int root_eof_terminal(lc_adapter *a) {
+ if(!root_bundles_absent(a))return 0;
+ if(!a->next_slot&&!a->root_state.pending&&!a->root_state.poisoned) {
+  /* No workload was attempted. Absence settles only the abort custody state,
+   * never C4/qualification success or a supplying-controller admission. */
+  a->root_state.cleanup_started=a->root_state.aborting=a->root_state.terminal=1;
+  a->root_state.store=LR_STORE_COUNT;
+ }
+ return lr_terminal(&a->root_state);
+}
 /* No libc allocator, CLR callback or caller code in the clone child. All argv,
  * environment and descriptors are copied/prepared before atomic birth. */
 static void child(lc_adapter *a,uint32_t slot,int out,int err,int handshake) {
@@ -641,8 +864,8 @@ static void child(lc_adapter *a,uint32_t slot,int out,int err,int handshake) {
  if(syscall(SYS_setgroups,0,NULL)<0||
   syscall(SYS_setns,a->caps[a->user_ns].descriptor,CLONE_NEWUSER)<0||
   syscall(SYS_setns,a->caps[a->mount_ns].descriptor,CLONE_NEWNS)<0||
-  syscall(SYS_setresgid,LC_NS_UID,LC_NS_UID,LC_NS_UID)<0||
-  syscall(SYS_setresuid,LC_NS_UID,LC_NS_UID,LC_NS_UID)<0||syscall(SYS_fchdir,a->caps[s->directory_handle].descriptor)<0||
+  syscall(SYS_setresgid,a->root_recipe?0:LC_NS_UID,a->root_recipe?0:LC_NS_UID,a->root_recipe?0:LC_NS_UID)<0||
+  syscall(SYS_setresuid,a->root_recipe?0:LC_NS_UID,a->root_recipe?0:LC_NS_UID,a->root_recipe?0:LC_NS_UID)<0||syscall(SYS_fchdir,a->caps[s->directory_handle].descriptor)<0||
   syscall(SYS_dup2,out,STDOUT_FILENO)<0||syscall(SYS_dup2,err,STDERR_FILENO)<0||
   syscall(SYS_prctl,PR_SET_NO_NEW_PRIVS,1,0,0,0)<0)goto setup_failed;
  /* Close every inherited descriptor except the pinned supervisor, error pipe,
@@ -876,6 +1099,12 @@ static int pump(lc_adapter *a,uint32_t slot) {
   }
  }
  o->settled=o->exit_known&&o->empty&&o->out_eof&&o->err_eof&&o->exec_error<0&&o->orphan_count==o->orphan_reaped;
+ if(a->root_recipe&&o->settled&&!a->root_reported[slot]) {
+  unsigned census=a->root_state.pending_kind==1;uint32_t store=a->root_state.pending_store;
+  if(!lr_retired(&a->root_state,o->signal?128+o->signal:o->exit_code,(cc_view){o->out_bytes,o->out_size},o->out_eof,o->err_eof))return fail(a,a->root_state.failure?a->root_state.failure:"root-retired-result-refused");
+  if(census)a->root_census_slot[store]=slot;
+  a->root_reported[slot]=1;
+ }
  return 1;
 }
 static int cancel(lc_adapter *a,uint32_t slot) {
@@ -906,6 +1135,7 @@ static int perform(lc_adapter *a,size_t *reply_size) {
   if(a->next_slot>=a->operation.maximum_commands||(a->active!=LC_NONE&&!a->owned[a->active].settled))return fail(a,"no-unused-serial-command-slot");
   slot=a->next_slot++;
   /* Consume before matching/refusal/attempted birth. */
+  if(a->root_recipe&&!root_prepare_start(a,slot))return 0;
   if(!command_match(a,&a->slots[slot]))return fail(a,"exact-root-command-mismatch");
   if(!launch(a,slot))return 0;
   result.lease=a->slots[slot].command_identity;
@@ -1003,7 +1233,8 @@ int lc_serve(lc_adapter *a) {
    if(remaining>sizeof bytes)remaining=sizeof bytes;
    ssize_t n=recv(a->caps[a->channel].descriptor,bytes,remaining,0);
    if(n<=0){if(n<0&&(errno==EAGAIN||errno==EINTR))continue;
-    int complete=n==0&&a->next_slot==a->operation.maximum_commands&&!a->core.pending&&!a->core.header_used&&!a->core.frame_used;
+    int command_terminal=a->root_recipe?root_eof_terminal(a):a->next_slot==a->operation.maximum_commands;
+    int complete=n==0&&command_terminal&&!a->core.pending&&!a->core.header_used&&!a->core.frame_used;
     for(uint32_t i=0;i<a->next_slot;i++)if(!a->owned[i].born||!a->owned[i].settled)complete=0;
     if(complete){a->terminal=1;
      break;
@@ -1030,6 +1261,10 @@ int lc_serve(lc_adapter *a) {
  int settled=cleanup(a);
  return settled&&!a->failure;
  /* Only kernel-derived completed commands and clean frame EOF. */
+}
+int lc_root_custody_outcome(lc_adapter *a,int *aborted) {
+ if(!a||!aborted||!a->root_recipe||!a->served||!a->terminal||a->failure||!lr_terminal(&a->root_state)||!root_bundles_absent(a))return 0;
+ *aborted=a->root_state.aborting!=0;return 1;
 }
 const char *lc_failure(const lc_adapter *a){return a?a->failure:"missing-adapter";
  }
@@ -1058,6 +1293,10 @@ int lc_observe_original(const lc_adapter *a,uint32_t slot,lc_observation *r) {
 int lc_release(lc_adapter *a) {
  if(!a)return 1;
  for(uint32_t i=0;i<a->next_slot;i++)if(a->owned[i].born&&!a->owned[i].settled)return 0;
+ if(a->root_recipe) {
+  int born=0;for(uint32_t i=0;i<a->next_slot;i++)if(a->owned[i].born)born=1;
+  if(!root_bundles_absent(a)||(born&&!lr_terminal(&a->root_state)))return fail(a,"root-owned-directory-or-program-retirement-unknown");
+ }
  if(a->subreaper_changed&&prctl(PR_SET_CHILD_SUBREAPER,a->old_subreaper))return fail(a,"subreaper-restore-unknown");
  dispose_storage(a);
  return 1;
