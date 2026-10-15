@@ -22,6 +22,23 @@ The new outcome owns host/profile provisioning, ephemeral allocation/teardown an
 
 This plan does not resume existing native operations, activate LEARN or admit a publication. It does not remove unwithdrawn cross-platform promises. Ordinary source work, routine process adoption and independent roadmap outcomes continue under their existing qualified routes.
 
+## Unattended normal use acceptance gate — 2026-10-15
+
+After one-time authorized setup and installation, the installed provisioner and launcher must
+handle allocation, binding, launch, scoped teardown and worker-loss recovery automatically,
+with no human host-agent dependency during normal V3 use. A developer supplies declared inputs
+and invokes the installed entrypoint; per-run host commands, approvals, evidence relays or manual
+state repair cannot be prerequisites. See the [owning design gate](../designs/2026-10-13-provisioned-podman-execution.md#unattended-normal-use-acceptance-gate)
+and the [user requirement](https://github.com/FS-GG/.github/issues/4516#issuecomment-6193108499).
+
+Close this gate only with installed observations covering normal completion and worker loss while
+the human host-agent channel is absent, plus selected provisioner-restart and supported host-reboot
+reconciliation. Preserve original identities, deadlines, export obligations and cleanup holds;
+automatic bounded `Incomplete` or `Unknown` is required when safe completion is unproven and
+cannot be reported as successful cleanup. Exceptional operator repair does not pass an unattended
+case. Manual pilots, source-only delivery, fixtures and source/evidence handoffs cannot close this
+gate or V3-ENV-01. Installed unattended lifecycle acceptance remains pending.
+
 ## Current qualification frontier, 2026-10-13
 
 Root accepted the ordinary supplied-profile Podman assertion on 2026-10-13. Clean Coordination source `b11fb121f046898e655b779dfc6809f35fc7aac6` passed native rootless Linux/amd64 preflight with mappings covering container UID 32768. The pinned inputs produced an image whose seven offline Python, TypeScript and composed cases returned exit 0 and matched all six expected output digests. Its OCI export and maintained layer, config, platform and user validation passed within the original operation deadline. See [qualification and limits](../reports/2026-10-13-basic-portable-podman-qualification.md).
@@ -111,8 +128,9 @@ allocations and Unknown retirement remain unchanged. Whole-item Done remains No.
   inner writable store empty. Pin supported namespace/mapping/mount/security inputs without adopting
   the troubleshooting guide's privileged example as a default. Reuse existing owner/recovery
   contracts for allocation and teardown; propose a small additive interface only for a demonstrated gap.
-  The installed launcher provisions/binds the host allocation; a Containerfile or workspace declaration
-  cannot create its parent mount or grant host permissions. Ordinary builds run in the development
+  After one-time setup, the installed provisioner and launcher automatically allocate, bind and
+  tear down storage without per-run human host-agent action. A Containerfile or workspace
+  declaration cannot create its parent mount or grant host permissions. Ordinary builds run in the development
   container; select nested Podman where a real container-build journey needs it. Bootstrap reports
   missing prerequisites; it does not install privileges, expose a host socket or disable host policy.
   Acceptance: actual effective paths cannot resolve into global user stores, source checkouts or
@@ -164,6 +182,8 @@ allocations and Unknown retirement remain unchanged. Whole-item Done remains No.
   proof with their own actual entrypoint cases. Inactive LEARN preparation retains its own trust and
   two-cold-image obligations; it does not wait for or authorize activation.
   Acceptance: genuinely delivered bytes and installed profile readback join the common evidence.
+  With the human host-agent channel absent, the installed entrypoint must demonstrate automatic
+  fresh allocation/binding, launch and scoped teardown; a manual pilot or evidence relay is insufficient.
   Both the framework-development pilot and an ordinary product workspace demonstrate their actual
   declared build/test entrypoint; product production release remains separate. Mixed/no-.NET and
   language-specific assertions retain their existing LANG population rather than becoming new duplicates.
@@ -179,7 +199,10 @@ allocations and Unknown retirement remain unchanged. Whole-item Done remains No.
   undeclared volumes/configuration and credentials cannot influence a default fresh run. Qualify
   worker/caller loss, provisioner restart and supported host-reboot reconciliation in disposable
   owner-admitted cases. Verify explicit source/artifact/evidence exports before scoped teardown.
-  Acceptance: the actual second-machine fresh development/build journey succeeds, no writable
+  Acceptance: installed worker-loss recovery and selected provisioner-restart/host-reboot cases
+  require no human host-agent action. Retain bounded Incomplete/Unknown and original holds where
+  safe completion is unproven; manual repair cannot pass these cases. The actual second-machine
+  fresh development/build journey succeeds, no writable
   engine/home/cache state is transferred, and incomplete original cleanup is neither hidden nor
   reused. Host hardware differences remain outside paired performance conclusions.
 
