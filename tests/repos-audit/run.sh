@@ -3341,7 +3341,7 @@ REN_COVER=unrequired mkreg "$REG"
 out="$(run 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] \
     && printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering absence-cover: unrequired — no REQUIRED context runs it' \
-    && printf '%s' "$out" | grep -q 'materialize / Materialize the kit from its pin'; } \
+    && printf '%s' "$out" | grep -q 'unexcused assertion/materialize path on: materialize /'; } \
   && ok "absence-cover: a gate on only an unrequired lane is GREEN when it says so" \
   || bad "a legitimate unrequired gate must not be flattened into a finding" "rc=$rc: $out"
 
