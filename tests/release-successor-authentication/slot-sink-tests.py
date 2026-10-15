@@ -256,6 +256,67 @@ class SlotSinkTests(unittest.TestCase):
                 subject('inert-slot', dict(sink.REPORT), binding, frames[0])
                 self.assertEqual(subject.ordinal, 1)
 
+    def test_identity_scalar_and_key_types_refuse_without_untrusted_equality(self):
+        comparisons = []
+        class Foreign(str):
+            __hash__ = str.__hash__
+            def __eq__(self, other):
+                comparisons.append('eq')
+                return True
+            def __ne__(self, other):
+                comparisons.append('ne')
+                return False
+        class Identity(dict):
+            pass
+        class Generation(int):
+            pass
+        binding, frames = inputs()
+        valid = {'path': 'inert-slot', 'binding': provider.validate_auth_binding(binding),
+                 'invocation': binding['invocation'], 'storeGeneration': 1}
+        invalid = [dict(valid, binding=Foreign('foreign')),
+                   dict(valid, invocation=Foreign('foreign')),
+                   dict(valid, path=Foreign('inert-slot')),
+                   {Foreign(key): value for key, value in valid.items()},
+                   Identity(valid), dict(valid, storeGeneration=True),
+                   dict(valid, storeGeneration=Generation(1)),
+                   dict(valid, binding='foreign'), dict(valid, invocation='foreign')]
+        for index, identity in enumerate(invalid):
+            with self.subTest(index=index):
+                comparisons.clear()
+                backend = sink.ControlledSlotBackend()
+                with self.assertRaises(provider.Refused):
+                    self.prepared(backend=backend, original_sink_identity=identity)
+                self.assertEqual(comparisons, [])
+                self.assertIsNone(backend.reservation)
+                self.assertEqual(backend.stores, {})
+                self.assertEqual(backend.attempts, set())
+                self.assertEqual(backend.events, [])
+                subject, bound, raw, _ = self.prepared(backend=backend)
+                subject('inert-slot', dict(sink.REPORT), bound, raw[0])
+                self.assertEqual(subject.ordinal, 1)
+
+    def test_identity_snapshot_survives_mutation_during_later_preparation_guard(self):
+        binding, frames = inputs()
+        identity = {'path': 'inert-slot', 'binding': provider.validate_auth_binding(binding),
+                    'invocation': binding['invocation'], 'storeGeneration': 1}
+        admitted = dict(identity)
+        calls = []
+        class MutatingPopulation(dict):
+            def __ne__(self, other):
+                calls.append('population comparison')
+                identity.update(path='foreign-path', binding='foreign', invocation='foreign', storeGeneration=2)
+                return False
+        subject, _, _, backend = self.prepared(original_sink_identity=identity,
+            reserved_population=MutatingPopulation(sink.population()))
+        self.assertEqual(calls, ['population comparison'])
+        self.assertNotEqual(identity, admitted)
+        self.assertEqual(json.loads(subject.identity), admitted)
+        self.assertEqual(subject.path, admitted['path'])
+        self.assertEqual(backend.reservation.identity, subject.identity)
+        self.assertEqual(backend.reservation.generation, admitted['storeGeneration'])
+        subject('inert-slot', dict(sink.REPORT), binding, frames[0])
+        self.assertEqual(subject.ordinal, 1)
+
     def test_role_capacities_are_immutable_and_changed_reservation_refuses(self):
         with self.assertRaises(TypeError): sink.ROLES['phase-1'] = 4096
         self.assertEqual(sink.ROLES['phase-1'], 2048)
