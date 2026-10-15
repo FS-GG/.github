@@ -1,0 +1,31 @@
+{
+  "schema": "fsgg.authentication-callback-contract/1",
+  "protocol": "fsgg.execution.phase-callback/1",
+  "framing": "four-byte unsigned big-endian body length plus canonical sorted compact ASCII JSON",
+  "commonKeys": ["binding", "frameDigest", "invocation", "kind", "ordinal", "sequence", "v"],
+  "additionalKeys": {
+    "bind": ["bindingBase64"],
+    "bound": [],
+    "validate": ["frameBase64"],
+    "validated": [],
+    "retain": [],
+    "retained": [],
+    "refused": ["reason"]
+  },
+  "reasons": ["binding", "order", "domain", "retention", "readback", "deadline", "cancelled", "internal"],
+  "maximumRequestResponsePairs": 13,
+  "maximumAggregateBytes": 40960,
+  "maximumBindValidateBytes": 4096,
+  "maximumRetainResponseBytes": 512,
+  "maximumBase64Bytes": 2732,
+  "maximumChildFrameBytes": 2048,
+  "maximumChildAggregateBytes": 16384,
+  "nonterminalFutureReserveBytes": 5632,
+  "terminalValidateFutureReserveBytes": 1024,
+  "terminalRetainFutureReserveBytes": 0,
+  "normalCallbackKinds": ["bind", "ready", "issuance-possible"],
+  "workCallbackKinds": ["token-owned", "revocation-possible", "revoked", "terminal"],
+  "deadline": "strict original normal/work admission at send and callback entry; original total settles existing tasks only",
+  "replay": "one serialized request, no retries, no cached success and no reset over existing durable state",
+  "availability": "source-only inert injected streams; native provisioner and command context unavailable"
+}
