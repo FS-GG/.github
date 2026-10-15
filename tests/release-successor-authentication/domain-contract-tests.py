@@ -127,6 +127,38 @@ class ContractTests(unittest.TestCase):
                 for duplicate in ('record-loss', 'expire'):
                     with self.assertRaises(ValueError): observed.step(duplicate)
 
+    def test_first_failure_is_monotonic_across_loss_expiry_and_diagnostics(self):
+        original = c.Model().step('begin').step('failure:transport')
+        self.assertEqual(original.first_failure, ('ready', 'transport'))
+        state = original.step('failure:readback')
+        self.assertEqual(state, original)
+        for event in ('diagnostic', 'loss', 'restart', 'record-loss', 'expire', 'diagnostic'):
+            state = state.step(event)
+            self.assertEqual(state.first_failure, original.first_failure)
+        with self.assertRaises(ValueError): state.step('begin')
+        # A newly detected cause cannot rewrite an already frozen core.
+        with self.assertRaises(ValueError): c.Model().step('loss').step('failure:readback')
+
+    def test_legacy_field_census_matches_current_validator(self):
+        _, binding, _, _ = inputs()
+        bounds = c.legacy_bounds(binding)
+        expected = provider.empty_auth_facts()
+        for phase, row in bounds.items():
+            if phase == 'ready':
+                self.assertEqual(set(row['p']), {'binding'})
+                self.assertEqual(set(row['p']['binding']), set(binding))
+                continue
+            facts = row['p']['facts']
+            self.assertEqual(set(facts), set(expected))
+            for key in facts:
+                if key != 'firstCause': self.assertEqual(set(facts[key]), set(expected[key]))
+            keys = ({'facts', 'request'} if phase in ('issuance-possible', 'revocation-possible') else
+                    {'facts', 'publication', 'publicationComplete', 'qualified', 'credentialReferencesDropped'}
+                    if phase == 'terminal' else {'facts'})
+            self.assertEqual(set(row['p']), keys)
+            self.assertEqual(set(facts['firstCause']), {'stage', 'code'})
+        self.assertEqual(set(bounds['terminal']['p']['publication']), set(provider.AUTH_PUBLICATION))
+
     def test_authenticated_join_cannot_repurpose_diagnostics(self):
         receipt = {'d': 'd', 'f': 'f', 'c': 'c', 'q': 'q', 'g': 1, 'n': 1, 'p': 'ready', 'k': 'gate', 'l': 0, 'u': 1}
         expected = dict(receipt)

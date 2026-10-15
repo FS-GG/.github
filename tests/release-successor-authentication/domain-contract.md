@@ -82,6 +82,13 @@ custodian signature. The hash `e` commits retained uncertainty members for loss/
 it never asserts which ambiguous write committed. First failure and original holds
 survive; expiry cannot authorize deletion when age continuity is unknown.
 
+First-failure recording is modeled as a single core transition before uncertainty;
+subsequent failure observations cannot replace its original phase/code. Once core
+state is frozen, a newly discovered cause cannot rewrite it and must use its separately
+reserved observational path. Tests preserve the original cause across loss, restart,
+expiry and diagnostic reads. Native first-failure persistence remains part of the
+unimplemented backend join.
+
 The model explores every write/barrier/readback/sign/reserve/take/send/consume cut,
 loss/restart, expiry, duplicate candidate and seventh-ordinal refusal. Its clock is an
 abstract conservative upper bound in elapsed original seconds. Authentication of the

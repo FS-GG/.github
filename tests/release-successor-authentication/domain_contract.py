@@ -151,11 +151,19 @@ class Model:
     sent: int = 0
     consumed: int = 0
     stage: str = 'idle'
+    first_failure: tuple | None = None
 
     loss_record: bool = False
     expiry_record: bool = False
 
     def step(self, event, upper=0, clock_ok=True):
+        if event.startswith('failure:'):
+            code = event.split(':', 1)[1]
+            if code not in ('credential-input', 'readback', 'transport', 'deadline', 'child-loss'):
+                raise ValueError('closed failure code')
+            if self.first_failure is not None: return self
+            if self.uncertain or self.expired: raise ValueError('core is frozen; observation slot only')
+            return replace(self, first_failure=(PHASES[min(self.ordinal, 5)], code), uncertain=True)
         if event == 'diagnostic': return self  # No mutation/renewal and no gate.
         if event == 'record-loss':
             if self.loss_record: raise ValueError('append once loss')
