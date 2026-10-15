@@ -113,7 +113,8 @@ class SlotSinkTests(unittest.TestCase):
                 before = copy.deepcopy(backend.stores)
                 with self.assertRaises(provider.Refused): subject('inert-slot', sink.REPORT, binding, frames[1])
                 self.assertEqual(backend.stores, before)
-                self.assertEqual(subject.first_cause, {'phase': 'issuance-possible', 'code': 'readback'})
+                self.assertEqual(subject.first_cause, {'phase': 'issuance-possible',
+                    'code': 'readback' if cut in ('readback', 'mismatch') else 'transport'})
                 backend.cut = None
                 loss = subject.observe('loss', {'phase': 'revocation-possible', 'code': 'child-loss'})
                 expiry = subject.observe('expiry', {'phase': 'terminal', 'code': 'deadline'})
@@ -191,6 +192,70 @@ class SlotSinkTests(unittest.TestCase):
         self.assertEqual(sink.MAXIMUM_BYTES, 10 * 2048 + 6 * 512)
         with self.assertRaises(provider.Refused): backend._store('candidate', b'x' * 2049)
         self.assertEqual(backend.stores, {})
+
+    def test_closed_report_is_independent_of_mutable_export(self):
+        original = dict(sink.REPORT)
+        try:
+            sink.REPORT['padding'] = 'x'
+            backend = sink.ControlledSlotBackend()
+            with self.assertRaises(provider.Refused): self.prepared(backend=backend)
+            self.assertIsNone(backend.reservation)
+            subject, binding, frames, backend = self.prepared(closed_report_envelope=original)
+            with self.assertRaises(provider.Refused): subject('inert-slot', sink.REPORT, binding, frames[0])
+            self.assertEqual(backend.stores, {})
+            subject('inert-slot', original, binding, frames[0])
+        finally:
+            sink.REPORT.clear()
+            sink.REPORT.update(original)
+
+    def test_early_terminal_uses_protected_publisher_transition_graph(self):
+        for prefix in (1, 2, 4):
+            with self.subTest(prefix=prefix):
+                subject, binding, frames, backend = self.prepared()
+                for raw in frames[:prefix]: subject('inert-slot', sink.REPORT, binding, raw)
+                facts = (provider.empty_auth_facts() if prefix == 1 else
+                         copy.deepcopy(provider.decode_auth_frame(frames[prefix - 1])['p']['facts']))
+                if prefix == 2: facts['issuance']['state'] = 'unknown'
+                if prefix == 4: facts['revocation']['state'] = 'unknown'
+                facts['firstCause'] = {'stage': 'protocol', 'code': 'transport'}
+                payload = dict(provider.decode_auth_frame(frames[-1])['p'], facts=facts, qualified=False)
+                terminal = provider.encode_auth_frame(binding, prefix + 1, 'terminal', payload)
+                receipt = subject('inert-slot', sink.REPORT, binding, terminal)
+                self.assertEqual(receipt['ordinal'], prefix + 1)
+                self.assertEqual(subject.previous_phase, 'terminal')
+                self.assertEqual(bytes(backend.stores[f'phase-{prefix + 1}']), terminal)
+                with self.assertRaises(provider.Refused): subject('inert-slot', sink.REPORT, binding, terminal)
+        subject, binding, frames, backend = self.prepared()
+        for raw in frames[:3]: subject('inert-slot', sink.REPORT, binding, raw)
+        payload = copy.deepcopy(provider.decode_auth_frame(frames[-1])['p'])
+        terminal = provider.encode_auth_frame(binding, 4, 'terminal', payload)
+        before = copy.deepcopy(backend.stores)
+        with self.assertRaises(provider.Refused): subject('inert-slot', sink.REPORT, binding, terminal)
+        self.assertEqual(backend.stores, before)
+
+    def test_actual_owner_accepts_ready_then_early_terminal(self):
+        vectors = json.loads((HERE / 'callback-vectors.json').read_bytes())
+        with tempfile.TemporaryDirectory() as root:
+            path = pathlib.Path(root) / 'inert-early-terminal'
+            subject, binding, frames, backend = self.prepared(path)
+            clock = consumer.InertCallbackClock(binding['clock']['domain'], 1000, 0,
+                                               270000, 285000, 300000, lambda: 1)
+            owner = consumer.InertCallbackOwner(binding, path, dict(sink.REPORT), subject, clock)
+            for exchange in vectors['exchanges'][:3]:
+                owner.handle(bytes.fromhex(exchange['request']))
+            facts = provider.empty_auth_facts()
+            facts['firstCause'] = {'stage': 'protocol', 'code': 'transport'}
+            payload = dict(provider.decode_auth_frame(frames[-1])['p'], facts=facts, qualified=False)
+            terminal = provider.encode_auth_frame(binding, 2, 'terminal', payload)
+            row = provider.decode_auth_frame(bytes.fromhex(vectors['exchanges'][3]['request']), maximum=4096)
+            row.update(frameBase64=base64.b64encode(terminal).decode(),
+                       frameDigest=hashlib.sha256(terminal).hexdigest())
+            self.assertEqual(provider.decode_auth_frame(owner.handle(consumer._callback_frame(row)))['kind'], 'validated')
+            row.pop('frameBase64')
+            row.update(kind='retain', sequence=5)
+            self.assertEqual(provider.decode_auth_frame(owner.handle(consumer._callback_frame(row)))['kind'], 'retained')
+            self.assertEqual(subject.ordinal, 2)
+            self.assertEqual(subject.previous_phase, 'terminal')
 
 
 if __name__ == '__main__': unittest.main()

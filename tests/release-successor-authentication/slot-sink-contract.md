@@ -18,7 +18,10 @@ time nor supplies a fresh execution window.
 
 The prepared callable accepts `(path, report, binding, exact_frame)`. It rechecks
 identity, the closed report and complete exact frame; validates payloads using the
-actual provider validator; and permits precisely six ordered phases. Repeated,
+actual provider validator; and permits at most six ordered phase slots. The graph
+matches the existing publisher: start → ready; ready → issuance-possible or terminal;
+issuance-possible → token-owned or terminal; token-owned → revocation-possible;
+revocation-possible → revoked or terminal; revoked → terminal. Repeated,
 foreign or out-of-order phase calls refuse before backend mutation. The report never
 enters a backend operation and is never serialized or mutated. The callback receipt
 contains only `binding`, `ordinal`, and `frameDigest` as required by the current owner.
@@ -44,6 +47,11 @@ first sink failure and an optional closed `lateCause`; later loss/expiry never r
 cannot authorize an ACK, retry, gate or effect. Phase payload facts remain verbatim
 inside the retained exact frame, including any provider `facts.firstCause`; the
 observation's `firstCause` is specifically the first sink transaction failure.
+Candidate/write/file-barrier/replace/directory-barrier cuts retain `transport`;
+fresh-readback failure or mismatched readback/receipt retains `readback`. An unexpected
+backend exception conservatively retains `transport` and Unknown. The exported report
+dict is only a convenience value; a fresh literal predicate enforces the closed
+envelope even if a caller mutates that dict.
 
 | Explicit modeled byte roles | Copies | Per-role capacity | Total |
 | --- | ---: | ---: | ---: |

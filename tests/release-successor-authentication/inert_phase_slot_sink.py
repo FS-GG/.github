@@ -9,6 +9,20 @@ import release_successor_provider as provider
 
 Refused = provider.Refused
 REPORT = {'schema': 'fsgg.release-successor-result/1', 'sink': 'inert-phase-slots/1'}
+
+
+def _closed_report(value):
+    # Independent of the exported convenience dict, including caller mutation.
+    return type(value) is dict and value == {
+        'schema': 'fsgg.release-successor-result/1', 'sink': 'inert-phase-slots/1'}
+
+
+class BackendCut(OSError):
+    def __init__(self, stage):
+        super().__init__('controlled ambiguous cut: ' + stage)
+        self.stage = stage
+
+
 ROLES = {**{f'phase-{n}': 2048 for n in range(1, 7)},
          **{role: 2048 for role in ('old', 'candidate', 'temporary', 'readback')},
          **{f'{kind}-{role}': 512 for kind in ('loss', 'expiry')
@@ -71,7 +85,7 @@ class ControlledSlotBackend:
     def _stage(self, stage):
         self.events.append(stage)
         if self.cut == stage:
-            raise OSError('controlled ambiguous cut: ' + stage)
+            raise BackendCut(stage)
 
     def _append(self, reservation, slot, raw, ordinal, observation=False):
         if reservation is not self.reservation or slot in self.attempts:
@@ -98,7 +112,7 @@ class ControlledSlotBackend:
         if self.cut == 'mismatch':
             actual = b'!' + actual[1:]
         if actual != raw:
-            raise Refused('fresh readback differs')
+            raise BackendCut('readback')
         receipt = Receipt(reservation.identity, reservation.generation, slot, ordinal,
                           hashlib.sha256(actual).hexdigest(), True, True, True)
         if not observation:
@@ -134,7 +148,7 @@ class InertPhaseSlotSink:
                 or type(identity['path']) is not str or not 0 < len(identity['path']) <= 512
                 or identity['binding'] != digest or identity['invocation'] != binding['invocation']
                 or type(identity['storeGeneration']) is not int or not 1 <= identity['storeGeneration'] <= contract.U64
-                or closed_report_envelope != REPORT or type(closed_report_envelope) is not dict
+                or not _closed_report(closed_report_envelope)
                 or original_window != binding['clock'] or reserved_population != population()
                 or type(slot_backend) is not ControlledSlotBackend):
             raise Refused('closed inert preparation refused')
@@ -146,6 +160,7 @@ class InertPhaseSlotSink:
         result.reservation = slot_backend.reserve(result.identity, ROLES, MAXIMUM_BYTES)
         result.ordinal = 0
         result.previous = None
+        result.previous_phase = None
         result.first_cause = None
         result.frozen = False
         result.observations = set()
@@ -170,24 +185,35 @@ class InertPhaseSlotSink:
         if not self._lock.acquire(blocking=False):
             raise Refused('serial slot entry required')
         try:
-            if (self.frozen or str(path) != self.path or type(report) is not dict or report != REPORT
+            if (self.frozen or str(path) != self.path or not _closed_report(report)
                     or binding != self.binding or type(exact_frame) is not bytes or len(exact_frame) > 2048):
                 raise Refused('prepared sink identity/state differs')
             phase = provider.decode_auth_frame(exact_frame)
             ordinal = self.ordinal + 1
+            allowed = {None: {'ready'}, 'ready': {'issuance-possible', 'terminal'},
+                       'issuance-possible': {'token-owned', 'terminal'},
+                       'token-owned': {'revocation-possible'},
+                       'revocation-possible': {'revoked', 'terminal'}, 'revoked': {'terminal'},
+                       'terminal': set()}
             if (set(phase) != {'v', 'b', 'n', 'k', 'p'} or phase['v'] != provider.AUTH_PROTOCOL
                     or phase['b'] != self.digest or type(phase['n']) is not int
                     or not 1 <= ordinal <= 6 or phase['n'] != ordinal
-                    or phase['k'] != provider.AUTH_PHASES[ordinal - 1]):
+                    or phase['k'] not in allowed[self.previous_phase]):
                 raise Refused('phase identity/order differs')
             provider.validate_auth_payload(phase['k'], phase['p'], self.binding, self.previous)
             try:
                 receipt = self.backend.append_phase(self.reservation, exact_frame)
+            except Exception as error:
+                code = 'readback' if isinstance(error, BackendCut) and error.stage == 'readback' else 'transport'
+                self._freeze(phase['k'], code)
+                raise Refused('Unknown: original slot attempt consumed') from None
+            try:
                 self._receipt(receipt, f'phase-{ordinal}', ordinal, exact_frame)
             except Exception:
                 self._freeze(phase['k'], 'readback')
                 raise Refused('Unknown: original slot attempt consumed') from None
             self.ordinal = ordinal
+            self.previous_phase = phase['k']
             self.previous = copy.deepcopy(phase['p'].get('facts'))
             return {'binding': self.digest, 'ordinal': ordinal, 'frameDigest': receipt.digest}
         finally:
