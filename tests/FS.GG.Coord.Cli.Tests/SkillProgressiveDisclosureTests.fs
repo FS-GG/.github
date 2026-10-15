@@ -65,9 +65,12 @@ module SkillProgressiveDisclosureTests =
     let ``representative tasks route to focused references instead of loading one monolith`` () =
         Assert.Contains("mechanical-reconciliation", body "check-board")
         Assert.Contains("judgement-findings", body "check-board")
-        Assert.Contains("command-contracts", body "pnext-item")
-        Assert.Contains("findings-and-filing", body "pnext-item")
-        Assert.Contains("merge-and-release", body "pnext-item")
+        Assert.Contains("strict-item-lifecycle", body "pnext-item")
+        let strictItemLifecycle =
+            File.ReadAllText(Path.Combine(skillPath ".claude" "pnext-item", "references", "strict-item-lifecycle.md"))
+        Assert.Contains("command-contracts", strictItemLifecycle)
+        Assert.Contains("findings-and-filing", strictItemLifecycle)
+        Assert.Contains("merge-and-release", strictItemLifecycle)
         Assert.Contains("mailbox-and-board", body "cross-repo-coordination")
         Assert.Contains("contract-changes", body "cross-repo-coordination")
         Assert.Contains("coherent-releases", body "cross-repo-coordination")
@@ -75,8 +78,12 @@ module SkillProgressiveDisclosureTests =
         Assert.Contains("feedback-contract", body "work-board")
         Assert.Contains("feedback-contract", body "work-roadmap")
 
-        for host in [ "drive-board"; "work-board"; "work-roadmap" ] do
+        for host in [ "drive-board"; "work-board" ] do
             Assert.Contains("host-loop", body host)
+        Assert.Contains("heavyweight-roadmap", body "work-roadmap")
+        let heavyweightRoadmap =
+            File.ReadAllText(Path.Combine(skillPath ".claude" "work-roadmap", "references", "heavyweight-roadmap.md"))
+        Assert.Contains("host-loop", heavyweightRoadmap)
 
     [<Fact>]
     let ``generated protocol facts live in routed references not triggered bodies`` () =
