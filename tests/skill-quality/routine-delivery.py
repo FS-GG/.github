@@ -806,6 +806,98 @@ class RoutineDeliveryTests(unittest.TestCase):
         self.assertEqual((code, result.outcome, callbacks), (2, "refused", []))
 
 
+class TelemetryUnavailableTests(unittest.TestCase):
+    base = ["--repo", "FS-GG/.github", "--pr", "7", "--head", HEAD]
+    flag = ["--telemetry-unavailable", "local-clr-resource-hold"]
+
+    def invoke(self, api, extra=(), environment=None):
+        with mock.patch.object(MODULE, "GhApi", return_value=api), \
+             mock.patch.object(MODULE, "discover_telemetry_config", side_effect=AssertionError("discovery")), \
+             mock.patch.object(MODULE, "create_ci_assignment", side_effect=AssertionError("assignment")), \
+             mock.patch.object(MODULE, "observe_candidate", side_effect=AssertionError("observer")), \
+             mock.patch.object(MODULE, "_compiled_json", side_effect=AssertionError("compiled")), \
+             mock.patch.dict(os.environ, environment or {}, clear=True), \
+             mock.patch("sys.stdout", new_callable=io.StringIO) as output, \
+             mock.patch("sys.stderr", new_callable=io.StringIO) as error:
+            code = MODULE.main(self.base + self.flag + list(extra))
+        self.assertEqual(len(error.getvalue().splitlines()), 1)
+        self.assertLess(len(error.getvalue().encode()), 4096)
+        result, gap = json.loads(output.getvalue()), json.loads(error.getvalue())
+        self.assertEqual(result["telemetryHealth"], "unavailable")
+        self.assertEqual(gap, dict(
+            schema="fsgg.routine-telemetry-unavailable/1", reason="local-clr-resource-hold",
+            repo="FS-GG/.github", pr=7, expectedHead=HEAD,
+            outcome=result["outcome"], codeDelivery=result["codeDelivery"],
+            **({"identity": gap["identity"]} if "identity" in gap else {})))
+        return code, result, gap
+
+    def test_success_retains_exact_merge_and_native_readback(self):
+        api = FakeApi([opened(), merged()], [{"merged": True, "sha": MERGE}])
+        code, result, gap = self.invoke(api, ["--apply", "--telemetry-feature", "F",
+            "--telemetry-item", "I", "--telemetry-attempt", "A", "--telemetry-parent-attempt", "P"])
+        self.assertEqual((code, result["codeDelivery"], api.attempts, api.read_attempts), (0, "delivered", 1, 2))
+        self.assertEqual(api.last_request.expectedHead, HEAD)
+        self.assertEqual(gap["identity"], dict(feature="F", item="I", attempt="A", parentAttempt="P"))
+
+    def test_refusal_pending_readback_and_publication_semantics_survive(self):
+        cases = [
+            (FakeApi([opened("c" * 40)]), ["--apply"], 2, "refused", 0),
+            (FakeApi([opened()], runs=[run()]), ["--apply", "--coherent-workflow", "CI.yml"], 2, "refused", 0),
+            (FakeApi([opened(), opened()], [MODULE.AmbiguousWrite("lost")]), ["--apply"], 3, "indeterminate", 1),
+            (FakeApi([opened(), merged()], [{"merged": True, "sha": MERGE}]),
+             ["--apply", "--publication", "required"], 0, "delivered", 1),
+            (FakeApi([opened()]), [], 0, "ready", 0),
+        ]
+        for api, extra, expected_code, outcome, attempts in cases:
+            with self.subTest(outcome=outcome):
+                code, result, gap = self.invoke(api, extra, {"FSGG_TELEMETRY_CONFIG": ""})
+                self.assertEqual((code, result["outcome"], api.attempts), (expected_code, outcome, attempts))
+                self.assertNotIn("identity", gap)
+                if "--publication" in extra:
+                    self.assertEqual(result["publication"], "pending")
+                if "--coherent-workflow" in extra:
+                    self.assertEqual(result["coherentValidation"], "pending")
+
+    def test_delivered_reuse_pending_is_not_disputed(self):
+        api = FakeApi([merged()], runs=[run()], selections={7: selection("reused")})
+        code, result, _gap = self.invoke(api, ["--apply", "--coherent-workflow", "CI.yml"])
+        self.assertEqual((code, result["codeDelivery"], result["coherentValidation"], api.attempts),
+                         (0, "delivered", "pending", 0))
+
+    def test_conflicts_and_invalid_audit_refuse_before_any_native_call(self):
+        cases = [([option, "value"], {}) for option in (
+            "--telemetry-assignment", "--telemetry-store-root", "--telemetry-config",
+            "--telemetry-engine", "--telemetry-publisher-config")]
+        cases += [(["--watch-checks", "--watch-seconds", "1"], {}),
+                  (["--telemetry-publisher-event"], {}),
+                  (["--telemetry-advisory-deadline-monotonic", "80"], {}),
+                  ([], {"FSGG_TELEMETRY_CONFIG": "/private/config"}),
+                  (["--telemetry-feature", "F"], {}),
+                  (["--telemetry-parent-attempt", "P"], {}),
+                  (["--telemetry-feature", "F", "--telemetry-item", "I", "--telemetry-attempt", ""], {}),
+                  (["--telemetry-feature", "F" * 2048, "--telemetry-item", "I", "--telemetry-attempt", "A"], {})]
+        for extra, environment in cases:
+            with self.subTest(extra=extra), \
+                 mock.patch.object(MODULE, "GhApi", side_effect=AssertionError("native")), \
+                 mock.patch.object(MODULE, "discover_telemetry_config", side_effect=AssertionError("compiled")), \
+                 mock.patch.dict(os.environ, environment, clear=True), \
+                 contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as refused:
+                MODULE.main(self.base + self.flag + extra)
+            self.assertEqual(refused.exception.code, 2)
+
+    def test_reason_enum_is_closed_and_default_still_discovers(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            MODULE.main(self.base + ["--telemetry-unavailable", "overload"])
+        with mock.patch.object(MODULE, "GhApi", return_value=FakeApi([opened()])), \
+             mock.patch.object(MODULE, "discover_telemetry_config", return_value=None) as discover, \
+             mock.patch.dict(os.environ, {}, clear=True), contextlib.redirect_stdout(io.StringIO()) as output, \
+             contextlib.redirect_stderr(io.StringIO()) as error:
+            self.assertEqual(MODULE.main(self.base), 0)
+        discover.assert_called_once()
+        self.assertEqual(json.loads(output.getvalue())["telemetryHealth"], "not-configured")
+        self.assertEqual(error.getvalue(), "")
+
+
 class ExplicitHostStoreEnvironmentTests(unittest.TestCase):
     def summary(self):
         return MODULE.Summary("fsgg.routine-delivery/v1", "FS-GG/.github", 7, HEAD, HEAD,
