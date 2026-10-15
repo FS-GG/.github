@@ -309,6 +309,18 @@ actual repository-native receiver use at that head, without claiming a separate 
 package installation or native custody. V2-DIAG-01.4 remains open for the owner joins and evaluation
 below; the failed intake read and unconfirmed supplying owner remain unchanged.
 
+### Protected-main ordinary readback — 2026-10-15
+
+The [post-merge work-programme run 38730201243/1](https://github.com/FS-GG/.github/actions/runs/38730201243)
+passed on protected `505c54cf630c33996d3fd7cafd68e7ab2496f019`. Independent readback of
+artifact `11968989527` found one JSON result, SHA-256
+`3d9edd293ff290b72dd22639a72881ac81b7b42310f0dbd57d7697c6eb5fbf0a`.
+All 32 input hashes matched that protected source. All thirteen `.agents`, `.claude` and Python
+suites passed with exit 0 and successful cleanup; the first cause was null, omitted coverage was
+empty, and reporting and the hosted artifact upload passed. The runner recorded 39.781 seconds
+and 20,556 output bytes. This confirms the selected repository-native ordinary entry after merge;
+it supplies no natural failure yield, comparative overhead, packaged installation or native result.
+
 ### Publication and native owner joins still required
 
 [Coordination CLI 0.3.0](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.3.0) is a published
@@ -334,6 +346,32 @@ owner joins. Missing credentials have not been established as their common block
 general Python provider pack does not own this route decision. Publication and effects retain their
 existing admission boundaries; original failed attempts and unresolved cleanup remain unchanged.
 V2-DIAG-01.4 stays open for these joins, both owners' installed assertions and bounded evaluation.
+
+### Exact inputs and next receiver gates
+
+| Selected route | Accepted input or observation | Next accountable gate |
+|---|---|---|
+| Ordinary `.github` work-programme | Protected `505c54cf` and the result above; thirteen actual suites across both repository-native skill roots. | `.github` programme owner retains original attempts and defines a bounded evaluation window. Source use is accepted; package or fleet adoption is a separate claim. |
+| Coordination canonical 0.2.1 | Producer `bc55a3d1cc887d653c1bb1198e4823b24f47aaa8`, preparation [37403093489/1](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37403093489), artifact `11386361825`, and the historical 21-record installed diagnostic candidate result. The selected native entry is `eng/prepared-attempt-installed-qualification.fsx` through the packaged qualifier against the exact Execution DLL. | Coordination P4 release/diagnostic maintainer and supplying host, administrator grant and private-custody owners must join an enforcing outer profile, original package/image and receiver identity, a fresh receiver-bound grant, and observed termination/cleanup before native acceptance and coherent publication. Candidate qualification is not release or adoption. |
+| Coordination CLI 0.3.0 | [Published CLI-only release](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.3.0), separate from canonical 0.2.1. | Coordination diagnostic owner must admit and qualify its own installed native route; equal diagnostic script/API bytes do not transfer changed Execution custody, bootstrap or project behavior. |
+| Diagnostic skill carrier and receivers | Drivers 0.98.0 guidance and the SDD 2.2.0 carrier were published. The [read-only .github feed probe 38732551619/1](https://github.com/FS-GG/.github/actions/runs/38732551619) found 0.102.0 latest and prospective 0.104.0 absent on all six CLI/Kit/Drivers feed coordinates. | `.github` release owner must resolve original 0.103.0 `tag:intent`/unknown dispatch before any 0.104.0 publisher preflight or credential exchange; the .104 proposal is source only. SDD, Kit and tool receiver owners must separately prove selected installed diagnostic-guidance use. Feed freshness is neither publication nor receiver use. |
+
+The [ordinary Atlas boundary](../atlas/records/5c3527e43fe24c5aa171c6fa4a3de7fe5e78f2527aed0dd19cb21d154d43da21.json)
+and [closed 0.104 release boundary](../atlas/records/d31e8aa21d1498f2d4a07c4cc89ea6f5a6d3ce54d334dbff230e0f55db35c85e.json)
+retain the reusable source/authority distinctions. This matrix records current observations, not
+a new authorization or an assumption that the two release routes share a blocker.
+
+### Prospective bounded evaluation
+
+Before each owner starts a treated pilot window, record its start and end rule, exact source/package
+and installed receiver identities, eligible original attempts and acceptance checks in the existing
+owner evidence. For each attempt retain first cause, independent useful findings, dependent blocking,
+time to first actionable diagnosis, total and active execution time when measured, infrastructure
+failure, and separate reporting and cleanup outcomes. Count repeat attempts against the declared
+eligible population and preserve failed or partial attempts. Record an unavailable or incomparable
+baseline as **unknown**; the historical ordinary and local native timings above are descriptive and
+cannot establish saved attempts, faster diagnosis or a process benefit. Do not enroll a historical
+attempt retrospectively as a treated cohort or weaken required qualification to fill a denominator.
 
 ### Route-selection request delivery is blocked
 
