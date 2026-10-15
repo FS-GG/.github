@@ -156,8 +156,12 @@ Separate development authority from final acceptance. Apply these defaults withi
 | Publication, live-store mutation, privileged/native safeguards | Operation-specific admission, custody and final evidence remain required |
 | Uncertain external effects | Observe the original identity and reconcile before retry |
 
-Use edit → incremental compile → focused tests → semantic review → full required qualification.
-Run the required exact-head PR/native qualification for each candidate; comprehensive protected parent,
+Use edit → incremental compile → focused tests → owner semantic review → full required qualification.
+During repair, use relevant cheap checks without rerunning the full suite after every edit. A distinct
+reviewer is risk-based and optional for ordinary reversible source work; retain any selected independent
+review and protected safeguard. Run the required coherent exact-head PR/native qualification on the final
+assembled candidate submitted for acceptance, and rerun applicable required checks for each changed final
+head; comprehensive protected parent,
 release and installed-receiver boundaries remain additional obligations, never a deferred substitute for
 that candidate's checks.
 Run the existing compiler early inside the approved environment; normally submit compiling source and
