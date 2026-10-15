@@ -25,6 +25,7 @@ gate_path = sys.argv[1] if len(sys.argv) > 1 else "scripts/check-feed-coherence.
 spec = importlib.util.spec_from_file_location("gate", gate_path)
 gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
+import fsgg_feed as feed
 
 passed = failed = 0
 
@@ -52,10 +53,20 @@ class _Resp(io.BytesIO):
 
 
 def stub(fn):
-    """Point urlopen at `fn(req)`; returns a restore callable."""
-    real = urllib.request.urlopen
-    urllib.request.urlopen = lambda req, timeout=None: fn(req)
-    return lambda: setattr(urllib.request, "urlopen", real)
+    """Stub the guarded opener while requiring the live index redirect policy."""
+    real = urllib.request.build_opener
+
+    class StubOpener:
+        def open(self, req, timeout=None):
+            return fn(req)
+
+    def build(*handlers):
+        if feed._RefuseFeedIndexRedirect not in handlers:
+            raise AssertionError("feed index reader omitted redirect refusal")
+        return StubOpener()
+
+    urllib.request.build_opener = build
+    return lambda: setattr(urllib.request, "build_opener", real)
 
 
 def http_error(code: str | int):
@@ -82,6 +93,20 @@ def expect_gate_error(label: str, transport, needle: str) -> None:
 
 
 print("--- the live feed reader fails CLOSED on every unreadable condition ---")
+for target in (
+    "https://nuget.pkg.github.com/FS-GG/other/index.json",
+    "https://attacker.invalid/index.json",
+):
+    request = urllib.request.Request(
+        "https://nuget.pkg.github.com/FS-GG/download/fs.gg.contracts/index.json",
+        headers={"Authorization": "Basic FAKE"},
+    )
+    try:
+        feed._RefuseFeedIndexRedirect().redirect_request(request, None, 302, "Found", {}, target)
+    except gate.GateError:
+        ok(f"index redirect refused before forwarding credentials to {target}")
+    else:
+        bad(f"index redirect refused before forwarding credentials to {target}")
 expect_gate_error("401 -> the token cannot read the feed", http_error(401), "read:packages")
 expect_gate_error("403 -> the token cannot read the feed", http_error(403), "read:packages")
 expect_gate_error("404 -> the package is not on the feed", http_error(404), "not on the org feed")

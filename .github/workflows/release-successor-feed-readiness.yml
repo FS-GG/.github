@@ -1,0 +1,44 @@
+name: release-successor-feed-readiness
+
+# Informational freshness observation for a prospective 0.104.0 coherent set.
+# This does not select a release, qualify source bytes, or authorize publication.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: release-successor-feed-readiness
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: release-successor-feed-readiness
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify the exact protected source and offline refusal controls
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = FS-GG/.github
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+          python3 tests/release-successor-candidate/run.py
+      - name: Observe both feeds for 0.104.0 against published 0.102.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/check-release-candidate-uniqueness.py \
+            --version 0.104.0 --predecessor 0.102.0
