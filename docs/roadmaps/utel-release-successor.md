@@ -1027,6 +1027,33 @@ source controls do not qualify replacement hosted ordinary settlement, the full
 exact-main workflow or publication. The accepted original `.103` archive and all
 release-effect boundaries remain fixed.
 
+### Original .103 authentication domain policy — 2026-10-15
+
+The sponsor-delegated [public policy decision](https://github.com/FS-GG/.github/issues/4517#issuecomment-6199911781)
+is recorded in [ADR-0093](../adr/0093-original-103-authentication-domain-policy.md).
+Programme owns policy/change control; EHotwagner retains credential/App custody;
+SystemAdmin owns the proposed external service and host evidence. The decision selects
+one original-operation descriptor and independently enrolled issuer/ACK trust, one-use
+durable phase gates, same-token HTTP 204 revocation, original-clock uncertainty checks
+within fixed 270/285/300-second cutoffs, and prospective nonsecret retention capped at
+six phase records/64 KiB until 90 days after the original total cutoff.
+
+Implementation remains pending. The protected provider binds publisher provenance to
+`release-successor-publish.yml`, while the inactive job uses
+`release-successor-authenticate.yml`; the reviewed descriptor extension must distinguish
+those identities and preserve original dependency pins. Existing inert source is not
+native qualification. The exact 17,647-byte restricted proposal is unavailable here;
+reconcile its internal signing/transport topology before freezing an implementation
+interface. SystemAdmin owes endpoint/store/transport, independently enrolled identities,
+durable ACK and clock/loss evidence; the UTEL source owner owes the reviewed extension
+and pin compatibility. Obtain a separate bounded source reservation and later installed/native
+admission before claiming those outcomes.
+
+All six native selections and all admission/effect flags remain false. Preserve the
+accepted loss matrix, original `.103` attempted-unknown tag and no replay, unchanged
+original candidate/journal, and `.104` release hold. No credential issuance,
+installation, dispatch, journal, tag or release effect follows from this policy.
+
 ### Proposed .104 selection on the maintained successor rail — 2026-10-15
 
 **Draft for release-owner review; no operating authority.** This proposes an
