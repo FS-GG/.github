@@ -1,0 +1,43 @@
+name: release-successor-authenticate-source
+
+# Ordinary source validation only; the selected protected authentication job
+# remains unconditionally inactive in its separate workflow.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/release-successor-authenticate.yml'
+      - '.github/workflows/release-successor-authenticate-source.yml'
+      - '.github/actions/setup-policy-python/**'
+      - 'scripts/check-release-successor-authenticate.py'
+      - 'tests/release-successor-authenticate/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-successor-authenticate.yml'
+      - '.github/workflows/release-successor-authenticate-source.yml'
+      - '.github/actions/setup-policy-python/**'
+      - 'scripts/check-release-successor-authenticate.py'
+      - 'tests/release-successor-authenticate/**'
+
+permissions:
+  contents: read
+
+jobs:
+  inert-source-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: ./.github/actions/setup-policy-python
+      - name: Check inactive policy and rejection controls without native execution
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 scripts/check-release-successor-authenticate.py
+          python3 tests/release-successor-authenticate/run.py

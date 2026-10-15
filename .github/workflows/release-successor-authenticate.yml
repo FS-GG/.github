@@ -1,0 +1,35 @@
+name: release-successor-authenticate
+
+# Inactive source preparation only. This job has no credential ingress or native
+# producer. Source review and environment selection do not admit authentication.
+# Native activation requires separately reviewed exact source/operation/runtime
+# pins, original-budget custody and independent same-token revocation on worker loss.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-successor-authenticate
+  cancel-in-progress: false
+
+jobs:
+  original-103-authentication:
+    if: ${{ false && github.event_name == 'workflow_dispatch' && github.repository == 'FS-GG/.github' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && github.run_attempt == 1 }}
+    environment: callable-isolated-operation
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read the selected immutable source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Refuse activation without a separately admitted native producer
+        run: |
+          printf '%s\n' 'Inactive source preparation; authentication is unavailable.' >&2
+          exit 78
