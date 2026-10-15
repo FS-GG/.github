@@ -229,6 +229,19 @@ frame succeeds. Thirteen focused controls, 90 full authentication tests and requ
 hosted checks passed. This closes that input-type counterexample in the inert sink;
 it establishes no host deployment, complete population fit or native qualification.
 
+Protected [PR #4576](https://github.com/FS-GG/.github/pull/4576) at
+`fca016e1db30a279a5489223d19408f086eb18b5` extends the [inert preparation guard](https://github.com/FS-GG/.github/blob/fca016e1db30a279a5489223d19408f086eb18b5/tests/release-successor-authentication/inert_phase_slot_sink.py)
+to identity, original-window and population/role declarations. Exact built-in dicts,
+string keys, string identity/window values and integer generation/capacities are checked
+before set/equality operations; admitted literals are snapshotted before caller-controlled
+preparation hooks. Later caller identity mutation cannot change admitted path, binding,
+invocation or generation. [Adversarial controls](https://github.com/FS-GG/.github/blob/fca016e1db30a279a5489223d19408f086eb18b5/tests/release-successor-authentication/slot-sink-tests.py)
+refuse spoofed scalars/mappings without custom comparison or backend reservation, then
+permit valid preparation and a phase. Sixteen focused controls, 106 full authentication
+tests and required hosted checks passed (32 success, two skipped). This closes those
+inert declaration-boundary counterexamples; complete population fit, installed host and
+native qualification remain unproved.
+
 Actual signer custody and independent enrollment, backend barrier/fresh exact readback,
 authenticated original-clock continuity/uncertainty, and independent loss observation
 remain unqualified. SystemAdmin owes those host/trust proofs; the UTEL source owner owes
