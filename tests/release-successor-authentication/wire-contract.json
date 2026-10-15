@@ -1,0 +1,21 @@
+{
+  "schema": "fsgg.authentication-inert-wire-pin/1",
+  "qualification": "inert source controls only; producer composition integration pending",
+  "producer": {
+    "repository": "FS-GG/FS.GG.Coordination",
+    "revision": "52250ac923a45816e81a00d6cb04863d499953df",
+    "path": "src/FS.GG.Coordination.Orchestration.Execution/PhaseResultProtocol.fs",
+    "sha256": "df27e14e33e82a68b42fdeeb67a2522f83affad994d0ce07ea5823b6ff068924"
+  },
+  "protocol": "fsgg.execution.phase-result/1",
+  "profile": "utel-rel-21/original-tag-authentication-only/2",
+  "mode": "inert",
+  "maximumFrameBytes": 2048,
+  "maximumAckBytes": 512,
+  "maximumAggregateBytes": 16384,
+  "gatePhases": [
+    "ready",
+    "issuance-possible",
+    "revocation-possible"
+  ]
+}
