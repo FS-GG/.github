@@ -28,4 +28,16 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - run: bash tests/work-programme/run.sh
+      - name: Run the bounded work-programme entry
+        run: bash tests/work-programme/run.sh > "$RUNNER_TEMP/work-programme-result.json"
+      - name: Display the result independently of the runner exit
+        if: always()
+        run: cat "$RUNNER_TEMP/work-programme-result.json"
+      - name: Retain the result independently of display
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: work-programme-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/work-programme-result.json
+          if-no-files-found: error
+          retention-days: 14
