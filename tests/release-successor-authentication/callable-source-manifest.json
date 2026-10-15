@@ -1,0 +1,55 @@
+{
+  "schema": "fsgg.authentication-callable-source-bundle/1",
+  "qualification": "local source candidate; managed compile and paired runtime integration pending",
+  "ownerBase": "6387eaaf71162237649a1c993c93d99a9e7dfdcb",
+  "producerRevision": "0945f654768d820f7c8a70a0c128ca582e84c5a3",
+  "digestRecipe": "SHA256 of sorted ASCII rows: <sha256><two spaces><repository>/<path><LF>; excludes this manifest, generated bindings/vectors and results",
+  "files": [
+    {
+      "repository": "FS-GG/.github",
+      "path": "scripts/release-successor-publish.py",
+      "sha256": "5b71be2557c6bd3415f71c8f08130fbbead06272b465b9cc95c5cc7f99b81cb0"
+    },
+    {
+      "repository": "FS-GG/.github",
+      "path": "scripts/release_successor_auth_consumer.py",
+      "sha256": "d777269b672c2c8a5b13a38253b96286fdb0052e70132e399560c91acc876b3d"
+    },
+    {
+      "repository": "FS-GG/.github",
+      "path": "scripts/release_successor_provider.py",
+      "sha256": "34ac63d74efa1b8c3f81fdea266d288c49a65db705ab4cc43ca8a8b3bd24dce0"
+    },
+    {
+      "repository": "FS-GG/.github",
+      "path": "tests/release-successor-authentication/callback-contract.json",
+      "sha256": "0fa45d5c69440cb701dba90952e533ba3990279281ce0f21f0240bbcd22d22ef"
+    },
+    {
+      "repository": "FS-GG/.github",
+      "path": "tests/release-successor-authentication/wire-contract.json",
+      "sha256": "dcf14cc3f92547b5a38eee78e3bdbfc838f146e594cf1b579e04ce83ddc16206"
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "path": "src/FS.GG.Coordination.Orchestration.Execution/FiniteCustodyComposition.fs",
+      "sha256": "71574d69f91f198097d1fb27d8ff7b0839e7fc7022e38e54e9d188dea5532791"
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "path": "src/FS.GG.Coordination.Orchestration.Execution/FiniteCustodySessionAdapter.fs",
+      "sha256": "dd3f3eb1c782cb1ebd9ce929725487ab09a24e353283ff9f0826d8116307c580"
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "path": "src/FS.GG.Coordination.Orchestration.Execution/PhaseCallbackProtocol.fs",
+      "sha256": "a54ea74d756842422333a0e012aeadce1a602a83f11a7e38a81cf07cfd52a800"
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "path": "src/FS.GG.Coordination.Orchestration.Execution/PhaseResultProtocol.fs",
+      "sha256": "df27e14e33e82a68b42fdeeb67a2522f83affad994d0ce07ea5823b6ff068924"
+    }
+  ],
+  "bundleDigest": "11b6a77f4ad4de8d951fa9a3df77974cd5044048e8dcc8c5e9d29b86ada672f9"
+}

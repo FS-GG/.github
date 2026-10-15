@@ -962,10 +962,44 @@ def run_forward(manifest, journal, admission, provider, report, deadline, *, max
     return "checkpoint"
 
 def write_result(path, report):
+    if report.get("authenticationSession") is not None:
+        return finalize_authentication_result(path, report)
     body = (json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n").encode()
     require(len(body) <= 16384, "publisher result exceeds its 16KiB bound")
     with path.open("xb") as stream:
         stream.write(body)
+
+
+def finalize_authentication_result(path, report):
+    """Extend the existing retained projection under its original destination lock."""
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        fcntl.flock(directory, fcntl.LOCK_EX)
+        require(path.exists() and not path.is_symlink() and stat.S_ISREG(path.stat().st_mode),
+                'authentication finalization requires original durable result')
+        with path.open('rb') as stream:
+            prior_bytes = stream.read(16385)
+        require(len(prior_bytes) <= 16384, 'authentication finalization prior exceeds bound')
+        prior = json.loads(prior_bytes)
+        require(type(prior) is dict and prior.get('authenticationSession') is not None
+                and prior['authenticationSession'] == report['authenticationSession']
+                and (json.dumps(prior, sort_keys=True, separators=(',', ':')) + '\n').encode('ascii') == prior_bytes,
+                'authentication finalization projection differs; reconcile original evidence')
+        body = (json.dumps(report, sort_keys=True, separators=(',', ':')) + '\n').encode('ascii')
+        require(len(body) <= 16384, 'authentication finalized result exceeds bound')
+        temporary = path.with_name(path.name + '.authentication-finalizing')
+        with temporary.open('xb') as stream:
+            os.chmod(temporary, 0o600)
+            stream.write(body); stream.flush(); os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        os.fsync(directory)
+        require(not path.is_symlink() and stat.S_ISREG(path.stat().st_mode),
+                'authentication finalized readback is not regular')
+        with path.open('rb') as stream:
+            actual = stream.read(16385)
+        require(actual == body, 'authentication finalized readback differs')
+    finally:
+        os.close(directory)
 
 
 def persist_authentication_snapshot(path, report, binding, frame):

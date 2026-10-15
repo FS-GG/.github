@@ -663,12 +663,25 @@ class ProtocolControls(unittest.TestCase):
         with self.assertRaises(provider.Refused): consumer.InertStartConsumer(bound)
 
 
+def contract_bundle_digest():
+    import hashlib
+    manifest = json.loads((ROOT / 'tests/release-successor-authentication/callable-source-manifest.json').read_bytes())
+    rows = sorted(manifest['files'], key=lambda row: row['repository'] + '/' + row['path'])
+    for row in rows:
+        if row['repository'] == 'FS-GG/.github':
+            assert hashlib.sha256((ROOT / row['path']).read_bytes()).hexdigest() == row['sha256']
+    raw = ''.join(row['sha256'] + '  ' + row['repository'] + '/' + row['path'] + '\n' for row in rows).encode('ascii')
+    digest = hashlib.sha256(raw).hexdigest()
+    assert digest == manifest['bundleDigest']
+    return digest
+
+
 def protocol_vectors():
     import hashlib
     with tempfile.TemporaryDirectory() as root:
         channel = RetainedChannel(root)
         # Deterministic fixture identities/timestamps, never an observed invocation.
-        channel.binding['source']['contract'] = hashlib.sha256((ROOT / 'scripts/release_successor_provider.py').read_bytes()).hexdigest()
+        channel.binding['source']['contract'] = contract_bundle_digest()
         opener = Opener()
         opener.rows[3]['expires_at'] = '2030-03-17T18:16:40Z'
         child = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123,
@@ -681,6 +694,199 @@ def protocol_vectors():
                 'profile': provider.AUTH_PROFILE, 'mode': 'inert',
                 'frameBytes': [len(x) for x in channel.frames]}
 
+
+
+class CallbackOwnerControls(unittest.TestCase):
+    def prepared(self, root, bound, sink=None):
+        self.now = 1
+        self.path = pathlib.Path(root) / 'callback-result.json'
+        self.report = {'schema': 'fsgg.release-successor-result/1'}
+        self.clock = consumer.InertCallbackClock(bound['clock']['domain'], 1000, 0, 270000, 285000,
+                                                300000, lambda: self.now)
+        return consumer.InertCallbackOwner(bound, self.path, self.report,
+            sink or publisher.persist_authentication_snapshot, self.clock)
+
+    def request(self, bound, sequence, kind, raw=None, phase=None):
+        import base64
+        import hashlib
+        row = {'v': consumer.CALLBACK_PROTOCOL, 'kind': kind, 'invocation': bound['invocation'],
+               'binding': provider.validate_auth_binding(bound), 'sequence': sequence,
+               'ordinal': 0 if phase is None else phase['n'],
+               'frameDigest': provider.validate_auth_binding(bound) if phase is None else hashlib.sha256(raw).hexdigest()}
+        if kind == 'bind': row['bindingBase64'] = base64.b64encode(provider._auth_canonical(bound)).decode('ascii')
+        if kind == 'validate': row['frameBase64'] = base64.b64encode(raw).decode('ascii')
+        return consumer._callback_frame(row)
+
+    def fixture(self):
+        vectors = protocol_vectors()
+        return vectors['binding'], [bytes.fromhex(raw) for raw in vectors['children']]
+
+    def test_callback_owner_actual_validator_and_sink_six_phase_roundtrip(self):
+        bound, frames = self.fixture()
+        with tempfile.TemporaryDirectory() as root:
+            subject = self.prepared(root, bound)
+            self.assertEqual(provider.decode_auth_frame(subject.handle(self.request(bound, 1, 'bind')))['kind'], 'bound')
+            for index, raw in enumerate(frames):
+                phase = provider.decode_auth_frame(raw)
+                validated = subject.handle(self.request(bound, index * 2 + 2, 'validate', raw, phase))
+                self.assertEqual(provider.decode_auth_frame(validated)['kind'], 'validated')
+                self.assertEqual(self.report.get('authenticationSession', {}).get('ordinal', 0), index)
+                retained = subject.handle(self.request(bound, index * 2 + 3, 'retain', raw, phase))
+                self.assertEqual(provider.decode_auth_frame(retained)['kind'], 'retained')
+                self.assertEqual(json.loads(self.path.read_bytes())['authenticationSession']['ordinal'], index + 1)
+            with self.assertRaises(provider.Refused): subject.handle(self.request(bound, 13, 'retain', raw, phase))
+            self.assertLess(subject.charged_bytes, consumer.CALLBACK_AGGREGATE)
+
+    def test_callback_inert_child_entry_runs_actual_library_without_default_http(self):
+        with tempfile.TemporaryDirectory() as root:
+            channel = RetainedChannel(root)
+            prepared = consumer.InertStartConsumer(channel.binding)
+            body = provider._auth_canonical({'v': provider.AUTH_PROTOCOL, 'k': 'start',
+                'b': prepared.binding_digest, 'p': channel.binding})
+            start = len(body).to_bytes(4, 'big') + body
+            opener = Opener()
+            self.assertTrue(consumer.run_inert_authentication(prepared, start, channel, lambda: 1,
+                                                            opener, channel.report, time.time))
+            self.assertEqual(len(opener.calls), 6)
+            self.assertEqual(len(channel.frames), 6)
+            self.assertEqual(channel.report['cleanup'], 'revoked')
+            with self.assertRaises(provider.Refused):
+                consumer.run_inert_authentication(prepared, start, forbidden, forbidden, None, {}, time.time)
+
+    def test_callback_request_decoder_bounds_fragments_pipeline_and_partial_write(self):
+        bound, _ = self.fixture()
+        with tempfile.TemporaryDirectory() as root:
+            subject = self.prepared(root, bound)
+            decoder = consumer.InertCallbackRequestDecoder(subject)
+            raw = self.request(bound, 1, 'bind')
+            for index, value in enumerate(raw):
+                reply = decoder.feed(bytes([value]))
+                self.assertEqual(reply is not None, index == len(raw) - 1)
+            self.assertEqual(decoder.observed_request_bytes, len(raw))
+            with self.assertRaises(provider.Refused): decoder.confirm_response_written(len(reply) - 1)
+            with self.assertRaises(provider.Refused): decoder.feed(raw)
+        for data in (b'\x00\x00\x10\x00', self.request(bound, 1, 'bind') * 2):
+            with tempfile.TemporaryDirectory() as root:
+                decoder = consumer.InertCallbackRequestDecoder(self.prepared(root, bound))
+                with self.assertRaises(provider.Refused): decoder.feed(data)
+                self.assertEqual(decoder.observed_request_bytes, len(data))
+                self.assertFalse(self.path.exists())
+
+    def test_callback_finalization_preserves_the_original_projection(self):
+        bound, frames = self.fixture()
+        with tempfile.TemporaryDirectory() as root:
+            subject = self.prepared(root, bound)
+            subject.handle(self.request(bound, 1, 'bind'))
+            phase = provider.decode_auth_frame(frames[0])
+            subject.handle(self.request(bound, 2, 'validate', frames[0], phase))
+            subject.handle(self.request(bound, 3, 'retain', frames[0], phase))
+            projection = copy.deepcopy(self.report['authenticationSession'])
+            self.report['pendingReason'] = 'source-only inert finalization'
+            publisher.write_result(self.path, self.report)
+            durable = json.loads(self.path.read_bytes())
+            self.assertEqual(durable['authenticationSession'], projection)
+            altered = copy.deepcopy(self.report)
+            altered['authenticationSession']['frameDigest'] = '0' * 64
+            with self.assertRaises(publisher.Refused): publisher.write_result(self.path, altered)
+            self.assertEqual(json.loads(self.path.read_bytes()), durable)
+
+    def test_callback_owner_validation_never_persists_and_failed_attempt_cannot_retry(self):
+        bound, frames = self.fixture()
+        with tempfile.TemporaryDirectory() as root:
+            calls = []
+            def sink(*args):
+                calls.append(1)
+                return publisher.persist_authentication_snapshot(*args)
+            subject = self.prepared(root, bound, sink)
+            subject.handle(self.request(bound, 1, 'bind'))
+            phase = provider.decode_auth_frame(frames[0])
+            validation = self.request(bound, 2, 'validate', frames[0], phase)
+            subject.handle(validation)
+            self.assertFalse(self.path.exists()); self.assertEqual(calls, [])
+            with self.assertRaises(provider.Refused): subject.handle(validation)
+            with self.assertRaises(provider.Refused): subject.handle(self.request(bound, 3, 'retain', frames[0], phase))
+            self.assertEqual(calls, [])
+
+    def test_callback_terminal_validation_finishing_at_work_cannot_retain(self):
+        bound, frames = self.fixture()
+        # Early terminal after ready preserves real monotone failure facts.
+        facts = provider.empty_auth_facts()
+        facts['firstCause'] = {'stage': 'protocol', 'code': 'child-loss'}
+        terminal = provider.encode_auth_frame(bound, 2, 'terminal', {
+            'facts': facts, 'publication': dict.fromkeys(['tag', 'journal', 'feed', 'release', 'asset', 'channel'], 0),
+            'publicationComplete': False, 'qualified': False, 'credentialReferencesDropped': True})
+        with tempfile.TemporaryDirectory() as root:
+            subject = self.prepared(root, bound)
+            subject.handle(self.request(bound, 1, 'bind'))
+            ready = provider.decode_auth_frame(frames[0])
+            subject.handle(self.request(bound, 2, 'validate', frames[0], ready))
+            subject.handle(self.request(bound, 3, 'retain', frames[0], ready))
+            phase = provider.decode_auth_frame(terminal)
+            original = provider.validate_auth_payload
+            def late(*args):
+                original(*args)
+                self.now = 285000
+            self.now = 284999
+            with patch.object(provider, 'validate_auth_payload', late):
+                reply = provider.decode_auth_frame(subject.handle(self.request(bound, 4, 'validate', terminal, phase)))
+            self.assertEqual(reply['kind'], 'refused'); self.assertEqual(reply['reason'], 'deadline')
+            with self.assertRaises(provider.Refused): subject.handle(self.request(bound, 5, 'retain', terminal, phase))
+            self.assertEqual(self.report['authenticationSession']['ordinal'], 1)
+
+    def test_callback_late_retention_keeps_durable_projection_and_cannot_retry(self):
+        bound, frames = self.fixture()
+        with tempfile.TemporaryDirectory() as root:
+            calls = []
+            def sink(*args):
+                calls.append(1)
+                receipt = publisher.persist_authentication_snapshot(*args)
+                self.now = 285000
+                return receipt
+            subject = self.prepared(root, bound, sink)
+            subject.handle(self.request(bound, 1, 'bind'))
+            phase = provider.decode_auth_frame(frames[0])
+            subject.handle(self.request(bound, 2, 'validate', frames[0], phase))
+            reply = provider.decode_auth_frame(subject.handle(self.request(bound, 3, 'retain', frames[0], phase)))
+            self.assertEqual(reply['kind'], 'refused')
+            self.assertEqual(json.loads(self.path.read_bytes())['authenticationSession']['ordinal'], 1)
+            with self.assertRaises(provider.Refused): subject.handle(self.request(bound, 4, 'retain', frames[0], phase))
+            self.assertEqual(calls, [1])
+            with self.assertRaises(provider.Refused): self.prepared(root, bound)
+
+    def test_callback_native_refuses_before_clock_and_domain_rejects_secret_canary(self):
+        bound, frames = self.fixture()
+        with tempfile.TemporaryDirectory() as root:
+            native = copy.deepcopy(bound); native['mode'] = 'native'
+            with self.assertRaises(provider.Refused):
+                consumer.InertCallbackOwner(native, pathlib.Path(root) / 'result', {}, forbidden, forbidden)
+            subject = self.prepared(root, bound)
+            subject.handle(self.request(bound, 1, 'bind'))
+            phase = provider.decode_auth_frame(frames[0])
+            phase['p']['private-canary'] = 'NEVER-RETAIN-TOKEN-OR-PATH'
+            body = provider._auth_canonical(phase)
+            raw = len(body).to_bytes(4, 'big') + body
+            reply = subject.handle(self.request(bound, 2, 'validate', raw, phase))
+            self.assertEqual(provider.decode_auth_frame(reply)['reason'], 'domain')
+            self.assertNotIn(b'NEVER-RETAIN', reply)
+            self.assertFalse(self.path.exists()); self.assertNotIn('NEVER-RETAIN', json.dumps(self.report))
+
+    def test_callback_queued_entry_at_work_refuses_sink_and_wrong_receipt_retains_obligation(self):
+        bound, frames = self.fixture()
+        for late in (True, False):
+            with self.subTest(late=late), tempfile.TemporaryDirectory() as root:
+                calls = []
+                def sink(*args):
+                    calls.append(1)
+                    return {'binding': '0' * 64, 'ordinal': 1, 'frameDigest': '0' * 64}
+                subject = self.prepared(root, bound, sink)
+                subject.handle(self.request(bound, 1, 'bind'))
+                phase = provider.decode_auth_frame(frames[0])
+                subject.handle(self.request(bound, 2, 'validate', frames[0], phase))
+                if late: self.now = 285000
+                reply = provider.decode_auth_frame(subject.handle(self.request(bound, 3, 'retain', frames[0], phase)))
+                self.assertEqual(reply['reason'], 'deadline' if late else 'readback')
+                self.assertEqual(calls, [] if late else [1])
+                self.assertEqual(subject.unresolved_retention, not late)
 
 
 if __name__ == '__main__': unittest.main()
