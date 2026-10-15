@@ -1060,23 +1060,35 @@ SystemAdmin independently reviews host layout/backend/trust against its exact di
 Programme decides the join. This permits pure contract/vectors/tests only, with no
 production provider/workflow change or native/credential/release effect.
 
-Interface freeze remains held on complete signed descriptor/frame/ACK/read schemas and
-maximum vectors, separate original publisher and executing authentication identities,
-original-pin compatibility, ready ABI fit within 2,048 bytes, and the peer's actual
-irreversible-control algorithm/simultaneous-copy bound. Two extra 1,024-byte control
-copies would yield 66,048 bytes and refuse admission. Diagnostic/raw-receipt reads cannot
-become replacement gates; ambiguous-write/loss/expiry encodings remain counted obligations.
-The [source-join review](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200296350)
-adds two exact obligations: the closed legacy child ACK (`b,h,k,n,v` plus BE-u32 framing)
-remains distinct from the external signed ACK, joined through authenticated trusted
-persistence/readback and preserved `TakeAck`/`ConfirmAckSent` one-use/full-write/cutoff
-checks. Full wrapped start/ready frames must fit 2,048 bytes with their exact child
-binding. The 4,096-byte external descriptor cannot replace it; its authenticated binding
-relationship and complete maximum wrapped vectors remain unproved.
-Actual custody/enrollment, backend barrier/fresh exact readback, original-clock continuity
-and uncertainty, and independent loss evidence remain unqualified. The UTEL source owner
-owes the closed consumer/descriptor/copy join; SystemAdmin owns host/trust proof. Existing
-inert source and the bounded reservation do not establish later installed/native admission.
+[PR #4565](https://github.com/FS-GG/.github/pull/4565), protected at
+`7262518eedabcf354f998b2c75130200fea73a96`, delivers an accepted **inert serialized
+construction subset**: [closed schemas/vectors and model](https://github.com/FS-GG/.github/blob/7262518eedabcf354f998b2c75130200fea73a96/tests/release-successor-authentication/domain-contract.md)
+count 57,282 proposed encoded bytes, leaving 8,254 under the 65,536-byte cap.
+The authentication entry passed 66 pure tests and hosted qualifications passed.
+Original pins and publisher provenance remain distinct from executing authentication;
+the external descriptor commits the exact child-binding and full ready-frame digests.
+Ready/start structural maxima including framing are 1,291/1,273 bytes. Child ACK
+`b,h,k,n,v` remains separate from the 510-byte framed external ACK. The 546-byte framed
+diagnostic response is distinct from the existing 512-byte callback retain response and
+cannot become a replacement gate. Authenticated typed readback and existing
+`TakeAck`/`ConfirmAckSent` one-use/full-write/cutoff checks remain integration obligations.
+Placeholder signatures provide no authenticated positive evidence.
+
+The model counts host/peer control overlap, uncertainty and independent same-token 204
+observations; frozen core uncertainty permits only separately reserved append-once loss
+and expiry observations, with no retry of an uncertain observation write. It preserves
+first failure and original-effect holds. This does not prove the actual population fit.
+The remaining source-owner blocker is the simultaneous-copy/lifetime census and exact
+slot mapping across snapshots, accessors, callbacks/tasks/queue/sink/readback,
+serialization and restart. Public pinned [snapshot source](https://github.com/FS-GG/FS.GG.Coordination/blob/039cba0bc7d9057cd01f490803576f4b0e97fb16/src/FS.GG.Coordination.Orchestration.Execution/PhaseResultProtocol.fs)
+retains frame/payload arrays and returns copies; [callback source](https://github.com/FS-GG/FS.GG.Coordination/blob/bedee6f44529838843ca7c4dfb4cb8aa9f1e1f36/src/FS.GG.Coordination.Orchestration.Execution/PhaseCallbackProtocol.fs)
+retains a pending base64 frame. The API does not bound caller/accessor/callback retention.
+Seven possible extra maximum-ready copies exceed headroom (9,037 > 8,254); this is not
+an observed current allocation count. Memory, filesystem metadata/allocated blocks and
+native enforcement need finite proof. Actual signer custody/enrollment, authenticated
+barrier/fresh exact readback, original-clock continuity/uncertainty and independent loss
+proof remain SystemAdmin/consumer integration obligations. Interface freeze and later
+installed/native admission remain held; production provider/workflow remain unchanged.
 
 All six native selections and all admission/effect flags remain false. Preserve the
 accepted loss matrix, original `.103` attempted-unknown tag and no replay, unchanged

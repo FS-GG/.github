@@ -98,23 +98,43 @@ exact contract digest; Programme decides the join. The reservation permits pure 
 vectors and tests. It grants no production provider/workflow change, service installation,
 key enrollment, credential use, original dispatch or release-state change.
 
-The exact remaining hold is the complete signed descriptor/frame/ACK/read schemas and
-maximum vectors, including distinct original publisher and executing authentication
-identities and preservation of original pins; the current ready ABI must fit its
-2,048-byte slot. The peer must prove its irreversible-control persistence algorithm and
-simultaneous-copy bound: two extra 1,024-byte control copies would raise 64,000 to 66,048
-bytes and refuse admission. Diagnostic/raw-receipt reads must stay distinct from a
-replacement effect gate, and ambiguous-write/loss/expiry states need counted encodings.
-The [exact source-join review](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200296350)
-also distinguishes the closed legacy child ACK (`b,h,k,n,v` plus BE-u32 framing) from
-the external signed ACK. Its proposed size does not prove child-ABI compatibility.
-The trusted persistence/readback callback must authenticate issuer, descriptor, frame,
-ordinal, purpose and original clock before returning typed readback; three echoed fields
-cannot prove independent authority. Preserve `TakeAck`/`ConfirmAckSent` one-use,
-full-write and cutoff checks. Start/ready must include the exact child binding and fit
-2,048 bytes including framing and wrappers. The 4,096-byte external descriptor slot
-cannot replace that binding: freeze their authenticated relationship and supply complete
-maximum wrapped vectors without removing required original fields.
+[PR #4565](https://github.com/FS-GG/.github/pull/4565), protected at
+`7262518eedabcf354f998b2c75130200fea73a96`, delivers the accepted **inert serialized
+construction subset**. Its [closed contract and maximum vectors](https://github.com/FS-GG/.github/blob/7262518eedabcf354f998b2c75130200fea73a96/tests/release-successor-authentication/domain-contract.md)
+count 57,282 proposed encoded bytes and 8,254 bytes of headroom under that model's
+65,536-byte cap. The existing authentication entry passed 66 pure tests and the PR's
+hosted qualifications passed. These results establish the proposed encoding/model only;
+the production provider and workflow remain unchanged and interface freeze stays held.
+
+The construction retains all original dependency pins and the exact legacy child binding,
+with separate executing authentication identity. The external descriptor commits the exact
+binding digest and full ready-frame digest. Complete ready/start structural bounds are
+1,291/1,273 bytes including framing, within the 2,048-byte child ABI. The closed legacy
+`b,h,k,n,v` child ACK stays distinct from the 510-byte framed external ACK. The separate
+546-byte framed diagnostic response cannot replace the existing 512-byte callback retain
+response or become a gate. Proposed trusted verification must still join issuer,
+descriptor/frame/checkpoint, ordinal, purpose, challenge, generation and original clock to
+`TakeAck`/`ConfirmAckSent` one-use, full-write and cutoff checks. Placeholder signatures
+are never authenticated positive evidence.
+
+The closed model counts distinct host/peer control overlap, child/external receipts,
+diagnostic bytes and independent same-token 204 observations. Core uncertainty refuses
+further core/phase/gate mutation; separate loss and expiry slots remain append-once,
+including consumption of an uncertain observation write without retry. First failure and
+original-effect holds survive. These modeled rules do not establish a native persistence
+algorithm or actual population fit.
+
+The exact remaining fit blocker is the simultaneous-copy/lifetime census and slot mapping
+for the actual managed/native path. Pinned public [PhaseResultSnapshot source](https://github.com/FS-GG/FS.GG.Coordination/blob/039cba0bc7d9057cd01f490803576f4b0e97fb16/src/FS.GG.Coordination.Orchestration.Execution/PhaseResultProtocol.fs)
+retains distinct frame/payload arrays and allocates accessor copies; callback code retains
+[a pending base64 frame](https://github.com/FS-GG/FS.GG.Coordination/blob/bedee6f44529838843ca7c4dfb4cb8aa9f1e1f36/src/FS.GG.Coordination.Orchestration.Execution/PhaseCallbackProtocol.fs).
+The API alone does not bound caller/accessor/callback retention. Every simultaneous copy
+that survives as authority or uncertainty, including memory, must map to the proposed
+slots. Seven extra maximum-ready copies would add 9,037 bytes and exceed 8,254 headroom;
+this is a possible-copy counterexample, not an observed current population. Excluding a
+working array requires a proved bounded-call lifetime, lack of authority and separate
+finite memory bound. Actual callback/task/queue/sink/readback/serialization/restart
+lifetimes, filesystem metadata/allocated blocks and runtime bounds remain unproved.
 
 Actual signer custody and independent enrollment, backend barrier/fresh exact readback,
 authenticated original-clock continuity/uncertainty, and independent loss observation
