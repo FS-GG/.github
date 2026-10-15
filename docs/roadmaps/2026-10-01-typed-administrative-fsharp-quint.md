@@ -33,6 +33,27 @@ Outcome: current qualification and administrative entrypoints derive identities 
 
 The missing process record does not prove pre-dispatch refusal: supervisor destruction after dispatch can settle a pending request without `abiInvoked`. Existing worker errors/timeouts can also stamp that compatibility flag without proving an ABI return. New observations retain dispatch and available return evidence separately and never classify legacy error strings as authority. A full target/input/session-incarnation identity is snapshotted before awaiting work. Legal empty successful output can be Processed; absent observations remain Unknown. Controlled real-supervisor tests must verify terminal identity, no duplicate/conflicting completion, unchanged controller command count, exact refusal/capture matching and post-dispatch destruction.
 
+### Selected ordinary receiver activation — SDD
+
+The producer installed by [SDD #1110](https://github.com/FS-GG/FS.GG.SDD/pull/1110)
+subsequently admitted genuine routine source changes through its unchanged default-branch
+`pull_request_target` workflow. [Run 38585012934, attempt 1](https://github.com/FS-GG/FS.GG.SDD/actions/runs/38585012934)
+admitted [SDD #1111](https://github.com/FS-GG/FS.GG.SDD/pull/1111) at exact head
+`01bafdd2ec2e6e79bcd63aaa4780c4349eb78034` (25 changed paths).
+[Run 38589186761, attempt 1](https://github.com/FS-GG/FS.GG.SDD/actions/runs/38589186761)
+admitted [SDD #1112](https://github.com/FS-GG/FS.GG.SDD/pull/1112) at exact head
+`3a4246d138239fcf9de140e347cafc14dc122a09` (one changed path). Both logs report
+`check-claim-generation: OK` with `operation=source-change`. The latter PR's required
+checks passed, and native merge readback identifies protected commit
+`3555ce34456d0d60f1ad63852e40c8f179cc70dd`.
+
+This closes SDD's selected ordinary routine-producer activation assertion. Published typed
+replacement installation, downloaded-only package adoption, native acceptance and administrative
+retirement remain open under their owning gates. [FsQuint #44](https://github.com/FS-GG/FsQuint/pull/44)
+remains source installation only: its protected routine workflow has no genuine run at the
+2026-10-15 readback. The original FsQuint Execution adoption candidate and its reservations
+remain held pending accepted producer publication and the existing receiver qualification.
+
 ### Later outcome outline, not another ready queue
 
 **Remaining OPS-TYPED-01.5 administrative-owner migration outline.** The diagnostic source slice above is delivered; its native adoption remains open and does not wait for broad producer adoption. The inventory below stays deferred until its own measured coherent slice is selected. PR/delivery/telemetry/helper rewrites retain their completion authority. The inventory below identifies ownership, not permission to rewrite every script.
