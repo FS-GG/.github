@@ -1136,7 +1136,8 @@ Protected [PR #4573](https://github.com/FS-GG/.github/pull/4573) at
 `d3dd657b23fc1ac2f3aeb6cba06b6ca455406bdf` adds the [inert framed Python journey](https://github.com/FS-GG/.github/blob/d3dd657b23fc1ac2f3aeb6cba06b6ca455406bdf/tests/release-successor-authentication/slot-sink-contract.md#framed-injected-stream-fixture)
 through actual decoder/owner/typed sink, with original scalar guard before copying
 and complete write plus flush before confirmation. Failure permanently closes while
-retaining Unknown/stores/attempts; no retry follows. Thirteen focused/103 full tests
+retaining existing stores/attempts and any existing Unknown; malformed input before
+a phase does not create Unknown, and no retry follows. Thirteen focused/103 full tests
 and hosted checks passed, including exact 13 exchanges/six retained frames. This
 accepts injected Python integration only: source pins and managed-profile selection
 remain unchanged; no whole-fit, production transport, durability, host-clock or native

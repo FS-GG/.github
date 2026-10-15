@@ -207,7 +207,8 @@ Protected [PR #4573](https://github.com/FS-GG/.github/pull/4573) at
 through the actual decoder → callback owner → typed slot sink. The original report
 passes the scalar guard before copying. A full response write and successful flush
 precede confirmation; partial/malformed input and write/flush failure permanently
-close the fixture, preserving backend attempts/stores and Unknown without retry.
+close the fixture, preserving existing backend attempts/stores and any existing Unknown
+without retry; malformed input before a phase does not create Unknown.
 The protected 13 exchanges and six retained frames match exactly. Thirteen focused
 controls, 103 full authentication tests and required hosted checks passed (32 success,
 two skipped). This accepts only injected-stream Python integration: it changes no
