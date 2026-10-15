@@ -63,6 +63,31 @@ This field mapping is not a runnable input, a grant or proof of complete invento
 [typed controls](https://github.com/FS-GG/.github/blob/877dd41610ed48aa39895845d99202285d5f3955/tests/work-programme/routine-decisions.fsx) for unknown/stale resources,
 CPU/memory occupancy and retained holds; no new scheduler or process ledger is needed.
 
+### Cheap assembled carrier preflight
+
+For changes to skills or Atlas delivery, run from the final candidate checkout:
+
+```bash
+bash tests/skill-quality/run.sh --preflight BASE_SHA
+```
+
+Replace `BASE_SHA` with the exact 40-character base commit available in local Git objects. Requires
+Bash, standard Unix file tools, Python 3, Git and Python SQLite with FTS5; no downloads, PyYAML, SDK or CLR launch. The command
+runs the existing Atlas delivery checks, including archive/seed agreement, history and staged payload,
+then uses the full skill-quality fixture's same partial tree and relative-link predicate. Python
+bytecode writing is disabled throughout; existing generated caches or changes to delivered skill bytes
+refuse before any gate-engine build. A link can
+resolve in this checkout but fail when the fixture omits its target. Keep repository-only references
+as explicit source URLs or prose paths instead of claiming they are carried with the skill.
+
+A failed check, malformed base, missing prerequisite or uninterpretable result returns nonzero before
+any gate-engine build. Exit0 proves only this assembled archive/link scope; it grants no resource or
+effect admission and replaces no semantic, compiler, native, installed or required hosted assertion.
+The normal `bash tests/skill-quality/run.sh` also runs these cheap checks before its unchanged full
+qualification (without an explicit history baseline; the dedicated Atlas gate retains that obligation).
+Measure the complete command including fixture preparation, staging and cleanup; retain original
+failures and cold/warm setup uncertainty rather than claim avoided attempts or comparative benefit.
+
 For this repository's work-programme suites, run from the checkout:
 
 ```bash
