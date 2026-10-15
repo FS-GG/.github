@@ -1150,6 +1150,14 @@ refuse without custom equality execution or reservation/backend/phase changes; v
 subsequent frames succeed. This is an inert input-boundary correction, with no deployed
 host, whole-fit or native claim.
 
+Protected [PR #4576](https://github.com/FS-GG/.github/pull/4576) at
+`fca016e1db30a279a5489223d19408f086eb18b5` extends exact-type preparation checks to
+identity/window/population/role declarations before set/equality and snapshots admitted
+literals before caller hooks. Spoofed scalars/mappings refuse without custom comparison
+or reservation; later caller mutation cannot alter admitted identity/path/generation.
+Sixteen focused/106 full tests and hosted checks passed (32 success, two skipped).
+This closes an inert declaration boundary, with no whole-fit, installed-host or native
+claim; producer integration remains separate.
 Actual signer custody/enrollment, authenticated barrier/fresh exact readback, original-clock
 continuity/uncertainty and independent loss proof remain SystemAdmin/consumer obligations.
 Interface freeze and installed/native admission stay held; production provider/workflow
