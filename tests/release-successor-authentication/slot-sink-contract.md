@@ -131,3 +131,60 @@ authenticate host clocks or establish native ACK custody. All earlier common-fit
 native, original `.103` attempted-unknown/no-replay and `.104` holds remain. Programme
 owns capture of this additional reusable integration finding in the existing Atlas
 capture gap.
+
+## Separate controlled callback pairing profile
+
+`inert-slot-callback-pair/1` selects only the new fixed
+`slot-callback-pair-manifest.json`, `slot-callback-pair-vectors.json` and
+`slot-sink-callback-entry.py`. The earlier twelve-role callback profile, its frozen
+vectors, the ten-role factory manifest and production sinks remain unchanged. The
+new sixteen-row manifest binds ten local roles and six exact protected Coordination
+roles. Its local import closure includes `fsgg_feed.py`,
+`release_successor_execution.py`, the provider, consumer, domain construction,
+typed slot sink, framed fixture and new entry, plus the wire/callback contracts.
+The closed selector verifies the complete ordered role population, exact source
+pins, sorted-row digest and all ten local file hashes. The entry consumes only the
+independently supplied inert binding and original clock arguments; it imports no
+publisher or operational receipt writer.
+
+The entry accepts three arguments: base64 canonical binding JSON, base64 canonical
+clock JSON, and a synthetic evidence destination. No environment values select
+its backend, sink or profile. It constructs the controlled backend and the existing
+framed fixture. Each bounded four-byte prefix and body goes through `feed()`;
+that existing path writes exactly one complete reply, checks the actual built-in
+integer write count, flushes, and confirms the decoder response before proceeding.
+The selected success journey has thirteen exchanges and six phase slots.
+
+The entry returns after the actual terminal retain reply has completed that
+write/flush/confirmation sequence. It does not call the fixture's EOF-dependent
+`run()` route: the managed caller waits for child exit before closing stdin.
+**Input EOF is unobserved and queued trailing input is unchecked.** Decoder
+response confirmation establishes settlement of that reply only. No EOF, transport
+closure, general pipelining or complete input-population assertion follows. The
+entry bounds the selected journey to thirteen requests; an earlier terminal reply
+cannot produce the six-slot success artifact.
+
+On success, exclusive file creation emits at most 32,768 encoded bytes with the
+closed `fsgg.inert-slot-callback-test-evidence/1` shape: `profile`, binding digest,
+`ordinal: 6`, six `slots` records containing `ordinal`, exact frame `bytes` as
+lowercase hexadecimal, and `sha256`; `terminalResponseConfirmed: true`,
+`inputEofObserved: false`, `trailingInputChecked: false`,
+`operationalReceipt: false`, and null `nativeCampaign`/`nativeAttempt`.
+These are actual bytes retained by the controlled backend, exported only for
+synthetic test comparison. The artifact is neither a whole report nor an
+operational receipt, and no barrier, authenticated host readback, common-population
+fit or native completion is established. The corpus includes this same evidence
+as `slotEvidence`, alongside the existing binding/exchanges/finalReadback shape.
+
+Malformed/incomplete input, write/flush/confirmation failure, backend refusal and
+evidence-output failure return a nonzero status with only
+`slot-sink-callback-refused` on stderr. There is no retry, fallback sink or
+whole-report serialization. A lost terminal response leaves already retained slot
+bytes intact and supplies no success artifact. Reusing the same reserved backend
+refuses. Focused controls exercise the full journey with an input that refuses
+any EOF read, leave queued trailing bytes unread, inject failures on the terminal
+reply, and verify the actual runtime import closure. Run
+`python3 tests/release-successor-authentication/slot-callback-pair-tests.py` or the
+established authentication runner. The existing total-fit, installed/host/native,
+original `.103` no-replay and `.104` holds remain. Programme owns Atlas capture of
+this separate source pairing after protected acceptance.
