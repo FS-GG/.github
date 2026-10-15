@@ -52,6 +52,44 @@ Likely touch-set: relevant `work-programme`/`work-roadmap` references and their 
 component caller/preflight/tests, existing acceptance evidence. Resolve exact paths before assignment;
 this plan does not reserve broad directories or authorize unrelated CI redesign.
 
+### Partial evidence — 15 October, 10:27 UTC
+
+[PR #4531](https://github.com/FS-GG/.github/pull/4531) delivered the final-candidate preflight at
+protected source `877dd41610ed48aa39895845d99202285d5f3955`.
+[Hosted qualification](https://github.com/FS-GG/.github/actions/runs/38718668310) passed all nine
+required runner suites at its exact candidate; all branch-required checks passed. The local preflight
+command needed no provisioning/downloads: first observed invocation 47.1 ms, three warm invocations
+46.7–49.3 ms. OS cache state was uncontrolled; active integration/repair effort was not instrumented.
+The original fixture declaration failures and the independently found post-preflight pin/symlink gap
+were repaired with retained negative controls; these repairs do not establish comparative savings.
+
+The programme maintainer observed one local `bash tests/work-programme/run.sh` profile at that protected
+source, **10:26:57.537–10:27:08.573 UTC**, using its original 170-second deadline. All nine suites passed
+in 11.036 seconds wall time (runner: 10.959 seconds), with no first cause or omitted coverage and successful
+cleanup/reporting. Across 110 samples at approximately 0.1-second intervals, aggregate family RSS peaked
+at **547,225,600 bytes (521.875 MiB)** and sampled CPU demand at **1.8785 cores**; peak threads were 61.
+The cgroup's sampled memory peak was 15,692,103,680 bytes including unrelated background work; its
+OOM/max counters did not increase. No known family survivor remained, and the final process readback
+found no live CLR process. Two observed CLR descendants belonged to this single serial workload.
+
+The earlier prelaunch inventory correctly held execution on seven unknown MSBuild processes. Their
+original owner was subsequently identified and absence observed before launch; no signal was sent and
+their termination cause remains unknown. The maintainer retains the original hold, process identities,
+profile, samples, runner output and summary in restricted pilot evidence. These are owner-observed local
+aggregates, separate from the linked hosted result. Sampling can miss short peaks, aggregate RSS can
+count shared pages twice, and the historical cgroup peak was not reset. The overlay was observed; SSD
+backing relied on the supplied environment admission rather than independently visible device evidence.
+
+**Second workload held:** background process ownership/reservation completeness and the second candidate's
+profile, disjoint output/cache joins and combined measured headroom have not been established. No second
+workload was requested or admitted in this pilot. Follow the existing
+[worked admission route](../../.agents/skills/work-programme/references/context.md#worked-admission-and-evidence-route)
+when real ready work supplies those prerequisites. The selected Coordination/SystemAdmin cross-repository
+cohort still needs next-candidate treatment and comparison; attempts/diagnosis baselines remain incomplete.
+Retain the preflight correctness change with **inconclusive economics**; this is not a wider-rollout decision.
+The .1 checkbox remains open: this evidence establishes one bounded local profile and partial source
+adoption, not two-workload acceptance, cross-repository evaluation or selected installed adoption.
+
 ## Change 2 — finish V2-DIAG-01.4 adoption
 
 **V3-IMPROVE-01.2** is the integration join to

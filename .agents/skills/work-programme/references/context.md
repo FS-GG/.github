@@ -24,6 +24,45 @@ outputs and shared state are disjoint, and every existing/unknown reservation is
 profile or reservation evidence keeps the narrower window; it never establishes two-workload acceptance.
 No new ledger is required: use the existing packet/current owner artifact and enforcing runner admission.
 
+### Worked admission and evidence route
+
+Use the existing [routine-decisions contract](adapter.md#additive-routine-decisions), not a second
+scheduler. For example, after one successful serial qualification, a second component owner requests
+an independently useful compile. The designated capacity owner follows this route:
+
+1. Retain the first operation's exact source, sampled demand, original bounds, terminal result and
+   observed cleanup in its existing owner artifact. Two CLR processes inside one caller are one
+   workload, not evidence of two independently admitted workloads. Sampling can miss peaks; choose
+   a supported profile with stated uncertainty/headroom rather than convert a sample into a hard cap.
+2. Refresh the complete lane reservation view and native process/storage evidence. Preserve unknown
+   processes in the resource evidence without inventing lane/operation identities. Missing resource
+   bounds, unquantified reservations or uncertain shared outputs keep the second workload held.
+3. Map those observations to the existing input fields below, retaining genuine source/owner/attempt
+   joins and original observation times. Carry `previous` and original operation history forward;
+   a newer summary cannot release an unresolved reservation or renew its deadline.
+
+| Existing input | Evidence supplied by the owner |
+|---|---|
+| `resources.known`, `observedAt`, `evidence` | Current completeness/freshness and the original inventory/measurement pointer; unknown availability stays `known:false`. |
+| `resources.cpu`, `memoryMiB`, `occupiedCpu`, `occupiedMemoryMiB` | Verified capacity and conservative occupied/reserved totals in the same units; include admitted helpers and build servers. |
+| `resources.agentMode`, `cpuMemoryMode` | Actual soft/enforced/unknown modes; agent slots and machine resources remain separate. |
+| Operation `cpu`, `memoryMiB`, allocation and deadline fields | That operation's supported profile/demand and unchanged original bounds, backed by its evidence/history. |
+
+4. Evaluate through the existing `routine-decisions` route. Unknown/stale resource evidence yields
+   `wait-for-resources`; insufficient remaining CPU/memory yields the same action with a distinct
+   reason. Preserve the full retained reservation view and the original blocker. The reducer compares
+   each operation with caller-supplied occupied totals; it does not atomically reserve several proposed
+   workloads. Account every newly admitted demand before evaluating or launching another operation.
+5. A favorable advisory result grants no execution. The existing native runner/owner rechecks actual
+   source, resources, disjoint outputs and shared caches/state beside launch under the applicable
+   admission. For an admitted pair, retain measured overlap, each workload's peaks/results, combined
+   occupancy, first failures and independently observed cleanup in the same owner artifacts. If the
+   second workload stays held, record why; neither free cores nor multiple CLR processes clear it.
+
+This field mapping is not a runnable input, a grant or proof of complete inventory. Reuse the current
+[typed controls](https://github.com/FS-GG/.github/blob/877dd41610ed48aa39895845d99202285d5f3955/tests/work-programme/routine-decisions.fsx) for unknown/stale resources,
+CPU/memory occupancy and retained holds; no new scheduler or process ledger is needed.
+
 For this repository's work-programme suites, run from the checkout:
 
 ```bash
