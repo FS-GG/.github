@@ -31,6 +31,7 @@ sys.addaudithook(audit)
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import release_successor_provider as provider
+import release_successor_auth_consumer as consumer
 import release_successor_journal as journal
 spec = importlib.util.spec_from_file_location('authentication_publisher', ROOT / 'scripts/release-successor-publish.py')
 publisher = importlib.util.module_from_spec(spec)
@@ -221,6 +222,43 @@ class FactoryControls(unittest.TestCase):
         session.adapter.normal = 0
         with self.assertRaises(provider.Refused): session._request('GET', '/app', 'inert-jwt')
 
+    def test_repository_census_identity_and_extra_rows_refuse_and_revoke_once(self):
+        for repositories in ([{'id': 7, 'full_name': 'FS-GG/.github'}],
+                             [{'id': 1269292704, 'full_name': 'FS-GG/other'}],
+                             [{'id': 1269292704, 'full_name': 'FS-GG/.github'},
+                              {'id': 7, 'full_name': 'FS-GG/other'}]):
+            with self.subTest(repositories=repositories):
+                opener = Opener(); opener.rows[4]['repositories'] = repositories
+                qualified, report = self.run_factory(opener)
+                self.assertFalse(qualified)
+                self.assertEqual(report['cleanup'], 'revoked')
+                self.assertEqual(report['requests']['issuancePosts'], 1)
+                self.assertEqual(report['requests']['revocationDeletes'], 1)
+                facts = provider.decode_auth_frame(self.last_frames[-1])['p']['facts']
+                self.assertEqual(facts['firstCause'], {'stage': 'census', 'code': 'scope'})
+
+    def test_cleanup_response_refusal_keeps_owned_effect_unknown_without_retry(self):
+        for fault in ('status', 'redirect', 'pagination', 'body'):
+            with self.subTest(fault=fault):
+                opener = Opener(); original = opener.open
+                def refuse_cleanup(request, timeout):
+                    response = original(request, timeout)
+                    if request.method == 'DELETE':
+                        if fault == 'status': response.status = 403
+                        if fault == 'redirect': response.url = 'https://untrusted.invalid/'
+                        if fault == 'pagination': response.headers['Link'] = '<next>'
+                        if fault == 'body': response.body = io.BytesIO(b'inert-owned-token')
+                    return response
+                opener.open = refuse_cleanup
+                qualified, report = self.run_factory(opener)
+                self.assertFalse(qualified)
+                self.assertEqual(report['cleanup'], 'revocation-unknown')
+                self.assertEqual(report['requests']['issuancePosts'], 1)
+                self.assertEqual(report['requests']['revocationDeletes'], 1)
+                terminal = provider.decode_auth_frame(self.last_frames[-1])['p']
+                self.assertFalse(terminal['qualified'])
+                self.assertEqual(terminal['facts']['revocation']['state'], 'unknown')
+
     def test_normal_production_factory_remains_unavailable(self):
         with self.assertRaises(provider.Refused): provider.approved_original_tag_transport()
 
@@ -251,6 +289,62 @@ class FactoryControls(unittest.TestCase):
         self.assertIn('--qualify-original-tag-authentication-only', inactive)
 
 class ProtocolControls(unittest.TestCase):
+    def test_pinned_existing_wire_contract_labels_only_inert_source_coverage(self):
+        pin = json.loads((pathlib.Path(__file__).parent / 'wire-contract.json').read_bytes())
+        vectors = protocol_vectors()
+        self.assertEqual(pin['protocol'], provider.AUTH_PROTOCOL)
+        self.assertEqual(pin['profile'], provider.AUTH_PROFILE)
+        self.assertEqual(pin['mode'], vectors['mode'])
+        self.assertEqual(pin['gatePhases'], ['ready', 'issuance-possible', 'revocation-possible'])
+        children = [bytes.fromhex(raw) for raw in vectors['children']]
+        acks = [bytes.fromhex(raw) for raw in vectors['acks']]
+        self.assertTrue(all(len(raw) <= pin['maximumFrameBytes'] for raw in children))
+        self.assertTrue(all(len(raw) <= pin['maximumAckBytes'] for raw in acks))
+        self.assertLessEqual(sum(map(len, children + acks)), pin['maximumAggregateBytes'])
+
+    def test_independent_readback_mismatch_never_opens_ready_gate(self):
+        with tempfile.TemporaryDirectory() as root:
+            channel = RetainedChannel(root); opener = Opener()
+            original_open = pathlib.Path.open
+            def mismatched_readback(path, mode='r', *args, **kwargs):
+                if path == channel.path and mode == 'rb':
+                    return io.BytesIO(b'{}\n')
+                return original_open(path, mode, *args, **kwargs)
+            child = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123,
+                phase_adapter=adapter(channel), opener=opener)
+            with patch.object(pathlib.Path, 'open', mismatched_readback):
+                self.assertFalse(child.qualify(channel.report))
+            self.assertTrue(channel.path.exists())  # Replacement may have happened.
+            self.assertEqual(channel.acks, [])
+            self.assertEqual(opener.calls, [])
+            self.assertTrue(child.adapter.failed)
+            self.assertFalse(channel.report['qualified'])
+            self.assertNotIn('authenticationSession', channel.report)
+
+    def test_first_validation_cause_survives_cleanup_and_terminal_reporting_failure(self):
+        with tempfile.TemporaryDirectory() as root:
+            channel = RetainedChannel(root); opener = Opener()
+            opener.rows[3]['permissions'] = {'contents': 'write'}
+            opener.fail_cleanup = True
+            def fail_terminal(raw):
+                if provider.decode_auth_frame(raw)['k'] == 'terminal':
+                    raise RuntimeError('inert-owned-token inert-jwt reporting sentinel')
+                return channel(raw)
+            subject = provider.AuthenticationPhaseAdapter(channel.binding, fail_terminal, lambda: 1)
+            child = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123,
+                phase_adapter=subject, opener=opener)
+            self.assertFalse(child.qualify(channel.report))
+            self.assertEqual(child.facts['firstCause'], {'stage': 'permissions', 'code': 'scope'})
+            self.assertEqual(child.facts['revocation']['state'], 'unknown')
+            self.assertEqual(channel.report['cleanup'], 'revocation-unknown')
+            self.assertEqual(channel.report['requests']['revocationDeletes'], 1)
+            self.assertEqual(provider.decode_auth_frame(channel.frames[-1])['k'], 'revocation-possible')
+            retained = channel.path.read_bytes()
+            for sentinel in (b'inert-owned-token', b'inert-jwt', b'reporting sentinel'):
+                self.assertNotIn(sentinel, retained)
+                self.assertNotIn(sentinel.decode(), json.dumps(channel.report))
+            self.assertIsNone(child._jwt); self.assertIsNone(child._token)
+
     def test_blocked_older_persistence_serializes_before_terminal_without_late_overwrite(self):
         vectors = protocol_vectors(); bound = vectors['binding']
         frames = [bytes.fromhex(x) for x in vectors['children']]
@@ -491,6 +585,53 @@ class ProtocolControls(unittest.TestCase):
         terminal['facts']['firstCause'] = {'stage': 'revocation-possible', 'code': 'credential-input'}
         final = provider.encode_auth_frame(bound, 6, 'terminal', terminal)
         self.assertLessEqual(len(ready), 2048); self.assertLessEqual(len(final), 2048)
+
+    def test_inert_consumer_accepts_exact_producer_start_once(self):
+        vectors = protocol_vectors(); expected = vectors['binding']
+        held = copy.deepcopy(expected)
+        subject = consumer.InertStartConsumer(expected)
+        expected['app']['id'] = 1  # Caller mutation cannot change the held identity.
+        with tempfile.TemporaryDirectory() as root:
+            channel = RetainedChannel(root, held)
+            adapter = subject.take(bytes.fromhex(vectors['start']), channel, lambda: 1)
+            self.assertEqual(subject.binding_digest, provider.validate_auth_binding(held))
+            self.assertEqual(channel.frames, [])  # Start admission emits no child phase.
+            adapter.emit('ready', {'binding': held})
+            self.assertEqual([provider.decode_auth_frame(x)['k'] for x in channel.frames], ['ready'])
+            with self.assertRaises(provider.Refused):
+                subject.take(bytes.fromhex(vectors['start']), channel, lambda: 1)
+
+    def test_inert_consumer_refuses_changed_or_ambiguous_start_before_callbacks(self):
+        vectors = protocol_vectors(); raw = bytes.fromhex(vectors['start'])
+        row = json.loads(raw[4:]); binding = vectors['binding']
+        cases = {'short': raw[:-1], 'length': b'\0\0\0\1' + raw[4:],
+                 'digest': None, 'binding': None, 'extra': None,
+                 'ordinal': None, 'duplicate': None, 'noncanonical': None}
+        for name in ('digest', 'binding', 'extra', 'ordinal'):
+            changed = copy.deepcopy(row)
+            if name == 'digest': changed['b'] = '0' * 64
+            if name == 'binding': changed['p']['app']['id'] += 1
+            if name == 'extra': changed['credential'] = 'forged'
+            if name == 'ordinal': changed['n'] = 1
+            body = provider._auth_canonical(changed)
+            cases[name] = len(body).to_bytes(4, 'big') + body
+        body = raw[4:-1] + b',"v":"fsgg.execution.phase-result/1"}'
+        cases['duplicate'] = len(body).to_bytes(4, 'big') + body
+        body = json.dumps(row, indent=1).encode('ascii')
+        cases['noncanonical'] = len(body).to_bytes(4, 'big') + body
+        for name, frame in cases.items():
+            with self.subTest(name=name):
+                calls = []
+                subject = consumer.InertStartConsumer(binding)
+                with self.assertRaises(provider.Refused):
+                    subject.take(frame, lambda *_: calls.append('exchange'), lambda: calls.append('clock'))
+                self.assertEqual(calls, [])
+                with self.assertRaises(provider.Refused):
+                    subject.take(raw, lambda *_: calls.append('exchange'), lambda: 1)
+
+    def test_inert_consumer_refuses_native_binding_without_a_port(self):
+        bound = binding(); bound['mode'] = 'native'; bound['workflow']['run'] = 1; bound['workflow']['attempt'] = 1
+        with self.assertRaises(provider.Refused): consumer.InertStartConsumer(bound)
 
 
 def protocol_vectors():
