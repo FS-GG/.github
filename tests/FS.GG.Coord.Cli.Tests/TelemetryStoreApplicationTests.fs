@@ -3922,8 +3922,46 @@ PRAGMA user_version=13;
 
     let private writeSchema13BackupFixture path schema =
         let database = Path.Combine(path,TelemetryStoreApplication.databaseFileName)
-        let manifest = JsonSerializer.Serialize {| schema = "fsgg.telemetry.host-backup/1"; storeSchemaVersion = schema; workspaceId = "migration-workspace"; files = [| {| path = TelemetryStoreApplication.databaseFileName; sha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes database)).ToLowerInvariant(); bytes = FileInfo(database).Length |} |] |}
+        let inbox = Path.Combine(path,"receipt-inbox")
+        let files =
+            [| yield database
+               if Directory.Exists inbox then
+                   yield! Directory.EnumerateFiles(inbox,"*.ready") |]
+            |> Array.map (fun file ->
+                {| path = Path.GetRelativePath(path,file).Replace(Path.DirectorySeparatorChar,'/')
+                   sha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes file)).ToLowerInvariant()
+                   bytes = FileInfo(file).Length |})
+        let manifest = JsonSerializer.Serialize {| schema = "fsgg.telemetry.host-backup/1"; storeSchemaVersion = schema; workspaceId = "migration-workspace"; files = files |}
         File.WriteAllText(Path.Combine(path,"manifest.json"),manifest+"\n")
+
+    let private schema13PendingReceiptBackup path =
+        genuineSchema13 path
+        correctionSql path "DELETE FROM ingest_batches; INSERT INTO store_metadata VALUES('receiptWorkspace','migration-workspace'); SELECT 1;" |> ignore
+        Directory.Delete(Path.Combine(path,"inbox"),true)
+        let scope: TelemetryReceipt.Scope =
+            { Workspace = "migration-workspace"; Producer = "migration-producer"; Stream = "runtime" }
+        let bytes =
+            Encoding.UTF8.GetBytes
+                $"""{{"schema":"{TelemetryReceipt.Schema}","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"pending13-batch","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"pending13-native","sourceIdentity":"pending13-source","generation":"g1","cursor":"1","eventCount":1,"events":[{{"kind":"item","identity":"pending13-item","itemId":"V2-EFF-01.2","revision":0}}]}}}}"""
+        let envelope = TelemetryReceipt.parse bytes |> unwrap
+        let admission = TelemetryReceipt.encodeAdmission (TelemetryReceipt.genericPrincipal scope) envelope |> unwrap
+        let inbox = Path.Combine(path,"receipt-inbox")
+        Directory.CreateDirectory inbox |> ignore
+        let ready = Path.Combine(inbox,envelope.Key + ".ready")
+        File.WriteAllText(ready,admission)
+        use connection = new SqliteConnection($"Data Source={Path.Combine(path,TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <- "INSERT INTO receipt_producers(producer,stream,authority_role) VALUES($producer,$stream,'generic'); INSERT INTO transport_receipts(producer,batch,stream,digest,payload_bytes,state) VALUES($producer,$batch,$stream,$digest,$bytes,'durably-received');"
+        command.Parameters.AddWithValue("$producer",scope.Producer) |> ignore
+        command.Parameters.AddWithValue("$stream",scope.Stream) |> ignore
+        command.Parameters.AddWithValue("$batch",envelope.BatchId) |> ignore
+        command.Parameters.AddWithValue("$digest",envelope.Digest) |> ignore
+        command.Parameters.AddWithValue("$bytes",Encoding.UTF8.GetByteCount admission) |> ignore
+        command.ExecuteNonQuery() |> ignore
+        connection.Close()
+        writeSchema13BackupFixture path 13
+        scope,bytes,ready
 
     [<Fact>]
     let ``schema13 authentic backup restores through migration into fresh root`` () =
@@ -3946,6 +3984,54 @@ PRAGMA user_version=13;
         Assert.Equal(cursor,correctionSql restored "SELECT cursor||batch_digest FROM source_cursors;")
         Assert.Equal(originalDatabase,Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(path,TelemetryStoreApplication.databaseFileName)))))
         Assert.True(TelemetryStoreApplication.import13ReceiptBackup path restored approved "migration-workspace" |> Result.isError)
+
+    [<Fact>]
+    let ``schema13 pending receipt backup conserves obligation through import and drain`` () =
+        let cleanup,path = root ()
+        use cleanup = cleanup
+        let restoredCleanup,restored = root ()
+        use restoredCleanup = restoredCleanup
+        let scope,envelope,ready = schema13PendingReceiptBackup path
+        let inputFiles =
+            [| Path.Combine(path,TelemetryStoreApplication.databaseFileName)
+               Path.Combine(path,"manifest.json")
+               ready |]
+            |> Array.map (fun file -> file,Convert.ToHexString(SHA256.HashData(File.ReadAllBytes file)))
+        Assert.Equal("13",correctionSql path "PRAGMA user_version;")
+        Assert.Equal("1",correctionSql path "SELECT count(*) FROM transport_receipts WHERE state='durably-received';")
+        TelemetryStoreApplication.import13ReceiptBackup path restored approved scope.Workspace |> unwrap |> ignore
+        Assert.Equal("14",correctionSql restored "PRAGMA user_version;")
+        Assert.Equal("1",correctionSql restored "SELECT count(*) FROM transport_receipts WHERE state='durably-received';")
+        Assert.Equal("1",correctionSql restored "SELECT count(*) FROM receipt_producers WHERE producer='migration-producer' AND stream='runtime';")
+        Assert.Equal("1",correctionSql restored "SELECT count(*) FROM receipt_admissions WHERE producer='migration-producer' AND batch='pending13-batch';")
+        Assert.Contains("\"status\":\"durably-received\"",TelemetryStoreApplication.lookupReceipt restored approved scope "pending13-batch" |> unwrap)
+        Assert.Contains("\"applied\":1",TelemetryStoreApplication.drainReceipts restored approved scope.Workspace |> unwrap)
+        Assert.Equal("1",correctionSql restored "SELECT count(*) FROM transport_receipts WHERE state='applied';")
+        Assert.Equal("1",correctionSql restored "SELECT count(*) FROM ingest_facts WHERE identity='pending13-item';")
+        Assert.Contains("\"status\":\"applied\"",TelemetryStoreApplication.lookupReceipt restored approved scope "pending13-batch" |> unwrap)
+        Assert.Contains("\"status\":\"applied\"",TelemetryStoreApplication.submitReceipt restored approved scope envelope |> unwrap)
+        Assert.Contains("\"applied\":0",TelemetryStoreApplication.drainReceipts restored approved scope.Workspace |> unwrap)
+        Assert.Equal("1",correctionSql restored "SELECT count(*) FROM ingest_facts WHERE identity='pending13-item';")
+        Assert.Equal("13",correctionSql path "PRAGMA user_version;")
+        for file,digest in inputFiles do
+            Assert.Equal(digest,Convert.ToHexString(SHA256.HashData(File.ReadAllBytes file)))
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``schema13 pending receipt import refuses missing or changed ready bytes`` changed =
+        let cleanup,path = root ()
+        use cleanup = cleanup
+        let restoredCleanup,restored = root ()
+        use restoredCleanup = restoredCleanup
+        let scope,_,ready = schema13PendingReceiptBackup path
+        if changed then
+            File.WriteAllText(ready,"not a receipt admission")
+            writeSchema13BackupFixture path 13
+        else
+            File.Delete ready
+        Assert.True(TelemetryStoreApplication.import13ReceiptBackup path restored approved scope.Workspace |> Result.isError)
+        Assert.False(Directory.Exists restored)
 
     [<Fact>]
     let ``schema13 mislabeled14 database refuses before restore publication`` () =
