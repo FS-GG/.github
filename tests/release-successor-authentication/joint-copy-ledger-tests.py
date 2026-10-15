@@ -76,13 +76,13 @@ class JointCopyLedgerControls(unittest.TestCase):
         self.assertGreater(result['groups'][0]['known_object_logical_bytes'], ledger.CAP)
         self.assertEqual(result['fit'], 'unproved')
 
-    def test_physical_overflow_requires_one_compatible_cut_and_distinct_objects(self):
+    def test_supplied_bound_overflow_is_conditional_and_needs_one_compatible_cut(self):
         # Synthetic adversarial control, not an additional observed population.
         physical = copy.deepcopy(self.inputs['observations'][0])
         physical.update(id='synthetic:physical', quantity_type='physical-byte-lower-bound', quantity=65537,
                         alias_class='synthetic-independent-object')
         self.inputs['observations'].append(physical)
-        self.assertEqual(ledger.reconcile(self.inputs)['fit'], 'demonstrated-overflow')
+        self.assertEqual(ledger.reconcile(self.inputs)['fit'], 'supplied-bound-overflow')
         physical['quantity'] = 40000
         separate = copy.deepcopy(physical)
         separate.update(id='synthetic:other-cut', cut='incompatible-cut')

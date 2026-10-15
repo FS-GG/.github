@@ -140,14 +140,15 @@ def reconcile(document):
                             ('physical-byte-lower-bound', 'physical_byte_lower_bound')):
             values = [row.quantity for row in selected if row.quantity_type == kind and row.quantity is not None]
             if values: group[field] = sum(values)
-        # A partial physical lower bound may refute fit; logical sums cannot.
+        # Conditional on the supplied bound; this parser does not validate a physical measurement.
+        # Logical sums cannot establish even this conditional physical overflow.
         bound = group['physical_byte_lower_bound']
-        if bound is not None and bound > CAP: group['fit'] = 'demonstrated-overflow'
+        if bound is not None and bound > CAP: group['fit'] = 'supplied-bound-overflow'
     return {'schema': 'fsgg.joint-copy-ledger-result/1',
             'observations': [dict(asdict(row), scope=dict(zip(('topology', 'run', 'process', 'attempt'), row.scope))) for row in observations],
             'groups': list(groups.values()),
             'supported_alias_deductions': deductions, 'missing_obligations': list(obligations),
-            'fit': 'demonstrated-overflow' if any(g['fit'] == 'demonstrated-overflow' for g in groups.values()) else 'unproved',
+            'fit': 'supplied-bound-overflow' if any(g['fit'] == 'supplied-bound-overflow' for g in groups.values()) else 'unproved',
             'admission': False}
 
 

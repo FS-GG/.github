@@ -46,8 +46,10 @@ refuses; cross-source correspondence remains an obligation. Repeated roles for
 one object count once; inconsistent quantities refuse. Every quantity has an
 explicit type. Unknown quantities remain `null`; absent populations do not become
 zero. Logical byte lengths never establish a physical bound. A supplied, distinct,
-compatible observed physical-byte lower bound above 65,536 may demonstrate overflow;
-the synthetic overflow regression does not add an observed population.
+compatible declared physical-byte lower bound above 65,536 yields
+`supplied-bound-overflow`, conditional on that supplied premise. The parser does
+not validate physical measurements; the label establishes no measured overflow.
+The synthetic regression does not add an observed population.
 
 For these inputs every physical lower bound remains unknown and **fit is unproved**.
 There is no successful-fit result or runtime admission. Missing caller/evidence/
