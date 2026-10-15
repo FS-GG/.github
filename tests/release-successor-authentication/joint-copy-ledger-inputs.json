@@ -455,7 +455,7 @@
       "id": "managed:completed-write-after-task-settlement:original-request-arrays",
       "provenance": {
         "repository": "FS-GG/FS.GG.Coordination",
-        "revision": "80dbe782eb23c1fc160a16ba27a86487134c1654",
+        "revision": "88b09cb7823935a048cec057ce87b6c1dbaf303c",
         "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/ManagedOwnershipCaptureTests.fs",
         "sha256": "cf5a374297598dbbf22cdf83b5a1b8a2255a79d0361e844bd6d96fff70d30d31",
         "source_type": "git-blob"
@@ -474,13 +474,13 @@
       "ownership": "test-endpoint-witnesses",
       "alias_class": null,
       "identity_basis": "population-only",
-      "uncertainty": "candidate PR1001; run38807111675/a1 passed; 55/55 reported TRX; no complete byte bound or physical release"
+      "uncertainty": "candidate PR1001 at88b09cb; capture source bytes unchanged; exact-head requalification pending when recorded; earlier run38807111675/a1 and reported55/55 qualify superseded80dbe782 only; protected PR1002 consumer165c22cf is separate accepted transport input, not capture acceptance or a physical bound"
     },
     {
       "id": "managed:completed-write-after-task-settlement:independent-endpoint-copy-arrays",
       "provenance": {
         "repository": "FS-GG/FS.GG.Coordination",
-        "revision": "80dbe782eb23c1fc160a16ba27a86487134c1654",
+        "revision": "88b09cb7823935a048cec057ce87b6c1dbaf303c",
         "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/ManagedOwnershipCaptureTests.fs",
         "sha256": "cf5a374297598dbbf22cdf83b5a1b8a2255a79d0361e844bd6d96fff70d30d31",
         "source_type": "git-blob"
@@ -499,13 +499,13 @@
       "ownership": "test-endpoint-witnesses",
       "alias_class": null,
       "identity_basis": "population-only",
-      "uncertainty": "candidate PR1001; run38807111675/a1 passed; 55/55 reported TRX; no complete byte bound or physical release"
+      "uncertainty": "candidate PR1001 at88b09cb; capture source bytes unchanged; exact-head requalification pending when recorded; earlier run38807111675/a1 and reported55/55 qualify superseded80dbe782 only; protected PR1002 consumer165c22cf is separate accepted transport input, not capture acceptance or a physical bound"
     },
     {
       "id": "managed:async-write-at-original-cutoff:original-request-arrays",
       "provenance": {
         "repository": "FS-GG/FS.GG.Coordination",
-        "revision": "80dbe782eb23c1fc160a16ba27a86487134c1654",
+        "revision": "88b09cb7823935a048cec057ce87b6c1dbaf303c",
         "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/ManagedOwnershipCaptureTests.fs",
         "sha256": "cf5a374297598dbbf22cdf83b5a1b8a2255a79d0361e844bd6d96fff70d30d31",
         "source_type": "git-blob"
@@ -524,13 +524,13 @@
       "ownership": "test-endpoint-witnesses",
       "alias_class": null,
       "identity_basis": "population-only",
-      "uncertainty": "candidate PR1001; run38807111675/a1 passed; 55/55 reported TRX; no complete byte bound or physical release"
+      "uncertainty": "candidate PR1001 at88b09cb; capture source bytes unchanged; exact-head requalification pending when recorded; earlier run38807111675/a1 and reported55/55 qualify superseded80dbe782 only; protected PR1002 consumer165c22cf is separate accepted transport input, not capture acceptance or a physical bound"
     },
     {
       "id": "managed:async-write-at-original-cutoff:independent-endpoint-copy-arrays",
       "provenance": {
         "repository": "FS-GG/FS.GG.Coordination",
-        "revision": "80dbe782eb23c1fc160a16ba27a86487134c1654",
+        "revision": "88b09cb7823935a048cec057ce87b6c1dbaf303c",
         "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/ManagedOwnershipCaptureTests.fs",
         "sha256": "cf5a374297598dbbf22cdf83b5a1b8a2255a79d0361e844bd6d96fff70d30d31",
         "source_type": "git-blob"
@@ -549,13 +549,13 @@
       "ownership": "test-endpoint-witnesses",
       "alias_class": null,
       "identity_basis": "population-only",
-      "uncertainty": "candidate PR1001; run38807111675/a1 passed; 55/55 reported TRX; no complete byte bound or physical release"
+      "uncertainty": "candidate PR1001 at88b09cb; capture source bytes unchanged; exact-head requalification pending when recorded; earlier run38807111675/a1 and reported55/55 qualify superseded80dbe782 only; protected PR1002 consumer165c22cf is separate accepted transport input, not capture acceptance or a physical bound"
     },
     {
       "id": "managed:sync-write-before-task-publication:original-request-arrays",
       "provenance": {
         "repository": "FS-GG/FS.GG.Coordination",
-        "revision": "80dbe782eb23c1fc160a16ba27a86487134c1654",
+        "revision": "88b09cb7823935a048cec057ce87b6c1dbaf303c",
         "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/ManagedOwnershipCaptureTests.fs",
         "sha256": "cf5a374297598dbbf22cdf83b5a1b8a2255a79d0361e844bd6d96fff70d30d31",
         "source_type": "git-blob"
@@ -574,13 +574,13 @@
       "ownership": "test-endpoint-witnesses",
       "alias_class": null,
       "identity_basis": "population-only",
-      "uncertainty": "candidate PR1001; run38807111675/a1 passed; 55/55 reported TRX; no complete byte bound or physical release"
+      "uncertainty": "candidate PR1001 at88b09cb; capture source bytes unchanged; exact-head requalification pending when recorded; earlier run38807111675/a1 and reported55/55 qualify superseded80dbe782 only; protected PR1002 consumer165c22cf is separate accepted transport input, not capture acceptance or a physical bound"
     },
     {
       "id": "managed:sync-write-before-task-publication:independent-endpoint-copy-arrays",
       "provenance": {
         "repository": "FS-GG/FS.GG.Coordination",
-        "revision": "80dbe782eb23c1fc160a16ba27a86487134c1654",
+        "revision": "88b09cb7823935a048cec057ce87b6c1dbaf303c",
         "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/ManagedOwnershipCaptureTests.fs",
         "sha256": "cf5a374297598dbbf22cdf83b5a1b8a2255a79d0361e844bd6d96fff70d30d31",
         "source_type": "git-blob"
@@ -599,7 +599,7 @@
       "ownership": "test-endpoint-witnesses",
       "alias_class": null,
       "identity_basis": "population-only",
-      "uncertainty": "candidate PR1001; run38807111675/a1 passed; 55/55 reported TRX; no complete byte bound or physical release"
+      "uncertainty": "candidate PR1001 at88b09cb; capture source bytes unchanged; exact-head requalification pending when recorded; earlier run38807111675/a1 and reported55/55 qualify superseded80dbe782 only; protected PR1002 consumer165c22cf is separate accepted transport input, not capture acceptance or a physical bound"
     },
     {
       "id": "host:old",
