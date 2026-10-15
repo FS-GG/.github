@@ -5,9 +5,9 @@
       "id": "python:phase-1",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -30,9 +30,9 @@
       "id": "python:phase-2",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -55,9 +55,9 @@
       "id": "python:phase-3",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -80,9 +80,9 @@
       "id": "python:phase-4",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -105,9 +105,9 @@
       "id": "python:phase-5",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -130,9 +130,9 @@
       "id": "python:phase-6",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -155,9 +155,9 @@
       "id": "python:old",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -180,9 +180,9 @@
       "id": "python:candidate",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -205,9 +205,9 @@
       "id": "python:readback",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -230,9 +230,9 @@
       "id": "python:actual",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -255,9 +255,9 @@
       "id": "python:pending",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -280,9 +280,9 @@
       "id": "python:decoder_buffer",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -305,9 +305,9 @@
       "id": "python:decoder_raw",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -330,9 +330,9 @@
       "id": "python:entry_body",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -355,9 +355,9 @@
       "id": "python:entry_prefix",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -380,9 +380,9 @@
       "id": "python:previous_reply",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -405,9 +405,9 @@
       "id": "python:append-raw",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -430,9 +430,9 @@
       "id": "python:owner-frame",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "ae1d71377d28f74b615d30d8b7629a6ae1bb1364c7744094d2295dfe2097ed91",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
         "source_type": "git-blob"
       },
       "scope": {
@@ -700,6 +700,1781 @@
       "alias_class": "candidate-stable-readback",
       "identity_basis": "modeled-identity",
       "uncertainty": "public accepted model mapping only; restricted source not included; incompatible with Python topology"
+    },
+    {
+      "id": "python-graph-0:entry-binding",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "entry-binding",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "entry-caller-binding",
+      "alias_class": "object-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-0:entry-identity",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "entry-identity",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "entry-local",
+      "alias_class": "object-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-0:owner-binding",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "owner-binding",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "callback-owner",
+      "alias_class": "object-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-0:owner-binding-bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "owner-binding-bytes",
+      "representation": "bytes",
+      "quantity_type": "logical-bytes",
+      "quantity": 994,
+      "ownership": "callback-owner",
+      "alias_class": "object-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-0:owner-previous",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "owner-previous",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "callback-owner",
+      "alias_class": "object-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-0:pending-phase",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "pending-phase",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "callback-owner",
+      "alias_class": "object-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-0:handle-phase",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "handle-phase",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "callback-frame-alias",
+      "alias_class": "object-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-0:parsed-request",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "parsed-request",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "callback-frame",
+      "alias_class": "object-7",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-0:sink-binding",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "sink-binding",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "typed-sink",
+      "alias_class": "object-8",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-0:sink-identity",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "sink-identity",
+      "representation": "bytes",
+      "quantity_type": "logical-bytes",
+      "quantity": 193,
+      "ownership": "typed-sink-and-reservation",
+      "alias_class": "object-9",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-0:reservation-identity",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "reservation-identity",
+      "representation": "bytes",
+      "quantity_type": "logical-bytes",
+      "quantity": 193,
+      "ownership": "backend-reservation-alias",
+      "alias_class": "object-9",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-0:sink-previous-facts",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "sink-previous-facts",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "typed-sink",
+      "alias_class": "object-10",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-0:sink-parsed-phase",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "sink-parsed-phase",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "sink-frame",
+      "alias_class": "object-11",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:evidence",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "evidence",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "execute-local",
+      "alias_class": "object-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:evidence/slots/0/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "evidence/slots/0/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 2282,
+      "ownership": "execute-local",
+      "alias_class": "object-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:evidence/slots/0/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "evidence/slots/0/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "execute-local",
+      "alias_class": "object-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:evidence/slots/1/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "evidence/slots/1/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1944,
+      "ownership": "execute-local",
+      "alias_class": "object-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:evidence/slots/1/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "evidence/slots/1/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "execute-local",
+      "alias_class": "object-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:evidence/slots/2/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "evidence/slots/2/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1660,
+      "ownership": "execute-local",
+      "alias_class": "object-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:evidence/slots/2/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "evidence/slots/2/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "execute-local",
+      "alias_class": "object-7",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:evidence/slots/3/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "evidence/slots/3/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1834,
+      "ownership": "execute-local",
+      "alias_class": "object-8",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:evidence/slots/3/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "evidence/slots/3/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "execute-local",
+      "alias_class": "object-9",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:evidence/slots/4/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "evidence/slots/4/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1662,
+      "ownership": "execute-local",
+      "alias_class": "object-10",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:evidence/slots/4/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "evidence/slots/4/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "execute-local",
+      "alias_class": "object-11",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:evidence/slots/5/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "evidence/slots/5/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1982,
+      "ownership": "execute-local",
+      "alias_class": "object-12",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:evidence/slots/5/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "evidence/slots/5/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "execute-local",
+      "alias_class": "object-13",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:records",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "records",
+      "representation": "list",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "execute-local-alias",
+      "alias_class": "object-14",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:last-slot-raw",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "last-slot-raw",
+      "representation": "bytes",
+      "quantity_type": "logical-bytes",
+      "quantity": 991,
+      "ownership": "execute-local",
+      "alias_class": "object-15",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-1:owner-previous",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "terminal-confirmed-evidence-before-encoding",
+      "role": "owner-previous",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "callback-owner",
+      "alias_class": "object-16",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:evidence",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "evidence",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "encoder-argument",
+      "alias_class": "object-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:evidence/slots/0/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "evidence/slots/0/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 2282,
+      "ownership": "encoder-argument",
+      "alias_class": "object-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:evidence/slots/0/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "evidence/slots/0/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "encoder-argument",
+      "alias_class": "object-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:evidence/slots/1/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "evidence/slots/1/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1944,
+      "ownership": "encoder-argument",
+      "alias_class": "object-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:evidence/slots/1/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "evidence/slots/1/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "encoder-argument",
+      "alias_class": "object-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:evidence/slots/2/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "evidence/slots/2/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1660,
+      "ownership": "encoder-argument",
+      "alias_class": "object-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:evidence/slots/2/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "evidence/slots/2/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "encoder-argument",
+      "alias_class": "object-7",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:evidence/slots/3/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "evidence/slots/3/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1834,
+      "ownership": "encoder-argument",
+      "alias_class": "object-8",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:evidence/slots/3/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "evidence/slots/3/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "encoder-argument",
+      "alias_class": "object-9",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:evidence/slots/4/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "evidence/slots/4/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1662,
+      "ownership": "encoder-argument",
+      "alias_class": "object-10",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:evidence/slots/4/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "evidence/slots/4/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "encoder-argument",
+      "alias_class": "object-11",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:evidence/slots/5/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "evidence/slots/5/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1982,
+      "ownership": "encoder-argument",
+      "alias_class": "object-12",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:evidence/slots/5/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "evidence/slots/5/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "encoder-argument",
+      "alias_class": "object-13",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-2:json-text",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-json-text-before-ascii",
+      "role": "json-text",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 12318,
+      "ownership": "encoder-return",
+      "alias_class": "object-14",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:evidence",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "evidence",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "encoder-argument",
+      "alias_class": "object-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:evidence/slots/0/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "evidence/slots/0/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 2282,
+      "ownership": "encoder-argument",
+      "alias_class": "object-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:evidence/slots/0/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "evidence/slots/0/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "encoder-argument",
+      "alias_class": "object-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:evidence/slots/1/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "evidence/slots/1/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1944,
+      "ownership": "encoder-argument",
+      "alias_class": "object-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:evidence/slots/1/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "evidence/slots/1/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "encoder-argument",
+      "alias_class": "object-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:evidence/slots/2/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "evidence/slots/2/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1660,
+      "ownership": "encoder-argument",
+      "alias_class": "object-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:evidence/slots/2/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "evidence/slots/2/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "encoder-argument",
+      "alias_class": "object-7",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:evidence/slots/3/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "evidence/slots/3/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1834,
+      "ownership": "encoder-argument",
+      "alias_class": "object-8",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:evidence/slots/3/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "evidence/slots/3/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "encoder-argument",
+      "alias_class": "object-9",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:evidence/slots/4/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "evidence/slots/4/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1662,
+      "ownership": "encoder-argument",
+      "alias_class": "object-10",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:evidence/slots/4/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "evidence/slots/4/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "encoder-argument",
+      "alias_class": "object-11",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:evidence/slots/5/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "evidence/slots/5/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1982,
+      "ownership": "encoder-argument",
+      "alias_class": "object-12",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:evidence/slots/5/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "evidence/slots/5/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "encoder-argument",
+      "alias_class": "object-13",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-3:encoded-bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-ascii-bytes-after-encoding",
+      "role": "encoded-bytes",
+      "representation": "bytes",
+      "quantity_type": "logical-bytes",
+      "quantity": 12318,
+      "ownership": "encoder-return",
+      "alias_class": "object-14",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:evidence",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "evidence",
+      "representation": "dict",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "main-local",
+      "alias_class": "object-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:evidence/slots/0/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "evidence/slots/0/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 2282,
+      "ownership": "main-local",
+      "alias_class": "object-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:evidence/slots/0/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "evidence/slots/0/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "main-local",
+      "alias_class": "object-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:evidence/slots/1/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "evidence/slots/1/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1944,
+      "ownership": "main-local",
+      "alias_class": "object-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:evidence/slots/1/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "evidence/slots/1/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "main-local",
+      "alias_class": "object-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:evidence/slots/2/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "evidence/slots/2/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1660,
+      "ownership": "main-local",
+      "alias_class": "object-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:evidence/slots/2/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "evidence/slots/2/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "main-local",
+      "alias_class": "object-7",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:evidence/slots/3/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "evidence/slots/3/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1834,
+      "ownership": "main-local",
+      "alias_class": "object-8",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:evidence/slots/3/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "evidence/slots/3/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "main-local",
+      "alias_class": "object-9",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:evidence/slots/4/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "evidence/slots/4/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1662,
+      "ownership": "main-local",
+      "alias_class": "object-10",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:evidence/slots/4/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "evidence/slots/4/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "main-local",
+      "alias_class": "object-11",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:evidence/slots/5/bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "evidence/slots/5/bytes",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 1982,
+      "ownership": "main-local",
+      "alias_class": "object-12",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:evidence/slots/5/sha256",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "evidence/slots/5/sha256",
+      "representation": "str",
+      "quantity_type": "logical-bytes",
+      "quantity": 64,
+      "ownership": "main-local",
+      "alias_class": "object-13",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "python-graph-4:encoded-bytes",
+      "provenance": {
+        "repository": "FS-GG/.github",
+        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
+        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "source_type": "git-blob"
+      },
+      "scope": {
+        "topology": "python-terminal-controlled",
+        "run": "source-witness",
+        "process": "python-terminal-controlled",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "evidence-file-write-before-return",
+      "role": "encoded-bytes",
+      "representation": "bytes",
+      "quantity_type": "logical-bytes",
+      "quantity": 12318,
+      "ownership": "main-local-and-write-argument",
+      "alias_class": "object-14",
+      "identity_basis": "observed-identity",
+      "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
     }
   ],
   "aliases": [
@@ -722,10 +2497,20 @@
       "left": "host:candidate",
       "right": "host:readback",
       "basis": "same-scoped-object"
+    },
+    {
+      "left": "python-graph-0:pending-phase",
+      "right": "python-graph-0:handle-phase",
+      "basis": "same-scoped-object"
+    },
+    {
+      "left": "python-graph-0:sink-identity",
+      "right": "python-graph-0:reservation-identity",
+      "basis": "same-scoped-object"
     }
   ],
   "missing_obligations": [
-    "Complete binding/start/ACK, parser/encoder/base64 and request/read buffers at compatible cuts",
+    "Complete binding/start/ACK, parser/base64/encoder transients and request/read buffers beyond selected Python cuts",
     "Managed arbitrary caller/accessor/stream captures and retained task lifetimes; all original backing arrays and copies",
     "Python harness/evidence/input/output streams, dictionaries, stack/object overhead and allocator capacity",
     "Actual host/sink/backend/peer map, metadata/allocated blocks and native memory enforcement",
