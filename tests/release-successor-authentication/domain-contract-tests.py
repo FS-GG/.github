@@ -248,11 +248,11 @@ class ContractTests(unittest.TestCase):
 
 def load_tests(loader, tests, pattern):
     # Exercise the actual publisher sink census inside the established pure entry.
-    spec = importlib.util.spec_from_file_location('authentication_sink_copy_tests',
-        HERE / 'sink-copy-contract-tests.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    tests.addTests(loader.loadTestsFromModule(module))
+    for name in ('sink-copy-contract-tests', 'slot-sink-tests'):
+        spec = importlib.util.spec_from_file_location(name.replace('-', '_'), HERE / (name + '.py'))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        tests.addTests(loader.loadTestsFromModule(module))
     return tests
 
 
