@@ -151,7 +151,9 @@ def emission_journey(failure=None):
         finally:
             del caller
     class EvidenceOutput(io.BytesIO):
+        writes = 0
         def write(self, raw):
+            self.writes += 1
             caller = sys._getframe(1)
             try:
                 census.capture('evidence-file-write-before-return', {
@@ -179,6 +181,7 @@ def emission_journey(failure=None):
          patch.object(sys, 'argv', arguments), patch.object(sys, 'stdin', types.SimpleNamespace(buffer=io.BytesIO(request))), \
          patch.object(sys, 'stdout', types.SimpleNamespace(buffer=io.BytesIO())), patch.object(sys, 'stderr', io.StringIO()):
         status = entry.main()
+    assert output.writes == opened.call_count  # Exactly one write per file open, zero for malformed input.
     return census, status, output.getvalue(), opened.call_count
 
 
