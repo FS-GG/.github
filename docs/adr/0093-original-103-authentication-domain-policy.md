@@ -4,7 +4,7 @@
 - **Date:** 2026-10-15
 - **Affects:** UTEL original `.103` authentication-only operation, external phase authority and native supervisor
 - **Decision owner:** Programme, under the sponsor's explicit delegation
-- **Decision:** [Public domain-policy selection](https://github.com/FS-GG/.github/issues/4517#issuecomment-6199911781)
+- **Decision:** [Domain policy](https://github.com/FS-GG/.github/issues/4517#issuecomment-6199911781), [accounting and ACK topology](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200107860), and [bounded source reservation](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200287829)
 
 ## Context
 
@@ -26,7 +26,14 @@ descriptor issuers. Reject caller-supplied trust roots, duplicate/unknown fields
 substitution. A separately enrolled, distinct acknowledgment (ACK) authority supplies an
 authenticated durable receipt binding the descriptor, exact phase-frame bytes, ordinal,
 phase, store generation and original-clock observation. Home retains bounded key-free facts;
-actual signing-key custody and enrollment require proof outside that retained-facts boundary.
+SystemAdmin owns the design and later operational custody of a separately supervised
+ACK-signing service outside that facts store and the original job/runner/VM. Its signing
+keys require separately approved private custody. The protected native supervisor must
+verify an independently enrolled ACK public identity. The service may sign only an exact,
+read-back-equal, barrier-complete receipt for the original descriptor/frame/ordinal/store
+generation under the original clock policy. A reporter assertion cannot establish that
+backend evidence. This selects a topology and owner; actual custody and independent
+enrollment remain unproved and no key creation or installation is admitted.
 
 Retain ready → issuance-possible → token-owned → revocation-possible → revoked → terminal
 order and the existing [frame/ACK limits](../../tests/release-successor-authentication/wire-contract.json).
@@ -51,12 +58,19 @@ and unknown uncertainty refuse effects. The 285–300 interval is settlement onl
 At/after 300, diagnostic reads and loss observations cannot become timely ACKs or
 permission to replay.
 
-Prospectively retain nonsecret descriptor/phase/ACK/loss facts for this one operation:
-at most six phase records and 64 KiB total, until 90 days after its original total
-cutoff, without sliding extension. Reject overflow rather than evict required facts.
-Expiry yields RetentionExpired/Unknown and preserves original effect holds. This is
-a newly selected phase policy; the existing 90-day CI artifact rule does not govern
-these facts or permit a rerun.
+Prospectively retain nonsecret facts for this one operation under six logical phase
+ordinals and **65,536 total retained bytes**. Count the complete worst-case signed/schema
+population: descriptor, exact frames/ACKs, loss/first-failure/terminal/expiry facts,
+immutable checkpoints, and distinct old/temp/candidate uncertainty evidence. Every
+simultaneous physical copy, peer control object, write and replacement overlap counts
+toward the byte cap. Reserve the complete bounded population before admission; an
+unproved fit or overflow refuses source/runtime admission. Required facts cannot be
+evicted, omitted or replaced by checkpoint hashes to fit.
+
+Retention ends 90 days after the original total cutoff, without read-based renewal.
+Expiry yields RetentionExpired/Unknown and preserves the original-effect hold in its
+owning decision record. This is a newly selected phase policy; the existing 90-day CI
+artifact rule does not govern these facts or permit a rerun.
 
 ## Consequences
 
@@ -67,12 +81,46 @@ uses `release-successor-authenticate.yml`. A reviewed descriptor extension must 
 original publisher provenance from executing authentication identity. Existing inert
 source controls do not establish native construction or acceptance.
 
-The exact 17,647-byte restricted proposal is unavailable in this programme environment.
-Its internal signing/transport topology must be reconciled before claiming the implementation
-interface frozen. SystemAdmin must supply endpoint/store/transport, independently enrolled
-identities, durable ACK and clock/loss evidence. The UTEL source owner must supply the
-reviewed descriptor extension and compatibility with original pins. A separate bounded
-source reservation and later installed/native admission remain required.
+The earlier unavailable-packet status is historical. SystemAdmin [reported restored,
+read-back-equal private v1/v2 materials](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200035172)
+and [delivered private v3](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200247987).
+Programme independently verified the received v3 digest and reviewed its planning claims.
+V1's 128-frame/131,072-byte proposal remains historical, outside the selected cap.
+Programme accepted v3's 64,000-byte constructive slot arithmetic and separate supervised
+ACK-service topology only as a [planning subset](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200287829).
+Receipt and slot arithmetic do not prove complete signed-schema fit or freeze an interface.
+Reported readiness v10 supplies no native qualification.
+
+Programme/fdev1 owns one reserved source-only proof slice: a versioned inert contract,
+complete maximum encoded vectors and exhaustive slot/copy accounting in an isolated
+checkout. SystemAdmin independently owns host layout/backend/trust review against that
+exact contract digest; Programme decides the join. The reservation permits pure contract,
+vectors and tests. It grants no production provider/workflow change, service installation,
+key enrollment, credential use, original dispatch or release-state change.
+
+The exact remaining hold is the complete signed descriptor/frame/ACK/read schemas and
+maximum vectors, including distinct original publisher and executing authentication
+identities and preservation of original pins; the current ready ABI must fit its
+2,048-byte slot. The peer must prove its irreversible-control persistence algorithm and
+simultaneous-copy bound: two extra 1,024-byte control copies would raise 64,000 to 66,048
+bytes and refuse admission. Diagnostic/raw-receipt reads must stay distinct from a
+replacement effect gate, and ambiguous-write/loss/expiry states need counted encodings.
+The [exact source-join review](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200296350)
+also distinguishes the closed legacy child ACK (`b,h,k,n,v` plus BE-u32 framing) from
+the external signed ACK. Its proposed size does not prove child-ABI compatibility.
+The trusted persistence/readback callback must authenticate issuer, descriptor, frame,
+ordinal, purpose and original clock before returning typed readback; three echoed fields
+cannot prove independent authority. Preserve `TakeAck`/`ConfirmAckSent` one-use,
+full-write and cutoff checks. Start/ready must include the exact child binding and fit
+2,048 bytes including framing and wrappers. The 4,096-byte external descriptor slot
+cannot replace that binding: freeze their authenticated relationship and supply complete
+maximum wrapped vectors without removing required original fields.
+
+Actual signer custody and independent enrollment, backend barrier/fresh exact readback,
+authenticated original-clock continuity/uncertainty, and independent loss observation
+remain unqualified. SystemAdmin owes those host/trust proofs; the UTEL source owner owes
+the closed consumer/descriptor/copy join and compatibility. Later installed/native
+admission remains separate from this bounded source reservation.
 
 All six native selections and all admission/effect flags remain false. The original `.103`
 tag result remains attempted-unknown and unreplayed; `.104` release remains held. No
