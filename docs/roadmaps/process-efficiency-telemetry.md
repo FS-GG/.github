@@ -350,23 +350,26 @@ unapproved URLs or executable markup escape. Feed errors and pending analysis ca
 cost or no delivered work. The matched dashboard/feed migration is current-only; previous reader
 compatibility is not required.
 
-### V2-EFF-01.5 — Calibrate explanations and measure net value
+### V2-EFF-01.5 — Calibrate explanations; assess net value only when claimed
 
 - [ ] Owner: telemetry evaluation maintainer, with a maintainer sample for label adjudication.
 - [ ] Evaluate the held-out corpus without tuning on its results. Report cause confusion,
   avoidability precision/recall, abstention, family coverage, source-reference validity and numeric
   accuracy. Use the design's proposed precision target with sample-size caveats.
-- [ ] Run a bounded live pilot covering successful, failed, retried, interrupted and incomplete items.
-  Compare like work and include analyst cost, all participants and unsuccessful attempts.
+- [ ] Use the .2–.4 vertical slice and selected real-item route to inspect the states they exercise;
+  retain focused controls for successful, failed, retried, interrupted and incomplete items. Record
+  observed analyst cost and missing coverage. Do not create attempts solely to fill a cohort.
 - [ ] Validate that the dashboard identifies specific supported problems and actionable interventions;
-  report whether measured improvement exceeds measurement cost. Tune or disable low-value analysis
-  rather than add mandatory review layers.
+  tune or disable low-value analysis rather than add mandatory review layers. Compare like work,
+  including analyst cost, all participants and unsuccessful attempts, only when making a net-value
+  claim; otherwise record the benefit as unproven.
 
-Depends on the .2–.4 vertical slice. Touch-set: evaluation fixtures/reports and bounded pilot
+Depends on the .2–.4 vertical slice. Touch-set: evaluation fixtures/reports and selected route
 configuration, with bug fixes returned to the owning implementation surface. Acceptance: no
 fabricated numeric claims or invalid references in accepted output; the supported-cause target and
-its uncertainty are reported honestly. Insufficient samples/usage prevent economic claims but not
-honest partial visibility. A plumbing demo is not proof of savings. Keep delivery quality and required
+its uncertainty are reported honestly. Uncalibrated model-generated cause or avoidable-work claims
+remain private or disabled. Insufficient samples/usage prevent economic claims but not honest
+partial visibility. A plumbing demo is not proof of savings. Keep delivery quality and required
 checks intact; recommendations alone do not count as completed process improvements.
 
 ### V2-EFF-01.6 — Publish, install and adopt the verified route
@@ -377,9 +380,11 @@ checks intact; recommendations alone do not count as completed process improveme
 - [ ] Deploy the matching new dashboard/feed through the established Pages route. Demonstrate a newly
   completed real item passing through installed collection, assessment, projection and browser view.
 - [ ] Adopt the verified assessment behavior for the selected completion paths. Record coverage,
-  health/freshness expectations, bounded backfill and tested rollback. Expand only after pilot evidence.
+  health/freshness expectations, bounded backfill and tested rollback. Expand only after installed
+  behavior and public-explanation calibration are verified.
 
-Depends on .5's calibration/disposition and the relevant publication gates. Candidate installation and
+Depends on .5's functional calibration/disposition and the relevant publication gates; an economic
+comparison or net-value finding is not an adoption prerequisite. Candidate installation and
 reversible facts/coverage-only visibility may support .5 through the existing selected release route;
 model-generated explanations remain explicitly experimental until calibrated. Reuse compatible accepted
 UTEL installation/migration and LEARN receiver evidence via the v3 shared cohort; qualify each missing
@@ -402,7 +407,7 @@ flowchart LR
     B --> E[Integrated vertical slice]
     C --> E
     D --> E
-    E --> F[.5 Calibration and economics]
+    E --> F[.5 Functional calibration]
     F --> G[.6 Publication and installed adoption]
 ```
 

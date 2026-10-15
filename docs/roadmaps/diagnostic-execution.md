@@ -2,7 +2,7 @@
 
 Date: 2026-10-06. Reviewed: 2026-10-15.
 Status: ordinary runner and result retention delivered; historical packaged native pilot qualified;
-SDD guidance carrier published; selected release, native receiver refresh and evaluation remain open.
+SDD guidance carrier published; selected release and native receiver refresh remain open.
 Design: [diagnostic execution](../designs/diagnostic-execution.md).
 Parent: [V2 roadmap](../github-substrate-v2-roadmap.md#v2-diag-01--diagnostic-execution--2026-10-05).
 
@@ -35,12 +35,14 @@ the relevant shared contracts and each adapter's current admission.
   authority or accounting uncertainty stops affected work and cannot qualify a result. Include a
   successful complete run, using real runner entry points and scoped fault injection. Retain failed
   evidence; never inject faults into a production effect without its applicable authority.
-- [ ] **V2-DIAG-01.4 — Publish, adopt and evaluate.** Use existing coherent release routes for affected
+- [ ] **V2-DIAG-01.4 — Publish and adopt.** Use existing coherent release routes for affected
   packaged contracts and skills, then verify the selected installed receivers actually use them.
-  Record source, publication, installation and native results separately. Compare observed defect
-  collection, attempts, overhead and infrastructure failures over a bounded pilot window; missing
-  baseline data remains unknown. Acceptance: both pilot owners verify adopted behavior and remaining
-  limits, required qualification stays intact, and the V2 roadmap records the actual outcome.
+  Record source, publication, installation and native results separately. Use the required
+  qualification and selected receiver attempts to report observed defect collection, attempts,
+  overhead and infrastructure failures where available. Missing comparison or baseline data remains
+  unknown; no additional pilot window gates delivery. Acceptance: both pilot owners verify adopted
+  behavior and remaining limits, required qualification stays intact, and the V2 roadmap records
+  the actual outcome.
 
 ## V2-DIAG-01.1 source window — 2026-10-05
 
@@ -213,6 +215,7 @@ better preparation, richer independent diagnostics, improved isolation and a jus
 Do not respond automatically by enlarging limits or suppressing the check that found the problem.
 Required coherent validation, protected operation admission and original deadline/cleanup contracts
 remain unchanged. Actual savings are an evaluation outcome, not a delivery prerequisite or promise.
+Do not add attempts solely to produce a before/after comparison or count source delivery as installed use.
 
 ## P4 provider failure diagnosis — 2026-10-06
 
@@ -257,8 +260,9 @@ historical; the receipt harness's placeholder-name refusal was corrected using t
 exact public-package substitution and reverified against the same retained archive.
 
 The earlier source-local 26 tests and 16-member, two-root scaffold acceptance remain scoped evidence.
-Selected installed diagnostic-guidance use and bounded evaluation remain open under .4; public package
-installation gates do not establish that adoption. Kit #1090 and tool #1087 remain separate receivers.
+Selected installed diagnostic-guidance use remains open under .4; public package installation gates
+do not establish that adoption. A comparative benefit assessment is conditional. Kit #1090 and
+tool #1087 remain separate receivers.
 Canonical Coordination publication, pilot adoption and unavailable baseline usage remain open;
 no measured savings, automatic guidance reload or `.claude` execution is inferred.
 
@@ -306,8 +310,8 @@ All 32 source pins matched; first cause was null, omitted coverage empty, and al
 reporting passed. Runner, display and upload steps succeeded separately. Observed 47.256 seconds and
 20,556 output bytes describe this run; they establish no overhead reduction or savings. This accepts
 actual repository-native receiver use at that head, without claiming a separate post-merge run,
-package installation or native custody. V2-DIAG-01.4 remains open for the owner joins and evaluation
-below; the failed intake read and unconfirmed supplying owner remain unchanged.
+package installation or native custody. V2-DIAG-01.4 remains open for the owner joins below;
+the failed intake read and unconfirmed supplying owner remain unchanged.
 
 ### Protected-main ordinary readback — 2026-10-15
 
@@ -345,13 +349,14 @@ administrator provider enrollment, private-facts custody and installed receiver 
 owner joins. Missing credentials have not been established as their common blocker. The separate
 general Python provider pack does not own this route decision. Publication and effects retain their
 existing admission boundaries; original failed attempts and unresolved cleanup remain unchanged.
-V2-DIAG-01.4 stays open for these joins, both owners' installed assertions and bounded evaluation.
+V2-DIAG-01.4 stays open for these joins and both owners' installed assertions. Available
+diagnostic observations are recorded with those attempts; a comparative benefit claim is optional.
 
 ### Exact inputs and next receiver gates
 
 | Selected route | Accepted input or observation | Next accountable gate |
 |---|---|---|
-| Ordinary `.github` work-programme | Protected `505c54cf` and the result above; thirteen actual suites across both repository-native skill roots. | `.github` programme owner retains original attempts and defines a bounded evaluation window. Source use is accepted; package or fleet adoption is a separate claim. |
+| Ordinary `.github` work-programme | Protected `505c54cf` and the result above; thirteen actual suites across both repository-native skill roots. | `.github` programme owner retains original attempts and records available diagnostics from selected use. Source use is accepted; package or fleet adoption is a separate claim. |
 | Coordination canonical 0.2.1 | Producer `bc55a3d1cc887d653c1bb1198e4823b24f47aaa8`, preparation [37403093489/1](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37403093489), artifact `11386361825`, and the historical 21-record installed diagnostic candidate result. The selected native entry is `eng/prepared-attempt-installed-qualification.fsx` through the packaged qualifier against the exact Execution DLL. | Coordination P4 release/diagnostic maintainer and supplying host, administrator grant and private-custody owners must join an enforcing outer profile, original package/image and receiver identity, a fresh receiver-bound grant, and observed termination/cleanup before native acceptance and coherent publication. Candidate qualification is not release or adoption. |
 | Coordination CLI 0.3.0 | [Published CLI-only release](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.3.0), separate from canonical 0.2.1. | Coordination diagnostic owner must admit and qualify its own installed native route; equal diagnostic script/API bytes do not transfer changed Execution custody, bootstrap or project behavior. |
 | Diagnostic skill carrier and receivers | Drivers 0.98.0 guidance and the SDD 2.2.0 carrier were published. The [read-only .github feed probe 38732551619/1](https://github.com/FS-GG/.github/actions/runs/38732551619) found 0.102.0 latest and prospective 0.104.0 absent on all six CLI/Kit/Drivers feed coordinates. | `.github` release owner must resolve original 0.103.0 `tag:intent`/unknown dispatch before any 0.104.0 publisher preflight or credential exchange; the .104 proposal is source only. SDD, Kit and tool receiver owners must separately prove selected installed diagnostic-guidance use. Feed freshness is neither publication nor receiver use. |
@@ -361,17 +366,17 @@ and [closed 0.104 release boundary](../atlas/records/d31e8aa21d1498f2d4a07c4cc89
 retain the reusable source/authority distinctions. This matrix records current observations, not
 a new authorization or an assumption that the two release routes share a blocker.
 
-### Prospective bounded evaluation
+### Optional comparative benefit assessment
 
-Before each owner starts a treated pilot window, record its start and end rule, exact source/package
-and installed receiver identities, eligible original attempts and acceptance checks in the existing
-owner evidence. For each attempt retain first cause, independent useful findings, dependent blocking,
-time to first actionable diagnosis, total and active execution time when measured, infrastructure
-failure, and separate reporting and cleanup outcomes. Count repeat attempts against the declared
-eligible population and preserve failed or partial attempts. Record an unavailable or incomparable
-baseline as **unknown**; the historical ordinary and local native timings above are descriptive and
-cannot establish saved attempts, faster diagnosis or a process benefit. Do not enroll a historical
-attempt retrospectively as a treated cohort or weaken required qualification to fill a denominator.
+When claiming fewer attempts, faster diagnosis or lower cost, select a prospective comparison with
+start and end rules, exact source/package and installed receiver identities, eligible original
+attempts and unchanged acceptance checks in the existing owner evidence. For each compared attempt
+retain first cause, independent useful findings, dependent blocking, time to first actionable
+diagnosis, measured execution time, infrastructure failure, and separate reporting and cleanup
+outcomes. Preserve failed or partial attempts in the denominator. An unavailable or incomparable
+baseline is **unknown**; the historical ordinary and local native timings above are descriptive.
+No comparative window is needed to publish or verify selected installed behavior. Do not enroll a
+historical attempt retrospectively or weaken required qualification to fill a denominator.
 
 ### Route-selection request delivery is blocked
 
