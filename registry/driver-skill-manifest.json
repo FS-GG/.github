@@ -854,12 +854,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "24190433bb138e022e169c381c2f5449b2fe68d335bf2936df92a461e88d705c",
-      "tree-sha256": "a237eb326a4b048de41de92d292b32e2bd3d3543ead0410b0cd4b2a51c072f7f",
+      "sha256": "41493a6ee3d2cbea9aa7a8f571e8bc32707aaa5a04601a04cda9be21d119c97f",
+      "tree-sha256": "e968040be0d7a98ddb0a374d97df93481406f5411cd6caa8d3db93e28f52c70f",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "24190433bb138e022e169c381c2f5449b2fe68d335bf2936df92a461e88d705c",
+          "sha256": "41493a6ee3d2cbea9aa7a8f571e8bc32707aaa5a04601a04cda9be21d119c97f",
           "executable": false
         },
         {
@@ -878,8 +878,18 @@
           "executable": false
         },
         {
+          "path": "references/execution-diagnostics.md",
+          "sha256": "7df0fb484e5befc401fa5acd758093c45205ea95848f20d01c7fc45b319b567a",
+          "executable": false
+        },
+        {
           "path": "references/feedback-contract.md",
           "sha256": "7342aa0c2c86d2f157b360741426f2769d901c67e1f6ef4549ddbd83f12937f1",
+          "executable": false
+        },
+        {
+          "path": "references/heavyweight-roadmap.md",
+          "sha256": "887ddfad2732824b8847d1a4d8c9e44f6df291b6212ed627cdf8fc342ea462ed",
           "executable": false
         },
         {
@@ -895,6 +905,16 @@
         {
           "path": "references/roadmap-ledger.md",
           "sha256": "fd7b535511327319467da7c4082afdf4b5bd7ca46c258a7129eba14c3fe6c679",
+          "executable": false
+        },
+        {
+          "path": "references/routine-producer-installation.md",
+          "sha256": "507edb4b2859c284bf6eddd5ed3f93c6650468388d009ec5207b49cdb5dcee5b",
+          "executable": false
+        },
+        {
+          "path": "references/runtime-observation.md",
+          "sha256": "ded3186f06547f769c2223ba8e3521932176c7b56caf2df1e328a12fb032b633",
           "executable": false
         }
       ],

@@ -186,7 +186,8 @@ def assert_performance_first_contract() -> None:
     assert not missing, f"performance-first worker contract lost required behavior: {missing}"
 
     for driver in ("work-board", "work-roadmap"):
-        driver_paths = mirrored_skill_files(driver, "SKILL.md")
+        relative = "references/heavyweight-roadmap.md" if driver == "work-roadmap" else "SKILL.md"
+        driver_paths = mirrored_skill_files(driver, relative)
         driver_bodies = [path.read_bytes() for path in driver_paths]
         assert len(set(driver_bodies)) == 1, (
             f"{driver} must remain byte-identical across all skill roots"
@@ -205,7 +206,7 @@ def assert_performance_first_contract() -> None:
         "pnext-item must remain byte-identical across all skill roots"
     )
     pnext = " ".join(pnext_bodies[0].decode().split())
-    assert "Before implementing interactive/game work" in pnext
+    assert "Interactive/game implementation" in pnext
     assert "references/performance-first.md" in pnext
 
 
