@@ -33,8 +33,9 @@ reservation for all other reachable paths.
 
 All thirteen successful confirmations clear the decoder buffer and reply
 reference. Validate retains its pending frame until retain; successful retain
-clears pending before response transport. After terminal confirmation, the backend store map contains only the
-six stable stores, with the original temporary identities; parsed state and entry
+clears pending before response transport. After terminal confirmation, the backend
+store map contains only the six stable stores, with the original temporary
+identities; parsed state and entry
 locals remain reachable independently.
 Clearing these references establishes the observed ownership transition only;
 it does not demonstrate collection, zeroization or physical release.
@@ -51,8 +52,8 @@ The harness independently owns frozen JSON/hex, concatenated requests, input and
 output streams, decoded expected frames and returned synthetic evidence. Those
 objects and the instrumentation's scalars are excluded from this source-object
 subtotal. Stack and
-object overhead, dictionary keys, unselected values, allocator capacity, stream copies, managed producer/caller/task
-copies, uncertainty members outside these cases, filesystem/kernel/peer copies
+object overhead, dictionary keys, unselected values, allocator capacity, stream
+copies, managed producer/caller/task copies, uncertainty members outside these cases, filesystem/kernel/peer copies
 and concurrent/restart populations are also excluded. The test does not bound
 arbitrary caller retention. No complete 65536-byte fit, real durability/barrier,
 clock authenticity, custody, native ACK, installed adoption, factory compatibility,
