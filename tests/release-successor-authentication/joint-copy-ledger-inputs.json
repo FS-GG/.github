@@ -5,9 +5,9 @@
       "id": "python:phase-1",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -30,9 +30,9 @@
       "id": "python:phase-2",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -55,9 +55,9 @@
       "id": "python:phase-3",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -80,9 +80,9 @@
       "id": "python:phase-4",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -105,9 +105,9 @@
       "id": "python:phase-5",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -130,9 +130,9 @@
       "id": "python:phase-6",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -155,9 +155,9 @@
       "id": "python:old",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -180,9 +180,9 @@
       "id": "python:candidate",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -205,9 +205,9 @@
       "id": "python:readback",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -230,9 +230,9 @@
       "id": "python:actual",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -255,9 +255,9 @@
       "id": "python:pending",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -280,9 +280,9 @@
       "id": "python:decoder_buffer",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -305,9 +305,9 @@
       "id": "python:decoder_raw",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -330,9 +330,9 @@
       "id": "python:entry_body",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -355,9 +355,9 @@
       "id": "python:entry_prefix",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -380,9 +380,9 @@
       "id": "python:previous_reply",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -405,9 +405,9 @@
       "id": "python:append-raw",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -430,9 +430,9 @@
       "id": "python:owner-frame",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -705,9 +705,9 @@
       "id": "python-graph-0:entry-binding",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -730,9 +730,9 @@
       "id": "python-graph-0:entry-identity",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -755,9 +755,9 @@
       "id": "python-graph-0:owner-binding",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -780,9 +780,9 @@
       "id": "python-graph-0:owner-binding-bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -805,9 +805,9 @@
       "id": "python-graph-0:owner-previous",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -830,9 +830,9 @@
       "id": "python-graph-0:pending-phase",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -855,9 +855,9 @@
       "id": "python-graph-0:handle-phase",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -880,9 +880,9 @@
       "id": "python-graph-0:parsed-request",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -905,9 +905,9 @@
       "id": "python-graph-0:sink-binding",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -930,9 +930,9 @@
       "id": "python-graph-0:sink-identity",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -955,9 +955,9 @@
       "id": "python-graph-0:reservation-identity",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -980,9 +980,9 @@
       "id": "python-graph-0:sink-previous-facts",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1005,9 +1005,9 @@
       "id": "python-graph-0:sink-parsed-phase",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1030,9 +1030,9 @@
       "id": "python-graph-1:evidence",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1055,9 +1055,9 @@
       "id": "python-graph-1:evidence/slots/0/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1080,9 +1080,9 @@
       "id": "python-graph-1:evidence/slots/0/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1105,9 +1105,9 @@
       "id": "python-graph-1:evidence/slots/1/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1130,9 +1130,9 @@
       "id": "python-graph-1:evidence/slots/1/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1155,9 +1155,9 @@
       "id": "python-graph-1:evidence/slots/2/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1180,9 +1180,9 @@
       "id": "python-graph-1:evidence/slots/2/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1205,9 +1205,9 @@
       "id": "python-graph-1:evidence/slots/3/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1230,9 +1230,9 @@
       "id": "python-graph-1:evidence/slots/3/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1255,9 +1255,9 @@
       "id": "python-graph-1:evidence/slots/4/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1280,9 +1280,9 @@
       "id": "python-graph-1:evidence/slots/4/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1305,9 +1305,9 @@
       "id": "python-graph-1:evidence/slots/5/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1330,9 +1330,9 @@
       "id": "python-graph-1:evidence/slots/5/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1355,9 +1355,9 @@
       "id": "python-graph-1:records",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1380,9 +1380,9 @@
       "id": "python-graph-1:last-slot-raw",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1405,9 +1405,9 @@
       "id": "python-graph-1:owner-previous",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1430,9 +1430,9 @@
       "id": "python-graph-2:evidence",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1455,9 +1455,9 @@
       "id": "python-graph-2:evidence/slots/0/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1480,9 +1480,9 @@
       "id": "python-graph-2:evidence/slots/0/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1505,9 +1505,9 @@
       "id": "python-graph-2:evidence/slots/1/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1530,9 +1530,9 @@
       "id": "python-graph-2:evidence/slots/1/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1555,9 +1555,9 @@
       "id": "python-graph-2:evidence/slots/2/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1580,9 +1580,9 @@
       "id": "python-graph-2:evidence/slots/2/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1605,9 +1605,9 @@
       "id": "python-graph-2:evidence/slots/3/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1630,9 +1630,9 @@
       "id": "python-graph-2:evidence/slots/3/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1655,9 +1655,9 @@
       "id": "python-graph-2:evidence/slots/4/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1680,9 +1680,9 @@
       "id": "python-graph-2:evidence/slots/4/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1705,9 +1705,9 @@
       "id": "python-graph-2:evidence/slots/5/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1730,9 +1730,9 @@
       "id": "python-graph-2:evidence/slots/5/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1755,9 +1755,9 @@
       "id": "python-graph-2:json-text",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1780,9 +1780,9 @@
       "id": "python-graph-3:evidence",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1805,9 +1805,9 @@
       "id": "python-graph-3:evidence/slots/0/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1830,9 +1830,9 @@
       "id": "python-graph-3:evidence/slots/0/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1855,9 +1855,9 @@
       "id": "python-graph-3:evidence/slots/1/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1880,9 +1880,9 @@
       "id": "python-graph-3:evidence/slots/1/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1905,9 +1905,9 @@
       "id": "python-graph-3:evidence/slots/2/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1930,9 +1930,9 @@
       "id": "python-graph-3:evidence/slots/2/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1955,9 +1955,9 @@
       "id": "python-graph-3:evidence/slots/3/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -1980,9 +1980,9 @@
       "id": "python-graph-3:evidence/slots/3/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2005,9 +2005,9 @@
       "id": "python-graph-3:evidence/slots/4/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2030,9 +2030,9 @@
       "id": "python-graph-3:evidence/slots/4/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2055,9 +2055,9 @@
       "id": "python-graph-3:evidence/slots/5/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2080,9 +2080,9 @@
       "id": "python-graph-3:evidence/slots/5/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2105,9 +2105,9 @@
       "id": "python-graph-3:encoded-bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2130,9 +2130,9 @@
       "id": "python-graph-4:evidence",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2155,9 +2155,9 @@
       "id": "python-graph-4:evidence/slots/0/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2180,9 +2180,9 @@
       "id": "python-graph-4:evidence/slots/0/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2205,9 +2205,9 @@
       "id": "python-graph-4:evidence/slots/1/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2230,9 +2230,9 @@
       "id": "python-graph-4:evidence/slots/1/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2255,9 +2255,9 @@
       "id": "python-graph-4:evidence/slots/2/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2280,9 +2280,9 @@
       "id": "python-graph-4:evidence/slots/2/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2305,9 +2305,9 @@
       "id": "python-graph-4:evidence/slots/3/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2330,9 +2330,9 @@
       "id": "python-graph-4:evidence/slots/3/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2355,9 +2355,9 @@
       "id": "python-graph-4:evidence/slots/4/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2380,9 +2380,9 @@
       "id": "python-graph-4:evidence/slots/4/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2405,9 +2405,9 @@
       "id": "python-graph-4:evidence/slots/5/bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2430,9 +2430,9 @@
       "id": "python-graph-4:evidence/slots/5/sha256",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
@@ -2455,9 +2455,9 @@
       "id": "python-graph-4:encoded-bytes",
       "provenance": {
         "repository": "FS-GG/.github",
-        "revision": "e26bdb250489e5f794d0da7c24b6c8645a37a5a8",
+        "revision": "c92d14f342bc11bd52c2e4a328f19ef0dfce9c90",
         "path": "tests/release-successor-authentication/slot-copy-lifetime-tests.py",
-        "sha256": "adeaa84929e273508678357623de16655bc5f6182f2eb1dfbc329d2ae5835df2",
+        "sha256": "fd1c6ab7a6d53fa248e2080e29800f273920484eb079bb141aa57288bb2604da",
         "source_type": "git-blob"
       },
       "scope": {
