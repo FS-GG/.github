@@ -192,6 +192,15 @@ def assert_performance_first_contract() -> None:
         assert len(set(driver_bodies)) == 1, (
             f"{driver} must remain byte-identical across all skill roots"
         )
+        if driver == "work-roadmap":
+            entries = [path.read_bytes() for path in mirrored_skill_files(driver, "SKILL.md")]
+            assert len(set(entries)) == 1, "work-roadmap entrypoints differ across skill roots"
+            entry = " ".join(entries[0].decode().split())
+            assert "Interactive/game implementation" in entry
+            assert "references/performance-first.md" in entry and "before implementation begins" in entry
+            assert "../pnext-item/" not in entry, "routine performance guidance must be local to the driver carrier"
+            for path in mirrored_skill_files(driver, "references/performance-first.md"):
+                assert path.read_bytes() == reference_bodies[0], "driver-local performance gate lost canonical obligations"
         text = " ".join(driver_bodies[0].decode().split())
         assert "During worker setup, interactive/game work must explicitly invoke" in text
         assert "`pnext-item` performance-first planning gate" in text

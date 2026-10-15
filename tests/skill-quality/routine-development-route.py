@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import tempfile
 from pathlib import Path
 
 
@@ -59,6 +61,7 @@ ROUTES = {
         "runtime-observation.md": ("Driver entry", "## Record repository-owned dispatches by default", "usage-reconcile"),
         "heavyweight-roadmap.md": ("Recorded explicit human instruction", "## Lifecycle log", "## Status position line"),
         "execution-diagnostics.md": ("before diagnostic execution", "Preserve the first cause", "partial failures cannot"),
+        "performance-first.md": ("Interactive/game implementation", "## PERF-PLAN", "## PERF-RELEASE"),
     },
 }
 LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
@@ -118,6 +121,38 @@ for name, references in ROUTES.items():
             pass
         else:
             raise SystemExit(f"unreadable conditional reference passed: {reference}")
+
+# Materialize the complete CoordinationKit, then traverse every pnext entry/reference link.
+# Drivers' independent fixture separately proves its optional-kit-free carrier closure.
+kit = json.loads((ROOT / "registry/coordination-kit-skill-manifest.json").read_text())
+with tempfile.TemporaryDirectory(prefix="pnext-carrier-links-") as scratch:
+    workspace = Path(scratch)
+    for runtime in (".agents", ".claude"):
+        for row in kit["skills"]:
+            for entry in row["files"]:
+                relative = Path(runtime) / "skills" / row["id"] / entry["path"]
+                target = workspace / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, target)
+        markdown_files = list((workspace / runtime / "skills/pnext-item").rglob("*.md"))
+        def materialized_links() -> None:
+            for source in markdown_files:
+                for target in LINK.findall(source.read_text()):
+                    if ":" in target or target.startswith("#"):
+                        continue
+                    require((source.parent / target.split("#", 1)[0]).is_file(),
+                            f"pnext carrier cannot load {source.relative_to(workspace)}: {target}")
+        materialized_links()
+        performance = workspace / runtime / "skills/pnext-item/references/performance-first.md"
+        original = performance.read_bytes()
+        performance.unlink()
+        try:
+            materialized_links()
+        except SystemExit:
+            pass
+        else:
+            raise SystemExit("missing materialized performance gate passed")
+        performance.write_bytes(original)
 
 constitution = (ROOT / ".fsgg/constitution.md").read_text()
 require("Routine Delivery Is the Default" in constitution, "constitution did not adopt routine-by-default doctrine")

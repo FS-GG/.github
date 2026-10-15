@@ -91,7 +91,7 @@ prerequisites block dependent effects, and partial coverage cannot qualify. Read
 | Driver entry, native dispatch or a prospectively selected observed normal-root item | [Runtime observation](references/runtime-observation.md), including the default `fsgg-coord-engine skill roadmap-telemetry` route. Missing usage stays unknown; observation cannot block delivery. |
 | Receiver has no routine producer | [Routine producer installation](references/routine-producer-installation.md). Its closed installation predicate does not establish ordinary eligibility or activation. |
 | Recorded explicit human instruction selects heavyweight process for named scope | [Heavyweight roadmap](references/heavyweight-roadmap.md), including lifecycle, status, [feedback-contract](references/feedback-contract.md) and critique obligations. Read its complete applicable protocol before dispatch. |
-| Interactive/game implementation | [Performance-first planning](../pnext-item/references/performance-first.md). |
+| Interactive/game implementation | Load the local [performance-first planning gate](references/performance-first.md) before implementation begins. |
 
 Milestones stay sequential unless the roadmap establishes disjoint parallel scope and the user authorizes
 parallel execution. Source delivery, publication, installation and activation remain separate claims.
