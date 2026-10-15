@@ -1006,4 +1006,221 @@ class CallbackOwnerControls(unittest.TestCase):
                 self.assertEqual(subject.unresolved_retention, not late)
 
 
+class SelectedFactoryOpener:
+    """Synthetic responses to the ACTUAL credential and tag Request/read paths."""
+    def __init__(self):
+        self.calls = []
+        self.rows = Opener().rows
+        self.rows[0]['id'] = 4995487
+        for index in (1, 2):
+            self.rows[index].update(id=162873149, app_id=4995487)
+        self.fail_cleanup = False
+        self.mutate = None
+    def open(self, request, timeout):
+        self.calls.append(request)
+        assert request.full_url.startswith('https://api.github.com/')
+        assert 0 < timeout <= 60
+        if request.full_url.endswith('/git/refs'):
+            assert request.method == 'POST'
+            assert request.get_header('Authorization') == 'Bearer inert-owned-token'
+            assert json.loads(request.data) == {'ref': provider.ORIGINAL_TAG_REF, 'sha': provider.ORIGINAL_TAG_SOURCE}
+            response = Response(request, {'ref': provider.ORIGINAL_TAG_REF, 'object': {
+                'type': 'commit', 'sha': provider.ORIGINAL_TAG_SOURCE,
+                'url': 'https://api.github.com/repos/FS-GG/.github/git/commits/' + provider.ORIGINAL_TAG_SOURCE}}, 201)
+            response.read = response.read1
+            return response
+        if request.method == 'DELETE':
+            Opener.assert_cleanup(request)
+            if self.fail_cleanup: raise RuntimeError('inert-owned-token secret cleanup')
+            return Response(request, None, 204)
+        index = len([r for r in self.calls if r.method != 'DELETE' and not r.full_url.endswith('/git/refs')]) - 1
+        paths = ['/app', '/app/installations/162873149', '/repos/FS-GG/.github/installation',
+                 '/app/installations/162873149/access_tokens', '/installation/repositories?per_page=100&page=1']
+        assert request.full_url == 'https://api.github.com' + paths[index]
+        assert request.method == ('POST' if index == 3 else 'GET')
+        assert request.get_header('Authorization') == ('Bearer inert-owned-token' if index == 4 else 'Bearer inert-jwt')
+        response = Response(request, copy.deepcopy(self.rows[index]), 201 if index == 3 else 200)
+        if self.mutate: self.mutate(index, response)
+        return response
+
+
+class SelectedOriginalFactoryControls(unittest.TestCase):
+    def prepare(self, root, *, bound=None, candidate=None, checkpoint=None, admit=None, retain=None, opener=None):
+        self.bound = bound or binding()
+        if bound is None: self.bound['app'] = {'id': 4995487, 'installation': 162873149}
+        self.report, self.credentials, self.snapshots = {}, [], []
+        self.opener = opener or SelectedFactoryOpener()
+        channel = RetainedChannel(root, self.bound)
+        def supply():
+            self.credentials.append('jwt')
+            return 'inert-jwt'
+        return provider.InertOriginalTagCredentialFactory(self.bound,
+            candidate or provider.ORIGINAL_TAG_FACTORY_CANDIDATE,
+            checkpoint or provider.ORIGINAL_TAG_FACTORY_CHECKPOINT,
+            phase_adapter=adapter(channel), jwt_supplier=supply, opener=self.opener,
+            admit=admit or (lambda: True), retain=retain or self.snapshots.append, report=self.report)
+
+    def test_selected_factory_actual_proof_one_exact_send_and_lexical_revocation(self):
+        with tempfile.TemporaryDirectory() as root:
+            factory = self.prepare(root)
+            with factory() as token:
+                self.assertEqual(token.identity()['appId'], 4995487)
+                effect = __import__('release_successor_execution').Effect('tag', provider.ORIGINAL_TAG_SOURCE, provider.ORIGINAL_TAG_CONTENT)
+                self.assertEqual(token.dispatch(effect, 100, lambda: 0).state, 'applied')
+                with self.assertRaises(provider.Refused): token.dispatch(effect, 100, lambda: 0)
+            self.assertEqual([r.method for r in self.opener.calls], ['GET', 'GET', 'GET', 'POST', 'GET', 'POST', 'DELETE'])
+            self.assertEqual(json.loads(self.opener.calls[3].data), {'repository_ids': [1269292704],
+                'permissions': {'contents': 'write', 'workflows': 'write'}})
+            self.assertTrue(self.report['qualified']); self.assertEqual(self.report['cleanup'], 'revoked')
+            with self.assertRaises(provider.Refused): token.identity()
+            with self.assertRaises(provider.Refused):
+                with factory(): pass
+            self.assertEqual(self.credentials, ['jwt'])
+            self.assertNotIn('inert-owned-token', json.dumps(self.report))
+            self.assertNotIn('inert-jwt', json.dumps(self.snapshots))
+
+    def test_factory_candidate_is_complete_original_publisher_tuple(self):
+        self.assertEqual(provider.ORIGINAL_TAG_FACTORY_CANDIDATE, publisher.ORIGINAL_0103_CANDIDATE)
+
+    def test_authenticated_wrong_identity_and_scope_reply_refuses_before_token_issuance(self):
+        for index, key, value in [(0, 'id', 4882140), (1, 'app_id', 8), (1, 'account', {'login': 'other'}),
+                (1, 'suspended_at', '2026-10-15T00:00:00Z'), (2, 'id', 1)]:
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as root:
+                opener = SelectedFactoryOpener(); opener.rows[index][key] = value
+                factory = self.prepare(root, opener=opener)
+                with self.assertRaises(provider.Refused):
+                    with factory(): forbidden()
+                self.assertFalse(any(r.method == 'POST' for r in opener.calls))
+                self.assertEqual(self.report['cleanup'], 'not-issued')
+
+    def test_reporter_loss_before_issuance_refuses_and_owned_cleanup_still_runs(self):
+        for phase in ('issuance-possible', 'token-owned', 'revocation-possible', 'revoked'):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as root:
+                def retain(row):
+                    if row['lastPhase'] == phase: raise OSError('inert-jwt secret reporter')
+                factory = self.prepare(root, retain=retain)
+                with self.assertRaises(provider.Refused):
+                    with factory(): pass
+                methods = [r.method for r in self.opener.calls]
+                if phase == 'issuance-possible': self.assertNotIn('POST', methods)
+                else: self.assertEqual(methods[-1], 'DELETE')
+                self.assertEqual(self.report['firstCause'], {'stage': 'reporting', 'code': 'retention'})
+                self.assertFalse(self.report['qualified'])
+                self.assertNotIn('secret', json.dumps(self.report))
+
+    def test_before_credential_refusal_for_native_other_app_tuple_checkpoint_and_admission(self):
+        for field in ('native', 'app', 'candidate', 'attempt-type', 'checkpoint', 'admission'):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as root:
+                bound = binding(); bound['app'] = {'id': 4995487, 'installation': 162873149}
+                candidate = copy.deepcopy(provider.ORIGINAL_TAG_FACTORY_CANDIDATE)
+                checkpoint = copy.deepcopy(provider.ORIGINAL_TAG_FACTORY_CHECKPOINT)
+                if field == 'native': bound['mode'] = 'native'; bound['workflow'].update(run=1, attempt=1)
+                if field == 'app': bound['app']['id'] = 4882140
+                if field == 'candidate': candidate['sourceSha'] = '0' * 40
+                if field == 'attempt-type': candidate['attempt'] = True
+                if field == 'checkpoint': checkpoint['generation'] = 3
+                with self.assertRaises(provider.Refused):
+                    factory = self.prepare(root, bound=bound, candidate=candidate, checkpoint=checkpoint,
+                        admit=(lambda: False) if field == 'admission' else None)
+                    with factory(): forbidden()
+                self.assertEqual(self.credentials, []); self.assertEqual(self.opener.calls, [])
+
+    def test_post_proof_and_all_consumer_refusals_revoke_without_replacing_first_cause(self):
+        for stage in ('candidate', 'admission', 'quota', 'attempt-record', 'recheck', 'send', 'report'):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as root:
+                factory = self.prepare(root)
+                self.opener.fail_cleanup = True
+                original = RuntimeError(stage)
+                with self.assertRaises(RuntimeError) as caught:
+                    with factory(): raise original
+                self.assertIs(caught.exception, original)
+                self.assertEqual(self.opener.calls[-1].method, 'DELETE')
+                self.assertEqual(self.report['cleanup'], 'revocation-unknown')
+                self.assertEqual(self.report['firstCause'], {'stage': 'consumer', 'code': 'failed'})
+                self.assertFalse(self.report['qualified'])
+
+    def test_owned_token_validation_failure_and_cleanup_failure_are_separate(self):
+        for index, key, value in [(3, 'permissions', {'contents': 'write'}),
+                (3, 'permissions', {'contents': 'write', 'workflows': 'write', 'actions': 'read'}),
+                (3, 'expires_at', '2099-01-01T00:00:00Z'),
+                (4, 'total_count', 2), (4, 'repositories', [])]:
+            with self.subTest(key=key,value=value), tempfile.TemporaryDirectory() as root:
+                opener = SelectedFactoryOpener(); opener.rows[index][key] = value; opener.fail_cleanup = True
+                factory = self.prepare(root, opener=opener)
+                with self.assertRaises(provider.Refused):
+                    with factory(): forbidden()
+                self.assertEqual(self.opener.calls[-1].method, 'DELETE')
+                self.assertIn(self.report['firstCause']['stage'], ['permissions', 'expiry', 'census'])
+                self.assertEqual(self.report['cleanup'], 'revocation-unknown')
+
+    def test_cleanup_or_terminal_reporting_failure_cannot_qualify_successful_body(self):
+        for cleanup in (True, False):
+            with self.subTest(cleanup=cleanup), tempfile.TemporaryDirectory() as root:
+                def retain(row):
+                    if not cleanup and row['lastPhase'] == 'terminal': raise OSError('reporter')
+                factory = self.prepare(root, retain=retain); self.opener.fail_cleanup = cleanup
+                with self.assertRaises(provider.Refused):
+                    with factory(): pass
+                self.assertFalse(self.report['qualified'])
+                self.assertEqual(self.opener.calls[-1].method, 'DELETE')
+
+    def test_insufficient_cleanup_lifetime_and_unknown_issuance_do_not_retry(self):
+        for unknown in (False, True):
+            with self.subTest(unknown=unknown), tempfile.TemporaryDirectory() as root:
+                opener = SelectedFactoryOpener()
+                if unknown:
+                    def mutate(index, response):
+                        if index == 3: raise OSError('inert-owned-token secret lost response')
+                    opener.mutate = mutate
+                else:
+                    opener.rows[3]['expires_at'] = dt.datetime.fromtimestamp(time.time() + 60,
+                        dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+                factory = self.prepare(root, opener=opener)
+                with self.assertRaises(provider.Refused):
+                    with factory(): forbidden()
+                self.assertEqual(self.report['cleanup'], 'issuance-unknown' if unknown else 'revoked')
+                if not unknown: self.assertEqual(self.report['firstCause'], {'stage': 'expiry', 'code': 'reserve'})
+                before = len(opener.calls)
+                with self.assertRaises(provider.Refused):
+                    with factory(): forbidden()
+                self.assertEqual(len(opener.calls), before)
+                self.assertEqual(self.credentials, ['jwt'])
+
+    def test_malformed_owned_token_never_enters_request_and_cleanup_is_unknown(self):
+        with tempfile.TemporaryDirectory() as root:
+            opener = SelectedFactoryOpener(); opener.rows[3]['token'] = 'inert-owned-token\r\nsecret'
+            factory = self.prepare(root, opener=opener)
+            with self.assertRaises(provider.Refused):
+                with factory(): forbidden()
+            self.assertEqual([r.method for r in opener.calls], ['GET','GET','GET','POST'])
+            self.assertEqual(self.report['cleanup'], 'revocation-unknown')
+            self.assertNotIn('secret', json.dumps(self.report))
+
+    def test_moved_admission_after_proof_revokes_and_does_not_send(self):
+        calls = []
+        def admit(): calls.append(1); return len(calls) == 1
+        with tempfile.TemporaryDirectory() as root:
+            factory = self.prepare(root, admit=admit)
+            with self.assertRaises(provider.Refused):
+                with factory(): forbidden()
+            self.assertEqual([r.method for r in self.opener.calls], ['GET','GET','GET','POST','GET','DELETE'])
+
+    def test_inactive_native_cli_and_workflow_refuse_before_all_credential_steps(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = pathlib.Path(root) / 'result.json'
+            argv = ['publisher', '--refuse-original-tag-factory-inactive', '--result-path', str(path)]
+            with patch.object(sys, 'argv', argv), patch.object(publisher, 'execute_publisher', forbidden), \
+                 patch.object(provider, 'OriginalTagAuthenticationSession', forbidden), \
+                 patch.object(provider, 'InertOriginalTagCredentialFactory', forbidden):
+                self.assertEqual(publisher.main(), 1)
+            report = json.loads(path.read_bytes())
+            self.assertFalse(report['credentialAcquisitionAttempted']); self.assertFalse(report['publicationComplete'])
+            self.assertEqual(report['disposition'], 'blocked-original-tag-factory-native-inactive')
+            workflow = (ROOT / '.github/workflows/release-successor-publish.yml').read_text()
+            guard = workflow.index('--refuse-original-tag-factory-inactive')
+            for step in ('Mint the ordinary protected-journal writer token', 'Exchange nuget.org trusted publishing identity'):
+                self.assertLess(guard, workflow.index(step))
+            self.assertIn('if: inputs.recover_original_0103_tag_intent == true', workflow[:guard])
+
+
 if __name__ == '__main__': unittest.main()
