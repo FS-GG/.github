@@ -152,13 +152,25 @@ class InertPhaseSlotSink:
                 or any(type(identity[key]) is not str for key in ('path', 'binding', 'invocation'))
                 or type(identity['storeGeneration']) is not int):
             raise Refused('closed inert preparation refused')
+        if type(original_window) is not dict or type(reserved_population) is not dict:
+            raise Refused('closed inert preparation refused')
+        window = original_window.copy()
+        reserved = reserved_population.copy()
+        if (any(type(key) is not str or type(value) is not str for key, value in window.items())
+                or len(reserved) != 2 or any(type(key) is not str for key in reserved)
+                or set(reserved) != {'roles', 'maximumBytes'}
+                or type(reserved['maximumBytes']) is not int or type(reserved['roles']) is not dict):
+            raise Refused('closed inert preparation refused')
+        reserved['roles'] = reserved['roles'].copy()
+        if any(type(key) is not str or type(value) is not int for key, value in reserved['roles'].items()):
+            raise Refused('closed inert preparation refused')
         binding = copy.deepcopy(independently_expected_binding)
         digest = provider.validate_auth_binding(binding)
         if (binding['mode'] != 'inert' or not 0 < len(identity['path']) <= 512
                 or identity['binding'] != digest or identity['invocation'] != binding['invocation']
                 or not 1 <= identity['storeGeneration'] <= contract.U64
                 or not _closed_report(closed_report_envelope)
-                or original_window != binding['clock'] or reserved_population != population()
+                or window != binding['clock'] or reserved != population()
                 or type(slot_backend) is not ControlledSlotBackend):
             raise Refused('closed inert preparation refused')
         result = cls()

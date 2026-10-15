@@ -295,27 +295,73 @@ class SlotSinkTests(unittest.TestCase):
                 subject('inert-slot', dict(sink.REPORT), bound, raw[0])
                 self.assertEqual(subject.ordinal, 1)
 
-    def test_identity_snapshot_survives_mutation_during_later_preparation_guard(self):
+    def test_identity_snapshot_survives_post_preparation_caller_mutation(self):
         binding, frames = inputs()
         identity = {'path': 'inert-slot', 'binding': provider.validate_auth_binding(binding),
                     'invocation': binding['invocation'], 'storeGeneration': 1}
         admitted = dict(identity)
-        calls = []
-        class MutatingPopulation(dict):
-            def __ne__(self, other):
-                calls.append('population comparison')
-                identity.update(path='foreign-path', binding='foreign', invocation='foreign', storeGeneration=2)
-                return False
-        subject, _, _, backend = self.prepared(original_sink_identity=identity,
-            reserved_population=MutatingPopulation(sink.population()))
-        self.assertEqual(calls, ['population comparison'])
-        self.assertNotEqual(identity, admitted)
+        subject, _, _, backend = self.prepared(original_sink_identity=identity)
+        identity.update(path='foreign-path', binding='foreign', invocation='foreign', storeGeneration=2)
         self.assertEqual(json.loads(subject.identity), admitted)
         self.assertEqual(subject.path, admitted['path'])
         self.assertEqual(backend.reservation.identity, subject.identity)
         self.assertEqual(backend.reservation.generation, admitted['storeGeneration'])
         subject('inert-slot', dict(sink.REPORT), binding, frames[0])
         self.assertEqual(subject.ordinal, 1)
+
+    def test_window_population_and_role_types_refuse_before_reservation(self):
+        comparisons = []
+        class Mapping(dict):
+            def __eq__(self, other):
+                comparisons.append('eq')
+                return True
+            def __ne__(self, other):
+                comparisons.append('ne')
+                return False
+        class Text(str):
+            __hash__ = str.__hash__
+            def __eq__(self, other):
+                comparisons.append('eq')
+                return True
+            def __ne__(self, other):
+                comparisons.append('ne')
+                return False
+        class Number(int):
+            def __eq__(self, other):
+                comparisons.append('eq')
+                return True
+            def __ne__(self, other):
+                comparisons.append('ne')
+                return False
+        binding, _ = inputs()
+        window = binding['clock']
+        population = sink.population()
+        invalid = [
+            {'original_window': Mapping(arbitrary='foreign')},
+            {'original_window': dict(window, total=Text('foreign'))},
+            {'original_window': {Text(key): value for key, value in window.items()}},
+            {'reserved_population': Mapping(arbitrary='foreign')},
+            {'reserved_population': {Text('roles'): population['roles'], 'maximumBytes': sink.MAXIMUM_BYTES}},
+            {'reserved_population': dict(population, maximumBytes=Number(-1))},
+            {'reserved_population': dict(population, maximumBytes=True)},
+            {'reserved_population': dict(population, roles=Mapping(arbitrary=-1))},
+            {'reserved_population': dict(population, roles=dict(population['roles'], candidate=Number(-1)))},
+            {'reserved_population': dict(population, roles=dict(population['roles'], candidate=True))},
+            {'reserved_population': dict(population, roles={Text(key): value for key, value in population['roles'].items()})},
+        ]
+        for index, changed in enumerate(invalid):
+            with self.subTest(index=index):
+                comparisons.clear()
+                backend = sink.ControlledSlotBackend()
+                with self.assertRaises(provider.Refused): self.prepared(backend=backend, **changed)
+                self.assertEqual(comparisons, [])
+                self.assertIsNone(backend.reservation)
+                self.assertEqual(backend.stores, {})
+                self.assertEqual(backend.attempts, set())
+                self.assertEqual(backend.events, [])
+                subject, bound, frames, _ = self.prepared(backend=backend)
+                subject('inert-slot', dict(sink.REPORT), bound, frames[0])
+                self.assertEqual(subject.ordinal, 1)
 
     def test_role_capacities_are_immutable_and_changed_reservation_refuses(self):
         with self.assertRaises(TypeError): sink.ROLES['phase-1'] = 4096
