@@ -139,6 +139,50 @@ class ContractTests(unittest.TestCase):
         # A newly detected cause cannot rewrite an already frozen core.
         with self.assertRaises(ValueError): c.Model().step('loss').step('failure:readback')
 
+    def test_late_cause_uses_append_once_observation_after_core_freeze(self):
+        late = {'phase': 'revocation-possible', 'code': 'child-loss'}
+        for core in (c.Model().step('loss'), c.Model().step('failure:transport')):
+            original = core.first_failure
+            observed = core.step('record-loss', late_cause=late)
+            self.assertEqual(observed.first_failure, original)
+            self.assertEqual(observed.loss_cause, ('revocation-possible', 'child-loss'))
+            expired = observed.step('expire', late_cause={'phase': 'terminal', 'code': 'deadline'})
+            self.assertEqual(expired.first_failure, original)
+            self.assertEqual(expired.loss_cause, observed.loss_cause)
+            self.assertEqual(expired.expiry_cause, ('terminal', 'deadline'))
+            self.assertTrue(expired.uncertain and expired.expired)
+            # The first possible observation write consumes its sole candidate,
+            # including an ambiguous write, loss or restart before completion.
+            for cut in ('loss', 'restart', 'diagnostic'):
+                held = expired.step(cut)
+                self.assertEqual(held.first_failure, original)
+                self.assertEqual(held.loss_cause, observed.loss_cause)
+                self.assertEqual(held.expiry_cause, expired.expiry_cause)
+                for event in ('record-loss', 'expire'):
+                    with self.assertRaises(ValueError): held.step(event, late_cause=late)
+                with self.assertRaises(ValueError): held.step('begin')
+            late['code'] = 'readback'
+            self.assertEqual(observed.loss_cause, ('revocation-possible', 'child-loss'))
+            late['code'] = 'child-loss'
+
+    def test_late_cause_is_closed_and_cannot_overflow_or_rewrite_core(self):
+        _, _, _, schemas = inputs()
+        value = c.maximum(schemas['observation'])
+        self.assertLessEqual(len(c.canonical(value)), 512)
+        self.assertEqual(c.decode(c.canonical(value), schemas['observation']), value)
+        without_cause = dict(value, lateCause=None)
+        self.assertNotEqual(c.signing_bytes('observation', value),
+                            c.signing_bytes('observation', without_cause))
+        for bad in ({'phase': 'seventh', 'code': 'readback'},
+                    {'phase': 'terminal', 'code': 'x' * 513},
+                    {'phase': 'terminal', 'code': 'readback', 'extra': 1}):
+            altered = dict(value, lateCause=bad)
+            with self.assertRaises(ValueError): c.decode(c.canonical(altered), schemas['observation'])
+            with self.assertRaises(ValueError): c.Model().step('loss').step('record-loss', late_cause=bad)
+        cause = {'phase': 'terminal', 'code': 'deadline'}
+        with self.assertRaises(ValueError): c.Model().step('begin', late_cause=cause)
+        self.assertEqual(c.Model().step('loss').step('record-loss').loss_cause, None)
+
     def test_legacy_field_census_matches_current_validator(self):
         _, binding, _, _ = inputs()
         bounds = c.legacy_bounds(binding)

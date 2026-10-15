@@ -51,7 +51,7 @@ Every other structural phase bound is smaller. This preserves the 2,048-byte ABI
 Structural upper vectors are deliberately distinguished from executable legal ready
 bytes. Regenerating vectors is a development action, never acceptance of source drift.
 
-The proposed serialized retained population is **57,282 bytes**, leaving 8,254 of
+The proposed serialized retained population is **57,562 bytes**, leaving 7,974 of
 65,536 bytes. The generated accounting is exhaustive for this proposed slot model:
 
 | Category | Simultaneous copies | Maximum bytes each |
@@ -64,7 +64,7 @@ The proposed serialized retained population is **57,282 bytes**, leaving 8,254 o
 | Host core control, old/temp/candidate | 3 | 543 |
 | Peer irreversible control, old/temp/candidate | 3 | 377 |
 | Three legacy gate ACKs on each side, plus two staging copies | 8 | 199 |
-| Append-once loss and expiry, each stable plus candidate | 4 | 427 |
+| Append-once loss and expiry, each stable plus candidate | 4 | 497 |
 | Independent same-token reserved DELETE/204 observation, stable plus candidate | 2 | 508 |
 | Framed diagnostic response with exact embedded receipt | 1 | 546 |
 | Original StartFrame | 1 | 1,273 |
@@ -85,7 +85,14 @@ survive; expiry cannot authorize deletion when age continuity is unknown.
 First-failure recording is modeled as a single core transition before uncertainty;
 subsequent failure observations cannot replace its original phase/code. Once core
 state is frozen, a newly discovered cause cannot rewrite it and must use its separately
-reserved observational path. Tests preserve the original cause across loss, restart,
+reserved observational path. Each loss/expiry envelope now includes an optional closed
+`lateCause` object with phase/code. The signed observation retains that later finding
+without changing the earlier core `firstCause`, including when the core has no known
+cause. Its maximum grows from 427 to 497 bytes within the existing 512-byte slot;
+the four pre-reserved copies add 280 bytes. The model stores separate immutable
+loss/expiry causes and consumes each append-once slot at its first possible write.
+Ambiguity, loss or restart cannot supply a retry or another candidate. Invalid/extra/
+oversized cause fields refuse before consuming a slot. Tests preserve the original cause across loss, restart,
 expiry and diagnostic reads. Native first-failure persistence remains part of the
 unimplemented backend join.
 
@@ -104,7 +111,7 @@ arrays; accessors allocate further copies. Its callers, callback tasks, queue, s
 readback, serialization and restart paths have not been joined to this proposed slot
 algorithm. All simultaneous copies surviving callbacks as authority or uncertainty
 count, including memory. Seven additional retained copies of the maximum legal ready
-frame alone add 9,037 bytes, exceeding this construction's 8,254-byte headroom. The
+frame alone add 9,037 bytes, exceeding this construction's 7,974-byte headroom. The
 protocol accessors permit those allocations; this is a possible-copy counterexample
 to inferring a bound from the API, not an assertion that a current caller keeps seven.
 The actual source-owner copy census/lifetime algorithm is required before interface

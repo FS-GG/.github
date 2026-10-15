@@ -24,6 +24,11 @@ def signature(): return Field('signature', 64)
 def optional(shape): return Field('optional', shape)
 
 
+def cause_shape():
+    return {'phase': choice(*PHASES),
+            'code': choice('credential-input', 'readback', 'transport', 'deadline', 'child-loss')}
+
+
 def maximum(shape):
     if isinstance(shape, Field):
         if shape.kind == 'optional': return maximum(shape.bound)
@@ -101,7 +106,7 @@ def shapes(original, binding_digest, ready_digest):
                   'control': hexdigest(), 'signature': signature()}
     control = {'v': 3, 'descriptor': hexdigest(), 'generation': uint(), 'ordinal': uint(6),
         'candidate': hexdigest(), 'priorCheckpoint': hexdigest(), 'gatePossible': uint(63),
-        'firstCause': optional({'phase': choice(*PHASES), 'code': choice('credential-input', 'readback', 'transport', 'deadline', 'child-loss')}),
+        'firstCause': optional(cause_shape()),
         'loss': choice('none', 'job', 'runner', 'vm', 'service'),
         'terminal': choice('open', 'unknown', 'qualified', 'unqualified'),
         'retention': choice('retained', 'RetentionExpired'), 'originalCutoff': uint(I63),
@@ -121,6 +126,8 @@ def shapes(original, binding_digest, ready_digest):
     custodian = dict(observation, k='custodian-204')
     observation = {k: v for k, v in observation.items() if k not in ('tokenSlot', 'method', 'path', 'status')}
     observation['k'] = choice('loss', 'expiry')
+    # A later cause belongs to its append-once observation, never frozen core.
+    observation['lateCause'] = optional(cause_shape())
     read = {'v': 3, 'k': 'diagnostic', 'evidence': ack}
     return dict(read=read, custodian=custodian, observation=observation, enrollment=enrollment, descriptor=descriptor, ack=ack, checkpoint=checkpoint,
                 control=control, peer=peer, child_ack=child_ack)
@@ -155,8 +162,14 @@ class Model:
 
     loss_record: bool = False
     expiry_record: bool = False
+    loss_cause: tuple | None = None
+    expiry_cause: tuple | None = None
 
-    def step(self, event, upper=0, clock_ok=True):
+    def step(self, event, upper=0, clock_ok=True, late_cause=None):
+        if late_cause is not None:
+            if event not in ('record-loss', 'expire'): raise ValueError('observational cause only')
+            validate(late_cause, cause_shape())
+        cause = None if late_cause is None else (late_cause['phase'], late_cause['code'])
         if event.startswith('failure:'):
             code = event.split(':', 1)[1]
             if code not in ('credential-input', 'readback', 'transport', 'deadline', 'child-loss'):
@@ -167,10 +180,10 @@ class Model:
         if event == 'diagnostic': return self  # No mutation/renewal and no gate.
         if event == 'record-loss':
             if self.loss_record: raise ValueError('append once loss')
-            return replace(self, loss_record=True, uncertain=True)
+            return replace(self, loss_record=True, loss_cause=cause, uncertain=True)
         if event == 'expire':
             if self.expiry_record: raise ValueError('append once expiry')
-            return replace(self, expired=True, uncertain=True, expiry_record=True)
+            return replace(self, expired=True, uncertain=True, expiry_record=True, expiry_cause=cause)
         if event in ('loss', 'restart'): return replace(self, uncertain=True)
         if self.uncertain or self.expired: raise ValueError('original hold')
         cutoff = 270 if self.ordinal + 1 <= 2 else 285
