@@ -850,6 +850,24 @@ class CallbackOwnerControls(unittest.TestCase):
             publisher.write_result(self.path, self.report)
             self.assertEqual(json.loads(self.path.read_bytes())['authenticationSession'], self.report['authenticationSession'])
 
+    def test_callback_process_fixture_entry_runs_actual_sink_without_process_launch(self):
+        import base64
+        import runpy
+        fixture = runpy.run_path(str(ROOT / 'tests/release-successor-authentication/callback-fixture.py'), run_name='callback_fixture_unit')
+        vectors = json.loads((ROOT / 'tests/release-successor-authentication/callback-vectors.json').read_bytes())
+        requests = b''.join(bytes.fromhex(row['request']) for row in vectors['exchanges'])
+        expected = b''.join(bytes.fromhex(row['response']) for row in vectors['exchanges'])
+        output = io.BytesIO()
+        with tempfile.TemporaryDirectory() as root:
+            result = pathlib.Path(root) / 'fixture-result.json'
+            arguments = ['callback-fixture.py', base64.b64encode(provider._auth_canonical(vectors['binding'])).decode(),
+                         base64.b64encode(provider._auth_canonical(vectors['binding']['clock'])).decode(), str(result)]
+            with patch.object(sys, 'argv', arguments), patch.object(sys, 'stdin', types.SimpleNamespace(buffer=io.BytesIO(requests))), \
+                 patch.object(sys, 'stdout', types.SimpleNamespace(buffer=output)):
+                self.assertEqual(fixture['main'](), 0)
+            self.assertEqual(output.getvalue(), expected)
+            self.assertEqual(json.loads(result.read_bytes())['authenticationSession']['ordinal'], 6)
+
     def test_callback_manifest_recipe_sorts_by_ascii_repository_path_key(self):
         import hashlib
         manifest = json.loads((ROOT / 'tests/release-successor-authentication/callable-source-manifest.json').read_bytes())
