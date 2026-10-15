@@ -128,6 +128,72 @@ class RunnerTests(unittest.TestCase):
         return {'tests/work-programme/context-owner-restart-fixtures/' + name + '.delta-input.json'
                 for name in names}
 
+    def test_each_fsi_suite_pins_and_selects_its_actual_receiver(self):
+        selected = [suite for suite in runner.suites(self.root) if suite['command'][0] == 'dotnet']
+        names = ['acceptance', 'context-delta', 'context-evidence', 'routine-decisions']
+        self.assertEqual([suite['id'] for suite in selected], names + [name + '-claude' for name in names])
+        prefix = ('#if CLAUDE_SKILLS\n'
+                  '#load "../../.claude/skills/work-programme/scripts/programme.fsx"\n'
+                  '#else\n#load "../../.agents/skills/work-programme/scripts/programme.fsx"\n#endif\n')
+        for index, suite in enumerate(selected):
+            claude = index >= len(names)
+            skill_root = '.claude' if claude else '.agents'
+            other_root = '.agents' if claude else '.claude'
+            self.assertIn(skill_root + '/skills/work-programme/scripts/programme.fsx', suite['inputs'])
+            self.assertNotIn(other_root + '/skills/work-programme/scripts/programme.fsx', suite['inputs'])
+            self.assertEqual(suite['command'], ['dotnet', 'fsi'] +
+                             (['--define:CLAUDE_SKILLS'] if claude else []) +
+                             ['--exec', 'tests/work-programme/' + names[index % len(names)] + '.fsx'])
+            self.assertTrue(Path(__file__).with_name(names[index % len(names)] + '.fsx').read_text().startswith(prefix))
+
+    def test_unknown_or_mismatched_fsi_receiver_blocks_before_launch(self):
+        selected = next(suite for suite in runner.suites(self.root) if suite['id'] == 'acceptance-claude')
+        for name in selected['inputs'] + ['.agents/skills/work-programme/scripts/programme.fsx']:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('synthetic pinned input')
+        script = selected['command'][-1]
+        cases = [
+            ({**selected, 'command': ['dotnet', 'fsi', '--define:UNKNOWN', '--exec', script]}, 'unknown-launch-closure'),
+            ({**selected, 'command': ['dotnet', 'fsi', '--define:CLAUDE_SKILLS', '--define:EXTRA', '--exec', script]},
+             'unknown-launch-closure'),
+            ({**selected, 'command': ['dotnet', 'fsi', '--exec', script]}, 'fsi-receiver-not-in-inputs'),
+            ({**selected, 'inputs': ['.agents/skills/work-programme/scripts/programme.fsx', script]},
+             'fsi-receiver-not-in-inputs'),
+            ({**selected, 'inputs': [script]}, 'fsi-receiver-not-in-inputs'),
+        ]
+        for suite, reason in cases:
+            with self.subTest(command=suite['command'], inputs=suite['inputs']):
+                with patch.object(runner.shutil, 'which', return_value='/controlled/dotnet'), \
+                        patch.object(runner, 'run_child') as child:
+                    report, code = self.collect([suite])
+                child.assert_not_called()
+                self.assertEqual(code, 1)
+                self.assertEqual(report['preflight']['suites'][0]['reason'], reason)
+
+    def test_missing_claude_helper_blocks_only_its_receiver(self):
+        selected = [suite for suite in runner.suites(self.root)
+                    if suite['id'] in ('acceptance', 'acceptance-claude')]
+        for suite in selected:
+            for name in suite['inputs']:
+                path = self.root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('synthetic pinned input')
+        (self.root / '.claude/skills/work-programme/scripts/programme.fsx').unlink()
+        with patch.object(runner.shutil, 'which', return_value='/controlled/dotnet'), \
+                patch.object(runner, 'run_child', return_value=dict(
+                    exit=0, reason=None, cleanup='passed', output='agents receiver', outputBytes=15)) as child:
+            report, code = self.collect(selected)
+        self.assertEqual(child.call_count, 1)
+        self.assertEqual(child.call_args.args[0], selected[0]['command'])
+        self.assertEqual(code, 1)
+        self.assertEqual([row['status'] for row in report['preflight']['suites']], ['ready', 'blocked'])
+        self.assertEqual([row['status'] for row in report['suites']], ['passed', 'blocked'])
+        self.assertIsNone(report['suites'][1]['exit'])
+        self.assertIn('.agents/skills/work-programme/scripts/programme.fsx', report['candidate'])
+        self.assertNotIn('.claude/skills/work-programme/scripts/programme.fsx', report['candidate'])
+        self.assertEqual(report['firstCause'], 'acceptance-claude: shared-input-missing-or-changed')
+
     def test_routine_decisions_inventory_covers_actual_source_reads(self):
         selected = next(suite for suite in runner.suites(self.root) if suite['id'] == 'routine-decisions')
         self.assertEqual(set(selected['inputs']), {
@@ -324,7 +390,7 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(runner.settle(children[0], runner.time.monotonic() + 1), 'leader-already-reaped')
             signal_group.assert_not_called()
 
-    def test_real_shell_entry_controlled_children_success_and_two_failures(self):
+    def test_real_shell_entry_controlled_children_success_and_independent_twin_failures(self):
         target = self.root / 'tests/work-programme'
         target.mkdir(parents=True)
         for name in ['run.py', 'run.sh']:
@@ -338,7 +404,7 @@ class RunnerTests(unittest.TestCase):
         binary = self.root / 'bin'
         binary.mkdir()
         dotnet = binary / 'dotnet'
-        dotnet.write_text('#!/usr/bin/env python3\nimport sys\nprint("controlled FSI stand-in", sys.argv[-1])\n')
+        dotnet.write_text('#!/usr/bin/env python3\nimport sys\nprint("controlled FSI stand-in", sys.argv[1:])\n')
         dotnet.chmod(0o700)
         env = {**os.environ, 'PATH': str(binary) + os.pathsep + os.environ['PATH']}
         # The real shell command forwards the preflight flag without invoking a suite.
@@ -358,15 +424,22 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(json.loads(blocked.stdout)['status'], 'blocked')
         self.assertFalse(marker.exists())
         missing.write_bytes(original)
-        dotnet.write_text('#!/usr/bin/env python3\nimport sys\nprint("controlled FSI stand-in", sys.argv[-1])\n')
+        dotnet.write_text('#!/usr/bin/env python3\nimport sys\nprint("controlled FSI stand-in", sys.argv[1:])\n')
         success = subprocess.run(['bash', str(target / 'run.sh')], env=env, capture_output=True, text=True, timeout=10)
         self.assertEqual(success.returncode, 0, success.stderr)
-        self.assertEqual(json.loads(success.stdout)['qualification'], 'passed')
+        successful = json.loads(success.stdout)
+        self.assertEqual(successful['qualification'], 'passed')
+        fsi_rows = successful['suites'][:8]
+        for row in fsi_rows:
+            self.assertEqual('--define:CLAUDE_SKILLS' in row['evidence'], row['id'].endswith('-claude'))
         dotnet.write_text('#!/usr/bin/env python3\nimport sys\nassert not any(x in sys.argv[-1] for x in ["acceptance", "context-delta"]), "independent fixture assertion"\n')
         failed = subprocess.run(['bash', str(target / 'run.sh')], env=env, capture_output=True, text=True, timeout=10)
         report = json.loads(failed.stdout)
         self.assertEqual(failed.returncode, 1)
-        self.assertEqual([r['status'] for r in report['suites']], ['failed', 'failed'] + ['passed'] * (len(runner.suites(self.root)) - 2))
+        self.assertEqual([r['status'] for r in report['suites']],
+                         ['failed', 'failed', 'passed', 'passed'] * 2 + ['passed'] * 5)
+        self.assertEqual(report['firstCause'], 'acceptance: exit 1')
+        self.assertEqual(report['omittedCoverage'], [])
 
 
 if __name__ == '__main__':

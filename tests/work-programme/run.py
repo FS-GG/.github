@@ -20,14 +20,17 @@ OUTPUT_BYTES = 1024 * 1024
 
 
 def suites(root):
-    shared = ['.agents/skills/work-programme/scripts/programme.fsx']
     restart = 'tests/work-programme/context-owner-restart-fixtures/'
     restart_names = ['interrupted-dispatch', 'missed-owner-revision', 'absent-owner',
                      'full-reservation', 'one-integrator-same-owner-repair', 'superseded-owner-return']
     return [
-        dict(id=name, command=['dotnet', 'fsi', '--exec', 'tests/work-programme/' + name + '.fsx'],
-             inputs=shared + ['tests/work-programme/' + name + '.fsx'] + extra,
+        dict(id=name + suffix,
+             command=['dotnet', 'fsi', *defines, '--exec', 'tests/work-programme/' + name + '.fsx'],
+             inputs=[skill_root + '/skills/work-programme/scripts/programme.fsx',
+                     'tests/work-programme/' + name + '.fsx'] + extra,
              prerequisites=['dotnet'], dependsOn=[], independent=True)
+        for skill_root, suffix, defines in [('.agents', '', []),
+                                           ('.claude', '-claude', ['--define:CLAUDE_SKILLS'])]
         for name, extra in [('acceptance', []), ('context-delta', [
             'tests/work-programme/context-delta-input.json', 'tests/work-programme/context-delta-expected.json',
             ] + [restart + name + '.delta-input.json' for name in restart_names]),
@@ -97,7 +100,9 @@ def preflight(root, selected):
                 if not command or launcher not in required or any(p not in tools for p in required):
                     reason = 'unknown-launch-closure'
                 elif ((launcher == 'dotnet' and not
-                       (len(command) == 4 and command[1:3] == ['fsi', '--exec'] and command[3].endswith('.fsx'))) or
+                       ((len(command) == 4 and command[1:3] == ['fsi', '--exec'] and command[3].endswith('.fsx')) or
+                        (len(command) == 5 and command[1:4] == ['fsi', '--define:CLAUDE_SKILLS', '--exec']
+                         and command[4].endswith('.fsx')))) or
                       (launcher == 'python' and not
                        ((len(command) == 2 and command[1].endswith('.py')) or
                         (len(command) == 3 and command[1] == '-c')))):
@@ -110,6 +115,8 @@ def preflight(root, selected):
                     reason = 'invalid-input-path'
                 elif any(arg.endswith(('.py', '.fsx')) and arg not in suite['inputs'] for arg in command[1:]):
                     reason = 'entrypoint-not-in-inputs'
+                elif launcher == 'dotnet' and not fsi_receiver_matches(command, suite['inputs']):
+                    reason = 'fsi-receiver-not-in-inputs'
                 else:
                     paths.update(suite['inputs'])
                     # Intermediate symlinks would escape the declared checkout closure.
@@ -132,6 +139,18 @@ def preflight(root, selected):
                 status='passed' if rows and all(r['status'] == 'ready' for r in rows) else 'blocked',
                 suites=rows, candidate=pins, executed=False, qualification='not-evaluated',
                 elapsedSeconds=round(time.monotonic() - started, 6))
+
+
+def fsi_receiver_matches(command, inputs):
+    receivers = ['.agents/skills/work-programme/scripts/programme.fsx',
+                 '.claude/skills/work-programme/scripts/programme.fsx']
+    selected = [path for path in receivers if path in inputs]
+    claude = '--define:CLAUDE_SKILLS' in command
+    # Existing standalone FSI fixture commands need no programme helper. The
+    # explicit receiver define always requires its own helper in the pinned closure.
+    if not selected and not claude:
+        return True
+    return selected == [receivers[1 if claude else 0]]
 
 
 def group_alive(group):
