@@ -208,6 +208,18 @@ class SlotSinkTests(unittest.TestCase):
             sink.REPORT.clear()
             sink.REPORT.update(original)
 
+    def test_role_capacities_are_immutable_and_changed_reservation_refuses(self):
+        with self.assertRaises(TypeError): sink.ROLES['phase-1'] = 4096
+        self.assertEqual(sink.ROLES['phase-1'], 2048)
+        changed = sink.population()
+        changed['roles']['phase-1'] = 4096
+        backend = sink.ControlledSlotBackend()
+        with self.assertRaises(provider.Refused):
+            self.prepared(backend=backend, reserved_population=changed)
+        self.assertIsNone(backend.reservation)
+        self.assertEqual(backend.stores, {})
+        self.assertEqual(sink.MAXIMUM_BYTES, 23552)
+
     def test_early_terminal_uses_protected_publisher_transition_graph(self):
         for prefix in (1, 2, 4):
             with self.subTest(prefix=prefix):

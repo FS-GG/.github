@@ -3,6 +3,7 @@ import copy
 import hashlib
 import threading
 from dataclasses import dataclass
+from types import MappingProxyType
 
 import domain_contract as contract
 import release_successor_provider as provider
@@ -23,10 +24,10 @@ class BackendCut(OSError):
         self.stage = stage
 
 
-ROLES = {**{f'phase-{n}': 2048 for n in range(1, 7)},
+ROLES = MappingProxyType({**{f'phase-{n}': 2048 for n in range(1, 7)},
          **{role: 2048 for role in ('old', 'candidate', 'temporary', 'readback')},
          **{f'{kind}-{role}': 512 for kind in ('loss', 'expiry')
-            for role in ('candidate', 'file', 'readback')}}
+            for role in ('candidate', 'file', 'readback')}})
 MAXIMUM_BYTES = sum(ROLES.values())
 
 
