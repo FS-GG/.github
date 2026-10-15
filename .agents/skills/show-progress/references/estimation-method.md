@@ -16,6 +16,20 @@ implementation, repair, qualification and publication milestones while whole out
 historical percentage or effort baseline does not prevent a concrete milestone comparison.
 Use the trailing 24-hour window as a separate comparison when its baseline differs.
 
+## Compact presentation without lost coverage
+
+Use one current-state row per selected outcome and link the previous report. Describe
+current acceptance, remaining boundary, changes, blockers, confidence and comparable
+estimates there. Expand only changed or materially exceptional claims; link historical
+detail instead of repeating it. Shared gaps and assumptions name all affected IDs once;
+retain item-specific uncertainty inline. Unchanged estimates need a dated basis and
+freshness limit; absent earlier estimates are unknown, not unchanged. All estimation
+obligations still apply even when their presentation is shared or linked.
+
+Use native observations for metrics and state their population, denominator, period and
+coverage. Report bytes as bytes; effort/usage savings need actual comparable attribution.
+Missing telemetry is unknown, never zero. Do not start extra workloads for reporting.
+
 ## Progress and its denominator
 
 Report three different quantities only when their inputs exist:
@@ -35,16 +49,19 @@ For baseline weights `w[j]` and evidenced credit `a[j]` between 0 and 1:
 
 Declare what partial credit means before using it. Do not give source delivery the
 publication/adoption weight or create universal phase weights across unrelated items.
-When no defensible weights exist, use a broad analyst judgement range with a short
-rationale and low confidence. Such a range is a provisional planning estimate, not
-measured physical completion or a statistical confidence interval. Do not retrospectively
+Use existing native acceptance units and defensible owner weights; do not manufacture
+units or weights to fill the report. When these do not exist, use a qualitative analyst
+judgement with rationale and low confidence, or unknown; a guessed numerical readiness
+range has no supported denominator. This restriction does not prevent a bottom-up effort
+or calendar scenario range supported by named remaining tasks. Do not retrospectively
 invent weights to make an earlier conversational guess look measured.
 
 Aggregate only compatible, covered items. Use baseline effort weights if available.
-An explicitly requested equal-item overview may average item readiness, but label it an
-**equal-item readiness index**, never programme effort completion. Report the population,
-missing items, coverage and weighting. No aggregate estimate is better than silently
-excluding the hardest unknowns. Keep formal closure beside any approximate aggregate.
+An explicitly requested equal-item overview may average supported native item readiness,
+but label it an **equal-item readiness index**, never programme effort completion.
+Report the population, missing items, coverage and weighting; an item without a native
+denominator remains unknown and prevents a claimed full-population index. No aggregate
+estimate is better than silently excluding the hardest unknowns. Keep formal closure beside any approximate aggregate.
 
 ## Change over a window
 
