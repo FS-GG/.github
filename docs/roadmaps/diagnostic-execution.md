@@ -1,6 +1,8 @@
 # V2-DIAG-01: Collect independent failures within bounded execution
 
-Date: 2026-10-06. Status: guidance and ordinary runner landed; local ordinary and packaged native pilots qualified; SDD guidance carrier published; canonical Coordination release and installed receiver adoption pending.
+Date: 2026-10-06. Reviewed: 2026-10-15.
+Status: ordinary runner and result retention delivered; historical packaged native pilot qualified;
+SDD guidance carrier published; selected release, native receiver refresh and evaluation remain open.
 Design: [diagnostic execution](../designs/diagnostic-execution.md).
 Parent: [V2 roadmap](../github-substrate-v2-roadmap.md#v2-diag-01--diagnostic-execution--2026-10-05).
 
@@ -259,3 +261,78 @@ Selected installed diagnostic-guidance use and bounded evaluation remain open un
 installation gates do not establish that adoption. Kit #1090 and tool #1087 remain separate receivers.
 Canonical Coordination publication, pilot adoption and unavailable baseline usage remain open;
 no measured savings, automatic guidance reload or `.claude` execution is inferred.
+
+## Ordinary result retention and remaining adoption — 2026-10-15
+
+[PR #4530](https://github.com/FS-GG/.github/pull/4530), merge
+[`3f0cdba`](https://github.com/FS-GG/.github/commit/3f0cdba10ffc726cf99546ea23a2c8e2e4e8f431),
+adds result retention to the selected [ordinary workflow](../../.github/workflows/work-programme.yml).
+The maintained runner writes its existing JSON report to a result file and keeps its own step exit.
+Independent `always()` steps display and upload that file; missing-file upload fails. Display or upload
+failure cannot suppress the other step. The original 170-second runner deadline, five-second cleanup
+reserve, 1 MiB output bound and three-minute job timeout remain unchanged. A disposable shell control
+retained its synthetic first cause while preserving exit 7; it is separate from hosted acceptance.
+
+The actual [hosted entry, run 38718508221/1](https://github.com/FS-GG/.github/actions/runs/38718508221)
+passed at qualified head `774c90751f8d17ec5740a1b52ef7d0b6becd8aff`. All nine suites passed in
+13.899 seconds with 10,547 output bytes, no first cause or omitted coverage, and successful cleanup
+and reporting. Actions display and upload steps passed separately. Independent download of artifact
+`11964595788` matched its API archive SHA256
+`7447ddf138405663254d0e6eb8a05e8bcae53935d693a5d5994c7af59c5af79b`;
+the sole JSON member has SHA256
+`fa62a6512798c2b51f5c28e48234024733f572314669774e6b91d8ab37a20d90`.
+All 31 reported input hashes matched the exact Git source. This accepts the selected ordinary entry
+and artifact acquisition at that head, without claiming a separate post-merge execution or native adoption.
+
+The preceding [hosted observation 38682224377](https://github.com/FS-GG/.github/actions/runs/38682224377),
+at `e71a23190a90bc93dc29af371cc79004d820c4c9`, passed the same nine suites with identical 31 input pins
+in 23.179 seconds. Both observations contain zero natural suite failures. These two runs provide a
+descriptive comparison only: environment variability, defect yield, avoided attempts, total diagnostic
+overhead and complete usage coverage are unmeasured. Upload timestamps span one second at the native
+timestamp resolution; that does not establish exact overhead. No savings are inferred.
+
+### Publication and native owner joins still required
+
+[Coordination CLI 0.3.0](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.3.0) is a published
+CLI-only successor from producer `8eef1ab7f205132553632e03dc650e7ecdd03679`, publisher
+`401a89e3e63c0eefda02124475e92d0c4b752cfd`. Independent public acquisition matched original archive
+`a8cd6d602e1203257e1241df0b5dfdb9d867334b46dc406d8cdaa8e6d2b3019c` and the normalized nuget.org
+payload. This is separate from the selected 0.2.1 package/image release and P4 joins in the
+[Coordination owner plan](https://github.com/FS-GG/FS.GG.Coordination/blob/38da024a8dbc7f65a091fcc9a4a81a383f327e63/docs/roadmaps/v2-lang-portable-integration.md#diag-021-canonical-preparation-and-dormant-source-amendment).
+The diagnostic preparation API and both installed qualification scripts are unchanged between those
+producers, but Execution custody/bootstrap/project sources changed. Historical native qualification
+cannot transfer to 0.3.0 from those selected equal files or the version number.
+
+The programme root and Coordination diagnostic owner must supply and admit the exact enforcing outer
+profile, original total/resource/cleanup bounds and custody/settlement evidence before a new packaged
+native attempt. The existing package rewriter and qualifier inputs are prepared; no new native attempt
+was executed in this window. Sampled process observations do not establish hard containment.
+
+The P4 owner must select and record a supported current qualification route with its enforcing profile,
+candidate/receiver custody and fresh receiver-bound grant. Historical or retired dispatch identities
+remain unavailable as current authority; this update revives no route. Publisher credential exchange,
+administrator provider enrollment, private-facts custody and installed receiver proof are distinct
+owner joins. Missing credentials have not been established as their common blocker. The separate
+general Python provider pack does not own this route decision. Publication and effects retain their
+existing admission boundaries; original failed attempts and unresolved cleanup remain unchanged.
+V2-DIAG-01.4 stays open for these joins, both owners' installed assertions and bounded evaluation.
+
+### Route-selection request delivery is blocked
+
+At the root-reported 2026-10-15 10:54:22 UTC cutoff, typed validation of the public Coordination
+route-selection draft succeeded with `kind=validated,writes=0`. Its subsequent `intake apply`
+refused while reading the Coordination room: production v1 admission was unavailable for durable
+operation scope, protected authority, the existing admission journal and provider reconciliation.
+This is a **failed read**, not an empty room or a delivered request. Root reports no issue or board
+write and no surviving CLR process; its later exact-ID/title issue search found no created issue.
+Board state remains unverified. The transcript is root-reported evidence, not an independently
+retained result artifact.
+
+The [production client fence](../../src/FS.GG.Coord.Cli/Client.fs) preserves that refusal;
+draft validation cannot supply installed mutation authority. The programme root owns routing this
+blocker to the `.github` coordination-engine maintainer and the installed admission authority owner.
+The latter supplying owner is not yet confirmed, and no alternative authorized public delivery
+channel has been established. Preserve the draft until that owner identifies and admits the existing
+supported intake route; do not replay apply or bypass it with direct issue creation. This request
+delivery blocker does not stop independent ordinary evidence reconciliation or establish native
+qualification, provider grant, publication or adoption authority.
