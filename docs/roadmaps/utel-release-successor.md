@@ -1083,17 +1083,77 @@ including when the earlier cause is absent. The maximum observation is 497 bytes
 its 512-byte slot; four reserved copies add 280 bytes. An observation remains immutable
 and append-once after its first possible write, with no retry after loss/restart/ambiguity.
 This does not prove the actual population fit.
-The remaining source-owner blocker is the simultaneous-copy/lifetime census and exact
-slot mapping across snapshots, accessors, callbacks/tasks/queue/sink/readback,
-serialization and restart. Public pinned [snapshot source](https://github.com/FS-GG/FS.GG.Coordination/blob/039cba0bc7d9057cd01f490803576f4b0e97fb16/src/FS.GG.Coordination.Orchestration.Execution/PhaseResultProtocol.fs)
-retains frame/payload arrays and returns copies; [callback source](https://github.com/FS-GG/FS.GG.Coordination/blob/bedee6f44529838843ca7c4dfb4cb8aa9f1e1f36/src/FS.GG.Coordination.Orchestration.Execution/PhaseCallbackProtocol.fs)
-retains a pending base64 frame. The API does not bound caller/accessor/callback retention.
-Seven possible extra maximum-ready copies exceed headroom (9,037 > 7,974); this is not
-an observed current allocation count. Memory, filesystem metadata/allocated blocks and
-native enforcement need finite proof. Actual signer custody/enrollment, authenticated
-barrier/fresh exact readback, original-clock continuity/uncertainty and independent loss
-proof remain SystemAdmin/consumer integration obligations. Interface freeze and later
-installed/native admission remain held; production provider/workflow remain unchanged.
+[Coordination PR #999](https://github.com/FS-GG/FS.GG.Coordination/pull/999), protected at
+`16c28c0419612a358aa572ca5cbc1e3540bdd8d0`,
+narrows the inert source profile to one immutable exact frame per decoded snapshot,
+with a checked payload view and no separate retained payload array. Callback correlation
+drops pending base64 after encoding, and internal encoding reads the owned frame;
+public `Frame`/`Payload` accessors still create caller-owned copies. Existing legacy
+start/phase/ACK/callback bytes and one-use/full-write checks remain unchanged.
+The protected [ownership inventory](https://github.com/FS-GG/FS.GG.Coordination/blob/16c28c0419612a358aa572ca5cbc1e3540bdd8d0/tests/engineering/phase-result-protocol/README.md)
+and [managed source](https://github.com/FS-GG/FS.GG.Coordination/blob/16c28c0419612a358aa572ca5cbc1e3540bdd8d0/src/FS.GG.Coordination.Orchestration.Execution/PhaseResultProtocol.fs)
+passed hosted compiler, required suites and coherent qualification (48 success, six
+skipped). The [qualifier pin](https://github.com/FS-GG/FS.GG.Coordination/blob/16c28c0419612a358aa572ca5cbc1e3540bdd8d0/eng/utel-callback-source.json)
+selects the separate inert callback pair at `.github` `71227e17` and exact 23-case census;
+its corpus and actual paired Python callback journey do not qualify factory/native
+compatibility, the new slot sink, credentials or original-operation effects.
+
+The six × 2,048-byte snapshot-array ceiling is a partial inventory only. The opt-in
+managed ownership profile explicitly refuses closed physical-copy admission until
+endpoint capture/release is qualified; legacy inert preparation asserts no fit.
+
+The remaining source-owner blocker is the actual simultaneous-copy/lifetime census
+and slot mapping across binding/start/ACK arrays, parser/encoder/base64 temporaries,
+callback/read buffers, async requests/tasks, arbitrary stream captures/caller copies,
+and actual host/sink/backend/peer storage. Aliases need truthful identity and independent
+buffers remain counted. Terminal/timeout/cancellation/task completion/restart do not
+prove physical release or permit reuse of unresolved slots. The serialized 57,562/7,974
+model is unchanged; no joined fit follows. Seven possible extra maximum-ready caller
+copies exceed headroom (9,037 > 7,974), without establishing a current allocation count.
+Memory, filesystem metadata/allocated blocks and native enforcement remain unproved.
+Protected [PR #4570](https://github.com/FS-GG/.github/pull/4570) at
+`966e3216713f2bc2959af5f01ebe9bb41be4b73b` adds the [actual-sink constructed witness](https://github.com/FS-GG/.github/blob/966e3216713f2bc2959af5f01ebe9bb41be4b73b/tests/release-successor-authentication/sink-copy-contract.md):
+a permitted padded report yields 66,170 serialized bytes at the pre-replace cut,
+634 over policy. Old/temp file stores, prior/body memory and incoming frame are five
+distinct backing stores, while each report remains within 16 KiB. Five focused controls,
+77 authentication tests and required hosted checks passed. This is a source-permitted
+counterexample using an inert filesystem double, not an observed deployed allocation
+or complete census. Additional objects/copies and filesystem blocks remain uncounted;
+the report limit does not prove the sink's joined fit or supply durable ACK/barrier,
+clock, recovery or retry authority. The actual host/sink/backend/peer map stays held.
+Protected [PR #4571](https://github.com/FS-GG/.github/pull/4571) at
+`df803eb90f1d3f1d6175319d06dcb30478df5093` adds the [inert closed-report slot sink](https://github.com/FS-GG/.github/blob/df803eb90f1d3f1d6175319d06dcb30478df5093/tests/release-successor-authentication/slot-sink-contract.md)
+through the actual callback owner. Twelve focused/89 full authentication controls and
+hosted checks passed. It rejects padding before reservation, preserves early-terminal
+phase order and models one-attempt core/append-once observational writes with Unknown
+and first/late-cause retention. Its explicit 23,552-byte store reservation excludes
+caller/callback/managed/runtime/serialization and native backend populations. It neither
+replaces the publisher nor supplies cold restart/cross-process custody, real barriers
+or authenticated receipts. It cannot be combined with or replace the 57,562-byte model
+to infer joined fit. The reusable finding resolves the source-contract capture gap through Atlas
+`github/original-103-authentication-domain-policy`.
+Protected [PR #4573](https://github.com/FS-GG/.github/pull/4573) at
+`d3dd657b23fc1ac2f3aeb6cba06b6ca455406bdf` adds the [inert framed Python journey](https://github.com/FS-GG/.github/blob/d3dd657b23fc1ac2f3aeb6cba06b6ca455406bdf/tests/release-successor-authentication/slot-sink-contract.md#framed-injected-stream-fixture)
+through actual decoder/owner/typed sink, with original scalar guard before copying
+and complete write plus flush before confirmation. Failure permanently closes while
+retaining existing stores/attempts and any existing Unknown; malformed input before
+a phase does not create Unknown, and no retry follows. Thirteen focused/103 full tests
+and hosted checks passed, including exact 13 exchanges/six retained frames. This
+accepts injected Python integration only: source pins and managed-profile selection
+remain unchanged; no whole-fit, production transport, durability, host-clock or native
+ACK claim follows. Atlas also captures this additional reusable source finding.
+The [PR #4572 scalar guard](https://github.com/FS-GG/.github/blob/11cecded9486cd74dfb0ff51946799a21f4469db/tests/release-successor-authentication/inert_phase_slot_sink.py),
+protected at `11cecded9486cd74dfb0ff51946799a21f4469db`, closes the literal-equality
+counterexample by checking exact built-in two-key dict/string types before equality.
+Thirteen focused/90 full tests and hosted checks passed. Custom equality and subclasses
+refuse without custom equality execution or reservation/backend/phase changes; valid
+subsequent frames succeed. This is an inert input-boundary correction, with no deployed
+host, whole-fit or native claim.
+
+Actual signer custody/enrollment, authenticated barrier/fresh exact readback, original-clock
+continuity/uncertainty and independent loss proof remain SystemAdmin/consumer obligations.
+Interface freeze and installed/native admission stay held; production provider/workflow
+remain unchanged.
 
 All six native selections and all admission/effect flags remain false. Preserve the
 accepted loss matrix, original `.103` attempted-unknown tag and no replay, unchanged
