@@ -1029,25 +1029,47 @@ release-effect boundaries remain fixed.
 
 ### Original .103 authentication domain policy — 2026-10-15
 
-The sponsor-delegated [public policy decision](https://github.com/FS-GG/.github/issues/4517#issuecomment-6199911781)
-is recorded in [ADR-0093](../adr/0093-original-103-authentication-domain-policy.md).
-Programme owns policy/change control; EHotwagner retains credential/App custody;
-SystemAdmin owns the proposed external service and host evidence. The decision selects
-one original-operation descriptor and independently enrolled issuer/ACK trust, one-use
-durable phase gates, same-token HTTP 204 revocation, original-clock uncertainty checks
-within fixed 270/285/300-second cutoffs, and prospective nonsecret retention capped at
-six phase records/64 KiB until 90 days after the original total cutoff.
+The sponsor-delegated [policy](https://github.com/FS-GG/.github/issues/4517#issuecomment-6199911781)
+and subsequent [accounting/ACK decision](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200107860)
+are recorded in [ADR-0093](../adr/0093-original-103-authentication-domain-policy.md).
+Programme owns policy/change control; EHotwagner retains separate credential/App custody.
+SystemAdmin owns the separate supervised ACK-service design and later operational custody,
+outside the key-free facts store and original job/runner/VM. Actual signer custody and
+independent enrollment remain unqualified. Preserve original-operation descriptor and
+issuer/ACK separation, one-use durable gates, same-token HTTP 204 revocation and original
+270/285/300-second cutoffs with authenticated finite clock uncertainty.
 
-Implementation remains pending. The protected provider binds publisher provenance to
-`release-successor-publish.yml`, while the inactive job uses
-`release-successor-authenticate.yml`; the reviewed descriptor extension must distinguish
-those identities and preserve original dependency pins. Existing inert source is not
-native qualification. The exact 17,647-byte restricted proposal is unavailable here;
-reconcile its internal signing/transport topology before freezing an implementation
-interface. SystemAdmin owes endpoint/store/transport, independently enrolled identities,
-durable ACK and clock/loss evidence; the UTEL source owner owes the reviewed extension
-and pin compatibility. Obtain a separate bounded source reservation and later installed/native
-admission before claiming those outcomes.
+The cap is six **logical phase ordinals** and **65,536 total retained bytes**, counting
+the complete signed/schema population, simultaneous physical copies, peer control,
+write/replacement overlap and old/temp/candidate uncertainty evidence. No required fact
+may be dropped or evicted to fit; unproved fit/overflow refuses source/runtime admission.
+Retention ends 90 days after the original total cutoff without read-based renewal;
+RetentionExpired/Unknown preserves the original-effect hold.
+
+The former unavailable-packet status is historical: SystemAdmin [reported restored/read-back-equal
+private v1/v2](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200035172) and
+[delivered v3](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200247987).
+Programme independently verified the received v3 digest and accepted its 64,000-byte slot
+arithmetic and separate ACK topology only as a [planning subset](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200287829).
+Receipt, prospective slot limits and reported readiness v10 do not prove complete fit or
+native qualification; v1's 128-frame/131,072-byte design is historical.
+
+Programme/fdev1 owns the reserved source-only slice for an isolated versioned inert
+contract, complete maximum encoded vectors and exhaustive slot/copy accounting.
+SystemAdmin independently reviews host layout/backend/trust against its exact digest;
+Programme decides the join. This permits pure contract/vectors/tests only, with no
+production provider/workflow change or native/credential/release effect.
+
+Interface freeze remains held on complete signed descriptor/frame/ACK/read schemas and
+maximum vectors, separate original publisher and executing authentication identities,
+original-pin compatibility, ready ABI fit within 2,048 bytes, and the peer's actual
+irreversible-control algorithm/simultaneous-copy bound. Two extra 1,024-byte control
+copies would yield 66,048 bytes and refuse admission. Diagnostic/raw-receipt reads cannot
+become replacement gates; ambiguous-write/loss/expiry encodings remain counted obligations.
+Actual custody/enrollment, backend barrier/fresh exact readback, original-clock continuity
+and uncertainty, and independent loss evidence remain unqualified. The UTEL source owner
+owes the closed consumer/descriptor/copy join; SystemAdmin owns host/trust proof. Existing
+inert source and the bounded reservation do not establish later installed/native admission.
 
 All six native selections and all admission/effect flags remain false. Preserve the
 accepted loss matrix, original `.103` attempted-unknown tag and no replay, unchanged
