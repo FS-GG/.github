@@ -87,10 +87,16 @@ provisioning and test coverage remain distinct from receiver native acceptance. 
 An approved durable export destination is ready under Home/SystemAdmin custody, outside pilot
 cleanup scope. The receiver selected zero payload outputs because no receiver native V3 run was
 admitted or executed against this fresh allocation. This does not establish an empty allocation,
-completed payload transfer or durable payload readback. The host's bounded allocation census and
-resulting export/cleanup disposition remain pending; unexpected or host-created files require owner
-disposition before cleanup. The original lease expiry remains **2026-10-15 20:04 UTC**; no renewal or
-deletion authority follows from the zero-output selection.
+completed payload transfer or durable payload readback. The [accepted owner extension and receiver
+verification](https://github.com/FS-GG/.github/issues/4516#issuecomment-6184086149) supersede the
+original **2026-10-15 20:04 UTC** expiry. At the [SystemAdmin readback on 2026-10-15 at 22:35:59
+UTC](https://github.com/FS-GG/.github/issues/4516#issuecomment-6203700324), the unchanged original
+activation plus the 61-day runtime limit gave exact expiry **2026-12-14T20:04:05.435589Z**; the original
+unit/container and reconciler were active. This is a dated lease snapshot. The [corrected
+disposition](https://github.com/FS-GG/.github/issues/4516#issuecomment-6186657587) retains zero
+receiver-selected payload files and all eight excluded engine metadata files, with no export or cleanup
+requested. Unexpected or host-created files require owner disposition before any later cleanup;
+neither this snapshot nor the zero-output selection grants renewal, deletion or native acceptance.
 
 Coordination's executor can select explicit VFS paths, but the allocation-identity, lease,
 export-before-retirement and host-owned outer-cleanup join remains open. These source and
