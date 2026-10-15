@@ -1,8 +1,8 @@
 {
   "schema": "fsgg.authentication-callable-source-bundle/1",
-  "qualification": "local source candidate; managed compile and paired runtime integration pending",
+  "qualification": "inert consumer source candidate pinned to an unprotected producer candidate; maintained managed compilation and hosted callback pair pending",
   "ownerBase": "6387eaaf71162237649a1c993c93d99a9e7dfdcb",
-  "producerRevision": "86ee51d21d310e2ec34421953b8456d81a810d0d",
+  "producerRevision": "7e3bfb800eec03d1ec8cdacddc6d011e8756b221",
   "digestRecipe": "SHA256 of ASCII rows <sha256><two spaces><repository>/<path><LF>, sorted by ASCII repository/path key (not by the whole row); excludes this manifest, generated bindings/vectors and results",
   "files": [
     {
