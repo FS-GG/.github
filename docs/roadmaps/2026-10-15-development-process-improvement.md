@@ -2,31 +2,56 @@
 
 Identity: **V3-IMPROVE-01**. Selected: **2026-10-15**.
 Owner: `.github` programme maintainer with Coordination and the selected diagnostic/receiver owners.
-Status: **implementation underway; all three selected adoption/evaluation outcomes remain open**.
+Status: **finite implementation trial complete; process changes delivered; throughput benefit unproven**.
 Parent: [Unified Roadmap v3](2026-10-07-unified-development-roadmap-v3.md#2-open-work-and-owning-plans).
 Design: [development process improvement](../designs/2026-10-15-development-process-improvement.md).
 
 ## Delivery boundary
 
-Deliver capacity/preflight practice, finish the existing diagnostic adoption outcome, then simplify
-skills/reports. Evaluate one ordinary cohort and one crossing repositories against the same acceptance
-standard. Success means fewer repeated attempts and faster useful diagnosis, with no increase in
-unknown effects, false passes or unowned work. Inconclusive data stays explicit.
+The user narrowed this lane on 15 October to a finite implementation trial and authorized closure
+with benefit inconclusive. Accept the measured single-workload profile and prospectively recorded
+V3 source cohort. A second workload is conditional on genuine ready work, compatible outputs and
+actual admission; an ordinary comparison is absent unless explicitly selected prospectively.
+Neither missing comparison creates a reporting-only workload or an indefinite completion gate.
 
-This is a finite improvement lane, not a new execution or telemetry framework. V2-CTX, V2-EFF,
-V2-PROC and V2-DIAG retain their own implementation and acceptance authority. The design's historical
-baseline ends at **2026-10-15 08:16:54 UTC**; later source or operational acceptance must be refreshed.
-The selected plan alone completed no implementation. The partial source and pilot evidence below
-records later delivery without implying package publication, installed adoption or comparative benefit.
+**Process changes delivered; throughput benefit unproven.** Retain the qualified source/practice
+changes and all first failures. The original design's stricter closure dependency on two cohorts and
+installed adoption is superseded for this finite trial. The historical evidence below retains what
+was and was not accepted at each cutoff. Source delivery never counts as installed behavior.
+
+Required CI/coherent checks, fail-closed prerequisites, original unknown effects, credential/release
+holds and the separate [V3 unattended lifecycle requirement](2026-10-10-fsgg-v3-clean-rewrite.md) remain
+intact. This closure changes no V3-ENV, UTEL, CTX, EFF or DIAG completion status. It establishes no
+throughput, effort, cost or installed benefit. New process experiments require a separate selection.
+
+### Finite trial disposition and open transfers
+
+| Trial contribution | Disposition and accepted boundary | Named work still open |
+|---|---|---|
+| Capacity and final-candidate preflight (.1) | Retain protected preflight/admission practice and the one-workload measurement below. Evaluate the prospectively recorded V3 source cohort with its first failure and explicit gaps. Benefit is inconclusive. | A second workload remains conditional on genuine ready work and fresh capacity admission. No ordinary comparison is selected. Neither two-workload acceptance nor comparative throughput is asserted. |
+| Repository-native diagnostics (.2) | Retain ordinary result/failure collection and thirteen-suite, dual-root source use. Close this lane's source integration contribution. | [V2-DIAG-01.4](diagnostic-execution.md#delivery-sequence) remains open: Coordination 0.2.1 P4/native joins, the separate 0.3.0 installed route, coherent diagnostic carrier publication, selected installed receiver use and bounded adoption evaluation. Existing diagnostic, host, grant, custody, publisher and receiver owners retain those gates. |
+| Concise guidance and full-coverage reports (.3) | Retain protected skill/report source and the 19/19-outcome sample, without interpreting bytes as effort savings. | Packaged skill-carrier publication stays with the `.github` release owner in the [maintained successor plan](utel-release-successor.md#proposed-104-selection-on-the-maintained-successor-rail--2026-10-15). Selected SDD/Kit/tool receiver owners retain pinning, materialization, reference traversal, clean creation and any promised retaining upgrade under their release/receiver roadmaps. [SDD's existing skill receiver plan](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/roadmaps/skill-fs-receiver-qualification.md) supplies the receiver boundary, not automatic enrollment in a newer candidate. Exact new receiver/version selection remains open. |
+
+The [release plan](utel-release-successor.md) preserves original 0.103 candidate/journal identity,
+dependency-pin refusal and unknown dispatch. The source-only 0.104 proposal is neither a release nor
+an installed selection. This transfer grants no credential exchange, reset, replay, provider or
+publication authority. Existing owning plans remain the completion authorities for transferred work.
+
+[PR #4548](https://github.com/FS-GG/.github/pull/4548) delivered the complete prospective source-cohort
+record below at protected `856b451da98bb82ab2f75f83b248e7348d81e020`, from exact candidate
+`bd202d067b8670788f13b5531c2f9547fcc5fef6`. Its final owner-measured durations, supplied-evidence
+verification boundary and original failure remain unchanged. This finite-trial closure accepts that
+bounded evaluation; it does not turn the source cohort into an ordinary comparison, installed V3
+acceptance or a throughput benefit.
 
 ## Change 1 — capacity and final-candidate preflight
 
-- [ ] **V3-IMPROVE-01.1 — Adopt the bounded capacity/preflight practice.** Route: routine.
+- [x] **V3-IMPROVE-01.1 — Deliver bounded capacity/preflight practice and the finite source trial.** Route: routine.
 
 Owner: programme maintainer and selected component owner; one `.github` integrator for shared skills.
-Depends on: current source, live reservations, actual enforcing execution profile and one ready
-ordinary cohort plus one ready cohort crossing repositories. Name the cohorts and their comparison
-basis in existing artifacts before treatment; do not impose unrelated fleet qualification.
+Depends on: current source, live reservations and the actual enforcing execution profile. The finite
+trial accepts the single-workload measurement and prospectively selected V3 source cohort below.
+Further workload/comparison admission is conditional, not a completion prerequisite.
 
 Scope: update the owning practice/source only where the design identifies a real gap. Use the supplied
 up-to-12-core/32-GiB envelope with observed availability and measured peaks, never a hardcoded count.
@@ -47,7 +72,8 @@ peaks, actual concurrency and cleanup. If a second workload cannot be admitted, 
 that does not establish two-workload acceptance. Provide one usable local preflight command through the owning tool, with explicit prerequisites
 and actionable failures. Measure its cold setup, warm execution and integration/repair overhead;
 report the observed basis and gaps. Required coherent checks and consumer assertions remain intact.
-Compare attempts and diagnosis in the declared cohorts with gaps explicit.
+Retain attempts/diagnosis observations in the selected source cohort with gaps explicit; comparative
+benefit remains inconclusive under the finite-trial disposition above.
 
 Likely touch-set: relevant `work-programme`/`work-roadmap` references and their mirrors, selected
 component caller/preflight/tests, existing acceptance evidence. Resolve exact paths before assignment;
@@ -88,8 +114,10 @@ workload was requested or admitted in this pilot. Follow the existing
 when real ready work supplies those prerequisites. The Coordination/SystemAdmin cross-repository source cohort is evaluated below; comparable
 attempts/diagnosis baselines remain incomplete.
 Retain the preflight correctness change with **inconclusive economics**; this is not a wider-rollout decision.
-The .1 checkbox remains open: this evidence establishes one bounded local profile and partial source
-adoption, not two-workload acceptance, cross-repository evaluation or selected installed adoption.
+At this historical cutoff .1 remained open under the initial scope. This evidence establishes one
+bounded local profile and partial source adoption, not two-workload acceptance, cross-repository
+evaluation or selected installed adoption. The later finite-trial decision accepts this profile
+without upgrading any of those absent assertions.
 
 [PR #4533](https://github.com/FS-GG/.github/pull/4533) subsequently delivered the bounded capacity
 admission guidance and this evidence record on protected main at
@@ -118,7 +146,7 @@ PR-body edit. That body-only edit triggered five metadata-sensitive runs, create
 and last reported updated at 11:37:45 UTC: a **98-second provider interval** across those runs. This
 includes provider bookkeeping and waiting; it is not active engineering effort or billed runner time.
 Full required validation was preserved. The second-workload and cohort holds
-above remain; .1 is open and comparative economics remain inconclusive. The reusable finding is
+above remained under the initial scope; comparative economics remain inconclusive. The reusable finding is
 [Atlas lesson `platform/assembled-carrier-preflight-and-bytecode`](../atlas/records/bac3431138e986d6426c1e81bdfe0a968394896c0751cbbcc8f36002fd0ed069.json).
 
 ### Cross-repository source cohort — 15 October, 13:44 UTC
@@ -173,13 +201,18 @@ or worker-loss recovery without a human host agent.
 
 No genuinely unstarted ordinary source cohort has yet been selected prospectively for this evaluation.
 Completed ordinary lanes cannot be relabelled as prospective cohorts, and no work is created solely
-for measurement. **V3-IMPROVE-01.1 remains open:** ordinary cohort evaluation, comparable denominators,
-second-workload admission and selected installed adoption remain unresolved. Local CLR and native
-effects remain held; this evidence update grants no execution or installation authority.
+for measurement. At that cutoff **V3-IMPROVE-01.1 remained open** under the initial scope: ordinary
+comparison, comparable denominators, second-workload admission and selected installed adoption were
+unresolved. The later user-selected finite-trial decision accepts this source cohort and the
+single-workload profile for .1 closure with benefit inconclusive. It establishes none of those
+missing assertions. The unattended installed gate above stays open. Local CLR and native effects
+remain held; neither the cohort evidence nor this closure grants execution or installation authority.
 
-## Change 2 — finish V2-DIAG-01.4 adoption
+## Change 2 — repository-native diagnostic source; open DIAG adoption transfer
 
-**V3-IMPROVE-01.2** is the integration join to
+- [x] **V3-IMPROVE-01.2 — Deliver repository-native diagnostic integration and name the open adoption transfer.**
+
+The original integration join was to
 [V2-DIAG-01.4](diagnostic-execution.md#delivery-sequence), whose existing checkbox remains the sole
 completion authority for publication, installed diagnostic adoption and evaluation.
 
@@ -202,8 +235,9 @@ Record source, publication, installation and native results separately. Evaluate
 attempts, diagnosis time, overhead and infrastructure failures in a bounded window. Missing baseline
 prevents a benefit claim, not truthful adoption evidence.
 
-This integration phase records the durable DIAG acceptance link and any remaining constraints in this
-plan. It neither clones DIAG .4 nor reopens .1–.3. No separate diagnostic service or fleet retrofit is selected.
+This finite source contribution closes with the repository-native evidence below and the explicit
+transfer above. DIAG .4 remains open; its original native/installed/publication and evaluation
+acceptance is unchanged. No separate diagnostic service or fleet retrofit is selected.
 
 [PR #4539](https://github.com/FS-GG/.github/pull/4539), protected merge
 `505c54cf630c33996d3fd7cafd68e7ab2496f019`, adds actual execution of all four `.claude`
@@ -213,12 +247,13 @@ passed all thirteen suites at `b8a536f36ad9f3311ba86b63fafb8d45f0721152`. Indepe
 acquisition matched all 32 source pins; first cause was null, omitted coverage empty, and exits,
 cleanup, reporting, display and upload passed. The observed 47.256 seconds and 20,556 output bytes
 are descriptive only. This accepts both repository-native helper roots at that source, without
-claiming a post-merge run, packaged installation, native custody or comparative benefit. Phase 2 and
-V2-DIAG-01.4 remain open; package/native/P4 owner joins and the existing failed intake read are unchanged.
+claiming a post-merge run, packaged installation, native custody or comparative benefit. At that
+cutoff phase 2 and V2-DIAG-01.4 remained open. The finite-trial decision closes only the source
+contribution; DIAG .4 and its package/native/P4 joins and original failed intake read remain open.
 
 ## Change 3 — simplify skill entrypoints and reports
 
-- [ ] **V3-IMPROVE-01.3 — Adopt concise guidance and full-coverage reporting.** Route: routine.
+- [x] **V3-IMPROVE-01.3 — Deliver concise guidance/full-coverage reporting and transfer packaged adoption.** Route: routine.
 
 Owner: `.github` skill/report maintainer with V2-CTX and applicable skill-carrier receiver owners.
 Depends on: current skill/report obligations, overlap reconciliation and the exact carrier/receiver
@@ -256,9 +291,10 @@ all 19 selected outcomes (two done, seventeen open) and measured 33,116 bytes ag
 115,056-byte report. Different report populations and missing effort/usage coverage prevent a savings
 claim. `show-progress` is repository-native; no package release follows from that edit alone.
 
-The .3 checkbox remains open pending the coherent skill-carrier release and installed receiver
-readback, ordinary and cross-repository use, and the selected cohort comparison. The source changes
-do not close the diagnostic or capacity outcomes.
+Under the initial scope .3 remained open pending carrier/installed readback and broader comparison.
+The finite-trial decision accepts source delivery and the full-population sample, with throughput
+benefit unproven. Carrier publication and selected installed receiver readback remain named open
+transfers above. Source changes establish neither installed diagnostic nor packaged skill adoption.
 
 ## Cohort evaluation and closure
 
@@ -274,15 +310,18 @@ Use necessary ordinary work, including failed/stopped attempts. Do not add repor
 | Acceptance and ownership | Keep the same required assertions; investigate unknown effects, false passes and unowned work individually. |
 | Guidance/report overhead | Record repeated reads, handoffs, report bytes and genuinely available usage/effort, without converting bytes to savings. |
 
-Use the design's comparative pass criteria; there is no unsupported numeric speedup or delivery-date
-promise. If evidence is missing or incomparable, record inconclusive benefit. If the treatment causes
+Use the design's comparative criteria only for a comparative improvement claim; the finite trial
+closes with benefit inconclusive. There is no unsupported numeric speedup or delivery-date promise. If evidence is missing or incomparable, record inconclusive benefit. If the treatment causes
 an acceptance, custody or ownership regression, stop that treatment and use the owning rollback or
 repair route. Broader adoption follows an explicit retain/revise/retire disposition, with existing
 correctness adoption and statistical-claim boundaries preserved.
 
-Close V3-IMPROVE-01 after the three changes' selected adoption and both cohort evaluations are recorded,
-including DIAG's owning closure link and every intervention's disposition. Update the Unified Roadmap
-row with durable evidence. New process candidates require a separate bounded selection.
+Close V3-IMPROVE-01 through this user-selected scope/disposition decision after the protected
+prospective V3 source-cohort evidence is reconciled. The three dispositions and named open transfers
+above define the whole remaining outcome. The Unified row records completion of this finite trial,
+not completion of transferred DIAG, release, receiver, V3-ENV or UTEL work. Original failed/stopped
+attempts, source-only and owner-reported limitations remain retained. New process candidates require
+a separate bounded selection; no new ordinary cohort or native workload is selected by this closure.
 
 ## Dependencies, concurrency and installed workspaces
 

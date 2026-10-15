@@ -2,25 +2,33 @@
 
 Identity: **V3-IMPROVE-01**. Selected direction: **2026-10-15**.
 Owner: `.github` programme maintainer, with existing Coordination, diagnostic and receiver owners.
-Status: **design selected; implementation and observed benefit remain open**.
+Status: **finite implementation trial selected for closure; process changes delivered; throughput benefit unproven**.
 Parent: [Unified Roadmap v3](../roadmaps/2026-10-07-unified-development-roadmap-v3.md#2-open-work-and-owning-plans).
 Delivery: [three bounded changes](../roadmaps/2026-10-15-development-process-improvement.md).
 
 ## Intended result
 
-Reduce repeated qualification attempts and time to useful diagnosis while preserving the same
-acceptance obligations. Use available capacity for independent work, finish installed diagnostic
-adoption and make routine guidance and progress reports easier to consume. Evaluate the changes
-in one ordinary development cohort and one cohort crossing repositories before wider adoption.
+Deliver a finite trial of capacity/preflight practice, repository-native diagnostic use and concise
+skills/reports while preserving the same acceptance obligations. The user's 15 October scope decision
+accepts the measured one-workload profile and prospectively recorded V3 source cohort for this trial.
+**Process changes delivered; throughput benefit unproven.** Comparative benefit may remain inconclusive
+at closure. A second workload is conditional on genuine ready work and its own admission; an ordinary
+comparison is absent unless explicitly selected before treatment.
 
 The user selected three changes, in order: **capacity and preflight practice**, **V2-DIAG-01.4
-adoption**, then **skill and report simplification**. The lane coordinates this finite improvement
-scope. Existing owners retain their implementation, publication and acceptance work. This design
+adoption**, then **skill and report simplification**. The original order remains historical.
+The narrowed lane closes its source implementation
+and bounded evaluation; diagnostic publication/installed adoption transfers to V2-DIAG-01.4, and
+packaged skill adoption to the existing release and receiver roadmaps. Those named outcomes remain open.
+Existing owners retain their implementation, publication and acceptance work. This design
 introduces no parallel execution framework, telemetry service or fixed worker count.
 
-Landing this design records the selected direction. It does not edit operational skills, change
-required checks, activate automation, release packages or accept installed behavior. Those changes
-follow the phased owning roadmap and existing operation-specific authority.
+The original design landing selected direction; subsequent protected source deliveries are recorded in
+the owning roadmap. This scope decision changes the finite trial's closure boundary. Required CI,
+fail-closed admission, credential/release holds and original effects remain intact. Source delivery
+never counts as installed adoption. The separate
+[V3 unattended lifecycle requirement](../roadmaps/2026-10-10-fsgg-v3-clean-rewrite.md) remains mandatory;
+this trial supplies no exception.
 
 ## Evidence and limits
 
@@ -51,10 +59,10 @@ attempts and unresolved effects rather than converting historical repair into cu
 |---|---|---|
 | [V2-EFF-01 and UTEL](../roadmaps/process-efficiency-telemetry.md) | Canonical observations, corrections, assessment, dashboard and bounded calibration | Supply available measurements and explicit gaps. This lane does not duplicate their reducers or dashboard implementation. |
 | [V2-CTX-01](../roadmaps/2026-10-05-programme-context-efficiency.md) | Compact returns, evidence reuse, watcher/restart integration and coordination adoption | Own affected driver/context changes and retain original identities and reservations. |
-| [V2-DIAG-01](../roadmaps/diagnostic-execution.md) | Diagnostic policy, qualified runner behavior and publication/installed adoption | Complete the existing open .4 outcome; do not reopen accepted .1–.3. |
+| [V2-DIAG-01](../roadmaps/diagnostic-execution.md) | Diagnostic policy, qualified runner behavior and publication/installed adoption | Retain open .4 with both selected owners' native/installed joins and evaluation; do not reopen accepted .1–.3. |
 | [V2-PROC-01](../roadmaps/2026-10-05-shared-process-supervision.md) | Execution contracts, qualified profiles and consumers | Supply enforcing execution mechanisms and applicable resource/cleanup evidence. |
 | [LEARN-01](../roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md) | Controlled statistical comparison and learning | Join a separately selected causal or statistical savings claim; ordinary correctness adoption retains its existing route. |
-| Programme integrator and component owners | Scope, conflicts, delivery, receiver assertions and original effects | Carry the three changes to observed use and an explicit retain/revise/retire disposition. |
+| Programme integrator and component owners | Scope, conflicts, delivery, receiver assertions and original effects | Close this finite source trial with a retain disposition and inconclusive benefit; carry open transfers in their owning plans. |
 
 Use existing lane packets, owner artifacts, acceptance records and telemetry. Measure necessary
 ordinary work; missing telemetry remains a declared gap rather than a reason to create reporting-only
@@ -135,7 +143,7 @@ partitions; verify that aggregation preserves every required assertion and failu
 and ADR-0086 to investment and cadence decisions. Missing measurements prevent a savings claim;
 they do not justify automatically increasing concurrency, dropping suites or weakening admission.
 
-## Change 2: complete diagnostic adoption
+## Change 2: repository-native diagnostics and open adoption transfer
 
 The [diagnostic policy](../coordination/diagnostic-execution.md) and
 [V2-DIAG-01 roadmap](../roadmaps/diagnostic-execution.md) already own this behavior. The roadmap
@@ -158,7 +166,10 @@ A published package is not an installed receiver proof; a local packaged pilot i
 Run a bounded ordinary-use evaluation of defect collection, repeated attempts, time to diagnosis,
 diagnostic overhead and infrastructure failures. Preserve the earlier failed attempts and missing
 baseline. The two owners record adoption and remaining limits in the existing DIAG acceptance record.
-This lane references that closure once; it creates no duplicate DIAG completion checklist.
+The initial design required that owning closure as an integration input. The narrowed finite trial
+accepts the delivered repository-native diagnostic work and transfers this still-open publication,
+installed/native qualification and evaluation scope to DIAG .4. It creates no duplicate completion
+checklist or installed acceptance claim.
 
 ## Change 3: simplify skills and progress reports
 
@@ -180,21 +191,21 @@ sections. Retain complications, expectation changes, actual/estimated effort dis
 changes and all unknowns. A concise report must not drop difficult, blocked or unchanged items,
 claim completion from PR counts or fabricate aggregate percentages.
 
-Six pre-existing local edits affect the `.agents` and `.claude` `show-progress` entrypoint,
-`estimation-method.md` and `report-template.md`. They remain untouched by this design delivery.
-The later implementation owner must inspect and reconcile those edits before applying overlapping
-simplifications, preserving the user's intended coverage and estimate semantics. No result in this
-plan implies those edits have been reviewed, accepted or discarded.
+The original design left six pre-existing local `show-progress` edits untouched. The implementation
+subsequently reconciled their coverage and estimate intent into protected source in #4534, as recorded
+in the owning roadmap. The shared working-tree copies retain their own local status; this closure
+does not overwrite or discard them.
 
 ## Pilot and decision rules
 
-Before the first treatment, select one ordinary cohort and one crossing repositories from genuine
-ready work. Freeze each population, owner, expected acceptance, evidence cutoff, comparison basis
-and bounded observation window in its existing artifact. Choose work with comparable scope when
-available; record differences and unavailable baseline rather than manufacture a control. The three changes have the selected landing/evaluation order for this lane. Independent DIAG
-publication/adoption and skill/report source work may proceed against their real prerequisites;
-phase ordering introduces no artificial gate between existing owners. Their accepted results become
-inputs to the corresponding evaluation stage.
+The original design requested ordinary and cross-repository comparisons. The user's bounded
+closure decision accepts the prospectively recorded V3 source cohort in the owning roadmap and
+the measured single-workload profile. Retain the cohort's original population, T0, supplied source
+acceptance and first failure, plus baseline, diagnostic and effort gaps. Do not relabel retrospective
+PR timings as prospective observations or ordinary comparison. A further ordinary cohort requires
+explicit prospective selection; a second workload needs genuine ready work and valid admission.
+Neither is manufactured to keep this trial open. Required comparisons below constrain any benefit
+claim; their missing measurements do not prevent the authorized finite implementation closure.
 
 | Question | Observation | Interpretation limit |
 |---|---|---|
@@ -205,23 +216,29 @@ inputs to the corresponding evaluation stage.
 | Is coordination/reporting cheaper? | Repeated reads, handoffs, report bytes and observed collection/analysis effort | Bytes are a proxy; whole-family token/cost claims need genuine coverage. |
 | Does improvement exceed its overhead? | Necessary preparation, execution, review, diagnostic and reporting work | Report observed bases separately; do not add overlapping elapsed intervals or infer labor from runtime. |
 
-The pass criterion is **fewer repeated attempts and faster useful diagnosis at the same acceptance
-standard**, with **no increase in unknown effects, false passes or unowned work** in the declared
-observed population. Count and inspect each adverse case; do not hide one behind a favorable average.
+The criterion for a comparative improvement claim remains **fewer repeated attempts and faster useful
+diagnosis at the same acceptance standard**, with **no increase in unknown effects, false passes or
+unowned work** in the declared observed population. This trial does not claim that comparison passed. Count and inspect each adverse
+case; do not hide one behind a favorable average.
 Numeric targets beyond these comparative criteria are not currently supported by a baseline.
 
 A regression in acceptance, custody or ownership stops the affected treatment and invokes its
 existing rollback/repair route. Missing or incomparable observations yield an inconclusive result,
 not a claimed improvement. Independently proven correctness/reliability changes may be retained with
-explicitly inconclusive economics under the existing CTX boundary. Wider rollout needs a recorded
-retain/revise/retire disposition; causal statistical claims retain their separate LEARN requirements.
+explicitly inconclusive economics under the existing CTX boundary. The finite trial retains the
+independently qualified process/source changes with benefit inconclusive.
+Any wider installed rollout follows its existing release/receiver authority; causal statistical claims
+retain their separate LEARN requirements.
 
 ## Completion and workspace impact
 
-The lane closes when all three bounded changes have their required source and selected installed
-adoption, both cohorts have a durable evaluation and each intervention has a disposition. DIAG,
-CTX and EFF closure remains owned by their existing plans; this lane cites their accepted contributions.
-Future candidates do not automatically extend the frozen scope.
+The lane closes on protected acceptance of the owning roadmap's finite-trial disposition and Unified
+row: delivered process source, measured one-workload profile, prospectively recorded V3 source cohort,
+explicitly inconclusive throughput benefit, retained first failures and named open transfers. This
+supersedes the original two-cohort/installed-adoption closure dependency; it does not establish those
+outcomes or waive their acceptance. DIAG .4, the maintained coherent release successor and selected
+receiver roadmaps retain publication, installed skill/diagnostic adoption and native gates. CTX, EFF,
+V3-ENV and UTEL remain under their existing scope/status. Future work needs a separate bounded selection.
 
 Planning changes no generated workspace. During implementation, identify each affected producer and
 skill carrier, selected default or opt-in behavior, clean-creation impact and any promised retaining
