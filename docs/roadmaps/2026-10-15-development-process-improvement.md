@@ -43,8 +43,10 @@ Acceptance: valid and invalid assembled inputs demonstrate the intended prefligh
 malformed, timed-out and unknown results cannot pass. The actual caller regression covers the
 selected failure mechanism. The recorded capacity window retains live/unknown reservations, sampled
 peaks, actual concurrency and cleanup. If a second workload cannot be admitted, record the blocker;
-that does not establish two-workload acceptance. Required coherent checks and consumer assertions
-remain intact. Compare attempts and diagnosis in the declared cohorts with gaps explicit.
+that does not establish two-workload acceptance. Provide one usable local preflight command through the owning tool, with explicit prerequisites
+and actionable failures. Measure its cold setup, warm execution and integration/repair overhead;
+report the observed basis and gaps. Required coherent checks and consumer assertions remain intact.
+Compare attempts and diagnosis in the declared cohorts with gaps explicit.
 
 Likely touch-set: relevant `work-programme`/`work-roadmap` references and their mirrors, selected
 component caller/preflight/tests, existing acceptance evidence. Resolve exact paths before assignment;
@@ -57,9 +59,10 @@ this plan does not reserve broad directories or authorize unrelated CI redesign.
 completion authority for publication, installed diagnostic adoption and evaluation.
 
 Owner: Coordination release/diagnostic owner and both existing pilot owners. Route: routine source
-delivery; publication and native effects retain their applicable admission. Depends on change 1's
-accepted operating window and the exact coherent producer/carrier prerequisites. Independent source,
-release inventory and receiver preparation can proceed earlier without launching blocked effects.
+delivery; publication and native effects retain their applicable admission. Depends on the exact coherent producer/carrier prerequisites and each receiver's actual authority
+and admission. Change 1 acceptance is not a technical prerequisite for independent DIAG publication
+or adoption. Existing owners may advance their ready work in parallel; this lane records the three
+bounded rollout/evaluation changes in the selected order without withholding useful accepted work.
 
 Reconcile current releases against the DIAG plan's historical package claims and original operations.
 Use existing coherent routes, publish required artifacts and independently verify installed receivers.
@@ -82,8 +85,10 @@ plan. It neither clones DIAG .4 nor reopens .1–.3. No separate diagnostic serv
 - [ ] **V3-IMPROVE-01.3 — Adopt concise guidance and full-coverage reporting.** Route: routine.
 
 Owner: `.github` skill/report maintainer with V2-CTX and applicable skill-carrier receiver owners.
-Depends on: adopted diagnostic behavior and the observations needed to preserve the same acceptance
-and reporting obligations. Read-only text inventory and overlap reconciliation may begin earlier.
+Depends on: current skill/report obligations, overlap reconciliation and the exact carrier/receiver
+join when installed adoption is claimed. Independent skill/report source simplification does not wait
+for DIAG adoption; only an assertion that consumes diagnostic behavior depends on that behavior.
+The selected rollout/evaluation order does not create a new cross-component delivery gate.
 
 Scope: slim `pnext-item` and `work-roadmap` by moving conditional detail into linked references while
 preserving complete applicable instructions. Reconcile `.agents`/`.claude` and registry/manifest
@@ -128,9 +133,12 @@ row with durable evidence. New process candidates require a separate bounded sel
 
 ## Dependencies, concurrency and installed workspaces
 
-The rollout order is .1 → .2 → .3. Disjoint evidence review, diagnostic receiver preparation and text
-inventory may overlap; shared policy/contracts have one integrator, and runtime adoption waits for
-its actual producer/authority join. Keep existing PR and host limits. A complete V2-EFF dashboard or
+The selected three-change landing/evaluation sequence is .1 → .2 → .3 for this lane's rollout.
+It is not a blanket dependency chain over existing owners: independent DIAG publication/adoption
+and skill/report source work can proceed when their actual prerequisites are met. Do not delay or
+reopen useful accepted work merely to preserve a diagram. Record it as an input when its evaluation
+stage arrives. Shared policy/contracts have one integrator; runtime adoption waits only for its
+actual producer/authority join. Keep existing PR and host limits. A complete V2-EFF dashboard or
 LEARN installation is not a blanket prerequisite for ordinary correctness work; conclusions needing
 missing evidence remain unavailable.
 

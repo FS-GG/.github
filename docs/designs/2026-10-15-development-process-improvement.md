@@ -95,8 +95,9 @@ large fixture preparation or hosted qualification, within its admitted execution
 
 Inert tests should exercise the maintained caller, adapters and real control flow while replacing
 external transport or effects at the declared seam. Include successful flow and representative
-failure, timeout, malformed response and cleanup/reporting cases. A fake callback with a different
-lifetime or a substitute launcher cannot establish the actual caller's behavior. Inert success
+failure, timeout, malformed response and cleanup/reporting cases. Expose the selected preflight through one usable local command with explicit prerequisites and
+actionable failures; measure cold setup, warm execution and integration/repair overhead. A fake
+callback with a different lifetime or a substitute launcher cannot establish the actual caller's behavior. Inert success
 remains separate from native, installed and external-effect acceptance.
 
 After **two similar failures** in the selected area, the same owner performs a bounded review of
@@ -190,9 +191,10 @@ plan implies those edits have been reviewed, accepted or discarded.
 Before the first treatment, select one ordinary cohort and one crossing repositories from genuine
 ready work. Freeze each population, owner, expected acceptance, evidence cutoff, comparison basis
 and bounded observation window in its existing artifact. Choose work with comparable scope when
-available; record differences and unavailable baseline rather than manufacture a control. The three
-changes roll out in the stated order; disjoint preparation may proceed without prematurely activating
-a later stage.
+available; record differences and unavailable baseline rather than manufacture a control. The three changes have the selected landing/evaluation order for this lane. Independent DIAG
+publication/adoption and skill/report source work may proceed against their real prerequisites;
+phase ordering introduces no artificial gate between existing owners. Their accepted results become
+inputs to the corresponding evaluation stage.
 
 | Question | Observation | Interpretation limit |
 |---|---|---|
