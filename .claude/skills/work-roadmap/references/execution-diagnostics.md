@@ -11,4 +11,3 @@ budget-limited coverage and separate exit, cleanup and reporting outcomes; parti
 qualify. Diagnostic mode is optional. Repeated first-failure repairs require a bounded composition
 review in the existing work artifact, without additional mandatory runs, forms or approval ceremony. Guidance source
 changes do not establish runtime qualification or installed adoption.
-

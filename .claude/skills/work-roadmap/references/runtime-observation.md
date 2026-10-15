@@ -97,4 +97,3 @@ When the private host has an explicit event-publication activation receipt, the 
 dashboard refresh after a completed root attempt drains successfully and after each successful post-terminal root
 observation drain. Publication and its returned health are advisory: failure, missing credentials, contention or an
 unchanged snapshot never blocks delivery or changes the recorded terminal state. Do not assume or require a daemon.
-

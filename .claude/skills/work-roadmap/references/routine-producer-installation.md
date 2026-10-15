@@ -61,4 +61,3 @@ It establishes no ordinary eligibility or installed Drivers/package acceptance. 
 subsequent routine PR event through the unchanged authenticated default-branch producer at that PR's
 exact head before ordinary delivery. Existing or failed producers use ordinary repair; bootstrap cannot
 bypass their gate. Root admission still governs receiver integration and protected effects.
-
