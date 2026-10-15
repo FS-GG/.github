@@ -86,3 +86,46 @@ Programme owns capture of the reusable finding that an injected closed-report si
 can exercise the real callback route while its explicit byte-store reservation still
 does not establish complete population fit. The owning source is this contract and
 its adjacent implementation/tests; no private record or receipt is published here.
+
+## Framed injected-stream fixture
+
+`slot-sink-fixture.py` adds an in-process `FramedSlotSinkFixture`. Independently
+supplied expected binding, original identity/window, closed report, reserved
+population, controlled backend and actual `InertCallbackClock` prepare the sink and
+owner. Its inert destination implements the owner's path protocol without touching
+the filesystem. The actual `InertCallbackRequestDecoder` receives the bytes and
+calls the actual owner, which calls the typed sink. No callback-pair manifest,
+protected vector, source pin, existing callback fixture or production entry changes.
+
+The pull route reads exactly four prefix bytes, submits them to the existing decoder
+to reject zero/oversized lengths before requesting body bytes, then reads the bounded
+body. Fragmented reads are accumulated within that bound. It performs exactly one
+response write, requires a built-in integer count equal to the complete response,
+flushes successfully, and only then calls `confirm_response_written`. No next prefix
+is read before that sequence completes. The separate `feed` route submits raw
+fragments to the same decoder, including its rejection of two pipelined requests in
+one fragment. The pull route does not infer whether another bounded frame was
+already queued in the injected input. EOF succeeds only after a confirmed terminal
+reply; partial/malformed input, write exceptions, short writes and flush exceptions
+close the owner and fixture permanently. Preserved backend stores and attempts never
+become retry permission. Response loss after successful retention cannot undo the
+retained phase. An incoming request during response write closes the owner before
+another phase can begin.
+
+The protected 13 callback requests produce the exact 13 protected replies and six
+exact retained frames through this complete Python path. Additional controls cover
+byte fragmentation, malformed/pipelined/EOF input, early oversized refusal, response
+write/flush failures, deadline before retain, early terminal, foreign/native/window/
+padded preparation refusals and core backend cuts after an earlier phase succeeded.
+Those cuts retain Unknown plus first/late causes and independent append-once loss and
+expiry observations. Run
+`python3 tests/release-successor-authentication/slot-sink-fixture-tests.py`; the
+established authentication entry also loads these controls.
+
+This fixture proves only inert framed Python integration. Stream buffers and caller
+copies add no measured allocation or joined population proof. It does not select
+production transport/backend, attest flush/barrier durability, qualify cold restart,
+authenticate host clocks or establish native ACK custody. All earlier common-fit,
+native, original `.103` attempted-unknown/no-replay and `.104` holds remain. Programme
+owns capture of this additional reusable integration finding in the existing Atlas
+capture gap.
