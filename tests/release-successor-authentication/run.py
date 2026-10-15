@@ -772,6 +772,105 @@ class CallbackOwnerControls(unittest.TestCase):
                 self.assertEqual(decoder.observed_request_bytes, len(data))
                 self.assertFalse(self.path.exists())
 
+    def test_callback_decoder_refuses_overlap_while_validation_or_sink_is_blocked(self):
+        bound, frames = self.fixture()
+        for block_sink in (False, True):
+            with self.subTest(block_sink=block_sink), tempfile.TemporaryDirectory() as root:
+                entered, release = threading.Event(), threading.Event()
+                sink_calls = []
+                def sink(*args):
+                    sink_calls.append(1)
+                    entered.set()
+                    if not release.wait(2): raise AssertionError('fixture sink release missing')
+                    return publisher.persist_authentication_snapshot(*args)
+                subject = self.prepared(root, bound, sink if block_sink else None)
+                decoder = consumer.InertCallbackRequestDecoder(subject)
+                bind = self.request(bound, 1, 'bind')
+                decoder.confirm_response_written(len(decoder.feed(bind)))
+                phase = provider.decode_auth_frame(frames[0])
+                validation = self.request(bound, 2, 'validate', frames[0], phase)
+                if block_sink: decoder.confirm_response_written(len(decoder.feed(validation)))
+                request = self.request(bound, 3, 'retain', frames[0], phase) if block_sink else validation
+                original = provider.validate_auth_payload
+                def validate(*args):
+                    entered.set()
+                    if not release.wait(2): raise AssertionError('fixture validator release missing')
+                    return original(*args)
+                replies, failures = [], []
+                def feed():
+                    try: replies.append(decoder.feed(request))
+                    except Exception as error: failures.append(error)
+                with patch.object(provider, 'validate_auth_payload', original if block_sink else validate):
+                    worker = threading.Thread(target=feed)
+                    worker.start()
+                    try:
+                        self.assertTrue(entered.wait(2))
+                        with self.assertRaises(provider.Refused): decoder.feed(b'x')
+                        self.assertEqual(subject.first_cause, 'order')
+                    finally:
+                        release.set(); worker.join(2)
+                    self.assertFalse(worker.is_alive())
+                self.assertEqual(failures, [])
+                self.assertEqual(provider.decode_auth_frame(replies[0])['kind'], 'refused')
+                self.assertEqual(provider.decode_auth_frame(replies[0])['reason'], 'order')
+                expected_bytes = len(bind) + len(validation) + (len(request) if block_sink else 0) + 1
+                self.assertEqual(decoder.observed_request_bytes, expected_bytes)
+                with self.assertRaises(provider.Refused): decoder.confirm_response_written(len(replies[0]))
+                with self.assertRaises(provider.Refused): decoder.feed(request)
+                self.assertEqual(sink_calls, [1] if block_sink else [])
+                self.assertEqual(self.path.exists(), block_sink)
+
+    def test_callback_finalization_rejects_equal_python_values_with_different_json_types(self):
+        bound, frames = self.fixture()
+        with tempfile.TemporaryDirectory() as root:
+            subject = self.prepared(root, bound)
+            subject.handle(self.request(bound, 1, 'bind'))
+            phase = provider.decode_auth_frame(frames[0])
+            subject.handle(self.request(bound, 2, 'validate', frames[0], phase))
+            subject.handle(self.request(bound, 3, 'retain', frames[0], phase))
+            before = self.path.read_bytes()
+            mutations = [
+                (['ordinal'], True), (['ordinal'], 1.0),
+                (['frame', 'n'], True), (['frame', 'n'], 1.0),
+                (['frame', 'p', 'binding', 'originalGeneration'], 2.0),
+                (['frame', 'p', 'binding', 'workflow', 'attempt'], False),
+                (['frame', 'p', 'binding', 'app', 'id'], float(bound['app']['id']))]
+            for keys, value in mutations:
+                with self.subTest(keys=keys, value=value):
+                    altered = copy.deepcopy(self.report)
+                    row = altered['authenticationSession']
+                    for key in keys[:-1]: row = row[key]
+                    row[keys[-1]] = value
+                    # Demonstrate why ordinary Python value equality is insufficient.
+                    self.assertEqual(altered['authenticationSession'], self.report['authenticationSession'])
+                    with self.assertRaises(publisher.Refused): publisher.write_result(self.path, altered)
+                    self.assertEqual(self.path.read_bytes(), before)
+                    self.assertFalse(self.path.with_name(self.path.name + '.authentication-finalizing').exists())
+            self.report['pendingReason'] = 'typed projection preserved'
+            publisher.write_result(self.path, self.report)
+            self.assertEqual(json.loads(self.path.read_bytes())['authenticationSession'], self.report['authenticationSession'])
+
+    def test_callback_manifest_recipe_sorts_by_ascii_repository_path_key(self):
+        import hashlib
+        manifest = json.loads((ROOT / 'tests/release-successor-authentication/callable-source-manifest.json').read_bytes())
+        self.assertIn('sorted by ASCII repository/path key', manifest['digestRecipe'])
+        ordered = sorted(manifest['files'], key=lambda row: (row['repository'] + '/' + row['path']).encode('ascii'))
+        self.assertEqual(manifest['files'], ordered)
+        rows = [row['sha256'] + '  ' + row['repository'] + '/' + row['path'] + '\n' for row in ordered]
+        self.assertEqual(hashlib.sha256(''.join(rows).encode('ascii')).hexdigest(), manifest['bundleDigest'])
+        self.assertEqual(contract_bundle_digest(), manifest['bundleDigest'])
+
+    def test_callback_frozen_vectors_match_current_manifest_and_actual_sink(self):
+        vectors = json.loads((ROOT / 'tests/release-successor-authentication/callback-vectors.json').read_bytes())
+        self.assertEqual(vectors['binding']['source']['contract'], contract_bundle_digest())
+        with tempfile.TemporaryDirectory() as root:
+            subject = self.prepared(root, vectors['binding'])
+            self.assertEqual(len(vectors['exchanges']), 13)
+            for exchange in vectors['exchanges']:
+                self.assertEqual(subject.handle(bytes.fromhex(exchange['request'])).hex(), exchange['response'])
+            projection = json.loads(self.path.read_bytes())['authenticationSession']
+            self.assertEqual({key: projection[key] for key in ('binding', 'ordinal', 'frameDigest')}, vectors['finalReadback'])
+
     def test_callback_finalization_preserves_the_original_projection(self):
         bound, frames = self.fixture()
         with tempfile.TemporaryDirectory() as root:

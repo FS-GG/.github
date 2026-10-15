@@ -982,7 +982,8 @@ def finalize_authentication_result(path, report):
         require(len(prior_bytes) <= 16384, 'authentication finalization prior exceeds bound')
         prior = json.loads(prior_bytes)
         require(type(prior) is dict and prior.get('authenticationSession') is not None
-                and prior['authenticationSession'] == report['authenticationSession']
+                and json.dumps(prior['authenticationSession'], sort_keys=True, separators=(',', ':'))
+                    == json.dumps(report['authenticationSession'], sort_keys=True, separators=(',', ':'))
                 and (json.dumps(prior, sort_keys=True, separators=(',', ':')) + '\n').encode('ascii') == prior_bytes,
                 'authentication finalization projection differs; reconcile original evidence')
         body = (json.dumps(report, sort_keys=True, separators=(',', ':')) + '\n').encode('ascii')

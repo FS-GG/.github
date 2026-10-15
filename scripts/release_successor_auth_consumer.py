@@ -174,6 +174,7 @@ class InertCallbackOwner:
         self._pending = self._previous = None
         self._retain_attempted = False
         self._lock = threading.Lock()
+        self._failure_lock = threading.Lock()
         self.first_cause = None
 
     @property
@@ -185,11 +186,14 @@ class InertCallbackOwner:
         return self._retain_attempted and self._pending is not None
 
     def close(self, reason='internal'):
-        self._closed = True
-        if self.first_cause is None:
-            self.first_cause = reason if reason in {
-                'binding', 'order', 'domain', 'retention', 'readback', 'deadline', 'cancelled', 'internal'
-            } else 'internal'
+        # Transport overlap and an in-flight callback can fail on different
+        # threads. Preserve the first observed reason under its own short lock.
+        with self._failure_lock:
+            self._closed = True
+            if self.first_cause is None:
+                self.first_cause = reason if reason in {
+                    'binding', 'order', 'domain', 'retention', 'readback', 'deadline', 'cancelled', 'internal'
+                } else 'internal'
 
     def handle(self, raw):
         # Charge even bytes received after closure or during a rejected overlap.
@@ -322,6 +326,9 @@ class InertCallbackRequestDecoder:
     def __init__(self, owner):
         if type(owner) is not InertCallbackOwner:
             raise Refused('authentication callback owner refused')
+        import threading
+        self._entry = threading.Lock()
+        self._counts = threading.Lock()
         self._owner = owner
         self._buffer = bytearray()
         self._expected = 4
@@ -330,13 +337,27 @@ class InertCallbackRequestDecoder:
 
     @property
     def observed_request_bytes(self):
-        return self._observed
+        with self._counts:
+            return self._observed
 
     def feed(self, data):
+        # Reserve entry before parsing or invoking a potentially blocked callback.
+        # An overlapping byte is observed and refused; it cannot enter the buffer
+        # that the first request will clear after its response.
+        with self._counts:
+            self._observed += len(data) if type(data) is bytes else 0
+        if not self._entry.acquire(blocking=False):
+            self._owner.close('order')
+            raise Refused('authentication callback overlap refused')
+        try:
+            return self._feed(data)
+        finally:
+            self._entry.release()
+
+    def _feed(self, data):
         try:
             if type(data) is not bytes:
                 raise Refused('authentication callback transport refused')
-            self._observed += len(data)
             if (self._owner._closed or self._reply is not None
                     or self._observed + self._owner.charged_bytes - self._delivered > CALLBACK_AGGREGATE):
                 raise Refused('authentication callback transport refused')
@@ -361,7 +382,16 @@ class InertCallbackRequestDecoder:
             raise Refused('authentication callback transport refused') from None
 
     def confirm_response_written(self, count):
-        if self._reply is None or type(count) is not int or count != len(self._reply):
+        if not self._entry.acquire(blocking=False):
+            self._owner.close('order')
+            raise Refused('authentication callback overlap refused')
+        try:
+            self._confirm_response_written(count)
+        finally:
+            self._entry.release()
+
+    def _confirm_response_written(self, count):
+        if self._owner._closed or self._reply is None or type(count) is not int or count != len(self._reply):
             self._owner.close('internal')
             raise Refused('authentication callback write refused')
         self._reply = None
@@ -369,6 +399,15 @@ class InertCallbackRequestDecoder:
         self._expected = 4
 
     def eof(self):
+        if not self._entry.acquire(blocking=False):
+            self._owner.close('order')
+            raise Refused('authentication callback overlap refused')
+        try:
+            self._eof()
+        finally:
+            self._entry.release()
+
+    def _eof(self):
         # EOF proves no writer termination. A partial/current reply stays owned.
         if self._buffer or self._reply is not None or not self._owner._terminal:
             self._owner.close('internal')
