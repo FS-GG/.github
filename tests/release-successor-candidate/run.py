@@ -166,6 +166,7 @@ class SuccessorRailBindingTests(unittest.TestCase):
             workflow,
         )
         self.assertIn("if: github.ref == 'refs/heads/main'", workflow)
+        self.assertIn("  probe:\n    name: release-successor-feed-readiness\n", workflow)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn('test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"', workflow)
         self.assertIn("python3 tests/release-successor-candidate/run.py", workflow)
