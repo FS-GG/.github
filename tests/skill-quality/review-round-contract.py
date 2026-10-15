@@ -117,7 +117,7 @@ def main() -> None:
                 require(retired not in body, f"retired prose authority remains in {path}: {retired}")
 
     for relative, acceptance_literal in (
-        ("pnext-item/SKILL.md", "structured v2 acceptance record"),
+        ("pnext-item/references/strict-item-lifecycle.md", "structured v2 acceptance record"),
         ("drive-board/references/host-loop.md", "fsgg:review-decision/v2"),
         ("work-board/references/host-loop.md", "fsgg:review-decision/v2"),
     ):

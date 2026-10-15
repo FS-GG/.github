@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import json
+import re
+import shutil
+import tempfile
 from pathlib import Path
 
 
@@ -47,6 +50,109 @@ skill = agent_skill.decode()
 for phrase in ("one accountable owner", "Do **not** create or require an issue", "exact base/head", "recorded explicit human",
                "ADR-0084", "content/semantic classifier first", "dependent acceptance or activation"):
     require(" ".join(phrase.split()) in " ".join(skill.split()), f"work-roadmap omitted {phrase!r}")
+
+# Conditional branches remain reachable without eagerly loading their complete contracts.
+ROUTES = {
+    "pnext-item": {
+        "strict-item-lifecycle.md": ("Recorded explicit human instruction", "## Lifecycle ledger", "## 7. Stamp and stop"),
+    },
+    "work-roadmap": {
+        "routine-producer-installation.md": ("Receiver has no routine producer", "--install-routine-producer", "readback-only"),
+        "runtime-observation.md": ("Driver entry", "## Record repository-owned dispatches by default", "usage-reconcile"),
+        "heavyweight-roadmap.md": ("Recorded explicit human instruction", "## Lifecycle log", "## Status position line"),
+        "execution-diagnostics.md": ("before diagnostic execution", "Preserve the first cause", "partial failures cannot"),
+        "performance-first.md": ("Interactive/game implementation", "## PERF-PLAN", "## PERF-RELEASE"),
+    },
+}
+LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+
+
+def validate_routes(contents: dict[str, str]) -> None:
+    for name, references in ROUTES.items():
+        entry = contents[f"{name}/SKILL.md"]
+        for heading in ("## Lifecycle ledger", "## Lifecycle log", "## Status position line",
+                        "## 0. Establish identity", "## First installation of the routine producer",
+                        "## Record repository-owned dispatches by default"):
+            require(heading not in entry, f"{name} entrypoint eagerly loads {heading}")
+        for reference, (condition, *witnesses) in references.items():
+            relative = f"{name}/references/{reference}"
+            require(f"references/{reference}" in entry and condition in entry,
+                    f"{name} omitted applicability or link for {reference}")
+            require(relative in contents, f"{name} cannot load {reference}")
+            for witness in witnesses:
+                require(witness in contents[relative], f"{relative} lost {witness!r}")
+        for relative in (f"{name}/SKILL.md", *(f"{name}/references/{r}" for r in references)):
+            source = ROOT / ".agents/skills" / relative
+            for target in LINK.findall(contents[relative]):
+                if ":" in target or target.startswith("#"):
+                    continue
+                require((source.parent / target.split("#", 1)[0]).is_file(),
+                        f"unreadable applicable reference: {relative}: {target}")
+
+
+contents = {
+    f"{name}/{relative}": (ROOT / ".agents/skills" / name / relative).read_text()
+    for name, references in ROUTES.items()
+    for relative in ("SKILL.md", *(f"references/{r}" for r in references))
+}
+validate_routes(contents)
+for relative, body in contents.items():
+    require(body == (ROOT / ".claude/skills" / relative).read_text(),
+            f"authored mirrors differ: {relative}")
+# Each route has a failing control for lost applicability, unreadable content and omitted obligations.
+for name, references in ROUTES.items():
+    for reference, (condition, *witnesses) in references.items():
+        for relative, witness in ((f"{name}/SKILL.md", condition),
+                                  (f"{name}/SKILL.md", f"references/{reference}"),
+                                  *((f"{name}/references/{reference}", w) for w in witnesses)):
+            mutated = dict(contents)
+            mutated[relative] = mutated[relative].replace(witness, "removed-route-witness")
+            try:
+                validate_routes(mutated)
+            except SystemExit:
+                pass
+            else:
+                raise SystemExit(f"conditional-route mutation survived: {relative}: {witness}")
+        mutated = dict(contents)
+        del mutated[f"{name}/references/{reference}"]
+        try:
+            validate_routes(mutated)
+        except SystemExit:
+            pass
+        else:
+            raise SystemExit(f"unreadable conditional reference passed: {reference}")
+
+# Materialize the complete CoordinationKit, then traverse every pnext entry/reference link.
+# Drivers' independent fixture separately proves its optional-kit-free carrier closure.
+kit = json.loads((ROOT / "registry/coordination-kit-skill-manifest.json").read_text())
+with tempfile.TemporaryDirectory(prefix="pnext-carrier-links-") as scratch:
+    workspace = Path(scratch)
+    for runtime in (".agents", ".claude"):
+        for row in kit["skills"]:
+            for entry in row["files"]:
+                relative = Path(runtime) / "skills" / row["id"] / entry["path"]
+                target = workspace / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, target)
+        markdown_files = list((workspace / runtime / "skills/pnext-item").rglob("*.md"))
+        def materialized_links() -> None:
+            for source in markdown_files:
+                for target in LINK.findall(source.read_text()):
+                    if ":" in target or target.startswith("#"):
+                        continue
+                    require((source.parent / target.split("#", 1)[0]).is_file(),
+                            f"pnext carrier cannot load {source.relative_to(workspace)}: {target}")
+        materialized_links()
+        performance = workspace / runtime / "skills/pnext-item/references/performance-first.md"
+        original = performance.read_bytes()
+        performance.unlink()
+        try:
+            materialized_links()
+        except SystemExit:
+            pass
+        else:
+            raise SystemExit("missing materialized performance gate passed")
+        performance.write_bytes(original)
 
 constitution = (ROOT / ".fsgg/constitution.md").read_text()
 require("Routine Delivery Is the Default" in constitution, "constitution did not adopt routine-by-default doctrine")

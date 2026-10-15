@@ -86,7 +86,7 @@ def compliant_journey() -> dict:
 def main() -> None:
     validator = CompiledValidator()
     for runtime in RUNTIMES:
-        skill = " ".join((ROOT / runtime / "skills/work-roadmap/SKILL.md").read_text().split())
+        skill = " ".join((ROOT / runtime / "skills/work-roadmap/references/heavyweight-roadmap.md").read_text().split())
         critique_contract = " ".join(
             (ROOT / runtime / "skills/work-roadmap/references/critique-contract.md").read_text().split()
         )

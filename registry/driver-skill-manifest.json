@@ -854,12 +854,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "24190433bb138e022e169c381c2f5449b2fe68d335bf2936df92a461e88d705c",
-      "tree-sha256": "a237eb326a4b048de41de92d292b32e2bd3d3543ead0410b0cd4b2a51c072f7f",
+      "sha256": "089a807bdb8bd8d6b2ec9bd2fe854d0f0c12abb45ba4a465a1db54e4a96a56c8",
+      "tree-sha256": "d95633c0d3a3a2a6d123dbf5e6a131503d45479355e69f227e28f950b069bc0f",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "24190433bb138e022e169c381c2f5449b2fe68d335bf2936df92a461e88d705c",
+          "sha256": "089a807bdb8bd8d6b2ec9bd2fe854d0f0c12abb45ba4a465a1db54e4a96a56c8",
           "executable": false
         },
         {
@@ -878,8 +878,18 @@
           "executable": false
         },
         {
+          "path": "references/execution-diagnostics.md",
+          "sha256": "66ad363e783c7102130a49c6bac964754cde0d539b99ab6e12ddee7a8960d1f2",
+          "executable": false
+        },
+        {
           "path": "references/feedback-contract.md",
           "sha256": "7342aa0c2c86d2f157b360741426f2769d901c67e1f6ef4549ddbd83f12937f1",
+          "executable": false
+        },
+        {
+          "path": "references/heavyweight-roadmap.md",
+          "sha256": "887ddfad2732824b8847d1a4d8c9e44f6df291b6212ed627cdf8fc342ea462ed",
           "executable": false
         },
         {
@@ -893,8 +903,23 @@
           "executable": false
         },
         {
+          "path": "references/performance-first.md",
+          "sha256": "323937cc50305259a1b93f1b67c035206af64a658a3f845eaca31f6db5c96529",
+          "executable": false
+        },
+        {
           "path": "references/roadmap-ledger.md",
           "sha256": "fd7b535511327319467da7c4082afdf4b5bd7ca46c258a7129eba14c3fe6c679",
+          "executable": false
+        },
+        {
+          "path": "references/routine-producer-installation.md",
+          "sha256": "7e41e59312e565579f9344e12c2f6f6ea327928504679baee0032e60b908fcbd",
+          "executable": false
+        },
+        {
+          "path": "references/runtime-observation.md",
+          "sha256": "61b6bc611b5cafe1a96dd39789e5a257a609f720fb0acaf32091154f7b90d8d9",
           "executable": false
         }
       ],

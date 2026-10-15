@@ -80,11 +80,18 @@ for driver in ("work-board", "drive-board"):
 pnext = (AGENTS / "pnext-item" / "SKILL.md").read_text(encoding="utf-8")
 pnext_normalized = " ".join(pnext.split())
 routine_start = pnext.find("## Choose the route before lifecycle work")
-strict_start = pnext.find("## Strict item state machine")
-ledger_start = pnext.find("## Lifecycle ledger")
-require(0 <= routine_start < strict_start < ledger_start, "pnext-item does not short-circuit before strict lifecycle work")
+strict_link = pnext.find("references/strict-item-lifecycle.md")
+require(0 <= routine_start < pnext.find("The routine route ends here") < strict_link,
+        "pnext-item does not short-circuit before conditional strict lifecycle traversal")
+require("## Lifecycle ledger" not in pnext and "## 0. Establish identity" not in pnext,
+        "pnext-item eagerly loads strict lifecycle work")
+strict = (AGENTS / "pnext-item/references/strict-item-lifecycle.md").read_text(encoding="utf-8")
+require(0 <= strict.find("## Lifecycle ledger") < strict.find("## 0. Establish identity"),
+        "strict reference lost lifecycle-before-identity ordering")
 for phrase in (
     "The routine route ends here",
+    "A routine refusal blocks the affected delivery until repaired",
+    "it does not select heavyweight",
     "Do not execute the lifecycle, identity, claim, critique, receipt, feedback,",
     "one fresh `routine/<item-slug>` branch and one PR",
     "native merge boundary",

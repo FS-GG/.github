@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "src/FS.GG.Coord.Cli.BoardOps/Handlers.fs"
 COMMAND_TESTS = ROOT / "tests/FS.GG.Coord.Cli.Tests/CommentMutationTests.fs"
 SUPERVISION_CONTRACTS = {
-    ROOT / ".agents/skills/pnext-item/SKILL.md": [
+    ROOT / ".agents/skills/pnext-item/references/strict-item-lifecycle.md": [
         "The supervising parent owns the post-child boundary",
         "unposted terminal draft marked `pending final usage`",
         "timing condition to `unavailable`",
@@ -28,7 +28,7 @@ SUPERVISION_CONTRACTS = {
         "Human-authorized synthetic checkpoint",
         "`reconstruct_missing_data:false`",
     ],
-    ROOT / ".agents/skills/work-roadmap/SKILL.md": [
+    ROOT / ".agents/skills/work-roadmap/references/heavyweight-roadmap.md": [
         "roadmap driver is the supervising parent",
         "terminal draft with `pending final usage`",
         "roadmap Done all fail closed",
