@@ -1026,3 +1026,96 @@ composition. Original failed observation `38571428924`, attempt 1, remains evide
 source controls do not qualify replacement hosted ordinary settlement, the full
 exact-main workflow or publication. The accepted original `.103` archive and all
 release-effect boundaries remain fixed.
+
+### Proposed .104 selection on the maintained successor rail — 2026-10-15
+
+**Draft for release-owner review; no operating authority.** This proposes an
+extension of the existing candidate, artifact verifier and publisher. It activates
+no workflow, journal or credential operation. ADR-0012's same-archive,
+organization-feed-first rule and ADR-0013's producer-local Trusted Publishing
+remain binding. No generic v1 admission genesis follows (ADR-0087).
+
+The local source-only proposal `638a0e1c` selects coherent 0.104.0 and a distinct
+`release-improvement-candidate.yml`. Reconcile it with current protected source
+before qualification. Its 0.102.0 predecessor is an assumption, not a decision
+about unfinished .103 effects. The current publisher selects .103; its artifact
+verifier accepts only `release-successor-candidate.yml` and the corresponding
+artifact name. It deliberately cannot consume the new .104 archive.
+
+#### Original .103 disposition comes first
+
+Preserve the fixed candidate run `38290966724`, attempt 1, artifact `11766710761`,
+source `4d136d5450a7032d0b87c4b8a37f69f020144792`, archive
+`d8b22728b9e36932bf8d31e1ab486b312f2d1aedddf96660c872fc69f97f25ba`
+and `utel-rel-21`. The source-pinned checkpoint from run `38580684077` records
+generation 2, `tag:intent`, and a tag dispatch with unknown outcome. This is
+historical evidence required by recovery, not a fresh journal observation. A
+missing public tag does not establish non-dispatch.
+
+Before any .104 publisher preflight, credential exchange or genesis, the programme
+root and accountable release authority must select a supported disposition:
+
+- Reconcile .103 through its admitted original-byte route. If it is promoted,
+  reselect the .104 predecessor and requalify the complete candidate; the current
+  0.102.0 assumption must refuse.
+- An explicit suspension or supersession of .103 would need a separately reviewed
+  installed authority route: durable receipt, exclusion of competing .103
+  continuation and a reader contract. None is established here. Unknown effects
+  stay unknown; no receipt may mark them verified or absent without evidence.
+
+Until a route is accepted, .104 publication remains blocked. Candidate source and
+byte qualification may advance under their separate admission. Neither resets
+`utel-rel-21`, replaces original archives, renews a consumed effect or enables the
+unavailable original-tag credential factory.
+
+#### Smallest source extension after the decision
+
+1. Keep the publisher filename, environment, sole operator, concurrency group,
+   protected journal adapter, admission rereads and 16-effect order. Add one
+   explicit, mutually exclusive, literal .104 profile. Preserve all original and
+   historical selections and refusals. The authority owner must allocate and
+   verify an unused protected journal identity; `utel-rel-22` is a proposal only.
+   No caller-supplied version, journal, workflow or artifact-name override.
+2. Extend the existing artifact verifier with a closed profile pairing exactly
+   `release-improvement-candidate.yml` and
+   `release-improvement-candidate-<source>-<run>`. Keep the old profile default.
+   Preserve repository IDs, successful first attempt, exact main, seven safe
+   members, raw archive digest, manifest, three packages, qualification and
+   predecessor checks. The publisher's verified selection chooses the profile;
+   untrusted artifact fields cannot choose it.
+3. Require candidate source to equal the exact current publisher source for fresh
+   .104 genesis. Hold main stable through qualification and first publication.
+   Changed source requires reviewed requalification; add no generic descendant
+   exception. Recheck both feeds, tags, release and selected journal before genesis.
+   Preserve the original archives for forward recovery.
+4. Preserve .103 dependency-pin refusal. Editing the verifier or feed reader
+   changes a pinned supporting dependency; ancestry or green .104 tests cannot
+   approve it. Review compatibility separately before allowing original selection
+   against changed dependencies. Do not silently refresh pins.
+
+The eventual touch set is the existing publisher workflow/script, artifact
+verifier, focused inert controls and this owning plan. The candidate scalar,
+projections and generated driver manifest belong to the separate source candidate;
+reconcile them after concurrent Atlas integration lands. This draft changes no
+executable path.
+
+#### Controls and live gates
+
+Inert controls must prove closed .104 selection, conflict with every historical
+flag, rejection of crossed workflow/name/version/journal bindings and reruns,
+changed-main refusal, unchanged .103 refusals, and zero journal/provider writes
+when selection, authority, predecessor or archive identity is denied. Reuse the
+existing protected-journal/provider controls for intent, unknown outcome, CAS
+conflict, feed partial publication and forward recovery. Preserve first failure
+and independent cleanup/reporting under original bounds.
+
+Before live work, separately admit the exact source-qualification dispatch and
+authenticate its original seven-file Actions archive and three package bytes.
+Refresh the selected .103 disposition, .104 journal/protection, six feed
+coordinates and exact-main facts. Then independently admit publisher runtime,
+custody, observation budget and credential route. Even `publish=false` mints the
+ordinary ledger App token and exchanges NuGet OIDC. Source metadata or historical
+proof does not establish current issuance, scope, expiry or effect authority.
+Publication needs all 16 durable effects and both-feed readback. SDD pin updates,
+materialization and installed receiver qualification follow normal owner routes;
+no candidate, package staging or version output establishes them.
