@@ -1,0 +1,70 @@
+{
+  "schema": "fsgg.authentication-callable-source-bundle/1",
+  "qualification": "inert callback pairing only; not factory/native compatibility, installed acceptance or original operation authority",
+  "ownerBase": "90cbcbf8c3dcddbb938d0e7e66bbe28eea67d718",
+  "producerRevision": "5c6e7073209f4aecf2a0733f9cd2eededfa397c5",
+  "digestRecipe": "SHA256 of ASCII rows <sha256><two spaces><repository>/<path><LF>, sorted by ASCII repository/path key (not by the whole row); excludes this manifest, generated bindings/vectors and results",
+  "files": [
+    {
+      "repository": "FS-GG/.github",
+      "path": "scripts/release-successor-publish.py",
+      "sha256": "91be800c14964ce925eb6a35eb568d2d689d9875b34154937fd5992f494385c3"
+    },
+    {
+      "repository": "FS-GG/.github",
+      "path": "scripts/release_successor_auth_consumer.py",
+      "sha256": "e61005233d80d394186024f5f0659b3546349811dab327b8f45b6ab5eaed56b2"
+    },
+    {
+      "repository": "FS-GG/.github",
+      "path": "scripts/release_successor_provider.py",
+      "sha256": "b20239f394379e2c42dba023d43065bdebe4e6a620ab8adba77be77c4689bd17"
+    },
+    {
+      "repository": "FS-GG/.github",
+      "path": "tests/release-successor-authentication/callback-contract.json",
+      "sha256": "0fa45d5c69440cb701dba90952e533ba3990279281ce0f21f0240bbcd22d22ef"
+    },
+    {
+      "repository": "FS-GG/.github",
+      "path": "tests/release-successor-authentication/callback-fixture.py",
+      "sha256": "aa0ebe326f961044334105f0fe2c0d761573ef6d91ae783433dce43282238324"
+    },
+    {
+      "repository": "FS-GG/.github",
+      "path": "tests/release-successor-authentication/wire-contract.json",
+      "sha256": "dcf14cc3f92547b5a38eee78e3bdbfc838f146e594cf1b579e04ce83ddc16206"
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "path": "src/FS.GG.Coordination.Orchestration.Execution/FiniteCustodyComposition.fs",
+      "sha256": "bd8cf7cf0d72abaf57ef47c9d1e3e7edf8cc01314001e961aa45d3f149b0b7ef"
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "path": "src/FS.GG.Coordination.Orchestration.Execution/FiniteCustodySessionAdapter.fs",
+      "sha256": "37ef2e6a67eac1d7e9a3840831797e90d847c076533ed3c9e3957aaabbb66fbb"
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "path": "src/FS.GG.Coordination.Orchestration.Execution/PhaseCallbackProtocol.fs",
+      "sha256": "8d6065aa0086eef0245a560e551a772d7588f948238155b16148d3d9712bc951"
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "path": "src/FS.GG.Coordination.Orchestration.Execution/PhaseResultProtocol.fs",
+      "sha256": "e8000f7a4ccec9fec505c29f89bfbb8595886d101c0e8757d409e628ff86a46c"
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "path": "src/FS.GG.Coordination.Orchestration.Runner.Client/FiniteCustodyInertAdapter.fs",
+      "sha256": "45ce87c8278b4803b2f277ccf71ea966f46c74bc8d50cb5d67c35a0dec0065e9"
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "path": "src/FS.GG.Coordination.Orchestration.Runner.Client/Program.fs",
+      "sha256": "290b4ca35e78cedadf5544a506346ae93f78d7c320697d7a5dd2144bbfd6d902"
+    }
+  ],
+  "bundleDigest": "5720eff0de13dae5396dcff68235c399e8fffea3ba1f14422cb09440ab8a1c07"
+}
