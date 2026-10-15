@@ -1,4 +1,8 @@
+#if CLAUDE_SKILLS
+#load "../../.claude/skills/work-programme/scripts/programme.fsx"
+#else
 #load "../../.agents/skills/work-programme/scripts/programme.fsx"
+#endif
 open System
 open System.IO
 open System.Text
