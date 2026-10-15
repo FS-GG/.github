@@ -200,8 +200,21 @@ select a production sink, or provide cold reconstruction/cross-process custody, 
 barriers or authenticated receipts. Its reservation cannot be added to or substituted
 into 57,562 as a joined fit proof; the common-population cap remains 65,536. The reusable
 source finding is that a closed injected sink can exercise the actual callback route
-while its named-store budget remains separate from complete fit. The [framed fixture lane #4573](https://github.com/FS-GG/.github/pull/4573)
-remains pending and supplies no accepted evidence here.
+while its named-store budget remains separate from complete fit.
+
+Protected [PR #4573](https://github.com/FS-GG/.github/pull/4573) at
+`d3dd657b23fc1ac2f3aeb6cba06b6ca455406bdf` adds an [inert framed Python fixture](https://github.com/FS-GG/.github/blob/d3dd657b23fc1ac2f3aeb6cba06b6ca455406bdf/tests/release-successor-authentication/slot-sink-contract.md#framed-injected-stream-fixture)
+through the actual decoder → callback owner → typed slot sink. The original report
+passes the scalar guard before copying. A full response write and successful flush
+precede confirmation; partial/malformed input and write/flush failure permanently
+close the fixture, preserving backend attempts/stores and Unknown without retry.
+The protected 13 exchanges and six retained frames match exactly. Thirteen focused
+controls, 103 full authentication tests and required hosted checks passed (32 success,
+two skipped). This accepts only injected-stream Python integration: it changes no
+source pin or managed profile selection and establishes no production transport,
+physical-copy total, real flush/barrier durability, cold restart, authenticated host
+clock or native ACK custody. The same Atlas capture covers this reusable integration
+finding; the original operation and complete-fit holds remain.
 
 The [scalar-guard correction in PR #4572](https://github.com/FS-GG/.github/pull/4572),
 protected at `11cecded9486cd74dfb0ff51946799a21f4469db`, addresses the review

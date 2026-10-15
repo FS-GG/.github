@@ -1131,8 +1131,16 @@ caller/callback/managed/runtime/serialization and native backend populations. It
 replaces the publisher nor supplies cold restart/cross-process custody, real barriers
 or authenticated receipts. It cannot be combined with or replace the 57,562-byte model
 to infer joined fit. The reusable finding resolves the source-contract capture gap through Atlas
-`github/original-103-authentication-domain-policy`; [framed fixture #4573](https://github.com/FS-GG/.github/pull/4573)
-remains pending, with no accepted evidence claimed.
+`github/original-103-authentication-domain-policy`.
+Protected [PR #4573](https://github.com/FS-GG/.github/pull/4573) at
+`d3dd657b23fc1ac2f3aeb6cba06b6ca455406bdf` adds the [inert framed Python journey](https://github.com/FS-GG/.github/blob/d3dd657b23fc1ac2f3aeb6cba06b6ca455406bdf/tests/release-successor-authentication/slot-sink-contract.md#framed-injected-stream-fixture)
+through actual decoder/owner/typed sink, with original scalar guard before copying
+and complete write plus flush before confirmation. Failure permanently closes while
+retaining Unknown/stores/attempts; no retry follows. Thirteen focused/103 full tests
+and hosted checks passed, including exact 13 exchanges/six retained frames. This
+accepts injected Python integration only: source pins and managed-profile selection
+remain unchanged; no whole-fit, production transport, durability, host-clock or native
+ACK claim follows. Atlas also captures this additional reusable source finding.
 The [PR #4572 scalar guard](https://github.com/FS-GG/.github/blob/11cecded9486cd74dfb0ff51946799a21f4469db/tests/release-successor-authentication/inert_phase_slot_sink.py),
 protected at `11cecded9486cd74dfb0ff51946799a21f4469db`, closes the literal-equality
 counterexample by checking exact built-in two-key dict/string types before equality.
