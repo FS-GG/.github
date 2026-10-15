@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Bounded serial collection for this repository's work-programme suites only."""
+import argparse
 import hashlib
 import json
 import os
@@ -55,11 +56,82 @@ def identity(root, paths):
     for p in paths:
         try:
             path = root / p
-            if path.is_file() and not path.is_symlink():
-                pins[p] = hashlib.sha256(path.read_bytes()).hexdigest()
+            closure = (path, *path.parents)
+            if path.is_file() and not any(part.is_symlink() for part in closure):
+                body = path.read_bytes()
+                # A changed intermediate directory must not acquire the same pin,
+                # even when its target happens to contain identical bytes.
+                if not any(part.is_symlink() for part in closure):
+                    pins[p] = hashlib.sha256(body).hexdigest()
         except OSError:
             pass  # Unreadable is missing evidence, never an unchanged identity.
     return pins
+
+
+def preflight(root, selected):
+    """Inspect the actual serial plan without running a tool or any suite."""
+    started = time.monotonic()
+    tools = {'dotnet': shutil.which('dotnet') is not None,
+             'python': Path(sys.executable).is_file()}
+    rows = []
+    paths = set()
+    seen = set()
+    for suite in selected:
+        reason = None
+        name = suite.get('id') if isinstance(suite, dict) else None
+        if (not isinstance(name, str) or not name or name in seen or
+                set(suite) != {'id', 'command', 'inputs', 'prerequisites', 'dependsOn', 'independent'}):
+            reason = 'malformed-or-duplicate-suite'
+        else:
+            seen.add(name)
+            for field in ('command', 'inputs', 'prerequisites', 'dependsOn'):
+                values = suite[field]
+                if not isinstance(values, list) or any(not isinstance(v, str) or not v for v in values):
+                    reason = 'malformed-' + field
+                    break
+            if not reason:
+                command = suite['command']
+                required = suite['prerequisites']
+                launcher = ('python' if command and command[0] == sys.executable else
+                            'dotnet' if command and command[0] == 'dotnet' else None)
+                if not command or launcher not in required or any(p not in tools for p in required):
+                    reason = 'unknown-launch-closure'
+                elif ((launcher == 'dotnet' and not
+                       (len(command) == 4 and command[1:3] == ['fsi', '--exec'] and command[3].endswith('.fsx'))) or
+                      (launcher == 'python' and not
+                       ((len(command) == 2 and command[1].endswith('.py')) or
+                        (len(command) == 3 and command[1] == '-c')))):
+                    reason = 'unknown-launch-closure'
+                elif (suite['independent'] is not True or
+                      any(p not in seen or p == name for p in suite['dependsOn'])):
+                    reason = 'unknown-dependency'
+                elif not suite['inputs'] or any(Path(p).is_absolute() or '..' in Path(p).parts
+                                               for p in suite['inputs']):
+                    reason = 'invalid-input-path'
+                elif any(arg.endswith(('.py', '.fsx')) and arg not in suite['inputs'] for arg in command[1:]):
+                    reason = 'entrypoint-not-in-inputs'
+                else:
+                    paths.update(suite['inputs'])
+                    # Intermediate symlinks would escape the declared checkout closure.
+                    for name_path in suite['inputs']:
+                        path = root / name_path
+                        if any(part.is_symlink() for part in (path, *path.parents)):
+                            reason = 'linked-input-path'
+                            break
+                if not reason and any(not tools[p] for p in required):
+                    reason = 'setup-tool-unavailable'
+        rows.append(dict(id=name, status='blocked' if reason else 'ready', reason=reason,
+                         missingTools=[p for p in suite['prerequisites'] if not tools.get(p, False)]
+                         if reason == 'setup-tool-unavailable' else [], missingInputs=[]))
+    pins = identity(root, sorted(paths))
+    for suite, row in zip(selected, rows):
+        if row['status'] == 'ready' and any(p not in pins for p in suite['inputs']):
+            row.update(status='blocked', reason='shared-input-missing-or-changed',
+                       missingInputs=[p for p in suite['inputs'] if p not in pins])
+    return dict(schema='fsgg.work-programme.test-preflight/1',
+                status='passed' if rows and all(r['status'] == 'ready' for r in rows) else 'blocked',
+                suites=rows, candidate=pins, executed=False, qualification='not-evaluated',
+                elapsedSeconds=round(time.monotonic() - started, 6))
 
 
 def group_alive(group):
@@ -158,9 +230,24 @@ def collect(root, selected, seconds=SECONDS, output_limit=OUTPUT_BYTES, reporter
     report = dict(schema='fsgg.work-programme.test-result/1', candidate={}, suites=[],
                   firstCause=None, cleanup=[], reporting='pending', qualification='incomplete',
                   outputBytes=0, omittedCoverage=[], elapsedSeconds=0)
+    preparation = preflight(root, selected)
+    report['preflight'] = preparation
+    # A malformed assembled plan cannot safely reach even the first child.
+    structural = [r for r in preparation['suites'] if r['reason'] not in
+                  (None, 'setup-tool-unavailable', 'shared-input-missing-or-changed', 'unknown-dependency')]
+    if structural or not selected:
+        report.update(firstCause=(str(structural[0]['id']) + ': ' + structural[0]['reason'])
+                      if structural else 'empty-suite-selection',
+                      qualification='failed-or-incomplete', reporting='passed',
+                      omittedCoverage=[r['id'] for r in preparation['suites']])
+        try:
+            reporter(json.dumps(report, sort_keys=True))
+        except (OSError, ValueError):
+            report['reporting'] = 'failed'
+        return report, 1
     tools = {'dotnet': shutil.which('dotnet') is not None, 'python': Path(sys.executable).is_file()}
     paths = sorted({p for suite in selected for p in suite['inputs']})
-    pins = identity(root, paths)
+    pins = preparation['candidate']
     report['candidate'] = pins
     invalid = set()
     hard_stop = None
@@ -245,6 +332,13 @@ def collect(root, selected, seconds=SECONDS, output_limit=OUTPUT_BYTES, reporter
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--preflight', action='store_true', help='check assembled inputs/tools; launch no workload')
+    args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
+    if args.preflight:
+        result = preflight(root, suites(root))
+        print(json.dumps(result, sort_keys=True))
+        sys.exit(0 if result['status'] == 'passed' else 1)
     _, code = collect(root, suites(root))
     sys.exit(code)

@@ -8,6 +8,51 @@ files under a dedicated0700 private root. Exit0 means the projection succeeded; 
 Default stdout is8KiB (`--stdout-bytes` accepts1024–65536). Larger results return a path/digest, never a
 truncated finding. Retrieve the required sections through `view`; a retained handle is not proof of review.
 
+## Capacity window and assembled test candidate
+
+Before a local compile/qualification window, retain the following in the existing owner artifact:
+current CPU/memory limits and availability with observation time; all live and unknown reservations
+(including helpers/build servers); selected enforcing profile and transitive launch closure; disjoint
+source/output/cache surfaces; storage backing/available space; and the original execution/cleanup bounds.
+A supplied machine envelope, free agent slots or a current memory reading is not a measured peak or admission.
+Verify storage class from the actual backing device/profile; an overlay mount or directory name leaves
+SSD/HDD placement unknown. Coordinate unresolved shared storage/profile changes with V3-ENV-01.
+
+Start with one admitted local compile. Retain its sampled CPU/memory peaks, elapsed time, actual concurrency
+and observed cleanup. Admit a second only when remaining headroom supports combined measured demand,
+outputs and shared state are disjoint, and every existing/unknown reservation is preserved. Missing peak,
+profile or reservation evidence keeps the narrower window; it never establishes two-workload acceptance.
+No new ledger is required: use the existing packet/current owner artifact and enforcing runner admission.
+
+For this repository's work-programme suites, run from the checkout:
+
+```bash
+bash tests/work-programme/run.sh --preflight
+```
+
+Requires Bash and Python 3; checks `dotnet` availability for the selected FSI suites without invoking it.
+No dependency installation, CLR launch or external request occurs. This is the existing maintained test
+entry, with a static preflight mode. It checks the assembled suite inventory, declared launcher/tool joins,
+entrypoint membership in hashed inputs, dependency order, file presence and symlink/path containment.
+JSON names blocked suites and missing tools/inputs; fix the named declaration/file/tool and rerun.
+Exit0 means only those checks passed; `executed:false` and `qualification:not-evaluated` retain that limit.
+Any blocked/malformed/unknown input returns nonzero; timeout or missing output supplies no pass.
+It cannot discover undeclared dynamic reads or transitive launches in trusted test source: the owner still
+inspects that closure and obtains its profile. Hashes establish identity, not correctness or authority.
+
+Normal `bash tests/work-programme/run.sh` performs the same assembled-plan inspection before any suite.
+Malformed inventory, missing entrypoint bindings and unknown launchers block all child launch. Existing
+per-suite tool/input/dependency failures retain their independent diagnostic behavior, original deadline,
+first cause and cleanup. Inputs are refreshed around each suite; a preflight pass never authorizes a later
+changed candidate. The full required coherent test entry remains required under admitted local/hosted resources.
+After two similar failures, review the complete affected path before another costly attempt as required by
+the work-programme entrypoint; neither preflight nor repair renews an attempt or permits an uncertain retry.
+
+Measure fresh-checkout setup and first invocation separately from warm invocations, including caller startup
+and output collection. Retain OS-cache uncertainty, integration/repair effort and false blocks in the same
+owner artifact. Reuse existing failure/timeout/cleanup controls rather than introduce a new launcher or
+model for this serial path. Source delivery alone closes no cohort evaluation or installed adoption.
+
 ## Bounded evidence
 
 `view` input has schema `fsgg.programme.context-view-input/1` and required fields:
