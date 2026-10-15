@@ -1992,12 +1992,8 @@ class Original0103Controls(unittest.TestCase):
         self.assertFalse((self.root / 'unused').exists()); self.assert_no_writes()
 
     def test_actual_tag_selector_existing_preflight_and_unavailable_send(self):
-        # Only the changed source-dependency pin is proposed in this fixture;
-        # production keeps the reviewed old pin until explicit compatibility review.
-        proposed = copy.deepcopy(publisher.ORIGINAL_0103_DEPENDENCIES)
-        for name in proposed:
-            body = (ROOT / name).read_bytes()
-            proposed[name] = {'bytes': len(body), 'sha256': hashlib.sha256(body).hexdigest()}
+        # Use the actual explicitly reviewed descendant closure. Historical pins
+        # are not overwritten even inside this actual-selector control.
         _, self.authority, _, _ = fixture(2, self.candidate, self.fixed['archiveSha256'], publisher.SUCCESSOR_REF)
         journal = ProtectedReleaseJournal(self.authority, ref=publisher.SUCCESSOR_REF, main_directory=True)
         journal.read()
@@ -2043,8 +2039,7 @@ class Original0103Controls(unittest.TestCase):
         self.provider.manifest_path = self.root / 'retained-original-manifest.json'
         self.provider.manifest_path.write_bytes(self.archive_members['release-manifest.json'])
         before = self.authority.head
-        with patch.object(publisher, 'ORIGINAL_0103_DEPENDENCIES', proposed), \
-             patch.object(publisher, 'ORIGINAL_0103_TAG_CHECKPOINT', checkpoint):
+        with patch.object(publisher, 'ORIGINAL_0103_TAG_CHECKPOINT', checkpoint):
             self.assertEqual(self.execute(selected=False, recover_original_0103_tag_intent=True), 'preflight')
             self.assertEqual(self.rows['originalTagRecovery']['branch'], 'non-writing-existing-intent-preflight')
             self.assertEqual(self.rows['publisherCounter'].report()['attempted']['candidateArchive'], 1)
@@ -2167,6 +2162,73 @@ class Original0103Controls(unittest.TestCase):
         self.authority.controls = copy.deepcopy(BINDING['rulesets']); self.versions = ['0.102.0', '0.103.0']
         with self.assertRaises(self.uniqueness.GateError): self.execute()
         self.assert_no_writes()
+
+class Original0103DescendantCompatibilityControls(unittest.TestCase):
+    """Retain historical pins; bound the reviewed PR4544 descendant as a whole.
+
+    Original full recovery baseline was110tests with8failures/3errors, first
+    refusing dependency size. These controls do not erase original tag Unknown,
+    authenticate credentials or authorize a native operation.
+    """
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.root = pathlib.Path(self.tmp.name)
+        for name in publisher.ORIGINAL_0103_DEPENDENCIES:
+            target = self.root / name; target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((ROOT / name).read_bytes())
+
+    def test_all_nine_historical_pins_remain_original_and_only_two_descendants_are_selected(self):
+        digest = hashlib.sha256((json.dumps(publisher.ORIGINAL_0103_DEPENDENCIES,
+            sort_keys=True, separators=(',', ':')) + '\n').encode()).hexdigest()
+        self.assertEqual(digest, '65556e0bd07ea88c687839321aafa761be66aebfcd2ca7d7ef821d9eab218520')
+        self.assertEqual(set(publisher.ORIGINAL_0103_DESCENDANT_DEPENDENCIES), {
+            'scripts/release_successor_provider.py', 'scripts/fsgg_feed.py'})
+        # Exact reviewed descendant2fb32c51 source blobs, not current-file auto-repin.
+        self.assertEqual(publisher.ORIGINAL_0103_DESCENDANT_DEPENDENCIES, {
+            'scripts/release_successor_provider.py': {'bytes': 85901,
+                'sha256': 'b20239f394379e2c42dba023d43065bdebe4e6a620ab8adba77be77c4689bd17'},
+            'scripts/fsgg_feed.py': {'bytes': 22991,
+                'sha256': 'f7650429432417af72168c288cdee347b338328848870cb4f2f18d6b62d0733f'}})
+
+    def test_exact_actual_reviewed_descendant_closure_passes_without_repacking(self):
+        self.assertEqual(publisher.verify_original_0103_dependencies(self.root),
+                         publisher.ORIGINAL_0103_DESCENDANT_PROFILE)
+        self.assertEqual(publisher.ORIGINAL_0103_CANDIDATE['sourceSha'],
+                         '4d136d5450a7032d0b87c4b8a37f69f020144792')
+        self.assertEqual(publisher.ORIGINAL_0103_TAG_CHECKPOINT['stateSHA256'],
+                         '67018515b0e6b49f96986d7844729461099e950058d20d0a9fa0b8ba3f3864d4')
+
+    def test_historical_first_size_failure_remains_reproducible_without_explicit_amendment(self):
+        with patch.object(publisher, 'ORIGINAL_0103_DESCENDANT_DEPENDENCIES', {}):
+            with self.assertRaisesRegex(publisher.Refused, 'original .103 dependency size differs'):
+                publisher.verify_original_0103_dependencies(self.root)
+
+    def test_complete_historical_closure_passes_but_either_unreviewed_hybrid_refuses(self):
+        historical = copy.deepcopy(publisher.ORIGINAL_0103_DEPENDENCIES)
+        # Two small historical fixture bodies replace only these bytes inside this
+        # offline control; production's entire original map is checked above.
+        for name in publisher.ORIGINAL_0103_DESCENDANT_DEPENDENCIES:
+            body = ('fixture-historical:' + name).encode()
+            historical[name] = {'bytes': len(body), 'sha256': hashlib.sha256(body).hexdigest()}
+            (self.root / name).write_bytes(body)
+        with patch.object(publisher, 'ORIGINAL_0103_DEPENDENCIES', historical):
+            self.assertEqual(publisher.verify_original_0103_dependencies(self.root),
+                             'utel-rel-21/frozen-source-compatibility/1')
+            for name in publisher.ORIGINAL_0103_DESCENDANT_DEPENDENCIES:
+                path = self.root / name; body = path.read_bytes(); path.write_bytes((ROOT / name).read_bytes())
+                with self.subTest(name=name), self.assertRaisesRegex(publisher.Refused, 'mixes unreviewed'):
+                    publisher.verify_original_0103_dependencies(self.root)
+                path.write_bytes(body)
+
+    def test_all_nine_arbitrary_future_same_size_and_size_drift_refuse(self):
+        for name in publisher.ORIGINAL_0103_DEPENDENCIES:
+            path = self.root / name; body = path.read_bytes()
+            for changed in (bytes([body[0] ^ 1]) + body[1:], body + b'\nfuture-drift'):
+                path.write_bytes(changed)
+                with self.subTest(name=name, size=len(changed)), self.assertRaises(publisher.Refused):
+                    publisher.verify_original_0103_dependencies(self.root)
+            path.write_bytes(body)
+
 
 class OriginalTagIntentControls(unittest.TestCase):
     """Synthetic authenticated archives exercise the real journal/admission/transport rails.

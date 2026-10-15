@@ -128,6 +128,26 @@ ORIGINAL_0103_DEPENDENCIES = {
         "sha256": "ccf87a351daa6e83fe313a09bde0854c88abae54146eb11e24c0903c014f5197"
     }
 }
+# Explicit descendant compatibility, not a rewrite of the nine historical pins.
+# Reviewed source-only closure: .github PR4544 at 2fb32c51a630f972c593b331f9ff46471796d237
+# (same seven blobs as semantic/security review3330abb7). The provider adds inert
+# proof/custody paths and retains the unavailable production factory; feed_versions
+# refuses authenticated index redirects, preserving direct reads and nupkg stripping.
+# The first unchanged baseline refused "original .103 dependency size differs"
+# (8 failures/3 errors); neither that failure nor attempted-unknown tag is erased.
+# This exact WHOLE descendant closure admits no arbitrary future drift, new candidate,
+# signing key, native custody, credential effect or historical non-dispatch claim.
+ORIGINAL_0103_DESCENDANT_PROFILE = "utel-rel-21/descendant-source-compatibility/1"
+ORIGINAL_0103_DESCENDANT_DEPENDENCIES = {
+    "scripts/release_successor_provider.py": {
+        "bytes": 85901,
+        "sha256": "b20239f394379e2c42dba023d43065bdebe4e6a620ab8adba77be77c4689bd17"
+    },
+    "scripts/fsgg_feed.py": {
+        "bytes": 22991,
+        "sha256": "f7650429432417af72168c288cdee347b338328848870cb4f2f18d6b62d0733f"
+    }
+}
 _ORIGINAL_0103_SEAL = object()
 
 
@@ -202,20 +222,37 @@ def validate_original_0103_manifest(manifest):
 
 
 def verify_original_0103_dependencies(root=None):
+    """Accept one complete historical OR explicitly reviewed descendant closure.
+
+    Per-file alternatives only bound the read. The final whole-set comparison
+    refuses unreviewed historical/descendant hybrids as well as future bytes.
+    Original candidate/archive checks and fresh effect admission stay separate.
+    """
     root = root or pathlib.Path(__file__).resolve().parents[1]
+    observed = {}
     for name, pin in ORIGINAL_0103_DEPENDENCIES.items():
+        allowed = [pin]
+        if name in ORIGINAL_0103_DESCENDANT_DEPENDENCIES:
+            allowed.append(ORIGINAL_0103_DESCENDANT_DEPENDENCIES[name])
         path = root / name
         require(not any(part.is_symlink() for part in [path, *path.parents]),
                 "original .103 dependency is linked")
         with path.open("rb") as stream:
             before = os.fstat(stream.fileno())
-            require(stat.S_ISREG(before.st_mode) and before.st_size == pin["bytes"],
+            require(stat.S_ISREG(before.st_mode) and before.st_size in {row["bytes"] for row in allowed},
                     "original .103 dependency size differs")
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
             after = os.fstat(stream.fileno())
         identity = lambda value: (value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+        value = {"bytes": before.st_size, "sha256": digest}
         require(identity(before) == identity(after) == identity(path.stat())
-                and digest == pin["sha256"], "original .103 dependency bytes differ")
+                and value in allowed, "original .103 dependency bytes differ")
+        observed[name] = value
+    if observed == ORIGINAL_0103_DEPENDENCIES:
+        return "utel-rel-21/frozen-source-compatibility/1"
+    descendant = {**ORIGINAL_0103_DEPENDENCIES, **ORIGINAL_0103_DESCENDANT_DEPENDENCIES}
+    require(observed == descendant, "original .103 dependency closure mixes unreviewed revisions")
+    return ORIGINAL_0103_DESCENDANT_PROFILE
 
 
 def verify_original_0103(args, run, artifact, manifest_bytes, archive, candidate, publisher_sha, api):
