@@ -1223,4 +1223,14 @@ class SelectedOriginalFactoryControls(unittest.TestCase):
             self.assertIn('if: inputs.recover_original_0103_tag_intent == true', workflow[:guard])
 
 
+def load_tests(loader, tests, pattern):
+    # Keep the pure ADR-0093 construction inside the existing hosted test entry.
+    path = pathlib.Path(__file__).with_name('domain-contract-tests.py')
+    spec = importlib.util.spec_from_file_location('authentication_domain_contract_tests', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    tests.addTests(loader.loadTestsFromModule(module))
+    return tests
+
+
 if __name__ == '__main__': unittest.main()
