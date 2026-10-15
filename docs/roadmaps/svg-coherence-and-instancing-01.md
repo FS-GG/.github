@@ -22,6 +22,26 @@ workload does not retroactively invalidate historical acceptance for other workl
 
 ## Current progress
 
+**2026-10-15: Actual-player staged composition accepted for the selected .5 join.**
+[Templates #724](https://github.com/FS-GG/FS.GG.Templates/pull/724) merged qualified
+head `dd19b19fd6b0f2f4dd37343a46ef6a5bc0ca0431` as
+`f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc` at 08:54:24 UTC.
+[Source checks](https://github.com/FS-GG/FS.GG.Templates/actions/runs/38705865364)
+and [composition](https://github.com/FS-GG/FS.GG.Templates/actions/runs/38705865694)
+passed on that exact head. Composition artifact `11959726639` retains eight verified
+actual generated Complete-player cases: local and external authority, populations
+1/100/250/500/1,000, and bounded churn. Thirteen fault-specific negative controls,
+resume, full-world SVG download, browser/server cleanup and template removal by
+verified package ID with empty installed-item readback passed. The retained producer
+fixture binds Rendering candidate `c921eb13963864609d36545ef45d1b4b50bc3b52` and
+local 0.32.0 packages; it is not a published-package receiver. The
+[merged composition source](https://github.com/FS-GG/FS.GG.Templates/blob/f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc/tests/composition/fable-game/verify-soldier-reference-candidate.sh)
+keeps the real player/server path and original gates. Earlier acquisition, frame-deadline
+and uninstall failures remain historical failed attempts. This accepts the staged
+actual-application composition join in .5; .3/.4, selected consumer/native acceptance,
+the late host GPU batch, publication and clean/retained installed adoption remain open.
+No performance, physical-input or assistive-technology acceptance follows.
+
 **2026-10-07: Public Templates-only receiver accepted.**
 [Run 37549683984/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37549683984)
 succeeded on repaired harness `c56541c6dbadbc753b500ac5ffc941e8af083854`.
