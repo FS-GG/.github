@@ -821,3 +821,35 @@ These results establish inert caller/native-selector composition. An authentic
 supplying controller and provider profile, mapped engine isolation, native8,
 cold image closure, native C5, receiver acceptance and activation remain open.
 Historical unknown operations retain their original custody holds.
+
+### Hosted image candidate rebinding, 2026-10-15
+
+The original [PR #4560 source check, run `38786251522/a1`](https://github.com/FS-GG/.github/actions/runs/38786251522)
+refused before the toolchain census and source qualification: the hosted provider
+reported Ubuntu 24.04 image `20261012.334.1`, while the guard still selected
+`20261004.327.1` / `e3fe113a581eb9a44ca43f479b69f9c93f36df34`.
+The failed attempt retained no toolchain artifact. Its image drift is a failed
+prerequisite and supplies no replacement custody or source acceptance.
+
+Root selected `20261012.334.1` and official runner-images tag commit
+[`7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe`](https://github.com/actions/runner-images/tree/7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe)
+as a candidate for bounded requalification. The direct immutable image manifests
+retain GCC 13.3.0, system Python 3.12.3, binutils 2.42-4ubuntu2.10,
+coreutils 9.4-3ubuntu6.3 and the selected .NET SDK 10.0.401. Listed sudo changes
+from `1.9.15p5-3ubuntu5.24.04.3` to `1.9.15p5-3ubuntu5.24.04.4`;
+the candidate release is marked prerelease. These declared versions do not
+establish actual transitive package/file custody, Python/PAM/ELF search closure
+or post-setup SDK placement.
+
+The source candidate changes only the selected image/source tuple and its
+independent source equality. It retains the actual provider/OS/architecture/image
+checks, pinned census, compiler and complete toolchain binding, SDK custody
+normalization, source tests and separate default-off protected native admission.
+Preflight uses static input consistency and inert wrong-tuple refusal against
+the actual workflow guard; this literal binding change needs no new model.
+The existing 20-minute hosted job budget and all stage, output and cleanup bounds
+remain authoritative. Full required hosted source qualification and fresh
+toolchain evidence on the candidate image remain pending. No native fixture,
+installed custody, publication, receiver acceptance, activation or historical
+retirement is established by this candidate. The first failure and original
+unknown operations retain their identities and holds.
