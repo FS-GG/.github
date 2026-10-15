@@ -97,6 +97,30 @@ admission guidance and this evidence record on protected main at
 including Atlas and semantic skill quality. It did not admit a second workload or resolve the cohort
 comparison, so the .1 acceptance boundary above is unchanged.
 
+[PR #4537](https://github.com/FS-GG/.github/pull/4537) delivered the assembled carrier preflight at
+protected source `83e9778003a6255af3483d8d82790ba887b2d430`. The existing skill-quality entry now
+checks Atlas archive/seed delivery and the same partial skill tree used by full qualification before
+building the gate engine; it also provides `--preflight BASE_SHA` without CLR or PyYAML. The two original
+hosted packaging misses (omitted Atlas seed and repository-only relative link) remain recorded. A later
+local review found that an Atlas import generated ignored bytecode and broke mirror validation; inherited
+bytecode suppression and the delivered-skill byte guard now refuse that defect. Thirteen real command
+controls covered the original defects, generated caches/bytes, malformed/missing prerequisites and
+normal-entry blocking, with no dotnet or gate-engine sentinel launch.
+
+The corrected complete command measured **2.034 seconds** on its first fresh-fixture invocation and
+**1.998/1.989 seconds** on warm invocations, including preparation and cleanup; OS caches were uncontrolled
+and no provisioning/downloads were needed. These are observations, not avoided-attempt or savings claims.
+[Full semantic qualification](https://github.com/FS-GG/.github/actions/runs/38727681459) and the
+[actual runner](https://github.com/FS-GG/.github/actions/runs/38727681396) passed at exact candidate
+`1e46a7459f2b641dad05c85a929153182ed1680c`; all eight required contexts passed, including fresh
+[metadata-sensitive coherence](https://github.com/FS-GG/.github/actions/runs/38728495058) after the final
+PR-body edit. That body-only edit triggered five metadata-sensitive runs, created at 11:36:07 UTC
+and last reported updated at 11:37:45 UTC: a **98-second provider interval** across those runs. This
+includes provider bookkeeping and waiting; it is not active engineering effort or billed runner time.
+Full required validation was preserved. The second-workload and cohort holds
+above remain; .1 is open and comparative economics remain inconclusive. The reusable finding is
+[Atlas lesson `platform/assembled-carrier-preflight-and-bytecode`](../atlas/records/bac3431138e986d6426c1e81bdfe0a968394896c0751cbbcc8f36002fd0ed069.json).
+
 ## Change 2 — finish V2-DIAG-01.4 adoption
 
 **V3-IMPROVE-01.2** is the integration join to
@@ -124,6 +148,17 @@ prevents a benefit claim, not truthful adoption evidence.
 
 This integration phase records the durable DIAG acceptance link and any remaining constraints in this
 plan. It neither clones DIAG .4 nor reopens .1–.3. No separate diagnostic service or fleet retrofit is selected.
+
+[PR #4539](https://github.com/FS-GG/.github/pull/4539), protected merge
+`505c54cf630c33996d3fd7cafd68e7ab2496f019`, adds actual execution of all four `.claude`
+work-programme FSI counterparts, preserving the four `.agents` suites, five Python suites and original
+budgets. The [exact-head hosted entry](https://github.com/FS-GG/.github/actions/runs/38729032134)
+passed all thirteen suites at `b8a536f36ad9f3311ba86b63fafb8d45f0721152`. Independent artifact
+acquisition matched all 32 source pins; first cause was null, omitted coverage empty, and exits,
+cleanup, reporting, display and upload passed. The observed 47.256 seconds and 20,556 output bytes
+are descriptive only. This accepts both repository-native helper roots at that source, without
+claiming a post-merge run, packaged installation, native custody or comparative benefit. Phase 2 and
+V2-DIAG-01.4 remain open; package/native/P4 owner joins and the existing failed intake read are unchanged.
 
 ## Change 3 — simplify skill entrypoints and reports
 

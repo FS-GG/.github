@@ -291,6 +291,24 @@ descriptive comparison only: environment variability, defect yield, avoided atte
 overhead and complete usage coverage are unmeasured. Upload timestamps span one second at the native
 timestamp resolution; that does not establish exact overhead. No savings are inferred.
 
+### Both repository-native receiver roots — 2026-10-15
+
+[PR #4539](https://github.com/FS-GG/.github/pull/4539), protected merge
+`505c54cf630c33996d3fd7cafd68e7ab2496f019`, preserves the four `.agents` FSI suites and adds the
+four `.claude` counterparts through the exact receiver selector and input closure. Five Python suites
+and the original deadline, cleanup reserve and output bounds remain unchanged. The
+[actual hosted entry 38729032134/1](https://github.com/FS-GG/.github/actions/runs/38729032134)
+passed all thirteen suites at exact candidate `b8a536f36ad9f3311ba86b63fafb8d45f0721152`.
+Independent download of artifact `11969673049` matched ZIP SHA256
+`d2611794ba97f0d19bce3c3c67be9b0df186e79ad8c1a5fb02f143097d6a0eb2`; its sole JSON has SHA256
+`e6c00e2251019e4413f6f24f14b06f958342e088f12f61d37b0dc2c9fa03b505`.
+All 32 source pins matched; first cause was null, omitted coverage empty, and all exits, cleanup and
+reporting passed. Runner, display and upload steps succeeded separately. Observed 47.256 seconds and
+20,556 output bytes describe this run; they establish no overhead reduction or savings. This accepts
+actual repository-native receiver use at that head, without claiming a separate post-merge run,
+package installation or native custody. V2-DIAG-01.4 remains open for the owner joins and evaluation
+below; the failed intake read and unconfirmed supplying owner remain unchanged.
+
 ### Publication and native owner joins still required
 
 [Coordination CLI 0.3.0](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.3.0) is a published
