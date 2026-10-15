@@ -13,7 +13,7 @@ The new outcome owns host/profile provisioning, ephemeral allocation/teardown an
 
 | Owner | Owned result | Boundary |
 |---|---|---|
-| Supplied host/provisioner owner, to be named | Actual host/kernel/engine/security profile; dedicated ephemeral allocation; independent outer cleanup | Agents cannot provision privileges, expose host sockets or edit host policy through this plan |
+| Home/SystemAdmin supplied host/provisioner owner | Actual host/kernel/engine/security profile; dedicated ephemeral allocation; independent outer cleanup | Agents cannot provision privileges, expose host sockets or edit host policy through this plan |
 | Coordination execution owner | Thin profile/storage adapter and bounded receipts using existing contracts/journal | Existing operation identity, deadlines, role caps and incomplete/unknown semantics remain authoritative |
 | `.github` programme/qualification owner | Shared base Containerfile and image/profile release workflow; framework pilot, cross-family scope mapping, benchmark disposition and v3 integration | Publish the common base through the existing authorized OCI route; no second registry, scheduler, board programme or statistical savings claim |
 | SDD/Templates and selected receiver owners | Reusable language profiles, exact image/profile materialization, clean installation and retaining upgrade journeys | Keep existing profile ownership; product code/build systems remain independent of framework implementation |
@@ -55,6 +55,31 @@ explicit retaining upgrades. OCI publication permissions/integration, actual ins
 external host-backed allocation/independent cleanup, containment and the second compatible machine
 remain open. Original ordinary-profile acceptance, failures and unknown operations remain unchanged;
 .1/.2 and whole-item Done remain incomplete.
+
+## Host provisioning and receiver integration frontier, 2026-10-15
+
+Home/SystemAdmin is the supplied host and independent outer-cleanup owner. The supplier reports
+ordinary rootless pilot provisioning with a reserved shared host-backed pool, fresh operation-bound
+VFS allocations, finite leases and independent teardown. Receiver review independently verified the
+restricted immutable source packet and accepted its scoped allocation, lease and teardown source
+contract for integration review, clearing the earlier source-visibility blocker. Supplier-reported
+provisioning and test coverage remain distinct from receiver native acceptance. See the
+[host response](https://github.com/FS-GG/.github/issues/4516#issuecomment-6183705100) and
+[receiver disposition](https://github.com/FS-GG/.github/issues/4516#issuecomment-6183778966).
+
+An approved durable export destination is ready under Home/SystemAdmin custody, outside pilot
+cleanup scope. The receiver selected zero payload outputs because no receiver native V3 run was
+admitted or executed against this fresh allocation. This does not establish an empty allocation,
+completed payload transfer or durable payload readback. The host's bounded allocation census and
+resulting export/cleanup disposition remain pending; unexpected or host-created files require owner
+disposition before cleanup. The original lease expiry remains **2026-10-15 20:04 UTC**; no renewal or
+deletion authority follows from the zero-output selection.
+
+Coordination's executor can select explicit VFS paths, but the allocation-identity, lease,
+export-before-retirement and host-owned outer-cleanup join remains open. These source and
+provisioning advances do not accept a receiver native pilot, measured storage benefit, strong
+containment, publication, installed adoption or portability. The earlier failed attempts, held
+allocations and Unknown retirement remain unchanged. Whole-item Done remains No.
 
 ## Delivery milestones
 
