@@ -8,6 +8,7 @@ are used without importing the existing subprocess-based journal test runner.
 """
 
 import base64
+from contextlib import contextmanager
 import copy
 import hashlib
 import io
@@ -1991,12 +1992,8 @@ class Original0103Controls(unittest.TestCase):
         self.assertFalse((self.root / 'unused').exists()); self.assert_no_writes()
 
     def test_actual_tag_selector_existing_preflight_and_unavailable_send(self):
-        # Only the changed source-dependency pin is proposed in this fixture;
-        # production keeps the reviewed old pin until explicit compatibility review.
-        proposed = copy.deepcopy(publisher.ORIGINAL_0103_DEPENDENCIES)
-        for name in proposed:
-            body = (ROOT / name).read_bytes()
-            proposed[name] = {'bytes': len(body), 'sha256': hashlib.sha256(body).hexdigest()}
+        # Use the actual explicitly reviewed descendant closure. Historical pins
+        # are not overwritten even inside this actual-selector control.
         _, self.authority, _, _ = fixture(2, self.candidate, self.fixed['archiveSha256'], publisher.SUCCESSOR_REF)
         journal = ProtectedReleaseJournal(self.authority, ref=publisher.SUCCESSOR_REF, main_directory=True)
         journal.read()
@@ -2034,9 +2031,15 @@ class Original0103Controls(unittest.TestCase):
             return native_get(path)
         self.native_get = get
         self.native.download_original_tag_result = lambda: raw
+        # The byte proof now precedes factory acquisition, so the synthetic
+        # provider exposes the actual retained fixture inputs it is asked to use.
+        self.provider.root = self.root
+        self.provider.manifest = self.candidate
+        self.provider.version, self.provider.source = '0.103.0', self.source
+        self.provider.manifest_path = self.root / 'retained-original-manifest.json'
+        self.provider.manifest_path.write_bytes(self.archive_members['release-manifest.json'])
         before = self.authority.head
-        with patch.object(publisher, 'ORIGINAL_0103_DEPENDENCIES', proposed), \
-             patch.object(publisher, 'ORIGINAL_0103_TAG_CHECKPOINT', checkpoint):
+        with patch.object(publisher, 'ORIGINAL_0103_TAG_CHECKPOINT', checkpoint):
             self.assertEqual(self.execute(selected=False, recover_original_0103_tag_intent=True), 'preflight')
             self.assertEqual(self.rows['originalTagRecovery']['branch'], 'non-writing-existing-intent-preflight')
             self.assertEqual(self.rows['publisherCounter'].report()['attempted']['candidateArchive'], 1)
@@ -2160,6 +2163,73 @@ class Original0103Controls(unittest.TestCase):
         with self.assertRaises(self.uniqueness.GateError): self.execute()
         self.assert_no_writes()
 
+class Original0103DescendantCompatibilityControls(unittest.TestCase):
+    """Retain historical pins; bound the reviewed PR4544 descendant as a whole.
+
+    Original full recovery baseline was110tests with8failures/3errors, first
+    refusing dependency size. These controls do not erase original tag Unknown,
+    authenticate credentials or authorize a native operation.
+    """
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.root = pathlib.Path(self.tmp.name)
+        for name in publisher.ORIGINAL_0103_DEPENDENCIES:
+            target = self.root / name; target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((ROOT / name).read_bytes())
+
+    def test_all_nine_historical_pins_remain_original_and_only_two_descendants_are_selected(self):
+        digest = hashlib.sha256((json.dumps(publisher.ORIGINAL_0103_DEPENDENCIES,
+            sort_keys=True, separators=(',', ':')) + '\n').encode()).hexdigest()
+        self.assertEqual(digest, '65556e0bd07ea88c687839321aafa761be66aebfcd2ca7d7ef821d9eab218520')
+        self.assertEqual(set(publisher.ORIGINAL_0103_DESCENDANT_DEPENDENCIES), {
+            'scripts/release_successor_provider.py', 'scripts/fsgg_feed.py'})
+        # Exact reviewed descendant2fb32c51 source blobs, not current-file auto-repin.
+        self.assertEqual(publisher.ORIGINAL_0103_DESCENDANT_DEPENDENCIES, {
+            'scripts/release_successor_provider.py': {'bytes': 85901,
+                'sha256': 'b20239f394379e2c42dba023d43065bdebe4e6a620ab8adba77be77c4689bd17'},
+            'scripts/fsgg_feed.py': {'bytes': 22991,
+                'sha256': 'f7650429432417af72168c288cdee347b338328848870cb4f2f18d6b62d0733f'}})
+
+    def test_exact_actual_reviewed_descendant_closure_passes_without_repacking(self):
+        self.assertEqual(publisher.verify_original_0103_dependencies(self.root),
+                         publisher.ORIGINAL_0103_DESCENDANT_PROFILE)
+        self.assertEqual(publisher.ORIGINAL_0103_CANDIDATE['sourceSha'],
+                         '4d136d5450a7032d0b87c4b8a37f69f020144792')
+        self.assertEqual(publisher.ORIGINAL_0103_TAG_CHECKPOINT['stateSHA256'],
+                         '67018515b0e6b49f96986d7844729461099e950058d20d0a9fa0b8ba3f3864d4')
+
+    def test_historical_first_size_failure_remains_reproducible_without_explicit_amendment(self):
+        with patch.object(publisher, 'ORIGINAL_0103_DESCENDANT_DEPENDENCIES', {}):
+            with self.assertRaisesRegex(publisher.Refused, 'original .103 dependency size differs'):
+                publisher.verify_original_0103_dependencies(self.root)
+
+    def test_complete_historical_closure_passes_but_either_unreviewed_hybrid_refuses(self):
+        historical = copy.deepcopy(publisher.ORIGINAL_0103_DEPENDENCIES)
+        # Two small historical fixture bodies replace only these bytes inside this
+        # offline control; production's entire original map is checked above.
+        for name in publisher.ORIGINAL_0103_DESCENDANT_DEPENDENCIES:
+            body = ('fixture-historical:' + name).encode()
+            historical[name] = {'bytes': len(body), 'sha256': hashlib.sha256(body).hexdigest()}
+            (self.root / name).write_bytes(body)
+        with patch.object(publisher, 'ORIGINAL_0103_DEPENDENCIES', historical):
+            self.assertEqual(publisher.verify_original_0103_dependencies(self.root),
+                             'utel-rel-21/frozen-source-compatibility/1')
+            for name in publisher.ORIGINAL_0103_DESCENDANT_DEPENDENCIES:
+                path = self.root / name; body = path.read_bytes(); path.write_bytes((ROOT / name).read_bytes())
+                with self.subTest(name=name), self.assertRaisesRegex(publisher.Refused, 'mixes unreviewed'):
+                    publisher.verify_original_0103_dependencies(self.root)
+                path.write_bytes(body)
+
+    def test_all_nine_arbitrary_future_same_size_and_size_drift_refuse(self):
+        for name in publisher.ORIGINAL_0103_DEPENDENCIES:
+            path = self.root / name; body = path.read_bytes()
+            for changed in (bytes([body[0] ^ 1]) + body[1:], body + b'\nfuture-drift'):
+                path.write_bytes(changed)
+                with self.subTest(name=name, size=len(changed)), self.assertRaises(publisher.Refused):
+                    publisher.verify_original_0103_dependencies(self.root)
+            path.write_bytes(body)
+
+
 class OriginalTagIntentControls(unittest.TestCase):
     """Synthetic authenticated archives exercise the real journal/admission/transport rails.
 
@@ -2248,12 +2318,69 @@ class OriginalTagIntentControls(unittest.TestCase):
             headers = {}
         return Reply(json.dumps(self.reply).encode())
 
+    @contextmanager
+    def lease(self, transport=None):
+        self.lease_entries = getattr(self, 'lease_entries', 0) + 1
+        transport = transport or self.transport()
+        try:
+            yield transport
+        finally:
+            self.lease_exits = getattr(self, 'lease_exits', 0) + 1
+            transport._token = None
+
     def recover(self, **changes):
-        kwargs = dict(factory=self.transport, clock=lambda: 0)
+        verify = changes.pop('verify_candidate', lambda: copy.deepcopy(self.candidate_proof))
+        kwargs = dict(factory=self.lease, clock=lambda: 0)
         kwargs.update(changes)
         with patch.object(urllib.request, 'build_opener', return_value=types.SimpleNamespace(open=self.open)):
             return publisher.run_original_tag_recovery(self.candidate, self.journal, self.admission, None,
-                self.counter, self.api, self.rows, 100, lambda: copy.deepcopy(self.candidate_proof), self.path, **kwargs)
+                self.counter, self.api, self.rows, 100, verify, self.path, **kwargs)
+
+    def test_changed_original_candidate_refuses_before_credential_lease(self):
+        with self.assertRaisesRegex(publisher.Refused, 'pre-credential candidate'):
+            self.recover(factory=forbidden_effect, verify_candidate=lambda: {})
+        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
+
+    def test_lexical_lease_closes_on_attempt_record_and_late_candidate_refusal(self):
+        for stage in ('attempt-record', 'candidate'):
+            with self.subTest(stage=stage):
+                self.path.unlink(missing_ok=True)
+                reads = []
+                def verify():
+                    reads.append(1)
+                    return self.candidate_proof if len(reads) == 1 else {}
+                if stage == 'attempt-record':
+                    with patch.object(publisher, 'write_kit_repeat_attempt', side_effect=OSError('disk')):
+                        with self.assertRaises(OSError): self.recover()
+                else:
+                    with self.assertRaisesRegex(publisher.Refused, 'candidate binding changed'):
+                        self.recover(verify_candidate=verify)
+                self.assertEqual(self.lease_entries, self.lease_exits)
+                self.assertEqual(self.posts, [])
+
+    def test_real_selected_factory_request_proof_composes_with_original_recovery(self):
+        spec = importlib.util.spec_from_file_location('selected_factory_fixture',
+            ROOT / 'tests/release-successor-authentication/run.py')
+        auth = importlib.util.module_from_spec(spec); spec.loader.exec_module(auth)
+        bound = auth.binding(); bound['app'] = {'id': 4995487, 'installation': 162873149}
+        channel = auth.RetainedChannel(self.tmp.name, bound)
+        opener = auth.SelectedFactoryOpener(); retained = []
+        lease_report = self.rows['originalTagCredential'] = {}
+        checkpoint = {'generation': 2, 'logicalHead': self.fixed['logicalHead'],
+                      'stateSHA256': self.fixed['stateSHA256']}
+        # Only this synthetic fixture's journal hashes differ from the fixed native checkpoint.
+        with patch.object(self.live, 'ORIGINAL_TAG_FACTORY_CHECKPOINT', checkpoint):
+            factory = self.live.InertOriginalTagCredentialFactory(bound,
+                self.live.ORIGINAL_TAG_FACTORY_CANDIDATE, checkpoint,
+                phase_adapter=auth.adapter(channel), jwt_supplier=lambda: 'inert-jwt',
+                opener=opener, admit=lambda: True, retain=retained.append, report=lease_report)
+            before = self.authority.head
+            self.assertEqual(self.recover(factory=factory), 'checkpoint')
+        self.assertEqual(self.authority.head, before)
+        self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
+        self.assertEqual([r.method for r in opener.calls], ['GET','GET','GET','POST','GET','POST','DELETE'])
+        self.assertTrue(lease_report['qualified']); self.assertEqual(lease_report['cleanup'], 'revoked')
+        self.assertTrue(self.path.exists()); self.assertFalse(self.rows['publicationComplete'])
 
     def test_existing_intent_preflight_is_read_only_and_does_not_require_factory(self):
         before = self.authority.head
@@ -2415,7 +2542,7 @@ class OriginalTagIntentControls(unittest.TestCase):
                     'permissions': {'contents': 'write', 'workflows': 'write'}, 'expiresAtUnix': 4102444800}
         transport.identity = identity
         with self.assertRaisesRegex(publisher.Refused, 'final source'):
-            self.recover(factory=lambda: transport)
+            self.recover(factory=lambda: self.lease(transport))
         self.assertTrue(self.path.exists()); self.assertEqual(self.posts, [])
         self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
 
@@ -2429,7 +2556,7 @@ class OriginalTagIntentControls(unittest.TestCase):
             return identity()
         transport.identity = read_identity
         with self.assertRaisesRegex(publisher.Refused, 'appeared'):
-            self.recover(factory=lambda: transport)
+            self.recover(factory=lambda: self.lease(transport))
         self.assertTrue(self.path.exists()); self.assertEqual(self.posts, [])
         self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
 
