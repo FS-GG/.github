@@ -85,8 +85,8 @@ backing relied on the supplied environment admission rather than independently v
 profile, disjoint output/cache joins and combined measured headroom have not been established. No second
 workload was requested or admitted in this pilot. Follow the existing
 [worked admission route](../../.agents/skills/work-programme/references/context.md#worked-admission-and-evidence-route)
-when real ready work supplies those prerequisites. The selected Coordination/SystemAdmin cross-repository
-cohort still needs next-candidate treatment and comparison; attempts/diagnosis baselines remain incomplete.
+when real ready work supplies those prerequisites. The Coordination/SystemAdmin cross-repository source cohort is evaluated below; comparable
+attempts/diagnosis baselines remain incomplete.
 Retain the preflight correctness change with **inconclusive economics**; this is not a wider-rollout decision.
 The .1 checkbox remains open: this evidence establishes one bounded local profile and partial source
 adoption, not two-workload acceptance, cross-repository evaluation or selected installed adoption.
@@ -120,6 +120,62 @@ includes provider bookkeeping and waiting; it is not active engineering effort o
 Full required validation was preserved. The second-workload and cohort holds
 above remain; .1 is open and comparative economics remain inconclusive. The reusable finding is
 [Atlas lesson `platform/assembled-carrier-preflight-and-bytecode`](../atlas/records/bac3431138e986d6426c1e81bdfe0a968394896c0751cbbcc8f36002fd0ed069.json).
+
+### Cross-repository source cohort — 15 October, 13:44 UTC
+
+The [prospective selection](https://github.com/FS-GG/.github/issues/4516#issuecomment-6193021836)
+at **13:18:33 UTC (T0)** enrolled one necessary SystemAdmin decoder source attempt against accepted
+Coordination input `16b30651e1197abae5ee6e9b607e96c15ed4a766`, before the host decoder edit.
+SystemAdmin owned the three-path change and a separate programme reviewer owned source review.
+The declared window ended at an accepted source result or 20:04 UTC, whichever came first; the
+[completion receipt](https://github.com/FS-GG/.github/issues/4516#issuecomment-6193555735) closes it
+at the accepted integration result, 13:42:15 UTC. Earlier carrier readback and framing work preceded
+T0 and differed in scope; they are not a comparable baseline.
+
+| Milestone | UTC | Evidence and boundary |
+| --- | --- | --- |
+| Branch/owner preflight began | 13:20:41 | Owner-reported; first edit followed at 13:23:48 |
+| Candidate delivered | 13:29:35 | [Candidate receipt](https://github.com/FS-GG/.github/issues/4516#issuecomment-6193248972), exact `e12430e1743a668a2a7c4d6ec905662e28042a2f` |
+| Independent source review passed | 13:34:57 | [Review receipt](https://github.com/FS-GG/.github/issues/4516#issuecomment-6193359821), independent 23 pure tests passed |
+| Ordinary host source landed | 13:36:40 | [Owner landing receipt](https://github.com/FS-GG/.github/issues/4516#issuecomment-6193443268), merge `d41559e0c8909ef012b29cc6234bb88e10ff9d5f`; host main is unprotected |
+| Fresh actual-main tests passed | 13:37:24 | Owner-reported 23 tests, zero failures/errors/skips; 251 wire and 31 sizing cases |
+| Programme integration audit passed | 13:42:15 | [Bounded integration receipt](https://github.com/FS-GG/.github/issues/4516#issuecomment-6193512676), supplied Git objects, scoped source equivalence and hash-bound transcript verified |
+
+**Original failure retained:** the first suite invocation hit a fixture transport error on an
+intentionally oversized negative row: the production document bound blocked the row before decoder
+refusal. The fixture transport was corrected without widening that bound. The original transcript
+and per-case history remain in restricted custody; final green counts do not erase that attempt.
+
+The public completion receipt reports **111.14 seconds** initial owner-mail discovery latency,
+**0.47/0.52 seconds** for the failed/passing test processes, and **28.47 seconds** from the first
+source-test failure to a subsequent passing result. The programme independently hash-verified the
+restricted completion summary (`5a19636d23f7c8f17f749d6c19e3493e3703413ed5024cc46440a8cf90351202`);
+these durations remain owner-measured. Failure-to-pass is not a measured first-useful-diagnosis
+interval. Exact failure/diagnosis timestamps and complete invocation count remain unavailable here.
+
+T0 to candidate delivery was **11 minutes 2 seconds**, to independent review **16 minutes 24 seconds**,
+and to reported host landing **18 minutes 7 seconds**. These are elapsed milestone intervals, not active
+engineering effort or runner cost. The measured test processes and initial discovery latency provide
+a partial separation; complete queue versus execution time, whole-family effort and a comparable
+baseline remain missing. Faster diagnosis, fewer repeated attempts and savings cannot be established.
+The treatment used candidate source checks and separate independent review; these data do not isolate
+the effect of programme preflight changes. Retain the bounded source route; comparative benefit remains
+**inconclusive**, with no wider-rollout inference.
+
+The programme audited the supplied integration packet, including exactly the three admitted paths and
+unchanged scoped subtree. Private live remote currentness and fresh host test execution remain
+SystemAdmin-reported, supported by that packet rather than independently rerun by the programme.
+No private source, evidence location or credential is copied here. The accepted
+[unattended installed gate](../designs/2026-10-13-provisioned-podman-execution.md#unattended-normal-use-acceptance-gate)
+at protected source `5480370339889e96ab805e3cab5fd9c934ee30b1` remains open: reviewed source,
+manual handoffs and pure fixtures do not establish installed allocation, binding, launch, teardown
+or worker-loss recovery without a human host agent.
+
+No genuinely unstarted ordinary source cohort has yet been selected prospectively for this evaluation.
+Completed ordinary lanes cannot be relabelled as prospective cohorts, and no work is created solely
+for measurement. **V3-IMPROVE-01.1 remains open:** ordinary cohort evaluation, comparable denominators,
+second-workload admission and selected installed adoption remain unresolved. Local CLR and native
+effects remain held; this evidence update grants no execution or installation authority.
 
 ## Change 2 — finish V2-DIAG-01.4 adoption
 
