@@ -121,15 +121,16 @@ Full required validation was preserved. The second-workload and cohort holds
 above remain; .1 is open and comparative economics remain inconclusive. The reusable finding is
 [Atlas lesson `platform/assembled-carrier-preflight-and-bytecode`](../atlas/records/bac3431138e986d6426c1e81bdfe0a968394896c0751cbbcc8f36002fd0ed069.json).
 
-### Cross-repository source cohort — 15 October, 13:42 UTC
+### Cross-repository source cohort — 15 October, 13:44 UTC
 
 The [prospective selection](https://github.com/FS-GG/.github/issues/4516#issuecomment-6193021836)
 at **13:18:33 UTC (T0)** enrolled one necessary SystemAdmin decoder source attempt against accepted
 Coordination input `16b30651e1197abae5ee6e9b607e96c15ed4a766`, before the host decoder edit.
 SystemAdmin owned the three-path change and a separate programme reviewer owned source review.
-The declared window ended at an accepted source result or 20:04 UTC, whichever came first; the source
-review result and subsequent integration receipts are distinguished below. Earlier carrier readback
-and framing work preceded T0 and differed in scope; they are not a comparable baseline.
+The declared window ended at an accepted source result or 20:04 UTC, whichever came first; the
+[completion receipt](https://github.com/FS-GG/.github/issues/4516#issuecomment-6193555735) closes it
+at the accepted integration result, 13:42:15 UTC. Earlier carrier readback and framing work preceded
+T0 and differed in scope; they are not a comparable baseline.
 
 | Milestone | UTC | Evidence and boundary |
 | --- | --- | --- |
@@ -143,13 +144,20 @@ and framing work preceded T0 and differed in scope; they are not a comparable ba
 **Original failure retained:** the first suite invocation hit a fixture transport error on an
 intentionally oversized negative row: the production document bound blocked the row before decoder
 refusal. The fixture transport was corrected without widening that bound. The original transcript
-and per-case history remain in restricted custody. The exact failure/diagnosis timestamps and complete
-invocation count are unavailable in the public evaluation; final green counts do not erase that attempt.
+and per-case history remain in restricted custody; final green counts do not erase that attempt.
+
+The public completion receipt reports **111.14 seconds** initial owner-mail discovery latency,
+**0.47/0.52 seconds** for the failed/passing test processes, and **28.47 seconds** from the first
+source-test failure to a subsequent passing result. The programme independently hash-verified the
+restricted completion summary (`5a19636d23f7c8f17f749d6c19e3493e3703413ed5024cc46440a8cf90351202`);
+these durations remain owner-measured. Failure-to-pass is not a measured first-useful-diagnosis
+interval. Exact failure/diagnosis timestamps and complete invocation count remain unavailable here.
 
 T0 to candidate delivery was **11 minutes 2 seconds**, to independent review **16 minutes 24 seconds**,
 and to reported host landing **18 minutes 7 seconds**. These are elapsed milestone intervals, not active
-engineering effort or runner cost. Queue versus execution time, whole-family effort and a comparable
-baseline are missing; faster diagnosis, fewer repeated attempts and savings cannot be established.
+engineering effort or runner cost. The measured test processes and initial discovery latency provide
+a partial separation; complete queue versus execution time, whole-family effort and a comparable
+baseline remain missing. Faster diagnosis, fewer repeated attempts and savings cannot be established.
 The treatment used candidate source checks and separate independent review; these data do not isolate
 the effect of programme preflight changes. Retain the bounded source route; comparative benefit remains
 **inconclusive**, with no wider-rollout inference.
