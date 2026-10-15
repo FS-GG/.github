@@ -56,7 +56,7 @@ The following residual transfers are **existing owner work**, not new v3 outcome
 
 | Existing transfer | Accountable owner and next boundary | Stop |
 |---|---|---|
-| [V2-DIAG-01.4](diagnostic-execution.md) | Coordination diagnostic producer and selected ordinary/native runner owners complete publication, installed entrypoint behavior and bounded evaluation. | Repository-native source from V3-IMPROVE is an input; it is not publication or installed acceptance. |
+| [V2-DIAG-01.4](diagnostic-execution.md) | Coordination diagnostic producer and selected ordinary/native runner owners complete publication, installed entrypoint behavior and observation from necessary attempts; compare benefit only if claimed. | Repository-native source from V3-IMPROVE is an input; it is not publication or installed acceptance. |
 | [Packaged skill release and receivers](utel-release-successor.md) | Maintained coherent release-successor owner publishes exact carrier; selected SDD/Templates/workspace receiver owners verify actual installed use. | Source/seed/manifest coherence is not a published package or clean/retained receiver. Original release holds remain. |
 
 The linked plan is authoritative if a compact row's phrasing is stale. The programme

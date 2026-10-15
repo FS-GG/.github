@@ -370,8 +370,9 @@ waiting, quality and coverage. Known source delivery stays visible when runtime 
 partial visibility does not grant native completion or justify a zero-cost efficiency claim.
 
 The six milestones cover contracts and labeled examples (.1), canonical measurement and supported
-attribution correction (.2), completion analysis (.3), public dashboard explanations (.4), calibration
-and economics (.5), and publication/installed adoption (.6). After shared contracts, .2–.4 can progress
+attribution correction (.2), completion analysis (.3), public dashboard explanations (.4), functional
+calibration with optional economics (.5), and publication/installed adoption (.6). After shared
+contracts, .2–.4 can progress
 with disjoint touch-sets and common fixtures; actual end-to-end acceptance precedes rollout. Preserve
 existing scoped economics profiles, required checks, privacy boundaries and one current outcome per
 canonical identity. This planning entry changes no active schema, policy, execution authority or
