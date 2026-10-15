@@ -94,5 +94,42 @@ class InactiveAuthenticationControls(unittest.TestCase):
                 self.reject(lambda d: d['jobs'][policy.JOB].update({field: value}))
 
 
+class ReadOnlySourceCallerControls(unittest.TestCase):
+    def setUp(self):
+        self.doc = policy.parse((ROOT / policy.SOURCE_WORKFLOW).read_text())
+
+    def test_actual_source_caller_runs_policy_and_mutants(self):
+        policy.validate_source_caller(self.doc)
+
+    def reject(self, mutate):
+        doc = copy.deepcopy(self.doc)
+        mutate(doc)
+        with self.assertRaises(policy.Refused): policy.validate_source_caller(doc)
+
+    def test_every_input_remains_in_both_trigger_sets(self):
+        for event in ['pull_request', 'push']:
+            for index in range(5):
+                with self.subTest(event=event, index=index):
+                    self.reject(lambda d: d['on'][event]['paths'].pop(index))
+        self.reject(lambda d: d['on'].update(workflow_dispatch=None))
+        self.reject(lambda d: d['on']['push'].update(branches=['other']))
+
+    def test_source_caller_cannot_gain_protected_or_write_capabilities(self):
+        for field, value in [('environment', 'callable-isolated-operation'),
+                             ('env', {'GH_TOKEN': '${{ github.token }}'}),
+                             ('permissions', {'contents': 'write'}),
+                             ('secrets', 'inherit'), ('uses', 'owner/repo/workflow@main')]:
+            with self.subTest(field=field):
+                self.reject(lambda d: d['jobs']['inert-source-controls'].update({field: value}))
+        self.reject(lambda d: d.update(permissions={'id-token': 'write'}))
+
+    def test_source_caller_cannot_skip_controls_or_add_effects(self):
+        for command in ['true', 'dotnet fsi native.fsx', 'gh workflow run effect.yml']:
+            with self.subTest(command=command):
+                self.reject(lambda d: d['jobs']['inert-source-controls']['steps'][2].update(run=command))
+        self.reject(lambda d: d['jobs']['inert-source-controls']['steps'].append({'run': 'true'}))
+        self.reject(lambda d: d['jobs']['inert-source-controls']['steps'][0].update(uses='actions/checkout@v7'))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

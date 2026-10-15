@@ -9,6 +9,7 @@ import sys
 import yaml
 
 WORKFLOW = '.github/workflows/release-successor-authenticate.yml'
+SOURCE_WORKFLOW = '.github/workflows/release-successor-authenticate-source.yml'
 JOB = 'original-103-authentication'
 GUARD = "${{ false && github.event_name == 'workflow_dispatch' && github.repository == 'FS-GG/.github' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && github.run_attempt == 1 }}"
 CHECKOUT = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
@@ -80,12 +81,44 @@ def validate(doc: dict) -> None:
                          'run': REFUSAL}, 'terminal path must only refuse native authentication')
 
 
+def validate_source_caller(doc: dict) -> None:
+    """The ordinary CI caller cannot inherit the protected job's capabilities."""
+    paths = [WORKFLOW, SOURCE_WORKFLOW, '.github/actions/setup-policy-python/**',
+             'scripts/check-release-successor-authenticate.py',
+             'tests/release-successor-authenticate/**']
+    require(set(doc) == {'name', 'on', 'permissions', 'jobs'}, 'extra source caller surface')
+    require(doc['name'] == 'release-successor-authenticate-source', 'source caller identity differs')
+    require(doc['on'] == {'pull_request': {'paths': paths},
+                         'push': {'branches': ['main'], 'paths': paths}},
+            'source controls must cover every input on PR and protected push only')
+    require(doc['permissions'] == {'contents': 'read'}, 'source workflow permissions differ')
+    require(isinstance(doc['jobs'], dict) and set(doc['jobs']) == {'inert-source-controls'},
+            'source caller job population differs')
+    job = doc['jobs']['inert-source-controls']
+    require(isinstance(job, dict) and set(job) ==
+            {'runs-on', 'timeout-minutes', 'permissions', 'steps'},
+            'source caller cannot select a protected environment, credentials or native job')
+    require(job['runs-on'] == 'ubuntu-24.04' and type(job['timeout-minutes']) is int
+            and job['timeout-minutes'] == 5, 'source caller runner or budget differs')
+    require(job['permissions'] == {'contents': 'read'}, 'source job permissions differ')
+    require(job['steps'] == [
+        {'uses': CHECKOUT, 'with': {'ref': '${{ github.sha }}', 'fetch-depth': 1,
+                                  'persist-credentials': False}},
+        {'uses': './.github/actions/setup-policy-python'},
+        {'name': 'Check inactive policy and rejection controls without native execution',
+         'env': {'PYTHONDONTWRITEBYTECODE': '1'},
+         'run': 'python3 scripts/check-release-successor-authenticate.py\n'
+                'python3 tests/release-successor-authenticate/run.py\n'},
+    ], 'source caller must run only maintained Python controls through pinned source')
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('workflow', nargs='?', default=WORKFLOW)
     args = parser.parse_args()
     try:
         validate(parse(pathlib.Path(args.workflow).read_text()))
+        validate_source_caller(parse(pathlib.Path(SOURCE_WORKFLOW).read_text()))
     except (Refused, OSError, yaml.YAMLError, TypeError) as error:
         print('Inactive authentication workflow refused: ' + str(error), file=sys.stderr)
         return 1
