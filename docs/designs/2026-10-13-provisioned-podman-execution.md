@@ -120,6 +120,32 @@ Host .NET, Node, Rust, Go and framework source checkouts are not development-ima
 
 A developer supplies the workspace/source inputs and a supported profile selection. The provisioner owns temporary storage setup and teardown; an explicit bootstrap/install route checks and reports unmet host prerequisites rather than attempting to grant its own privileges. A missing required capability blocks that dependent launch, while independent source work remains available.
 
+### Unattended normal use acceptance gate
+
+After one-time authorized host setup and installation, normal V3 use must have no human
+host-agent dependency. The installed provisioner and launcher must automatically allocate
+fresh operation-bound storage, bind it before workload release, launch the selected workspace,
+and perform scoped teardown and worker-loss recovery through the existing authority and
+operation records. A normal run or its failure recovery must not require a person or host agent
+to issue per-run host commands, relay evidence, approve allocation or cleanup, or repair state.
+The developer still selects declared workspace inputs and invokes the installed entrypoint.
+
+One-time setup may establish prerequisites, trust and the installed qualified profile. Routine
+operation thereafter must validate current prerequisites and refuse unavailable capabilities
+without requesting a manual host-agent fallback. Recovery retains original identities, deadlines,
+export obligations and unresolved cleanup. When safe completion cannot be established, the
+installed path must report bounded `Incomplete` or `Unknown` and retain the hold automatically;
+unattended operation does not permit unsafe deletion or an invented successful recovery.
+Exceptional operator repair cannot count as a successful unattended acceptance case.
+
+Acceptance requires genuine installed observations of fresh allocation/binding, normal completion
+and teardown, and worker-loss recovery with the human host-agent channel absent. Include
+provisioner restart and supported host-reboot reconciliation in the selected recovery population.
+Manual pilots, reviewed source, pure fixtures and source/evidence handoffs are preparation evidence;
+they cannot close this gate or V3-ENV-01. This is the user's
+[normal-use requirement](https://github.com/FS-GG/.github/issues/4516#issuecomment-6193108499),
+not a claim that the installed lifecycle is already available.
+
 ### Workspace materialization
 
 Templates/SDD materialize the selected image/profile reference, toolchain versions, component build/test entrypoints and applicable launch/storage requirements into a workspace's existing versioned declaration. If the current schema lacks a necessary field, propose an additive change through its owner; these names are conceptual requirements, not newly implemented schema keys. A generated Dev Container configuration can offer editor integration, but it cannot grant host capabilities or override the provisioned profile.
@@ -369,6 +395,7 @@ The following proposed matrix is grouped for reuse. Actual case selection, budge
 | Caller/owner failure | Lost channel, caller crash, supervisor crash, conmon/runtime failure, ambiguous launch response | Independent cleanup/reconciliation using the same operation; no duplicate retry |
 | Recovery | Receiver/container restart, interrupted durable intent, duplicate receipt, host reboot, expired evidence | Exact original-effect recovery; no renewed deadline or reconstructed historical fact |
 | Completion | Exit0 with inherited writer, zombie children, payload empty with live helper, removal failure, unreadable scope | Separate exit/EOF/empty/reap/resource facts; no false Complete |
+| Unattended installed lifecycle | Fresh allocate/bind/launch/teardown, worker loss, provisioner restart and supported reboot with no human host-agent channel | Installed provisioner/launcher completes safely or retains bounded Incomplete/Unknown; manual intervention cannot satisfy this gate |
 | Installed matrix | .NET/F#/Python and selected TypeScript/Rust/Go; mixed/no-.NET; missing tools and real serialization | Common profile proof plus each actual toolchain/entrypoint and distinct failure path |
 | Publication/adoption | Public image/package acquisition, cold install, two cold LEARN images where required, retaining upgrade, rollback | Published bytes and genuine receiver evidence; no repository-source fallback |
 | Telemetry | Receiver ingest/reopen/replay/conflict, resource samples missing, event loss, correction and duplicate delivery | Explicit provenance/coverage; no inferred causal wait, token cost or savings |
