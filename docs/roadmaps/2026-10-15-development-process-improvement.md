@@ -2,7 +2,7 @@
 
 Identity: **V3-IMPROVE-01**. Selected: **2026-10-15**.
 Owner: `.github` programme maintainer with Coordination and the selected diagnostic/receiver owners.
-Status: **design selected; three bounded implementation changes remain open**.
+Status: **implementation underway; all three selected adoption/evaluation outcomes remain open**.
 Parent: [Unified Roadmap v3](2026-10-07-unified-development-roadmap-v3.md#2-open-work-and-owning-plans).
 Design: [development process improvement](../designs/2026-10-15-development-process-improvement.md).
 
@@ -16,7 +16,8 @@ unknown effects, false passes or unowned work. Inconclusive data stays explicit.
 This is a finite improvement lane, not a new execution or telemetry framework. V2-CTX, V2-EFF,
 V2-PROC and V2-DIAG retain their own implementation and acceptance authority. The design's historical
 baseline ends at **2026-10-15 08:16:54 UTC**; later source or operational acceptance must be refreshed.
-No skill/runtime implementation, package publication or pilot execution is completed by this plan.
+The selected plan alone completed no implementation. The partial source and pilot evidence below
+records later delivery without implying package publication, installed adoption or comparative benefit.
 
 ## Change 1 — capacity and final-candidate preflight
 
@@ -90,6 +91,12 @@ Retain the preflight correctness change with **inconclusive economics**; this is
 The .1 checkbox remains open: this evidence establishes one bounded local profile and partial source
 adoption, not two-workload acceptance, cross-repository evaluation or selected installed adoption.
 
+[PR #4533](https://github.com/FS-GG/.github/pull/4533) subsequently delivered the bounded capacity
+admission guidance and this evidence record on protected main at
+`3c5589e81a8cb70cd0b8e5c681bf0046605724a6`. Its exact final head passed required hosted checks,
+including Atlas and semantic skill quality. It did not admit a second workload or resolve the cohort
+comparison, so the .1 acceptance boundary above is unchanged.
+
 ## Change 2 — finish V2-DIAG-01.4 adoption
 
 **V3-IMPROVE-01.2** is the integration join to
@@ -134,16 +141,33 @@ coherence using the existing source-of-truth route. Make `show-progress` compact
 coverage and linked detailed evidence. Preserve meaningful changes, blockers, complications,
 expectations, estimate bases and unknowns; remove duplicated narrative rather than outcome rows.
 
-Before overlapping edits, inspect and reconcile the six existing local `show-progress` modifications
-in both skill roots: `SKILL.md`, `references/estimation-method.md` and
-`references/report-template.md`. This docs delivery preserves them untouched. Keep the user's
-coverage/estimation intent and separate unrelated work; do not assume the local edits are already delivered.
+The source implementation reconciled the six existing local `show-progress` modifications in both skill
+roots: `SKILL.md`, `references/estimation-method.md` and `references/report-template.md`. Preserve the
+accepted coverage and estimation intent in any later consumer or report changes.
 
 Acceptance: applicable reference traversal and mirror/registry checks pass; representative ordinary
 and cross-repository work retains authority, evidence and original failures. A compact sample report
 covers the full selected population and supports comparison with the prior report without fabricated
 aggregate progress or savings. Verify installed carrier adoption wherever delivery changes packaged
 skills. Record report size and actual effort/usage coverage separately.
+
+### Partial source evidence — 15 October, 10:48 UTC
+
+[PR #4532](https://github.com/FS-GG/.github/pull/4532) delivered the `pnext-item` and `work-roadmap`
+entrypoint simplification on protected main at `42ce800441d45b1b045cc17478ca306eb4db9fbf`.
+The strict, heavyweight, first-install and observed-runtime obligations remain in linked references;
+the mirrored skill manifests and hosted semantic checks passed. This is source and carrier-input delivery,
+not publication or installed receiver adoption.
+
+[PR #4534](https://github.com/FS-GG/.github/pull/4534) delivered the compact `show-progress` guidance
+on protected main at `f311f0d9d3d89639390243372289c03d8dc6d88d`. A bounded sample covered
+all 19 selected outcomes (two done, seventeen open) and measured 33,116 bytes against the prior
+115,056-byte report. Different report populations and missing effort/usage coverage prevent a savings
+claim. `show-progress` is repository-native; no package release follows from that edit alone.
+
+The .3 checkbox remains open pending the coherent skill-carrier release and installed receiver
+readback, ordinary and cross-repository use, and the selected cohort comparison. The source changes
+do not close the diagnostic or capacity outcomes.
 
 ## Cohort evaluation and closure
 
