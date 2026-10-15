@@ -30,6 +30,7 @@ def audit(event, args):
 sys.addaudithook(audit)
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import release_successor_provider as provider
 import release_successor_auth_consumer as consumer
 import release_successor_journal as journal
@@ -663,7 +664,10 @@ class ProtocolControls(unittest.TestCase):
         with self.assertRaises(provider.Refused): consumer.InertStartConsumer(bound)
 
 
-def contract_bundle_digest():
+def contract_bundle_digest(profile="factory"):
+    if profile != "factory":
+        from callback_pair_profile import select
+        return select(ROOT, profile)[0]["bundleDigest"]
     import hashlib
     manifest = json.loads((ROOT / 'tests/release-successor-authentication/callable-source-manifest.json').read_bytes())
     rows = sorted(manifest['files'], key=lambda row: row['repository'] + '/' + row['path'])
@@ -676,12 +680,12 @@ def contract_bundle_digest():
     return digest
 
 
-def protocol_vectors():
+def protocol_vectors(profile="factory"):
     import hashlib
     with tempfile.TemporaryDirectory() as root:
         channel = RetainedChannel(root)
         # Deterministic fixture identities/timestamps, never an observed invocation.
-        channel.binding['source']['contract'] = contract_bundle_digest()
+        channel.binding['source']['contract'] = contract_bundle_digest(profile)
         opener = Opener()
         opener.rows[3]['expires_at'] = '2030-03-17T18:16:40Z'
         child = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123,
@@ -694,6 +698,29 @@ def protocol_vectors():
                 'profile': provider.AUTH_PROFILE, 'mode': 'inert',
                 'frameBytes': [len(x) for x in channel.frames]}
 
+
+
+def callback_pair_vectors(profile='inert-callback-pair'):
+    from callback_pair_profile import select
+    select(ROOT, profile)  # Verify the selected source before running the producer.
+    vectors = protocol_vectors(profile)
+    control = CallbackOwnerControls()
+    with tempfile.TemporaryDirectory() as root:
+        owner = control.prepared(root, vectors['binding'])
+        exchanges = []
+        def exchange(request):
+            exchanges.append({'request': request.hex(), 'response': owner.handle(request).hex()})
+        exchange(control.request(vectors['binding'], 1, 'bind'))
+        for index, rawhex in enumerate(vectors['children']):
+            raw = bytes.fromhex(rawhex)
+            phase = provider.decode_auth_frame(raw)
+            for offset, kind in ((2, 'validate'), (3, 'retain')):
+                exchange(control.request(vectors['binding'], index * 2 + offset, kind, raw, phase))
+        projection = json.loads(control.path.read_bytes())['authenticationSession']
+        return {'schema': 'fsgg.authentication-callback-vectors/1',
+                'qualification': 'inert callback pairing only; actual Python provider/owner/sink; managed hosted join pending',
+                'binding': vectors['binding'], 'exchanges': exchanges,
+                'finalReadback': {key: projection[key] for key in ('binding', 'ordinal', 'frameDigest')}}
 
 
 class CallbackOwnerControls(unittest.TestCase):
@@ -1221,6 +1248,83 @@ class SelectedOriginalFactoryControls(unittest.TestCase):
             for step in ('Mint the ordinary protected-journal writer token', 'Exchange nuget.org trusted publishing identity'):
                 self.assertLess(guard, workflow.index(step))
             self.assertIn('if: inputs.recover_original_0103_tag_intent == true', workflow[:guard])
+
+
+
+class CallbackPairProfileControls(unittest.TestCase):
+    def test_callback_pair_profile_closed_selection_and_twelve_roles(self):
+        import callback_pair_profile as pair
+        manifest, vectors = pair.select(ROOT, pair.PROFILE)
+        self.assertEqual(len(manifest['files']), 12)
+        self.assertEqual(manifest['bundleDigest'], contract_bundle_digest(pair.PROFILE))
+        self.assertEqual(vectors.name, 'callback-pair-vectors.json')
+        for profile in ('factory', '', '../callback-pair-manifest.json', 'native'):
+            with self.subTest(profile=profile), self.assertRaises(ValueError):
+                pair.select(ROOT, profile)
+        mutations = []
+        default = json.loads((ROOT / 'tests/release-successor-authentication/callable-source-manifest.json').read_bytes())
+        mutations.append(default)
+        for key, value in (('ownerBase', '0' * 40), ('producerRevision', '0' * 40),
+                           ('bundleDigest', '0' * 64), ('schema', 'unknown')):
+            changed = copy.deepcopy(manifest); changed[key] = value; mutations.append(changed)
+        for files in (manifest['files'][:-1], manifest['files'] + manifest['files'][:1],
+                      list(reversed(manifest['files']))):
+            changed = copy.deepcopy(manifest); changed['files'] = files; mutations.append(changed)
+        changed = copy.deepcopy(manifest); changed['files'][0]['sha256'] = '0' * 64; mutations.append(changed)
+        for changed in mutations:
+            with self.subTest(mutation=changed), patch.object(pathlib.Path, 'read_bytes', return_value=json.dumps(changed).encode()):
+                with self.assertRaises(ValueError): pair.select(ROOT, pair.PROFILE)
+        duplicate = json.dumps(manifest)[:-1] + ', "ownerBase": "' + pair.OWNER + '"}'
+        with patch.object(pathlib.Path, 'read_bytes', return_value=duplicate.encode()):
+            with self.assertRaises(ValueError): pair.select(ROOT, pair.PROFILE)
+
+    def test_callback_pair_profile_refuses_each_wrong_local_source(self):
+        import callback_pair_profile as pair
+        original = pathlib.Path.read_bytes
+        for source in pair.GITHUB_ROLES:
+            def altered(path):
+                raw = original(path)
+                return raw + b'\n# wrong source control\n' if path == ROOT / source else raw
+            with self.subTest(source=source), patch.object(pathlib.Path, 'read_bytes', altered):
+                with self.assertRaisesRegex(ValueError, 'source mismatch'):
+                    callback_pair_vectors()
+
+    def test_callback_pair_vectors_regenerate_actual_producer_owner_and_sink(self):
+        import callback_pair_profile as pair
+        _, path = pair.select(ROOT, pair.PROFILE)
+        frozen = json.loads(path.read_bytes())
+        self.assertEqual(callback_pair_vectors(), frozen)
+        self.assertEqual(len(frozen['exchanges']), 13)
+        self.assertEqual(frozen['finalReadback']['ordinal'], 6)
+        # A genuine default-factory callback request cannot enter the paired owner.
+        control = CallbackOwnerControls()
+        default = protocol_vectors()
+        with tempfile.TemporaryDirectory() as root:
+            owner = control.prepared(root, frozen['binding'])
+            with self.assertRaises(provider.Refused):
+                owner.handle(control.request(default['binding'], 1, 'bind'))
+            self.assertFalse(control.path.exists())
+
+    def test_callback_pair_fixture_entry_uses_exact_fixed_vectors(self):
+        import base64
+        import runpy
+        import callback_pair_profile as pair
+        _, path = pair.select(ROOT, pair.PROFILE)
+        vectors = json.loads(path.read_bytes())
+        fixture = runpy.run_path(str(ROOT / 'tests/release-successor-authentication/callback-fixture.py'), run_name='callback_pair_fixture_unit')
+        requests = b''.join(bytes.fromhex(row['request']) for row in vectors['exchanges'])
+        expected = b''.join(bytes.fromhex(row['response']) for row in vectors['exchanges'])
+        output = io.BytesIO()
+        with tempfile.TemporaryDirectory() as root:
+            result = pathlib.Path(root) / 'pair-result.json'
+            arguments = ['callback-fixture.py', base64.b64encode(provider._auth_canonical(vectors['binding'])).decode(),
+                         base64.b64encode(provider._auth_canonical(vectors['binding']['clock'])).decode(), str(result)]
+            with patch.object(sys, 'argv', arguments), patch.object(sys, 'stdin', types.SimpleNamespace(buffer=io.BytesIO(requests))), \
+                 patch.object(sys, 'stdout', types.SimpleNamespace(buffer=output)):
+                self.assertEqual(fixture['main'](), 0)
+            self.assertEqual(output.getvalue(), expected)
+            projection = json.loads(result.read_bytes())['authenticationSession']
+            self.assertEqual({key: projection[key] for key in vectors['finalReadback']}, vectors['finalReadback'])
 
 
 def load_tests(loader, tests, pattern):
