@@ -105,6 +105,17 @@ identities and preservation of original pins; the current ready ABI must fit its
 simultaneous-copy bound: two extra 1,024-byte control copies would raise 64,000 to 66,048
 bytes and refuse admission. Diagnostic/raw-receipt reads must stay distinct from a
 replacement effect gate, and ambiguous-write/loss/expiry states need counted encodings.
+The [exact source-join review](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200296350)
+also distinguishes the closed legacy child ACK (`b,h,k,n,v` plus BE-u32 framing) from
+the external signed ACK. Its proposed size does not prove child-ABI compatibility.
+The trusted persistence/readback callback must authenticate issuer, descriptor, frame,
+ordinal, purpose and original clock before returning typed readback; three echoed fields
+cannot prove independent authority. Preserve `TakeAck`/`ConfirmAckSent` one-use,
+full-write and cutoff checks. Start/ready must include the exact child binding and fit
+2,048 bytes including framing and wrappers. The 4,096-byte external descriptor slot
+cannot replace that binding: freeze their authenticated relationship and supply complete
+maximum wrapped vectors without removing required original fields.
+
 Actual signer custody and independent enrollment, backend barrier/fresh exact readback,
 authenticated original-clock continuity/uncertainty, and independent loss observation
 remain unqualified. SystemAdmin owes those host/trust proofs; the UTEL source owner owes

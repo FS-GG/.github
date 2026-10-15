@@ -1066,6 +1066,13 @@ original-pin compatibility, ready ABI fit within 2,048 bytes, and the peer's act
 irreversible-control algorithm/simultaneous-copy bound. Two extra 1,024-byte control
 copies would yield 66,048 bytes and refuse admission. Diagnostic/raw-receipt reads cannot
 become replacement gates; ambiguous-write/loss/expiry encodings remain counted obligations.
+The [source-join review](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200296350)
+adds two exact obligations: the closed legacy child ACK (`b,h,k,n,v` plus BE-u32 framing)
+remains distinct from the external signed ACK, joined through authenticated trusted
+persistence/readback and preserved `TakeAck`/`ConfirmAckSent` one-use/full-write/cutoff
+checks. Full wrapped start/ready frames must fit 2,048 bytes with their exact child
+binding. The 4,096-byte external descriptor cannot replace it; its authenticated binding
+relationship and complete maximum wrapped vectors remain unproved.
 Actual custody/enrollment, backend barrier/fresh exact readback, original-clock continuity
 and uncertainty, and independent loss evidence remain unqualified. The UTEL source owner
 owes the closed consumer/descriptor/copy join; SystemAdmin owns host/trust proof. Existing
