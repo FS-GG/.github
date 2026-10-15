@@ -49,6 +49,8 @@ spawn a worker or save a report unless the user invokes reporting or requests sa
    comparison when its cutoff differs. Keep
    games and conditional scope separate unless selected. Use stable feature IDs, owners,
    acceptance boundaries and original operation identities; do not hard-code a row count.
+   Give every selected outcome one current-state row, including done, blocked, unchanged
+   and poorly observed outcomes. Compare the selected IDs with the table before saving.
 3. Record one UTC `as_of` cutoff, window start, generation time and display timezone.
    Read the current roadmap, relevant owning-plan sections, accepted owner evidence and
    existing native results. Use available read-only sources for material current claims.
@@ -81,8 +83,9 @@ For every in-scope item provide:
 - **Accepted status:** completed acceptance assertions and the remaining boundary; distinguish
   source, qualification, publication, installed use, activation and whole-outcome closure.
 - **Readiness:** a supported percentage/range with its method, denominator, weights and
-  confidence; preserve formal Done separately. Use an explicitly provisional judgement
-  range when evidence supports only a rough estimate, or unknown when it supports neither.
+  confidence; preserve formal Done separately. Use a numerical readiness range only with
+  existing native acceptance units and a defensible denominator; otherwise give a qualitative provisional judgement with its
+  rationale/confidence, or unknown. Do not create weights solely to fill the report.
 - **Change:** previous/current readiness and percentage-point movement on the same scope;
   separate delivered progress from changed scope, corrected evidence and revised weights.
 - **Effort:** original total baseline, previous total forecast, current remaining effort,
@@ -140,15 +143,24 @@ draft, local save or another narrower scope. For an ordinary chat question, answ
 unless saving is requested; automatic skill selection alone does not authorize saving or
 landing. A request to modify this skill does not itself invoke reporting or schedule automation.
 
-Use [report-template.md](references/report-template.md) for the saved report. Fill every
-selected item; use explicit unknown/not-applicable states instead of silently omitting
-inconvenient fields. Open with process health against expectations and material pathologies,
-then show concrete changes since the previous report, work done overall, and remaining
-tasks, effort/complexity and health in the main table. Put optional readiness
-percentages and detailed evidence in item sections; do not fill the overview with repeated
-“Unknown → Unknown” cells. Summarize shared evidence gaps once while retaining item-specific
-uncertainty beside the affected claim. Include a visible complications and churn summary
-and the development process recommendations verdict.
+Use [report-template.md](references/report-template.md) for the saved report. Open with a
+brief process-health verdict against expectations, then one current-state table with one
+row per selected outcome. Each row carries accepted capability and remaining acceptance
+boundary, meaningful change, remaining work/blocker, comparable effort and completion
+forecast, health/confidence and evidence links. Link the previous report visibly.
+
+Expand only changed claims or material exceptions: expectation or scope changes,
+complications, recurring failures, unknown effects and estimates needing explanation.
+Do not repeat an outcome's history, accepted work or forecast in multiple sections.
+Unchanged rows still state current acceptance and evidence freshness; link prior detail
+without treating a historical observation as a fresh check. Record shared evidence gaps
+and assumptions once with named affected IDs; rows reference those gaps and retain their
+specific uncertainty. An explicit shared unknown applies to each named item; silence does
+not. Preserve every applicable estimation field through a row, shared statement or linked
+exception. Metrics require native observations, a defined denominator and coverage; omit
+unsupported ratios and mark missing measurements unknown. Report bytes alone prove no
+cost or effort saving. Retain the development process recommendations verdict once;
+link any shared cause instead of repeating it in item details.
 
 Save as `docs/reports/progressReports/YYYY-MM-DD-HHMMSSZ-unified-v3-progress.md`, using the
 actual generation UTC time. Create the directory if absent. Use exclusive creation; on
