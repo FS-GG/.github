@@ -98,6 +98,24 @@ provisioning advances do not accept a receiver native pilot, measured storage be
 containment, publication, installed adoption or portability. The earlier failed attempts, held
 allocations and Unknown retirement remain unchanged. Whole-item Done remains No.
 
+## Receiver admission source precursor — 2026-10-15
+
+[Coordination #996](https://github.com/FS-GG/FS.GG.Coordination/pull/996) is protected at
+`791bd37b6bf106edbe85e6e65a918a55cb2c2fc8`. Its partial, inert receiver model binds pending
+challenge purposes, copies and bounds retained transcripts, and stages source-only v2 drafts under
+the existing journal key while retaining v1 readers. Disk durability remains `Unknown`; ACK
+preparation and production host handoff always refuse. Hosted focused checks passed 27 allocation
+and 33 executor cases, including sixteen new fake-only cases, and full required/coherent gates passed.
+The original compiler failures and test-selector omission remain retained.
+
+Exact-envelope authentication/provenance and original-byte joins, ACK checkpoint semantics, durable
+crash-cut admission, once-only production handoff and the complete replay/v1 compatibility matrix
+remain open. The host owns its unattended adapter/controller/reconciler; Coordination owns receiver
+trust and durable admission. No installed unattended endpoint, host-backed native use, teardown,
+worker-loss recovery or earlier pilot retirement is accepted. Source fixtures run in the SSD-hosted
+workspace and establish no timing result for the distinct HDD storage pool. V3-ENV-01 remains
+incomplete and its unattended normal-use gate stays open.
+
 ## Delivery milestones
 
 - [ ] **V3-ENV-01.1 — Freeze the profile, storage baseline and finite pilot population.**
