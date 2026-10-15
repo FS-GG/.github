@@ -719,54 +719,72 @@ def run_original_tag_recovery(manifest, journal, admission, provider, ledger_api
         require(guarded.compare_and_swap(current, "tag", "verified"), "original tag settlement CAS conflict")
         report["originalTagRecovery"]["branch"] = "matched-one-settlement-no-send"
         return "checkpoint"
-    transport = factory()  # Native factory unavailable: this branch refuses before any tag send.
-    require(type(transport) is VerifiedOriginalTagTransport, "original tag verified transport unavailable")
-    capability = transport.identity()
+    # Refuse original-byte/admission changes BEFORE the credential factory is entered.
     candidate = verify_candidate()
-    require(candidate == {"contentId": ORIGINAL_0103_CANDIDATE["contentId"],
-                          "archiveSha256": ORIGINAL_0103_CANDIDATE["archiveSha256"],
-                          "manifestSha256": ORIGINAL_0103_CANDIDATE["manifestSha256"]},
-            "original tag candidate binding changed")
-    require(admission.authorize(manifest["contentId"], "tag", "dispatch", effect.request_digest),
-            "original tag uncertainty dispatch admission denied")
+    require(candidate == {key: ORIGINAL_0103_CANDIDATE[key]
+                          for key in ('contentId', 'archiveSha256', 'manifestSha256')},
+            'original tag pre-credential candidate binding changed')
+    guarded.read()
+    require(clock() < deadline and admission.authorize(manifest['contentId'], 'tag', 'dispatch', effect.request_digest),
+            'original tag pre-credential admission denied')
     ledger_api.admit_quota()
     require(authority_main(ledger_api) == physical and clock() < deadline
             and sum(ledger_api.attempted.values()) < ORDINARY_AUTHORITY_CALL_CEILING
-            and ledger_api.quota is not None and ledger_api.quota["reset"] > time.time(),
-            "original tag current physical head/quota/deadline changed")
-    record = {"schema": "fsgg.original-tag-intent-attempt/1", "profile": ORIGINAL_0103_TAG_PROFILE,
-              "execution": report.get("execution"), "original": original, "candidate": candidate,
-              "journal": {"logicalHead": observed.head, "physicalHead": physical, "generation": 2,
-                          "stateSHA256": ORIGINAL_0103_TAG_CHECKPOINT["stateSHA256"]},
-              "request": {"method": "POST", "path": f"repos/{REPOSITORY}/git/refs",
-                          "ref": "refs/tags/coherent-set/v0.103.0", "sha": ORIGINAL_0103_CANDIDATE["sourceSha"],
-                          "requestDigest": effect.request_digest}, "capabilityIdentity": capability,
-              "historicalNonDispatchProved": False, "globalOnceClaim": False, "maxDispatchesThisInvocation": 1}
-    write_kit_repeat_attempt(attempt_path, record)
-    report["originalTagRecovery"]["attemptRecord"] = {"path": str(attempt_path),
-        "sha256": hashlib.sha256(attempt_path.read_bytes()).hexdigest()}
-    guarded.read()
-    require(verify_candidate() == candidate and transport.identity() == capability,
-            "original tag candidate/capability moved before send")
-    require(exact_original_tag_observation(publisher_api) == "absent",
-            "original tag appeared before the explicit create")
-    require(admission.authorize(manifest["contentId"], "tag", "dispatch", effect.request_digest)
-            and authority_main(ledger_api) == physical and clock() < deadline
-            and sum(ledger_api.attempted.values()) < ORDINARY_AUTHORITY_CALL_CEILING
-            and ledger_api.quota is not None and ledger_api.quota["reset"] > time.time(),
-            "original tag final source/physical/deadline admission denied")
-    publisher_api.claim("tagPost")
-    report["originalTagRecovery"]["branch"] = "one-explicit-create-no-settlement"
-    report["lastDispatch"] = {"effect": "tag", "attempted": True, "state": "unknown"}
-    outcome = transport.dispatch(effect, deadline, clock)
-    report["lastDispatch"]["state"] = outcome.state
-    try:
-        diagnostic = sanitized_dispatch_diagnostic({"category": "protocol-failure", "request": transport.last_dispatch_diagnostic})
-    except BaseException:
-        diagnostic = {"diagnosticUnavailable": True}
-    if diagnostic is not None:
-        report["lastDispatch"]["diagnostic"] = diagnostic
-    return "checkpoint"  # No journal mutation or second effect after the sole send, including201.
+            and ledger_api.quota is not None and ledger_api.quota['reset'] > time.time(),
+            'original tag pre-credential physical head/quota/deadline changed')
+    # Factory acquisition AND all later candidate/quota/record/send/report paths
+    # are inside one lexical owner; no returned live token outlives this scope.
+    lease = factory()  # Native factory still refuses before acquisition.
+    require(callable(getattr(lease, '__enter__', None)) and callable(getattr(lease, '__exit__', None)),
+            'original tag factory requires an owned credential lease')
+    with lease as transport:
+        require(type(transport) is VerifiedOriginalTagTransport, "original tag verified transport unavailable")
+        capability = transport.identity()
+        candidate = verify_candidate()
+        require(candidate == {"contentId": ORIGINAL_0103_CANDIDATE["contentId"],
+                              "archiveSha256": ORIGINAL_0103_CANDIDATE["archiveSha256"],
+                              "manifestSha256": ORIGINAL_0103_CANDIDATE["manifestSha256"]},
+                "original tag candidate binding changed")
+        require(admission.authorize(manifest["contentId"], "tag", "dispatch", effect.request_digest),
+                "original tag uncertainty dispatch admission denied")
+        ledger_api.admit_quota()
+        require(authority_main(ledger_api) == physical and clock() < deadline
+                and sum(ledger_api.attempted.values()) < ORDINARY_AUTHORITY_CALL_CEILING
+                and ledger_api.quota is not None and ledger_api.quota["reset"] > time.time(),
+                "original tag current physical head/quota/deadline changed")
+        record = {"schema": "fsgg.original-tag-intent-attempt/1", "profile": ORIGINAL_0103_TAG_PROFILE,
+                  "execution": report.get("execution"), "original": original, "candidate": candidate,
+                  "journal": {"logicalHead": observed.head, "physicalHead": physical, "generation": 2,
+                              "stateSHA256": ORIGINAL_0103_TAG_CHECKPOINT["stateSHA256"]},
+                  "request": {"method": "POST", "path": f"repos/{REPOSITORY}/git/refs",
+                              "ref": "refs/tags/coherent-set/v0.103.0", "sha": ORIGINAL_0103_CANDIDATE["sourceSha"],
+                              "requestDigest": effect.request_digest}, "capabilityIdentity": capability,
+                  "historicalNonDispatchProved": False, "globalOnceClaim": False, "maxDispatchesThisInvocation": 1}
+        write_kit_repeat_attempt(attempt_path, record)
+        report["originalTagRecovery"]["attemptRecord"] = {"path": str(attempt_path),
+            "sha256": hashlib.sha256(attempt_path.read_bytes()).hexdigest()}
+        guarded.read()
+        require(verify_candidate() == candidate and transport.identity() == capability,
+                "original tag candidate/capability moved before send")
+        require(exact_original_tag_observation(publisher_api) == "absent",
+                "original tag appeared before the explicit create")
+        require(admission.authorize(manifest["contentId"], "tag", "dispatch", effect.request_digest)
+                and authority_main(ledger_api) == physical and clock() < deadline
+                and sum(ledger_api.attempted.values()) < ORDINARY_AUTHORITY_CALL_CEILING
+                and ledger_api.quota is not None and ledger_api.quota["reset"] > time.time(),
+                "original tag final source/physical/deadline admission denied")
+        publisher_api.claim("tagPost")
+        report["originalTagRecovery"]["branch"] = "one-explicit-create-no-settlement"
+        report["lastDispatch"] = {"effect": "tag", "attempted": True, "state": "unknown"}
+        outcome = transport.dispatch(effect, deadline, clock)
+        report["lastDispatch"]["state"] = outcome.state
+        try:
+            diagnostic = sanitized_dispatch_diagnostic({"category": "protocol-failure", "request": transport.last_dispatch_diagnostic})
+        except BaseException:
+            diagnostic = {"diagnosticUnavailable": True}
+        if diagnostic is not None:
+            report["lastDispatch"]["diagnostic"] = diagnostic
+        return "checkpoint"  # No journal mutation or second effect after the sole send, including201.
 
 
 class ReportingJournal:
@@ -1652,7 +1670,9 @@ def authentication_only_main():
     qualification alone does not select that owner or admit credential effects.
     """
     parser = argparse.ArgumentParser(description="Inactive original-tag authentication-only qualification")
-    parser.add_argument("--qualify-original-tag-authentication-only", action="store_true", required=True)
+    selection = parser.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--qualify-original-tag-authentication-only", action="store_true")
+    selection.add_argument("--refuse-original-tag-factory-inactive", action="store_true")
     parser.add_argument("--result-path", type=pathlib.Path, required=True)
     args = parser.parse_args()
     report = {"schema": "fsgg.release-successor-result/1",
@@ -1661,12 +1681,17 @@ def authentication_only_main():
               "publicationComplete": False, "credentialAcquisitionAttempted": False,
               "publicationEffects": {"tag": 0, "journal": 0, "feed": 0, "release": 0, "asset": 0, "channel": 0},
               "cleanup": "not-issued", "failure": "accountable-owner-and-native-custody-qualification-required"}
+    if args.refuse_original_tag_factory_inactive:
+        report.update(profile=ORIGINAL_0103_TAG_PROFILE,
+            disposition='blocked-original-tag-factory-native-inactive',
+            failure='native-factory-ingress-custody-and-effect-admission-required')
     write_result(args.result_path, report)
     return 1
 
 
 def main() -> int:
-    if "--qualify-original-tag-authentication-only" in sys.argv[1:]:
+    if any(flag in sys.argv[1:] for flag in ("--qualify-original-tag-authentication-only",
+                                             "--refuse-original-tag-factory-inactive")):
         return authentication_only_main()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate-run-id", required=True, type=int)

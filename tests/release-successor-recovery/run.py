@@ -8,6 +8,7 @@ are used without importing the existing subprocess-based journal test runner.
 """
 
 import base64
+from contextlib import contextmanager
 import copy
 import hashlib
 import io
@@ -2034,6 +2035,13 @@ class Original0103Controls(unittest.TestCase):
             return native_get(path)
         self.native_get = get
         self.native.download_original_tag_result = lambda: raw
+        # The byte proof now precedes factory acquisition, so the synthetic
+        # provider exposes the actual retained fixture inputs it is asked to use.
+        self.provider.root = self.root
+        self.provider.manifest = self.candidate
+        self.provider.version, self.provider.source = '0.103.0', self.source
+        self.provider.manifest_path = self.root / 'retained-original-manifest.json'
+        self.provider.manifest_path.write_bytes(self.archive_members['release-manifest.json'])
         before = self.authority.head
         with patch.object(publisher, 'ORIGINAL_0103_DEPENDENCIES', proposed), \
              patch.object(publisher, 'ORIGINAL_0103_TAG_CHECKPOINT', checkpoint):
@@ -2248,12 +2256,69 @@ class OriginalTagIntentControls(unittest.TestCase):
             headers = {}
         return Reply(json.dumps(self.reply).encode())
 
+    @contextmanager
+    def lease(self, transport=None):
+        self.lease_entries = getattr(self, 'lease_entries', 0) + 1
+        transport = transport or self.transport()
+        try:
+            yield transport
+        finally:
+            self.lease_exits = getattr(self, 'lease_exits', 0) + 1
+            transport._token = None
+
     def recover(self, **changes):
-        kwargs = dict(factory=self.transport, clock=lambda: 0)
+        verify = changes.pop('verify_candidate', lambda: copy.deepcopy(self.candidate_proof))
+        kwargs = dict(factory=self.lease, clock=lambda: 0)
         kwargs.update(changes)
         with patch.object(urllib.request, 'build_opener', return_value=types.SimpleNamespace(open=self.open)):
             return publisher.run_original_tag_recovery(self.candidate, self.journal, self.admission, None,
-                self.counter, self.api, self.rows, 100, lambda: copy.deepcopy(self.candidate_proof), self.path, **kwargs)
+                self.counter, self.api, self.rows, 100, verify, self.path, **kwargs)
+
+    def test_changed_original_candidate_refuses_before_credential_lease(self):
+        with self.assertRaisesRegex(publisher.Refused, 'pre-credential candidate'):
+            self.recover(factory=forbidden_effect, verify_candidate=lambda: {})
+        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
+
+    def test_lexical_lease_closes_on_attempt_record_and_late_candidate_refusal(self):
+        for stage in ('attempt-record', 'candidate'):
+            with self.subTest(stage=stage):
+                self.path.unlink(missing_ok=True)
+                reads = []
+                def verify():
+                    reads.append(1)
+                    return self.candidate_proof if len(reads) == 1 else {}
+                if stage == 'attempt-record':
+                    with patch.object(publisher, 'write_kit_repeat_attempt', side_effect=OSError('disk')):
+                        with self.assertRaises(OSError): self.recover()
+                else:
+                    with self.assertRaisesRegex(publisher.Refused, 'candidate binding changed'):
+                        self.recover(verify_candidate=verify)
+                self.assertEqual(self.lease_entries, self.lease_exits)
+                self.assertEqual(self.posts, [])
+
+    def test_real_selected_factory_request_proof_composes_with_original_recovery(self):
+        spec = importlib.util.spec_from_file_location('selected_factory_fixture',
+            ROOT / 'tests/release-successor-authentication/run.py')
+        auth = importlib.util.module_from_spec(spec); spec.loader.exec_module(auth)
+        bound = auth.binding(); bound['app'] = {'id': 4995487, 'installation': 162873149}
+        channel = auth.RetainedChannel(self.tmp.name, bound)
+        opener = auth.SelectedFactoryOpener(); retained = []
+        lease_report = self.rows['originalTagCredential'] = {}
+        checkpoint = {'generation': 2, 'logicalHead': self.fixed['logicalHead'],
+                      'stateSHA256': self.fixed['stateSHA256']}
+        # Only this synthetic fixture's journal hashes differ from the fixed native checkpoint.
+        with patch.object(self.live, 'ORIGINAL_TAG_FACTORY_CHECKPOINT', checkpoint):
+            factory = self.live.InertOriginalTagCredentialFactory(bound,
+                self.live.ORIGINAL_TAG_FACTORY_CANDIDATE, checkpoint,
+                phase_adapter=auth.adapter(channel), jwt_supplier=lambda: 'inert-jwt',
+                opener=opener, admit=lambda: True, retain=retained.append, report=lease_report)
+            before = self.authority.head
+            self.assertEqual(self.recover(factory=factory), 'checkpoint')
+        self.assertEqual(self.authority.head, before)
+        self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
+        self.assertEqual([r.method for r in opener.calls], ['GET','GET','GET','POST','GET','POST','DELETE'])
+        self.assertTrue(lease_report['qualified']); self.assertEqual(lease_report['cleanup'], 'revoked')
+        self.assertTrue(self.path.exists()); self.assertFalse(self.rows['publicationComplete'])
 
     def test_existing_intent_preflight_is_read_only_and_does_not_require_factory(self):
         before = self.authority.head
@@ -2415,7 +2480,7 @@ class OriginalTagIntentControls(unittest.TestCase):
                     'permissions': {'contents': 'write', 'workflows': 'write'}, 'expiresAtUnix': 4102444800}
         transport.identity = identity
         with self.assertRaisesRegex(publisher.Refused, 'final source'):
-            self.recover(factory=lambda: transport)
+            self.recover(factory=lambda: self.lease(transport))
         self.assertTrue(self.path.exists()); self.assertEqual(self.posts, [])
         self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
 
@@ -2429,7 +2494,7 @@ class OriginalTagIntentControls(unittest.TestCase):
             return identity()
         transport.identity = read_identity
         with self.assertRaisesRegex(publisher.Refused, 'appeared'):
-            self.recover(factory=lambda: transport)
+            self.recover(factory=lambda: self.lease(transport))
         self.assertTrue(self.path.exists()); self.assertEqual(self.posts, [])
         self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
 

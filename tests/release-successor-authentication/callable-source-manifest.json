@@ -1,14 +1,14 @@
 {
   "schema": "fsgg.authentication-callable-source-bundle/1",
-  "qualification": "inert consumer source candidate pinned to an unprotected producer candidate; maintained managed compilation and hosted callback pair pending",
-  "ownerBase": "6387eaaf71162237649a1c993c93d99a9e7dfdcb",
+  "qualification": "inert selected original .103 factory source candidate; native JWT ingress, custody, credentials, compatibility repin and hosted producer/consumer qualification remain pending",
+  "ownerBase": "e338e13f60fa1c1b506a61edac399e3f52851c07",
   "producerRevision": "bedee6f44529838843ca7c4dfb4cb8aa9f1e1f36",
   "digestRecipe": "SHA256 of ASCII rows <sha256><two spaces><repository>/<path><LF>, sorted by ASCII repository/path key (not by the whole row); excludes this manifest, generated bindings/vectors and results",
   "files": [
     {
       "repository": "FS-GG/.github",
       "path": "scripts/release-successor-publish.py",
-      "sha256": "d6307d3b71d0d37d4dfa24e099cda4a61f9dff03f1e6e719e7ff0324f2aaf513"
+      "sha256": "4a38fb6f7a781a51d79587d0d4ddf53ff4861d3b52b04bea21e202ef41e37872"
     },
     {
       "repository": "FS-GG/.github",
@@ -18,7 +18,7 @@
     {
       "repository": "FS-GG/.github",
       "path": "scripts/release_successor_provider.py",
-      "sha256": "34ac63d74efa1b8c3f81fdea266d288c49a65db705ab4cc43ca8a8b3bd24dce0"
+      "sha256": "b20239f394379e2c42dba023d43065bdebe4e6a620ab8adba77be77c4689bd17"
     },
     {
       "repository": "FS-GG/.github",
@@ -56,5 +56,5 @@
       "sha256": "df27e14e33e82a68b42fdeeb67a2522f83affad994d0ce07ea5823b6ff068924"
     }
   ],
-  "bundleDigest": "75afc053513fdab02a80a33e8beebbac1a828fd79be6136f8f88da2545367e76"
+  "bundleDigest": "b08ec5f23ce114b6cbba48a78d4db26c4294f05b5cd5eaf3f53de4dcae895f8a"
 }

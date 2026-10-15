@@ -113,6 +113,13 @@ jobs:
           python3 scripts/release-successor-publish.py \
             --qualify-original-tag-authentication-only \
             --result-path "$RUNNER_TEMP/release-successor-result.json"
+      - name: Refuse the inert original-tag factory before any credential exchange
+        if: inputs.recover_original_0103_tag_intent == true
+        run: |
+          set -euo pipefail
+          python3 scripts/release-successor-publish.py \
+            --refuse-original-tag-factory-inactive \
+            --result-path "$RUNNER_TEMP/release-successor-result.json"
       - name: Mint the ordinary protected-journal writer token
         if: inputs.qualify_original_tag_authentication_only != true
         id: ledger
