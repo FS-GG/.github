@@ -98,11 +98,11 @@ exact contract digest; Programme decides the join. The reservation permits pure 
 vectors and tests. It grants no production provider/workflow change, service installation,
 key enrollment, credential use, original dispatch or release-state change.
 
-[PR #4565](https://github.com/FS-GG/.github/pull/4565), protected at
-`7262518eedabcf354f998b2c75130200fea73a96`, delivers the accepted **inert serialized
-construction subset**. Its [closed contract and maximum vectors](https://github.com/FS-GG/.github/blob/7262518eedabcf354f998b2c75130200fea73a96/tests/release-successor-authentication/domain-contract.md)
-count 57,282 proposed encoded bytes and 8,254 bytes of headroom under that model's
-65,536-byte cap. The existing authentication entry passed 66 pure tests and the PR's
+[PR #4565](https://github.com/FS-GG/.github/pull/4565) and the [late-cause correction #4567](https://github.com/FS-GG/.github/pull/4567),
+protected at `a8384157c5622c7e0629b6d9129a6fbe8a96428a`, deliver the accepted **inert serialized
+construction subset**. Its [closed contract and maximum vectors](https://github.com/FS-GG/.github/blob/a8384157c5622c7e0629b6d9129a6fbe8a96428a/tests/release-successor-authentication/domain-contract.md)
+count 57,562 proposed encoded bytes and 7,974 bytes of headroom under that model's
+65,536-byte cap. The existing authentication entry passed 68 pure tests and the PR's
 hosted qualifications passed. These results establish the proposed encoding/model only;
 the production provider and workflow remain unchanged and interface freeze stays held.
 
@@ -121,7 +121,12 @@ The closed model counts distinct host/peer control overlap, child/external recei
 diagnostic bytes and independent same-token 204 observations. Core uncertainty refuses
 further core/phase/gate mutation; separate loss and expiry slots remain append-once,
 including consumption of an uncertain observation write without retry. First failure and
-original-effect holds survive. These modeled rules do not establish a native persistence
+original-effect holds survive. The signed loss/expiry envelope includes optional closed
+`lateCause` phase/code fields for a later discovery after core freeze, preserving the
+earlier core `firstCause` even when absent. Each observation remains immutable and
+append-once after its first possible write; loss/restart/ambiguity cannot supply a retry.
+The 497-byte observation fits its 512-byte slot; four reserved copies add 280 bytes.
+These modeled rules do not establish a native persistence
 algorithm or actual population fit.
 
 The exact remaining fit blocker is the simultaneous-copy/lifetime census and slot mapping
@@ -130,7 +135,7 @@ retains distinct frame/payload arrays and allocates accessor copies; callback co
 [a pending base64 frame](https://github.com/FS-GG/FS.GG.Coordination/blob/bedee6f44529838843ca7c4dfb4cb8aa9f1e1f36/src/FS.GG.Coordination.Orchestration.Execution/PhaseCallbackProtocol.fs).
 The API alone does not bound caller/accessor/callback retention. Every simultaneous copy
 that survives as authority or uncertainty, including memory, must map to the proposed
-slots. Seven extra maximum-ready copies would add 9,037 bytes and exceed 8,254 headroom;
+slots. Seven extra maximum-ready copies would add 9,037 bytes and exceed 7,974 headroom;
 this is a possible-copy counterexample, not an observed current population. Excluding a
 working array requires a proved bounded-call lifetime, lack of authority and separate
 finite memory bound. Actual callback/task/queue/sink/readback/serialization/restart

@@ -1060,11 +1060,11 @@ SystemAdmin independently reviews host layout/backend/trust against its exact di
 Programme decides the join. This permits pure contract/vectors/tests only, with no
 production provider/workflow change or native/credential/release effect.
 
-[PR #4565](https://github.com/FS-GG/.github/pull/4565), protected at
-`7262518eedabcf354f998b2c75130200fea73a96`, delivers an accepted **inert serialized
-construction subset**: [closed schemas/vectors and model](https://github.com/FS-GG/.github/blob/7262518eedabcf354f998b2c75130200fea73a96/tests/release-successor-authentication/domain-contract.md)
-count 57,282 proposed encoded bytes, leaving 8,254 under the 65,536-byte cap.
-The authentication entry passed 66 pure tests and hosted qualifications passed.
+[PR #4565](https://github.com/FS-GG/.github/pull/4565) and the [late-cause correction #4567](https://github.com/FS-GG/.github/pull/4567),
+protected at `a8384157c5622c7e0629b6d9129a6fbe8a96428a`, deliver an accepted **inert serialized
+construction subset**: [closed schemas/vectors and model](https://github.com/FS-GG/.github/blob/a8384157c5622c7e0629b6d9129a6fbe8a96428a/tests/release-successor-authentication/domain-contract.md)
+count 57,562 proposed encoded bytes, leaving 7,974 under the 65,536-byte cap.
+The authentication entry passed 68 pure tests and hosted qualifications passed.
 Original pins and publisher provenance remain distinct from executing authentication;
 the external descriptor commits the exact child-binding and full ready-frame digests.
 Ready/start structural maxima including framing are 1,291/1,273 bytes. Child ACK
@@ -1077,13 +1077,18 @@ Placeholder signatures provide no authenticated positive evidence.
 The model counts host/peer control overlap, uncertainty and independent same-token 204
 observations; frozen core uncertainty permits only separately reserved append-once loss
 and expiry observations, with no retry of an uncertain observation write. It preserves
-first failure and original-effect holds. This does not prove the actual population fit.
+first failure and original-effect holds. Signed loss/expiry observations now retain optional
+closed `lateCause` phase/code after core freeze without rewriting core `firstCause`,
+including when the earlier cause is absent. The maximum observation is 497 bytes within
+its 512-byte slot; four reserved copies add 280 bytes. An observation remains immutable
+and append-once after its first possible write, with no retry after loss/restart/ambiguity.
+This does not prove the actual population fit.
 The remaining source-owner blocker is the simultaneous-copy/lifetime census and exact
 slot mapping across snapshots, accessors, callbacks/tasks/queue/sink/readback,
 serialization and restart. Public pinned [snapshot source](https://github.com/FS-GG/FS.GG.Coordination/blob/039cba0bc7d9057cd01f490803576f4b0e97fb16/src/FS.GG.Coordination.Orchestration.Execution/PhaseResultProtocol.fs)
 retains frame/payload arrays and returns copies; [callback source](https://github.com/FS-GG/FS.GG.Coordination/blob/bedee6f44529838843ca7c4dfb4cb8aa9f1e1f36/src/FS.GG.Coordination.Orchestration.Execution/PhaseCallbackProtocol.fs)
 retains a pending base64 frame. The API does not bound caller/accessor/callback retention.
-Seven possible extra maximum-ready copies exceed headroom (9,037 > 8,254); this is not
+Seven possible extra maximum-ready copies exceed headroom (9,037 > 7,974); this is not
 an observed current allocation count. Memory, filesystem metadata/allocated blocks and
 native enforcement need finite proof. Actual signer custody/enrollment, authenticated
 barrier/fresh exact readback, original-clock continuity/uncertainty and independent loss
