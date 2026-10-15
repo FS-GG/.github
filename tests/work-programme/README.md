@@ -1,6 +1,14 @@
 # Work-programme acceptance entry
 
-Run `bash tests/work-programme/run.sh`. The four FSI suites, Python
+Run `bash tests/work-programme/run.sh --preflight` for the cheap assembled candidate check
+(Bash/Python 3, no downloads). It checks tool presence without invoking `dotnet`, suite/launcher
+shape, hashed entrypoints, declared dependency order and input paths. Missing tools/inputs are
+named in JSON. Exit 0 means preflight only; no child ran and qualification remains `not-evaluated`.
+Missing/malformed/unknown results and timeout cannot qualify. It does not inspect undeclared
+transitive source behavior or provide resource admission. See the skill's
+[capacity window](../../.agents/skills/work-programme/references/context.md#capacity-window-and-assembled-test-candidate).
+
+Run `bash tests/work-programme/run.sh` for full qualification. The four FSI suites, Python
 collector tests, context controls, owner-restart structural controls, synthetic
 watcher regressions and runner controls execute serially. `unittest` still collects
 independent test failures and owns its per-test cleanup.
@@ -47,3 +55,16 @@ The additive `routine-decisions` suite exercises the real pure reducer and CLI, 
 original-effect retention, same-owner repair, typed limits, revision conflict and the
 2048-byte UTF-8 stdout bound. Recorded private replay remains observation-only and separate
 from these synthetic controls; neither supplies execution or publication authority.
+
+
+The V3-IMPROVE-01.1 ordinary pilot population is this runner change and its required suites:
+compare the pre-change 17 Python controls with the changed controls and assembled static check,
+retaining full hosted qualification. This is correctness/overhead observation, with no comparable
+attempt/diagnosis baseline for a savings claim. The first changed run had two fixture declarations
+whose prerequisite was changed without changing the launcher; both were corrected coherently.
+The cross-repository cohort selected by the programme owner is Coordination PR #991 at immutable
+`8a6da39b7b834c3a26df8c3110b6a4b37c63a5da` with its SystemAdmin inert decoder source pair.
+Its comparison basis is the existing compiler/fixture failure and correction sequence and queued
+coherent qualification; next-candidate source-pin/assembly treatment and receiver evaluation remain
+with those owners. Missing attempt denominators and incomparable work remain unknown. This source
+change does not complete .1, native qualification, two-workload acceptance or cross-repository evaluation.

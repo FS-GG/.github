@@ -30,6 +30,98 @@ class RunnerTests(unittest.TestCase):
     def collect(self, selected, **kwargs):
         return runner.collect(self.root, selected, reporter=lambda _: None, **kwargs)
 
+    def test_preflight_valid_candidate_never_launches(self):
+        with patch.object(runner, 'run_child') as child:
+            result = runner.preflight(self.root, [self.suite('good')])
+        child.assert_not_called()
+        self.assertEqual(result['status'], 'passed')
+        self.assertFalse(result['executed'])
+        self.assertEqual(result['qualification'], 'not-evaluated')
+        self.assertIn('input', result['candidate'])
+
+    def test_preflight_missing_tools_inputs_and_unknown_dependencies_cannot_pass(self):
+        missing_tool = self.suite('tool')
+        missing_tool.update(command=['dotnet', 'fsi', '--exec', 'fixture.fsx'],
+                            inputs=['fixture.fsx'], prerequisites=['dotnet'])
+        (self.root / 'fixture.fsx').write_text('()')
+        with patch.object(runner.shutil, 'which', return_value=None):
+            result = runner.preflight(self.root, [missing_tool, self.suite('input', inputs=['absent']),
+                                                 self.suite('unknown', dependencies=['absent'])])
+        self.assertEqual(result['status'], 'blocked')
+        self.assertEqual([r['reason'] for r in result['suites']],
+                         ['setup-tool-unavailable', 'shared-input-missing-or-changed', 'unknown-dependency'])
+
+    def test_assembled_entrypoint_omission_blocks_entire_launch(self):
+        # A real file being present is insufficient when absent from the hashed closure.
+        (self.root / 'caller.py').write_text('raise RuntimeError("must not launch")')
+        bad = self.suite('bad')
+        bad['command'] = [sys.executable, 'caller.py']
+        with patch.object(runner, 'run_child') as child:
+            report, code = self.collect([self.suite('earlier'), bad])
+        child.assert_not_called()
+        self.assertEqual(code, 1)
+        self.assertEqual(report['firstCause'], 'bad: entrypoint-not-in-inputs')
+        self.assertEqual(report['preflight']['status'], 'blocked')
+
+    def test_assembled_entrypoint_positive_control_reaches_real_caller(self):
+        (self.root / 'caller.py').write_text('print("real maintained caller seam")')
+        good = self.suite('good', inputs=['caller.py'])
+        good['command'] = [sys.executable, 'caller.py']
+        report, code = self.collect([good])
+        self.assertEqual(code, 0)
+        self.assertIn('real maintained caller seam', report['suites'][0]['evidence'])
+
+    def test_preflight_pins_survive_input_mutation_before_first_launch(self):
+        original = runner.preflight
+        def changed(root, selected):
+            result = original(root, selected)
+            (self.root / 'input').write_text('changed after preflight')
+            return result
+        with patch.object(runner, 'preflight', side_effect=changed), patch.object(runner, 'run_child') as child:
+            report, code = self.collect([self.suite('first')])
+        child.assert_not_called()
+        self.assertEqual(code, 1)
+        self.assertEqual(report['candidate'], report['preflight']['candidate'])
+        self.assertEqual(report['firstCause'], 'first: shared-input-missing-or-changed')
+
+    def test_intermediate_symlink_after_preflight_blocks_identical_target_bytes(self):
+        folder = self.root / 'folder'
+        folder.mkdir()
+        (folder / 'input').write_text('immutable')
+        original = runner.preflight
+        def changed(root, selected):
+            result = original(root, selected)
+            folder.rename(self.root / 'original-folder')
+            folder.symlink_to(self.root / 'original-folder', target_is_directory=True)
+            return result
+        with patch.object(runner, 'preflight', side_effect=changed), patch.object(runner, 'run_child') as child:
+            report, code = self.collect([self.suite('first', inputs=['folder/input'])])
+        child.assert_not_called()
+        self.assertEqual(code, 1)
+        self.assertEqual(report['firstCause'], 'first: shared-input-missing-or-changed')
+
+    def test_malformed_plan_cannot_launch(self):
+        for field, value in [('command', None), ('inputs', ['../outside']),
+                             ('prerequisites', ['unexamined-runtime']),
+                             ('command', [sys.executable, '--unexamined-mode'])]:
+            with self.subTest(field=field):
+                bad = self.suite('bad')
+                bad[field] = value
+                with patch.object(runner, 'run_child') as child:
+                    report, code = self.collect([bad])
+                child.assert_not_called()
+                self.assertEqual(code, 1)
+                self.assertEqual(report['preflight']['status'], 'blocked')
+
+    def test_duplicate_identity_and_linked_input_cannot_launch(self):
+        (self.root / 'linked').symlink_to(self.root / 'input')
+        for selected in ([self.suite('same'), self.suite('same')],
+                         [self.suite('linked', inputs=['linked'])]):
+            with patch.object(runner, 'run_child') as child:
+                report, code = self.collect(selected)
+            child.assert_not_called()
+            self.assertEqual(code, 1)
+
     def restart_fixture_reads(self):
         source = Path(__file__).with_name('context-delta.fsx').read_text()
         names = set(re.findall(r'restartFixture "([^"]+)"', source))
@@ -55,6 +147,7 @@ class RunnerTests(unittest.TestCase):
     def test_restart_fixture_drift_blocks_next_consumer_without_process_launch(self):
         selected = next(suite for suite in runner.suites(self.root) if suite['id'] == 'context-delta')
         selected['prerequisites'] = ['python']
+        selected['command'] = [sys.executable, '-c', 'pass']
         consumed = self.restart_fixture_reads()
         for name in set(selected['inputs']) | consumed:
             path = self.root / name
@@ -156,6 +249,9 @@ class RunnerTests(unittest.TestCase):
     def test_setup_and_missing_input_block_before_launch(self):
         selected = [self.suite('missing', inputs=['absent']), self.suite('setup')]
         selected[1]['prerequisites'] = ['dotnet']
+        (self.root / 'setup.fsx').write_text('()')
+        selected[1]['command'] = ['dotnet', 'fsi', '--exec', 'setup.fsx']
+        selected[1]['inputs'] = ['setup.fsx']
         with patch.object(runner.shutil, 'which', return_value=None):
             report, _ = self.collect(selected)
         self.assertEqual([r['status'] for r in report['suites']], ['blocked', 'blocked'])
@@ -245,6 +341,24 @@ class RunnerTests(unittest.TestCase):
         dotnet.write_text('#!/usr/bin/env python3\nimport sys\nprint("controlled FSI stand-in", sys.argv[-1])\n')
         dotnet.chmod(0o700)
         env = {**os.environ, 'PATH': str(binary) + os.pathsep + os.environ['PATH']}
+        # The real shell command forwards the preflight flag without invoking a suite.
+        marker = self.root / 'launched'
+        dotnet.write_text('#!/usr/bin/env python3\nfrom pathlib import Path\nPath(' + repr(str(marker)) + ').write_text("launched")\n')
+        ready = subprocess.run(['bash', str(target / 'run.sh'), '--preflight'], env=env,
+                               capture_output=True, text=True, timeout=10)
+        self.assertEqual(ready.returncode, 0, ready.stderr)
+        self.assertEqual(json.loads(ready.stdout)['qualification'], 'not-evaluated')
+        self.assertFalse(marker.exists())
+        missing = self.root / 'tests/work-programme/acceptance.fsx'
+        original = missing.read_bytes()
+        missing.unlink()
+        blocked = subprocess.run(['bash', str(target / 'run.sh'), '--preflight'], env=env,
+                                 capture_output=True, text=True, timeout=10)
+        self.assertEqual(blocked.returncode, 1)
+        self.assertEqual(json.loads(blocked.stdout)['status'], 'blocked')
+        self.assertFalse(marker.exists())
+        missing.write_bytes(original)
+        dotnet.write_text('#!/usr/bin/env python3\nimport sys\nprint("controlled FSI stand-in", sys.argv[-1])\n')
         success = subprocess.run(['bash', str(target / 'run.sh')], env=env, capture_output=True, text=True, timeout=10)
         self.assertEqual(success.returncode, 0, success.stderr)
         self.assertEqual(json.loads(success.stdout)['qualification'], 'passed')

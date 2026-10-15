@@ -157,6 +157,11 @@ resolved diagnostics for semantic review. After two failures of the same class, 
 expression or generation path and make one coherent repair before another qualification. A cheap parse
 check must inspect diagnostics as well as exit status and never replaces compilation or required tests.
 
+Record observed capacity, live and unknown reservations, storage evidence and the first workload peaks
+in the existing owner artifact before increasing local concurrency. Follow the
+[capacity window and assembled test candidate](references/context.md#capacity-window-and-assembled-test-candidate)
+route, including `bash tests/work-programme/run.sh --preflight` for this repository’s maintained suites.
+
 Before expensive qualification, run relevant cheap deterministic checks on the final candidate: input
 shape and native identity syntax, branch-specific expected results, generated metadata/digest bindings,
 mirror/link consistency and workflow selectors. Inspect the transitive launch closure of each test
