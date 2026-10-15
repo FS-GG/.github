@@ -64,6 +64,11 @@ process adoption need not await Linux containment, qualified driver correctness 
 statistical savings experiment, and WASM-only adoption need not await presentation adoption. Do not
 reopen completed Board/Portal work, stopped profiling or unselected conditional scope.
 
+For ordinary advancement, use a narrow ready assertion from an open owning plan, one accountable owner,
+and one integrator for shared surfaces. Prepare genuinely disjoint source or receiver work in parallel
+within measured resources; a source merge never proves publication or installed use. This is the
+existing owner route, with no separate process lane, mandatory cohort, packet form or benefit gate.
+
 ## Keep ownership through accepted closure
 
 The parent owns scope, capacity, shared-surface conflicts and exceptional decisions. One accountable
@@ -152,6 +157,9 @@ Separate development authority from final acceptance. Apply these defaults withi
 | Uncertain external effects | Observe the original identity and reconcile before retry |
 
 Use edit → incremental compile → focused tests → semantic review → full required qualification.
+Run the required exact-head PR/native qualification for each candidate; comprehensive protected parent,
+release and installed-receiver boundaries remain additional obligations, never a deferred substitute for
+that candidate's checks.
 Run the existing compiler early inside the approved environment; normally submit compiling source and
 resolved diagnostics for semantic review. After two failures of the same class, sweep the affected module,
 expression or generation path and make one coherent repair before another qualification. A cheap parse
@@ -370,23 +378,11 @@ artifacts and safely independent stages under the existing
 reuse only with its complete donor and scope proof; retain required checks, coherent obligations and
 capacity limits. Do not respond by blindly increasing concurrency or dropping suites.
 
-Measure the next active window using existing native timestamps and owner artifacts: time to accepted
-milestone, owner/parent handoffs, execution-harness failures and repeated qualification work. Separate product
-work, useful acceptance verification, harness repairs, external waiting and coordination; distinguish active
-work from elapsed time and leave unattributed intervals unknown. Track checks-green to accepted closure,
-including legitimate reservation time. Record first-pass qualification success and repair causes,
-diagnostic completeness on terminal failures, time to accepted installed consumer behavior, repeated
-evidence exposure, and actionable-observation-to-closure latency. State selected populations, denominators
-and coverage; PR-open time excludes pre-PR development, and overlapping CI time is not critical-path
-delay. Collect from existing necessary operations, not reporting-only workloads. Also measure
-edit-to-compiler feedback, routine retry parent
-transitions, unused grant expirations and review rework. Trial the defaults in one existing lane/window;
-target zero parent transitions for ordinary compile retries, zero unused grant expirations and merge within
-five minutes of eligibility when no external dependency remains. Targets are not acceptance waivers or
-measured savings. Evaluate the operating changes on those outcomes before adding agents
-or lanes; more nearly finished work is not higher throughput. Keep the existing active lanes, finish prepared
-reliability changes and canonical paths, and retire redundant wrappers before increasing concurrency to address
-this bottleneck. Report measured effects and coverage gaps; promise no percentage speedup without evidence.
+Use existing native timestamps and owner artifacts for normal progress reporting: accepted outcomes,
+material failures or waits, and evidence gaps when relevant. Do not make a prospective cohort, comparison,
+new metric, target or telemetry receipt a prerequisite for ordinary delivery. Missing economic evidence
+does not waive required acceptance evidence and supports no throughput claim. Keep active lanes focused
+on accepted consumer outcomes rather than opening work to fill agent capacity.
 
 Stop at user scope, feature exit or unresolved boundary, distinguishing completed window, delivered feature,
 pending publication and blocked work. Retain snapshot/evidence pointers and the bounded dispatch index in

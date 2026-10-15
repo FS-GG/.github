@@ -1,15 +1,14 @@
-# Speed-first agent development roadmap
+# Speed-first open-row routing notes
 
-Status: selected design and phased implementation route, 2026-10-15.
+Status: ordinary work-programme navigation, revised 2026-10-15.
 Owner: `.github` programme integrator. [Design](../designs/2026-10-15-speed-first-agent-development.md).
 Parent: [Unified Roadmap v3](2026-10-07-unified-development-roadmap-v3.md).
-This plan changes scheduling and proposed qualification cadence; each existing owning plan
-still defines its acceptance. It grants no release, credential, deployment or effect authority.
+The existing owning plans define acceptance. These notes create no process lane, cohort,
+phase gate, release, credential, deployment or effect authority.
 
 ## 1. Freeze and operating contract
 
-The protected prechange v3 table has **19 rows: three Done and sixteen open**. This
-roadmap adds `V3-SPEED-01`, yielding **20 rows: three Done and seventeen open**. Freeze
+The v3 table has **19 rows: three Done and sixteen open**. Keep
 `V3-IMPROVE-01`, `GAME-BOX2D-01 / GAME-PORTAL-01 P3` and `COORD-BOARD-V2-01`.
 Keep their evidence links; do not schedule them to fill agent capacity. The finite
 process trial closed with “process changes delivered; throughput benefit unproven.”
@@ -18,16 +17,17 @@ Its diagnostic publication and installed pilot remain open in
 with the coherent release successor and the selected receiver owners. Source delivery
 never stands for installed behavior.
 
-Each active slice has exactly one accountable owner, a declared repository/touch set,
-immutable input and original-effect identities, available local/hosted resources, a
-consumer assertion and a named integration join. The programme integrator holds shared
-surfaces and capacity. One PR per dependency chain and at most two managed PRs per
-repository remain the default. Disjoint preparation may run while a serial join waits;
-unknown operations, reservations or native effects retain their original custody.
+Use the existing owner packets to identify an independently useful ready slice and its
+actual source, touch set, resources, original-effect custody, consumer assertion and
+integration join. This is an ordinary scheduling choice, not a new required form.
+The programme integrator holds shared surfaces and capacity. One PR per dependency
+chain and at most two managed PRs per repository remain the default. Disjoint
+preparation may run while a serial join waits; unknown operations and reservations
+retain their original custody.
 
 ## 2. Owned ready slices
 
-These are the next **boundaries**, not newly granted dispatches or duplicate checklists.
+These are possible next **boundaries**, not newly granted dispatches or a required order.
 Before starting, the owner refreshes the linked owning plan and current native state.
 Split a row only at the named independent join. Where one row spans repositories, the
 first listed owner delivers the producer assertion; the consumer owns its installed
@@ -35,7 +35,6 @@ assertion after immutable selection. Completed milestones are inputs, not fresh 
 
 | Open v3 outcome | Narrow next slice and accountable owner | Serial join / stop |
 |---|---|---|
-| [V3-SPEED-01](#3-phased-change) | `.github` programme integrator selects one ordinary and one cross-repository ready slice for P0–P1 with actual owner, resource and evidence bounds. | P2 retains required exact-head and comprehensive closure; P3 may conclude benefit inconclusive. This row never absorbs DIAG/skill transfers or reopens V3-IMPROVE. |
 | [UTEL operational collection](utel-operational-completeness.md) | `.github` release/auth owner reconciles original `.103` effect identities and factory authority; Coordination owner prepares a separate native executor/provider source seam. | Credential and `.104` release hold remains until exact native owner, original effects, protected publisher and installed receiver are qualified. |
 | [Routine activity, review and usage coverage](process-efficiency-telemetry.md) | Programme/telemetry owner captures one settled attempt population and its coverage/usage gaps. | No effort or delay claim from incomplete attribution or overlapping queues. |
 | [V2-EFF-01.2–.6](process-efficiency-telemetry.md) | Telemetry owner qualifies one canonical correction/store path; receiver owner prepares matching provider and dashboard selections. | Coherent install, migration, provider execution and bounded dashboard pilot are separate. |
@@ -53,8 +52,7 @@ assertion after immutable selection. Completed milestones are inputs, not fresh 
 | [UNITYC-01.1d](https://github.com/FS-GG/FS.GG.Unity.Client/blob/main/docs/roadmaps/unityc-01-reference-admission.md) | Unity Client owner selects an actual Editor/Server native window and operator admission. | Native behavior precedes publication/installed adoption; managed/browser source alone is insufficient. |
 | [V3-ENV-01](2026-10-13-provisioned-podman-execution.md) | Host provisioner and Coordination owners deliver a reviewed unattended command/admission contract and disjoint source. | Installed allocation/bind/launch/teardown and loss/restart/reboot recovery with **no human host agent** after one-time setup precede normal-use acceptance; two-machine blank-slate and observed cleanup remain. |
 
-The following residual transfers are **existing owner work**, not new v3 outcomes or
-subtasks of V3-SPEED-01:
+The following residual transfers are **existing owner work**, not new v3 outcomes:
 
 | Existing transfer | Accountable owner and next boundary | Stop |
 |---|---|---|
@@ -64,24 +62,27 @@ subtasks of V3-SPEED-01:
 The linked plan is authoritative if a compact row's phrasing is stale. The programme
 integrator repairs that projection rather than dispatching against an unverified row.
 
-## 3. Phased change
+## 3. Apply in ordinary work
 
-| Phase | Owner and bounded work | Exit evidence / decision |
-|---|---|---|
-| **P0 — Freeze and select** | `.github` integrator preserves the three Done rows, records the sixteen preexisting open boundaries plus this new operating row, and chooses one ready ordinary slice plus one cross-repository join only if resources and source facts support them. Pin owner, touch set, original effects, final assertion and baseline T0 in existing packets. | No closed row reopened; no duplicate DIAG or skill adoption lane; each selected slice has a responsible owner, free capacity and a stop condition. If no comparable slice exists, record the gap without manufacturing work. |
-| **P1 — Shorten local feedback** | Each owner exposes the cheapest actual-candidate compile/shape/caller check, keeps inert transport at a declared seam, and repairs in the same workspace. Prepare disjoint producer/consumer work in parallel; admit hosted PRs against live queue and conflict proof. | Known-bad assembled candidate stops before expensive work, good candidate proceeds, first failure and overhead remain visible. A second local workload only after genuine ready work and measured headroom. |
-| **P2 — Qualify exact candidates** | Owning repositories run required exact-head CI and coherent validation, with ADR-0084 reuse only on complete audited proof. Integrators join exact producer release and installed receiver assertions. Review any proposed optional cadence reduction under ADR-0081/0086 separately. | Current required checks, branch protection, hard security/authority minimum cadence and comprehensive parent/release/receiver closure pass. Failed or unknown evidence remains a hold. |
-| **P3 — Evaluate and retain** | Programme/telemetry owner compares selected slices with an honestly comparable baseline where available: accepted-outcome lead time, attempts, diagnosis latency, reviewer/CI wait and effort, unknown effects and adverse cases. Existing owners retain proven local improvements and roll back regressions. | Report denominators, coverage and uncertainty. Claim speed only with comparable evidence at unchanged acceptance; otherwise state benefit unproven. Decide a further cohort or a reviewed cadence change separately. |
+Use this order within an already selected owning lane, without waiting for a separate
+programme implementation or evidence cohort:
 
-Phases overlap for independent lanes. P2 cannot be bypassed because P1 passed. The
-published/installed join cannot be inferred from source. No phase creates a programme-wide
-gate that serializes unrelated ready slices.
+1. Refresh its owning plan and live facts. Keep completed rows closed and choose a ready
+   assertion with one owner and a genuine consumer or native acceptance path.
+2. Use existing cheap relevant compile, shape and actual-caller checks during owner-local
+   repair. Admit a second local workload only if genuinely ready disjoint work and measured
+   headroom permit it. Prepare independent producer/receiver source concurrently where safe.
+3. Admit a ready PR against the live hosted queue. Run every current required exact-head
+   check and ADR-0084 coherent obligation; preserve protected comprehensive parent,
+   release and installed receiver acceptance. An early pass never replaces a final gate.
+4. Report material accepted progress, original failures and open limits through the
+   normal progress route. No separate speed comparison, benefit threshold, new metric or
+   trial closure is required. No throughput benefit is claimed by these notes.
 
 ## 4. Risk and stop rules
 
-The speed-first trial accepts later detection of some low-impact local defects, bounded
-rework from narrow slices, CI timing variance and temporarily invalid development
-branches. Those costs are visible in the selected cohort. It does **not** accept a
+Ordinary focused checks can miss a defect later found by unchanged required checks;
+parallel disjoint preparation can add rework and resource use. The route does **not** accept a
 missing required check, a false pass, unowned effect, lost first failure, broadened
 credential, unauthenticated release, unverified cleanup, or a human host-agent step in
 V3 normal use. Unknown results fail closed. Keep original UTEL candidate/journal and
