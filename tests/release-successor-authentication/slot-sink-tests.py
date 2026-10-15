@@ -208,6 +208,54 @@ class SlotSinkTests(unittest.TestCase):
             sink.REPORT.clear()
             sink.REPORT.update(original)
 
+    def test_closed_report_refuses_custom_equality_before_backend_mutation(self):
+        equality_calls = []
+        class Scalar:
+            def __eq__(self, other):
+                equality_calls.append(other)
+                return True
+        class Text(str):
+            __hash__ = str.__hash__
+            def __eq__(self, other):
+                equality_calls.append(other)
+                return True
+        class Report(dict):
+            def __eq__(self, other):
+                equality_calls.append(other)
+                return True
+        # Exact two-key dicts can spoof literal equality via either scalar.
+        invalid = [
+            {'schema': Scalar(), 'sink': Scalar()},
+            {'schema': Text('wrong'), 'sink': sink.REPORT['sink']},
+            {Text('schema'): sink.REPORT['schema'], 'sink': sink.REPORT['sink']},
+            Report(sink.REPORT),
+            {'schema': sink.REPORT['schema'], 'sink': 'wrong'},
+            {'schema': sink.REPORT['schema'], 'other': sink.REPORT['sink']},
+        ]
+        for index, report in enumerate(invalid):
+            with self.subTest(index=index):
+                equality_calls.clear()
+                backend = sink.ControlledSlotBackend()
+                with self.assertRaises(provider.Refused):
+                    self.prepared(backend=backend, closed_report_envelope=report)
+                self.assertIsNone(backend.reservation)
+                self.assertEqual(backend.stores, {})
+                self.assertEqual(backend.attempts, set())
+                self.assertEqual(backend.events, [])
+                subject, binding, frames, backend = self.prepared()
+                with self.assertRaises(provider.Refused):
+                    subject('inert-slot', report, binding, frames[0])
+                self.assertEqual(backend.stores, {})
+                self.assertEqual(backend.attempts, set())
+                self.assertEqual(backend.events, [])
+                self.assertEqual(subject.ordinal, 0)
+                self.assertFalse(subject.frozen)
+                self.assertIsNone(subject.first_cause)
+                self.assertEqual(equality_calls, [])
+                # The rejected report did not consume the original phase slot.
+                subject('inert-slot', dict(sink.REPORT), binding, frames[0])
+                self.assertEqual(subject.ordinal, 1)
+
     def test_role_capacities_are_immutable_and_changed_reservation_refuses(self):
         with self.assertRaises(TypeError): sink.ROLES['phase-1'] = 4096
         self.assertEqual(sink.ROLES['phase-1'], 2048)

@@ -14,8 +14,9 @@ REPORT = {'schema': 'fsgg.release-successor-result/1', 'sink': 'inert-phase-slot
 
 def _closed_report(value):
     # Independent of the exported convenience dict, including caller mutation.
-    return type(value) is dict and value == {
-        'schema': 'fsgg.release-successor-result/1', 'sink': 'inert-phase-slots/1'}
+    return (type(value) is dict and len(value) == 2
+            and all(type(key) is str and type(item) is str for key, item in value.items())
+            and value == {'schema': 'fsgg.release-successor-result/1', 'sink': 'inert-phase-slots/1'})
 
 
 class BackendCut(OSError):
