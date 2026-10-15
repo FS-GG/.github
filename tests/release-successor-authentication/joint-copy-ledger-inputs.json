@@ -474,7 +474,7 @@
       "ownership": "test-endpoint-witnesses",
       "alias_class": null,
       "identity_basis": "population-only",
-      "uncertainty": "protected PR1001 ata235822e; reviewed88b09cb source/project blobs identical; exact-head bootstrap38817219946/a1 TRX55/55 independently retrieved; earlier80dbe782 run38807111675 historical only; protected PR1002 consumer165c22cf is separate transport input; no complete physical byte bound or physical release"
+      "uncertainty": "protected PR1001 at a235822e; reviewed 88b09cb source/project blobs identical; exact-head bootstrap 38817219946/a1 TRX 55/55 independently retrieved; earlier 80dbe782 run 38807111675 historical only; protected PR1002 consumer 165c22cf is separate transport input; no complete physical byte bound or physical release"
     },
     {
       "id": "managed:completed-write-after-task-settlement:independent-endpoint-copy-arrays",
@@ -499,7 +499,7 @@
       "ownership": "test-endpoint-witnesses",
       "alias_class": null,
       "identity_basis": "population-only",
-      "uncertainty": "protected PR1001 ata235822e; reviewed88b09cb source/project blobs identical; exact-head bootstrap38817219946/a1 TRX55/55 independently retrieved; earlier80dbe782 run38807111675 historical only; protected PR1002 consumer165c22cf is separate transport input; no complete physical byte bound or physical release"
+      "uncertainty": "protected PR1001 at a235822e; reviewed 88b09cb source/project blobs identical; exact-head bootstrap 38817219946/a1 TRX 55/55 independently retrieved; earlier 80dbe782 run 38807111675 historical only; protected PR1002 consumer 165c22cf is separate transport input; no complete physical byte bound or physical release"
     },
     {
       "id": "managed:async-write-at-original-cutoff:original-request-arrays",
@@ -524,7 +524,7 @@
       "ownership": "test-endpoint-witnesses",
       "alias_class": null,
       "identity_basis": "population-only",
-      "uncertainty": "protected PR1001 ata235822e; reviewed88b09cb source/project blobs identical; exact-head bootstrap38817219946/a1 TRX55/55 independently retrieved; earlier80dbe782 run38807111675 historical only; protected PR1002 consumer165c22cf is separate transport input; no complete physical byte bound or physical release"
+      "uncertainty": "protected PR1001 at a235822e; reviewed 88b09cb source/project blobs identical; exact-head bootstrap 38817219946/a1 TRX 55/55 independently retrieved; earlier 80dbe782 run 38807111675 historical only; protected PR1002 consumer 165c22cf is separate transport input; no complete physical byte bound or physical release"
     },
     {
       "id": "managed:async-write-at-original-cutoff:independent-endpoint-copy-arrays",
@@ -549,7 +549,7 @@
       "ownership": "test-endpoint-witnesses",
       "alias_class": null,
       "identity_basis": "population-only",
-      "uncertainty": "protected PR1001 ata235822e; reviewed88b09cb source/project blobs identical; exact-head bootstrap38817219946/a1 TRX55/55 independently retrieved; earlier80dbe782 run38807111675 historical only; protected PR1002 consumer165c22cf is separate transport input; no complete physical byte bound or physical release"
+      "uncertainty": "protected PR1001 at a235822e; reviewed 88b09cb source/project blobs identical; exact-head bootstrap 38817219946/a1 TRX 55/55 independently retrieved; earlier 80dbe782 run 38807111675 historical only; protected PR1002 consumer 165c22cf is separate transport input; no complete physical byte bound or physical release"
     },
     {
       "id": "managed:sync-write-before-task-publication:original-request-arrays",
@@ -574,7 +574,7 @@
       "ownership": "test-endpoint-witnesses",
       "alias_class": null,
       "identity_basis": "population-only",
-      "uncertainty": "protected PR1001 ata235822e; reviewed88b09cb source/project blobs identical; exact-head bootstrap38817219946/a1 TRX55/55 independently retrieved; earlier80dbe782 run38807111675 historical only; protected PR1002 consumer165c22cf is separate transport input; no complete physical byte bound or physical release"
+      "uncertainty": "protected PR1001 at a235822e; reviewed 88b09cb source/project blobs identical; exact-head bootstrap 38817219946/a1 TRX 55/55 independently retrieved; earlier 80dbe782 run 38807111675 historical only; protected PR1002 consumer 165c22cf is separate transport input; no complete physical byte bound or physical release"
     },
     {
       "id": "managed:sync-write-before-task-publication:independent-endpoint-copy-arrays",
@@ -599,7 +599,7 @@
       "ownership": "test-endpoint-witnesses",
       "alias_class": null,
       "identity_basis": "population-only",
-      "uncertainty": "protected PR1001 ata235822e; reviewed88b09cb source/project blobs identical; exact-head bootstrap38817219946/a1 TRX55/55 independently retrieved; earlier80dbe782 run38807111675 historical only; protected PR1002 consumer165c22cf is separate transport input; no complete physical byte bound or physical release"
+      "uncertainty": "protected PR1001 at a235822e; reviewed 88b09cb source/project blobs identical; exact-head bootstrap 38817219946/a1 TRX 55/55 independently retrieved; earlier 80dbe782 run 38807111675 historical only; protected PR1002 consumer 165c22cf is separate transport input; no complete physical byte bound or physical release"
     },
     {
       "id": "host:old",

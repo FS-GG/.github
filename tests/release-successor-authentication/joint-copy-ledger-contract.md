@@ -37,7 +37,9 @@ requires three child ACKs, six exact retained slot frames/digests, a confirmed
 terminal response, owner exit while input remains open, and settled managed tasks.
 It records no input EOF/trailing-input check, operational receipt or native identity.
 The protected transport consumer and separately protected PR1001 capture establish
-their respective source controls; neither adds a sixth copy cut. The five existing cuts and their identity scopes remain unchanged;
+their respective source controls;
+neither adds a sixth copy cut. The five existing cuts and their identity scopes
+remain unchanged;
 no combined physical-copy fit or native acceptance follows.
 
 The Python logical subtotal is `5682 + 831 + 4*991 + 3*295 + 298 = 11660`.
