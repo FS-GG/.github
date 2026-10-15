@@ -33,8 +33,9 @@ reservation for all other reachable paths.
 
 All thirteen successful confirmations clear the decoder buffer and reply
 reference. Validate retains its pending frame until retain; successful retain
-clears pending before response transport. After terminal confirmation, only the
-six stable backend stores remain, with the original temporary identities.
+clears pending before response transport. After terminal confirmation, the backend store map contains only the
+six stable stores, with the original temporary identities; parsed state and entry
+locals remain reachable independently.
 Clearing these references establishes the observed ownership transition only;
 it does not demonstrate collection, zeroization or physical release.
 
@@ -49,10 +50,54 @@ attempt or store replacement. No failure means NotCommitted or permits replay.
 The harness independently owns frozen JSON/hex, concatenated requests, input and
 output streams, decoded expected frames and returned synthetic evidence. Those
 objects and the instrumentation's scalars are excluded from this source-object
-subtotal. Runtime parsed dictionaries/strings, binding/identity data, stack and
-object overhead, allocator capacity, stream copies, managed producer/caller/task
+subtotal. Stack and
+object overhead, dictionary keys, unselected values, allocator capacity, stream copies, managed producer/caller/task
 copies, uncertainty members outside these cases, filesystem/kernel/peer copies
 and concurrent/restart populations are also excluded. The test does not bound
 arbitrary caller retention. No complete 65536-byte fit, real durability/barrier,
 clock authenticity, custody, native ACK, installed adoption, factory compatibility,
 original operation acceptance or release authority follows.
+
+## Additional selected Python representations
+
+The original sixteen-object cut and its 11,660-byte subtotal stay unchanged.
+A separate selected-value-graph observation at the same sixth readback exposes
+entry/owner/sink binding dictionaries, canonical owner binding bytes, entry
+identity, sink/reservation identity bytes, the parsed retain request, pending and
+sink-parsed terminal phases, owner previous phase/facts and sink previous facts.
+Pending phase and handle phase alias; the sink reparses a distinct phase. Owner
+and sink bindings are distinct dictionaries. Sink identity aliases reservation
+identity. Owner previous facts and the sink's deep-copied facts are distinct.
+The observer walks only the named roots' values; dictionary keys and integers
+are excluded. A dict/list/tuple has quantity type `object-count` and quantity 1;
+this is not its element count or a byte size. Strings have `logical-bytes` equal
+to UTF-8 encoded length; bytes/bytearrays use their length. Identities are scoped
+to one cut, never compared across later cuts after possible object reuse.
+
+The actual entry `main` also runs with inert stdin/stdout and an exclusive-file
+output double. Separate cuts observe terminal-confirmed evidence construction
+(including the final 991-byte slot conversion still in `execute.raw`), JSON text
+before ASCII encoding, encoded bytes after encoding, and the file-write argument
+before return. Evidence slots hold hexadecimal strings, each twice the original
+frame length, plus digest strings. `records` aliases `evidence.slots`; main's
+encoded bytes alias the write argument. The evidence-bound encoding in execute
+and the later main encoding are separate invocations: the retained encoding
+observations are the final invocation, and no cross-invocation identity claim is
+made. JSON text and encoded bytes are separate cuts and cannot be added together.
+
+The instrumentation stores numeric identities, types, quantities and literal
+role/ownership labels. Temporary traversal/frame references are dropped on return;
+observer wrappers and the file double add harness references, never production
+ownership or release evidence. Graph roots shared with the independent caller
+are labeled as such. Neither scalars nor the independently retained output stream
+are counted as production copies. A malformed one-byte JSON request refuses
+before evidence-file creation. Evidence short-write and flush failures return 3
+after one file open/write attempt, preserving uncertainty without retry. Existing
+readback and terminal-response write/flush controls retain their original checks.
+
+These scoped representations narrow earlier omissions. They do not complete
+parser/base64/encoder transient inventories, all binding/start/ACK cuts, arbitrary
+caller/stream retention, headers, allocator capacities, physical release or the
+whole simultaneous physical-copy bound. Original `.103` remains attempted-unknown;
+`.104` remains held. Every physical quantity stays unknown, fit unproved and
+admission false.
