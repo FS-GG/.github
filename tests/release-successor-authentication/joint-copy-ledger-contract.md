@@ -38,8 +38,8 @@ terminal response, owner exit while input remains open, and settled managed task
 It records no input EOF/trailing-input check, operational receipt or native identity.
 The protected transport consumer and separately protected PR1001 capture establish
 their respective source controls;
-neither adds a sixth copy cut. The five existing cuts and their identity scopes
-remain unchanged;
+neither adds a transport copy cut. The five previously accepted cuts and their
+identity scopes remain unchanged;
 no combined physical-copy fit or native acceptance follows.
 
 The Python logical subtotal is `5682 + 831 + 4*991 + 3*295 + 298 = 11660`.
@@ -64,6 +64,28 @@ compatible declared physical-byte lower bound above 65,536 yields
 `supplied-bound-overflow`, conditional on that supplied premise. The parser does
 not validate physical measurements; the label establishes no measured overflow.
 The synthetic regression does not add an observed population.
+
+The Python extension adds five separate selected cuts without changing the original
+16-object subtotal: selected binding/identity/parsed/previous value roots at sixth
+readback, terminal-confirmed evidence construction, JSON text before ASCII encoding,
+ASCII bytes after encoding, and evidence-file write before return. The ledger records
+root representations and the evidence slot hex/digest values; the observer also
+walks their selected value graphs to establish alias distinctions. Containers have
+`object-count: 1`; strings use UTF-8 logical length. No dictionary, list or tuple
+count is converted to bytes. Evidence construction still retains the last raw slot
+conversion. JSON text and ASCII bytes are distinct cuts, as are construction and
+write. The retained encoder observations belong to the final main encoding; the
+earlier bound-check encoding is not added. Main encoded bytes and the write argument
+are the same object within the write cut. Instrumentation and file-double references
+are harness ownership and are excluded. Malformed JSON refuses before evidence
+creation; short evidence writes and evidence flush failures preserve uncertainty
+after one attempt, without retry. Existing backend readback and terminal response
+write/flush controls remain. The regression reruns actual main and checks selected
+roles, typed quantities, ownership labels and every pair of alias classes within
+each snapshot; it never compares object IDs across cuts. Current witness source
+provenance supersedes the old witness pin in the local ledger while the protected
+PR4578 evidence above remains historical. The unchanged sixteen-role runtime bundle
+and original `.103` attempted-unknown / `.104` hold remain intact.
 
 For these inputs every physical lower bound remains unknown and **fit is unproved**.
 There is no successful-fit result or runtime admission. Missing caller/evidence/

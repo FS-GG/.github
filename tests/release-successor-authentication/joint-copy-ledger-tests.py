@@ -23,15 +23,16 @@ class JointCopyLedgerControls(unittest.TestCase):
         result = ledger.reconcile(self.inputs)
         self.assertEqual(result['fit'], 'unproved')
         self.assertFalse(result['admission'])
-        self.assertEqual(len(result['groups']), 5)
+        self.assertEqual(len(result['groups']), 10)
         python = result['groups'][0]
         self.assertEqual(python['known_object_logical_bytes'], 11660)
         self.assertIsNone(python['physical_byte_lower_bound'])
         for group in result['groups'][1:]:
-            self.assertIsNone(group['known_object_logical_bytes'])
+            if group['scope']['topology'] != 'python-terminal-controlled':
+                self.assertIsNone(group['known_object_logical_bytes'])
             self.assertIsNone(group['physical_byte_lower_bound'])
             self.assertEqual(group['fit'], 'unproved')
-        self.assertEqual(len(result['supported_alias_deductions']), 4)
+        self.assertEqual(len(result['supported_alias_deductions']), len(self.inputs['aliases']))
         self.assertTrue(result['missing_obligations'])
         self.assertNotIn('total_bytes', result)
 
@@ -47,6 +48,34 @@ class JointCopyLedgerControls(unittest.TestCase):
         self.assertEqual({row['role']: row['quantity'] for row in concrete},
                          {role: size for role, (_, size) in census.cut.items()})
         self.assertEqual(sum(row['quantity'] for row in concrete), 11660)
+
+    def test_selected_python_graphs_match_actual_cuts_without_cross_cut_sum(self):
+        spec = importlib.util.spec_from_file_location('graph_witness', HERE / 'slot-copy-lifetime-tests.py')
+        witness = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(witness)
+        _, _, readback = witness.SlotCopyLifetimeControls().journey()
+        emission, status, _, _ = witness.emission_journey()
+        self.assertEqual(status, 0)
+        snapshots = readback.representations | emission.representations
+        for index, (cut, snapshot) in enumerate(snapshots.items()):
+            selected = {role: value for role, value in snapshot.items()
+                        if '/' not in role or (role.startswith('evidence/slots/') and role.count('/') == 3)}
+            recorded = {row['role']: row for row in self.inputs['observations']
+                        if row['id'].startswith(f'python-graph-{index}:')}
+            self.assertEqual(set(recorded), set(selected))
+            for role, row in recorded.items():
+                identity, representation, quantity, kind, ownership = selected[role]
+                self.assertEqual((row['cut'], row['representation'], row['quantity'], row['quantity_type'], row['ownership']),
+                                 (cut, representation, quantity, kind, ownership))
+            roles = tuple(selected)
+            for left in roles:
+                for right in roles:
+                    self.assertEqual(recorded[left]['alias_class'] == recorded[right]['alias_class'],
+                                     selected[left][0] == selected[right][0])
+        result = ledger.reconcile(self.inputs)
+        self.assertEqual((result['fit'], result['admission']), ('unproved', False))
+        self.assertNotIn('total_bytes', result)
+        self.assertTrue(all(group['physical_byte_lower_bound'] is None for group in result['groups']))
 
     def test_equal_bytes_never_establish_alias(self):
         # Candidate/readback lengths match, but the actual Python objects differ.
