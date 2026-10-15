@@ -295,6 +295,22 @@ class ContextTests(unittest.TestCase):
         self.assertEqual((result['ownerReturnRevision'], result['watcherRevision']), (2, 1))
         self.assertEqual(result['nativeObservation'], 'fresh-exact-head-observation-required')
 
+    def test_restart_watch_observation_loss_retains_original_custody(self):
+        for event in ('deadline', 'observation-failure', 'unrecognized-event'):
+            with self.subTest(event=event):
+                spec, _ = self.restart_spec()
+                spec['reservationCompleteness'] = 'declared-complete'
+                watch = json.loads(Path(spec['watcher']['path']).read_text())
+                watch['event'] = event
+                spec['watcher'] = self.file('lost-watch.json', json.dumps(watch))
+                result = ctx.restart(spec)
+                self.assertEqual(result['reservations'], spec['reservations'])
+                self.assertEqual(result['lineage']['originalAttempt'], 'original-attempt')
+                self.assertEqual(result['continuation'], 'reconcile-holds')
+                self.assertIn('watch-event-unknown' if event == 'unrecognized-event'
+                              else 'watch-observation-incomplete', result['holds'])
+                self.assertEqual(result['nativeObservation'], 'fresh-exact-head-observation-required')
+
     def test_restart_same_owner_source_repair_retains_original_attempt(self):
         spec, _ = self.restart_spec()
         spec['reservationCompleteness'] = 'declared-complete'
@@ -302,6 +318,13 @@ class ContextTests(unittest.TestCase):
         result = ctx.restart(spec)
         self.assertEqual(result['continuation'], 'same-owner-fresh-native-readback')
         self.assertEqual(result['lineage']['originalAttempt'], 'original-attempt')
+
+    def test_restart_normal_terminal_watch_preserves_same_owner_route(self):
+        spec, _ = self.restart_spec()
+        spec['reservationCompleteness'] = 'declared-complete'
+        result = ctx.restart(spec)
+        self.assertEqual(result['holds'], [])
+        self.assertEqual(result['continuation'], 'same-owner-fresh-native-readback')
 
     def test_restart_missing_base_resynchronizes_without_dropping_holds(self):
         spec, _ = self.restart_spec()

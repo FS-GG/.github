@@ -358,6 +358,14 @@ def restart(spec):
                 watch.get('expectedHead') == spec['sourceRevision'], 'restart-watcher-identity-conflict')
         require(watch.get('applyAuthorized') is False and watch.get('readiness') == 'not-evaluated',
                 'restart-watcher-authority-conflict')
+        # A watcher is advisory, but a failed or uninterpretable notification
+        # must remain visible during owner recovery. Historical records may
+        # omit optional projection fields, so do not promote those fields to
+        # authority or reject an otherwise pinned older event.
+        if watch.get('event') in ('deadline', 'observation-failure'):
+            holds.append('watch-observation-incomplete')
+        elif watch.get('event') not in ('initial', 'revision', 'terminal'):
+            holds.append('watch-event-unknown')
         # Watch-local revision1 after interruption is not owner revision1. No
         # event, timestamp or terminal state grants freshness or execution rights.
     result = dict(schema='fsgg.programme.context-restart/1',
