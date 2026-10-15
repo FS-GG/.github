@@ -112,6 +112,21 @@ class CandidateUniquenessTests(unittest.TestCase):
         with self.assertRaisesRegex(gate.GateError, "403"):
             gate.check("0.101.0", "0.100.0", "test-token")
 
+    def test_prospective_0104_probe_requires_exact_0102_frontier_on_both_feeds(self) -> None:
+        self.github_read.return_value = ["0.102.0"]
+        self.nuget_read.return_value = ["0.102.0"]
+        rows = gate.check("0.104.0", "0.102.0", "read-token")
+        self.assertEqual(len(rows), 6)
+        self.assertEqual({row["latest"] for row in rows}, {"0.102.0"})
+        self.assertEqual(self.github_read.call_count, 3)
+        self.assertEqual(self.nuget_read.call_count, 3)
+        self.nuget_read.return_value = ["0.102.0", "0.103.0"]
+        with self.assertRaisesRegex(gate.GateError, "not predecessor"):
+            gate.check("0.104.0", "0.102.0", "read-token")
+        self.github_read.side_effect = gate.GateError("HTTP 403")
+        with self.assertRaisesRegex(gate.GateError, "403"):
+            gate.check("0.104.0", "0.102.0", "read-token")
+
     def test_an_occupied_version_on_either_feed_refuses(self) -> None:
         for feed in (self.github_read, self.nuget_read):
             with self.subTest(feed=feed):
@@ -140,6 +155,30 @@ class CandidateUniquenessTests(unittest.TestCase):
 
 
 class SuccessorRailBindingTests(unittest.TestCase):
+    def test_prospective_feed_probe_has_only_main_read_permissions_and_no_release_effect(self) -> None:
+        workflow = (ROOT / ".github/workflows/release-successor-feed-readiness.yml").read_text()
+        self.assertIn("  workflow_dispatch:", workflow)
+        self.assertIn("  contents: read", workflow)
+        self.assertIn("  packages: read", workflow)
+        self.assertEqual(workflow.count("permissions:"), 1)
+        self.assertIn(
+            "permissions:\n  contents: read\n  packages: read\n\nconcurrency:",
+            workflow,
+        )
+        self.assertIn("if: github.ref == 'refs/heads/main'", workflow)
+        self.assertIn("persist-credentials: false", workflow)
+        self.assertIn('test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"', workflow)
+        self.assertIn("python3 tests/release-successor-candidate/run.py", workflow)
+        self.assertIn("python3 scripts/check-release-candidate-uniqueness.py", workflow)
+        self.assertIn("--version 0.104.0 --predecessor 0.102.0", workflow)
+        for forbidden in (
+            "packages: write", "contents: write", "id-token:", "environment:", "secrets.",
+            "release-successor-publish.py", "release-saga.py", "dotnet pack",
+            "gh release create", "git push", "oidc", "upload-artifact",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, workflow.lower())
+
     def test_candidate_binds_the_next_version_and_exact_predecessor(self) -> None:
         workflow = (ROOT / ".github/workflows/release-successor-candidate.yml").read_text()
         self.assertIn('test "$version" = 0.103.0', workflow)

@@ -51,6 +51,13 @@ class GateError(Exception):
     """A condition under which a gate must fail rather than skip."""
 
 
+class _RefuseFeedIndexRedirect(urllib.request.HTTPRedirectHandler):
+    """An authenticated version index must be read from the org feed itself."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise GateError("authenticated org feed index redirected; refusing the version read")
+
+
 def parse_version(text: str) -> tuple:
     """Return a sort key ordering NuGet versions. Raises GateError on anything unparsable.
 
@@ -100,8 +107,12 @@ def feed_versions(package: str, token: str) -> list[str]:
             "User-Agent": "fsgg-check-feed-coherence",
         },
     )
+    # urllib's default redirect handler forwards Authorization even across hosts.
+    # The version index should be served directly; a redirect is neither a safe
+    # credential destination nor proof of the org feed's current versions.
+    opener = urllib.request.build_opener(_RefuseFeedIndexRedirect)
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with opener.open(req, timeout=30) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         if e.code in (401, 403):
@@ -193,8 +204,7 @@ class _StripAuthOnRedirect(urllib.request.HTTPRedirectHandler):
 
     That message names Authorization, so it reads exactly like a bad token — which is presumably why
     reading a nuspec from this feed looked closed off (.github#933). The token is fine; the header is
-    simply not ours to send to Azure. `feed_versions` never hit this because `index.json` is served
-    directly, without a redirect.
+    simply not ours to send to Azure. Version-index reads refuse all redirects separately.
     """
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
