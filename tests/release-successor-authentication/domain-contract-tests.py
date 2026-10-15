@@ -3,6 +3,7 @@
 import ast
 import copy
 import hashlib
+import importlib.util
 import json
 import pathlib
 import sys
@@ -243,6 +244,16 @@ class ContractTests(unittest.TestCase):
             with self.assertRaises(ValueError): c.Model().step('begin', upper=upper)
         with self.assertRaises(ValueError): c.Model().step('begin', clock_ok=False)
         self.assertEqual(state.step('diagnostic', upper=300), state)
+
+
+def load_tests(loader, tests, pattern):
+    # Exercise the actual publisher sink census inside the established pure entry.
+    spec = importlib.util.spec_from_file_location('authentication_sink_copy_tests',
+        HERE / 'sink-copy-contract-tests.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    tests.addTests(loader.loadTestsFromModule(module))
+    return tests
 
 
 if __name__ == '__main__':
