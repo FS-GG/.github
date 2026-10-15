@@ -92,7 +92,9 @@ its adjacent implementation/tests; no private record or receipt is published her
 `slot-sink-fixture.py` adds an in-process `FramedSlotSinkFixture`. Independently
 supplied expected binding, original identity/window, closed report, reserved
 population, controlled backend and actual `InertCallbackClock` prepare the sink and
-owner. Its inert destination implements the owner's path protocol without touching
+owner. The original report must pass the exact built-in dict/string guard before
+copying: custom copy hooks cannot synthesize an acceptable envelope. Its inert
+destination implements the owner's path protocol without touching
 the filesystem. The actual `InertCallbackRequestDecoder` receives the bytes and
 calls the actual owner, which calls the typed sink. No callback-pair manifest,
 protected vector, source pin, existing callback fixture or production entry changes.

@@ -248,5 +248,23 @@ class FramedSlotFixtureTests(unittest.TestCase):
         self.assertEqual(backend.stores, {})
         self.assertEqual(backend.attempts, set())
 
+    def test_original_report_refused_before_deepcopy_can_synthesize_literals(self):
+        invoked = []
+        class Scalar:
+            def __deepcopy__(self, memo):
+                invoked.append('scalar')
+                return 'fsgg.release-successor-result/1'
+        class Envelope(dict):
+            def __deepcopy__(self, memo):
+                invoked.append('envelope')
+                return dict(slots.REPORT)
+        for report in (dict(slots.REPORT, schema=Scalar()), Envelope(padding='x')):
+            backend = slots.ControlledSlotBackend()
+            with self.subTest(report=type(report)), self.assertRaises(provider.Refused):
+                self.prepared(report=report, backend=backend)
+            self.assertEqual(invoked, [])
+            self.assertIsNone(backend.reservation)
+            self.assertEqual(backend.stores, {})
+
 
 if __name__ == '__main__': unittest.main()

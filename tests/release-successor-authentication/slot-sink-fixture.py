@@ -24,6 +24,9 @@ class InertDestination:
 class FramedSlotSinkFixture:
     def __init__(self, expected_binding, original_sink_identity, report, original_window,
                  reserved_population, backend, clock, input_stream, output_stream):
+        # Check caller bytes/types before any copy hook could rewrite them.
+        if not slots._closed_report(report):
+            raise Refused('inert framed fixture closed report refused')
         # The independently supplied live clock must match the original window.
         # No callback bytes construct a grant or replace these expected inputs.
         if (type(clock) is not consumer.InertCallbackClock
@@ -33,7 +36,7 @@ class FramedSlotSinkFixture:
                 or not callable(getattr(output_stream, 'flush', None))):
             raise Refused('inert framed fixture preparation refused')
         binding = copy.deepcopy(expected_binding)
-        self.report = copy.deepcopy(report)
+        self.report = dict(report)  # Safe after exact dict/string guard, no copy hooks.
         self.sink = slots.InertPhaseSlotSink.prepare(binding, original_sink_identity,
             self.report, original_window, reserved_population, backend)
         destination = InertDestination(original_sink_identity['path'])
