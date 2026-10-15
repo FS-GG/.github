@@ -449,11 +449,23 @@ semantic equivalence, useful measurements and no lifecycle/resource regression.
 
 ### Proposed execution topology
 
-The container builds immutable production fixtures and serves only their static
-artifact directory through a selected reachable port. The existing browser on host-main opens that URL, runs the self-contained
+The container builds immutable production fixtures. Baseline and measurement
+profiles serve only their static artifact directory through a selected reachable
+port. The existing browser on host-main opens that URL, runs the self-contained
 test queue locally, and downloads one combined result. No host-side installation,
 command-line runner or remote-control service is required for this default route. Rendering occurs on host-main, regardless of
 where the HTTP server runs. Serving on the container does not require a container GPU.
+
+Milestone .5 adds one selected **functional actual-player profile**. The generated
+Complete player starts its existing HTTP and SignalR authority, so this profile
+uses the [generated ASP.NET server](https://github.com/FS-GG/FS.GG.Templates/blob/5968a59a599550362e9dc27fc117f45df45c0e30/templates/fs-gg-fable-game/Server/Program.fs)
+on the same task-owned origin as the sealed production fixture tree. Its existing
+routes are `/healthz`, `/api/bootstrap`, `/hub/game` and, when the network candidate
+is enabled, the read-only `/api/review`. The server serves generated test-room state;
+it gains no new endpoint, credential, checkout access or debugging interface. The
+owner binds the exact source, packages, assets, workload and server lifetime to the
+downloaded result, then stops only that server. This functional profile does not
+change the static measurement profiles or establish native product authority.
 
 Default user journey: **open the supplied URL → click Run all → download results**.
 The page owns warm-up, case sequencing, progress, bounded durations, checkpoint/resume
@@ -486,8 +498,10 @@ not authorization or evidence of a running host browser.
 
 ### Fixture and page-runner separation
 
-Refactor the existing harness into build/package, static serving, browser driving,
-measurement and reporting components within Rendering's existing test area.
+For baseline and measurement profiles, refactor the existing harness into
+build/package, static serving, browser driving, measurement and reporting
+components within Rendering's existing test area. The .5 functional profile
+reuses the same queue and result contract with its generated server.
 Reuse its workloads, negative controls and evidence formats. Add a base-URL mode
 that does not launch a container browser or assume container host facts describe
 the browser machine. Keep the current local software route available unchanged
@@ -498,7 +512,8 @@ bundle, asset and workload hashes before and after each run. Serve fixed product
 bytes, with no hot reload or development compilation during measurement. Select an
 unused task-specific port and an owned server process; report the reachable URL
 and stop only that server when the window ends. Do not serve the checkout or
-credentials. A result-download path avoids needing a write-enabled web service.
+credentials. For static profiles, a result-download path avoids needing a
+write-enabled web service.
 
 Host workload actions and timestamps originate inside the host browser. Steady-state
 measurement begins after resources load; report cold-load/network time separately.
@@ -613,7 +628,7 @@ even when an alternative is faster.
 | .2 Host route preparation | Rendering harness split and self-running test page with combined result download | Container dry runs, exact artifact identities, queued execution/checkpoint/export behavior and original software profile retained; no human-assisted host operation; may proceed alongside .1 |
 | .3 Container instance research | Rendering screened benchmarks and provisional design report using realistic glyphs | Raw software-profile results, CPU/allocation/update-path analysis, equivalent outputs and explicit GPU unknowns; depends on prepared harness, not host availability; contract refinements join .1 |
 | .4 Shared implementation | Rendering instance updates/index/reconciliation/cache changes selected by .3 | Focused unit/portable/software-browser tests, before/after container evidence, versioned API and compatibility checks; GPU conclusions remain provisional |
-| .5 Integrated reference | Templates soldier workload in the actual player, shared APIs and accessible alternatives | Container-qualified local/external authority, stress/churn/focus/export; actual application composition joins the staged host suite |
+| .5 Integrated reference | Templates soldier workload in the actual player, shared APIs and accessible alternatives | Container-qualified local/external authority, stress/churn/focus/export through the selected generated-server functional profile; actual application composition joins the staged host suite, while measurement profiles remain static |
 | .6 Consumer and package candidate preparation | FourD/SC2/BAR owners within FABLE-ADOPT-01's existing sequence, plus release owners | Selected product source integration, native semantic obligations, exact package/clean-consumer/retaining-upgrade candidates and autonomous checks complete; freeze baseline/candidate artifacts and one consolidated host packet; no claim of GPU-qualified adoption |
 | .7 Late host-main GPU qualification batch | Rendering measurement owner and host operator | One open-URL/run-all/download session runs baseline/alternatives/candidates and selected consumer journeys; optional diagnostics verify GPU-specific claims without blocking page tests; depends on .1–.6 readiness; follow-up only for demonstrated affected gaps |
 | .8 Publication, installed adoption and closure | Existing release/product owners and programme integrator | Required .7 evidence accepted, coherent publication and final installed/upgrade readback, superseded copies retired, consumer map and owning/unified plans reconciled; an artifact change affecting GPU behavior rejoins a focused batch |
