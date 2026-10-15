@@ -6,6 +6,69 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/skill-quality-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
+# Atlas imports must not add ignored bytes to delivered skill directories.
+export PYTHONDONTWRITEBYTECODE=1
+
+# The cheap and complete routes materialize the same partial skill tree. Keep
+# its declared population here; an engine is added only by the full fixture.
+seed_layout() {
+  rm -rf "$WORK/tree"
+  mkdir -p "$WORK/tree/scripts" "$WORK/tree/tests"
+  cp -a "$ROOT/.claude" "$ROOT/.agents" "$WORK/tree/"
+  cp -a "$ROOT/.github" "$ROOT/docs" "$ROOT/profile" "$WORK/tree/"
+  cp -a "$ROOT/registry" "$WORK/tree/"
+  cp "$ROOT/default.json" "$WORK/tree/"
+  cp -a "$ROOT/tests/skill-registry" "$ROOT/tests/skill-quality" "$WORK/tree/tests/"
+  cp "$ROOT/scripts/generate-driver-manifest" "$WORK/tree/scripts/"
+  cp "$ROOT/scripts/generate-projections" "$WORK/tree/scripts/"
+}
+
+if [ "$#" -ne 0 ]; then
+  if [ "$#" -ne 2 ] || [ "$1" != "--preflight" ] || [[ ! "$2" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "usage: bash tests/skill-quality/run.sh [--preflight BASE_SHA]" >&2
+    exit 2
+  fi
+fi
+
+skill_byte_state() {
+  python3 -B - "$ROOT" <<'PYSTATE'
+import hashlib, json, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+rows = []
+for name in ('.agents/skills', '.claude/skills'):
+    base = root / name
+    if not base.is_dir():
+        raise SystemExit('carrier preflight: missing skill root ' + name)
+    for path in sorted(base.rglob('*')):
+        if '__pycache__' in path.parts:
+            raise SystemExit('carrier preflight: generated Python cache in ' + str(path.relative_to(root)))
+        if path.is_file():
+            rows.append((str(path.relative_to(root)), hashlib.sha256(path.read_bytes()).hexdigest()))
+print(json.dumps(rows, separators=(',', ':')))
+PYSTATE
+}
+skill_byte_state >"$WORK/skill-bytes.before"
+
+# Inspect the assembled archives and partial-tree links before any gate-engine
+# build. These maintained predicates also run during normal qualification.
+if [ "$#" -eq 2 ]; then
+  python3 -B "$ROOT/tests/atlas/check.py" --baseline "$2"
+else
+  python3 -B "$ROOT/tests/atlas/check.py"
+fi
+seed_layout
+python3 "$ROOT/scripts/check-skill-quality.py" --root "$WORK/tree" --links-only
+skill_byte_state >"$WORK/skill-bytes.after"
+if ! cmp -s "$WORK/skill-bytes.before" "$WORK/skill-bytes.after"; then
+  echo "carrier preflight: skill bytes changed during validation; no engine build admitted" >&2
+  exit 1
+fi
+if [ "$#" -eq 2 ]; then
+  echo "carrier preflight: passed; full semantic/CLR qualification was not run"
+  exit 0
+fi
+
 # .github#2653 — THE GATE MUST NOT LEAVE A SHADOWING ENGINE BUILD IN THE CALLER'S CHECKOUT.
 #
 # `scripts/check-skill-quality` builds the coordination engine. Until this row it built it INTO the
@@ -96,15 +159,7 @@ pass=0
 fail=0
 
 seed() {
-  rm -rf "$WORK/tree"
-  mkdir -p "$WORK/tree/scripts" "$WORK/tree/tests"
-  cp -a "$ROOT/.claude" "$ROOT/.agents" "$WORK/tree/"
-  cp -a "$ROOT/.github" "$ROOT/docs" "$ROOT/profile" "$WORK/tree/"
-  cp -a "$ROOT/registry" "$WORK/tree/"
-  cp "$ROOT/default.json" "$WORK/tree/"
-  cp -a "$ROOT/tests/skill-registry" "$ROOT/tests/skill-quality" "$WORK/tree/tests/"
-  cp "$ROOT/scripts/generate-driver-manifest" "$WORK/tree/scripts/"
-  cp "$ROOT/scripts/generate-projections" "$WORK/tree/scripts/"
+  seed_layout
   # THE SEEDED TREE STILL CARRIES AN ENGINE WHERE `generate-projections` LOOKS FOR ONE, because several
   # cases below run `$WORK/tree/scripts/generate-projections` and it resolves
   # `${FSGG_COORD_ENGINE_BIN:-<root>/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}`. That
@@ -259,6 +314,42 @@ seed
 printf '\n[missing reference](references/does-not-exist.md)\n' \
   >>"$WORK/tree/.claude/skills/check-board/SKILL.md"
 expect_rejection "broken relative links fail before distribution" "broken relative link"
+
+# A target present in the repository can still be absent from the partial tree.
+seed
+printf '\n[repository-only test](../../../../tests/work-programme/routine-decisions.fsx)\n' \
+  >>"$WORK/tree/.claude/skills/work-programme/references/context.md"
+expect_rejection "repository-only test links fail in the actual partial tree" "broken relative link"
+
+# Exercise the real Atlas delivery predicate on an omitted seed projection.
+seed
+cp -a "$ROOT/.fsgg" "$WORK/tree/"
+cp "$ROOT/AGENTS.md" "$ROOT/CLAUDE.md" "$WORK/tree/"
+python3 -B - "$ROOT" "$WORK/tree" <<'PYCONTROL'
+import importlib.util, json, sys
+from pathlib import Path
+root, tree = map(Path, sys.argv[1:])
+spec = importlib.util.spec_from_file_location('atlas_delivery', root / 'tests/atlas/check.py')
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+module.ROOT = tree
+seed = tree / '.agents/skills/atlas/assets/seed'
+catalog = json.loads((seed / 'catalog.json').read_text())
+records = {digest: json.loads((seed / 'records' / (digest + '.json')).read_text())
+           for digest in catalog['records']}
+referenced = {digest for row in records.values() for key in ('supersedes', 'conflictsWith')
+              for digest in row[key]}
+removed = next(digest for digest in reversed(catalog['records']) if digest not in referenced)
+catalog['records'].remove(removed)
+(seed / 'catalog.json').write_bytes(module.atlas.canonical(catalog))
+(seed / 'records' / (removed + '.json')).unlink()
+try:
+    module.delivery_checks()
+except AssertionError as error:
+    assert str(error) == 'seed drift', str(error)
+else:
+    raise AssertionError('omitted seed projection passed')
+print('PASS  original omitted seed projection fails the real Atlas delivery predicate')
+PYCONTROL
 
 # .github#2343: a link inside a kit-delivered skill (registry/repos.yml `kit:` block) that resolves
 # to a real file OUTSIDE every kit skill directory (here, docs/coordination/README.md) is exactly

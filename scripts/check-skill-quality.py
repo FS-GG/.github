@@ -14,7 +14,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import yaml
 
 ROOTS = (".claude/skills", ".agents/skills")
 # The single statement of the contract schema this gate understands. Stated ONCE on purpose
@@ -44,6 +43,7 @@ def load_generator(root: Path):
 
 
 def validate_openai_metadata(root: Path, names: set[str], errors: list[str]) -> None:
+    import yaml
     for name in sorted(names):
         path = root / ROOTS[0] / name / "agents/openai.yaml"
         if not path.is_file():
@@ -122,6 +122,7 @@ def kit_skill_ids(root: Path, errors: list[str]) -> set[str]:
     `kit_sources`, which answers the sibling "every kit source" question this narrows to skills).
     """
     path = root / "registry/repos.yml"
+    import yaml
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -612,10 +613,33 @@ def validate_forward_corpus(root: Path, names: set[str], errors: list[str]) -> N
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", default=".")
-    parser.add_argument("--contract", required=True)
+    parser.add_argument("--contract")
+    parser.add_argument("--links-only", action="store_true",
+                        help="check relative links only; no YAML, engine contract or CLR")
     args = parser.parse_args()
     root = Path(args.root).resolve()
     errors: list[str] = []
+    if args.links_only:
+        if args.contract:
+            parser.error("--links-only does not accept --contract; full validation remains separate")
+        directory = root / ROOTS[0]
+        if not directory.is_dir():
+            parser.error("--links-only requires the declared skill root")
+        names = {path.name for path in directory.iterdir() if path.is_dir()}
+        if not names:
+            parser.error("--links-only requires a nonempty skill population")
+        for name in sorted(names):
+            if not (directory / name / "SKILL.md").is_file():
+                fail(errors, f"{name}: --links-only requires SKILL.md")
+        validate_links(root, names, errors)
+        for error in errors:
+            print(f"::error::skill-quality: {error}", file=sys.stderr)
+        if errors:
+            return 1
+        print(f"skill-quality: relative links pass for {len(names)} skills; other obligations not evaluated")
+        return 0
+    if not args.contract:
+        parser.error("full validation requires --contract")
 
     generator = load_generator(root)
     report, catalog_errors = generator.validate_catalog(str(root))
