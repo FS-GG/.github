@@ -1831,6 +1831,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--merge-method", choices=("merge", "squash", "rebase"), default="squash")
     result.add_argument("--publication", choices=("none", "required"), default="none")
     result.add_argument("--coherent-workflow", help="candidate-scoped coherent workflow file or id")
+    result.add_argument("--telemetry-unavailable", choices=("local-clr-resource-hold",),
+                        help="record an explicit advisory collection gap without starting CLR telemetry")
     result.add_argument("--telemetry-assignment", help="private CI assignment for advisory automatic observation")
     result.add_argument("--telemetry-store-root", help="private durable telemetry store root")
     result.add_argument("--telemetry-config", help="private host telemetry configuration; otherwise use the canonical discovery order")
@@ -1863,6 +1865,32 @@ def main(argv: list[str]) -> int:
         parser().error("--pr must be positive")
     if not SHA_RE.fullmatch(args.head):
         parser().error("--head must be a lowercase 40-hex commit SHA")
+    unavailable_audit = None
+    if args.telemetry_unavailable:
+        if (args.watch_checks or args.telemetry_assignment is not None
+                or args.telemetry_store_root is not None or args.telemetry_config is not None
+                or args.telemetry_engine is not None or args.telemetry_publisher_event
+                or args.telemetry_publisher_config is not None
+                or args.telemetry_advisory_deadline_monotonic is not None
+                or os.environ.get("FSGG_TELEMETRY_CONFIG")):
+            parser().error("--telemetry-unavailable conflicts with watch, telemetry configuration or publication options")
+        identities = [args.telemetry_feature, args.telemetry_item, args.telemetry_attempt]
+        if (any(value is not None for value in identities)
+                and not all(isinstance(value, str) and value.strip() for value in identities)):
+            parser().error("unavailable audit requires a complete nonempty feature/item/attempt trio")
+        if args.telemetry_parent_attempt is not None and (
+                not all(identities) or not args.telemetry_parent_attempt.strip()):
+            parser().error("unavailable parent attempt requires a complete identity trio and nonempty value")
+        unavailable_audit = {
+            "schema": "fsgg.routine-telemetry-unavailable/1", "reason": args.telemetry_unavailable,
+            "repo": args.repo, "pr": args.pr, "expectedHead": args.head,
+        }
+        if all(identities):
+            unavailable_audit["identity"] = dict(zip(("feature", "item", "attempt"), identities))
+            if args.telemetry_parent_attempt is not None:
+                unavailable_audit["identity"]["parentAttempt"] = args.telemetry_parent_attempt
+        if len(json.dumps(unavailable_audit, separators=(",", ":")).encode("utf-8")) > 2048:
+            parser().error("unavailable audit identity exceeds 2048 bytes")
     if args.install_routine_producer:
         if (args.watch_checks or args.publication != "none" or not args.coherent_workflow
                 or not args.routine_producer_source or not SHA_RE.fullmatch(args.routine_producer_source)):
@@ -1899,7 +1927,9 @@ def main(argv: list[str]) -> int:
     config_path, telemetry_repository = args.telemetry_config, args.repo
     workspace_transport = bool(config_path and not store_root)
     engine = args.telemetry_engine or "fsgg-coord-engine"
-    if not assignment and not store_root:
+    if args.telemetry_unavailable:
+        observation_health.append("unavailable")
+    elif not assignment and not store_root:
         try:
             config = discover_telemetry_config(args.telemetry_config, command_engine=engine)
             if config is not None:
@@ -1974,6 +2004,9 @@ def main(argv: list[str]) -> int:
     output = asdict(result)
     if args.telemetry_publisher_event:
         output["dashboardPublicationHealth"] = dashboard_health
+    if unavailable_audit is not None:
+        unavailable_audit.update(outcome=result.outcome, codeDelivery=result.codeDelivery)
+        print(json.dumps(unavailable_audit, separators=(",", ":"), sort_keys=True), file=sys.stderr)
     print(json.dumps(output, separators=(",", ":"), sort_keys=True))
     return code
 

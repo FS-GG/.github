@@ -30,6 +30,19 @@ root observation before the driver itself returns. Pass feature/item/attempt ide
 configuration or publication remains advisory to delivery but must be reported once as an attributed coverage
 gap, never silently omitted.
 
+When local CLR execution is held, the canonical delivery helper accepts
+`--telemetry-unavailable local-clr-resource-hold` for otherwise authorized delivery. This explicit
+advisory route skips compiled configuration discovery, assignment creation and CI observation, retains
+`telemetryHealth: unavailable`, and emits one bounded JSON coverage-gap record to stderr with the exact
+repository, PR, head and final delivery outcome. A complete feature/item/attempt trio and optional parent
+attempt may be retained as audit identity only; it creates no assignment or authenticated usage join.
+The audit input is limited to 2048 bytes. This route rejects watch mode, explicit telemetry assignment,
+store, config or engine, publisher event/config/deadline options, and nonempty `FSGG_TELEMETRY_CONFIG`
+before native calls. Preserve the stderr record in existing private native logs and reconcile the gap
+asynchronously. The flag establishes no missing-config claim or resource admission; ordinary exact-head
+checks, coherent validation, merge refusal, native readback and publication boundaries still apply.
+Default collection behavior is unchanged.
+
 The native collaboration tool exposes no usage hook. The adapter records expected population, lineage,
 requested model/effort and outcome, then joins completed child turns through read-only Codex host metadata when
 `CODEX_THREAD_ID` is available. After late usage or a follow-up, run `usage-reconcile` for the affected terminal
