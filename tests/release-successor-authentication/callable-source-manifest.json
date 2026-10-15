@@ -1,8 +1,8 @@
 {
   "schema": "fsgg.authentication-callable-source-bundle/1",
-  "qualification": "inert consumer source candidate pinned to an unprotected producer candidate; maintained managed compilation and hosted callback pair pending",
-  "ownerBase": "6387eaaf71162237649a1c993c93d99a9e7dfdcb",
-  "producerRevision": "bedee6f44529838843ca7c4dfb4cb8aa9f1e1f36",
+  "qualification": "S4-A typed plan/refusal source candidate; native preparation unavailable; managed nine new controls and callback pair pending hosted qualification",
+  "ownerBase": "42ce800441d45b1b045cc17478ca306eb4db9fbf",
+  "producerRevision": "8cbb7a44baae41354c346e718c1ecff12650a45f",
   "digestRecipe": "SHA256 of ASCII rows <sha256><two spaces><repository>/<path><LF>, sorted by ASCII repository/path key (not by the whole row); excludes this manifest, generated bindings/vectors and results",
   "files": [
     {
@@ -38,12 +38,12 @@
     {
       "repository": "FS-GG/FS.GG.Coordination",
       "path": "src/FS.GG.Coordination.Orchestration.Execution/FiniteCustodyComposition.fs",
-      "sha256": "871b58f7547fa805ad3a8348f44e7d438524249653571d867a83fb0c8a31ed9b"
+      "sha256": "bd8cf7cf0d72abaf57ef47c9d1e3e7edf8cc01314001e961aa45d3f149b0b7ef"
     },
     {
       "repository": "FS-GG/FS.GG.Coordination",
       "path": "src/FS.GG.Coordination.Orchestration.Execution/FiniteCustodySessionAdapter.fs",
-      "sha256": "508e714e643c8e51819ac8eef72aa6391a9531a25757290f368f47cbf867b86a"
+      "sha256": "c77aebf01bfeed4dcdde0a570fc76e95f9b01ba2a507063861ff247e782c81a1"
     },
     {
       "repository": "FS-GG/FS.GG.Coordination",
@@ -54,7 +54,17 @@
       "repository": "FS-GG/FS.GG.Coordination",
       "path": "src/FS.GG.Coordination.Orchestration.Execution/PhaseResultProtocol.fs",
       "sha256": "df27e14e33e82a68b42fdeeb67a2522f83affad994d0ce07ea5823b6ff068924"
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "path": "src/FS.GG.Coordination.Orchestration.Runner.Client/FiniteCustodyInertAdapter.fs",
+      "sha256": "45ce87c8278b4803b2f277ccf71ea966f46c74bc8d50cb5d67c35a0dec0065e9"
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "path": "src/FS.GG.Coordination.Orchestration.Runner.Client/Program.fs",
+      "sha256": "290b4ca35e78cedadf5544a506346ae93f78d7c320697d7a5dd2144bbfd6d902"
     }
   ],
-  "bundleDigest": "75afc053513fdab02a80a33e8beebbac1a828fd79be6136f8f88da2545367e76"
+  "bundleDigest": "59f37a68e55abf873dea45e67f4860a47c565a79733e40c0f9f6f352ff8413ac"
 }
