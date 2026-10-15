@@ -302,6 +302,35 @@ class ProtocolControls(unittest.TestCase):
         self.assertTrue(all(len(raw) <= pin['maximumAckBytes'] for raw in acks))
         self.assertLessEqual(sum(map(len, children + acks)), pin['maximumAggregateBytes'])
 
+    def test_selected_future_identity_is_distinct_from_synthetic_provider_fixture(self):
+        pin = json.loads((pathlib.Path(__file__).parent / 'wire-contract.json').read_bytes())
+        synthetic = pin['identities']['syntheticFixture']
+        selected = pin['identities']['selectedFuture']
+        self.assertEqual(synthetic, {'id': 4882140, 'installation': 123})
+        self.assertEqual(selected, {'id': 4995487, 'installation': 162873149})
+        self.assertEqual(binding()['app'], synthetic)
+        self.assertNotEqual(selected, synthetic)
+        vectors = protocol_vectors()
+        selected_binding = copy.deepcopy(vectors['binding'])
+        selected_binding['app'] = selected
+        # This is an inert expected descriptor, never provider identity evidence.
+        start = provider._auth_canonical({'v': provider.AUTH_PROTOCOL, 'k': 'start',
+            'b': provider.validate_auth_binding(selected_binding), 'p': selected_binding})
+        selected_frame = len(start).to_bytes(4, 'big') + start
+        for expected, foreign in ((selected_binding, bytes.fromhex(vectors['start'])),
+                                  (vectors['binding'], selected_frame)):
+            with self.subTest(expected=expected['app']):
+                calls = []
+                subject = consumer.InertStartConsumer(expected)
+                with self.assertRaises(provider.Refused):
+                    subject.take(foreign, lambda *_: calls.append('exchange'), lambda: calls.append('clock'))
+                self.assertEqual(calls, [])
+        subject = consumer.InertStartConsumer(selected_binding)
+        admitted = subject.take(selected_frame, forbidden, lambda: 1)
+        self.assertEqual(admitted.binding['app'], selected)
+        self.assertNotEqual(subject.binding_digest,
+                            provider.validate_auth_binding(vectors['binding']))
+
     def test_independent_readback_mismatch_never_opens_ready_gate(self):
         with tempfile.TemporaryDirectory() as root:
             channel = RetainedChannel(root); opener = Opener()
