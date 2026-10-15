@@ -1334,6 +1334,11 @@ def load_tests(loader, tests, pattern):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     tests.addTests(loader.loadTestsFromModule(module))
+    slot_path = pathlib.Path(__file__).with_name('slot-callback-pair-tests.py')
+    slot_spec = importlib.util.spec_from_file_location('authentication_slot_callback_pair_tests', slot_path)
+    slot_module = importlib.util.module_from_spec(slot_spec)
+    slot_spec.loader.exec_module(slot_module)
+    tests.addTests(loader.loadTestsFromModule(slot_module))
     return tests
 
 
