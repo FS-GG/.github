@@ -119,6 +119,8 @@ registry like any other, and this org gates its registries.
 | [0091](0091-speed-first-clean-v2-start.md) | Start v2 clean in `.github`, prove one real journey and rerun, then adopt repositories explicitly and repair forward | Accepted |
 | [0092](0092-descriptor-driven-polyglot-workspace-providers.md) | Descriptor-driven polyglot catalog, provider-owned identifiers and shared Quint/governance/skills contracts; downstream publication and adoption stay separate | Accepted architecture; record implements the maintainer decision |
 
+| [0093](0093-original-103-authentication-domain-policy.md) | Original .103 authentication domain policy | Accepted policy; implementation and native admission pending |
+
 ## Supersession map
 
 Which record currently rules, and where a decision was amended. Every edge below is recorded in
