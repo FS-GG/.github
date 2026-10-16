@@ -1,10 +1,15 @@
 # ADR-0093: Original .103 authentication domain policy
 
-- **Status:** Accepted policy; principal/custody selection amended by [ADR-0094](0094-separate-v3-and-utel-principals-and-custody.md); implementation and native admission pending
+- **Status:** Accepted policy; principal/custody selection amended by [ADR-0094](0094-separate-v3-and-utel-principals-and-custody.md); fresh-profile resource scope proposed by [ADR-0095](0095-utel-resource-containment-for-fresh-profiles.md); implementation and native admission pending
 - **Date:** 2026-10-15
 - **Affects:** UTEL original `.103` authentication-only operation, external phase authority and native supervisor
 - **Decision owner:** Programme, under the sponsor's explicit delegation
 - **Decision:** [Domain policy](https://github.com/FS-GG/.github/issues/4517#issuecomment-6199911781), [accounting and ACK topology](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200107860), and [bounded source reservation](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200287829)
+
+**Fresh-profile resource scope — 2026-10-16:** [ADR-0095](0095-utel-resource-containment-for-fresh-profiles.md)
+selects resource containment only for separately authorized fresh profiles. This record's
+original `.103` physical-copy requirement and 65,536-byte cap remain unchanged and unproved;
+no existing reservation, original-effect hold or admission is migrated by that decision.
 
 ## Context
 
