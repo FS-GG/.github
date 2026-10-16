@@ -126,6 +126,99 @@ def prepare_body(body: str, branch: str, head: str, campaign: str, chain: str) -
     return append_marker(body, expected)
 
 
+def machine_markers(body: str) -> dict[str, str]:
+    """Retain even unknown FS.GG metadata; never guess how to rewrite it."""
+    matches = list(re.finditer(r"<!--\s*(fsgg[^\s>]*)(?:\s.*?)?-->", body, re.DOTALL))
+    markers: dict[str, str] = {}
+    for match in matches:
+        key = match.group(1)
+        if key in markers:
+            raise ToolError("duplicate machine-owned PR metadata")
+        markers[key] = match.group(0)
+    if len(re.findall(r"<!--\s*fsgg", body)) != len(matches):
+        raise ToolError("incomplete machine-owned PR metadata")
+    return markers
+
+
+def update_body(fresh: str, proposed: str, branch: str, head: str,
+                previous_head: str, campaign: str, chain: str) -> str:
+    """Only the routine head may change; native metadata owns every other field."""
+    if marker_from_body(fresh) != (campaign, chain) or fresh.count("fsgg-pr-lane-admission") != 1:
+        raise ToolError("existing PR admission identity is missing, malformed or conflicts")
+    original = machine_markers(fresh)
+    desired = dict(original)
+    if branch.startswith("routine/"):
+        # Idempotent retries can observe the already rebound marker.
+        try:
+            validate_routine_body(fresh, branch, head)
+        except ToolError:
+            validate_routine_body(fresh, branch, previous_head)
+        key = "fsgg:routine-development/v1"
+        desired[key] = re.sub(r"(?<!\S)head=[0-9a-f]+(?=\s)", "head=" + head, original[key])
+    submitted = machine_markers(proposed)
+    for key, value in submitted.items():
+        allowed = {original[key], desired[key]} if key in original else set()
+        if key == "fsgg:routine-development/v1" and key in desired:
+            allowed.add(re.sub(r"(?<!\S)head=[0-9a-f]+(?=\s)", "head=" + previous_head, desired[key]))
+        if value not in allowed:
+            raise ToolError("proposed body conflicts with native machine-owned metadata")
+    prose = proposed
+    for value in submitted.values():
+        prose = prose.replace(value, "", 1)
+    result = prose.rstrip() + "\n\n" + "\n".join(desired.values()) + "\n"
+    validate_routine_body(result, branch, head)
+    return result
+
+
+def update_pull(arguments: argparse.Namespace, proposed: str, identity: dict[str, Any]) -> dict[str, Any]:
+    identity = {**identity, "number": arguments.update_pr, "headSha": arguments.head_sha}
+    endpoint = f"/repos/{arguments.repo}/pulls/{arguments.update_pr}"
+
+    def read() -> dict[str, Any]:
+        value = run_gh(arguments.gh, ["--method", "GET", endpoint])
+        if not isinstance(value, dict) or not isinstance(value.get("body"), str):
+            raise ToolError("existing pull-request response was unreadable")
+        head = value.get("head")
+        base = value.get("base")
+        repo = head.get("repo") if isinstance(head, dict) else None
+        if (not isinstance(head, dict) or not isinstance(base, dict) or not isinstance(repo, dict)
+                or value.get("number") != arguments.update_pr or value.get("state") != "open"
+                or head.get("ref") != arguments.head
+                or head.get("sha") != arguments.head_sha
+                or str(repo.get("full_name", "")).lower() != arguments.repo.lower()
+                or base.get("ref") != arguments.base):
+            raise Refusal("update-candidate-mismatch", **identity)
+        return value
+
+    with repository_lock(arguments.repo):
+        before = read()
+        body = update_body(before["body"], proposed, arguments.head, arguments.head_sha,
+                           arguments.previous_head_sha, arguments.campaign_id, arguments.dependency_chain_id)
+        if current_head_sha(arguments.gh, arguments.repo, arguments.head) != arguments.head_sha:
+            raise Refusal("head-moved", **identity)
+        # This route cannot atomically compare-and-swap a PR body. Re-read
+        # immediately before mutation and read back after; never retry an uncertain write.
+        if read() != before:
+            raise Refusal("update-conflict", **identity)
+        unchanged = before["body"] == body and before.get("title") == arguments.title
+        if not arguments.inspect and not unchanged:
+            try:
+                run_gh(arguments.gh, ["--method", "PATCH", endpoint, "--input", "-"],
+                       stdin=json.dumps({"body": body, "title": arguments.title}, ensure_ascii=False))
+            except ToolError as error:
+                # A failed response does not establish whether GitHub applied it.
+                raise Refusal("update-write-unresolved", **identity) from error
+            try:
+                after = read()
+            except (ToolError, Refusal) as error:
+                raise Refusal("post-write-readback-unresolved", **identity) from error
+            if after["body"] != body or after.get("title") != arguments.title:
+                raise Refusal("update-readback-mismatch", **identity)
+        return {"ok": True, "action": "admitted" if arguments.inspect else "unchanged" if unchanged else "updated",
+                **identity, "number": arguments.update_pr, "headSha": arguments.head_sha,
+                "url": before.get("html_url")}
+
+
 def run_gh(gh: str, arguments: list[str], stdin: str | None = None) -> Any:
     try:
         completed = subprocess.run(
@@ -280,12 +373,19 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--base", required=True)
     result.add_argument("--title", required=True)
     result.add_argument("--body-file", required=True, type=pathlib.Path)
+    result.add_argument("--update-pr", type=int, help="Update an existing managed PR, preserving native machine metadata")
+    result.add_argument("--previous-head-sha", help="Explicit previous routine marker head for an update")
     result.add_argument("--inspect", action="store_true", help="Check admission without creating a PR")
     result.add_argument("--gh", default="gh", help=argparse.SUPPRESS)
     return result
 
 
 def validate(arguments: argparse.Namespace) -> None:
+    if arguments.update_pr is not None and (arguments.update_pr <= 0 or not arguments.previous_head_sha
+            or not SHA_RE.fullmatch(arguments.previous_head_sha)):
+        raise ToolError("update requires a positive PR number and an exact previous head SHA")
+    if arguments.previous_head_sha and arguments.update_pr is None:
+        raise ToolError("previous head SHA requires --update-pr")
     if not REPO_RE.fullmatch(arguments.repo):
         raise ToolError("repo must have owner/repository form")
     for label, value in (
@@ -310,14 +410,16 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
         original_body = arguments.body_file.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as error:
         raise ToolError(f"could not read UTF-8 body file: {error}") from error
-    managed_body = prepare_body(original_body, arguments.head, arguments.head_sha,
-                                arguments.campaign_id, arguments.dependency_chain_id)
     identity = {
         "repo": arguments.repo,
         "campaignId": arguments.campaign_id,
         "dependencyChainId": arguments.dependency_chain_id,
     }
 
+    if arguments.update_pr is not None:
+        return update_pull(arguments, original_body, identity)
+    managed_body = prepare_body(original_body, arguments.head, arguments.head_sha,
+                                arguments.campaign_id, arguments.dependency_chain_id)
     with repository_lock(arguments.repo):
         pulls = open_pulls(arguments.gh, arguments.repo)
         try:
