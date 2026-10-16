@@ -1,0 +1,42 @@
+{
+  "schema": "fsgg.utel-closed-source-manifest/1",
+  "qualification": "source semantics only; controlled unsigned evidence; no physical fit or operational authority",
+  "files": [
+    {
+      "path": "scripts/fsgg_feed.py",
+      "sha256": "f7650429432417af72168c288cdee347b338328848870cb4f2f18d6b62d0733f"
+    },
+    {
+      "path": "scripts/release_successor_auth_consumer.py",
+      "sha256": "e61005233d80d394186024f5f0659b3546349811dab327b8f45b6ab5eaed56b2"
+    },
+    {
+      "path": "scripts/release_successor_closed_callback.py",
+      "sha256": "6b49a8dab19fecc9ff7ed043a4c55c978fff1e8e17c48266819d82642659939b"
+    },
+    {
+      "path": "scripts/release_successor_execution.py",
+      "sha256": "ea1fb156eca3d63ab4d7ae0c60ecfd6fd5d2c5053c25019252451a855387375e"
+    },
+    {
+      "path": "scripts/release_successor_provider.py",
+      "sha256": "b20239f394379e2c42dba023d43065bdebe4e6a620ab8adba77be77c4689bd17"
+    },
+    {
+      "path": "tests/release-successor-authentication/domain_contract.py",
+      "sha256": "397a7e7bf6475ce91e6f7843b9b1b326e914b5fe8ab0413bf51ec585efef4675"
+    },
+    {
+      "path": "tests/release-successor-authentication/inert_phase_slot_sink.py",
+      "sha256": "98d9457555d5a67c9bdf21d683b6889e665dae57955cfa2b31f305a8b98f9ce3"
+    },
+    {
+      "path": "tests/release-successor-authentication/domain-max-vectors.json",
+      "sha256": "75dc1fbc6ef7e21ab163861c900fcf70bd9d6d8b00d7469b9f5bf0177d78db11"
+    },
+    {
+      "path": "tests/release-successor-authentication/closed-source-profile.json",
+      "sha256": "5c13399a71a782e713e445b3da9a93687b00347ab02bf3112bddce3dc803b5ff"
+    }
+  ]
+}

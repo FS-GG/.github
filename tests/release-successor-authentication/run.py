@@ -1344,6 +1344,11 @@ def load_tests(loader, tests, pattern):
     authority_module = importlib.util.module_from_spec(authority_spec)
     authority_spec.loader.exec_module(authority_module)
     tests.addTests(loader.loadTestsFromModule(authority_module))
+    closed_path = pathlib.Path(__file__).with_name('closed-source-tests.py')
+    closed_spec = importlib.util.spec_from_file_location('authentication_closed_source_tests', closed_path)
+    closed_module = importlib.util.module_from_spec(closed_spec)
+    closed_spec.loader.exec_module(closed_module)
+    tests.addTests(loader.loadTestsFromModule(closed_module))
     return tests
 
 
