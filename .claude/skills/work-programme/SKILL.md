@@ -15,15 +15,25 @@ Start development only on requested advancement; inspection, maintenance and aud
 
 ## Conditional three-outcome pilot
 
+<!-- Retain this anchor for existing handoffs; scope is extended below. -->
+
 The selected [pilot](../../../docs/roadmaps/2026-10-05-programme-context-efficiency.md#selected-three-outcome-programme-pilot--2026-10-16)
 replaces conflicting coordination requirements below and in this skill's references **only for its
-three outcomes after protected delivery of this reviewed governing change**. The replacement applies
+three original outcomes and ROUTINEV3 source work from the v3 open index after protected delivery
+of the applicable reviewed governing change**. The replacement applies
 to the default workflow and its adapter, bootstrap, context and crash-recovery references, including
 their mandatory packet, typed-return, reducer/current-view and dispatch-index directions. The owning
 issue, applicable governing instructions and linked native evidence become the assignment and recovery
 route. Preserve owner, scope, authority, resource bounds, acceptance, original identities and all active
 or uncertain reservations. Use old helpers only when they answer a named unresolved obligation; their
 schemas remain valid for other callers. Other outcomes retain the default workflow.
+
+The ROUTINEV3 extension uses the existing owning issue and native PR as current state; do not create
+a new issue, packet, return or status projection merely to deliver a routine source change. One
+accountable owner carries it through one independent source review, relevant tests and final required
+CI with exact tested-versus-delivered correspondence. This includes governing policy and skill changes.
+Existing authorization and operation-specific admission persist; the extension grants no deployment,
+credential, cleanup, publication or uncertain-original authority.
 
 | Outcome | Accountable owner | Done when |
 |---|---|---|
@@ -47,7 +57,11 @@ operational acceptance, custody, enrollment and recovery. One owner carries ordi
 repair, PR updates and delivery through existing admission in an isolated worktree; one integrator owns
 shared surfaces. Existing authorization persists. Escalate changed scope/authority, unresolved user
 choices, conflicts and uncertain effects. Ordinary milestones require no extra parent approval or
-repeated parent file-by-file review. Keep one active implementation PR per coherent change. Open a lane
+repeated parent file-by-file review. Explicitly activate an idle designated reviewer when the exact
+candidate is ready, supplying its head and review obligations; an assignment alone is not a review.
+Preserve PR-body admission metadata through the canonical delivery tooling whenever the body changes;
+until automatic preservation is qualified, verify the native metadata and repair through that route
+before delivery. Keep one active implementation PR per coherent change. Open a lane
 only for a completion condition or independently useful cross-team dependency.
 
 Retire mandatory packet/return/reducer and duplicate current-view artifacts at protected delivery of
@@ -87,6 +101,8 @@ coordination effort, blocked time and escaped defects during ordinary work; miss
 80% effort-reduction claim inconclusive, but measurement is not an activation or delivery gate.
 
 ## Default workflow
+
+Apply this section only where the activated pilot and ROUTINEV3 extension above do not replace it.
 
 Use the user-selected V2-CTX-01 default: pinned packets, typed returns, `delta` views, bounded `view`, declared
 mechanical `reuse` and existing check watchers. Use the dependency-free [context helper](references/context.md)

@@ -1,7 +1,8 @@
 # Parent context operations
 
 The [conditional pilot](../SKILL.md#conditional-three-outcome-pilot) replaces mandatory context-helper,
-packet and reducer use for its three outcomes only after the replacement evidence gate qualifies.
+packet and reducer use for the original outcomes and ROUTINEV3 source work after protected delivery
+of the applicable governing rule; automatic evidence qualification is a separate fact-specific boundary.
 The helper contracts below remain unchanged when used; native resource, reservation, review and
 recovery obligations still apply. Store necessary evidence with the issue-linked original artifacts,
 without requiring duplicate packet/current-view records.

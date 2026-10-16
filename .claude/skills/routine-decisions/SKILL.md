@@ -10,7 +10,7 @@ Use this for current programme observations and ordinary same-owner repair. The 
 Apply the full governing instructions once per selected window. This skill does not select
 new work or grant execution, merge, publication, cleanup or ownership transfer.
 
-For the three selected outcomes, apply the [conditional pilot](../work-programme/SKILL.md#conditional-three-outcome-pilot)
+For the original outcomes and ROUTINEV3 source work, apply the [conditional pilot](../work-programme/SKILL.md#conditional-three-outcome-pilot)
 first. After its reviewed rule is protected, the six-field owning issue, native PR/check identities and
 linked evidence replace mandatory reducer, packet, return and duplicate current-view artifacts below.
 The reducer remains optional diagnostics. Where an automatic CI result has not yet qualified a required
