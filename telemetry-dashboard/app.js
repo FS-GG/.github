@@ -431,6 +431,40 @@
     state.deliveries.forEach((delivery)=>{const tr=document.createElement("tr"), first=document.createElement("td"), link=document.createElement("a");link.href=delivery.url;link.target="_blank";link.rel="noopener";link.textContent=`#${delivery.number} ${delivery.title}`;first.append(link);const merged=document.createElement("td");merged.textContent=date(delivery.mergedAt);const elapsed=document.createElement("td");elapsed.textContent=duration(delivery.elapsedSeconds);tr.append(first,merged,elapsed);body.append(tr);});
   }
 
+  function renderFacts(data, host) {
+    const known=(value)=>value==null?"Unknown":String(value);
+    const ready=host.schema === "fsgg.telemetry.dashboard-host/5";
+    const launcher=ready?host.launcherPopulation:{};
+    const coverage=ready?host.completedItems.coverage:null;
+    const selection=data.actions.selection;
+    const rows=[
+      ["Public Actions sample",`${selection.returned} returned / ${known(selection.repositoryTotalAtObservation)} repository runs at observation`,selection.truncated?"Bounded sample; repository population is larger":"Sample at observation; not a runtime usage denominator"],
+      ["Public merged-delivery sample",`${data.deliveries.selection.returned} merged deliveries / ${data.deliveries.selection.closedScanned} closed pull requests scanned`,"Bounded updated-order scan; delivery evidence does not establish whole-item completion or effort"],
+      ["Completed-item projection",coverage?`${known(coverage.published)} published / ${known(coverage.eligible)} eligible`:"Unknown",coverage?`${known(coverage.unmapped)} unmapped · ${known(coverage.dirty)} pending reduction · ${known(coverage.incompatible)} incompatible`:"Host item population unavailable"],
+      ["Launcher records",`admitted ${known(launcher.admitted)} · started ${known(launcher.started)} · terminal ${known(launcher.terminal)} · usage ${known(launcher.usage)}`,`Missing admission ${known(launcher.missingAdmission)} · start ${known(launcher.missingStart)} · terminal ${known(launcher.missingTerminal)} · usage ${known(launcher.missingUsage)}`],
+      ["Expected runtime dispatches",ready?known(host.operational.expected):"Unknown","Usage and terminal coverage not evaluated; launcher record counts are not a matched dispatch denominator"],
+      ["Observed token total",ready&&host.totals.usageObservations>0?known(host.usage.total):"Unknown","Observed usage only; gaps do not establish a complete total"],
+      ["Whole-population priced cost","Unknown","No complete priced-cost population is available in this feed"],
+    ];
+    $("facts-population").replaceChildren(metricTable(["Population / dimension","Observed value / denominator","Missing evidence / limit"],rows,"Observed populations and missing coverage"));
+  }
+  function renderFactClocks(data, host) {
+    const observed=(value,limit)=>{
+      if(!value)return "Unavailable";
+      const age=Date.now()-Date.parse(value);
+      return `${date(value)} · ${!Number.isFinite(age)||age<0?"freshness unknown (clock mismatch)":age>limit?"stale observation":"within observation age limit"}`;
+    };
+    $("facts-freshness").replaceChildren(metricTable(["Clock","Evidence"],[
+      ["Actions observation",observed(data.actions.observedAt,30*60*1000)],
+      ["Public delivery observation",observed(data.deliveries.observedAt,30*60*1000)],
+      ["Store snapshot observation",observed(host.observedAt,60*60*1000)],
+      ["Producer observation (whole population)","Unavailable"],
+      ["Ingestion receipt (whole population)","Unavailable"],
+      ["Publication receipt","Unavailable"],
+      ["Data build",`${date(data.builtAt)} · build time only`],
+    ],"Source clocks and freshness limits"));
+  }
+
   function renderLocal(host) {
     const content = $("local-content");
     content.replaceChildren();
@@ -695,7 +729,7 @@
     });
   }
   function validate(data) {
-    if (!object(data) || data.schema !== "fsgg.telemetry.dashboard/2" || !timestamp(data.builtAt) || typeof data.sourceRevision !== "string" || !object(data.actions) || data.actions.schema !== "fsgg.telemetry.public-actions/1" || !timestamp(data.actions.observedAt) || !Array.isArray(data.actions.runs) || !object(data.actions.selection) || !object(data.deliveries) || data.deliveries.schema !== "fsgg.telemetry.public-deliveries/1" || !object(data.deliveries.selection) || !Array.isArray(data.deliveries.deliveries)) malformed();
+    if (!object(data) || data.schema !== "fsgg.telemetry.dashboard/2" || !timestamp(data.builtAt) || typeof data.sourceRevision !== "string" || !object(data.actions) || data.actions.schema !== "fsgg.telemetry.public-actions/1" || !timestamp(data.actions.observedAt) || !Array.isArray(data.actions.runs) || !object(data.actions.selection) || !object(data.deliveries) || data.deliveries.schema !== "fsgg.telemetry.public-deliveries/1" || !timestamp(data.deliveries.observedAt) || !object(data.deliveries.selection) || !Array.isArray(data.deliveries.deliveries)) malformed();
     const actionSelection=data.actions.selection, deliverySelection=data.deliveries.selection;
     if (!finite(actionSelection.returned) || !finite(actionSelection.pagesFetched) || (actionSelection.repositoryTotalAtObservation!=null&&!finite(actionSelection.repositoryTotalAtObservation)) || (actionSelection.oldestCreatedAt!=null&&!timestamp(actionSelection.oldestCreatedAt)) || (actionSelection.newestCreatedAt!=null&&!timestamp(actionSelection.newestCreatedAt)) || !finite(deliverySelection.returned) || !finite(deliverySelection.closedScanned)) malformed();
     data.actions.runs.forEach((run) => {
@@ -768,7 +802,7 @@
     const itemCoverage=host.completedItems?.coverage;
     text("items-note",itemCoverage?`${itemCoverage.published} published · ${itemCoverage.unmapped} awaiting an approved label · ${itemCoverage.dirty} pending canonical reduction · ${itemCoverage.incompatible} incompatible.`:"Host item projection unavailable. Showing independent public merged deliveries.");
     const counts=renderOutcomes(state.runs);
-    renderTrend(state.runs); renderWorkflowHealth(state.runs); renderLocal(host);
+    renderTrend(state.runs); renderWorkflowHealth(state.runs); renderLocal(host); renderFacts(data,host);
     if (view) document.querySelectorAll("#local-content details").forEach((node)=>{node.open=view.openLocal.has(node.dataset.detailKey);});
     reconcileOutcomes(); renderTable();
     const completed=state.runs.filter((run)=>run.durationSeconds!=null).map((run)=>run.durationSeconds).sort((a,b)=>a-b), middle=Math.floor(completed.length/2);
@@ -799,13 +833,14 @@
   const relativeAge=(instant)=>{const seconds=Math.max(0,Math.floor((Date.now()-instant)/1000));return seconds<2?"just now":seconds<60?`${seconds}s ago`:`${Math.floor(seconds/60)}m ago`;};
   function updateFreshness() {
     if (state.data) {
-      const age=Date.now()-Date.parse(state.data.actions.observedAt), live=state.runs.length>0&&age<=30*60*1000;
-      text("health-label",state.runs.length?(live?"Public Actions live":"Public Actions stale"):"Public Actions sample empty");
+      const age=Date.now()-Date.parse(state.data.actions.observedAt), live=state.runs.length>0&&age>=0&&age<=30*60*1000;
+      text("health-label",state.runs.length?(age<0?"Public Actions freshness unknown":live?"Public Actions live":"Public Actions stale"):"Public Actions sample empty");
       $("pulse-dot").classList.toggle("live",live);
       const host=selectedHost(state.data.host);
+      renderFactClocks(state.data,host);
       if (host.schema === "fsgg.telemetry.dashboard-host/5") {
         const hostAge=Date.now()-Date.parse(host.observedAt);
-        text("local-state",`${hostAge>60*60*1000?"Stale · ":""}Observed ${date(host.observedAt)}`);
+        text("local-state",`${hostAge<0?"Freshness unknown · ":hostAge>60*60*1000?"Stale · ":""}Observed ${date(host.observedAt)}`);
       }
     }
     if (state.refreshError) text("refresh-status",state.data?`Refresh failed ${relativeAge(state.refreshError.at)} · showing last good data · retrying every minute`:`Refresh unavailable ${relativeAge(state.refreshError.at)} · retrying every minute`);

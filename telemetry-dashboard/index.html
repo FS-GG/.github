@@ -39,7 +39,7 @@
           <h1 id="hero-title">The shape of<br /><em>delivery.</em></h1>
           <p class="lede">
             A privacy-bounded view of workflow throughput, runtime coverage and
-            the cost of coordination.
+            explicit gaps in the available evidence.
           </p>
         </div>
         <div class="pulse" aria-label="Data source health">
@@ -71,6 +71,14 @@
         <p class="context" id="source-context-note" role="status"></p>
       </section>
 
+      <section class="panel" id="facts-coverage" aria-labelledby="facts-title">
+        <p class="eyebrow">FACTS / COVERAGE</p><h2 id="facts-title">What is observed, and what is missing</h2>
+        <p class="context">Retained host snapshots are historical evidence; current runtime collection is not established by this view. Each population retains its own denominator. Independent work sources and overlapping measurements are not added together. Unknown usage or cost is never zero.</p>
+        <div id="facts-population"></div>
+        <div id="facts-freshness"></div>
+        <p class="context">Store snapshot observation, producer observation, ingestion and publication are distinct clocks. A successful browser refresh or data build does not establish fresh producer evidence. Per-item source and ingestion observations appear with additional measurements when available.</p>
+      </section>
+
       <section class="panel items-panel" id="items" aria-labelledby="items-title">
         <div class="section-heading">
           <div><p class="eyebrow">DELIVERY / ITEM EVIDENCE</p><h2 id="items-title">Completed items</h2></div>
@@ -93,8 +101,9 @@
 
       <section id="efficiency" aria-labelledby="efficiency-title">
         <p class="eyebrow">PROCESS EFFICIENCY / COVERAGE FIRST</p>
-        <h2 id="efficiency-title">Work, retries and explanations</h2>
-        <p id="efficiency-health" role="status">Process efficiency unavailable; runtime and cost remain unknown.</p>
+        <h2 id="efficiency-title">Additional measurements and coverage</h2>
+        <p class="context" id="efficiency-deferred">Causal explanations, avoidable-work shares, improvement recommendations and savings claims are deferred. Their absence does not establish zero avoidable work or savings. Measurements and analysis availability remain visible independently.</p>
+        <p id="efficiency-health" role="status">Additional measurements unavailable; independent facts remain visible above.</p>
         <p id="efficiency-analysis-counts" role="status">Analysis population unavailable; missing evidence does not establish zero work.</p>
         <div class="filters">
           <label>Find item <input id="efficiency-search" type="search" maxlength="120" /></label>
