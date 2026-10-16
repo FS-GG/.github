@@ -63,9 +63,9 @@ def select(root, profile):
     return manifest, directory / 'callback-pair-vectors.json'
 
 
-SLOT_PROFILE = 'inert-slot-callback-pair/1'
-SLOT_BUNDLE = 'b73ce545011cc1156bbcf49f2bb98f174e33b970d221b32c0bad6e83b21b5862'
-SLOT_OWNER = 'fca016e1db30a279a5489223d19408f086eb18b5'
+SLOT_PROFILE = 'inert-slot-callback-pair/2'
+SLOT_BUNDLE = '6a932c240c4ee8f46626be2637499a298cb7146568a16cf4e4321edcf0e3a6cc'
+SLOT_OWNER = 'ed58ca52ee4a7aa27d5b902054ca284c9f350996'
 SLOT_PRODUCER = '16c28c0419612a358aa572ca5cbc1e3540bdd8d0'
 SLOT_GITHUB_ROLES = (
     'scripts/fsgg_feed.py',

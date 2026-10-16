@@ -12,7 +12,7 @@
     },
     {
       "path": "scripts/release_successor_closed_callback.py",
-      "sha256": "6b49a8dab19fecc9ff7ed043a4c55c978fff1e8e17c48266819d82642659939b"
+      "sha256": "9819b2a3e3371a10bcf4086a3913ed7929bd6c772c3d0188be912c452c080626"
     },
     {
       "path": "scripts/release_successor_execution.py",
@@ -28,7 +28,7 @@
     },
     {
       "path": "tests/release-successor-authentication/inert_phase_slot_sink.py",
-      "sha256": "98d9457555d5a67c9bdf21d683b6889e665dae57955cfa2b31f305a8b98f9ce3"
+      "sha256": "f4321ab6ea0589e944b4aef2e2865c437cd80aa894020e9603ed7a168e7bc8da"
     },
     {
       "path": "tests/release-successor-authentication/domain-max-vectors.json",

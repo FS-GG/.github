@@ -72,6 +72,49 @@ class SlotSinkTests(unittest.TestCase):
             self.assertLessEqual(backend.peak_bytes, sink.MAXIMUM_BYTES)
             with self.assertRaises(provider.Refused): subject(path, report, binding, frames[-1])
 
+    def test_legacy_public_prepare_refuses_ducks_and_subclasses_without_effects(self):
+        class Derived(sink.ControlledSlotBackend):
+            def reserve(self, *args):
+                raise AssertionError('subclass must not reserve')
+        class Foreign:
+            def reserve(self, *args):
+                raise AssertionError('foreign adapter must not reserve')
+        for backend in (Derived(), Foreign(), object()):
+            with self.subTest(backend=type(backend)), self.assertRaises(provider.Refused):
+                self.prepared(backend=backend)
+
+    def test_internal_snapshot_and_initialization_preserve_exact_identity_and_algorithm(self):
+        binding, frames = inputs()
+        original = copy.deepcopy(binding)
+        identity = {'path': 'inert-slot', 'binding': provider.validate_auth_binding(binding),
+                    'invocation': binding['invocation'], 'storeGeneration': 1}
+        admitted = dict(identity)
+        prepared = sink._validate_preparation(binding, identity, dict(sink.REPORT),
+            binding['clock'], sink.population())
+        binding['clock']['total'] = '1'
+        identity.update(path='foreign', storeGeneration=2)
+        self.assertEqual(prepared.binding, original)
+        self.assertEqual(prepared.identity, sink.contract.canonical(admitted))
+        backend = sink.ControlledSlotBackend()
+        self.assertIsNone(backend.reservation)
+        subject = sink.InertPhaseSlotSink._initialize_owned(prepared, backend)
+        self.assertIs(type(subject), sink.InertPhaseSlotSink)
+        self.assertIs(subject.identity, backend.reservation.identity)
+        self.assertEqual(subject.reservation.generation, 1)
+        for ordinal, raw in enumerate(frames, 1):
+            reply = subject('inert-slot', dict(sink.REPORT), original, raw)
+            self.assertEqual(reply['ordinal'], ordinal)
+            self.assertEqual(bytes(backend.stores[f'phase-{ordinal}']), raw)
+        for kind in ('loss', 'expiry'):
+            row = subject.observe(kind)
+            self.assertEqual(row['ordinal'], 6)
+            self.assertEqual(row['result'], 'Unknown')
+            self.assertEqual(bytes(backend.stores[kind+'-file']), sink.contract.canonical(row))
+        with self.assertRaises(provider.Refused):
+            sink.InertPhaseSlotSink._initialize_owned(object(), sink.ControlledSlotBackend())
+        with self.assertRaisesRegex(provider.Refused, 'restart'):
+            sink.InertPhaseSlotSink._initialize_owned(prepared, backend)
+
     def test_closed_preparation_rejects_before_reservation(self):
         binding, _ = inputs()
         for changed in ({'closed_report_envelope': dict(sink.REPORT, padding='x')},

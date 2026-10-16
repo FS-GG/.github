@@ -98,7 +98,7 @@ class SlotCallbackPairControls(unittest.TestCase):
                 return raw + b'\n# source mutation\n' if path == ROOT / source else raw
             with self.subTest(source=source), patch.object(pathlib.Path, 'read_bytes', altered):
                 with self.assertRaisesRegex(ValueError, 'source mismatch'): generate()
-        with self.assertRaises(ValueError): pair.select(ROOT, 'inert-slot-callback-pair/2')
+        with self.assertRaises(ValueError): pair.select(ROOT, 'inert-slot-callback-pair/1')
 
     def test_slot_callback_pair_regenerates_real_six_slot_journey_without_eof(self):
         frozen = self.frozen()
@@ -117,6 +117,31 @@ class SlotCallbackPairControls(unittest.TestCase):
                 frame = bytes.fromhex(slot['bytes'])
                 self.assertEqual(hashlib.sha256(frame).hexdigest(), slot['sha256'])
                 self.assertEqual(entry.provider.decode_auth_frame(frame)['n'], slot['ordinal'])
+
+    def test_historical_v1_binding_keeps_its_exact_child_and_callback_wire_bytes(self):
+        # Frozen hashes measured from protected ed58ca52 /1 vectors, not /2.
+        # Selectors still refuse /1 here; only this explicit compatibility control
+        # reconstructs its historical source binding with the maintained codec.
+        old_bundle = 'b73ce545011cc1156bbcf49f2bb98f174e33b970d221b32c0bad6e83b21b5862'
+        producer = load('slot_pair_historical_codec', HERE / 'run.py')
+        with patch.object(producer, 'contract_bundle_digest', return_value=old_bundle):
+            vectors = producer.protocol_vectors('inert-slot-callback-pair/1')
+        binding = vectors['binding']; control = producer.CallbackOwnerControls()
+        requests = [control.request(binding, 1, 'bind')]
+        for index, rawhex in enumerate(vectors['children']):
+            raw = bytes.fromhex(rawhex); phase = producer.provider.decode_auth_frame(raw)
+            for offset, kind in ((2, 'validate'), (3, 'retain')):
+                requests.append(control.request(binding, index * 2 + offset, kind, raw, phase))
+        output = io.BytesIO()
+        evidence = entry.execute(binding, binding['clock'], io.BytesIO(b''.join(requests)), output)
+        self.assertEqual(hashlib.sha256(b''.join(requests)).hexdigest(),
+            'f66fb293743c1225038514cd483d2ba0cd7f8a2ab684cf19513bdb757a775b31')
+        self.assertEqual(hashlib.sha256(output.getvalue()).hexdigest(),
+            'dde1440ade9f322b0bd351945793c06c62d1658b1582d6f6922491bf49f1fb52')
+        self.assertEqual(hashlib.sha256(b''.join(bytes.fromhex(row['bytes']) for row in evidence['slots'])).hexdigest(),
+            '583eb273f0d865f834eb5d2c067496f181851d2dfcb4f47c6c6d036027369e59')
+        self.assertEqual(evidence['profile'], pair.SLOT_PROFILE)
+        self.assertNotEqual(binding['source']['contract'], self.frozen()['binding']['source']['contract'])
 
     def test_slot_callback_entry_refuses_incomplete_short_write_flush_and_backend_cuts(self):
         frozen = self.frozen(); binding = frozen['binding']

@@ -1,7 +1,7 @@
 # Inert slot callback copy and lifetime witness
 
 Run `python3 tests/release-successor-authentication/slot-copy-lifetime-tests.py`.
-This source-only control selects the closed `inert-slot-callback-pair/1` manifest
+This source-only control selects the closed `inert-slot-callback-pair/2` manifest
 and frozen 13-exchange corpus, then executes the actual controlled entry,
 request decoder, callback owner, typed sink and backend synchronously with inert
 in-memory streams. It requires no subprocess, network, credential or native job.
@@ -102,3 +102,12 @@ caller/stream retention, headers, allocator capacities, physical release or the
 whole simultaneous physical-copy bound. Original `.103` remains attempted-unknown;
 `.104` remains held. Every physical quantity stays unknown, fit unproved and
 admission false.
+
+The explicit `/2` SOURCE successor changes the preparation implementation and selected
+binding digest. The same unchanged lifetime observer executes that selection; its stack
+frame names, locals, aliases, transfer and failure checks remain required. Equal-length
+digest substitution does not by itself prove unchanged graph sizes: the selected journey
+and backing-capacity checks must run. Historical `/1` observations and the joint copy
+ledger retain their original scope; they are not measurements of the future private
+CAP03 composition. No observer hash or historical accounting input changes in this
+successor, and no private-provider or physical-fit result follows from these controls.

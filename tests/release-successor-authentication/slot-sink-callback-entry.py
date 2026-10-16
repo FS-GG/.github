@@ -23,7 +23,7 @@ import inert_phase_slot_sink as slots
 spec = importlib.util.spec_from_file_location('slot_callback_framed_fixture', HERE / 'slot-sink-fixture.py')
 fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
-PROFILE = 'inert-slot-callback-pair/1'
+PROFILE = 'inert-slot-callback-pair/2'
 EVIDENCE_MAXIMUM = 32768
 
 

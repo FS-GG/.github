@@ -1043,6 +1043,30 @@ custody remains null. Lost responses consume before extraction and never renew a
 This is a source slice of [#4600](https://github.com/FS-GG/.github/issues/4600), whose complete
 finite-cap acceptance remains open; it is not a production recipient/physical-fit claim.
 
+The next public SOURCE successor factors only sink preparation and shared closed owner/
+decoder/buffer construction. The maintained callback, observation, run and diagnostic
+algorithms remain shared; public legacy preparation retains the exact controlled-backend
+guard and production `prepare(profile)` still refuses before effects. The coupled
+`inert-slot-callback-pair/2` source selection carries coherent bundle/provenance and
+regenerated vectors, refusing `/1` against the new closure. Historical `/1` stays available
+at its immutable producer/consumer pins; the legacy callback/factory selections stay fixed.
+The unchanged lifetime/allocation observers qualify the selected controlled-source journey,
+including raw aliases and the sixth readback, without rewriting the historical joint ledger.
+
+This preparation is a dependency for the real managed → Python → owned CAP03 store →
+recipient journey, not acceptance of that join. After independent CAP03 source review,
+SystemAdmin owns the separately reviewed fixed private adapter and exact observation
+commit extension: explicit synthetic original/descriptor/checkpoint/source mapping,
+owned reservation/proof identity, both barriers and fresh new-descriptor readback,
+checked translation to existing source receipts, observation ordinal mapping and
+cumulative constructor/recipient attempts. Private qualification must use the maintained
+public decoder/owner/sink and no monkeypatch, subclass impersonation, second callback
+engine or public raw egress. Coordination then adopts the exact protected `/2` source,
+manifest/vector/bundle pins and matching managed selected journey. Public CI uses only
+the controlled backend, with no private code, endpoint or credential dependency. Actual
+authenticated provider/checkpoint/clock/enrollment, native qualification, physical bound,
+fit and admission remain unresolved; original unknown attempts are never replayed.
+
 Coordination owns matching parent integration against the protected producer manifest;
 SystemAdmin supplies actual provider/process/transport/storage/clock/proof/recovery and
 enrolled-recipient containment. Production fields remain null and construction refuses
