@@ -12,16 +12,19 @@ Publish a useful, privacy-bounded GitHub Pages dashboard for FS-GG delivery tele
 
 ## Facts-first source slice — 2026-10-16
 
-The source candidate presents existing public Actions and merged-delivery samples, completed-item
-coverage, launcher gaps and unknown usage/cost before additional measurements. Each population keeps
+[PR #4623](https://github.com/FS-GG/.github/pull/4623), merged at `e992bc2f`, delivers existing
+public Actions and merged-delivery samples, completed-item coverage, launcher gaps and unknown usage/cost before additional measurements. Each population keeps
 its own denominator. Source observation clocks remain separate from build/browser refresh; missing
 producer, ingestion and publication receipts remain unavailable. Measurements and analysis status
 remain visible while causal explanations, avoidable-work claims, recommendations and savings are deferred.
 Closed privacy validation and last-valid-feed fallback remain enforced.
 
-The retained source passed 153 inert Python tests after integration of the protected facts-first policy.
-Browser regressions remain subject to the required hosted workflow. This is source preparation;
-publication, installed collection, feed activation and real-browser operational acceptance remain open.
+The source passed 153 inert Python tests and all 29 hosted Chromium tests. Canonical delivery
+readback confirmed identical tested/delivered trees. The existing [Pages run](https://github.com/FS-GG/.github/actions/runs/38900904329)
+passed test, build and deployment; HTTP 200 readback matched the merged page/script bytes and
+snapshot source revision while retaining the frozen historical-host revision. This accepts the
+static source delivery, not current runtime collection, installed telemetry, host-feed activation
+or the real-item provider/receiver/store/browser journey; those operational outcomes remain open.
 Atlas: `github/telemetry-dashboard-facts-first-presentation`.
 
 ## Delivered source repair — 2026-10-06
