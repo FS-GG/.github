@@ -231,13 +231,24 @@ also passed at the exact delivered revision. No further receiver surrogate is se
 remains Unknown; production
 `prepareAck` and `reserveHost` still refuse, and no live ACK authority is established.
 
+[Coordination #1024](https://github.com/FS-GG/FS.GG.Coordination/pull/1024), merged at `6b2bab64`,
+delivers the controlled-source genesis checkpoint and unsigned ACK export boundary with explicit
+input/hash selection and verified output readback. Strict compilation, 226 focused tests including
+one export and nine refusals, required checks and [full coherent qualification](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38977082516)
+passed at `a99356b8`, with exact tested/delivered tree correspondence. The owning Atlas boundary
+`coordination/controlled-genesis-checkpoint-export-boundary` is protected with the source delivery.
+[Post-merge observation](https://github.com/FS-GG/.github/issues/4516#issuecomment-6226508518) remains
+pending. This public SOURCE delivery does not qualify Home's fresh input, environment, driver or
+authentication-factory joins, current external clocks, signing/ACK authority or production durability.
+
 Home's host transaction, current codecs and structural consumption have [accepted bounded SOURCE
 qualification](https://github.com/FS-GG/.github/issues/4516#issuecomment-6222834756): 47/47 cases passed
 with no skips or test/collection errors. The earlier failed qualification remains retained. [Supplied
 private source/Atlas delivery correspondence](https://github.com/FS-GG/.github/issues/4516#issuecomment-6222985659)
 is accepted; native private merge remains Home-observed, with no hosted CI PASS or installed acceptance
-inferred. Current authentication-factory source preparation is underway; receiver residency/custody
-remains unresolved. Durability remains Unknown, and actual
+inferred. [Current Home activity](https://github.com/FS-GG/.github/issues/4516#issuecomment-6226508518)
+remains unconfirmed; fresh input/environment/driver integration and authentication-factory source
+acceptance remain open. Receiver residency/custody remains unresolved. Durability remains Unknown, and actual
 authentication, physical/native/production qualification and installed acceptance remain unestablished.
 
 Keep source delivery, publication, installed qualification and runtime acceptance separate.
