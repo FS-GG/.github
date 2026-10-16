@@ -1339,6 +1339,11 @@ def load_tests(loader, tests, pattern):
     slot_module = importlib.util.module_from_spec(slot_spec)
     slot_spec.loader.exec_module(slot_module)
     tests.addTests(loader.loadTestsFromModule(slot_module))
+    authority_path = pathlib.Path(__file__).with_name('domain-authority-tests.py')
+    authority_spec = importlib.util.spec_from_file_location('authentication_domain_authority_tests', authority_path)
+    authority_module = importlib.util.module_from_spec(authority_spec)
+    authority_spec.loader.exec_module(authority_module)
+    tests.addTests(loader.loadTestsFromModule(authority_module))
     return tests
 
 
