@@ -2,6 +2,18 @@
 
 Owner: `FS-GG/.github` release and telemetry producer. Main/SystemAdmin owns installed-host adoption. This item is a separate, additive publication route; it does not reopen the accepted GS2-08.9 legacy routes or authorize `OpenV2`.
 
+## Selected current source scope — 2026-10-16
+
+The [user direction](https://github.com/FS-GG/.github/issues/4517#issuecomment-6218097145)
+requires no backwards compatibility for active programme source and consumer work. Qualify one
+coherent selected current composition; obsolete variants, layouts, serialized bytes, fixtures and
+test populations need not be retained solely for compatibility. Replace or remove such scaffolding
+where it serves no selected consumer, without an unrelated mass cleanup or rewrite. Preserve current
+security, identity, ownership, boundedness, custody and failure/Unknown assertions in the resulting
+tests; record removed or replaced coverage honestly. Immutable historical source, test and failure
+evidence and original-operation identities remain intact. This changes no admission, publication,
+installed-adoption, credential or replay gate and admits no managed/native cohort or uncertain original.
+
 ## Trigger and outcome
 
 The native subagent usage and durable remote receipt fixes are merged at source, but the installed host still selects the 0.90.0 coherent set. GS2-08.9 deliberately sealed the old release scripts and disabled five write-capable workflows because their shell publication boundaries do not compose common effect admission. A source build or a package with a new version is not an installed release. Deliver a reviewed successor that publishes one immutable coherent set of `FS.GG.Coord.Cli`, `FS.GG.Kit` and `FS.GG.Drivers` from one source, then allows Main to adopt its verified promoted manifest.
@@ -1084,8 +1096,9 @@ decoder/buffer construction. The maintained callback, observation, run and diagn
 algorithms remain shared; public legacy preparation retains the exact controlled-backend
 guard and production `prepare(profile)` still refuses before effects. The coupled
 `inert-slot-callback-pair/2` source selection carries coherent bundle/provenance and
-regenerated vectors, refusing `/1` against the new closure. Historical `/1` stays available
-at its immutable producer/consumer pins; the legacy callback/factory selections stay fixed.
+regenerated vectors, refusing `/1` against the new closure. Historical `/1` remains available
+at its immutable producer/consumer pins as evidence; the current selected successor need not maintain
+legacy callback/factory variants or compatibility-only scaffolding under the current-scope direction above.
 The unchanged lifetime/allocation observers qualify the selected controlled-source journey,
 including raw aliases and the sixth readback, without rewriting the historical joint ledger.
 
