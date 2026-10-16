@@ -136,3 +136,29 @@ regenerated bundle-bound vectors and the Coordination pin follow-up to move toge
 The initial import attempt correctly failed those immutable source/closure guards;
 this slice retains the old consumer and every old source/vector pin. Production
 codec promotion here does not establish consumer adoption.
+
+## Inactive protected CI route
+
+[ADR-0094](../../docs/adr/0094-separate-v3-and-utel-principals-and-custody.md)
+selects `fsgg-utel-original-descriptor-issuer` and Programme custody in the dedicated
+`utel-original-descriptor` Actions environment. The `original-103-descriptor-issuer`
+job in [the authentication workflow](../../.github/workflows/release-successor-authenticate.yml)
+declares that route with an unconditional false guard, exact-source checkout and
+read-only permissions. Its terminal step refuses issuance. It references no secret
+and constructs none of this module's trusted ports. The original authentication job
+and descriptor authentication workflow identity remain unchanged.
+
+This source slice advances [authority service #4601](https://github.com/FS-GG/.github/issues/4601)
+only by qualifying the inactive route declaration and its mutation controls. Before
+activation, qualify `IssuerAdmission` against independent enrollment, original-bound
+host proof/clock evidence and complete physical-copy accounting; `IssuanceStore`
+against durable reservation/readback, concurrent exclusion and cold recovery; and
+`DescriptorSigner` against descriptor-only purpose, actual dispatch-time authority
+and clock checks, selected key custody and uncertain-signing refusal. Authenticated
+transport and finite recipient/copy lifetimes remain part of those concrete ports.
+No new codec, signing service or authority ledger is introduced here.
+
+Environment/key provisioning, fingerprint enrollment, installed source readback and
+operational acceptance remain separate. The original `.103` is attempted-unknown
+and unreplayed; `.104` and native effects remain held. A passing source control or
+manual workflow dispatch cannot activate this job or establish credential custody.

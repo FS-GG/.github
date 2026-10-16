@@ -33,3 +33,23 @@ jobs:
         run: |
           printf '%s\n' 'Inactive source preparation; authentication is unavailable.' >&2
           exit 78
+
+  original-103-descriptor-issuer:
+    # Selected ADR-0094 route only: concrete trusted ports and custody are absent.
+    if: ${{ false && github.event_name == 'workflow_dispatch' && github.repository == 'FS-GG/.github' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && github.run_attempt == 1 }}
+    environment: utel-original-descriptor
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read the selected immutable source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Refuse descriptor issuance without qualified trusted ports
+        run: |
+          printf '%s\n' 'Inactive descriptor preparation; issuer admission, durable reservation and signer are unavailable.' >&2
+          exit 78

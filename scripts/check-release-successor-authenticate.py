@@ -11,9 +11,12 @@ import yaml
 WORKFLOW = '.github/workflows/release-successor-authenticate.yml'
 SOURCE_WORKFLOW = '.github/workflows/release-successor-authenticate-source.yml'
 JOB = 'original-103-authentication'
+DESCRIPTOR_JOB = 'original-103-descriptor-issuer'
 GUARD = "${{ false && github.event_name == 'workflow_dispatch' && github.repository == 'FS-GG/.github' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && github.run_attempt == 1 }}"
 CHECKOUT = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
 REFUSAL = "printf '%s\\n' 'Inactive source preparation; authentication is unavailable.' >&2\nexit 78\n"
+
+DESCRIPTOR_REFUSAL = "printf '%s\\n' 'Inactive descriptor preparation; issuer admission, durable reservation and signer are unavailable.' >&2\nexit 78\n"
 
 
 class Refused(ValueError):
@@ -60,13 +63,21 @@ def validate(doc: dict) -> None:
     require(doc['permissions'] == {'contents': 'read'}, 'workflow permissions exceed contents read')
     require(doc['concurrency'] == {'group': 'release-successor-authenticate', 'cancel-in-progress': False},
             'concurrency selection differs')
-    require(isinstance(doc['jobs'], dict) and set(doc['jobs']) == {JOB}, 'job identity or population differs')
-    job = doc['jobs'][JOB]
+    require(isinstance(doc['jobs'], dict) and set(doc['jobs']) == {JOB, DESCRIPTOR_JOB},
+            'job identity or population differs')
+    validate_job(doc['jobs'][JOB], 'callable-isolated-operation',
+                 'Refuse activation without a separately admitted native producer', REFUSAL)
+    validate_job(doc['jobs'][DESCRIPTOR_JOB], 'utel-original-descriptor',
+                 'Refuse descriptor issuance without qualified trusted ports', DESCRIPTOR_REFUSAL)
+
+
+def validate_job(job: dict, environment: str, terminal_name: str, refusal: str) -> None:
+    """Each declared route is independently closed and unconditionally inactive."""
     require(isinstance(job, dict) and set(job) ==
             {'if', 'environment', 'permissions', 'runs-on', 'timeout-minutes', 'steps'},
             'extra or missing job surface')
     require(job['if'] == GUARD, 'job must remain unconditionally inactive with complete identity fences')
-    require(job['environment'] == 'callable-isolated-operation', 'protected environment differs')
+    require(job['environment'] == environment, 'protected environment differs')
     require(job['permissions'] == {'contents': 'read'}, 'job permissions exceed contents read')
     require(job['runs-on'] == 'ubuntu-24.04' and type(job['timeout-minutes']) is int
             and job['timeout-minutes'] == 5, 'runner or preparation budget differs')
@@ -77,8 +88,7 @@ def validate(doc: dict) -> None:
                          'with': {'ref': '${{ github.sha }}', 'fetch-depth': 1,
                                   'persist-credentials': False}},
             'checkout must pin the action and exact source without persistent credentials')
-    require(terminal == {'name': 'Refuse activation without a separately admitted native producer',
-                         'run': REFUSAL}, 'terminal path must only refuse native authentication')
+    require(terminal == {'name': terminal_name, 'run': refusal}, 'terminal path must only refuse native authentication')
 
 
 def validate_source_caller(doc: dict) -> None:
