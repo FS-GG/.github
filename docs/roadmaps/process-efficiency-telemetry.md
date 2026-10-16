@@ -20,6 +20,39 @@ explicit data coverage. Sampling reduces cost at the price of fewer item-specifi
 extrapolate sampled reviews to unreviewed items or use a selected sample as an unbiased savings estimate.
 Known source delivery remains visible when runtime accounting or analysis is incomplete.
 
+### Selected telemetry delivery order — 2026-10-16
+
+Release **facts and coverage first** through V2-EFF-01.2/.4/.6. Show known delivery and
+acceptance stages, observed usage, missing usage, producer/ingestion/publication freshness,
+selected populations and denominators, and unknown or unattributed amounts. Unknown cost is
+never zero. Partial, stale, unavailable and unsupported data remain explicit. This first release
+does not wait for .3 model assessments or .5 explanation calibration; causal explanations,
+avoidable-work verdicts, calibrated health assessments and savings claims remain deferred.
+The bounded exception/success sample applies when assessment work is selected later.
+
+First operational acceptance uses **one telemetry collection provider → one selected receiver/store
+→ canonical projection → dashboard/browser**, with immutable coherent versions and exact source,
+configuration and store identity recorded. Exercise actual success, interruption preserving Unknown,
+recovery and a supported correction across separately admitted cases; verify publication/readback and
+rollback for that selected route. Include a real item, but never replay an uncertain original to fill
+the failure/recovery matrix.
+A source fixture or matching version pin alone is insufficient. This establishes only the observed
+provider, receiver, store and outcome scope, not fleet coverage or whole-feature completion. Model or
+Responses enrollment is required only for a selected model-dependent behavior, not deterministic facts.
+
+Reconcile historical reservations and usage separately from demonstrably isolated fresh telemetry
+work admitted through the established route. Preserve old holds, first failures and unknown costs;
+never replay uncertain originals or infer retirement from fresh-job isolation. Reuse accepted evidence
+across telemetry items only for exact code, configuration, store identity and tested scope. Consumers
+reference one canonical accepted evidence record for the same assertion, without duplicate packets or
+repeated parent approvals. Test changed boundaries and affected joins, retaining final required CI. Use one owner, one meaningful authorized
+independent review and fast compile/focused checks through the existing review/delivery route; credential
+custody remains separate. No new approval or evidence machinery is introduced.
+
+Fresh-profile resource containment still requires numeric budgets and tested enforcement. The current
+CAP-03 custody defect remains a separate required repair. A selected runtime path that depends on it
+cannot bypass that repair; independent facts display can advance without claiming runtime qualification.
+
 Deliver through the existing Coordination telemetry store, observation adapters, dashboard projection
 and GitHub Pages route. This roadmap introduces no permanent analytics service and does not itself
 change schemas, policies, execution authority or defaults. Research/design merge is planning delivery,
@@ -155,8 +188,9 @@ pending; this milestone stays unchecked.
 ### V2-EFF-01.4 — Publish useful dashboard explanations
 
 - [ ] Owner: `.github` dashboard maintainer.
-- [ ] Implement the versioned sanitized projection, public-summary publication rules and matched
-  current-only dashboard/feed migration. Keep private findings private unless the approved projection allows their content.
+- [ ] Deliver the facts-and-coverage slice first: versioned sanitized projection, approved public
+  summaries and matched current-only dashboard/feed migration. Keep private findings private unless
+  the approved projection allows their content; defer uncalibrated explanations and savings claims.
 - [ ] Build the work-mix, retry, problem, item-summary/timeline, improvement and data-health views from
   the design. Include open/abandoned items and known deliveries with incomplete accounting.
 - [ ] Add accessible tables, keyboard interaction, coverage/denominator labels, stable filters,
@@ -341,7 +375,8 @@ proof. The earlier browser 20-pass/two-failure window and pre-fixture staging re
 separate historical evidence. Current installed 0.98/schema-13 feed remains unchanged; installed
 0.99/schema-14 qualification and full .4/.6 remain open.
 
-Depends on .1 for fixture-driven work; live projection acceptance requires .2 and .3. Touch-set:
+Depends on .1 for fixture-driven work. Facts-only live projection requires the relevant .2 facts/correction
+route and its actual installed producer/receiver; .3 is required only for assessment-derived content. Touch-set:
 dashboard collector/projection, static UI/assets and focused projection/UI tests. Coordinate ownership
 of shared DTOs with .2; the UI does not edit canonical completion logic.
 Acceptance: the vertical slice shows one actual native completion and one incomplete-accounting
@@ -377,19 +412,23 @@ checks intact; recommendations alone do not count as completed process improveme
 - [ ] Owner: relevant package/release maintainer and selected receiver owners, with Pages maintainer.
 - [ ] Publish the coherent producer/CLI/adapter set where package changes require it. Verify installed
   versions and their emitted contracts independently from source merges.
-- [ ] Deploy the matching new dashboard/feed through the established Pages route. Demonstrate a newly
-  completed real item passing through installed collection, assessment, projection and browser view.
+- [ ] First deploy matching facts/coverage dashboard and feed through the established Pages route.
+  Demonstrate one selected real telemetry item through installed collection/provider, receiver/store,
+  projection and browser view. Use separately admitted success, interruption/Unknown, recovery and
+  correction cases; do not replay an uncertain original to make one item exercise every case.
+- [ ] Later demonstrate installed assessment-derived content only after the relevant .3/.5 qualification.
 - [ ] Adopt the verified assessment behavior for the selected completion paths. Record coverage,
   health/freshness expectations, bounded backfill and tested rollback. Expand only after installed
   behavior and public-explanation calibration are verified.
 
-Depends on .5's functional calibration/disposition and the relevant publication gates; an economic
-comparison or net-value finding is not an adoption prerequisite. Candidate installation and
-reversible facts/coverage-only visibility may support .5 through the existing selected release route;
-model-generated explanations remain explicitly experimental until calibrated. Reuse compatible accepted
-UTEL installation/migration and LEARN receiver evidence via the v3 shared cohort; qualify each missing
-assessment/provider/correction assertion and record the exact store identity instead of repeating migration.
-A selected real item must still traverse installed assessment/projection/browser acceptance before .6 closes.
+The facts/coverage first release depends on relevant .2/.4 qualification and publication gates, not
+.3 analysis or .5 calibration. Reuse exact compatible UTEL installation/migration and receiver evidence
+for its tested scope; qualify changed source/configuration/store boundaries and missing provider, recovery
+or correction assertions. Retain current-only migration and canonical history without repeating a
+qualified exact-store migration. Broader assessment adoption and whole .6 closure still require the
+selected installed assessment/projection/browser route and .5 functional calibration/disposition.
+Uncalibrated model claims stay private or disabled; an economic comparison is required only for a
+net-value or savings claim. A facts-only release does not complete those later obligations.
 Touch-set: release/receiver configuration and
 deployment integration; no unrelated product changes. Acceptance: installed end-to-end evidence,
 including a provisional/missing-data case and a supported correction, reconciles with canonical
@@ -405,10 +444,11 @@ flowchart LR
     A --> C[.3 Completion analyst]
     A --> D[.4 Dashboard]
     B --> E[Integrated vertical slice]
-    C --> E
     D --> E
-    E --> F[.5 Functional calibration]
-    F --> G[.6 Publication and installed adoption]
+    E --> G[.6 Facts-only publication and scoped installed acceptance]
+    C --> F[.5 Explanation calibration]
+    E --> F
+    F --> H[Later assessment adoption and whole-feature closure]
 ```
 
 After .1, .2–.4 can proceed against the same versioned fixtures with disjoint declared touch-sets.
