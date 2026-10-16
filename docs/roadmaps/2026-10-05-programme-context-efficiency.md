@@ -322,6 +322,23 @@ reconciliation passed with automatic run selection and identical tested/delivere
 Required tests, independent source review and operation-specific acceptance remain in force.
 The earlier optional 30% duplicate-retrieval target is a different proxy; it neither proves nor substitutes for this coordination-effort target.
 
+### ROUTINEV3 source extension — 2026-10-16
+
+On protected delivery of this reviewed extension, apply the same lightweight route to
+routine source slices selected from the Unified Roadmap v3 open index. Use the existing
+owning issue and native PR; no new issue or status projection is required solely for a
+routine source delivery. One accountable owner, one independent source review, relevant
+tests and final required CI qualify the exact delivered code. Policy and skill behavior
+remain governing changes. Existing source authorization persists without repeated parent
+approval; operational admission, distinct credentials, independent trust-boundary readback
+and original unknown reservations remain required.
+
+The original three outcomes retain their completion conditions. The extension changes
+coordination scope, not the current physical-copy contract or cap. The
+[roadmap priorities](2026-10-07-unified-development-roadmap-v3.md#15-priority-unblockers--2026-10-16)
+select the next useful work through existing owners. Apply the replacements and change
+classes below to this extended scope; other work retains its existing route.
+
 ### Owners, completion and the one record
 
 | Outcome | Accountable owner | Completion condition | Required current record |
@@ -362,10 +379,10 @@ The reviewed rule change removes the mandatory obligations identified below and
 clarifies the already limited practices. Programme `/root`
 is accountable for the combined governance and CI-evidence outcome; the designated
 CI implementation owner carries the existing result producer and maintained reader
-through source delivery. Other outcomes retain
-their existing route.
+through source delivery. The ROUTINEV3 source extension uses the same replacements; work outside this scope retains
+its existing route.
 
-| Old requirement or recurring practice | Replacement for these three outcomes | Retained boundary |
+| Old requirement or recurring practice | Replacement for the original outcomes and ROUTINEV3 source | Retained boundary |
 |---|---|---|
 | `work-programme` default lane assignment, bootstrap and `references/bootstrap.md`: mandatory packet and dispatch index | Six-field issue, applicable instruction/source links and native PR identities | Exact scope, owner, authority, resource bounds and all reservations |
 | `work-programme` lane-return/decision-view clauses, `references/adapter.md` and `routine-decisions`: serialized typed returns and reducer current view | Issue state and linked native evidence; old helpers optional for a named gap | Original attempts, first failures and uncertain effects |

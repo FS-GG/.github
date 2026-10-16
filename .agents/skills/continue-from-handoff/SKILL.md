@@ -50,7 +50,7 @@ receiver state, outstanding progress projections, partial files, and worker or
 process status against available live evidence. Keep observed results separate
 from worker reports and proposals. Missing temporary evidence remains unknown;
 do not reconstruct results or repeat a consumed operation to fill that gap.
-For an activated three-outcome pilot, also recover each pending request's canonical
+For an activated pilot and ROUTINEV3 source extension, also recover each pending request's canonical
 channel and original message identity, owner, expected response, response/escalation
 deadline and last complete successful read from the issue or restricted handoff.
 At session start, reconcile changed replies or the full thread when that baseline is
@@ -86,7 +86,7 @@ worker, CPU, integrator and hosted-CI capacity. Repair and integrate the existin
 queue before opening excess PRs. Resume interrupted source preparation before
 starting replacements; recheck source and admission before any fresh operation.
 
-Outside the activated three-outcome pilot, give structured updates every 30 minutes
+Outside the activated pilot and ROUTINEV3 source extension, give structured updates every 30 minutes
 with **Progress**, **Working on**, and **Problems**. In the pilot, update at a ready
 deliverable, changed blocker, needed decision or changed promised time, plus one
 daily programme summary; deadline and session-start reply reads replace fixed polling.

@@ -1,6 +1,6 @@
 # Delegated bootstrap and restart
 
-For an activated pilot outcome, recover from its owning issue and native evidence under the
+For an activated pilot outcome or ROUTINEV3 source slice, recover from its owning issue and native evidence under the
 [parent pilot rule](../SKILL.md#conditional-three-outcome-pilot). Snapshot, dispatch-index, packet and
 return construction below are optional diagnostics after the replacement evidence gate qualifies.
 Preserve complete reservations, original identities and unresolved effects; missing replacements retain

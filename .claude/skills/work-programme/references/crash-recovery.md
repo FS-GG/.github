@@ -1,6 +1,6 @@
 # Recover a killed session without a handoff
 
-For an activated pilot outcome, the [parent pilot rule](../SKILL.md#conditional-three-outcome-pilot)
+For an activated pilot outcome or ROUTINEV3 source slice, the [parent pilot rule](../SKILL.md#conditional-three-outcome-pilot)
 uses the owning issue and native evidence for recovery. It replaces mandatory snapshot/index/packet
 reconstruction only after the replacement evidence gate qualifies. Every reservation, unknown operation
 and reconciliation obligation below still applies.
