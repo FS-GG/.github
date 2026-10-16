@@ -221,10 +221,12 @@ that scope; operational authority, independent credential custody and original e
 
 V3 source progress remains separate: [Coordination #1022](https://github.com/FS-GG/FS.GG.Coordination/pull/1022)
 is merged at `5b99dee4` with exact tested/delivered tree correspondence; post-merge coherent validation
-remains pending. The unsigned ACK source in [#1023](https://github.com/FS-GG/FS.GG.Coordination/pull/1023)
-is an open, Home-qualified inert source candidate awaiting required CI, not delivered source or live ACK
-authority. Home is implementing
-the [accepted host transaction source slice](https://github.com/FS-GG/.github/issues/4516#issuecomment-6220614003).
+remains pending. The inert unsigned ACK implementation in [#1023](https://github.com/FS-GG/FS.GG.Coordination/pull/1023)
+has accepted Home/source, focused and audit evidence but remains unmerged. Its first coherent
+[formal-base run](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38936797965/job/117097229642)
+timed out; that failure is retained, and a bounded existing-wrapper repair is under integrator review.
+Full coherent qualification remains unaccepted; no live ACK authority is established.
+Home is implementing the [accepted host transaction source slice](https://github.com/FS-GG/.github/issues/4516#issuecomment-6220614003).
 Actual receiver residency and authenticated host-factory composition remain unresolved; these source
 steps establish no installed host/receiver or credential authority.
 
