@@ -61,8 +61,10 @@ not invent a coherent-validation verdict or silently change the selected validat
 The extension retains changed file/status/previous filename records, required check rows
 (including native exit-1 failures), producing-run references and explicit collection exceptions.
 Its `assessment` is `ready`, `delivered` or `attention`, with `issues` naming gaps. A clean
-assessment requires the corresponding original ready/delivered outcome, passed coherent and
-routine validation, successful producer run, all observed required checks passing, a verified
+assessment requires the corresponding original ready/delivered outcome, passed coherent
+validation, and routine validation either passed or explicitly not required by the existing
+native admission route. Unobserved, unresolved and installation-specific routine states remain
+attention. It also requires a successful producer run, all observed required checks passing, a verified
 checkout and, after delivery, identical trees. Pending publication remains an issue. This is a
 projection of evidence; it grants no merge, publication or activation authority and changes no gate.
 

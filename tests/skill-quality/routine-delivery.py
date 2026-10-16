@@ -185,6 +185,55 @@ class DeliveryEvidenceTests(unittest.TestCase):
         self.assertEqual((evidence["assessment"], evidence["issues"], evidence["run"]["id"]), ("delivered", [], 7))
         self.assertEqual(evidence["testedCheckout"]["kind"], "synthetic-pr-merge")
 
+    def test_native_ordinary_docs_route_does_not_require_routine_route_too(self):
+        for delivered in (False, True):
+            with self.subTest(delivered=delivered):
+                _, api, _, _, _ = self.automatic_fixture()
+                pr = dict(merged() if delivered else opened(), changed_files=1)
+                pr["head"]["ref"] = "codex/documentation-update"
+                # No routine marker: the existing native route explicitly says not-required.
+                source = FakeApi([pr], runs=[run("completed", "success")])
+                code, summary = MODULE.summarize(source, repo="FS-GG/.github", pr_number=1,
+                    expected_head=HEAD, merge_method="merge", publication_required=False,
+                    apply=False, coherent_workflow="coherence.yml")
+                self.assertEqual((code, summary.routineEligibility, summary.coherentValidation),
+                                 (0, "not-required", "passed"))
+                api.get_pr.return_value = pr
+                output = MODULE.delivery_evidence(summary, None, api=api, assembled=True)
+                evidence = output.pop("deliveryEvidence")
+                self.assertEqual(output, asdict(summary))
+                self.assertEqual(evidence["assessment"], "delivered" if delivered else "ready")
+                self.assertEqual(evidence["issues"], [])
+                self.assertEqual(source.attempts, 0)
+
+    def test_ordinary_docs_route_does_not_mask_original_coherent_refusal(self):
+        _, api, _, _, _ = self.automatic_fixture()
+        pr = dict(opened(), changed_files=1)
+        pr["head"]["ref"] = "codex/documentation-update"
+        source = FakeApi([pr], runs=[run("completed", "failure")])
+        code, summary = MODULE.summarize(source, repo="FS-GG/.github", pr_number=1,
+            expected_head=HEAD, merge_method="merge", publication_required=False,
+            apply=True, coherent_workflow="coherence.yml")
+        self.assertEqual((code, summary.outcome, summary.routineEligibility, source.attempts),
+                         (2, "refused", "not-required", 0))
+        api.get_pr.return_value = pr
+        output = MODULE.delivery_evidence(summary, None, api=api, assembled=True)
+        evidence = output.pop("deliveryEvidence")
+        self.assertEqual(output, asdict(summary))
+        self.assertEqual(evidence["assessment"], "attention")
+        self.assertIn("coherent-validation-failed", evidence["issues"])
+        self.assertIn("delivery-refused", evidence["issues"])
+
+    def test_missing_unresolved_and_installation_routine_states_still_need_attention(self):
+        for state in ("unobserved", "unresolved", "unavailable-first-install", "unknown"):
+            summary, api, _, _, _ = self.automatic_fixture()
+            summary = MODULE.replace(summary, routineEligibility=state)
+            output = MODULE.delivery_evidence(summary, None, api=api, assembled=True)
+            evidence = output.pop("deliveryEvidence")
+            self.assertEqual(output, asdict(summary))
+            self.assertEqual(evidence["assessment"], "attention")
+            self.assertIn("routine-eligibility-" + state, evidence["issues"])
+
     def test_automatic_missing_duplicate_wrong_and_changed_projection_refuse(self):
         for case in ("missing", "duplicate", "foreign-link", "wrong-workflow", "changed"):
             with self.subTest(case=case):
