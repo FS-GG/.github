@@ -144,4 +144,3 @@ def collect(summary: Any, run_id: int, *, api: Any, native: Any) -> dict:
     elif summary.codeDelivery == "not-delivered":
         result["parity"] = "not-delivered"
     return result
-
