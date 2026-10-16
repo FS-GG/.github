@@ -52,6 +52,12 @@ The entire bounded run-link population is validated before selecting a match; ma
 duplicate or conflicting entries refuse even after a matching entry. The final native PR
 snapshot rechecks branch identity and the merged predicate, as well as head/base/merge commit.
 This fallback does not relax tree parity or coherent-validation results.
+
+[PR4602](https://github.com/FS-GG/.github/pull/4602) qualified the repaired reader on genuine
+[run38862677998](https://github.com/FS-GG/.github/actions/runs/38862677998): pre-merge readiness and
+separate post-merge readback retained the same checkout artifact and confirmed identical tested
+and delivered trees, with all eight native required checks passing. This accepted repair supplies
+neither universal producer deployment nor evidence for other jobs' checkouts.
 `parity` compares that tested tree with the native delivered commit tree: `identical-tree`,
 `different-tree`, `not-delivered` or `unavailable`. Equal trees can coexist with failed or
 pending checks, a late coherent dispute, or an unresolved installation. This field grants
@@ -76,7 +82,9 @@ Pipeline preflight uses focused Python fixtures and static YAML/step-order inspe
 change adds no job dependency, fan-out, cancellation, publication or shared mutable state,
 so a new model would add maintenance without testing a new scheduling interaction. The local
 inspection/fixture budget is ten minutes; the existing full required checks remain applicable.
-Tests cover candidate/synthetic checkout, differing trees, artifact identity/absence, head/base
+The skill-quality PR/push selectors include the producer's coherence workflow so edits to its
+capture/upload steps execute the invariant fixtures. Tests cover candidate/synthetic checkout,
+differing trees, artifact identity/absence, head/base
 drift, late coherent failure, uncertain merge and both prior-result shapes. Local fixture success
 is source qualification only. The next qualification is a genuine matching coherence/projection PR run,
 its retained artifact, and post-delivery native commit/tree readback through this option. Record

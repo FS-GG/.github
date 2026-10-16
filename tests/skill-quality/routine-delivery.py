@@ -196,6 +196,9 @@ class DeliveryEvidenceTests(unittest.TestCase):
                     if "fsgg.tested-checkout/1" in step.get("run", ""):
                         emitters.append((path.name, job_name, workflow, job, step))
         self.assertEqual([(row[0], row[1]) for row in emitters], [("coherence.yml", "projection")])
+        suite = yaml.load((ROOT / ".github/workflows/skill-quality.yml").read_text(), Loader=yaml.BaseLoader)
+        for event in ("pull_request", "push"):
+            self.assertIn(".github/workflows/coherence.yml", suite["on"][event]["paths"])
         _, _, workflow, job, capture = emitters[0]
         self.assertEqual(set(workflow["on"]["pull_request"]), {"types"})
         self.assertEqual(workflow["on"]["pull_request"]["types"], ["opened", "synchronize", "reopened", "edited"])

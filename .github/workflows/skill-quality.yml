@@ -55,6 +55,7 @@ on:
       - "tools/routine-telemetry-safety.py"
       - "tests/skill-registry/catalog-triggers.json"
       - ".github/workflows/skill-quality.yml"
+      - ".github/workflows/coherence.yml"
   push:
     branches: [main]
     paths:
@@ -109,6 +110,7 @@ on:
       - "tools/routine-telemetry-safety.py"
       - "tests/skill-registry/catalog-triggers.json"
       - ".github/workflows/skill-quality.yml"
+      - ".github/workflows/coherence.yml"
   workflow_dispatch:
 
 permissions:
