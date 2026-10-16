@@ -33,7 +33,9 @@ The bounded exception/success sample applies when assessment work is selected la
 First operational acceptance uses **one telemetry collection provider → one selected receiver/store
 → canonical projection → dashboard/browser**, with immutable coherent versions and exact source,
 configuration and store identity recorded. Exercise actual success, interruption preserving Unknown,
-recovery and a supported correction; verify publication/readback and rollback for that selected route.
+recovery and a supported correction across separately admitted cases; verify publication/readback and
+rollback for that selected route. Include a real item, but never replay an uncertain original to fill
+the failure/recovery matrix.
 A source fixture or matching version pin alone is insufficient. This establishes only the observed
 provider, receiver, store and outcome scope, not fleet coverage or whole-feature completion. Model or
 Responses enrollment is required only for a selected model-dependent behavior, not deterministic facts.
@@ -41,8 +43,9 @@ Responses enrollment is required only for a selected model-dependent behavior, n
 Reconcile historical reservations and usage separately from demonstrably isolated fresh telemetry
 work admitted through the established route. Preserve old holds, first failures and unknown costs;
 never replay uncertain originals or infer retirement from fresh-job isolation. Reuse accepted evidence
-across telemetry items only for exact code, configuration, store identity and tested scope; test changed
-boundaries and affected joins, retaining final required CI. Use one owner, one meaningful authorized
+across telemetry items only for exact code, configuration, store identity and tested scope. Consumers
+reference one canonical accepted evidence record for the same assertion, without duplicate packets or
+repeated parent approvals. Test changed boundaries and affected joins, retaining final required CI. Use one owner, one meaningful authorized
 independent review and fast compile/focused checks through the existing review/delivery route; credential
 custody remains separate. No new approval or evidence machinery is introduced.
 
@@ -411,7 +414,8 @@ checks intact; recommendations alone do not count as completed process improveme
   versions and their emitted contracts independently from source merges.
 - [ ] First deploy matching facts/coverage dashboard and feed through the established Pages route.
   Demonstrate one selected real telemetry item through installed collection/provider, receiver/store,
-  projection and browser view, including success, interruption/Unknown, recovery and correction.
+  projection and browser view. Use separately admitted success, interruption/Unknown, recovery and
+  correction cases; do not replay an uncertain original to make one item exercise every case.
 - [ ] Later demonstrate installed assessment-derived content only after the relevant .3/.5 qualification.
 - [ ] Adopt the verified assessment behavior for the selected completion paths. Record coverage,
   health/freshness expectations, bounded backfill and tested rollback. Expand only after installed
