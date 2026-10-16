@@ -64,6 +64,20 @@ until automatic preservation is qualified, verify the native metadata and repair
 before delivery. Keep one active implementation PR per coherent change. Open a lane
 only for a completion condition or independently useful cross-team dependency.
 
+Independent source review means a reviewer separate from implementation authorship; it does not
+require a second human collaborator. Where the user has authorized agent review and the platform
+permits the task, appoint a fresh independent subagent and activate it on the exact candidate. The
+reviewer examines changed logic, relevant tests and evidence and returns a meaningful exact-source
+verdict. Accepted author-run Home source tests need not be repeated solely to establish independence;
+repeat affected tests only for changed inputs, missing evidence or a concrete unresolved defect. Final
+required CI and exact delivered-code qualification still run. Review-role separation does not replace
+distinct credential custody or independent readback across operational trust boundaries.
+
+A platform cybersecurity flag leaves the affected review incomplete. Preserve the observed error and
+its provenance without inferring a separate approval-review denial or a universal human-review rule.
+User authorization does not override platform restrictions; do not retry or reroute a blocked task to
+evade them, and do not convert that failure into a demand for human staffing.
+
 Retire mandatory packet/return/reducer and duplicate current-view artifacts at protected delivery of
 this rule: they repeat the issue and GitHub's native identities. Successful hash recitations and routine
 parent file-by-file readbacks are unnecessary when an exact native source/check/merge join supplies the

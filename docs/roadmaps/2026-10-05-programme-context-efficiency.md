@@ -401,6 +401,12 @@ Classify each coherent change once, revisiting only a material scope change:
 | Source, protocol or governing behavior | One independent review, relevant tests and required CI. Code, tests, schema, policy and skill behavior stay here even when described as inert. |
 | Deployment, credentials or irreversible operations | Explicit operational acceptance, including custody, enrollment and recovery checks. |
 
+For source review, independence means separation from implementation authorship. An authorized
+fresh subagent can supply that review where the platform permits it; a second human collaborator
+is not a universal requirement. Use the [governing review rule](../../.agents/skills/work-programme/SKILL.md#conditional-three-outcome-pilot)
+for exact-source review and reuse of accepted author-run Home source tests. Required CI, credential
+separation and operational trust-boundary readback remain distinct obligations.
+
 Existing authorization travels with the outcome. Ask the user again only when an
 action exceeds it or a concrete unresolved user-owned decision remains. These
 classes must replace conflicting governing rules in a reviewed repository change;
