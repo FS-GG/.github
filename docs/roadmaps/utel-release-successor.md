@@ -29,9 +29,7 @@ The remaining UTEL frontier in [#4600](https://github.com/FS-GG/.github/issues/4
 [#4601](https://github.com/FS-GG/.github/issues/4601) is finite production budgets and headroom,
 provider/runtime/storage/recipient enforcement, authenticated clocks, credential custody and enrollment,
 with independent readback and fresh-profile/original admission. This source result establishes none of
-those outcomes. No further pipe runtime job is selected. Home is implementing the separately
-[accepted V3 host transaction source slice](https://github.com/FS-GG/.github/issues/4516#issuecomment-6220614003);
-actual receiver residency and authenticated host-factory composition remain unresolved and uninstalled.
+those outcomes. No further pipe runtime job is selected.
 
 ## Trigger and outcome
 
