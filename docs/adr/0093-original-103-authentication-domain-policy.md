@@ -1,6 +1,6 @@
 # ADR-0093: Original .103 authentication domain policy
 
-- **Status:** Accepted policy; implementation and native admission pending
+- **Status:** Accepted policy; principal/custody selection amended by [ADR-0094](0094-separate-v3-and-utel-principals-and-custody.md); implementation and native admission pending
 - **Date:** 2026-10-15
 - **Affects:** UTEL original `.103` authentication-only operation, external phase authority and native supervisor
 - **Decision owner:** Programme, under the sponsor's explicit delegation
@@ -34,6 +34,12 @@ read-back-equal, barrier-complete receipt for the original descriptor/frame/ordi
 generation under the original clock policy. A reporter assertion cannot establish that
 backend evidence. This selects a topology and owner; actual custody and independent
 enrollment remain unproved and no key creation or installation is admitted.
+
+**2026-10-16 amendment:** [ADR-0094](0094-separate-v3-and-utel-principals-and-custody.md)
+names the distinct descriptor, phase-proof and ACK principals and assigns their
+prospective credential custodians. It resolves the policy-selection gap in this
+paragraph; actual secret provisioning, host custody, independent enrollment and
+installed verification remain unproved. The App credential custodian is unchanged.
 
 Retain ready → issuance-possible → token-owned → revocation-possible → revoked → terminal
 order and the existing [frame/ACK limits](../../tests/release-successor-authentication/wire-contract.json).

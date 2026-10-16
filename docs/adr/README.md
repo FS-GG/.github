@@ -120,6 +120,7 @@ registry like any other, and this org gates its registries.
 | [0092](0092-descriptor-driven-polyglot-workspace-providers.md) | Descriptor-driven polyglot catalog, provider-owned identifiers and shared Quint/governance/skills contracts; downstream publication and adoption stay separate | Accepted architecture; record implements the maintainer decision |
 
 | [0093](0093-original-103-authentication-domain-policy.md) | Original .103 authentication domain policy | Accepted policy; implementation and native admission pending |
+| [0094](0094-separate-v3-and-utel-principals-and-custody.md) | Separate V3 and UTEL principals and credential custody | Accepted policy; provisioning and activation pending |
 
 ## Supersession map
 
@@ -128,6 +129,7 @@ Which record currently rules, and where a decision was amended. Every edge below
 
 | Amended | § | By | What changed |
 |---|---|---|---|
+| [0093](0093-original-103-authentication-domain-policy.md) | §Decision, principal and private-custody selection | [0094](0094-separate-v3-and-utel-principals-and-custody.md) | Names prospective descriptor, phase-proof and ACK principals and custodians; actual provisioning, enrollment and original-effect admission remain pending. |
 | [0076](0076-agent-authored-fsharp-specification-kernel.md) | future canonical authoring | [0077](0077-quint-first-typed-specification-authority.md) | **Superseded after P0–P4 delivery.** Future Typed SDD source is Quint under a constrained profile; F# becomes a generated consumer binding. Existing F# packages, manifests, migrations, and evidence retain their exact historical and production meaning until explicit migration. |
 | [0027](0027-worker-keyed-claim-lock-and-worker-channel.md) | §1 | [0075](0075-per-receiver-operation-lock-and-lease-free-election.md) §1 | **A third identity, and a prohibition.** Worker-keying stands for what it decides — addressing, provenance, and the ordinary one-worker-per-item case — but it cannot separate two executors of one session, which is the 2026-07-28 incident. `executor identity` joins worker id and claim generation, issued by GitHub as the grant's comment id, and **a worker id may no longer be an input to an authorization decision**. The comment-order CAS and everything else in 0027 are untouched. |
 | [0041](0041-the-chore-lock-is-the-item-cas-on-another-subject.md) | the substrate finding | [0075](0075-per-receiver-operation-lock-and-lease-free-election.md) §2 | **Extended, not amended — the finding is applied a third time.** `Writes.claim` is a general comment-order CAS over an arbitrary issue ref, so a per-receiver `[op-lock]` issue needs no new function, prefix, field or parameter, exactly as the chore lock needed none. The chore lock itself is untouched and remains a separate subject; ADR-0042's embedded-ref clause is inherited unchanged. Unlike the chore-lock table, the operation-lock table covers all eight roster repositories. |
