@@ -120,6 +120,17 @@ remain grounded in each producer's release evidence and owning plan.
 | [**FS.GG.Coordination**](https://github.com/FS-GG/FS.GG.Coordination) | The independently qualified new-only GitHub Substrate v2 component. It owns its coordination model and GitHub adapters. [ADR-0085](adr/0085-fsquint-single-owner-package-boundary.md) assigns generic correspondence to FsQuint; receiver adoption is separate from that ownership decision. Its zero legacy-fabric capabilities do not make the selected ADR-0091 runtime inactive. | V2 coordination tooling and contracts; operational acceptance remains limited to the selected qualified profiles |
 | [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. **Also a producer** — it owns organization tooling and delivery packages, and their release workflows live here because the tools do ([ADR-0016](adr/0016-retire-templates-local-new-fullstack-single-scaffolder.md), [ADR-0034](adr/0034-typed-coordination-engine.md)). | `FS.GG.NewSddWorkspace` (`new-sdd-workspace`) + `FS.GG.Coord.Cli` (the ADR-0034 engine) — **both published**, org feed + nuget.org |
 
+[ADR-0094](adr/0094-separate-v3-and-utel-principals-and-custody.md) selects
+separate, purpose-bound identities for the prospective V3 and UTEL authority
+paths. Protected `.github` CI environments would hold distinct V3 original
+intent, effect grant, receiver command ACK, and UTEL original descriptor signing
+keys under Programme custody. Separate supervised host identities would provide
+V3 attestation and UTEL phase proofs and external ACKs under SystemAdmin custody.
+Coordination would integrate secret-free verifiers with independently enrolled
+public pins. This is a selected trust boundary, not an assertion that the
+environments, keys, services, or enrollment already exist; operational authority
+remains held pending verified custody, transport, enrollment, and recovery.
+
 ---
 
 ## 2. Why it is split this way
