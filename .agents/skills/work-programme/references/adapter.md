@@ -1,8 +1,9 @@
 # Temporary adapter contract
 
 The [conditional pilot](../SKILL.md#conditional-three-outcome-pilot) makes these helper artifacts
-optional for its three outcomes only after the replacement evidence gate qualifies. It changes no
-CLI/schema behavior or native acceptance boundary; until qualification, existing routing still applies.
+optional for the original outcomes and ROUTINEV3 source work after protected delivery of the
+applicable governing rule. Automatic evidence qualifies each additional fact separately; missing joins
+need one targeted read, not duplicate artifacts. CLI/schema and native acceptance boundaries remain.
 
 This dependency-free F# script is advisory. It performs no model launch, GitHub read/write, process
 termination, workload execution or acceptance minting. Existing native tools remain the authority.
@@ -372,7 +373,10 @@ recorded replay and normal source delivery; later ordinary routing uses fresh na
 within existing authority. Active protected operation pins and holds remain unchanged.
 
 For native worker continuation, use `followup_task` for a completed/idle owner;
-`send_message` delivers a message but does not start its next turn. This distinction
+`send_message` delivers a message but does not start its next turn. When an exact source candidate
+is ready, activate the designated idle reviewer with `followup_task`, supplying the PR/head, changed
+logic, review obligations and acceptance boundary. Confirm that the review actually started and
+retain its exact-source verdict; a queued message or assignment is insufficient. This distinction
 changes no owner/attempt/effect identity. A continuation never replays an unknown native
 operation. Record prospective telemetry when available; a missing follow-up join is an
 attributed gap, and does not block an otherwise authorized ordinary review.

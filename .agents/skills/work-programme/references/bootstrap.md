@@ -1,10 +1,11 @@
 # Delegated bootstrap and restart
 
-For an activated pilot outcome, recover from its owning issue and native evidence under the
+For an activated pilot outcome or ROUTINEV3 source slice, recover from its owning issue and native evidence under the
 [parent pilot rule](../SKILL.md#conditional-three-outcome-pilot). Snapshot, dispatch-index, packet and
-return construction below are optional diagnostics after the replacement evidence gate qualifies.
-Preserve complete reservations, original identities and unresolved effects; missing replacements retain
-the current route.
+return construction below are optional diagnostics after protected delivery of the applicable reviewed
+governing rule. Preserve complete reservations, original identities and unresolved effects. Missing or
+ambiguous evidence needs one targeted native read and an explicit gap; it does not restore mandatory
+packet/reducer machinery or admit an effect.
 
 Read this when assigned bounded recovery or packet assembly. The parent supplies user scope, known
 campaign/attempt identities, available references and actual capacity/operation constraints. Read the

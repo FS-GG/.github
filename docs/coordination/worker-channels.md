@@ -8,7 +8,8 @@ for coordination. The selected three-outcome pilot uses owning issues
 [#4601](https://github.com/FS-GG/.github/issues/4601); existing host reply channels
 are [#4516](https://github.com/FS-GG/.github/issues/4516) and
 [#4517](https://github.com/FS-GG/.github/issues/4517). Reconcile them on session
-start and at agreed reply deadlines under the activated governing pilot rule.
+start and at agreed reply deadlines under the activated governing pilot rule and its
+ROUTINEV3 source extension; routine slices use their existing owning issue/PR.
 The [2026-10-09 handoff](../handoffs/2026-10-09-161118-unified-roadmap-handoff.md)
 is historical recovery context; current issues and live systems establish state.
 
