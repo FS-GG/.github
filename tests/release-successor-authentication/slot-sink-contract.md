@@ -134,7 +134,7 @@ capture gap.
 
 ## Separate controlled callback pairing profile
 
-`inert-slot-callback-pair/1` selects only the new fixed
+`inert-slot-callback-pair/2` selects the current fixed
 `slot-callback-pair-manifest.json`, `slot-callback-pair-vectors.json` and
 `slot-sink-callback-entry.py`. The earlier twelve-role callback profile, its frozen
 vectors, the ten-role factory manifest and production sinks remain unchanged. The
@@ -143,7 +143,15 @@ roles. Its local import closure includes `fsgg_feed.py`,
 `release_successor_execution.py`, the provider, consumer, domain construction,
 typed slot sink, framed fixture and new entry, plus the wire/callback contracts.
 The closed selector verifies the complete ordered role population, exact source
-pins, sorted-row digest and all ten local file hashes. The entry consumes only the
+pins, sorted-row digest and all ten local file hashes. This explicit SOURCE successor
+covers the internal preparation factoring required for a future fixed private provider
+composition; it preserves the callback and domain wire protocols. The old `/1` remains
+valid with its immutable historical checkout and independently pinned consumer. A `/1`
+request against this closure refuses rather than selecting `/2`. Historical source stays
+in Git, with no duplicate engine. The earlier callback profile is unchanged. New `/2`
+bundle provenance and vectors move together; its changed binding intentionally changes
+selected frame bytes. The tests separately reconstruct the old binding and compare exact
+historical request, reply and child-frame digests to verify codec compatibility. The entry consumes only the
 independently supplied inert binding and original clock arguments; it imports no
 publisher or operational receipt writer.
 
@@ -188,3 +196,12 @@ reply, and verify the actual runtime import closure. Run
 established authentication runner. The existing total-fit, installed/host/native,
 original `.103` no-replay and `.104` holds remain. Programme owns Atlas capture of
 this separate source pairing after protected acceptance.
+
+The sink's internal `_validate_preparation` owns a copied, validated SOURCE snapshot
+without backend effects. `_initialize_owned` initializes that snapshot through the existing
+reserve/append/observation ports. The public `prepare` retains its exact controlled-backend
+restriction. Only reviewed fixed private code may compose an already owned adapter through
+these internal helpers; no caller backend, receipt validator or activation argument is
+added. `__call__`, `observe`, first failure and typed receipts remain the maintained
+algorithm. This public suite exercises the controlled backend only; it has not exercised
+CAP03 or qualified a private adapter, authenticated checkpoint mapping or physical fit.

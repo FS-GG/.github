@@ -1,10 +1,10 @@
 {
   "schema": "fsgg.authentication-callable-source-bundle/1",
   "qualification": "inert typed slot callback pairing only; controlled backend, synthetic evidence; no total-fit/native/factory/operational acceptance",
-  "ownerBase": "fca016e1db30a279a5489223d19408f086eb18b5",
+  "ownerBase": "ed58ca52ee4a7aa27d5b902054ca284c9f350996",
   "producerRevision": "16c28c0419612a358aa572ca5cbc1e3540bdd8d0",
   "digestRecipe": "SHA256 of ASCII rows <sha256><two spaces><repository>/<path><LF>, sorted by ASCII repository/path key (not by the whole row); excludes this manifest, generated bindings/vectors and results",
-  "bundleDigest": "b73ce545011cc1156bbcf49f2bb98f174e33b970d221b32c0bad6e83b21b5862",
+  "bundleDigest": "6a932c240c4ee8f46626be2637499a298cb7146568a16cf4e4321edcf0e3a6cc",
   "files": [
     {
       "repository": "FS-GG/.github",
@@ -39,12 +39,12 @@
     {
       "repository": "FS-GG/.github",
       "path": "tests/release-successor-authentication/inert_phase_slot_sink.py",
-      "sha256": "98d9457555d5a67c9bdf21d683b6889e665dae57955cfa2b31f305a8b98f9ce3"
+      "sha256": "f4321ab6ea0589e944b4aef2e2865c437cd80aa894020e9603ed7a168e7bc8da"
     },
     {
       "repository": "FS-GG/.github",
       "path": "tests/release-successor-authentication/slot-sink-callback-entry.py",
-      "sha256": "dd1394463ea93a20d2a4f3da59bf55ff9632a63158e312426ea289a9a6dad968"
+      "sha256": "a6e5e360ffd329636de03cf2daacdfddc1542eafa065b9a963ea1767951218d4"
     },
     {
       "repository": "FS-GG/.github",

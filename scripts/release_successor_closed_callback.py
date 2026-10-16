@@ -132,20 +132,38 @@ class _Core:
         with original.lock:
             if original.started: raise Refused('closed original already attempted')
             original.started = True  # Before any possible construction/retention.
-        self._original, self._cut, self._fragment = original, cut, fragment
+        clock = binding['clock']
+        identity = {'path': 'closed-owned-slot', 'binding': _wire.validate_auth_binding(binding),
+                    'invocation': binding['invocation'], 'storeGeneration': 1}
+        owned_sink = _slots.InertPhaseSlotSink.prepare(binding, identity, dict(_slots.REPORT),
+            clock, _slots.population(), original.backend)
+        self._initialize_owned(token, original, binding, requests, owned_sink, cut=cut, fragment=fragment)
+        if cut == 'backend': original.backend.cut = 'write'
+
+    def _initialize_owned(self, token, owned_original, binding, requests, owned_sink, *, cut=None, fragment=4096):
+        """Share the one maintained callback engine with an already owned sink.
+
+        Fixed private composition owns original consumption and adapter/source joins
+        before sink preparation. No public entry or dynamic provider selection uses
+        this seam; run and diagnostic remain the same owned algorithms.
+        """
+        if (token is not _TOKEN or type(owned_sink) is not _slots.InertPhaseSlotSink
+                or hasattr(self, '_attempted')):
+            raise Refused('closed constructor refused')
+        if type(requests) is not bytes or len(requests) > 40960:
+            raise Refused('closed input refused')
+        if cut not in (None, 'write', 'short', 'flush', 'confirmation', 'backend') or type(fragment) is not int or not 1 <= fragment <= 4096:
+            raise Refused('closed qualification refused')
+        self._original, self._cut, self._fragment = owned_original, cut, fragment
         self._input, self._replies = io.BytesIO(requests), io.BytesIO()
         self._attempted, self._status, self._cleanup = False, Status.UNKNOWN, Status.UNKNOWN
         clock = binding['clock']
         owned_clock = _consumer.InertCallbackClock(clock['domain'], int(clock['frequency']),
             int(clock['start']), int(clock['normal']), int(clock['work']), int(clock['total']),
             lambda: int(clock['start']) + 1)
-        identity = {'path': 'closed-owned-slot', 'binding': _wire.validate_auth_binding(binding),
-                    'invocation': binding['invocation'], 'storeGeneration': 1}
-        self._sink = _slots.InertPhaseSlotSink.prepare(binding, identity, dict(_slots.REPORT),
-            clock, _slots.population(), original.backend)
+        self._sink = owned_sink
         self._owner = _consumer.InertCallbackOwner(binding, _Destination(), dict(_slots.REPORT), self._sink, owned_clock)
         self._decoder = _consumer.InertCallbackRequestDecoder(self._owner)
-        if cut == 'backend': original.backend.cut = 'write'
 
     def _read(self, count):
         result = bytearray()

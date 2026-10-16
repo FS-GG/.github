@@ -4,7 +4,8 @@
 [ADR-0093](../../docs/adr/0093-original-103-authentication-domain-policy.md) and
 [ADR-0094](../../docs/adr/0094-separate-v3-and-utel-principals-and-custody.md).
 It changes no child, callback /1, domain /3 wire bytes, signature domain or legacy
-manifest/vector. Source qualification supplies no production admission or physical bound.
+callback-pair manifest/vector. The separately selected slot source closure advances
+to `inert-slot-callback-pair/2`. Source qualification supplies no production admission or physical bound.
 
 The production ABI is `release_successor_closed_callback.prepare(profile: bytes)`.
 The profile is canonical ASCII JSON, without a newline, at most 65,536 bytes,
@@ -14,7 +15,9 @@ The exact digest is fixed in the constructor. The source manifest names the exac
 nine-file closure, including all seven imported Python sources, the existing unsigned
 maximum vectors and selected profile. A consumer must bind the protected manifest digest
 and producer revision independently; self-consistency alone authenticates no installation.
-The profile fixes placement, roles, source maxima and the original 90-day retention rule.
+The profile fixes placement, roles, source maxima and retention expiry at the original
+total cutoff plus 90 days, without read-based renewal. This is distinct from the
+300-second operational cutoff.
 Actual original/generation/provider/source/runtime/endpoint/clock/enrollment/physical
 accounting/post-expiry custody fields remain null. `prepare` always refuses after
 validation, before constructing a provider or performing reservation, process, network,
@@ -28,6 +31,39 @@ backend; it never calls the generic fixture's `execute`. Its `run` returns only 
 CLI or external provider selector on this route. The existing generic APIs remain separate.
 The trusted pinned Python module boundary covers ordinary API use; private qualification
 seams do not defend against reflection, interpreter modification or arbitrary code injection.
+
+Preparation is factored into internal `_validate_preparation(...)` and
+`InertPhaseSlotSink._initialize_owned(snapshot, owned_backend)` helpers. Validation owns
+a copied binding and canonical no-newline identity (`path`, `binding`, `invocation`,
+`storeGeneration`) and performs no backend operation. Initialization calls the existing
+`reserve(identity, ROLES, MAXIMUM_BYTES)` port and initializes the maintained sink.
+The public legacy `prepare` still accepts only the exact `ControlledSlotBackend` type;
+subclasses and duck-typed adapters refuse before reservation. The sink's `__call__`,
+`observe`, phase ordering, first-failure and exact typed `Receipt` checks remain the one
+algorithm. Its frame-local values and raw-byte aliases remain available to the unchanged
+copy-lifetime observer.
+
+`_Core._initialize_owned(token, owned_original, binding, requests, owned_sink, ...)`
+factors shared owned buffer, clock, owner and decoder construction from the controlled
+original/sink creation. It receives an already owned exact maintained sink. The controlled
+constructor consumes its original before preparation/reservation. A future fixed private
+composer must consume its own original and check its exact adapter, pinned public/private
+sources, profile/store/original identities and fixture qualification before using these
+internal helpers. They provide no registry, plugin lookup, caller callback, validator or
+public activation option. Internal naming and the token are source conventions, not a
+security mechanism. The same `run` and `diagnostic` algorithms own the callback journey
+and fixed-status egress; no second callback engine or generic fixture wrapper is added.
+
+This public SOURCE preparation does **not** implement or exercise CAP03. A separately
+reviewed private adapter must preserve the distinct public canonical identity and CAP03
+original/descriptor identity, own reservation and proof objects, validate exact frame,
+checkpoint, store and source joins, and explicitly translate only checked provider proofs
+to existing source receipts. It must commit the sink's exact observation envelope and
+check the provider's observation ordinal zero separately from the public phase ordinal.
+Actual authenticated original/checkpoint/clock mapping stays null. Public CI imports no
+private code and needs no private checkout, endpoint or credential. Private qualification
+and subsequent Coordination pin adoption remain dependent work; source receipts grant
+no operational ACK, durability qualification or installed admission.
 
 One original record reserves construction before possible retention and never resets after
 failure. Thirteen serialized exchanges, one outstanding reply and 40,960 aggregate request
@@ -72,7 +108,10 @@ Runtime exception/allocation maxima remain supplier obligations.
 thirteen-exchange/six-slot path, exact frozen bytes, fragment/oversize/truncation controls,
 short/write/flush/confirmation/backend cuts, cumulative construction and recipient attempts,
 source substitutions and egress refusal. Private test inspection is excluded from the
-production population. The existing controls retain all legacy maxima, vectors and census.
+production population. The existing controls retain all legacy maxima and census. The separate slot `/2`
+vectors use the new bundle binding; their bytes intentionally differ from `/1`. An
+explicit historical `/1` binding control compares the maintained codec output against
+protected historical request/reply/frame digests; it does not admit `/1` selection here.
 These are source semantics tests; no CLR, process launch, network or native provider runs.
 
 Coordination owns the matching closed parent constructor, endpoint ownership and protected

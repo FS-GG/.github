@@ -138,47 +138,77 @@ class ControlledSlotBackend:
         return {'result': 'Unknown', 'attempts': tuple(sorted(self.attempts))}
 
 
+@dataclass(frozen=True)
+class _Preparation:
+    """Privately owned validated values; no backend choice or admission authority."""
+    binding: dict
+    digest: str
+    identity: bytes
+    path: str
+
+
+def _validate_preparation(independently_expected_binding, original_sink_identity,
+                          closed_report_envelope, original_window, reserved_population):
+    """Snapshot the existing closed SOURCE contract without any backend effect."""
+    if type(original_sink_identity) is not dict:
+        raise Refused('closed inert preparation refused')
+    # Snapshot once before any caller-controlled preparation hooks. Exact
+    # scalar types make this shallow copy a stable literal identity.
+    identity = original_sink_identity.copy()
+    if (len(identity) != 4 or any(type(key) is not str for key in identity)
+            or set(identity) != {'path', 'binding', 'invocation', 'storeGeneration'}
+            or any(type(identity[key]) is not str for key in ('path', 'binding', 'invocation'))
+            or type(identity['storeGeneration']) is not int):
+        raise Refused('closed inert preparation refused')
+    if type(original_window) is not dict or type(reserved_population) is not dict:
+        raise Refused('closed inert preparation refused')
+    window = original_window.copy()
+    reserved = reserved_population.copy()
+    if (any(type(key) is not str or type(value) is not str for key, value in window.items())
+            or len(reserved) != 2 or any(type(key) is not str for key in reserved)
+            or set(reserved) != {'roles', 'maximumBytes'}
+            or type(reserved['maximumBytes']) is not int or type(reserved['roles']) is not dict):
+        raise Refused('closed inert preparation refused')
+    reserved['roles'] = reserved['roles'].copy()
+    if any(type(key) is not str or type(value) is not int for key, value in reserved['roles'].items()):
+        raise Refused('closed inert preparation refused')
+    binding = copy.deepcopy(independently_expected_binding)
+    digest = provider.validate_auth_binding(binding)
+    if (binding['mode'] != 'inert' or not 0 < len(identity['path']) <= 512
+            or identity['binding'] != digest or identity['invocation'] != binding['invocation']
+            or not 1 <= identity['storeGeneration'] <= contract.U64
+            or not _closed_report(closed_report_envelope)
+            or window != binding['clock'] or reserved != population()):
+        raise Refused('closed inert preparation refused')
+    return _Preparation(binding, digest, contract.canonical(identity), identity['path'])
+
+
 class InertPhaseSlotSink:
     @classmethod
     def prepare(cls, independently_expected_binding, original_sink_identity,
                 closed_report_envelope, original_window, reserved_population, slot_backend):
-        if type(original_sink_identity) is not dict:
+        # Legacy public ingress remains restricted to the exact controlled backend.
+        if type(slot_backend) is not ControlledSlotBackend:
             raise Refused('closed inert preparation refused')
-        # Snapshot once before any caller-controlled preparation hooks. Exact
-        # scalar types make this shallow copy a stable literal identity.
-        identity = original_sink_identity.copy()
-        if (len(identity) != 4 or any(type(key) is not str for key in identity)
-                or set(identity) != {'path', 'binding', 'invocation', 'storeGeneration'}
-                or any(type(identity[key]) is not str for key in ('path', 'binding', 'invocation'))
-                or type(identity['storeGeneration']) is not int):
-            raise Refused('closed inert preparation refused')
-        if type(original_window) is not dict or type(reserved_population) is not dict:
-            raise Refused('closed inert preparation refused')
-        window = original_window.copy()
-        reserved = reserved_population.copy()
-        if (any(type(key) is not str or type(value) is not str for key, value in window.items())
-                or len(reserved) != 2 or any(type(key) is not str for key in reserved)
-                or set(reserved) != {'roles', 'maximumBytes'}
-                or type(reserved['maximumBytes']) is not int or type(reserved['roles']) is not dict):
-            raise Refused('closed inert preparation refused')
-        reserved['roles'] = reserved['roles'].copy()
-        if any(type(key) is not str or type(value) is not int for key, value in reserved['roles'].items()):
-            raise Refused('closed inert preparation refused')
-        binding = copy.deepcopy(independently_expected_binding)
-        digest = provider.validate_auth_binding(binding)
-        if (binding['mode'] != 'inert' or not 0 < len(identity['path']) <= 512
-                or identity['binding'] != digest or identity['invocation'] != binding['invocation']
-                or not 1 <= identity['storeGeneration'] <= contract.U64
-                or not _closed_report(closed_report_envelope)
-                or window != binding['clock'] or reserved != population()
-                or type(slot_backend) is not ControlledSlotBackend):
+        prepared = _validate_preparation(independently_expected_binding, original_sink_identity,
+            closed_report_envelope, original_window, reserved_population)
+        return cls._initialize_owned(prepared, slot_backend)
+
+    @classmethod
+    def _initialize_owned(cls, prepared, owned_backend):
+        """Internal fixed-composition seam, never public backend admission.
+
+        A private composer must validate and own its exact adapter/source/original
+        join before entry. Pinned reviewed code, not private naming, is the boundary.
+        """
+        if type(prepared) is not _Preparation:
             raise Refused('closed inert preparation refused')
         result = cls()
-        result.binding, result.digest = binding, digest
-        result.identity = contract.canonical(identity)
-        result.path = identity['path']
-        result.backend = slot_backend
-        result.reservation = slot_backend.reserve(result.identity, ROLES, MAXIMUM_BYTES)
+        result.binding, result.digest = prepared.binding, prepared.digest
+        result.identity = prepared.identity
+        result.path = prepared.path
+        result.backend = owned_backend
+        result.reservation = owned_backend.reserve(result.identity, ROLES, MAXIMUM_BYTES)
         result.ordinal = 0
         result.previous = None
         result.previous_phase = None
