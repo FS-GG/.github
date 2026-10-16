@@ -3,11 +3,18 @@
 `tools/routine-delivery.py --evidence-run RUN_ID` appends `deliveryEvidence` with schema
 `fsgg.routine-delivery-evidence/1` to its final `fsgg.routine-delivery/v1` result.
 The option collects read-only evidence after the original delivery and telemetry paths.
+The optional supporting library `tools/routine-delivery-evidence.py` must accompany the helper
+when selecting this option. Missing library or unexpected collection failure reports
+`collection-unavailable` while retaining the original JSON and exit status. The installation
+helper stays under its existing 128 KiB source-blob bound; the cap is unchanged.
 It preserves their outcome, coherent-validation state, original merge identity and effect count.
 Default output and telemetry input keep the legacy field set. Installation recovery accepts
 both the exact legacy result and that result with the versioned extension; the extension cannot
 renew an original merge attempt. Other strict consumers must continue using default output
-until they explicitly support this extension.
+until they explicitly support this extension. The CLI refuses `--evidence-run` together with
+`--install-routine-producer` before any effect: pilot check populations can exceed the existing
+64 KiB retained installation-result bound. Installation recovery retains that bound and uses
+the legacy output. Supporting an extended shape does not waive its existing file-size bound.
 
 The producer in [skill-quality](../../.github/workflows/skill-quality.yml) captures the job-entry
 Git checkout commit and tree, candidate/base, repository, PR, run, attempt and job before tests.
@@ -26,7 +33,7 @@ pending checks, a late coherent dispute, or an unresolved installation. This fie
 no acceptance, merge, publication or activation authority.
 
 The result also retains changed filenames/status/previous filenames, native required-check
-rows and producing-run references. Unknown evidence stays null with a bounded exception label;
+rows (including native exit-1 failed checks) and producing-run references. Unknown evidence stays null with a bounded exception label;
 independent available results survive another collection failure. PR identity is checked before
 and after collection; head/base drift invalidates checkout, file and check associations.
 There is no retry or effect replay. Raw hosted artifacts remain the original evidence.

@@ -17,6 +17,7 @@ import sys
 import unittest
 import warnings
 import zipfile
+import zlib
 from dataclasses import asdict
 from datetime import datetime, timezone
 from unittest import mock
@@ -239,6 +240,75 @@ class DeliveryEvidenceTests(unittest.TestCase):
         self.assertEqual((code, summary.codeDelivery, summary.attempts), (3, "unknown", 1))
         self.assertIsNone(result["deliveredCommit"])
         self.assertEqual(result["parity"], "unavailable")
+
+    def test_corrupt_deflate_and_eof_preserve_independent_evidence(self):
+        summary, api, fact, _ = self.fixture()
+        raw = bytearray(selection_archive([("checkout.json", json.dumps(fact).encode())]))
+        offset = 30 + int.from_bytes(raw[26:28], "little") + int.from_bytes(raw[28:30], "little")
+        raw[offset] = (raw[offset] & ~7) | 7  # reserved DEFLATE block type
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            with self.assertRaises(zlib.error):
+                archive.read("checkout.json")
+        for failure in (bytes(raw), EOFError("truncated archive")):
+            with self.subTest(failure=type(failure).__name__):
+                api.query.side_effect = failure if isinstance(failure, Exception) else None
+                api.query.return_value = (0, failure)
+                result = MODULE.delivery_evidence(summary, 7, api=api)
+                self.assertIsNone(result["testedCheckout"])
+                self.assertEqual(result["parity"], "unavailable")
+                self.assertEqual(result["deliveredTree"], "c" * 40)
+                self.assertEqual(result["exceptions"], ["tested-checkout-unavailable"])
+                self.assertEqual(summary.outcome, "delivered")
+
+    def test_failed_required_check_rows_are_retained_and_validated(self):
+        for malformed in (False, True):
+            summary, api, _, _ = self.fixture()
+            original = api._watch_read.side_effect
+            row = {name: "" for name in MODULE.WATCH_FIELDS.split(",")}
+            row.update(name="required-suite", state="FAILURE", bucket="fail",
+                link="https://github.com/FS-GG/.github/actions/runs/7/job/11")
+            if malformed:
+                row["bucket"] = "unknown"
+            def read(command, accepted):
+                if command[1:3] == ["pr", "checks"]:
+                    self.assertIn(1, accepted)
+                    return 1, [row]
+                return original(command, accepted)
+            api._watch_read.side_effect = read
+            result = MODULE.delivery_evidence(summary, 7, api=api)
+            self.assertEqual(result["requiredChecks"], None if malformed else [row])
+            self.assertEqual(result["parity"], "identical-tree")
+
+    def test_optional_failure_cannot_suppress_final_delivery_json_or_exit_code(self):
+        original, _, _, _ = self.fixture()
+        for code, outcome, delivery in [(0, "delivered", "delivered"),
+                (4, "delivered-disputed", "delivered"), (3, "indeterminate", "unknown")]:
+            for failure in (zlib.error("corrupt"), EOFError("truncated"), OSError("library missing")):
+                with self.subTest(outcome=outcome, failure=type(failure).__name__):
+                    summary = MODULE.replace(original, outcome=outcome, codeDelivery=delivery,
+                        coherentValidation="disputed" if code == 4 else original.coherentValidation,
+                        mergeCommit=None if code == 3 else MERGE, attempts=1)
+                    output = io.StringIO()
+                    with mock.patch.object(MODULE, "summarize", return_value=(code, summary)), \
+                         mock.patch.object(MODULE, "delivery_evidence", side_effect=failure), \
+                         contextlib.redirect_stdout(output):
+                        actual = MODULE.main(["--repo", summary.repo, "--pr", "1", "--head", HEAD,
+                            "--evidence-run", "7", "--telemetry-unavailable", "local-clr-resource-hold"])
+                    result = json.loads(output.getvalue())
+                    self.assertEqual(actual, code)
+                    self.assertEqual({k: v for k, v in result.items() if k != "deliveryEvidence"},
+                        asdict(MODULE.replace(summary, telemetryHealth="unavailable")))
+                    self.assertEqual(result["deliveryEvidence"]["exceptions"], ["collection-unavailable"])
+
+    def test_installation_pilot_combination_refuses_before_effect_or_acquisition(self):
+        with mock.patch.object(MODULE, "summarize") as effect, \
+             mock.patch.object(MODULE, "delivery_evidence") as evidence, \
+             contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+            MODULE.main(["--repo", "FS-GG/.github", "--pr", "1", "--head", HEAD,
+                "--evidence-run", "7", "--install-routine-producer", "--apply"])
+        self.assertEqual(error.exception.code, 2)
+        effect.assert_not_called()
+        evidence.assert_not_called()
 
     def test_prior_result_accepts_legacy_and_versioned_extension_only(self):
         summary, _, _, _ = self.fixture()
