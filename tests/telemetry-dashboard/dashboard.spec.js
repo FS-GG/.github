@@ -570,6 +570,7 @@ test("facts overview preserves distinct populations, missing usage and unknown c
   await page.goto("/#facts-coverage");
   const facts=page.locator("#facts-population");
   await expect(facts).toContainText("8 returned / 40000 repository runs at observation");
+  await expect(facts).toContainText("2 merged deliveries / 2 closed pull requests scanned");
   await expect(facts).toContainText("admitted 9 · started 8 · terminal 7 · usage 3");
   await expect(facts).toContainText("Missing admission 1 · start 2 · terminal 3 · usage 5");
   await expect(facts).toContainText("Usage and terminal coverage not evaluated");

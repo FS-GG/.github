@@ -439,6 +439,7 @@
     const selection=data.actions.selection;
     const rows=[
       ["Public Actions sample",`${selection.returned} returned / ${known(selection.repositoryTotalAtObservation)} repository runs at observation`,selection.truncated?"Bounded sample; repository population is larger":"Sample at observation; not a runtime usage denominator"],
+      ["Public merged-delivery sample",`${data.deliveries.selection.returned} merged deliveries / ${data.deliveries.selection.closedScanned} closed pull requests scanned`,"Bounded updated-order scan; delivery evidence does not establish whole-item completion or effort"],
       ["Completed-item projection",coverage?`${coverage.published} published / ${coverage.eligible} eligible`:"Unknown",coverage?`${coverage.unmapped} unmapped · ${coverage.dirty} pending reduction · ${coverage.incompatible} incompatible`:"Host item population unavailable"],
       ["Launcher records",`admitted ${known(launcher.admitted)} · started ${known(launcher.started)} · terminal ${known(launcher.terminal)} · usage ${known(launcher.usage)}`,`Missing admission ${known(launcher.missingAdmission)} · start ${known(launcher.missingStart)} · terminal ${known(launcher.missingTerminal)} · usage ${known(launcher.missingUsage)}`],
       ["Expected runtime dispatches",ready?known(host.operational.expected):"Unknown","Usage and terminal coverage not evaluated; launcher record counts are not a matched dispatch denominator"],
@@ -455,6 +456,7 @@
     };
     $("facts-freshness").replaceChildren(metricTable(["Clock","Evidence"],[
       ["Actions observation",observed(data.actions.observedAt,30*60*1000)],
+      ["Public delivery observation",observed(data.deliveries.observedAt,30*60*1000)],
       ["Store snapshot observation",observed(host.observedAt,60*60*1000)],
       ["Producer observation (whole population)","Unavailable"],
       ["Ingestion receipt (whole population)","Unavailable"],
