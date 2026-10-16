@@ -5471,5 +5471,80 @@
     "PR1007 early held ACK/read source cut establishes only selected 199/2048 backing capacities and pending joins; parser-endpoint overlap, earlier ACK arrays, terminal survival/reclamation and other populations remain unproved",
     "PR1009 terminal pending callback reader establishes one backing-capacity byte with disjointness to selected11/endpoint26 only; do not sum across source cuts or infer full physical population, release, fit, installed/native custody or original-operation authority",
     "PR4588 selected Python ten-buffer capacity remains separate from logical lengths and other source runs; complete simultaneous populations, headers/allocator rounding, OS/stream/caller/failure/restart retention and physical enforcement/fit/native acceptance remain unproved"
-  ]
+  ],
+  "upper_bound_profile": {
+    "schema": "fsgg.copy-upper-bound/1",
+    "profile": "utel-complete-copy-accounting-pending",
+    "runtime": {
+      "implementation": "unselected",
+      "version": "unselected",
+      "build": "unselected",
+      "architecture": "unselected",
+      "allocator": "unselected",
+      "storage": "unselected"
+    },
+    "topology": "unselected-closed-operation-topology",
+    "source": null,
+    "inventory": {
+      "authority": null,
+      "managed": null,
+      "python": null,
+      "backend": null,
+      "peer": null,
+      "transport-kernel-cache": null,
+      "diagnostic-export": null,
+      "observation": null
+    },
+    "components": [],
+    "obligations": [
+      {
+        "id": "closed-call-graph",
+        "status": "unknown",
+        "source": null,
+        "proof": null
+      },
+      {
+        "id": "all-representations",
+        "status": "unknown",
+        "source": null,
+        "proof": null
+      },
+      {
+        "id": "headers-rounding-storage",
+        "status": "unknown",
+        "source": null,
+        "proof": null
+      },
+      {
+        "id": "uncertainty-replacements",
+        "status": "unknown",
+        "source": null,
+        "proof": null
+      },
+      {
+        "id": "concurrency-restart",
+        "status": "unknown",
+        "source": null,
+        "proof": null
+      },
+      {
+        "id": "diagnostic-recipient-population",
+        "status": "unknown",
+        "source": null,
+        "proof": null
+      },
+      {
+        "id": "transient-exclusions",
+        "status": "unknown",
+        "source": null,
+        "proof": null
+      },
+      {
+        "id": "runtime-source-layout",
+        "status": "unknown",
+        "source": null,
+        "proof": null
+      }
+    ]
+  }
 }

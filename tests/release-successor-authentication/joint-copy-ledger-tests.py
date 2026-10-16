@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -511,6 +512,166 @@ class JointCopyLedgerControls(unittest.TestCase):
             path = Path(directory) / 'duplicate.json'
             path.write_text('{"schema":1,"schema":2}')
             with self.assertRaises(ValueError): ledger.load(path)
+
+
+
+class UpperBoundSchemaControls(unittest.TestCase):
+    """Arithmetic trust fixtures below are synthetic, never production source proofs."""
+
+    def fixture(self):
+        # A reviewed-contract registry replacement exists only inside these tests.
+        source = dict(source_type='git-blob', repository='synthetic/test-only',
+                      revision='1' * 40, path='synthetic-proof', sha256='2' * 64)
+        runtime = dict(implementation='synthetic', version='1', build='fixture',
+                       architecture='fixture', allocator='fixture', storage='fixture')
+        profile = dict(schema='fsgg.copy-upper-bound/1', profile='synthetic-only',
+            runtime=runtime, topology='synthetic-closed-topology', source=source,
+            inventory={domain: ['retained'] for domain in ledger.POPULATION_DOMAINS},
+            components=[], obligations=[dict(id=item, status='proved', source=source,
+                proof='synthetic test proof only') for item in ledger.COMPLETENESS_OBLIGATIONS])
+        for domain in ledger.POPULATION_DOMAINS:
+            profile['components'].append(dict(allocation_class=domain, roles=[domain + '/retained'],
+                profile=profile['profile'], runtime=runtime, topology=profile['topology'], source=source,
+                quantity_type='physical-allocation-upper-bound-bytes', maximum_multiplicity=2,
+                metrics=dict(capacity_bytes=10, header_bytes=3, allocator_rounding_bytes=2,
+                             storage_metadata_bytes=1, transport_cache_bytes=4),
+                lifetime=dict(policy='cumulative-through-operation-and-uncertainty',
+                              ownership='reserved', reservation_proof='synthetic finite lifetime'),
+                alias_basis='single-role'))
+        return profile
+
+    def reviewed(self, profile):
+        # Test-only authority injection; input JSON has no such route.
+        return patch.object(ledger, 'REVIEWED_UPPER_BOUND_CONTRACTS',
+                            frozenset(((profile['profile'], ledger.profile_digest(profile)),)))
+
+    def test_pending_inputs_preserve_all_historical_arrays_and_results(self):
+        document = ledger.load()
+        for key, count, digest in (
+            ('observations', 215, '2389a80a950a8684416000382767d50e370d4af6a7a2f941f2a2499473db315d'),
+            ('aliases', 16, '69bc49e9606b40eed4bfe7f244e659bfaa172910e81122d99ae1daaffa9a4a6e'),
+            ('missing_obligations', 11, 'cf0065e81e8b0061d1658a72bb0d3d04952123eb4c73b21aaae596fac0eba2f6')):
+            self.assertEqual(len(document[key]), count)
+            self.assertEqual(hashlib.sha256(json.dumps(document[key], sort_keys=True,
+                separators=(',', ':')).encode()).hexdigest(), digest)
+        before = copy.deepcopy(document); del before['upper_bound_profile']
+        result = ledger.reconcile(document)
+        upper = result.pop('upper_bound')
+        self.assertEqual(result, ledger.reconcile(before))
+        self.assertEqual(len(result['groups']), 14)
+        self.assertEqual((result['fit'], result['admission']), ('unproved', False))
+        self.assertEqual(upper['status'], 'unresolved')
+        self.assertIsNone(upper['physical_upper_bound_bytes'])
+        self.assertFalse(ledger.REVIEWED_UPPER_BOUND_CONTRACTS)
+        self.assertIn('profile-source', upper['unresolved'])
+        self.assertIn('authentic-reviewed-contract', upper['unresolved'])
+
+    def test_complete_synthetic_reviewed_profile_sums_all_physical_terms_without_admission(self):
+        profile = self.fixture()
+        with self.reviewed(profile): result = ledger.reconcile_upper_bound(profile)
+        self.assertEqual(result['status'], 'finite-complete')
+        self.assertEqual(result['physical_upper_bound_bytes'], 8 * 2 * (10 + 3 + 2 + 1 + 4))
+        self.assertFalse(result['admission'])
+        self.assertNotIn('cap', result)
+        self.assertNotIn('fit', result)
+        self.assertEqual(result['unresolved'], [])
+
+    def test_claimed_source_hash_status_and_self_review_never_supply_trust(self):
+        profile = self.fixture()
+        result = ledger.reconcile_upper_bound(profile)
+        self.assertEqual(result['status'], 'unresolved')
+        self.assertIsNone(result['physical_upper_bound_bytes'])
+        self.assertEqual(result['unresolved'], ['authentic-reviewed-contract'])
+        for key, value in (('reviewed', True), ('reviewed_digest', ledger.profile_digest(profile)),
+                           ('admission', True), ('cap', 1)):
+            altered = copy.deepcopy(profile); altered[key] = value
+            with self.assertRaises(ValueError): ledger.reconcile_upper_bound(altered)
+        with self.reviewed(profile):
+            for mutation in ('source', 'capacity', 'missing-domain', 'invented-alias'):
+                altered = copy.deepcopy(profile)
+                if mutation == 'source': altered['source']['sha256'] = '3' * 64
+                elif mutation == 'capacity': altered['components'][0]['metrics']['capacity_bytes'] = 1
+                elif mutation == 'missing-domain':
+                    altered['inventory']['authority'] = ['other']
+                    altered['components'][0]['roles'] = ['authority/other']
+                else:
+                    altered['components'][0]['roles'].append('managed/retained')
+                    altered['components'][0]['alias_basis'] = 'reviewed-shared-allocation'
+                    altered['components'].pop(1)
+                result = ledger.reconcile_upper_bound(altered)
+                self.assertEqual(result['status'], 'unresolved')
+                self.assertIn('authentic-reviewed-contract', result['unresolved'])
+
+    def test_missing_roles_overhead_unknown_copies_and_expired_ownership_never_become_zero(self):
+        for mutation in ('role', 'domain', 'capacity', 'multiplicity', 'header', 'rounding',
+                         'storage', 'transport', 'ownership-unknown', 'ownership-expired',
+                         'reservation', 'obligation', 'obligation-source', 'obligation-proof', 'source'):
+            with self.subTest(mutation=mutation):
+                profile = self.fixture(); row = profile['components'][0]
+                if mutation == 'role': profile['components'].pop(0)
+                elif mutation == 'domain':
+                    profile['inventory']['authority'] = None; profile['components'].pop(0)
+                elif mutation == 'multiplicity': row['maximum_multiplicity'] = None
+                elif mutation.startswith('ownership-'): row['lifetime']['ownership'] = mutation.split('-')[1]
+                elif mutation == 'reservation': row['lifetime']['reservation_proof'] = None
+                elif mutation == 'obligation': profile['obligations'].pop()
+                elif mutation == 'obligation-source': profile['obligations'][0]['source'] = None
+                elif mutation == 'obligation-proof': profile['obligations'][0]['proof'] = None
+                elif mutation == 'source': profile['source'] = None
+                else:
+                    key = {'capacity': 'capacity_bytes', 'header': 'header_bytes',
+                           'rounding': 'allocator_rounding_bytes', 'storage': 'storage_metadata_bytes',
+                           'transport': 'transport_cache_bytes'}[mutation]
+                    row['metrics'][key] = None
+                # Even an explicitly trusted synthetic malformed proof cannot supply a missing term.
+                with self.reviewed(profile): result = ledger.reconcile_upper_bound(profile)
+                self.assertEqual(result['status'], 'unresolved')
+                self.assertIsNone(result['physical_upper_bound_bytes'])
+
+    def test_malformed_bounds_false_aliases_and_incompatible_identities_refuse(self):
+        for mutation in ('missing-domain-key', 'empty-domain', 'missing-overhead-key', 'duplicate-class',
+                         'duplicate-role', 'unknown-role', 'false-alias', 'runtime', 'topology',
+                         'profile', 'gc-release', 'logical', 'lower-bound', 'capacity-only',
+                         'boolean', 'negative', 'fractional', 'unbounded', 'zero', 'overflow',
+                         'sum-overflow', 'source-comment', 'duplicate-obligation'):
+            with self.subTest(mutation=mutation):
+                profile = self.fixture(); row = profile['components'][0]
+                if mutation == 'missing-domain-key': del profile['inventory']['authority']
+                elif mutation == 'empty-domain': profile['inventory']['authority'] = []
+                elif mutation == 'missing-overhead-key': del row['metrics']['header_bytes']
+                elif mutation == 'duplicate-class': profile['components'][1]['allocation_class'] = row['allocation_class']
+                elif mutation == 'duplicate-role': profile['components'][1]['roles'] = row['roles']
+                elif mutation == 'unknown-role': row['roles'] = ['authority/unlisted']
+                elif mutation == 'false-alias': row['alias_basis'] = 'equal-bytes'
+                elif mutation in ('runtime', 'topology', 'profile'):
+                    row[mutation] = dict(profile['runtime'], version='other') if mutation == 'runtime' else 'other'
+                elif mutation == 'gc-release': row['lifetime']['policy'] = 'release-on-task-completion'
+                elif mutation in ('logical', 'lower-bound', 'capacity-only'):
+                    row['quantity_type'] = {'logical': 'logical-bytes', 'lower-bound': 'physical-byte-lower-bound',
+                                            'capacity-only': 'backing-capacity-bytes'}[mutation]
+                elif mutation in ('boolean', 'negative', 'fractional', 'unbounded', 'zero'):
+                    row['maximum_multiplicity'] = {'boolean': True, 'negative': -1, 'fractional': 1.5,
+                                                  'unbounded': 'unbounded', 'zero': 0}[mutation]
+                elif mutation == 'overflow': row['maximum_multiplicity'] = ledger.MAX_ACCOUNTING_INTEGER
+                elif mutation == 'sum-overflow':
+                    for item in profile['components']:
+                        item['maximum_multiplicity'] = 1
+                        item['metrics'] = dict.fromkeys(ledger.UPPER_BOUND_METRICS, 0)
+                        item['metrics']['capacity_bytes'] = ledger.MAX_ACCOUNTING_INTEGER // 2
+                elif mutation == 'source-comment':
+                    row['source'] = dict(source_type='public-comment', repository='synthetic/test-only',
+                                         revision=None, path='issues/1#issuecomment-1', sha256='2' * 64)
+                else: profile['obligations'].append(copy.deepcopy(profile['obligations'][0]))
+                with self.reviewed(profile), self.assertRaises(ValueError): ledger.reconcile_upper_bound(profile)
+
+    def test_shared_allocation_needs_reviewed_whole_profile_and_unique_role_partition(self):
+        profile = self.fixture()
+        profile['components'][0]['roles'].append('managed/retained')
+        profile['components'][0]['alias_basis'] = 'reviewed-shared-allocation'
+        profile['components'].pop(1)
+        self.assertEqual(ledger.reconcile_upper_bound(profile)['status'], 'unresolved')
+        with self.reviewed(profile): result = ledger.reconcile_upper_bound(profile)
+        self.assertEqual(result['physical_upper_bound_bytes'], 7 * 40)
 
 
 if __name__ == '__main__': unittest.main()
