@@ -1029,6 +1029,29 @@ release-effect boundaries remain fixed.
 
 ### Original .103 authentication domain policy — 2026-10-15
 
+
+The opt-in `fsgg.utel-closed-source/1` construction profile now has a
+[closed source contract](../../tests/release-successor-authentication/closed-source-contract.md)
+and an owned Python constructor that composes the maintained decoder, callback owner and
+typed slot sink through bounded owned endpoints. It excludes generic stream/backend/path
+injection and raw evidence export from this selected route while preserving child,
+callback /1 and domain /3 wire formats. Focused source controls exercise thirteen serialized
+exchanges, six exact retained phases, fixed-status egress and two recipient roles with
+three cumulatively reserved purposes each. Four unsigned controlled diagnostic deliveries
+can retain the existing maximum fixture; both expiry purposes refuse while post-expiry
+custody remains null. Lost responses consume before extraction and never renew an attempt.
+This is a source slice of [#4600](https://github.com/FS-GG/.github/issues/4600), whose complete
+finite-cap acceptance remains open; it is not a production recipient/physical-fit claim.
+
+Coordination owns matching parent integration against the protected producer manifest;
+SystemAdmin supplies actual provider/process/transport/storage/clock/proof/recovery and
+enrolled-recipient containment. Production fields remain null and construction refuses
+before effects. Complete recipient source/runtime/storage/transport and alternate-egress
+populations still require qualified accounting/enforcement. The upper-bound trust registry
+is unchanged: cap 65,536, physical bound null, fit unproved, admission false. This source
+delivery proves no installed/native acceptance or authority-service private review.
+Original `.103` remains attempted-unknown/unreplayed and `.104` remains held.
+
 The sponsor-delegated [policy](https://github.com/FS-GG/.github/issues/4517#issuecomment-6199911781)
 and subsequent [accounting/ACK decision](https://github.com/FS-GG/.github/issues/4517#issuecomment-6200107860)
 are recorded in [ADR-0093](../adr/0093-original-103-authentication-domain-policy.md).
