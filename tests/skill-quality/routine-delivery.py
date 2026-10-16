@@ -218,6 +218,47 @@ class DeliveryEvidenceTests(unittest.TestCase):
                 self.assertIsNone(result["testedCheckout"])
                 self.assertEqual(result["parity"], "unavailable")
 
+    def test_entire_run_pr_link_population_is_validated_before_selection(self):
+        valid = dict(number=1, head=dict(sha=HEAD), base=dict(sha="d" * 40))
+        wrong_head = copy.deepcopy(valid); wrong_head["head"]["sha"] = "f" * 40
+        wrong_base = copy.deepcopy(valid); wrong_base["base"]["sha"] = "f" * 40
+        malformed = [None, {}, dict(number=True), dict(number=2, head=None, base=dict(sha="d" * 40)),
+                     dict(number=2, head=dict(sha="bad"), base=dict(sha="d" * 40))]
+        for bad in [wrong_head, wrong_base, valid, *malformed]:
+            for links in ([valid, bad], [bad, valid]):
+                with self.subTest(links=links):
+                    summary, api, _, responses = self.fixture(checkout="e" * 40)
+                    responses["actions/runs/7"]["pull_requests"] = links
+                    result = MODULE.delivery_evidence(summary, 7, api=api)
+                    self.assertIsNone(result["testedCheckout"])
+                    self.assertEqual(result["parity"], "unavailable")
+                    self.assertIn("tested-checkout-unavailable", result["exceptions"])
+        # A fully formed different-PR row remains permissible; it cannot satisfy the target join.
+        summary, api, _, responses = self.fixture(checkout="e" * 40)
+        responses["actions/runs/7"]["pull_requests"] = [dict(valid, number=2), valid]
+        self.assertEqual(MODULE.delivery_evidence(summary, 7, api=api)["parity"], "identical-tree")
+
+    def test_final_branch_and_native_merged_predicate_are_rechecked(self):
+        for fallback in (False, True):
+            for change in ("branch", "merged", "state", "merged_at"):
+                with self.subTest(fallback=fallback, change=change):
+                    summary, api, _, responses = self.fixture(checkout="e" * 40)
+                    original = api.get_pr.return_value
+                    if fallback:
+                        responses["actions/runs/7"].update(head_branch=original["head"]["ref"], pull_requests=[])
+                    changed = copy.deepcopy(original)
+                    if change == "branch": changed["head"]["ref"] = "unrelated"
+                    elif change == "merged": changed["merged"] = False
+                    elif change == "state": changed["state"] = "open"
+                    else: changed["merged_at"] = None
+                    api.get_pr.side_effect = [original, changed]
+                    result = MODULE.delivery_evidence(summary, 7, api=api)
+                    self.assertIsNone(result["testedCheckout"])
+                    self.assertIsNone(result["changedFiles"])
+                    self.assertIsNone(result["requiredChecks"])
+                    self.assertEqual(result["parity"], "unavailable")
+                    self.assertIn("final-pr-identity-unavailable", result["exceptions"])
+
     def test_merged_association_fallback_reports_tree_mismatch_and_preserves_dispute(self):
         summary, api, _, responses = self.fixture(checkout="e" * 40, delivered_tree="f" * 40)
         responses["actions/runs/7"].update(head_branch=api.get_pr.return_value["head"]["ref"], pull_requests=[])

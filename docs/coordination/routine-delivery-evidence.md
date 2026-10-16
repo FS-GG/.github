@@ -36,6 +36,9 @@ unchanged PR branch, its repository/head/event/workflow/attempt must match, the 
 retain the exact PR/head/base/run joins, and its native checkout commit must have the ordered
 exact base/head parents. A missing, malformed or conflicting run association, open/uncertain
 merge, candidate-only checkout or unrelated head/base/branch drift remains unavailable.
+The entire bounded run-link population is validated before selecting a match; malformed,
+duplicate or conflicting entries refuse even after a matching entry. The final native PR
+snapshot rechecks branch identity and the merged predicate, as well as head/base/merge commit.
 This fallback does not relax tree parity or coherent-validation results.
 `parity` compares that tested tree with the native delivered commit tree: `identical-tree`,
 `different-tree`, `not-delivered` or `unavailable`. Equal trees can coexist with failed or
@@ -53,7 +56,7 @@ There is no retry or effect replay. Raw hosted artifacts remain the original evi
 The collection gets one 60-second budget including the existing direct-child cleanup reserve.
 Each response uses the existing 256 KiB native-query limit. The pilot permits at most 100
 changed files, 128 required checks, 100 artifact records, one 64 KiB ZIP and one 4 KiB checkout
-JSON entry. Larger or incomplete populations remain unavailable. It does not paginate or
+JSON entry, and 100 run PR links. Larger or incomplete populations remain unavailable. It does not paginate or
 create a second check aggregator. The workflow adds two Git reads, a small JSON write and one
 artifact upload; hosted latency and storage overhead are unmeasured.
 

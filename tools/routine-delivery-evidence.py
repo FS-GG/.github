@@ -30,10 +30,14 @@ def collect(summary: Any, run_id: int, *, api: Any, native: Any) -> dict:
         except (RuntimeError, ValueError, KeyError, TypeError, AttributeError, OSError, zipfile.BadZipFile, zlib.error, EOFError):
             result["exceptions"].append(label + "-unavailable")
             return None
+    before = None
     def snapshot():
         pr = api.get_pr(repo, number)
         if (head_of(pr) != summary.expectedHead or base_of(pr) != (summary.baseRef, summary.baseSha)
-                or (summary.mergeCommit is not None and merged_commit_of(pr) != summary.mergeCommit)):
+                or (summary.mergeCommit is not None and merged_commit_of(pr) != summary.mergeCommit)
+                or (summary.codeDelivery == "delivered" and not is_merged(pr))
+                or (before is not None and (pr.get("head", {}).get("ref") != before.get("head", {}).get("ref")
+                                           or is_merged(pr) != is_merged(before)))):
             raise ValueError("evidence differs")
         return pr
     before = attempt("pr-identity", snapshot)
@@ -80,9 +84,21 @@ def collect(summary: Any, run_id: int, *, api: Any, native: Any) -> dict:
         run = read(f"actions/runs/{run_id}")
         attempt_number = run.get("run_attempt")
         links = run.get("pull_requests")
-        linked = isinstance(links, list) and any(
-            row.get("number") == number and row.get("head", {}).get("sha") == summary.expectedHead
-            and row.get("base", {}).get("sha") == summary.baseSha for row in links)
+        if not isinstance(links, list) or len(links) > 100:
+            raise ValueError("run PR link population differs")
+        linked, seen = False, set()
+        for row in links:
+            if (not isinstance(row, dict) or type(row.get("number")) is not int or row["number"] < 1
+                    or row["number"] in seen or not isinstance(row.get("head"), dict)
+                    or not isinstance(row.get("base"), dict)
+                    or any(not isinstance(row[side].get("sha"), str)
+                           or not SHA_RE.fullmatch(row[side]["sha"]) for side in ("head", "base"))):
+                raise ValueError("run PR link population differs")
+            seen.add(row["number"])
+            if row["number"] == number:
+                if row["head"]["sha"] != summary.expectedHead or row["base"]["sha"] != summary.baseSha:
+                    raise ValueError("run PR link identity differs")
+                linked = True
         # GitHub can remove this association after merge (observed on PR4597).
         # The fallback additionally requires the artifact's native exact-parent merge below.
         merged_link = (links == [] and summary.codeDelivery == "delivered" and is_merged(before)
