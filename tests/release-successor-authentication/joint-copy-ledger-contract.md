@@ -87,6 +87,53 @@ provenance supersedes the old witness pin in the local ledger while the protecte
 PR4578 evidence above remains historical. The unchanged sixteen-role runtime bundle
 and original `.103` attempted-unknown / `.104` hold remain intact.
 
+The protected [Coordination PR1005](https://github.com/FS-GG/FS.GG.Coordination/pull/1005)
+source at `2af47b82f95dea136e9d9f4c2c8edd0be7f90987` adds a separate
+managed-parent group at ordinal-six Python readback, before release. Its
+[field census](https://github.com/FS-GG/FS.GG.Coordination/blob/2af47b82f95dea136e9d9f4c2c8edd0be7f90987/tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs)
+has SHA-256 `531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669`.
+Atlas `coordination/managed-held-cut-backing-roots`, protected by
+[PR1006](https://github.com/FS-GG/FS.GG.Coordination/pull/1006) at
+`eb007772a44b7d1edb3dab3bdd11ba2157047d0d`, indexes the same source bytes.
+The original ten groups, observations and aliases remain intact. This additional
+source-controlled group has explicit topology/run/process/attempt/cut labels;
+it does not authenticate a native process or join a different witness execution.
+
+| Selected managed backing | Distinct arrays | Backing capacity bytes |
+| --- | ---: | ---: |
+| Six snapshot frames | 6 | 5,682 |
+| Result and callback parser inputs | 2 | 2,048 + 512 |
+| Result and callback binding copies | 2 | 994 + 994 |
+| Start frame | 1 | 1,123 |
+| Selected backing subtotal | 11 | 11,353 |
+
+`backing-capacity-bytes` records byte-array lengths, independently of logical
+lengths, object counts and physical-byte lower bounds. Only observed identities
+may carry capacity. Summaries deduplicate scoped backing classes and expose
+`known_object_backing_capacity_bytes`; absent capacity remains `null`. Capacity
+never determines fit, including a supplied capacity above the policy cap.
+
+Six payload-backing roles alias the six snapshot arrays. These roles name the
+underlying byte arrays, not the `ReadOnlyMemory` views. The 4,835 payload slice
+bytes are excluded from the capacity subtotal and are not another allocation.
+Twenty-six distinct original-request/endpoint-copy array identity witnesses stay
+disjoint from the eleven selected backings. Their object counts claim no byte
+inventory. The thirteenth original request alone records its verified 295 logical
+bytes; the discovered current-request role aliases that same object and contributes
+no additional bytes. The bounded field walk discovers twelve arrays: the eleven
+selected backings plus that existing request. The full ledger group names 37
+objects because it also retains the other endpoint identity witnesses; it does
+not claim all 37 were discovered by the field walk. No endpoint byte total is
+inferred or combined with the backing subtotal.
+
+The offline regressions bind these rows to the pinned source assertions, including
+all eleven capacities, six payload backing aliases, the current-request alias,
+endpoint disjointness and exact provenance/scope/cut. Wrong capacity, false alias,
+changed provenance, process or cut, and payload-as-allocation mutations fail those
+regressions. The generic reconciler checks consistency; it does not authenticate
+arbitrary remote source claims. Cross-cut aliases refuse and separate cuts have
+no combined capacity or byte total.
+
 For these inputs every physical lower bound remains unknown and **fit is unproved**.
 There is no successful-fit result or runtime admission. Missing caller/evidence/
 restart/uncertainty populations, metadata, allocator capacity and native enforcement
@@ -97,6 +144,6 @@ original uncertain/consumed attempts remain held by the source contracts. No
 barrier/readback/clock authenticity, signer/ACK custody, installed adoption or
 original `.103`/`.104` effect is qualified.
 
-Reusable finding capture remains with the programme integrator: update the existing
-Atlas record after semantic review and native source delivery; this lane's bounded
-five-file touch-set excludes Atlas and roadmap edits.
+Reusable consumer findings belong in the owning `.github` Atlas archive after
+accepted source delivery, through a separately scoped capture. This four-file
+source lane does not edit Atlas or the roadmap.
