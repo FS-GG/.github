@@ -98,4 +98,9 @@ The genuine docs-only [PR4607](https://github.com/FS-GG/.github/pull/4607) sched
 run; coherence run38866764067/artifact12030918081 supplied synthetic checkout7dbb1112 and tree2a7bc98a.
 Its protected native merge638b4b26 retained that tree, with eight required checks passing and no
 collection exception. These observations establish producer coverage and explicit-run readback;
-the automatic selection and consumer changes require their own exact-head hosted qualification.
+the automatic selection and consumer changes were then independently reviewed and delivered
+in [PR4609](https://github.com/FS-GG/.github/pull/4609). Its actual apply and subsequent read-only
+collection selected the required projection run automatically, reported matching tested/delivered
+trees and all eight required checks passing, and returned `delivered` with no evidence issues.
+This qualifies the maintained repository helper and reader for the stated scope; fleet
+installation and every-job test-time filesystem coverage remain separate.

@@ -315,10 +315,12 @@ only independently justified correctness improvements.
 The user selected a stronger, outcome-led trial as the priority for V2-CTX-01.4–.6.
 It targets **80% less coordination effort** than a comparable current-route baseline,
 faster delivery and unchanged correctness, credential custody and replay protection.
-This section selects the design and implementation sequence. The existing work-programme,
-handoff, review, CI and operation-specific rules apply until their replacements pass
-review and protected delivery. The earlier optional 30% duplicate-retrieval target is a
-different proxy; it neither proves nor substitutes for this coordination-effort target.
+The [governing replacement #4608](https://github.com/FS-GG/.github/pull/4608) is protected
+and active for the three outcomes. [Automatic evidence integration #4609](https://github.com/FS-GG/.github/pull/4609)
+delivers the maintained repository result and reader; its actual delivery and read-only
+reconciliation passed with automatic run selection and identical tested/delivered trees.
+Required tests, independent source review and operation-specific acceptance remain in force.
+The earlier optional 30% duplicate-retrieval target is a different proxy; it neither proves nor substitutes for this coordination-effort target.
 
 ### Owners, completion and the one record
 
@@ -341,9 +343,10 @@ custody. The owning issues are [V3 `/3` #4599](https://github.com/FS-GG/.github/
 [authority service #4601](https://github.com/FS-GG/.github/issues/4601).
 The `/3` source issue is closed as historical baseline, excluded from prospective pilot
 savings. #4516 and #4517 remain the existing cross-repository request mailboxes until
-their reply contracts end or both sides agree to move them. This completes the one-issue-per-outcome mapping. Automatic CI evidence remains a
-separate qualification for the joins it can replace; reply handling uses deadlines
-and session-start reconciliation after the governing rule is protected.
+their reply contracts end or both sides agree to move them. The issue mapping and
+governing replacement are delivered. Automatic evidence covers the maintained helper's
+qualified joins; missing evidence stays unknown. Reply handling now uses deadlines
+and session-start reconciliation.
 
 One owner carries implementation, review and delivery through the completion
 condition. A new lane must name the condition it materially advances or an
@@ -454,6 +457,11 @@ inconclusive result. Two recent Coordination source PRs had only 30–32 seconds
 between final check and merge, so that interval alone cannot support the target.
 The already protected `/3` compatibility result is historical baseline/recovery
 evidence, not prospective pilot savings; do not rerun it to create pilot activity.
+The ordinary delivery observation in [PR4609](https://github.com/FS-GG/.github/pull/4609)
+records 20m22s from source preparation to protected delivery and zero extra packets,
+typed-return reports, duplicate current views or manual issue polls by its implementation
+owner. Owner/reviewer effort and comparable baseline coverage remain unknown, so the
+80% savings claim is inconclusive. These observations did not gate delivery.
 Adopt, adjust or retire the pilot after accepted results; the protected rule removes
 duplicate coordination requirements, while each CI fact replaces a manual verification
 only after its producer and consumer prove their failure and recovery paths.
