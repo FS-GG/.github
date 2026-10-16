@@ -162,6 +162,128 @@ class DeliveryEvidenceTests(unittest.TestCase):
         api.query.side_effect = archive
         return summary, api, fact, responses
 
+    def automatic_fixture(self):
+        summary, api, fact, responses = self.fixture(checkout="e" * 40)
+        summary = MODULE.replace(summary, coherentValidation="passed", routineEligibility="passed")
+        responses["actions/runs/7"]["path"] = ".github/workflows/coherence.yml"
+        fact["job"] = "projection"
+        row = dict.fromkeys(MODULE.WATCH_FIELDS.split(","), "")
+        row.update(name="projection", workflow="coherence", event="pull_request", state="SUCCESS",
+                   bucket="pass", link="https://github.com/FS-GG/.github/actions/runs/7/job/12")
+        responses["actions/jobs/12"] = dict(id=12, run_id=7, run_attempt=1, name="projection", head_sha=HEAD)
+        original = api._watch_read.side_effect
+        def read(command, accepted):
+            return (0, [row]) if command[1:3] == ["pr", "checks"] else original(command, accepted)
+        api._watch_read.side_effect = read
+        return summary, api, fact, responses, row
+
+    def test_automatic_required_projection_discovers_run_and_assesses_delivery(self):
+        summary, api, _, _, _ = self.automatic_fixture()
+        result = MODULE.delivery_evidence(summary, None, api=api, assembled=True)
+        evidence = result.pop("deliveryEvidence")
+        self.assertEqual(result, asdict(summary))
+        self.assertEqual((evidence["assessment"], evidence["issues"], evidence["run"]["id"]), ("delivered", [], 7))
+        self.assertEqual(evidence["testedCheckout"]["kind"], "synthetic-pr-merge")
+
+    def test_automatic_missing_duplicate_wrong_and_changed_projection_refuse(self):
+        for case in ("missing", "duplicate", "foreign-link", "wrong-workflow", "changed"):
+            with self.subTest(case=case):
+                summary, api, _, _, row = self.automatic_fixture()
+                rows = [row]
+                if case == "missing": rows = []
+                if case == "duplicate": rows = [row, row]
+                if case == "foreign-link": row["link"] = row["link"].replace("FS-GG", "other")
+                if case == "wrong-workflow": row["workflow"] = "skill-quality"
+                original, reads = api._watch_read.side_effect, 0
+                def read(command, accepted):
+                    nonlocal reads
+                    if command[1:3] == ["pr", "checks"]:
+                        reads += 1
+                        return 0, ([dict(row, link=row["link"] + "0")] if case == "changed" and reads > 1 else rows)
+                    return original(command, accepted)
+                api._watch_read.side_effect = read
+                evidence = MODULE.delivery_evidence(summary, None, api=api, assembled=True)["deliveryEvidence"]
+                self.assertIsNone(evidence["testedCheckout"])
+                self.assertEqual(evidence["assessment"], "attention")
+                self.assertTrue(evidence["exceptions"])
+
+    def test_automatic_stale_job_attempt_and_crossed_producer_refuse(self):
+        for key, value in (("run_attempt", 2), ("head_sha", "f" * 40), ("name", "unrelated"), ("run_id", 8)):
+            summary, api, _, responses, _ = self.automatic_fixture()
+            responses["actions/jobs/12"][key] = value
+            result = MODULE.delivery_evidence(summary, None, api=api)
+            self.assertIsNone(result["testedCheckout"])
+        summary, api, fact, responses, _ = self.automatic_fixture()
+        responses["actions/runs/7"]["path"] = ".github/workflows/skill-quality.yml"
+        fact["job"] = "semantic-skill-quality"
+        self.assertIsNone(MODULE.delivery_evidence(summary, None, api=api)["testedCheckout"])
+
+    def test_automatic_ready_dispute_failure_and_mismatch_preserve_original(self):
+        for state in ("ready", "disputed", "failed-check", "different-tree"):
+            summary, api, _, responses, row = self.automatic_fixture()
+            if state == "ready":
+                summary = MODULE.replace(summary, outcome="ready", codeDelivery="not-delivered", mergeCommit=None)
+                api.get_pr.return_value = dict(opened(), changed_files=1)
+            if state == "disputed":
+                summary = MODULE.replace(summary, outcome="delivered-disputed", coherentValidation="disputed")
+            if state == "failed-check": row.update(bucket="fail", state="FAILURE")
+            if state == "different-tree": responses[f"git/commits/{MERGE}"]["tree"]["sha"] = "f" * 40
+            output = MODULE.delivery_evidence(summary, None, api=api, assembled=True)
+            evidence = output.pop("deliveryEvidence")
+            self.assertEqual(output, asdict(summary))
+            self.assertEqual(evidence["assessment"], "ready" if state == "ready" else "attention")
+
+    def test_large_automatic_result_roundtrips_existing_custody_bound(self):
+        summary, api, _, _, row = self.automatic_fixture()
+        original = api._watch_read.side_effect
+        def read(command, accepted):
+            return (0, [dict(row, name="x" * 500 + str(i)) for i in range(127)] + [row]) if command[1:3] == ["pr", "checks"] else original(command, accepted)
+        api._watch_read.side_effect = read
+        output = MODULE.delivery_evidence(summary, None, api=api, assembled=True)
+        self.assertIsNone(output["deliveryEvidence"]["requiredChecks"])
+        self.assertIn("result-populations-over-budget", output["deliveryEvidence"]["exceptions"])
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "result.json"
+            path.write_text(json.dumps(output, separators=(",", ":"), sort_keys=True) + "\n")
+            self.assertLessEqual(path.stat().st_size, 65536)
+            self.assertEqual(MODULE.installation_prior_result(str(path)), output)
+
+    def test_default_ordinary_collection_is_repository_scoped(self):
+        summary, _, _, _ = self.fixture()
+        for repo, expected in (("FS-GG/.github", True), ("FS-GG/other", False)):
+            output = io.StringIO()
+            with mock.patch.object(MODULE, "summarize", return_value=(0, MODULE.replace(summary, repo=repo))), \
+                 mock.patch.object(MODULE, "delivery_evidence", return_value=dict(asdict(summary), deliveryEvidence={})) as evidence, \
+                 contextlib.redirect_stdout(output), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(MODULE.main(["--repo", repo, "--pr", "1", "--head", HEAD,
+                    "--telemetry-unavailable", "local-clr-resource-hold"]), 0)
+            self.assertEqual(evidence.called, expected)
+            if expected: self.assertEqual(evidence.call_args.args[1], None)
+
+    def test_rerun_during_collection_and_installation_default_refuse_extension(self):
+        summary, api, _, responses, _ = self.automatic_fixture()
+        original, reads = api._watch_read.side_effect, 0
+        def read(command, accepted):
+            nonlocal reads
+            if command[-1].endswith("actions/runs/7"):
+                reads += 1
+                if reads > 1:
+                    return 0, dict(responses["actions/runs/7"], run_attempt=2)
+            return original(command, accepted)
+        api._watch_read.side_effect = read
+        output = MODULE.delivery_evidence(summary, None, api=api, assembled=True)
+        self.assertIsNone(output["deliveryEvidence"]["testedCheckout"])
+        self.assertIn("final-producer-run-unavailable", output["deliveryEvidence"]["exceptions"])
+        capture = io.StringIO()
+        with mock.patch.object(MODULE, "summarize", return_value=(0, summary)), \
+             mock.patch.object(MODULE, "delivery_evidence") as evidence, \
+             contextlib.redirect_stdout(capture), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(MODULE.main(["--repo", summary.repo, "--pr", "1", "--head", HEAD,
+                "--install-routine-producer", "--routine-producer-source", "f" * 40,
+                "--coherent-workflow", "coherence.yml", "--telemetry-unavailable", "local-clr-resource-hold"]), 0)
+        evidence.assert_not_called()
+        self.assertEqual(json.loads(capture.getvalue()), asdict(MODULE.replace(summary, telemetryHealth="unavailable")))
+
     def test_one_reader_accepts_exact_live_and_historic_producer_pairs(self):
         pairs = [("coherence.yml", "projection", "github-pr-checkout"),
                  ("skill-quality.yml", "semantic-skill-quality", "skill-quality-pilot")]

@@ -40,6 +40,10 @@ def delivery_view(value: dict[str, Any] | None, problem: str | None) -> dict[str
         "expectedHead": value.get("expectedHead"),
         "observedHead": value.get("observedHead") if value.get("observedHead") is not None else value.get("head"),
         "mergeCommit": value.get("mergeCommit"),
+        "checkoutEvidence": ({"status": "reported", "assessment": value["deliveryEvidence"].get("assessment"),
+                              "parity": value["deliveryEvidence"]["parity"],
+                              "issues": value["deliveryEvidence"].get("issues", [])}
+                             if "deliveryEvidence" in value else {"status": "not-provided"}),
     }
 
 

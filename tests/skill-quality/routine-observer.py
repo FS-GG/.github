@@ -40,6 +40,15 @@ with tempfile.TemporaryDirectory(prefix="fsgg-routine-observer-") as scratch:
     assert report["qualification"] == {"status":"not-evaluated", "code":"population-coverage-unknown"}
     assert report["usage"]["conservativeOverheadRatio"] == .2
     assert report["usage"]["withinTenPercentCeiling"] is False
+    extension = {"schema":"fsgg.routine-delivery-evidence/1", "scope":"github-pr-checkout",
+                 "parity":"identical-tree", "exceptions":[], "assessment":"delivered", "issues":[]}
+    reported = invoke(root, delivery(deliveryEvidence=extension, routineEligibility="passed",
+                                    producerInstallation="not-selected", producerSource=None))
+    assert reported["recordValidity"]["status"] == "valid"
+    assert reported["delivery"]["checkoutEvidence"] == {"status":"reported", "assessment":"delivered",
+                                                        "parity":"identical-tree", "issues":[]}
+    assert reported["qualification"]["status"] == "not-evaluated"
+    assert invoke(root, delivery(deliveryEvidence=dict(extension, private="bad")))["recordValidity"]["status"] == "invalid"
     mismatch = invoke(root, delivery(observedHead=OTHER))
     assert mismatch["joinIntegrity"] == {"status":"invalid", "code":"head-mismatch"}
     assert mismatch["delivery"]["status"] == "delivered"
