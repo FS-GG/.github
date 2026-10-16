@@ -629,7 +629,7 @@ class UpperBoundSchemaControls(unittest.TestCase):
                 self.assertIsNone(result['physical_upper_bound_bytes'])
 
     def test_malformed_bounds_false_aliases_and_incompatible_identities_refuse(self):
-        for mutation in ('missing-domain-key', 'empty-domain', 'missing-overhead-key', 'duplicate-class',
+        for mutation in ('missing-domain-key', 'invalid-domain', 'missing-overhead-key', 'duplicate-class',
                          'duplicate-role', 'unknown-role', 'false-alias', 'runtime', 'topology',
                          'profile', 'gc-release', 'logical', 'lower-bound', 'capacity-only',
                          'boolean', 'negative', 'fractional', 'unbounded', 'zero', 'overflow',
@@ -637,7 +637,7 @@ class UpperBoundSchemaControls(unittest.TestCase):
             with self.subTest(mutation=mutation):
                 profile = self.fixture(); row = profile['components'][0]
                 if mutation == 'missing-domain-key': del profile['inventory']['authority']
-                elif mutation == 'empty-domain': profile['inventory']['authority'] = []
+                elif mutation == 'invalid-domain': profile['inventory']['authority'] = 'absent'
                 elif mutation == 'missing-overhead-key': del row['metrics']['header_bytes']
                 elif mutation == 'duplicate-class': profile['components'][1]['allocation_class'] = row['allocation_class']
                 elif mutation == 'duplicate-role': profile['components'][1]['roles'] = row['roles']
@@ -663,6 +663,27 @@ class UpperBoundSchemaControls(unittest.TestCase):
                                          revision=None, path='issues/1#issuecomment-1', sha256='2' * 64)
                 else: profile['obligations'].append(copy.deepcopy(profile['obligations'][0]))
                 with self.reviewed(profile), self.assertRaises(ValueError): ledger.reconcile_upper_bound(profile)
+
+    def test_empty_domain_is_distinct_from_unknown_and_requires_reviewed_completeness(self):
+        profile = self.fixture()
+        profile['inventory']['observation'] = []
+        profile['components'] = [row for row in profile['components'] if row['allocation_class'] != 'observation']
+        unreviewed = ledger.reconcile_upper_bound(profile)
+        self.assertEqual(unreviewed['status'], 'unresolved')
+        self.assertIsNone(unreviewed['physical_upper_bound_bytes'])
+        self.assertIn('authentic-reviewed-contract', unreviewed['unresolved'])
+        with self.reviewed(profile): result = ledger.reconcile_upper_bound(profile)
+        self.assertEqual(result['status'], 'finite-complete')
+        self.assertEqual(result['physical_upper_bound_bytes'], 7 * 40)
+        # A pin alone cannot erase an unknown inventory or unresolved proof.
+        for mutation in ('unknown', 'incomplete'):
+            altered = copy.deepcopy(profile)
+            if mutation == 'unknown': altered['inventory']['observation'] = None
+            else:
+                next(row for row in altered['obligations'] if row['id'] == 'all-representations')['status'] = 'unknown'
+            with self.reviewed(altered): result = ledger.reconcile_upper_bound(altered)
+            self.assertEqual(result['status'], 'unresolved')
+            self.assertIsNone(result['physical_upper_bound_bytes'])
 
     def test_shared_allocation_needs_reviewed_whole_profile_and_unique_role_partition(self):
         profile = self.fixture()

@@ -135,6 +135,10 @@ def reconcile_upper_bound(profile):
     for domain, inventory in profile['inventory'].items():
         if inventory is None:
             unresolved.append('inventory:' + domain)
+        elif type(inventory) is list and not inventory:
+            # An empty domain is a zero-population claim. Only the whole-profile
+            # protected pin plus proved completeness obligations can establish it.
+            pass
         else:
             for role in unique_labels(inventory): roles.add(domain + '/' + role)
     if type(profile['components']) is not list or type(profile['obligations']) is not list:

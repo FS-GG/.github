@@ -288,8 +288,11 @@ runtime, source proof, closed inventory or component bound. Its result is
 A complete profile must name its version, exact topology and runtime implementation,
 version, build, architecture, allocator and storage geometry. Its inventory explicitly
 covers authority, managed, Python, backend, peer, transport/kernel/cache,
-diagnostic/export and observation populations. Each domain needs a nonempty closed
-role inventory; a null inventory remains unknown. A component assigns each role
+diagnostic/export and observation populations. Each domain needs an explicit closed
+role inventory; a null inventory remains unknown. An empty list claims a truly
+absent population and is accepted only through the whole-profile protected pin
+and proved completeness obligations (including the all-representations argument).
+An unreviewed empty claim remains unresolved and never becomes a proven zero. A component assigns each role
 exactly once to a disjoint physical allocation class, with a positive maximum
 multiplicity and five separate upper-bound metrics: capacity, object header,
 allocator rounding, storage metadata and transport/cache bytes. An applicable term
