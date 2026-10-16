@@ -2,6 +2,7 @@
 """Offline controls for source-scoped copy evidence and honest unknowns."""
 import copy
 from dataclasses import FrozenInstanceError
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -23,7 +24,7 @@ class JointCopyLedgerControls(unittest.TestCase):
         result = ledger.reconcile(self.inputs)
         self.assertEqual(result['fit'], 'unproved')
         self.assertFalse(result['admission'])
-        self.assertEqual(len(result['groups']), 13)
+        self.assertEqual(len(result['groups']), 14)
         python = result['groups'][0]
         self.assertEqual(python['known_object_logical_bytes'], 11660)
         self.assertIsNone(python['physical_byte_lower_bound'])
@@ -76,6 +77,149 @@ class JointCopyLedgerControls(unittest.TestCase):
         self.assertEqual((result['fit'], result['admission']), ('unproved', False))
         self.assertNotIn('total_bytes', result)
         self.assertTrue(all(group['physical_byte_lower_bound'] is None for group in result['groups']))
+
+
+    def assert_original_prefixes(self, inputs):
+        # Canonical complete predecessor arrays at protected PR4587, never regenerated.
+        for key, count, digest in (
+            ('observations', 205, '930eab6e2d51b6813df75b32eb6a6239f027db637dad4c8726bdc996811db0de'),
+            ('aliases', 16, '69bc49e9606b40eed4bfe7f244e659bfaa172910e81122d99ae1daaffa9a4a6e'),
+            ('missing_obligations', 10, '0b8a63943f5a36dbc83c2de7316a1897a029272bdd7042c6682e275b7851df91'),
+        ):
+            self.assertGreaterEqual(len(inputs[key]), count)
+            prefix = json.dumps(inputs[key][:count], sort_keys=True, separators=(',', ':')).encode()
+            self.assertEqual(hashlib.sha256(prefix).hexdigest(), digest, key)
+        self.assertEqual(len(inputs['observations']), 215)
+        self.assertEqual(len(inputs['aliases']), 16)
+        self.assertEqual(len(inputs['missing_obligations']), 11)
+
+    def python_capacity_journey(self):
+        path = HERE / 'slot-backing-capacity-tests.py'
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),
+                         'a831e911089a322ccdc5bb1add8b8da5ec3219c2adfb5bb09b5554f89b9221b6')
+        spec = importlib.util.spec_from_file_location('ledger_capacity_witness', path)
+        witness = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(witness)
+        _, _, census = witness.SlotBackingCapacityControls().journey()
+        self.assertEqual(census.runtime, witness.runtime_identity())
+        self.assertEqual(census.runtime[0], 'CPython')
+        return census
+
+    def assert_python_capacity(self, inputs, census):
+        ledger.verify_local_sources(inputs)
+        rows = [row for row in inputs['observations'] if row['id'].startswith('python-capacity:')]
+        self.assertEqual(len(rows), 10)
+        recorded = {row['role']: row for row in rows}
+        self.assertEqual(set(recorded), set(census.allocations))
+        self.assertEqual(len(recorded), 10)
+        for role, row in recorded.items():
+            identity, representation, logical, capacity = census.allocations[role]
+            self.assertEqual((identity, logical), census.cut[role])
+            self.assertEqual((row['id'], row['representation'], row['quantity_type'], row['quantity'],
+                              row['alias_class'], row['identity_basis']),
+                             ('python-capacity:' + role, representation, 'backing-capacity-bytes',
+                              capacity, role, 'observed-identity'))
+            ownership = ('stable-backend' if role.startswith('phase-') else
+                         'decoder' if role == 'decoder_buffer' else 'staging-backend')
+            self.assertEqual(row['ownership'], ownership)
+            self.assertEqual(row['scope'], dict(topology='python-terminal-backing-capacity-controlled',
+                run='pr4588-capacity-source-witness', process='python-in-memory-owner', attempt='original-controlled-attempt'))
+            self.assertEqual(row['cut'], 'sixth-readback-selected-value-graphs')
+            self.assertEqual(row['provenance'], dict(source_type='git-blob', repository='FS-GG/.github',
+                revision='a6d63d2657ed15c66ca46b07a66ebd25f5789799',
+                path='tests/release-successor-authentication/slot-backing-capacity-tests.py',
+                sha256='a831e911089a322ccdc5bb1add8b8da5ec3219c2adfb5bb09b5554f89b9221b6'))
+        for left in recorded:
+            for right in recorded:
+                self.assertEqual(recorded[left]['alias_class'] == recorded[right]['alias_class'],
+                                 census.allocations[left][0] == census.allocations[right][0])
+        self.assertEqual(sum(census.allocations[role][2] for role in recorded), 8790)
+        result = ledger.reconcile(inputs)
+        group = next(group for group in result['groups'] if group['scope']['run'] == 'pr4588-capacity-source-witness')
+        self.assertEqual(group['known_object_backing_capacity_bytes'], 8822)
+        self.assertIsNone(group['known_object_logical_bytes'])
+        self.assertIsNone(group['physical_byte_lower_bound'])
+        self.assertEqual(len(result['groups']), 14)
+        self.assertEqual((result['fit'], result['admission']), ('unproved', False))
+        self.assertNotIn('total_bytes', result)
+        self.assertNotIn('total_capacity_bytes', result)
+        self.assertTrue(all(group['physical_byte_lower_bound'] is None for group in result['groups']))
+
+    def test_python_capacity_matches_protected_actual_runtime_without_logical_merge(self):
+        census = self.python_capacity_journey()
+        self.assert_python_capacity(self.inputs, census)
+        self.assert_original_prefixes(self.inputs)
+        print(json.dumps({'pythonCapacityConsumerRuntime': census.runtime,
+                          'selectedCapacityBytes': 8822, 'separateLogicalBytes': 8790,
+                          'objects': len(census.allocations)}, sort_keys=True))
+
+    def test_original_prefix_drift_is_detected(self):
+        self.assert_original_prefixes(self.inputs)
+        for key in ('observations', 'aliases', 'missing_obligations'):
+            altered = copy.deepcopy(self.inputs)
+            if key == 'observations': altered[key][0]['quantity'] += 1
+            elif key == 'aliases': altered[key][0]['basis'] = 'equal-bytes'
+            else: altered[key][0] = 'erased historical gap'
+            with self.subTest(key=key), self.assertRaises(AssertionError):
+                self.assert_original_prefixes(altered)
+
+    def test_python_capacity_source_mutations_refuse(self):
+        census = self.python_capacity_journey()
+        for mutation in ('missing', 'extra', 'capacity', 'logical-as-capacity', 'alias', 'phase-six-alias', 'type', 'ownership',
+                         'hash', 'revision', 'topology', 'run', 'process', 'attempt', 'cut', 'identity-basis'):
+            with self.subTest(mutation=mutation):
+                altered = copy.deepcopy(self.inputs)
+                rows = [row for row in altered['observations'] if row['id'].startswith('python-capacity:')]
+                row = next(row for row in rows if row['role'] == 'candidate')
+                if mutation == 'missing': altered['observations'].remove(row)
+                elif mutation == 'extra':
+                    extra = copy.deepcopy(row); extra.update(id='python-capacity:extra', role='extra')
+                    altered['observations'].append(extra)
+                elif mutation == 'capacity': row['quantity'] += 1
+                elif mutation == 'logical-as-capacity': row['quantity'] = census.allocations['candidate'][2]
+                elif mutation == 'alias': row['alias_class'] = 'readback'
+                elif mutation == 'phase-six-alias': row['alias_class'] = 'phase-6'
+                elif mutation == 'type': row['representation'] = 'bytes'
+                elif mutation == 'ownership': row['ownership'] = 'stable-backend'
+                elif mutation in ('hash', 'revision'):
+                    row['provenance']['sha256' if mutation == 'hash' else 'revision'] = '0' * (64 if mutation == 'hash' else 40)
+                elif mutation in ('topology', 'run', 'process', 'attempt'): row['scope'][mutation] = 'different'
+                elif mutation == 'cut': row['cut'] = 'other-cut'
+                else: row['identity_basis'] = 'modeled-identity'
+                with self.assertRaises((AssertionError, ValueError)):
+                    self.assert_python_capacity(altered, census)
+
+    def test_python_capacity_cannot_alias_old_runs_or_collapse_cuts(self):
+        for target in ('python:candidate', 'managed-roots:snapshot-1',
+                       'managed-ack-read:ack-supplied-backing', 'managed-callback-read:callback-supplied-backing'):
+            altered = copy.deepcopy(self.inputs)
+            altered['aliases'].append(dict(left='python-capacity:candidate', right=target, basis='same-scoped-object'))
+            with self.subTest(target=target), self.assertRaises(ValueError): ledger.reconcile(altered)
+        altered = copy.deepcopy(self.inputs)
+        old = next(row for row in altered['observations'] if row['id'] == 'python:candidate')
+        for row in altered['observations']:
+            if row['id'].startswith('python-capacity:'):
+                row['scope'], row['cut'] = old['scope'], old['cut']
+        with self.assertRaises(ValueError): ledger.reconcile(altered)
+        # The existing grammar refuses logical and capacity quantities for one object.
+        altered = copy.deepcopy(self.inputs)
+        extra = copy.deepcopy(next(row for row in altered['observations'] if row['id'] == 'python-capacity:candidate'))
+        extra.update(id='synthetic:same-object-logical', quantity_type='logical-bytes', quantity=991)
+        altered['observations'].append(extra)
+        with self.assertRaises(ValueError): ledger.reconcile(altered)
+
+    def test_python_large_capacity_still_proves_no_fit_or_total(self):
+        altered = copy.deepcopy(self.inputs)
+        row = next(row for row in altered['observations'] if row['id'] == 'python-capacity:candidate')
+        row['quantity'] = ledger.CAP + 1
+        result = ledger.reconcile(altered)
+        group = next(group for group in result['groups'] if group['scope']['run'] == 'pr4588-capacity-source-witness')
+        self.assertGreater(group['known_object_backing_capacity_bytes'], ledger.CAP)
+        self.assertIsNone(group['known_object_logical_bytes'])
+        self.assertIsNone(group['physical_byte_lower_bound'])
+        self.assertEqual((group['fit'], result['fit'], result['admission']), ('unproved', 'unproved', False))
+        self.assertNotIn('total_bytes', result)
+        self.assertNotIn('total_capacity_bytes', result)
 
     def managed_rows(self, inputs=None):
         return [row for row in (inputs or self.inputs)['observations']
@@ -232,7 +376,7 @@ class JointCopyLedgerControls(unittest.TestCase):
             self.assertIsNone(group['physical_byte_lower_bound'])
         original = next(group for group in result['groups'] if group['scope']['run'] == 'pr1005-source-witness')
         self.assertEqual(original['known_object_backing_capacity_bytes'], 11353)
-        self.assertEqual(len(result['groups']), 13)
+        self.assertEqual(len(result['groups']), 14)
         self.assertTrue(all(group['physical_byte_lower_bound'] is None for group in result['groups']))
         self.assertEqual((result['fit'], result['admission']), ('unproved', False))
         self.assertNotIn('total_bytes', result)

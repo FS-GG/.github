@@ -207,3 +207,69 @@ original `.103`/`.104` effect is qualified.
 Reusable consumer findings belong in the owning `.github` Atlas archive after
 accepted source delivery, through a separately scoped capture. The three-file pending-reader
 extension does not edit Atlas or the roadmap.
+
+## Selected Python bytearray backing capacity
+
+Protected [PR4588](https://github.com/FS-GG/.github/pull/4588), commit
+`a6d63d2657ed15c66ca46b07a66ebd25f5789799`, supplies a separate ten-row group
+from the [capacity companion](https://github.com/FS-GG/.github/blob/a6d63d2657ed15c66ca46b07a66ebd25f5789799/tests/release-successor-authentication/slot-backing-capacity-tests.py)
+(SHA256 `a831e911089a322ccdc5bb1add8b8da5ec3219c2adfb5bb09b5554f89b9221b6`).
+It reuses the real synchronous Python callback journey at
+`sixth-readback-selected-value-graphs`, joining nine backend bytearrays and the
+decoder buffer to their original identities, contents and logical lengths.
+
+| Selected role | Observed backing capacity bytes |
+| --- | ---: |
+| phase-1 through phase-6 | 1142, 973, 831, 918, 832, 992 |
+| old, candidate, readback | 832, 992, 992 |
+| decoder_buffer | 318 |
+
+The ten mutually distinct built-in bytearrays contribute **8822 backing-capacity
+bytes**, read directly through `bytearray.__alloc__`. Their **8790 logical bytes**
+are a separate source-comparison assertion, excluded from the capacity group's
+logical subtotal. The nine backend buffers account for 8504 capacity bytes versus
+8495 logical bytes; the decoder accounts for 318 versus 295. No temporary row is
+added: each stable phase keeps its former temporary identity without a second
+simultaneous allocation. Stable backend, staging backend and decoder ownership
+remain separate role labels.
+
+These vectors were observed on local CPython 3.14.8 and hosted CPython 3.12.3
+([run 38848183268](https://github.com/FS-GG/.github/actions/runs/38848183268)).
+They are immutable source-witness inputs, not universal capacities inferred from
+length. The consumer reruns the protected pure journey, checks the producer hash,
+records actual implementation/version/build, and compares every role's capacity,
+identity, type and logical length with the live scalar census. A changed runtime
+vector fails visibly for review; it does not regenerate these inputs. Unsupported
+runtime/capability semantics fail through the producer's unchanged controls.
+Capacity includes CPython buffer overallocation and its trailing byte, excluding
+object headers, allocator rounding, resident memory and unselected populations.
+
+The scope is topology `python-terminal-backing-capacity-controlled`, run
+`pr4588-capacity-source-witness`, process `python-in-memory-owner`, attempt
+`original-controlled-attempt`. These are controlled source-witness labels, not
+authenticated native execution identities. Ten alias classes correspond exactly
+to ten observed identities within this one synchronous run. No alias reaches the
+older Python logical group or any managed/Python cut. Matching role names, stage
+labels or runtime vectors establish no cross-run simultaneity. The unchanged
+parser rejects two quantity types for one same-object alias class; no duplicate
+identity, repinning or grammar exception is used to record both quantities.
+
+The extension preserves the protected predecessor's 205 observations, sixteen
+aliases and ten missing obligations as exact prefixes. Canonical prefix digests
+and deliberate drift controls protect all three arrays. Ten appended observations
+produce fourteen separate groups and 215 observations; aliases remain sixteen.
+One scoped missing obligation is appended. The new group has a known capacity
+subtotal, null logical subtotal and null physical lower bound. There is no combined
+capacity or byte total. Even synthetic capacity above 65536 leaves fit unproved
+and admission false; a possible future cap change requires complete accounting
+and is not justified by this selected group.
+
+Adversarial controls reject missing/extra roles, wrong capacity, logical length
+used as capacity, false aliases among equal-length candidate/readback/phase-six
+objects, wrong type/ownership, source hash/revision drift, changed scope/cut,
+unsupported identity basis, old-run aliases and group collapse. Original reader
+and terminal groups keep their earlier pins and quantities. No CLR/native
+producer run, complete population, physical release, native barrier/clock/custody,
+installation, replay or original-effect acceptance follows. Original `.103` stays
+attempted-unknown/unreplayed and `.104` held. Atlas capture belongs to the existing
+owning follow-up after source acceptance, without competing catalog edits.
