@@ -617,3 +617,30 @@ for(const analysisState of ["unavailable","pending","failed"]){
     await expect(page.locator("#efficiency-deferred")).toContainText("savings claims are deferred");
   });
 }
+
+
+test("malformed delivery observation is rejected before replacing facts or clocks",async({page})=>{
+  await page.clock.install({time:new Date("2026-10-16T12:00:00Z")});let requests=0;
+  await page.route("**/data/dashboard.json",route=>{
+    const data=payload(completedHost([]),"2026-10-16T12:00:00Z");
+    if(++requests>1){data.deliveries.observedAt="not-a-date";data.actions.selection.repositoryTotalAtObservation=999;}
+    return route.fulfill({json:data});
+  });
+  await page.goto("/#facts-coverage");
+  const facts=page.locator("#facts-population"),clocks=page.locator("#facts-freshness");
+  await expect(facts).toContainText("8 returned / 40000");
+  const priorClock=await clocks.locator("tr").filter({hasText:"Public delivery observation"}).textContent();
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(2);
+  await expect(page.locator("#error")).toContainText("showing last good data");
+  await expect(facts).toContainText("8 returned / 40000");
+  await expect(facts).not.toContainText("999");
+  await expect(clocks.locator("tr").filter({hasText:"Public delivery observation"})).toHaveText(priorClock);
+});
+
+test("absent completed population denominator stays unknown",async({page})=>{
+  const host=completedHost([]);delete host.completedItems.coverage.eligible;
+  await page.route("**/data/dashboard.json",route=>route.fulfill({json:payload(host)}));
+  await page.goto("/#facts-coverage");
+  await expect(page.locator("#facts-population")).toContainText("0 published / Unknown eligible");
+  await expect(page.locator("#facts-population")).not.toContainText("undefined");
+});
