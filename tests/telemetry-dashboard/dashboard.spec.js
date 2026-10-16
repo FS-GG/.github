@@ -390,7 +390,7 @@ test("host5 efficiency fixture tables, unknown accounting, keyboard and bounded 
   await page.locator("#efficiency-search").fill("absent");await expect(page.locator("#efficiency-items")).toContainText("No approved items match");
 });
 
-test("host5 malformed efficiency refresh preserves the last valid explanation",async({page})=>{
+test("host5 malformed efficiency refresh preserves the last valid measurements",async({page})=>{
   await page.clock.install();let requests=0;
   await page.route("**/data/dashboard.json",route=>{const host=efficiencyHost();if(++requests>1)host.processEfficiency.items[0].privateNotes="PRIVATE SENTINEL";return route.fulfill({json:payload(host)});});
   await page.goto("/#efficiency");
@@ -410,6 +410,7 @@ test("canonical efficiency export shows queued analysis, omitted populations and
   await page.locator("#efficiency-native-example-toggle").click();
   await expect(page.locator("#efficiency-native-example")).toContainText("Request: pending · accepted assessment: ready");
   await expect(page.locator("#efficiency-native-example")).toContainText("ingested: unknown");
+  await expect(page.locator("#efficiency-native-example")).toContainText("Source observed: 2026-10-06T12:00:00Z");
   await page.locator("#efficiency-missing-example-toggle").click();
   await expect(page.locator("#efficiency-missing-example")).toContainText("4 omitted");
   await expect(page.locator("#efficiency-missing-example")).toContainText("Selected measurements unavailable");
@@ -560,3 +561,55 @@ test("nullable canonical aggregates retain exact Int64 values and refuse unsafe 
   await expect(total.locator("strong")).toHaveText("9,223,372,036,854,775,807");
   await expect(output.locator("strong")).toHaveText("Unknown");
 });
+
+test("facts overview preserves distinct populations, missing usage and unknown cost without analysis",async({page})=>{
+  const host=completedHost([]);
+  host.launcherPopulation={admitted:9,started:8,terminal:7,usage:3,missingAdmission:1,missingStart:2,missingTerminal:3,missingUsage:5};
+  host.operational.expected=12;
+  await page.route("**/data/dashboard.json",route=>route.fulfill({json:payload(host)}));
+  await page.goto("/#facts-coverage");
+  const facts=page.locator("#facts-population");
+  await expect(facts).toContainText("8 returned / 40000 repository runs at observation");
+  await expect(facts).toContainText("admitted 9 · started 8 · terminal 7 · usage 3");
+  await expect(facts).toContainText("Missing admission 1 · start 2 · terminal 3 · usage 5");
+  await expect(facts).toContainText("Usage and terminal coverage not evaluated");
+  await expect(facts.locator("tr").filter({hasText:"Observed token total"})).toContainText("Unknown");
+  await expect(facts.locator("tr").filter({hasText:"Whole-population priced cost"})).toContainText("Unknown");
+  await expect(page.locator("#efficiency-health")).toContainText("Independent usage, source delivery and CI facts remain visible");
+});
+
+test("fresh browser and build retain stale source clocks and last evidence on refresh failure",async({page})=>{
+  await page.clock.install({time:new Date("2026-10-16T12:00:00Z")});let requests=0;
+  const host=completedHost([]),data=payload(host,"2026-10-16T12:00:00Z");
+  await page.route("**/data/dashboard.json",route=>++requests===1?route.fulfill({json:data}):route.fulfill({status:503,body:"Unavailable"}));
+  await page.goto("/#facts-coverage");
+  const clocks=page.locator("#facts-freshness");
+  await expect(clocks.locator("tr").filter({hasText:"Actions observation"})).toContainText("within observation age limit");
+  await expect(clocks.locator("tr").filter({hasText:"Store snapshot observation"})).toContainText("stale observation");
+  for(const label of ["Producer observation (whole population)","Ingestion receipt (whole population)","Publication receipt"])
+    await expect(clocks.locator("tr").filter({hasText:label})).toContainText("Unavailable");
+  await expect(clocks.locator("tr").filter({hasText:"Data build"})).toContainText("build time only");
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(2);
+  await expect(page.locator("#refresh-status")).toContainText("showing last good data");
+  await expect(clocks.locator("tr").filter({hasText:"Store snapshot observation"})).toContainText("stale observation");
+  await expect(page.locator("#facts-population")).toContainText("8 returned / 40000");
+});
+
+for(const analysisState of ["unavailable","pending","failed"]){
+  test(`measurements remain visible with ${analysisState} analysis while semantic claims are deferred`,async({page})=>{
+    const host=efficiencyHost(),item=host.processEfficiency.items[0];item.analysisState=analysisState;
+    const deferred=JSON.parse(JSON.stringify(item.metrics[0]));deferred.metric="avoidable-share";deferred.key="m31";
+    // Preserve the closed DTO and its full privacy validation; only presentation is deferred.
+    item.metrics.push(deferred);
+    await page.route("**/data/dashboard.json",route=>route.fulfill({json:payload(host)}));
+    await page.goto("/#efficiency");await page.locator(`#efficiency-${item.key}-toggle`).click();
+    const card=page.locator(`#efficiency-${item.key}`);
+    await expect(card).toContainText(`analysis ${analysisState}`);
+    await expect(card).toContainText("observed resource");
+    await expect(card).toContainText("unknown: Unknown");
+    await expect(card).not.toContainText("avoidable share");
+    await expect(card).not.toContainText("Problem episodes");
+    await expect(card).not.toContainText("Suggested next step");
+    await expect(page.locator("#efficiency-deferred")).toContainText("savings claims are deferred");
+  });
+}
