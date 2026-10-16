@@ -134,6 +134,66 @@ regressions. The generic reconciler checks consistency; it does not authenticate
 arbitrary remote source claims. Cross-cut aliases refuse and separate cuts have
 no combined capacity or byte total.
 
+Two later source observations add separate groups using the existing ledger grammar:
+
+| Source observation | Selected capacities | Identity boundary |
+| --- | --- | --- |
+| Protected [Coordination PR1007](https://github.com/FS-GG/FS.GG.Coordination/pull/1007), `1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e`, [ACK/read census](https://github.com/FS-GG/FS.GG.Coordination/blob/1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e/tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs) | One 199-byte ACK array and one 2,048-byte child-read array: **2,247 backing-capacity bytes**. | Earlier phase-four ACK write is pending, before return. Read call five waits for ordinal four; confirmed ordinal remains two and phase six stays queued. |
+| Protected [Coordination PR1009](https://github.com/FS-GG/FS.GG.Coordination/pull/1009), `6970fd73a6fecafde61d403713c16fb5b0f7aa63`, [callback-reader census](https://github.com/FS-GG/FS.GG.Coordination/blob/6970fd73a6fecafde61d403713c16fb5b0f7aa63/tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs) | One callback-reader array: **one backing-capacity byte**. | Python ordinal-six readback remains held while the actual callback stdout read is pending, after the selected backing census. |
+
+Atlas `coordination/managed-held-ack-child-read-roots`, protected by
+[PR1008](https://github.com/FS-GG/FS.GG.Coordination/pull/1008) at
+`b81a598512a273da4e888c8fbf032e160396c906`, cites the earlier source.
+Its test SHA-256 is
+`4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa`;
+the protected PR1008 test and README bytes are identical to PR1007. The callback
+source SHA-256 is
+`8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c`,
+equal to reviewed PR1009 head `ec3aaeded1266b3fcf56c2a14e34e35377a37af6`.
+
+The earlier cut aliases each supplied memory backing to its exact production
+state bytes/buffer. Both actual pending stream tasks are incomplete, and named
+state/channel/awaiter joins bind the observations. The two arrays are mutually
+distinct and distinct from the result parser input and eighteen endpoint arrays
+(nine original requests and nine copies). Those eighteen endpoint identities have
+object-count quantities, giving twenty classified distinct arrays with the two
+capacity arrays. The parser role has `object-count: 1` and **`alias_class: null`**:
+source does not establish whether it aliases an endpoint array. No twenty-first
+distinct array, parser capacity or parser-endpoint alias is inferred. Its separation
+from the two selected buffers remains evidence in the cited source contract.
+
+The terminal callback cut aliases the actual supplied read-memory backing to the
+production callback-state buffer. The observer forwards identical memory and token
+once to actual Python stdout. Memory length one and offset zero are separate facts,
+not added byte quantities. The observer work and underlying stream tasks are distinct
+and incomplete; named continuations join the production bridge/awaiter and the
+wrapper's underlying task/awaiter. The retained reader is incomplete. The ledger
+asserts no additional equality between that retained reader task and a continuation
+task. Generated state names, bounded ancestor lookup and changed/unavailable field
+structure belong to the producer's fail-closed witness, not a consumer scanning
+fallback. Clearing the pending observation after settlement establishes no physical
+release.
+
+That one-byte backing is distinct from eleven selected backings and twenty-six
+endpoint arrays. These thirty-seven identities use object-count quantities in the
+new callback group: thirty-eight distinct arrays are witnessed, with only one byte
+of capacity recorded there. The older 11,353-byte group retains its original
+PR1005 provenance and is not repinned, merged or added into this later observation.
+The two new groups have separate full topology/run/process/attempt/cut and source
+provenance. Their labels identify controlled source witnesses, not authenticated
+execution IDs. No alias, lifetime, combined peak or physical-fit conclusion crosses
+these observations.
+
+The extension preserves the previous 143 observations, thirteen aliases and eight
+missing obligations as equal prefixes, then adds the two groups and scoped remaining
+obligations. Earlier source-specific gaps remain historical evidence; later scoped
+observations do not erase them. Regressions bind the exact capacities, identities,
+partial parser identity, ownership, source pins and cuts. Wrong capacities, invented
+parser distinctness, missing endpoints, changed provenance/process/cut, task bytes
+and cross-cut aliases or merged provenance are rejected by the source regression
+or reconciler. The maintained consumer controls use pinned source evidence and inert
+Python paths; they do not execute the producer's CLR/Python subprocess journey.
+
 For these inputs every physical lower bound remains unknown and **fit is unproved**.
 There is no successful-fit result or runtime admission. Missing caller/evidence/
 restart/uncertainty populations, metadata, allocator capacity and native enforcement
@@ -145,5 +205,5 @@ barrier/readback/clock authenticity, signer/ACK custody, installed adoption or
 original `.103`/`.104` effect is qualified.
 
 Reusable consumer findings belong in the owning `.github` Atlas archive after
-accepted source delivery, through a separately scoped capture. This four-file
-source lane does not edit Atlas or the roadmap.
+accepted source delivery, through a separately scoped capture. The three-file pending-reader
+extension does not edit Atlas or the roadmap.

@@ -23,7 +23,7 @@ class JointCopyLedgerControls(unittest.TestCase):
         result = ledger.reconcile(self.inputs)
         self.assertEqual(result['fit'], 'unproved')
         self.assertFalse(result['admission'])
-        self.assertEqual(len(result['groups']), 11)
+        self.assertEqual(len(result['groups']), 13)
         python = result['groups'][0]
         self.assertEqual(python['known_object_logical_bytes'], 11660)
         self.assertIsNone(python['physical_byte_lower_bound'])
@@ -158,7 +158,7 @@ class JointCopyLedgerControls(unittest.TestCase):
         for row in self.managed_rows():
             if row['quantity_type'] == 'backing-capacity-bytes': row['quantity'] += 100000
         result = ledger.reconcile(self.inputs)
-        group = result['groups'][-1]
+        group = next(group for group in result['groups'] if group['scope']['run'] == 'pr1005-source-witness')
         self.assertGreater(group['known_object_backing_capacity_bytes'], ledger.CAP)
         self.assertEqual((group['fit'], result['fit'], result['admission']), ('unproved', 'unproved', False))
         self.assertIsNone(group['physical_byte_lower_bound'])
@@ -178,6 +178,115 @@ class JointCopyLedgerControls(unittest.TestCase):
         self.assertNotIn('total_bytes', separate)
         prototype['identity_basis'] = 'modeled-identity'
         with self.assertRaises(ValueError): ledger.Observation.read(prototype)
+
+    def assert_reader_cuts(self, inputs):
+        result = ledger.reconcile(inputs)
+        early = {
+            'ack-supplied-backing': ('ack', 199, 'backing-capacity-bytes'),
+            'ack-state-backing': ('ack', 199, 'backing-capacity-bytes'),
+            'child-read-supplied-backing': ('child-read', 2048, 'backing-capacity-bytes'),
+            'child-read-state-backing': ('child-read', 2048, 'backing-capacity-bytes'),
+            'result-parser-input': (None, 1, 'object-count')}
+        terminal = {
+            'callback-supplied-backing': ('callback-reader', 1, 'backing-capacity-bytes'),
+            'callback-state-backing': ('callback-reader', 1, 'backing-capacity-bytes')}
+        for role in ('snapshot-1', 'snapshot-2', 'snapshot-3', 'snapshot-4', 'snapshot-5',
+                     'snapshot-6', 'result-parser-input', 'callback-parser-input',
+                     'result-binding', 'callback-binding', 'start-frame'):
+            terminal[role] = (role, 1, 'object-count')
+        for population, count in ((early, 9), (terminal, 13)):
+            for number in range(1, count + 1):
+                for kind in ('original-request', 'endpoint-copy'):
+                    role = f'{kind}-{number}'
+                    population[role] = (role, 1, 'object-count')
+        cases = (
+            ('managed-ack-read:', early, '1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e',
+             '4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa',
+             'managed-python-held-ack-read', 'pr1007-source-witness',
+             'managed-parent-before-third-ack-write-returns', 'phase-four-ack-write-child-read-five-pending', 2247, 20),
+            ('managed-callback-read:', terminal, '6970fd73a6fecafde61d403713c16fb5b0f7aa63',
+             '8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c',
+             'managed-python-held-terminal-callback-read', 'pr1009-source-witness',
+             'managed-parent-python-sixth-readback-held', 'ordinal-six-callback-read-pending-after-backing-census', 1, 38))
+        for prefix, roles, revision, digest, topology, run, process, cut, capacity, count in cases:
+            rows = [row for row in inputs['observations'] if row['id'].startswith(prefix)]
+            self.assertEqual({row['role'] for row in rows}, set(roles))
+            self.assertEqual(len(rows), len(roles))
+            for row in rows:
+                alias, quantity, kind = roles[row['role']]
+                self.assertEqual((row['alias_class'], row['quantity'], row['quantity_type']), (alias, quantity, kind))
+                self.assertEqual(row['representation'], 'managed-byte-array')
+                self.assertEqual(row['identity_basis'], 'observed-identity')
+                self.assertEqual(row['scope'], dict(topology=topology, run=run, process=process, attempt='original-controlled-attempt'))
+                self.assertEqual(row['cut'], cut)
+                self.assertEqual(row['provenance'], dict(source_type='git-blob', repository='FS-GG/FS.GG.Coordination',
+                    revision=revision, path='tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs', sha256=digest))
+                expected_ownership = ('managed-endpoint-capture' if row['role'].startswith(('original-request-', 'endpoint-copy-'))
+                                      else 'production-pending-state' if row['role'].endswith('state-backing')
+                                      else 'selected-live-root')
+                self.assertEqual(row['ownership'], expected_ownership)
+            self.assertEqual(len({row['alias_class'] for row in rows if row['alias_class'] is not None}), count)
+            group = next(group for group in result['groups'] if group['scope']['run'] == run)
+            self.assertEqual(group['known_object_backing_capacity_bytes'], capacity)
+            self.assertIsNone(group['known_object_logical_bytes'])
+            self.assertIsNone(group['physical_byte_lower_bound'])
+        original = next(group for group in result['groups'] if group['scope']['run'] == 'pr1005-source-witness')
+        self.assertEqual(original['known_object_backing_capacity_bytes'], 11353)
+        self.assertEqual(len(result['groups']), 13)
+        self.assertTrue(all(group['physical_byte_lower_bound'] is None for group in result['groups']))
+        self.assertEqual((result['fit'], result['admission']), ('unproved', False))
+        self.assertNotIn('total_bytes', result)
+
+    def test_protected_pending_reader_cuts_keep_separate_capacity_and_partial_identity(self):
+        self.assert_reader_cuts(self.inputs)
+        parser = next(row for row in self.inputs['observations'] if row['id'] == 'managed-ack-read:result-parser-input')
+        self.assertIsNone(parser['alias_class'])
+        pairs = {(row['left'], row['right']) for row in self.inputs['aliases']}
+        for prefix, left, right in (
+                ('managed-ack-read:', 'ack-supplied-backing', 'ack-state-backing'),
+                ('managed-ack-read:', 'child-read-supplied-backing', 'child-read-state-backing'),
+                ('managed-callback-read:', 'callback-supplied-backing', 'callback-state-backing')):
+            self.assertIn((prefix + left, prefix + right), pairs)
+
+    def test_pending_reader_source_mutations_fail_the_source_regression(self):
+        for mutation in ('ack-capacity', 'child-capacity', 'callback-capacity', 'parser-distinct',
+                         'endpoint-count', 'provenance', 'cut', 'process', 'task-allocation'):
+            with self.subTest(mutation=mutation):
+                altered = copy.deepcopy(self.inputs)
+                rows = [row for row in altered['observations'] if row['id'].startswith(('managed-ack-read:', 'managed-callback-read:'))]
+                if mutation.endswith('capacity'):
+                    alias = {'ack-capacity': 'ack', 'child-capacity': 'child-read', 'callback-capacity': 'callback-reader'}[mutation]
+                    for row in rows:
+                        if row['alias_class'] == alias: row['quantity'] += 1
+                elif mutation == 'parser-distinct':
+                    next(row for row in rows if row['id'] == 'managed-ack-read:result-parser-input')['alias_class'] = 'invented-parser-object'
+                elif mutation == 'endpoint-count':
+                    altered['observations'].remove(next(row for row in rows if row['id'] == 'managed-ack-read:endpoint-copy-9'))
+                elif mutation in ('provenance', 'cut', 'process'):
+                    for row in rows:
+                        if row['id'].startswith('managed-callback-read:'):
+                            if mutation == 'provenance': row['provenance']['revision'] = '0' * 40
+                            elif mutation == 'cut': row['cut'] = 'after-read-settlement'
+                            else: row['scope']['process'] = 'python-child'
+                else:
+                    extra = copy.deepcopy(rows[0])
+                    extra.update(id='managed-ack-read:task-allocation', role='task-allocation', alias_class='invented-task-bytes')
+                    altered['observations'].append(extra)
+                with self.assertRaises((AssertionError, ValueError)): self.assert_reader_cuts(altered)
+
+    def test_pending_reader_aliases_refuse_cross_cut_or_old_census_join(self):
+        for left, right in (
+                ('managed-ack-read:ack-supplied-backing', 'managed-callback-read:callback-supplied-backing'),
+                ('managed-callback-read:callback-supplied-backing', 'managed-roots:snapshot-1')):
+            altered = copy.deepcopy(self.inputs)
+            altered['aliases'].append(dict(left=left, right=right, basis='same-scoped-object'))
+            with self.assertRaises(ValueError): ledger.reconcile(altered)
+        altered = copy.deepcopy(self.inputs)
+        callback = next(row for row in altered['observations'] if row['id'] == 'managed-callback-read:callback-supplied-backing')
+        for row in altered['observations']:
+            if row['id'].startswith('managed-ack-read:'):
+                row['scope'], row['cut'] = callback['scope'], callback['cut']
+        with self.assertRaises(ValueError): ledger.reconcile(altered)
 
     def test_equal_bytes_never_establish_alias(self):
         # Candidate/readback lengths match, but the actual Python objects differ.
