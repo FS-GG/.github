@@ -1018,6 +1018,18 @@ class Summary:
     producerSource: str | None = None
 
 
+def installation_result_shape(value: Any) -> bool:
+    legacy = {f.name for f in fields(Summary)}
+    if not isinstance(value, dict):
+        return False
+    if set(value) == legacy:
+        return True
+    evidence = value.get("deliveryEvidence")
+    return (set(value) == legacy | {"deliveryEvidence"}
+            and isinstance(evidence, dict)
+            and evidence.get("schema") == "fsgg.routine-delivery-evidence/1")
+
+
 def installation_prior_result(path: str) -> dict:
     """Existing retained Summary is a restriction, never an installation grant."""
     target = pathlib.Path(path)
@@ -1044,7 +1056,7 @@ def installation_prior_result(path: str) -> dict:
         value = json.loads(raw, object_pairs_hook=unique)
     except (OSError, ValueError) as error:
         raise RuntimeError("installation prior result is unreadable or malformed") from error
-    if not isinstance(value, dict) or set(value) != {f.name for f in fields(Summary)}:
+    if not installation_result_shape(value):
         raise RuntimeError("installation prior result schema fields differ")
     return value
 
@@ -1373,7 +1385,7 @@ def summarize(
         raise RuntimeError("producer installation requires a pinned source, completed coherent workflow and no publication")
     if installation_prior is not None:
         if (producer_source is None or not isinstance(installation_prior, dict)
-                or set(installation_prior) != {f.name for f in fields(Summary)}
+                or not installation_result_shape(installation_prior)
                 or installation_prior.get("schema") != "fsgg.routine-delivery/v1"
                 or installation_prior.get("repo") != repo or installation_prior.get("pr") != pr_number
                 or type(installation_prior.get("pr")) is not int
@@ -1738,6 +1750,19 @@ class WatchGhApi(GhApi):
         return sorted(value, key=lambda row: tuple(row[name] for name in ("name", "workflow", "link", "event")))
 
 
+
+def delivery_evidence(summary: Summary, run_id: int, *, api: Any = None) -> dict:
+    """Load optional evidence support without expanding the installed merge helper."""
+    path = pathlib.Path(__file__).with_name("routine-delivery-evidence.py")
+    spec = importlib.util.spec_from_file_location("routine_delivery_evidence", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("optional evidence reader unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.collect(summary, run_id, api=api or WatchGhApi(time.monotonic() + 60),
+                          native=sys.modules[__name__])
+
+
 def watch_checks(
     repo: str, pr: int, head: str, seconds: int, *,
     clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep,
@@ -1849,6 +1874,7 @@ def parser() -> argparse.ArgumentParser:
                         help="caller-owned absolute monotonic deadline including direct-child cleanup; no default")
     result.add_argument("--watch-checks", action="store_true", help="read-only bounded native-check watch; never grants apply")
     result.add_argument("--watch-seconds", type=int, help="required watch budget, 1..600 seconds")
+    result.add_argument("--evidence-run", type=int, help="append skill-quality pilot evidence")
     result.add_argument("--apply", action="store_true")
     result.add_argument("--install-routine-producer", action="store_true",
                         help="closed first installation only; never ordinary eligibility success")
@@ -1865,6 +1891,10 @@ def main(argv: list[str]) -> int:
         parser().error("--pr must be positive")
     if not SHA_RE.fullmatch(args.head):
         parser().error("--head must be a lowercase 40-hex commit SHA")
+    if args.evidence_run is not None and (args.evidence_run <= 0 or args.watch_checks):
+        parser().error("--evidence-run requires a positive run ID and cannot combine with watch")
+    if args.evidence_run is not None and args.install_routine_producer:
+        parser().error("--evidence-run cannot combine with installation recovery")
     unavailable_audit = None
     if args.telemetry_unavailable:
         if (args.watch_checks or args.telemetry_assignment is not None
@@ -2002,6 +2032,14 @@ def main(argv: list[str]) -> int:
     if observer is not None or observation_health:
         result = replace(result, telemetryHealth=observation_health[-1] if observation_health else "unavailable")
     output = asdict(result)
+    if args.evidence_run is not None:
+        try:
+            output["deliveryEvidence"] = delivery_evidence(result, args.evidence_run)
+        except Exception:
+            # Optional acquisition/reporting cannot suppress the original effect readback.
+            output["deliveryEvidence"] = {"schema": "fsgg.routine-delivery-evidence/1",
+                "scope": "skill-quality-pilot", "parity": "unavailable",
+                "exceptions": ["collection-unavailable"]}
     if args.telemetry_publisher_event:
         output["dashboardPublicationHealth"] = dashboard_health
     if unavailable_audit is not None:
