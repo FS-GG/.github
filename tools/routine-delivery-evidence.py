@@ -242,7 +242,7 @@ def assemble(summary: Any, evidence: dict, *, max_bytes: int = 65280) -> dict:
             issues.append("publication-pending")
         if summary.coherentValidation != "passed":
             issues.append("coherent-validation-" + summary.coherentValidation)
-        if summary.routineEligibility != "passed":
+        if summary.routineEligibility not in {"passed", "not-required"}:
             issues.append("routine-eligibility-" + summary.routineEligibility)
         if evidence.get("testedCheckout") is None:
             issues.append("tested-checkout-unavailable")
