@@ -3575,6 +3575,1556 @@
       "alias_class": "original-request-13",
       "identity_basis": "observed-identity",
       "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-ack-read:ack-supplied-backing",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "ack-supplied-backing",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 199,
+      "ownership": "selected-live-root",
+      "alias_class": "ack",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:ack-state-backing",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "ack-state-backing",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 199,
+      "ownership": "production-pending-state",
+      "alias_class": "ack",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:child-read-supplied-backing",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "child-read-supplied-backing",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 2048,
+      "ownership": "selected-live-root",
+      "alias_class": "child-read",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:child-read-state-backing",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "child-read-state-backing",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 2048,
+      "ownership": "production-pending-state",
+      "alias_class": "child-read",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:result-parser-input",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "result-parser-input",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "selected-live-root",
+      "alias_class": null,
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:original-request-1",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "original-request-1",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:endpoint-copy-1",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "endpoint-copy-1",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:original-request-2",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "original-request-2",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:endpoint-copy-2",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "endpoint-copy-2",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:original-request-3",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "original-request-3",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:endpoint-copy-3",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "endpoint-copy-3",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:original-request-4",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "original-request-4",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:endpoint-copy-4",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "endpoint-copy-4",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:original-request-5",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "original-request-5",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:endpoint-copy-5",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "endpoint-copy-5",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:original-request-6",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "original-request-6",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:endpoint-copy-6",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "endpoint-copy-6",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:original-request-7",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "original-request-7",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-7",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:endpoint-copy-7",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "endpoint-copy-7",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-7",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:original-request-8",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "original-request-8",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-8",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:endpoint-copy-8",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "endpoint-copy-8",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-8",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:original-request-9",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "original-request-9",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-9",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-ack-read:endpoint-copy-9",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "1cc2af9a5e4ba65cd2db39afbc86cfdb7ca8029e",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "4c52908092508e241878113aa5338783a3ea756d35f87612ad8993910ed4afaa"
+      },
+      "scope": {
+        "topology": "managed-python-held-ack-read",
+        "run": "pr1007-source-witness",
+        "process": "managed-parent-before-third-ack-write-returns",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "phase-four-ack-write-child-read-five-pending",
+      "role": "endpoint-copy-9",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-9",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:callback-supplied-backing",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "callback-supplied-backing",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 1,
+      "ownership": "selected-live-root",
+      "alias_class": "callback-reader",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:callback-state-backing",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "callback-state-backing",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 1,
+      "ownership": "production-pending-state",
+      "alias_class": "callback-reader",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:snapshot-1",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "snapshot-1",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "selected-live-root",
+      "alias_class": "snapshot-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:snapshot-2",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "snapshot-2",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "selected-live-root",
+      "alias_class": "snapshot-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:snapshot-3",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "snapshot-3",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "selected-live-root",
+      "alias_class": "snapshot-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:snapshot-4",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "snapshot-4",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "selected-live-root",
+      "alias_class": "snapshot-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:snapshot-5",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "snapshot-5",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "selected-live-root",
+      "alias_class": "snapshot-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:snapshot-6",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "snapshot-6",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "selected-live-root",
+      "alias_class": "snapshot-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:result-parser-input",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "result-parser-input",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "selected-live-root",
+      "alias_class": "result-parser-input",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:callback-parser-input",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "callback-parser-input",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "selected-live-root",
+      "alias_class": "callback-parser-input",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:result-binding",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "result-binding",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "selected-live-root",
+      "alias_class": "result-binding",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:callback-binding",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "callback-binding",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "selected-live-root",
+      "alias_class": "callback-binding",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:start-frame",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "start-frame",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "selected-live-root",
+      "alias_class": "start-frame",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:original-request-1",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "original-request-1",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:endpoint-copy-1",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "endpoint-copy-1",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:original-request-2",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "original-request-2",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:endpoint-copy-2",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "endpoint-copy-2",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:original-request-3",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "original-request-3",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:endpoint-copy-3",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "endpoint-copy-3",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:original-request-4",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "original-request-4",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:endpoint-copy-4",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "endpoint-copy-4",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:original-request-5",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "original-request-5",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:endpoint-copy-5",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "endpoint-copy-5",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:original-request-6",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "original-request-6",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:endpoint-copy-6",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "endpoint-copy-6",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:original-request-7",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "original-request-7",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-7",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:endpoint-copy-7",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "endpoint-copy-7",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-7",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:original-request-8",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "original-request-8",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-8",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:endpoint-copy-8",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "endpoint-copy-8",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-8",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:original-request-9",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "original-request-9",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-9",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:endpoint-copy-9",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "endpoint-copy-9",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-9",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:original-request-10",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "original-request-10",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-10",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:endpoint-copy-10",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "endpoint-copy-10",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-10",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:original-request-11",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "original-request-11",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-11",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:endpoint-copy-11",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "endpoint-copy-11",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-11",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:original-request-12",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "original-request-12",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-12",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:endpoint-copy-12",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "endpoint-copy-12",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-12",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:original-request-13",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "original-request-13",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-13",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "managed-callback-read:endpoint-copy-13",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "6970fd73a6fecafde61d403713c16fb5b0f7aa63",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "8e34fd991e9e0eb858fb59d225ad1b6d39eb6972b8f0b781a05458714e1e985c"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal-callback-read",
+        "run": "pr1009-source-witness",
+        "process": "managed-parent-python-sixth-readback-held",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-callback-read-pending-after-backing-census",
+      "role": "endpoint-copy-13",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-13",
+      "identity_basis": "observed-identity",
+      "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
     }
   ],
   "aliases": [
@@ -3642,6 +5192,21 @@
       "left": "managed-roots:discovered-current-request",
       "right": "managed-roots:original-request-13",
       "basis": "same-scoped-object"
+    },
+    {
+      "left": "managed-ack-read:ack-supplied-backing",
+      "right": "managed-ack-read:ack-state-backing",
+      "basis": "same-scoped-object"
+    },
+    {
+      "left": "managed-ack-read:child-read-supplied-backing",
+      "right": "managed-ack-read:child-read-state-backing",
+      "basis": "same-scoped-object"
+    },
+    {
+      "left": "managed-callback-read:callback-supplied-backing",
+      "right": "managed-callback-read:callback-state-backing",
+      "basis": "same-scoped-object"
     }
   ],
   "missing_obligations": [
@@ -3652,6 +5217,8 @@
     "Failure/uncertainty, concurrent and restart populations; original attempts remain consumed or uncertain",
     "Authenticated barrier/readback, original clock continuity/uncertainty, signer/ACK custody and installed/native qualification",
     "Cross-topology correspondence and a complete simultaneous physical accounting proof; no joined 65536-byte fit",
-    "PR1005 selected backing capacity is not physical memory; payload slice bytes (4835) are not allocations; unresolved ACK/child-read/callback-reader live-root joins and unselected runtime/stream/caller/peer roots remain unknown"
+    "PR1005 selected backing capacity is not physical memory; payload slice bytes (4835) are not allocations; unresolved ACK/child-read/callback-reader live-root joins and unselected runtime/stream/caller/peer roots remain unknown",
+    "PR1007 early held ACK/read source cut establishes only selected 199/2048 backing capacities and pending joins; parser-endpoint overlap, earlier ACK arrays, terminal survival/reclamation and other populations remain unproved",
+    "PR1009 terminal pending callback reader establishes one backing-capacity byte with disjointness to selected11/endpoint26 only; do not sum across source cuts or infer full physical population, release, fit, installed/native custody or original-operation authority"
   ]
 }
