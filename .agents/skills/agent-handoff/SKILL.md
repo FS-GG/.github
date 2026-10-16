@@ -31,7 +31,7 @@ Keep one request per owner when possible. Do not make one owner's answer a prere
 
 For each request that needs a response, state **what answer is expected, where it must appear, and when to expect it**. Name the exact thread, branch/file, or other mailbox; give a marker or source revision when it helps match replies. Ask for the smallest useful answer: a receipt for a delivery test, a decision with its chosen option, a result with evidence, or a precise blocker with its owner. Distinguish a quick receipt from the later work result; a receipt does not prove the work is complete. Give an explicit UTC deadline or a realistic elapsed-time estimate for each expected answer. If the receiver must first investigate, ask them to return an estimate and next update time promptly, then use that time for the substantive result. Keep the response on the named channel unless both owners agree to move it.
 
-Check that the request landed before waiting for a reply. After a push or comment, read the remote artifact and record its revision or URL. A scheduled watcher is one way to detect mail, not the only way to verify a time-sensitive reply. If the promised answer is due in seconds, check near that deadline rather than waiting for a multi-minute watcher. If the work is expected to take 10–20 minutes, do useful independent work between mailbox checks; the agreed update time determines when silence becomes overdue, not when to check next. Check sooner when the channel's delivery latency or the owner's estimate calls for it. At the deadline, check again, then send one concise follow-up or escalate only when the missed response blocks progress. Avoid duplicate requests and busy polling.
+Check that the request landed before waiting for a reply. After a push or comment, read the remote artifact and record its revision or URL. A scheduled watcher is one way to detect mail, not the only way to verify a time-sensitive reply. If the promised answer is due in seconds, check near that deadline rather than waiting for a multi-minute watcher. Outside the selected three-outcome pilot, if the work is expected to take 10–20 minutes, do useful independent work between mailbox checks; the agreed update time determines when silence becomes overdue, not when to check next. Check sooner when the channel's delivery latency or the owner's estimate calls for it. At the deadline, check again, then send one concise follow-up or escalate only when the missed response blocks progress. Avoid duplicate requests and busy polling.
 
 ## Protect the boundary
 
@@ -44,26 +44,34 @@ Check that the request landed before waiting for a reply. After a push or commen
 
 For the three outcomes in the [work-programme pilot](../work-programme/SKILL.md#conditional-three-outcome-pilot),
 replace the fixed mailbox checks and unchanged-status reporting below only after protected delivery of
-the reviewed governing change **and** qualification of automatic reply notifications and missed-event/
-restart reconciliation. Until both conditions are met, keep the five-minute check and current updates.
-A proposed watcher or this source edit does not establish qualified notification delivery.
+the reviewed governing change. Its deadline and session-start reconciliation are the detection route;
+no notification service is an activation condition. Until protected delivery, keep the current route.
 
 After activation, post an outcome update when a deliverable is ready, a blocker appears or clears, a
 decision is needed or a promised delivery time changes; publish one daily programme summary while active.
 Use the six-field owning issue as current state and link native evidence and necessary private context.
-External requests retain an owner, exact expected reply/channel and escalation time. Check the source
-at that escalation time if a required reply is missing; send one follow-up or escalate when it blocks
-progress. Qualified notifications replace repeated unchanged-mail reads and unchanged-hold comments.
-Notification loss retains the affected hold and requires reconciliation of the original message and
-operation identities before retry; preserve unknown effects, custody and every unresolved reservation.
+External requests retain the canonical channel/request identity, owner, expected response, response
+deadline, escalation time and last complete successful read in the existing issue or private handoff.
+Read each pending thread at session start/resume and at its agreed deadline; check earlier on a useful
+notification, user request or before an action depends on the reply. Reconcile changed replies since the
+last complete read; when that baseline is absent or unreliable, read the full thread. A failed, partial,
+inaccessible or conflicting read means reply status unknown: retain the prior position and affected hold.
+At a missed deadline, send one follow-up or escalate only if progress is blocked, with a new deadline.
+For every still-pending or unknown request, record a next observation deadline even when no comment is
+needed; a failed read never becomes a successful baseline. The next deadline follows the request's
+response contract or a concrete recovery need, not a fixed polling interval.
+Before reposting, verify the expected reply or an equivalent follow-up did not already land. Notifications
+are optional hints, never authority. Silence cannot admit an operation, replay or reservation release;
+preserve original identities, unknown effects, custody and every unresolved reservation. At session exit,
+transfer pending monitoring explicitly; never imply background checks continue.
 This exception changes neither consequential-action verification nor operation-specific admission.
 
 ## Maintain the loop
 
-- During an active handoff or mailbox-monitoring session, check the chosen mailbox at least once every five minutes, measured from the last successful remote read. A shorter requested interval or time-sensitive reply may require earlier checks. Record the last check and the next due time; continue independent work between checks. If a blocking operation makes a check late, read the mailbox immediately afterward and report the gap. Do not imply that checks continue after the session ends unless a real scheduled mechanism is installed.
+- Outside the activated three-outcome pilot, during an active handoff or mailbox-monitoring session, check the chosen mailbox at least once every five minutes, measured from the last successful remote read. A shorter requested interval or time-sensitive reply may require earlier checks. Record the last check and the next due time; continue independent work between checks. If a blocking operation makes a check late, read the mailbox immediately afterward and report the gap. Do not imply that checks continue after the session ends unless a real scheduled mechanism is installed.
 - On new mail, acknowledge the request by taking the owned action or replying with a precise blocker and a new owner. Avoid acknowledgment-only traffic.
 - If an owner cannot act, route the smallest missing decision or access request to the person who can resolve it. Escalate to the user when there is no viable agent path, with the decision needed and the consequence of waiting.
-- In user updates, report the last check time, new information, each owner's working/waiting status, the next roadmap gate, and verification status. Say “no new mail” when that is the result; do not suggest progress from silence.
+- Outside the activated three-outcome pilot, in user updates, report the last check time, new information, each owner's working/waiting status, the next roadmap gate, and verification status. Say “no new mail” when that is the result; do not suggest progress from silence. In the pilot, update only for the material events above and in the daily programme summary.
 
 An active handoff does not end merely because a local action finished, a request was sent, or another owner or the user must reply. Keep checking the manual mailbox through the agreed reply time, act on the response, and do independent work while waiting. Required user authentication pauses only the work that depends on it.
 

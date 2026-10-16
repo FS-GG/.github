@@ -50,6 +50,11 @@ receiver state, outstanding progress projections, partial files, and worker or
 process status against available live evidence. Keep observed results separate
 from worker reports and proposals. Missing temporary evidence remains unknown;
 do not reconstruct results or repeat a consumed operation to fill that gap.
+For an activated three-outcome pilot, also recover each pending request's canonical
+channel and original message identity, owner, expected response, response/escalation
+deadline and last complete successful read from the issue or restricted handoff.
+At session start, reconcile changed replies or the full thread when that baseline is
+missing or unreliable. Failed or conflicting reads leave the affected hold in place.
 Restore stable feature/item/cost lineage and campaign/dependency-chain IDs.
 A handoff's historical pause is superseded by this continuation request;
 explicit narrower constraints in the current request still apply.
@@ -81,8 +86,11 @@ worker, CPU, integrator and hosted-CI capacity. Repair and integrate the existin
 queue before opening excess PRs. Resume interrupted source preparation before
 starting replacements; recheck source and admission before any fresh operation.
 
-Give structured updates every 30 minutes with **Progress**, **Working on**, and
-**Problems**, plus concise material updates during active work. Keep executing
+Outside the activated three-outcome pilot, give structured updates every 30 minutes
+with **Progress**, **Working on**, and **Problems**. In the pilot, update at a ready
+deliverable, changed blocker, needed decision or changed promised time, plus one
+daily programme summary; deadline and session-start reply reads replace fixed polling.
+Keep executing
 through ordinary failures, CI waits and context compaction. Neither a checked
 local milestone list nor a session boundary proves completion: verify the
 roadmap's required acceptance outcomes, including applicable publication,

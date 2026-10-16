@@ -341,9 +341,9 @@ custody. The owning issues are [V3 `/3` #4599](https://github.com/FS-GG/.github/
 [authority service #4601](https://github.com/FS-GG/.github/issues/4601).
 The `/3` source issue is closed as historical baseline, excluded from prospective pilot
 savings. #4516 and #4517 remain the existing cross-repository request mailboxes until
-their reply contracts end or both sides agree to move them. This completes the
-one-issue-per-outcome mapping gate; evidence and notification/reconciliation gates
-remain separate.
+their reply contracts end or both sides agree to move them. This completes the one-issue-per-outcome mapping. Automatic CI evidence remains a
+separate qualification for the joins it can replace; reply handling uses deadlines
+and session-start reconciliation after the governing rule is protected.
 
 One owner carries implementation, review and delivery through the completion
 condition. A new lane must name the condition it materially advances or an
@@ -354,6 +354,24 @@ maintenance owner, and no parallel task whose coordination cost exceeds its
 contribution to completion.
 
 ### Delivery classes and automatic evidence
+
+The reviewed rule change removes the mandatory obligations identified below and
+clarifies the already limited practices. Programme `/root`
+is accountable for the combined governance and CI-evidence outcome; the designated
+CI implementation owner carries the existing result producer and maintained reader
+through source delivery. Other outcomes retain
+their existing route.
+
+| Old requirement or recurring practice | Replacement for these three outcomes | Retained boundary |
+|---|---|---|
+| `work-programme` default lane assignment, bootstrap and `references/bootstrap.md`: mandatory packet and dispatch index | Six-field issue, applicable instruction/source links and native PR identities | Exact scope, owner, authority, resource bounds and all reservations |
+| `work-programme` lane-return/decision-view clauses, `references/adapter.md` and `routine-decisions`: serialized typed returns and reducer current view | Issue state and linked native evidence; old helpers optional for a named gap | Original attempts, first failures and uncertain effects |
+| Recurring successful hash/file correspondence recitations; `work-programme` and `references/context.md` already discourage these, and no general parent file-by-file review is required | One exact native or qualified CI join, with a targeted read when missing; this clarifies the existing limit rather than retiring a mandatory review | One independent source review and semantic review of changed logic |
+| Recurring unchanged-code test reruns; current guidance and ADR-0084 already limit them | Accepted unchanged receipts within proven scope; this clarifies the existing reuse rule | Relevant tests, required final-head CI and coherent validation under ADR-0084 |
+| `agent-handoff`: five-minute mailbox reads and unchanged “no new mail” updates | Checks at agreed reply/escalation deadlines and session start/resume | Complete-thread recovery on missing baseline, unknown-read holds and no replay |
+| `continue-from-handoff`: fixed thirty-minute status report | Material-event updates and one daily programme summary | Deadline changes, decisions and blockers are reported |
+| Pre-pilot baseline/coverage declaration | Measure through ordinary delivery; evaluate savings after evidence accrues | No unsupported 80% claim or weaker correctness/custody acceptance |
+
 
 Classify each coherent change once, revisiting only a material scope change:
 
@@ -370,10 +388,12 @@ they do not waive branch protection, exact-head coherent validation or original
 effect admission. Source delivery, publication, installation and native acceptance
 remain distinct.
 
-Migration retains the current route until the governing change, issue mapping,
-replacement evidence and notification/recovery gates are separately qualified.
-If a replacement result or notification path fails, return to the current route
-for the affected outcome while retaining its original identities and holds.
+The reviewed governing change retires duplicate coordination artifacts and fixed
+polling when protected. An automatic acceptance result qualifies separately for
+the mechanical facts it covers. Until then, use native issue/PR/check facts and
+one targeted read for a missing acceptance fact; mark unavailable or conflicting
+facts unknown. Never restore duplicate packet/reducer machinery merely because
+automation is incomplete. Retain original identities and holds.
 
 Extend the existing `fsgg.routine-delivery/v1` result and relevant CI receipts rather
 than building another evidence ledger. One machine-readable result per PR records
@@ -384,17 +404,23 @@ canonical file-tree difference, with workflow/run/attempt references. A run's
 candidate head differ. Do not compare a `git archive` SHA-256 with a Git tree OID.
 The owner performs the mechanical join once and requests qualification when
 integration changes behavior or coherent validation later fails. Existing
-consumers must accept the versioned result before removing duplicate hash
-recitations, unchanged-code tests or parent file-by-file readbacks. Retain
+consumers must accept the versioned result before it replaces a fact they currently
+verify. A native exact join can already replace routine hash recitations and parent
+file-by-file correspondence reads; a missing join gets a targeted read and remains
+an explicit gap. Reuse unchanged-code test results only within their accepted scope;
+never omit required final-candidate CI or coherent validation. Retain
 independent readback where it crosses a further trust boundary, such as actual
 deployment or credential enrollment. No self-declared result grants authority.
 
 Post outcome updates when a deliverable is ready, a blocker appears or clears, a
 decision is needed, or a promised delivery time changes. Publish one daily
 programme summary while active. External requests retain an owner, exact reply
-contract and escalation time; use automatic reply notifications when qualified.
-Retire five-minute unchanged-mail checks and unchanged-hold comments only after
-the governing handoff rule and notification/reconciliation route change. Capture
+contract, original request identity and response/escalation deadline. Read pending
+threads at session start/resume and at those deadlines; check earlier on a useful
+notification, user request or before a dependent action. Failed, partial or
+conflicting reads preserve the hold. Notifications are optional hints, not an
+activation gate. The protected handoff rule retires five-minute unchanged-mail
+checks and unchanged-hold comments. Capture
 durable accepted contracts, architecture and reusable lessons beside the
 implementation or in one consolidated follow-up; CI may generate Atlas metadata
 and indexes, while the owner still verifies source and content. A dedicated
@@ -415,8 +441,9 @@ The authority owner keeps one source-to-deployment plan for ownership, custody,
 enrollment, verification and recovery. Original `.103` stays attempted-unknown and
 unreplayed; `.104` and other original effects remain held.
 
-Before pilot operation, declare a comparable current-route population, active
-coordination-effort definition, attribution and coverage threshold. Include owner,
+Measure savings during ordinary delivery, without making measurement an activation
+or delivery gate. For a supported savings claim, use a comparable current-route
+population, active coordination-effort definition, attribution and coverage. Include owner,
 reviewer and parent work; distinguish necessary review/refresh, implementation,
 CI/resource wait, blocked time and unknown intervals. Track elapsed delivery,
 coordination effort per accepted unit, blocked time, escaped defects and replay or
@@ -427,8 +454,9 @@ inconclusive result. Two recent Coordination source PRs had only 30–32 seconds
 between final check and merge, so that interval alone cannot support the target.
 The already protected `/3` compatibility result is historical baseline/recovery
 evidence, not prospective pilot savings; do not rerun it to create pilot activity.
-Adopt, adjust or retire the pilot after accepted results; remove redundant
-requirements only after the replacement has proved its failure and recovery paths.
+Adopt, adjust or retire the pilot after accepted results; the protected rule removes
+duplicate coordination requirements, while each CI fact replaces a manual verification
+only after its producer and consumer prove their failure and recovery paths.
 
 ## Implementation roadmap and parallelism
 
