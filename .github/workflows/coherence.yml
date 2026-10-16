@@ -75,6 +75,27 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      # Evidence acquisition/reporting cannot skip or replace the existing projection checks.
+      # Missing artifacts remain unavailable in the delivery reader.
+      - name: Record tested checkout identity
+        continue-on-error: true
+        if: github.event_name == 'pull_request'
+        env:
+          CHECKOUT_CANDIDATE: ${{ github.event.pull_request.head.sha }}
+          CHECKOUT_BASE: ${{ github.event.pull_request.base.sha }}
+          CHECKOUT_PR: ${{ github.event.pull_request.number }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, pathlib, subprocess
+          def git(rev):
+              return subprocess.check_output(['git', 'rev-parse', rev], text=True).strip()
+          value = dict(schema='fsgg.tested-checkout/1', repository=os.environ['GITHUB_REPOSITORY'],
+                       pr=int(os.environ['CHECKOUT_PR']), candidate=os.environ['CHECKOUT_CANDIDATE'],
+                       base=os.environ['CHECKOUT_BASE'], run=int(os.environ['GITHUB_RUN_ID']),
+                       attempt=int(os.environ['GITHUB_RUN_ATTEMPT']), job=os.environ['GITHUB_JOB'],
+                       commit=git('HEAD'), tree=git('HEAD^{tree}'))
+          pathlib.Path(os.environ['RUNNER_TEMP'], 'checkout.json').write_text(json.dumps(value) + '\n')
+          PYTHON
       - uses: ./.github/actions/setup-policy-python
       # The fixture carries the subject mutations that prove the production checker can refuse
       # stale, ambiguous, missing, and internally divergent authority. Running only the checker on
@@ -83,6 +104,15 @@ jobs:
         run: bash tests/projection/run.sh
       - name: Assert compatibility.md projects the registry
         run: python scripts/check-projection.py registry/dependencies.yml docs/registry/compatibility.md
+      - name: Retain tested checkout identity
+        continue-on-error: true
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: tested-checkout-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/checkout.json
+          if-no-files-found: warn
+          retention-days: 7
 
   # V2-CI-I1's secret-free source policy and native observer are hermetic here. The fixture
   # also checks that the installed workflow keeps credential execution behind the predecessor.
