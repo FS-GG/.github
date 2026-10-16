@@ -4,7 +4,7 @@
 - **Date:** 2026-10-16
 - **Decision owner:** FS-GG Programme under the sponsor's explicit delegation
 - **Affects:** V3 original-intent, grant, host and receiver authority; UTEL `.103` descriptor, phase proof and external ACK authority
-- **Decision:** [V3 selection](https://github.com/FS-GG/.github/issues/4516#issuecomment-6209884629), [UTEL selection](https://github.com/FS-GG/.github/issues/4517#issuecomment-6209889196)
+- **Decision:** [V3 selection](https://github.com/FS-GG/.github/issues/4516#issuecomment-6209884629), [UTEL selection](https://github.com/FS-GG/.github/issues/4517#issuecomment-6209889196), [V3 transport selection](https://github.com/FS-GG/.github/issues/4516#issuecomment-6211348444)
 
 ## Context
 
@@ -48,6 +48,27 @@ qualified source artifact, signer purpose and public fingerprint outside the rec
 packet. Original intent, grants and receiver commands remain separately scoped and
 one-use. CI queue delay cannot renew an original deadline. Missing transport,
 fencing, clock mapping, receipt or enrollment evidence refuses the effect.
+
+## V3 transport custody
+
+Programme selects the existing-node shared TLS hostname and terminator custody scope
+for V3 source preparation: a separate HTTPS origin on port 8443, a fixed POST exchange
+path and a dedicated loopback backend on port 18443. The exact hostname remains
+restricted. The existing private service on port 443 must remain unchanged. This
+selection does not assert a dedicated TLS key or an installed endpoint.
+
+The shared TLS administrator is a common transport trust boundary. Transport
+authentication supplies no original-intent, grant, attestation or ACK authority.
+Every purpose-specific signing principal and key above remains distinct, independently
+enrolled and verified; sharing transport custody does not permit signing-key reuse.
+
+Provisioning requires separate admission against the joined source contract, including
+exact source, version and configuration; finite header, token, body, error, concurrency,
+depth, time and copy limits; the OIDC allowlist; and independent pin, rotation and
+readback policy. Production-provider and physical-copy maxima remain unproved.
+Any Funnel-related certificate and tailnet-policy changes must be explicit in that
+admission. This selection admits no Funnel command, listener, certificate or key
+operation, enrollment, workflow dispatch or native effect.
 
 ## Activation and recovery
 
