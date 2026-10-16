@@ -1018,6 +1018,18 @@ class Summary:
     producerSource: str | None = None
 
 
+def installation_result_shape(value: Any) -> bool:
+    legacy = {f.name for f in fields(Summary)}
+    if not isinstance(value, dict):
+        return False
+    if set(value) == legacy:
+        return True
+    evidence = value.get("deliveryEvidence")
+    return (set(value) == legacy | {"deliveryEvidence"}
+            and isinstance(evidence, dict)
+            and evidence.get("schema") == "fsgg.routine-delivery-evidence/1")
+
+
 def installation_prior_result(path: str) -> dict:
     """Existing retained Summary is a restriction, never an installation grant."""
     target = pathlib.Path(path)
@@ -1044,7 +1056,7 @@ def installation_prior_result(path: str) -> dict:
         value = json.loads(raw, object_pairs_hook=unique)
     except (OSError, ValueError) as error:
         raise RuntimeError("installation prior result is unreadable or malformed") from error
-    if not isinstance(value, dict) or set(value) != {f.name for f in fields(Summary)}:
+    if not installation_result_shape(value):
         raise RuntimeError("installation prior result schema fields differ")
     return value
 
@@ -1373,7 +1385,7 @@ def summarize(
         raise RuntimeError("producer installation requires a pinned source, completed coherent workflow and no publication")
     if installation_prior is not None:
         if (producer_source is None or not isinstance(installation_prior, dict)
-                or set(installation_prior) != {f.name for f in fields(Summary)}
+                or not installation_result_shape(installation_prior)
                 or installation_prior.get("schema") != "fsgg.routine-delivery/v1"
                 or installation_prior.get("repo") != repo or installation_prior.get("pr") != pr_number
                 or type(installation_prior.get("pr")) is not int
@@ -1738,6 +1750,138 @@ class WatchGhApi(GhApi):
         return sorted(value, key=lambda row: tuple(row[name] for name in ("name", "workflow", "link", "event")))
 
 
+
+def delivery_evidence(summary: Summary, run_id: int, *, api: Any = None) -> dict:
+    api = api or WatchGhApi(time.monotonic() + 60)
+    repo, number = summary.repo, summary.pr
+    result = {"schema": "fsgg.routine-delivery-evidence/1", "scope": "skill-quality-pilot",
+              "candidate": summary.expectedHead, "base": summary.baseSha,
+              "deliveredCommit": summary.mergeCommit, "deliveredTree": None,
+              "testedCheckout": None, "parity": "unavailable", "changedFiles": None,
+              "requiredChecks": None, "run": None, "exceptions": [],
+              "observedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
+    def read(endpoint):
+        return api._watch_read(["gh", "api", f"repos/{repo}/{endpoint}"], (0,))[1]
+    def attempt(label, action):
+        try:
+            return action()
+        except (RuntimeError, ValueError, KeyError, TypeError, AttributeError, OSError, zipfile.BadZipFile):
+            result["exceptions"].append(label + "-unavailable")
+            return None
+    def snapshot():
+        pr = api.get_pr(repo, number)
+        if (head_of(pr) != summary.expectedHead or base_of(pr) != (summary.baseRef, summary.baseSha)
+                or (summary.mergeCommit is not None and merged_commit_of(pr) != summary.mergeCommit)):
+            raise ValueError("evidence differs")
+        return pr
+    before = attempt("pr-identity", snapshot)
+    if before is None:
+        return result
+    def commit(sha):
+        value = read(f"git/commits/{sha}")
+        if value.get("sha") != sha or not SHA_RE.fullmatch(value["tree"]["sha"]):
+            raise ValueError("evidence differs")
+        return value
+    if summary.mergeCommit is not None:
+        delivered = attempt("delivered-tree", lambda: commit(summary.mergeCommit))
+        if delivered is not None:
+            result["deliveredTree"] = delivered["tree"]["sha"]
+    def files():
+        count = before.get("changed_files")
+        if type(count) is not int or not 0 <= count <= 100:
+            raise ValueError("evidence differs")
+        rows = read(f"pulls/{number}/files?per_page=100")
+        if not isinstance(rows, list) or len(rows) != count:
+            raise ValueError("evidence differs")
+        output = []
+        for row in rows:
+            if not isinstance(row.get("filename"), str) or not isinstance(row.get("status"), str):
+                raise ValueError("evidence differs")
+            output.append({key: row.get(key) for key in ("filename", "previous_filename", "status")})
+        if len({row["filename"] for row in output}) != count:
+            raise ValueError("evidence differs")
+        return output
+    result["changedFiles"] = attempt("changed-files", files)
+    def checks():
+        _, rows = api._watch_read(["gh", "pr", "checks", str(number), "--repo", repo,
+                                   "--required", "--json", WATCH_FIELDS], (0, 8))
+        if (not isinstance(rows, list) or len(rows) > WATCH_MAX_CHECKS
+                or any(not isinstance(row, dict) or set(row) != set(WATCH_FIELDS.split(","))
+                       or any(not isinstance(value, str) for value in row.values()) for row in rows)):
+            raise ValueError("evidence differs")
+        return rows
+    result["requiredChecks"] = attempt("required-checks", checks)
+    def checkout():
+        run = read(f"actions/runs/{run_id}")
+        attempt_number = run.get("run_attempt")
+        if (run.get("id") != run_id or run.get("head_sha") != summary.expectedHead
+                or run.get("event") != "pull_request"
+                or run.get("path") != ".github/workflows/skill-quality.yml"
+                or run.get("repository", {}).get("full_name") != repo
+                or type(attempt_number) is not int or attempt_number < 1
+                or not any(row.get("number") == number and row.get("head", {}).get("sha") == summary.expectedHead
+                           and row.get("base", {}).get("sha") == summary.baseSha for row in run.get("pull_requests", []))):
+            raise ValueError("evidence differs")
+        result["run"] = {key: run.get(key) for key in
+                         ("id", "run_attempt", "head_sha", "path", "event", "status", "conclusion", "html_url")}
+        artifacts = read(f"actions/runs/{run_id}/artifacts?per_page=100")
+        rows = artifacts.get("artifacts")
+        if (not isinstance(rows, list) or artifacts.get("total_count") != len(rows) or len(rows) > 100):
+            raise ValueError("evidence differs")
+        matches = [row for row in rows if row.get("name") == f"tested-checkout-{run_id}-{attempt_number}"]
+        if (len(matches) != 1 or matches[0].get("expired") is not False
+                or type(matches[0].get("id")) is not int
+                or type(matches[0].get("size_in_bytes")) is not int
+                or not 0 < matches[0]["size_in_bytes"] <= 65536):
+            raise ValueError("evidence differs")
+        artifact_id = matches[0]["id"]
+        command = ["gh", "api", f"repos/{repo}/actions/artifacts/{artifact_id}/zip"]
+        code, raw = api.query(command, api.deadline, clock=api.clock)
+        if code != 0 or len(raw) > 65536:
+            raise ValueError("evidence differs")
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            entries = archive.infolist()
+            if len(entries) != 1 or entries[0].filename != "checkout.json" or entries[0].file_size > 4096:
+                raise ValueError("evidence differs")
+            def unique(pairs):
+                value = {}
+                for key, item in pairs:
+                    if key in value:
+                        raise ValueError("evidence differs")
+                    value[key] = item
+                return value
+            fact = json.loads(archive.read(entries[0]), object_pairs_hook=unique)
+        expected = {"schema": "fsgg.tested-checkout/1", "repository": repo,
+                    "pr": number, "candidate": summary.expectedHead, "base": summary.baseSha,
+                    "run": run_id, "attempt": attempt_number, "job": "semantic-skill-quality"}
+        if any(fact.get(key) != value or type(fact.get(key)) is not type(value) for key, value in expected.items()):
+            raise ValueError("evidence differs")
+        if not all(isinstance(fact.get(key), str) and SHA_RE.fullmatch(fact[key]) for key in ("commit", "tree")):
+            raise ValueError("evidence differs")
+        native = commit(fact["commit"])
+        if native["tree"]["sha"] != fact["tree"]:
+            raise ValueError("evidence differs")
+        if fact["commit"] == summary.expectedHead:
+            kind = "candidate"
+        elif [parent.get("sha") for parent in native.get("parents", [])] == [summary.baseSha, summary.expectedHead]:
+            kind = "synthetic-pr-merge"
+        else:
+            raise ValueError("evidence differs")
+        return {"commit": fact["commit"], "tree": fact["tree"], "kind": kind,
+                "run": run_id, "attempt": attempt_number, "job": fact["job"], "artifact": artifact_id,
+                "coverage": "skill-quality job entry"}
+    result["testedCheckout"] = attempt("tested-checkout", checkout)
+    if attempt("final-pr-identity", snapshot) is None:
+        result.update(testedCheckout=None, changedFiles=None, requiredChecks=None)
+        return result
+    if result["testedCheckout"] is not None and result["deliveredTree"] is not None:
+        result["parity"] = ("identical-tree" if result["testedCheckout"]["tree"] == result["deliveredTree"]
+                            else "different-tree")
+    elif summary.codeDelivery == "not-delivered":
+        result["parity"] = "not-delivered"
+    return result
+
+
 def watch_checks(
     repo: str, pr: int, head: str, seconds: int, *,
     clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep,
@@ -1849,6 +1993,7 @@ def parser() -> argparse.ArgumentParser:
                         help="caller-owned absolute monotonic deadline including direct-child cleanup; no default")
     result.add_argument("--watch-checks", action="store_true", help="read-only bounded native-check watch; never grants apply")
     result.add_argument("--watch-seconds", type=int, help="required watch budget, 1..600 seconds")
+    result.add_argument("--evidence-run", type=int, help="append skill-quality pilot evidence")
     result.add_argument("--apply", action="store_true")
     result.add_argument("--install-routine-producer", action="store_true",
                         help="closed first installation only; never ordinary eligibility success")
@@ -1865,6 +2010,8 @@ def main(argv: list[str]) -> int:
         parser().error("--pr must be positive")
     if not SHA_RE.fullmatch(args.head):
         parser().error("--head must be a lowercase 40-hex commit SHA")
+    if args.evidence_run is not None and (args.evidence_run <= 0 or args.watch_checks):
+        parser().error("--evidence-run requires a positive run ID and cannot combine with watch")
     unavailable_audit = None
     if args.telemetry_unavailable:
         if (args.watch_checks or args.telemetry_assignment is not None
@@ -2002,6 +2149,8 @@ def main(argv: list[str]) -> int:
     if observer is not None or observation_health:
         result = replace(result, telemetryHealth=observation_health[-1] if observation_health else "unavailable")
     output = asdict(result)
+    if args.evidence_run is not None:
+        output["deliveryEvidence"] = delivery_evidence(result, args.evidence_run)
     if args.telemetry_publisher_event:
         output["dashboardPublicationHealth"] = dashboard_health
     if unavailable_audit is not None:

@@ -128,6 +128,132 @@ def selection_archive(entries: list[tuple[str, bytes]]) -> bytes:
     return output.getvalue()
 
 
+class DeliveryEvidenceTests(unittest.TestCase):
+    def fixture(self, checkout=HEAD, delivered_tree="c" * 40):
+        _, summary = MODULE.summarize(FakeApi([merged()]), repo="FS-GG/.github", pr_number=1,
+            expected_head=HEAD, merge_method="squash", publication_required=False, apply=False)
+        pr = dict(merged(), changed_files=1)
+        fact = dict(schema="fsgg.tested-checkout/1", repository=summary.repo, pr=1,
+            candidate=HEAD, base=summary.baseSha, run=7, attempt=1,
+            job="semantic-skill-quality", commit=checkout, tree="c" * 40)
+        native_run = dict(id=7, run_attempt=1, head_sha=HEAD, event="pull_request",
+            path=".github/workflows/skill-quality.yml", repository=dict(full_name=summary.repo),
+            pull_requests=[dict(number=1, head=dict(sha=HEAD), base=dict(sha=summary.baseSha))],
+            status="completed", conclusion="success")
+        responses = {
+            f"git/commits/{MERGE}": dict(sha=MERGE, tree=dict(sha=delivered_tree)),
+            f"git/commits/{checkout}": dict(sha=checkout, tree=dict(sha=fact["tree"]),
+                parents=[dict(sha=summary.baseSha), dict(sha=HEAD)]),
+            "pulls/1/files?per_page=100": [dict(filename="tools/routine-delivery.py", status="modified")],
+            "actions/runs/7": native_run,
+            "actions/runs/7/artifacts?per_page=100": dict(total_count=1, artifacts=[dict(
+                id=11, name="tested-checkout-7-1", expired=False, size_in_bytes=1024)]),
+        }
+        api = mock.Mock(deadline=100, clock=lambda: 0)
+        api.get_pr.return_value = pr
+        def read(command, accepted):
+            if command[1:3] == ["pr", "checks"]:
+                return 0, []
+            return 0, responses[command[-1].split(f"repos/{summary.repo}/", 1)[1]]
+        api._watch_read.side_effect = read
+        def archive(*args, **kwargs):
+            return 0, selection_archive([("checkout.json", json.dumps(fact).encode())])
+        api.query.side_effect = archive
+        return summary, api, fact, responses
+
+    def test_candidate_and_synthetic_checkout_use_native_tree_parity(self):
+        for checkout, kind in [(HEAD, "candidate"), ("e" * 40, "synthetic-pr-merge")]:
+            with self.subTest(kind=kind):
+                summary, api, _, _ = self.fixture(checkout)
+                result = MODULE.delivery_evidence(summary, 7, api=api)
+                self.assertEqual((result["testedCheckout"]["kind"], result["parity"]), (kind, "identical-tree"))
+                self.assertEqual(result["deliveredCommit"], MERGE)
+                self.assertEqual(result["exceptions"], [])
+                self.assertEqual(len(result["changedFiles"]), 1)
+
+    def test_different_delivered_tree_is_explicit(self):
+        summary, api, _, _ = self.fixture(delivered_tree="f" * 40)
+        result = MODULE.delivery_evidence(summary, 7, api=api)
+        self.assertEqual(result["parity"], "different-tree")
+        self.assertEqual(summary.outcome, "delivered")
+
+    def test_artifact_tree_must_match_native_checkout(self):
+        summary, api, fact, _ = self.fixture()
+        fact["tree"] = "f" * 40
+        result = MODULE.delivery_evidence(summary, 7, api=api)
+        self.assertIsNone(result["testedCheckout"])
+        self.assertEqual(result["parity"], "unavailable")
+
+    def test_changed_head_or_base_invalidates_sample(self):
+        for stage in (0, 1):
+            for field in ("head", "base"):
+                with self.subTest(stage=stage, field=field):
+                    summary, api, _, _ = self.fixture()
+                    original = api.get_pr.return_value
+                    changed = copy.deepcopy(original); changed[field]["sha"] = "f" * 40
+                    api.get_pr.side_effect = [changed, original] if stage == 0 else [original, changed]
+                    result = MODULE.delivery_evidence(summary, 7, api=api)
+                    self.assertIsNone(result["testedCheckout"])
+                    self.assertEqual(result["parity"], "unavailable")
+
+    def test_missing_expired_ambiguous_and_misbound_artifacts(self):
+        for change in ("missing", "expired", "duplicate", "attempt", "candidate", "base", "job", "run", "size"):
+            with self.subTest(change=change):
+                summary, api, fact, responses = self.fixture()
+                population = responses["actions/runs/7/artifacts?per_page=100"]
+                if change == "missing": population.update(total_count=0, artifacts=[])
+                elif change == "expired": population["artifacts"][0]["expired"] = True
+                elif change == "duplicate": population.update(total_count=2, artifacts=population["artifacts"] * 2)
+                elif change == "size": population["artifacts"][0]["size_in_bytes"] = 65537
+                else: fact[change] = "wrong"
+                result = MODULE.delivery_evidence(summary, 7, api=api)
+                self.assertIsNone(result["testedCheckout"])
+                self.assertEqual(result["parity"], "unavailable")
+                self.assertEqual(result["changedFiles"][0]["status"], "modified")
+
+    def test_absent_evidence_does_not_hide_independent_results(self):
+        summary, api, _, responses = self.fixture()
+        del responses["actions/runs/7"]
+        result = MODULE.delivery_evidence(summary, 7, api=api)
+        self.assertEqual(result["deliveredTree"], "c" * 40)
+        self.assertEqual(result["requiredChecks"], [])
+        self.assertIsNone(result["testedCheckout"])
+
+    def test_late_coherent_failure_keeps_original_dispute(self):
+        api = FakeApi([opened(), merged()], [dict(merged=True, sha=MERGE)],
+            runs=[run()], selections={7: selection("reused")},
+            job_reads=[[], [dict(status="completed", conclusion="failure")]])
+        code, summary = MODULE.summarize(api, repo="FS-GG/.github", pr_number=1, expected_head=HEAD,
+            merge_method="squash", publication_required=False, apply=True, coherent_workflow="coherent.yml")
+        _, observer, _, _ = self.fixture()
+        result = MODULE.delivery_evidence(summary, 7, api=observer)
+        self.assertEqual((code, summary.outcome, summary.coherentValidation), (4, "delivered-disputed", "disputed"))
+        self.assertEqual(result["parity"], "identical-tree")
+
+    def test_ambiguous_merge_cannot_gain_delivery_from_checkout(self):
+        code, summary = MODULE.summarize(FakeApi([opened(), opened()], [MODULE.AmbiguousWrite("lost")]),
+            repo="FS-GG/.github", pr_number=1, expected_head=HEAD,
+            merge_method="squash", publication_required=False, apply=True)
+        _, observer, _, _ = self.fixture()
+        result = MODULE.delivery_evidence(summary, 7, api=observer)
+        self.assertEqual((code, summary.codeDelivery, summary.attempts), (3, "unknown", 1))
+        self.assertIsNone(result["deliveredCommit"])
+        self.assertEqual(result["parity"], "unavailable")
+
+    def test_prior_result_accepts_legacy_and_versioned_extension_only(self):
+        summary, _, _, _ = self.fixture()
+        legacy = asdict(summary)
+        extended = dict(legacy, deliveryEvidence={"schema": "fsgg.routine-delivery-evidence/1"})
+        for value in (legacy, extended):
+            self.assertTrue(MODULE.installation_result_shape(value))
+            with tempfile.TemporaryDirectory() as directory:
+                path = pathlib.Path(directory) / "result.json"
+                path.write_text(json.dumps(value))
+                self.assertEqual(MODULE.installation_prior_result(str(path)), value)
+        self.assertFalse(MODULE.installation_result_shape(dict(legacy, unknown=True)))
+        self.assertFalse(MODULE.installation_result_shape(dict(legacy, deliveryEvidence={"schema": "other"})))
+
+
 class RoutineDeliveryTests(unittest.TestCase):
     def setUp(self):
         # Legacy main-path fixtures must remain pure: an implicit advisory
