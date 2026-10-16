@@ -53,6 +53,11 @@ a failed check or coherent dispute. The original delivery result retains that fa
 
 ## Compact delivery assessment and consumers
 
+A clean result still requires the ordinary `--coherent-workflow coherence.yml` selection for
+this repository. Omitting it preserves the legacy `coherentValidation: not-required` result and
+reports `attention` with `coherent-validation-not-required`; automatic checkout discovery does
+not invent a coherent-validation verdict or silently change the selected validation route.
+
 The extension retains changed file/status/previous filename records, required check rows
 (including native exit-1 failures), producing-run references and explicit collection exceptions.
 Its `assessment` is `ready`, `delivered` or `attention`, with `issues` naming gaps. A clean
