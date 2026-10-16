@@ -336,10 +336,14 @@ authors, times, commits, reviews and checks; do not transcribe them into packets
 return files, comments or handoffs. Preserve real operation identities and unknown
 attempts where correctness needs them. A handoff points to the current issue and
 genuinely private context; sensitive evidence and credentials stay in restricted
-custody. The current #4516 and #4517 are cross-repository request mailboxes, not
-three distinct owning issues. Map each outcome to one existing owning issue before
-pilot activation; if the cap has none, resolve that record decision explicitly
-rather than pretending the shared mailbox is three records.
+custody. The owning issues are [V3 `/3` #4599](https://github.com/FS-GG/.github/issues/4599),
+[finite cap #4600](https://github.com/FS-GG/.github/issues/4600) and
+[authority service #4601](https://github.com/FS-GG/.github/issues/4601).
+The `/3` source issue is closed as historical baseline, excluded from prospective pilot
+savings. #4516 and #4517 remain the existing cross-repository request mailboxes until
+their reply contracts end or both sides agree to move them. This completes the
+one-issue-per-outcome mapping gate; evidence and notification/reconciliation gates
+remain separate.
 
 One owner carries implementation, review and delivery through the completion
 condition. A new lane must name the condition it materially advances or an

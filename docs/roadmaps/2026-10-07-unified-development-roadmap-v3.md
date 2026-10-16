@@ -162,10 +162,13 @@ source review, one active PR per coherent implementation change, and CI-produced
 acceptance evidence. Replace repeated packets, hash recitations, duplicate unchanged
 tests and unchanged-status comments only after the governing rule and evidence route
 are protected. Keep private evidence restricted and original-operation identities
-where correctness needs them. The current [V3 #4516](https://github.com/FS-GG/.github/issues/4516)
-and [UTEL #4517](https://github.com/FS-GG/.github/issues/4517) threads are cross-repository
-requests, not three distinct outcome records; owner-issue mapping is an activation
-decision. An existing separate cap issue has not yet been verified.
+where correctness needs them. The owning issue records are [V3 `/3` #4599](https://github.com/FS-GG/.github/issues/4599)
+(closed source baseline), [finite cap #4600](https://github.com/FS-GG/.github/issues/4600)
+and [authority service #4601](https://github.com/FS-GG/.github/issues/4601).
+[V3 #4516](https://github.com/FS-GG/.github/issues/4516) and
+[UTEL #4517](https://github.com/FS-GG/.github/issues/4517) remain cross-repository
+reply channels for their existing host requests. The one-issue-per-outcome mapping is established;
+CI evidence and automatic reply/reconciliation qualification remain separate activation gates.
 
 The pilot's three change classes, issue fields, CI acceptance result, decision-driven
 updates, knowledge capture, cap-accounting sequence, authority-service plan and
