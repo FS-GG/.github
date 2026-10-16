@@ -182,6 +182,28 @@ class AuthorityTests(unittest.TestCase):
         with self.assertRaises(c.Refused): self.issue(self.construct())
         self.assertEqual(len(self.signer.calls), 1)
 
+    def test_all_five_custody_roles_are_pairwise_distinct(self):
+        import itertools
+        self.prepare()
+        for left, right in itertools.combinations(('issuer', 'ack', 'reporter', 'custodian', 'supervisor'), 2):
+            changed = copy.deepcopy(self.policy)
+            changed['enrollment'][left] = changed['enrollment'][right]
+            with self.subTest(left=left, right=right), self.assertRaisesRegex(c.Refused, 'must be distinct'):
+                c.DescriptorAuthority(c.canonical(changed), admission=self.admission, store=self.store, signer=self.signer)
+        self.assertEqual(self.events, [])
+
+    def test_admission_evidence_is_nonempty_immutable_and_bounded_before_callback(self):
+        authority = self.prepare(); request = c.canonical(self.request)
+        for evidence in (b'', b'x' * 65537, bytearray(b'inert-evidence'), True):
+            with self.subTest(kind=type(evidence)), self.assertRaises(c.Refused):
+                authority.issue(request, evidence)
+        self.assertEqual(self.events, [])
+        # At the exact finite boundary the trusted authenticator still decides
+        # authenticity; a permitted byte length is never positive evidence.
+        with self.assertRaises(c.Refused): authority.issue(request, b'x' * 65536)
+        self.assertEqual(self.events, ['authenticate'])
+        self.assertEqual(self.signer.calls, [])
+
     def test_request_identity_ready_source_clock_and_authentication_substitution(self):
         for field in ('binding', 'ready', 'authentication'):
             authority = self.prepare()

@@ -34,7 +34,11 @@ and limit 65,536. That declaration is necessary input, not a fit proof.
 
 A request contains exactly `binding`, `ready` and `authentication`, byte equal to
 the provisioned selection. Every input is immutable canonical `bytes` before a
-callback; mutable mappings, duplicate keys and noncanonical documents refuse.
+callback; mutable mappings, duplicate keys and noncanonical documents refuse. External
+admission evidence must be nonempty exact built-in bytes of at most 65,536 bytes
+before any callback. This finite input ceiling is not a complete population bound.
+All five issuer/ACK/reporter/custodian/supervisor identity digests must be pairwise
+distinct; a role cannot authenticate another role by sharing its identity.
 The descriptor binds the complete ready and binding digests, every original pin,
 separate authentication identity and enrollment digest without wire extensions.
 

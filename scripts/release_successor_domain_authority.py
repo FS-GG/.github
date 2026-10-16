@@ -266,8 +266,9 @@ class DescriptorAuthority:
             raise Refused('executing authentication must be distinct from original publisher')
         validate(value['enrollment'], schemas['enrollment'])
         roles = value['enrollment']
-        if roles['issuer'] in (roles['ack'], roles['reporter'], roles['custodian']):
-            raise Refused('issuer custody must be distinct')
+        identities = [roles[name] for name in ('issuer', 'ack', 'reporter', 'custodian', 'supervisor')]
+        if len(set(identities)) != len(identities):
+            raise Refused('issuer, ACK, reporter, custodian and supervisor must be distinct')
         population = value['population']
         validate(population, {'v': 1, 'scope': 'complete-physical-population',
                              'evidence': hexdigest(), 'bytes': uint(65536, minimum=1), 'limit': 65536})
@@ -307,7 +308,8 @@ class DescriptorAuthority:
         try:
             if self._state != 'Unissued': raise Refused('original attempt consumed')
             _document(request)
-            if request != self._expected or type(evidence) is not bytes:
+            if (request != self._expected or type(evidence) is not bytes
+                    or not 0 < len(evidence) <= 65536):
                 raise Refused('original identity/ready/authentication differs')
             admission = self._admission.authenticate(self._policy, request, evidence)
             initial = self._check_admission(admission, request)
