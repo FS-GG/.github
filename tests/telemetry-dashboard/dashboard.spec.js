@@ -402,8 +402,9 @@ test("host5 malformed efficiency refresh preserves the last valid measurements",
 });
 
 test("canonical efficiency export shows queued analysis, omitted populations and unknown clocks",async({page})=>{
+  await page.clock.install({time:new Date("2026-10-16T12:00:00Z")});
   const host=efficiencyHost();host.processEfficiency=JSON.parse(JSON.stringify(require("./fixtures/process-efficiency-canonical-public-v1.json")));
-  await page.route("**/data/dashboard.json",route=>route.fulfill({json:payload(host)}));
+  await page.route("**/data/dashboard.json",route=>route.fulfill({json:payload(host,"2026-10-16T12:00:00Z")}));
   await page.goto("/#efficiency");
   await expect(page.locator("#efficiency-health")).toContainText("Canonical export");
   await expect(page.locator("#efficiency-health")).toContainText("3 omitted");
@@ -411,6 +412,7 @@ test("canonical efficiency export shows queued analysis, omitted populations and
   await expect(page.locator("#efficiency-native-example")).toContainText("Request: pending · accepted assessment: ready");
   await expect(page.locator("#efficiency-native-example")).toContainText("ingested: unknown");
   await expect(page.locator("#efficiency-native-example")).toContainText("Source observed: 2026-10-06T12:00:00Z");
+  await expect(page.locator("#facts-freshness tr").filter({hasText:"Actions observation"})).toContainText("within observation age limit");
   await page.locator("#efficiency-missing-example-toggle").click();
   await expect(page.locator("#efficiency-missing-example")).toContainText("4 omitted");
   await expect(page.locator("#efficiency-missing-example")).toContainText("Selected measurements unavailable");
