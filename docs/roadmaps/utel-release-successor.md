@@ -14,6 +14,23 @@ tests; record removed or replaced coverage honestly. Immutable historical source
 evidence and original-operation identities remain intact. This changes no admission, publication,
 installed-adoption, credential or replay gate and admits no managed/native cohort or uncertain original.
 
+## Current joined source frontier — 2026-10-16
+
+The [exact 18-case managed/private pipe SOURCE qualification](https://github.com/FS-GG/.github/issues/4517#issuecomment-6220575332)
+is accepted at `6429d3a8`, including actual process receipts and independent source/runtime/artifact
+correspondence. [Supplied source and restricted Atlas correspondence](https://github.com/FS-GG/.github/issues/4517#issuecomment-6220757659)
+is also accepted. Home reports private PR155 merged at `f8a2902e`; native private merge and remote
+blob equality remain Home-observed. Independent review verifies the supplied components and retained
+Atlas history, not full remote-tree reconstruction. No hosted PASS or installed adoption is claimed.
+The earlier 16/18 failed cohort, two missing historical receipts, compiler/source failures and rejected
+timeout evidence remain preserved; the replacement result does not fill those historical gaps.
+
+The remaining UTEL frontier in [#4600](https://github.com/FS-GG/.github/issues/4600) and
+[#4601](https://github.com/FS-GG/.github/issues/4601) is finite production budgets and headroom,
+provider/runtime/storage/recipient enforcement, authenticated clocks, credential custody and enrollment,
+with independent readback and fresh-profile/original admission. This source result establishes none of
+those outcomes. No further pipe runtime job is selected.
+
 ## Trigger and outcome
 
 The native subagent usage and durable remote receipt fixes are merged at source, but the installed host still selects the 0.90.0 coherent set. GS2-08.9 deliberately sealed the old release scripts and disabled five write-capable workflows because their shell publication boundaries do not compose common effect admission. A source build or a package with a new version is not an installed release. Deliver a reviewed successor that publishes one immutable coherent set of `FS.GG.Coord.Cli`, `FS.GG.Kit` and `FS.GG.Drivers` from one source, then allows Main to adopt its verified promoted manifest.
