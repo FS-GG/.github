@@ -1,4 +1,4 @@
-# Routine delivery evidence pilot
+# Routine delivery checkout evidence
 
 `tools/routine-delivery.py --evidence-run RUN_ID` appends `deliveryEvidence` with schema
 `fsgg.routine-delivery-evidence/1` to its final `fsgg.routine-delivery/v1` result.
@@ -16,12 +16,24 @@ until they explicitly support this extension. The CLI refuses `--evidence-run` t
 64 KiB retained installation-result bound. Installation recovery retains that bound and uses
 the legacy output. Supporting an extended shape does not waive its existing file-size bound.
 
-The producer in [skill-quality](../../.github/workflows/skill-quality.yml) captures the job-entry
-Git checkout commit and tree, candidate/base, repository, PR, run, attempt and job before tests.
-Its artifact is uploaded even when later steps fail and retained for seven days. This covers
-only `semantic-skill-quality` on PR events matching that workflow's existing paths; tools,
-skills and its own workflow are covered, while arbitrary docs-only/product PRs may be absent.
-It proves neither every required job's checkout nor the filesystem state throughout a test.
+The sole live producer is the existing required `projection` job in
+[coherence](../../.github/workflows/coherence.yml). Its unfiltered PR events cover opened,
+synchronize, reopened and edited PRs, including docs-only changes. It captures the job-entry Git
+checkout commit and tree, candidate/base, repository, PR, run, attempt and job before validation.
+Its artifact is uploaded even when later steps fail and retained for seven days. Capture and
+upload continue on error so acquisition/reporting failure cannot suppress the existing projection
+validation or replace its verdict. Missing evidence remains unavailable to the reader. This supplies
+one checkout witness for each scheduled PR run; it proves neither every required job's checkout
+nor the filesystem state throughout a test. Conflicting PRs that GitHub does not schedule,
+unavailable runs and population/byte-bound overflow retain explicit gaps.
+
+The one reader accepts exact workflow/job pairs: `coherence.yml/projection` reports scope
+`github-pr-checkout`; the retired `skill-quality.yml/semantic-skill-quality` producer remains
+readable as `skill-quality-pilot` for historical artifacts. Both use the unchanged
+`fsgg.tested-checkout/1` artifact, `checkout.json`, and `tested-checkout-RUN-ATTEMPT` name. No
+second metadata record, new CI job or check aggregator is added. The caller selects the native
+run with the existing `--evidence-run` option. Strict default telemetry/observer consumers stay
+on the unchanged default delivery shape; this migration does not enable the extension by default.
 The Actions run's `head_sha` associates a run with a candidate; it does not identify its checkout.
 
 The reader binds the artifact to native run/repository/PR/head/base/attempt metadata and checks
@@ -54,7 +66,7 @@ There is no retry or effect replay. Raw hosted artifacts remain the original evi
 ## Bounds and qualification
 
 The collection gets one 60-second budget including the existing direct-child cleanup reserve.
-Each response uses the existing 256 KiB native-query limit. The pilot permits at most 100
+Each response uses the existing 256 KiB native-query limit. The reader permits at most 100
 changed files, 128 required checks, 100 artifact records, one 64 KiB ZIP and one 4 KiB checkout
 JSON entry, and 100 run PR links. Larger or incomplete populations remain unavailable. It does not paginate or
 create a second check aggregator. The workflow adds two Git reads, a small JSON write and one
@@ -66,6 +78,6 @@ so a new model would add maintenance without testing a new scheduling interactio
 inspection/fixture budget is ten minutes; the existing full required checks remain applicable.
 Tests cover candidate/synthetic checkout, differing trees, artifact identity/absence, head/base
 drift, late coherent failure, uncertain merge and both prior-result shapes. Local fixture success
-is source qualification only. The next qualification is a genuine matching skill-quality PR run,
+is source qualification only. The next qualification is a genuine matching coherence/projection PR run,
 its retained artifact, and post-delivery native commit/tree readback through this option. Record
-measured collection/upload latency and exceptions before expanding the pilot's coverage.
+measured collection/upload latency and exceptions before claiming an improvement in delivery latency.

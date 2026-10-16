@@ -9,6 +9,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 
+# Exact native workflow and job pairs; the old producer remains readable for retained artifacts.
+PRODUCERS = {
+    ".github/workflows/coherence.yml": ("projection", "github-pr-checkout", "projection job entry"),
+    ".github/workflows/skill-quality.yml": ("semantic-skill-quality", "skill-quality-pilot", "skill-quality job entry"),
+}
+
+
 def collect(summary: Any, run_id: int, *, api: Any, native: Any) -> dict:
     """Collect pilot evidence using the delivery owner's native identity validators."""
     head_of, base_of = native.head_of, native.base_of
@@ -16,7 +23,7 @@ def collect(summary: Any, run_id: int, *, api: Any, native: Any) -> dict:
     is_merged = native.is_merged
     WATCH_FIELDS, WATCH_MAX_CHECKS = native.WATCH_FIELDS, native.WATCH_MAX_CHECKS
     repo, number = summary.repo, summary.pr
-    result = {"schema": "fsgg.routine-delivery-evidence/1", "scope": "skill-quality-pilot",
+    result = {"schema": "fsgg.routine-delivery-evidence/1", "scope": "github-pr-checkout",
               "candidate": summary.expectedHead, "base": summary.baseSha,
               "deliveredCommit": summary.mergeCommit, "deliveredTree": None,
               "testedCheckout": None, "parity": "unavailable", "changedFiles": None,
@@ -83,6 +90,9 @@ def collect(summary: Any, run_id: int, *, api: Any, native: Any) -> dict:
     def checkout():
         run = read(f"actions/runs/{run_id}")
         attempt_number = run.get("run_attempt")
+        producer = PRODUCERS.get(run.get("path"))
+        if producer is None:
+            raise ValueError("unsupported checkout producer")
         links = run.get("pull_requests")
         if not isinstance(links, list) or len(links) > 100:
             raise ValueError("run PR link population differs")
@@ -107,11 +117,11 @@ def collect(summary: Any, run_id: int, *, api: Any, native: Any) -> dict:
             and run.get("head_branch") == before["head"]["ref"])
         if (run.get("id") != run_id or run.get("head_sha") != summary.expectedHead
                 or run.get("event") != "pull_request"
-                or run.get("path") != ".github/workflows/skill-quality.yml"
                 or run.get("repository", {}).get("full_name") != repo
                 or type(attempt_number) is not int or attempt_number < 1
                 or not (linked or merged_link)):
             raise ValueError("evidence differs")
+        result["scope"] = producer[1]
         result["run"] = {key: run.get(key) for key in
                          ("id", "run_attempt", "head_sha", "head_branch", "path", "event", "status", "conclusion", "html_url")}
         artifacts = read(f"actions/runs/{run_id}/artifacts?per_page=100")
@@ -143,7 +153,7 @@ def collect(summary: Any, run_id: int, *, api: Any, native: Any) -> dict:
             fact = json.loads(archive.read(entries[0]), object_pairs_hook=unique)
         expected = {"schema": "fsgg.tested-checkout/1", "repository": repo,
                     "pr": number, "candidate": summary.expectedHead, "base": summary.baseSha,
-                    "run": run_id, "attempt": attempt_number, "job": "semantic-skill-quality"}
+                    "run": run_id, "attempt": attempt_number, "job": producer[0]}
         if any(fact.get(key) != value or type(fact.get(key)) is not type(value) for key, value in expected.items()):
             raise ValueError("evidence differs")
         if not all(isinstance(fact.get(key), str) and SHA_RE.fullmatch(fact[key]) for key in ("commit", "tree")):
@@ -162,7 +172,7 @@ def collect(summary: Any, run_id: int, *, api: Any, native: Any) -> dict:
         return {"commit": fact["commit"], "tree": fact["tree"], "kind": kind,
                 "association": "native-pr-link" if linked else "merged-pr-exact-checkout-parents",
                 "run": run_id, "attempt": attempt_number, "job": fact["job"], "artifact": artifact_id,
-                "coverage": "skill-quality job entry"}
+                "coverage": producer[2]}
     result["testedCheckout"] = attempt("tested-checkout", checkout)
     if attempt("final-pr-identity", snapshot) is None:
         result.update(testedCheckout=None, changedFiles=None, requiredChecks=None)

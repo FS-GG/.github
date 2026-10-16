@@ -1874,7 +1874,7 @@ def parser() -> argparse.ArgumentParser:
                         help="caller-owned absolute monotonic deadline including direct-child cleanup; no default")
     result.add_argument("--watch-checks", action="store_true", help="read-only bounded native-check watch; never grants apply")
     result.add_argument("--watch-seconds", type=int, help="required watch budget, 1..600 seconds")
-    result.add_argument("--evidence-run", type=int, help="append skill-quality pilot evidence")
+    result.add_argument("--evidence-run", type=int, help="append verified PR checkout evidence from this native run")
     result.add_argument("--apply", action="store_true")
     result.add_argument("--install-routine-producer", action="store_true",
                         help="closed first installation only; never ordinary eligibility success")
@@ -2038,7 +2038,7 @@ def main(argv: list[str]) -> int:
         except Exception:
             # Optional acquisition/reporting cannot suppress the original effect readback.
             output["deliveryEvidence"] = {"schema": "fsgg.routine-delivery-evidence/1",
-                "scope": "skill-quality-pilot", "parity": "unavailable",
+                "scope": "github-pr-checkout", "parity": "unavailable",
                 "exceptions": ["collection-unavailable"]}
     if args.telemetry_publisher_event:
         output["dashboardPublicationHealth"] = dashboard_health

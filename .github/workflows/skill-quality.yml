@@ -122,24 +122,6 @@ jobs:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@v7
-      - name: Record tested checkout identity (pilot)
-        if: github.event_name == 'pull_request'
-        env:
-          CHECKOUT_CANDIDATE: ${{ github.event.pull_request.head.sha }}
-          CHECKOUT_BASE: ${{ github.event.pull_request.base.sha }}
-          CHECKOUT_PR: ${{ github.event.pull_request.number }}
-        run: |
-          python3 - <<'PYTHON'
-          import json, os, pathlib, subprocess
-          def git(rev):
-              return subprocess.check_output(['git', 'rev-parse', rev], text=True).strip()
-          value = dict(schema='fsgg.tested-checkout/1', repository=os.environ['GITHUB_REPOSITORY'],
-                       pr=int(os.environ['CHECKOUT_PR']), candidate=os.environ['CHECKOUT_CANDIDATE'],
-                       base=os.environ['CHECKOUT_BASE'], run=int(os.environ['GITHUB_RUN_ID']),
-                       attempt=int(os.environ['GITHUB_RUN_ATTEMPT']), job=os.environ['GITHUB_JOB'],
-                       commit=git('HEAD'), tree=git('HEAD^{tree}'))
-          pathlib.Path(os.environ['RUNNER_TEMP'], 'checkout.json').write_text(json.dumps(value) + '\n')
-          PYTHON
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
@@ -160,11 +142,3 @@ jobs:
           python3 tests/skill-fsharp/cli/run.py
       - name: Validate semantic skill quality and its rejection paths
         run: bash tests/skill-quality/run.sh
-      - name: Retain tested checkout identity (pilot)
-        if: always() && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v7
-        with:
-          name: tested-checkout-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/checkout.json
-          if-no-files-found: warn
-          retention-days: 7

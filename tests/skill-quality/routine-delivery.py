@@ -162,6 +162,83 @@ class DeliveryEvidenceTests(unittest.TestCase):
         api.query.side_effect = archive
         return summary, api, fact, responses
 
+    def test_one_reader_accepts_exact_live_and_historic_producer_pairs(self):
+        pairs = [("coherence.yml", "projection", "github-pr-checkout"),
+                 ("skill-quality.yml", "semantic-skill-quality", "skill-quality-pilot")]
+        for workflow, job, scope in pairs:
+            with self.subTest(workflow=workflow):
+                summary, api, fact, responses = self.fixture(checkout="e" * 40)
+                responses["actions/runs/7"]["path"] = ".github/workflows/" + workflow
+                fact["job"] = job
+                result = MODULE.delivery_evidence(summary, 7, api=api)
+                self.assertEqual((result["scope"], result["testedCheckout"]["job"], result["parity"]),
+                    (scope, job, "identical-tree"))
+                self.assertEqual(result["exceptions"], [])
+
+    def test_unsupported_or_crossed_workflow_job_pair_cannot_supply_checkout(self):
+        for workflow, job in [("coherence.yml", "semantic-skill-quality"),
+                ("skill-quality.yml", "projection"), ("unrelated.yml", "projection")]:
+            with self.subTest(workflow=workflow, job=job):
+                summary, api, fact, responses = self.fixture(checkout="e" * 40)
+                responses["actions/runs/7"]["path"] = ".github/workflows/" + workflow
+                fact["job"] = job
+                result = MODULE.delivery_evidence(summary, 7, api=api)
+                self.assertIsNone(result["testedCheckout"])
+                self.assertEqual(result["parity"], "unavailable")
+
+    def test_universal_producer_is_single_and_runs_in_existing_unfiltered_projection_job(self):
+        import yaml  # Existing requirements-test.txt dependency; no new package.
+        emitters = []
+        for path in (ROOT / ".github/workflows").glob("*.yml"):
+            workflow = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
+            for job_name, job in workflow.get("jobs", {}).items():
+                for step in job.get("steps", []):
+                    if "fsgg.tested-checkout/1" in step.get("run", ""):
+                        emitters.append((path.name, job_name, workflow, job, step))
+        self.assertEqual([(row[0], row[1]) for row in emitters], [("coherence.yml", "projection")])
+        _, _, workflow, job, capture = emitters[0]
+        self.assertEqual(set(workflow["on"]["pull_request"]), {"types"})
+        self.assertEqual(workflow["on"]["pull_request"]["types"], ["opened", "synchronize", "reopened", "edited"])
+        self.assertNotIn("if", job)
+        self.assertEqual(capture["if"], "github.event_name == 'pull_request'")
+        self.assertEqual(capture["continue-on-error"], "true")
+        steps = job["steps"]
+        checkout = next(step for step in steps if step.get("uses", "").startswith("actions/checkout@"))
+        validation = next(step for step in steps if step.get("name") == "Run projection gate negative controls")
+        upload = next(step for step in steps if step.get("with", {}).get("name", "").startswith("tested-checkout-"))
+        self.assertLess(steps.index(checkout), steps.index(capture))
+        self.assertLess(steps.index(capture), steps.index(validation))
+        self.assertLess(steps.index(validation), steps.index(upload))
+        self.assertEqual(upload["if"], "always() && github.event_name == 'pull_request'")
+        self.assertEqual(upload["continue-on-error"], "true")
+        self.assertNotIn("continue-on-error", validation)
+        self.assertEqual(upload["with"]["retention-days"], "7")
+        self.assertEqual(upload["with"]["name"], "tested-checkout-${{ github.run_id }}-${{ github.run_attempt }}")
+
+    def test_workflow_producer_emits_exact_observed_git_identity_with_existing_schema(self):
+        import yaml
+        workflow = yaml.load((ROOT / ".github/workflows/coherence.yml").read_text(), Loader=yaml.BaseLoader)
+        step = next(step for step in workflow["jobs"]["projection"]["steps"]
+                    if "fsgg.tested-checkout/1" in step.get("run", ""))
+        with tempfile.TemporaryDirectory() as directory:
+            environment = dict(os.environ, CHECKOUT_CANDIDATE=HEAD, CHECKOUT_BASE="d" * 40,
+                CHECKOUT_PR="1", GITHUB_REPOSITORY="FS-GG/.github", GITHUB_RUN_ID="7",
+                GITHUB_RUN_ATTEMPT="1", GITHUB_JOB="projection", RUNNER_TEMP=directory)
+            body = step["run"].split("python3 - <<'PYTHON'\n", 1)[1].rsplit("PYTHON", 1)[0]
+            observed = {"HEAD": "e" * 40, "HEAD^{tree}": "c" * 40}
+            def git_read(command, **options):
+                self.assertEqual(command[:2], ["git", "rev-parse"])
+                self.assertTrue(options["text"])
+                return observed[command[2]] + "\n"
+            with mock.patch.dict(os.environ, environment, clear=True), \
+                 mock.patch.object(subprocess, "check_output", side_effect=git_read) as reads:
+                exec(compile(body, ".github/workflows/coherence.yml:projection", "exec"), {})
+            self.assertEqual(reads.call_count, 2)
+            fact = json.loads((pathlib.Path(directory) / "checkout.json").read_text())
+        self.assertEqual(set(fact), {"schema", "repository", "pr", "candidate", "base", "run", "attempt", "job", "commit", "tree"})
+        self.assertEqual((fact["schema"], fact["job"], fact["candidate"]), ("fsgg.tested-checkout/1", "projection", HEAD))
+        self.assertEqual((fact["commit"], fact["tree"]), (observed["HEAD"], observed["HEAD^{tree}"]))
+
     def test_candidate_and_synthetic_checkout_use_native_tree_parity(self):
         for checkout, kind in [(HEAD, "candidate"), ("e" * 40, "synthetic-pr-merge")]:
             with self.subTest(kind=kind):
