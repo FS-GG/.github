@@ -35,7 +35,7 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
                     raise RuntimeError("offline qualification refuses nonfixture child")
         sys.addaudithook(inert)
 
-    def invoke(self, state, body="First line\nSecond line\n", branch="feature/combined", head=EXPECTED_SHA):
+    def invoke(self, state, body="First line\nSecond line\n", branch="feature/combined", head=EXPECTED_SHA, extra=()):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         directory = pathlib.Path(temporary.name)
@@ -69,6 +69,7 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
                 str(body_path),
                 "--gh",
                 str(FAKE_GH),
+                *extra,
             ],
             env=environment,
             text=True,
@@ -80,6 +81,85 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
         if log_path.exists():
             calls = [json.loads(line) for line in log_path.read_text().splitlines()]
         return completed, json.loads(completed.stdout), calls
+
+    def update_state(self, body=None):
+        return {"head_sha": EXPECTED_SHA, "pull": {
+            "number": 42, "state": "open", "title": "Deliver coherent feature",
+            "head": {"ref": "routine/fixture", "sha": EXPECTED_SHA,
+                     "repo": {"full_name": "FS-GG/example"}},
+            "base": {"ref": "main"},
+            "body": body if body is not None else managed_body("campaign-7", "chain-3") +
+                "<!-- fsgg:routine-development/v1 head=" + "b" * 40 + " operation=source-change extra=value -->\n"}}
+
+    def update(self, state, body="Revised prose\n"):
+        return self.invoke(state, body, "routine/fixture", extra=(
+            "--update-pr", "42", "--previous-head-sha", "b" * 40))
+
+    def test_update_preserves_fresh_metadata_and_rebinds_only_routine_head(self):
+        state = self.update_state()
+        state["pull"]["body"] += "<!-- fsgg:future/v8 opaque=preserve-me -->\n"
+        completed, result, calls = self.update(state)
+        self.assertEqual(0, completed.returncode, completed.stdout)
+        self.assertEqual("updated", result["action"])
+        patches = [c for c in calls if c["arguments"][2] == "PATCH"]
+        self.assertEqual(1, len(patches))
+        body = json.loads(patches[0]["stdin"])["body"]
+        self.assertIn(managed_body("campaign-7", "chain-3").split("\n\n")[1].strip(), body)
+        self.assertIn("head=" + EXPECTED_SHA + " operation=source-change extra=value", body)
+        self.assertIn("<!-- fsgg:future/v8 opaque=preserve-me -->", body)
+        self.assertTrue(body.startswith("Revised prose\n"))
+        self.assertEqual("GET", calls[-1]["arguments"][2])
+        old_body = state["pull"]["body"]
+        state["pull"]["body"] = body
+        completed, result, calls = self.update(state, "Revised prose\n" + old_body[old_body.index("<!--"):])
+        self.assertEqual(0, completed.returncode, completed.stdout)
+        self.assertEqual("unchanged", result["action"])
+        self.assertFalse(any(c["arguments"][2] == "PATCH" for c in calls))
+
+    def test_update_refuses_metadata_conflicts_and_missing_ownership(self):
+        cases = [self.update_state("Prose without admission marker"),
+                 self.update_state(self.update_state()["pull"]["body"].replace("campaign-7", "other")),
+                 self.update_state(self.update_state()["pull"]["body"].replace("b" * 40, "c" * 40))]
+        for state in cases:
+            completed, _, calls = self.update(state)
+            self.assertNotEqual(0, completed.returncode)
+            self.assertFalse(any(c["arguments"][2] == "PATCH" for c in calls))
+        for proposed in ["<!-- fsgg:future/v8 replace=unknown -->", self.update_state()["pull"]["body"].replace("source-change", "internal-docs")]:
+            completed, _, calls = self.update(self.update_state(), proposed)
+            self.assertNotEqual(0, completed.returncode)
+            self.assertFalse(any(c["arguments"][2] == "PATCH" for c in calls))
+
+    def test_update_conflicts_refuse_before_write_and_readback_detects_race(self):
+        import copy
+        state = self.update_state()
+        changed = copy.deepcopy(state["pull"])
+        changed["body"] += "Concurrent edit\n"
+        state["read_sequence"] = [state["pull"], changed]
+        completed, result, calls = self.update(state)
+        self.assertEqual(3, completed.returncode, completed.stdout)
+        self.assertEqual("update-conflict", result["reason"])
+        self.assertFalse(any(c["arguments"][2] == "PATCH" for c in calls))
+        state = self.update_state()
+        state["read_sequence"] = [state["pull"], state["pull"], changed]
+        completed, result, calls = self.update(state)
+        self.assertEqual(3, completed.returncode, completed.stdout)
+        self.assertEqual("update-readback-mismatch", result["reason"])
+        self.assertEqual(1, sum(c["arguments"][2] == "PATCH" for c in calls))
+
+    def test_update_refuses_wrong_candidate_or_moved_ref(self):
+        for field in ["sha", "ref", "repo"]:
+            state = self.update_state()
+            state["pull"]["head"][field] = {"full_name": "other/repo"} if field == "repo" else "wrong"
+            completed, result, calls = self.update(state)
+            self.assertEqual(3, completed.returncode, completed.stdout)
+            self.assertEqual("update-candidate-mismatch", result["reason"])
+            self.assertFalse(any(c["arguments"][2] == "PATCH" for c in calls))
+        state = self.update_state()
+        state["head_sha"] = "c" * 40
+        completed, result, calls = self.update(state)
+        self.assertEqual(3, completed.returncode, completed.stdout)
+        self.assertEqual("head-moved", result["reason"])
+        self.assertFalse(any(c["arguments"][2] == "PATCH" for c in calls))
 
     def test_refuses_when_same_dependency_chain_is_open_across_paginated_results(self):
         state = {
