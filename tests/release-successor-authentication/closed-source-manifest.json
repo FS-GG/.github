@@ -12,7 +12,7 @@
     },
     {
       "path": "scripts/release_successor_closed_callback.py",
-      "sha256": "9819b2a3e3371a10bcf4086a3913ed7929bd6c772c3d0188be912c452c080626"
+      "sha256": "bfc4b5341dcc082aac7e8ffaa3efe03bba0eb81254c2950e9d6f17bd621bb3e4"
     },
     {
       "path": "scripts/release_successor_execution.py",

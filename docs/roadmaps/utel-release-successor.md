@@ -1089,6 +1089,18 @@ at its immutable producer/consumer pins; the legacy callback/factory selections 
 The unchanged lifetime/allocation observers qualify the selected controlled-source journey,
 including raw aliases and the sixth readback, without rewriting the historical joint ledger.
 
+The closed Python core now shares endpoint initialization below its existing original,
+sealed-input and exact-sink guards. The existing buffered path constructs the same two
+`BytesIO` objects; a fixed source-owned composer can initialize the one maintained engine
+with owned nonseekable endpoints. Initialization performs no endpoint I/O or discovery.
+Public source controls exercise the thirteen-exchange/six-slot path and first/terminal
+output failures without seek, EOF or a fourteenth read. The run/diagnostic algorithms,
+closed semantic profile and sixteen-role `/2` slot manifest/bundle/vector bytes stay
+unchanged; only the nine-file closed source closure changes. Coherent consumer repinning
+and actual concurrent process/provider qualification remain separate dependent work.
+Public production preparation still refuses before effects; no endpoint selector or
+public activation is added.
+
 This preparation is a dependency for the real managed → Python → owned CAP03 store →
 recipient journey, not acceptance of that join. After independent CAP03 source review,
 SystemAdmin owns the separately reviewed fixed private adapter and exact observation

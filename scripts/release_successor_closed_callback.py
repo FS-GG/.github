@@ -154,8 +154,25 @@ class _Core:
             raise Refused('closed input refused')
         if cut not in (None, 'write', 'short', 'flush', 'confirmation', 'backend') or type(fragment) is not int or not 1 <= fragment <= 4096:
             raise Refused('closed qualification refused')
+        owned_input, owned_replies = io.BytesIO(requests), io.BytesIO()
+        self._initialize_endpoints_owned(token, owned_original, binding, owned_sink,
+            owned_input, owned_replies, cut=cut, fragment=fragment)
+
+    def _initialize_endpoints_owned(self, token, owned_original, binding, owned_sink,
+                                    owned_input, owned_replies, *, cut=None, fragment=4096):
+        """Initialize the same engine with endpoints owned by a fixed composer.
+
+        The trusted composer checks exact endpoints and original/source identity
+        before this internal seam. Initialization performs no endpoint I/O or
+        discovery; this is not a public provider or activation capability.
+        """
+        if (token is not _TOKEN or type(owned_sink) is not _slots.InertPhaseSlotSink
+                or hasattr(self, '_attempted')):
+            raise Refused('closed constructor refused')
+        if cut not in (None, 'write', 'short', 'flush', 'confirmation', 'backend') or type(fragment) is not int or not 1 <= fragment <= 4096:
+            raise Refused('closed qualification refused')
         self._original, self._cut, self._fragment = owned_original, cut, fragment
-        self._input, self._replies = io.BytesIO(requests), io.BytesIO()
+        self._input, self._replies = owned_input, owned_replies
         self._attempted, self._status, self._cleanup = False, Status.UNKNOWN, Status.UNKNOWN
         clock = binding['clock']
         owned_clock = _consumer.InertCallbackClock(clock['domain'], int(clock['frequency']),

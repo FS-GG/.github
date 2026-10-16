@@ -44,15 +44,29 @@ algorithm. Its frame-local values and raw-byte aliases remain available to the u
 copy-lifetime observer.
 
 `_Core._initialize_owned(token, owned_original, binding, requests, owned_sink, ...)`
-factors shared owned buffer, clock, owner and decoder construction from the controlled
-original/sink creation. It receives an already owned exact maintained sink. The controlled
-constructor consumes its original before preparation/reservation. A future fixed private
-composer must consume its own original and check its exact adapter, pinned public/private
-sources, profile/store/original identities and fixture qualification before using these
-internal helpers. They provide no registry, plugin lookup, caller callback, validator or
+retains the exact sink/token/one-initialization guards, sealed `bytes` input limit of
+40,960 and the same two `BytesIO` objects. It delegates common clock, owner and decoder
+initialization to `_initialize_endpoints_owned(token, owned_original, binding, owned_sink,
+owned_input, owned_replies, ...)`. That internal helper retains the exact sink/token,
+one-initialization, cut and fragment guards, stores the owned endpoints, and performs
+no endpoint I/O, discovery or diagnostic extraction during initialization.
+
+The controlled constructor still consumes its original before preparation/reservation.
+A fixed composer must consume its own original and check its exact endpoint classes,
+adapter, pinned sources, profile/store/original identities and qualification before using
+these helpers. They provide no registry, plugin lookup, caller callback, validator or
 public activation option. Internal naming and the token are source conventions, not a
 security mechanism. The same `run` and `diagnostic` algorithms own the callback journey
 and fixed-status egress; no second callback engine or generic fixture wrapper is added.
+The engine requires only positive bounded `read(count)`, `write(bytes)` and `flush()`;
+it requires no seek, buffer export, input EOF, fourteenth read or endpoint close.
+
+Only the nine-file closed-source manifest's constructor hash changes. The sixteen-role
+slot manifest/bundle, `/2` vectors, closed profile/schema and semantic profile digest stay
+unchanged. Subsequent coherent consumer adoption must select the same new protected
+producer revision for both existing closed and slot pins, update the closed manifest
+digest and retain the unchanged slot manifest/bundle/vector digests. This preparation
+neither performs that adoption nor qualifies a concurrent process/pipe journey.
 
 This public SOURCE preparation does **not** implement or exercise CAP03. A separately
 reviewed private adapter must preserve the distinct public canonical identity and CAP03
@@ -107,7 +121,11 @@ Runtime exception/allocation maxima remain supplier obligations.
 `closed-source-tests.py` runs in the existing authentication suite and tests the actual
 thirteen-exchange/six-slot path, exact frozen bytes, fragment/oversize/truncation controls,
 short/write/flush/confirmation/backend cuts, cumulative construction and recipient attempts,
-source substitutions and egress refusal. Private test inspection is excluded from the
+source substitutions and egress refusal. Fixed nonseekable inert endpoints exercise the
+same initializer and engine with fragmented reads, prefix/truncation/read-loss controls,
+a controlled aggregate-counter cut, and real short/write/flush failures at the first and
+terminal replies. These controls preserve consumed originals and retained terminal slots;
+source refusal does not establish that a provider effect was absent. Private test inspection is excluded from the
 production population. The existing controls retain all legacy maxima and census. The separate slot `/2`
 vectors use the new bundle binding; their bytes intentionally differ from `/1`. An
 explicit historical `/1` binding control compares the maintained codec output against
