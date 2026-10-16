@@ -602,12 +602,15 @@ for(const analysisState of ["unavailable","pending","failed"]){
     const deferred=JSON.parse(JSON.stringify(item.metrics[0]));deferred.metric="avoidable-share";deferred.key="m31";
     // Preserve the closed DTO and its full privacy validation; only presentation is deferred.
     item.metrics.push(deferred);
+    const partial=JSON.parse(JSON.stringify(item.metrics[0]));partial.key="m30";partial.metric="retry-incidence";partial.unit="ratio";partial.value={status:"partial",numerator:2,denominator:5,unknownAmount:null};
+    item.metrics.push(partial);
     await page.route("**/data/dashboard.json",route=>route.fulfill({json:payload(host)}));
     await page.goto("/#efficiency");await page.locator(`#efficiency-${item.key}-toggle`).click();
     const card=page.locator(`#efficiency-${item.key}`);
     await expect(card).toContainText(`analysis ${analysisState}`);
     await expect(card).toContainText("observed resource");
     await expect(card).toContainText("unknown: Unknown");
+    await expect(card).toContainText("partial: 2 / 5");
     await expect(card).not.toContainText("avoidable share");
     await expect(card).not.toContainText("Problem episodes");
     await expect(card).not.toContainText("Suggested next step");
