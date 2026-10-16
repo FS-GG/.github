@@ -219,16 +219,26 @@ that scope; operational authority, independent credential custody and original e
 | **6. One working producer/provider journey** — Coordination, SystemAdmin and `.github` UTEL owners | The [18-case joined managed/private pipe SOURCE qualification](https://github.com/FS-GG/.github/issues/4517#issuecomment-6220575332) and [supplied source/Atlas correspondence](https://github.com/FS-GG/.github/issues/4517#issuecomment-6220757659) are accepted. Home reports private PR155 merged at `f8a2902e`; the [owning plan](utel-release-successor.md#current-joined-source-frontier--2026-10-16) records the accepted scope and remaining UTEL provider/budget/enforcement dependencies from [#4600](https://github.com/FS-GG/.github/issues/4600) and [#4601](https://github.com/FS-GG/.github/issues/4601). | Private native merge remains Home-observed; supplied-byte correspondence is independently verified. No hosted PASS, full remote-tree reconstruction, installed adoption or operational acceptance is claimed. Preserve the earlier 16/18 failed cohort and two missing receipts. No further pipe runtime job is selected; original-bound reservations, custody, enrollment and operational admission remain separate. |
 | **7. Fresh-profile enforced resource containment** — finite-cap owner, SystemAdmin/provisioner and Programme acceptance owner, tracked in [#4600](https://github.com/FS-GG/.github/issues/4600) | Qualify the [ADR-0095](../adr/0095-utel-resource-containment-for-fresh-profiles.md) contract for one operational construction and one retained original: finite measured budgets with justified headroom, independently read-back enforcement, integrated success/fault journeys and explicit coverage exclusions. | Acceptance-contract reassessment is settled: enforced resource containment is selected for separately authorized fresh profiles; it supplies no universal physical-copy or erasure guarantee. Production budgets, installed enforcement and fresh profile/original admission remain pending. The legacy ADR-0093 profile retains **65,536 bytes**, physical bound null, `fit=unproved`, `admission=false`, all 439 reservations and the `.103`/`.104` holds. |
 
-V3 source progress remains separate: [Coordination #1022](https://github.com/FS-GG/FS.GG.Coordination/pull/1022)
-is merged at `5b99dee4` with exact tested/delivered tree correspondence; post-merge coherent validation
-remains pending. The inert unsigned ACK implementation in [#1023](https://github.com/FS-GG/FS.GG.Coordination/pull/1023)
-has accepted Home/source, focused and audit evidence but remains unmerged. Its first coherent
-[formal-base run](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38936797965/job/117097229642)
-timed out; that failure is retained, and a bounded existing-wrapper repair is under integrator review.
-Full coherent qualification remains unaccepted; no live ACK authority is established.
-Home is implementing the [accepted host transaction source slice](https://github.com/FS-GG/.github/issues/4516#issuecomment-6220614003).
-Actual receiver residency and authenticated host-factory composition remain unresolved; these source
-steps establish no installed host/receiver or credential authority.
+V3 receiver source progress remains separate: [Coordination #1022](https://github.com/FS-GG/FS.GG.Coordination/pull/1022)
+and [#1023](https://github.com/FS-GG/FS.GG.Coordination/pull/1023) are merged at `5b99dee4` and
+`a0897a55`, with exact tested/delivered tree correspondence. The selected uncertainty-cut, locked-read
+and inert unsigned ACK SOURCE assertions are delivered. The final [bootstrap](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38943378505)
+and [coherent qualification](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38943377854) passed
+at `8f513dd9`. The original [formal-base timeout](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38936797965/job/117097229642)
+remains unexplained and retained. Both successful qualifications used the existing canonical Q2
+lifecycle retry; the new pre-parser retry remains unexercised. [Post-merge coherent validation](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38949025174)
+also passed at the exact delivered revision. No further receiver surrogate is selected. Durability
+remains Unknown; production
+`prepareAck` and `reserveHost` still refuse, and no live ACK authority is established.
+
+Home's host transaction, current codecs and structural consumption have [accepted bounded SOURCE
+qualification](https://github.com/FS-GG/.github/issues/4516#issuecomment-6222834756): 47/47 cases passed
+with no skips or test/collection errors. The earlier failed qualification remains retained. [Supplied
+private source/Atlas delivery correspondence](https://github.com/FS-GG/.github/issues/4516#issuecomment-6222985659)
+is accepted; native private merge remains Home-observed, with no hosted CI PASS or installed acceptance
+inferred. Current authentication-factory source preparation is underway; receiver residency/custody
+remains unresolved. Durability remains Unknown, and actual
+authentication, physical/native/production qualification and installed acceptance remain unestablished.
 
 Keep source delivery, publication, installed qualification and runtime acceptance separate.
 Original `.103` remains attempted-unknown and unreplayed; `.104` remains held. Use

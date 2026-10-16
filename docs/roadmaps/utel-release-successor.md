@@ -21,7 +21,8 @@ is accepted at `6429d3a8`, including actual process receipts and independent sou
 correspondence. [Supplied source and restricted Atlas correspondence](https://github.com/FS-GG/.github/issues/4517#issuecomment-6220757659)
 is also accepted. Home reports private PR155 merged at `f8a2902e`; native private merge and remote
 blob equality remain Home-observed. Independent review verifies the supplied components and retained
-Atlas history, not full remote-tree reconstruction. No hosted PASS or installed adoption is claimed.
+Atlas history, not full remote-tree reconstruction. No hosted PASS or installed adoption is claimed
+for this private pipe; separately qualified public receiver source does not change that visibility limit.
 The earlier 16/18 failed cohort, two missing historical receipts, compiler/source failures and rejected
 timeout evidence remain preserved; the replacement result does not fill those historical gaps.
 
