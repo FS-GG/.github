@@ -273,3 +273,78 @@ producer run, complete population, physical release, native barrier/clock/custod
 installation, replay or original-effect acceptance follows. Original `.103` stays
 attempted-unknown/unreplayed and `.104` held. Atlas capture belongs to the existing
 owning follow-up after source acceptance, without competing catalog edits.
+
+
+## Finite upper-bound preparation
+
+`upper_bound_profile` is an optional, separate `fsgg.copy-upper-bound/1` input.
+The existing observations, aliases, missing obligations and fourteen group results
+remain unchanged. Omitting this field preserves the complete historical result
+shape. Including it adds only `upper_bound`; it never changes historical `fit`,
+selects a cap or grants admission. The shipped pending profile has no selected
+runtime, source proof, closed inventory or component bound. Its result is
+`unresolved` with `physical_upper_bound_bytes: null`.
+
+A complete profile must name its version, exact topology and runtime implementation,
+version, build, architecture, allocator and storage geometry. Its inventory explicitly
+covers authority, managed, Python, backend, peer, transport/kernel/cache,
+diagnostic/export and observation populations. Each domain needs an explicit closed
+role inventory; a null inventory remains unknown. An empty list claims a truly
+absent population and is accepted only through the whole-profile protected pin
+and proved completeness obligations (including the all-representations argument).
+An unreviewed empty claim remains unresolved and never becomes a proven zero. A component assigns each role
+exactly once to a disjoint physical allocation class, with a positive maximum
+multiplicity and five separate upper-bound metrics: capacity, object header,
+allocator rounding, storage metadata and transport/cache bytes. An applicable term
+may be zero only with the reviewed contract's supporting argument. Omitted metrics
+refuse; null metrics or multiplicity leave accounting unresolved. Logical byte sizes,
+observed capacities, object counts and physical lower bounds cannot substitute for
+any upper-bound metric.
+
+Every component binds its exact profile/runtime/topology, immutable Git source
+citation and cumulative lifetime through the operation and uncertainty. Reservations
+must be owned and supported by an explicit proof. Unknown or expired ownership and
+missing reservation proof remain unresolved. The schema admits no GC, task completion,
+timeout, cancellation or restart release discount. Multiplicity must conservatively
+cover cumulative allocations and all uncertain replacements. Transient exclusions
+require a separate finite budget, bounded non-authority lifetime and reviewed proof
+under the completeness obligations; they cannot be created by an extra JSON field.
+
+Completeness obligations cover the closed call graph, every representation,
+headers/rounding/storage, uncertainty/replacement, concurrency/restart, diagnostic
+recipient population, transient exclusions and runtime/source layout. Missing or
+unknown obligations, source citations or proof leave accounting unresolved. A
+component may map several roles to one allocation only as a reviewed shared
+allocation. Equal bytes, names or sizes never establish that identity. Unknown
+alias relationships must use separate bounded allocation classes conservatively.
+
+Source authenticity is a separate protected-code boundary:
+`REVIEWED_UPPER_BOUND_CONTRACTS` in the evaluator is initially empty. A future
+protected source review must pin the exact profile identity and canonical SHA256
+of the **whole** reviewed profile there, including its source citations, inventory,
+component values, alias mapping, runtime, lifetimes and completeness proofs. Input
+JSON cannot add a registry entry. A syntactically valid Git citation, caller-provided
+hash, `proved` status or claimed review Boolean supplies no trust. A changed term,
+source or omitted population invalidates the pin. Adding a production pin requires
+review of authentic immutable source and the complete accounting argument, rather
+than simply copying the digest of a producer's claim. This source window adds no
+production pin and accepts no production finite bound.
+
+Only complete, trusted profiles produce `finite-complete` and a physical upper bound
+`sum(maximum_multiplicity * sum(five metrics))`. Arithmetic is checked against the
+signed 64-bit accounting range for every term and sum; overflow refuses. Partial
+sums are never exposed as a bound. The maxima need not occur at one observed cut:
+this is conservative complete-profile accounting, independent of the historical
+observation groups. It is neither measured occupancy nor an authenticated native
+runtime assertion. The result always has `admission: false` and has no cap or fit
+field. Selection and protection of a justified finite cap, actual runtime/profile
+qualification, enrollment/custody and effect admission remain their owning gates.
+
+The synthetic tests inject a test-only reviewed-contract registry to exercise full
+arithmetic and shared allocations. This fixture is explicitly synthetic and does
+not authenticate any producer. Adversarial controls cover missing domain/role/
+overhead, unknown copies, expired ownership, lower-bound/capacity substitutions,
+false aliases, incompatible runtime/topology, arithmetic overflow and self-asserted
+review/source claims. Canonical digests preserve all 215 historical observations,
+sixteen aliases and eleven missing obligations. Original `.103` remains
+attempted-unknown/unreplayed and `.104` held; no retention or cutoff is renewed.
