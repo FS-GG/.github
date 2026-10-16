@@ -233,12 +233,13 @@ remains Unknown; production
 
 [Coordination #1024](https://github.com/FS-GG/FS.GG.Coordination/pull/1024), merged at `6b2bab64`,
 delivers the controlled-source genesis checkpoint and unsigned ACK export boundary with explicit
-input/hash selection and verified output readback. Strict compilation, 226 focused tests including
-one export and nine refusals, required checks and [full coherent qualification](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38977082516)
-passed at `a99356b8`, with exact tested/delivered tree correspondence. The owning Atlas boundary
+input/hash selection and verified output readback. Strict compilation, 226 focused tests, required
+checks and [full coherent qualification](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38977082516)
+passed at `a99356b8`, with exact tested/delivered tree correspondence. The existing genuine Fact
+exercised one export and nine refusals. The owning Atlas boundary
 `coordination/controlled-genesis-checkpoint-export-boundary` is protected with the source delivery.
-[Post-merge observation](https://github.com/FS-GG/.github/issues/4516#issuecomment-6226508518) remains
-pending. This public SOURCE delivery does not qualify Home's fresh input, environment, driver or
+Post-merge results are tracked separately in the [delivery thread](https://github.com/FS-GG/.github/issues/4516#issuecomment-6226508518).
+This public SOURCE delivery does not qualify Home's fresh input, environment, driver or
 authentication-factory joins, current external clocks, signing/ACK authority or production durability.
 
 Home's host transaction, current codecs and structural consumption have [accepted bounded SOURCE
