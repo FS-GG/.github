@@ -172,6 +172,61 @@ class DeliveryEvidenceTests(unittest.TestCase):
                 self.assertEqual(result["exceptions"], [])
                 self.assertEqual(len(result["changedFiles"]), 1)
 
+    def test_run_pr_link_disappears_after_native_merge_without_base_drift(self):
+        # PR4597/run38860185845 retained head/base but returned pull_requests:[] after merge.
+        summary, api, _, responses = self.fixture(checkout="e" * 40)
+        branch = api.get_pr.return_value["head"]["ref"]
+        run = responses["actions/runs/7"]
+        run["head_branch"] = branch
+        api.get_pr.return_value = dict(opened(), changed_files=1)
+        prepared = MODULE.replace(summary, outcome="ready", codeDelivery="not-delivered", mergeCommit=None)
+        before = MODULE.delivery_evidence(prepared, 7, api=api)
+        self.assertEqual((before["testedCheckout"]["association"], before["parity"]),
+            ("native-pr-link", "not-delivered"))
+        api.get_pr.return_value = dict(merged(), changed_files=1)
+        run["pull_requests"] = []
+        after = MODULE.delivery_evidence(summary, 7, api=api)
+        self.assertEqual((after["testedCheckout"]["association"], after["parity"]),
+            ("merged-pr-exact-checkout-parents", "identical-tree"))
+        self.assertEqual(after["exceptions"], [])
+        self.assertEqual(before["base"], after["base"])
+        self.assertEqual(before["candidate"], after["candidate"])
+
+    def test_merged_missing_run_link_still_refuses_unrelated_or_unproven_identity(self):
+        cases = ("absent-links", "null-links", "other-pr", "branch", "open", "ambiguous",
+                 "candidate-only", "wrong-parent", "reversed-parents", "head", "base", "late-base")
+        for change in cases:
+            with self.subTest(change=change):
+                checkout = HEAD if change == "candidate-only" else "e" * 40
+                summary, api, _, responses = self.fixture(checkout=checkout)
+                run = responses["actions/runs/7"]
+                run.update(head_branch=api.get_pr.return_value["head"]["ref"], pull_requests=[])
+                if change == "absent-links": del run["pull_requests"]
+                elif change == "null-links": run["pull_requests"] = None
+                elif change == "other-pr": run["pull_requests"] = [dict(number=2, head=dict(sha=HEAD), base=dict(sha=summary.baseSha))]
+                elif change == "branch": run["head_branch"] = "unrelated"
+                elif change == "open": api.get_pr.return_value = dict(opened(), changed_files=1)
+                elif change == "ambiguous": summary = MODULE.replace(summary, codeDelivery="unknown", mergeCommit=None)
+                elif change == "wrong-parent": responses[f"git/commits/{checkout}"]["parents"][0]["sha"] = "f" * 40
+                elif change == "reversed-parents": responses[f"git/commits/{checkout}"]["parents"].reverse()
+                elif change in ("head", "base"): api.get_pr.return_value[change]["sha"] = "f" * 40
+                elif change == "late-base":
+                    original = api.get_pr.return_value
+                    changed = copy.deepcopy(original); changed["base"]["sha"] = "f" * 40
+                    api.get_pr.side_effect = [original, changed]
+                result = MODULE.delivery_evidence(summary, 7, api=api)
+                self.assertIsNone(result["testedCheckout"])
+                self.assertEqual(result["parity"], "unavailable")
+
+    def test_merged_association_fallback_reports_tree_mismatch_and_preserves_dispute(self):
+        summary, api, _, responses = self.fixture(checkout="e" * 40, delivered_tree="f" * 40)
+        responses["actions/runs/7"].update(head_branch=api.get_pr.return_value["head"]["ref"], pull_requests=[])
+        summary = MODULE.replace(summary, outcome="delivered-disputed", coherentValidation="disputed")
+        result = MODULE.delivery_evidence(summary, 7, api=api)
+        self.assertEqual(result["parity"], "different-tree")
+        self.assertEqual(summary.outcome, "delivered-disputed")
+        self.assertEqual(summary.coherentValidation, "disputed")
+
     def test_different_delivered_tree_is_explicit(self):
         summary, api, _, _ = self.fixture(delivered_tree="f" * 40)
         result = MODULE.delivery_evidence(summary, 7, api=api)

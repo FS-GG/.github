@@ -27,6 +27,16 @@ The Actions run's `head_sha` associates a run with a candidate; it does not iden
 The reader binds the artifact to native run/repository/PR/head/base/attempt metadata and checks
 its tree against the native Git commit. A checkout is classified as `candidate`, or as
 `synthetic-pr-merge` only when its ordered native parents are the exact base and candidate.
+GitHub can return an empty run `pull_requests` list after merge, as observed for
+[PR4597](https://github.com/FS-GG/.github/pull/4597) and
+[run38860185845](https://github.com/FS-GG/.github/actions/runs/38860185845), while the native PR
+head/base remain unchanged. Only for a confirmed delivered/merged PR, an explicitly empty list
+can use `merged-pr-exact-checkout-parents` association: the native run branch must match the
+unchanged PR branch, its repository/head/event/workflow/attempt must match, the artifact must
+retain the exact PR/head/base/run joins, and its native checkout commit must have the ordered
+exact base/head parents. A missing, malformed or conflicting run association, open/uncertain
+merge, candidate-only checkout or unrelated head/base/branch drift remains unavailable.
+This fallback does not relax tree parity or coherent-validation results.
 `parity` compares that tested tree with the native delivered commit tree: `identical-tree`,
 `different-tree`, `not-delivered` or `unavailable`. Equal trees can coexist with failed or
 pending checks, a late coherent dispute, or an unresolved installation. This field grants

@@ -13,6 +13,7 @@ def collect(summary: Any, run_id: int, *, api: Any, native: Any) -> dict:
     """Collect pilot evidence using the delivery owner's native identity validators."""
     head_of, base_of = native.head_of, native.base_of
     merged_commit_of, SHA_RE = native.merged_commit_of, native.SHA_RE
+    is_merged = native.is_merged
     WATCH_FIELDS, WATCH_MAX_CHECKS = native.WATCH_FIELDS, native.WATCH_MAX_CHECKS
     repo, number = summary.repo, summary.pr
     result = {"schema": "fsgg.routine-delivery-evidence/1", "scope": "skill-quality-pilot",
@@ -78,16 +79,25 @@ def collect(summary: Any, run_id: int, *, api: Any, native: Any) -> dict:
     def checkout():
         run = read(f"actions/runs/{run_id}")
         attempt_number = run.get("run_attempt")
+        links = run.get("pull_requests")
+        linked = isinstance(links, list) and any(
+            row.get("number") == number and row.get("head", {}).get("sha") == summary.expectedHead
+            and row.get("base", {}).get("sha") == summary.baseSha for row in links)
+        # GitHub can remove this association after merge (observed on PR4597).
+        # The fallback additionally requires the artifact's native exact-parent merge below.
+        merged_link = (links == [] and summary.codeDelivery == "delivered" and is_merged(before)
+            and summary.mergeCommit == merged_commit_of(before)
+            and isinstance(before.get("head", {}).get("ref"), str) and bool(before["head"]["ref"])
+            and run.get("head_branch") == before["head"]["ref"])
         if (run.get("id") != run_id or run.get("head_sha") != summary.expectedHead
                 or run.get("event") != "pull_request"
                 or run.get("path") != ".github/workflows/skill-quality.yml"
                 or run.get("repository", {}).get("full_name") != repo
                 or type(attempt_number) is not int or attempt_number < 1
-                or not any(row.get("number") == number and row.get("head", {}).get("sha") == summary.expectedHead
-                           and row.get("base", {}).get("sha") == summary.baseSha for row in run.get("pull_requests", []))):
+                or not (linked or merged_link)):
             raise ValueError("evidence differs")
         result["run"] = {key: run.get(key) for key in
-                         ("id", "run_attempt", "head_sha", "path", "event", "status", "conclusion", "html_url")}
+                         ("id", "run_attempt", "head_sha", "head_branch", "path", "event", "status", "conclusion", "html_url")}
         artifacts = read(f"actions/runs/{run_id}/artifacts?per_page=100")
         rows = artifacts.get("artifacts")
         if (not isinstance(rows, list) or artifacts.get("total_count") != len(rows) or len(rows) > 100):
@@ -122,16 +132,19 @@ def collect(summary: Any, run_id: int, *, api: Any, native: Any) -> dict:
             raise ValueError("evidence differs")
         if not all(isinstance(fact.get(key), str) and SHA_RE.fullmatch(fact[key]) for key in ("commit", "tree")):
             raise ValueError("evidence differs")
-        native = commit(fact["commit"])
-        if native["tree"]["sha"] != fact["tree"]:
+        checkout_commit = commit(fact["commit"])
+        if checkout_commit["tree"]["sha"] != fact["tree"]:
             raise ValueError("evidence differs")
         if fact["commit"] == summary.expectedHead:
             kind = "candidate"
-        elif [parent.get("sha") for parent in native.get("parents", [])] == [summary.baseSha, summary.expectedHead]:
+        elif [parent.get("sha") for parent in checkout_commit.get("parents", [])] == [summary.baseSha, summary.expectedHead]:
             kind = "synthetic-pr-merge"
         else:
             raise ValueError("evidence differs")
+        if not linked and kind != "synthetic-pr-merge":
+            raise ValueError("merged run association requires exact checkout parents")
         return {"commit": fact["commit"], "tree": fact["tree"], "kind": kind,
+                "association": "native-pr-link" if linked else "merged-pr-exact-checkout-parents",
                 "run": run_id, "attempt": attempt_number, "job": fact["job"], "artifact": artifact_id,
                 "coverage": "skill-quality job entry"}
     result["testedCheckout"] = attempt("tested-checkout", checkout)
