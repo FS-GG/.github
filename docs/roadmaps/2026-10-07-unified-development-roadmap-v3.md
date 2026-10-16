@@ -230,10 +230,12 @@ lifecycle retry; the new pre-parser retry remains unexercised. Post-merge cohere
 pending. No further receiver surrogate is selected. Durability remains Unknown; production
 `prepareAck` and `reserveHost` still refuse, and no live ACK authority is established.
 
-Home's [host transaction source implementation](https://github.com/FS-GG/.github/issues/4516#issuecomment-6220614003)
-is under repair; its qualification has not run and source acceptance remains pending. Actual receiver
-residency and authenticated host-factory composition remain unresolved; these source steps establish
-no installed host/receiver or credential authority.
+Home's host transaction, current codecs and structural consumption have [accepted bounded SOURCE
+qualification](https://github.com/FS-GG/.github/issues/4516#issuecomment-6222834756): 47/47 cases passed
+with no skips or test/collection errors. The earlier failed qualification remains retained. Private
+source and Atlas integration remain pending. The actual current authentication factory is the next
+source join; receiver residency/custody remains unresolved. Durability remains Unknown, and actual
+authentication, physical/native/production qualification and installed acceptance remain unestablished.
 
 Keep source delivery, publication, installed qualification and runtime acceptance separate.
 Original `.103` remains attempted-unknown and unreplayed; `.104` remains held. Use
