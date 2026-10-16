@@ -68,7 +68,7 @@ class Observation:
         provenance = Provenance.read(value['provenance'])
         for key in ('id', 'cut', 'role', 'representation', 'quantity_type', 'ownership', 'identity_basis', 'uncertainty'):
             label(value[key])
-        if value['quantity_type'] not in ('logical-bytes', 'physical-byte-lower-bound', 'object-count'):
+        if value['quantity_type'] not in ('logical-bytes', 'physical-byte-lower-bound', 'object-count', 'backing-capacity-bytes'):
             raise ValueError('quantity type required')
         quantity = value['quantity']
         if quantity is not None and (type(quantity) is not int or quantity < 0):
@@ -79,8 +79,8 @@ class Observation:
             raise ValueError('identity basis required')
         if value['identity_basis'] == 'population-only' and alias is not None:
             raise ValueError('population has no individual object identity')
-        if value['quantity_type'] == 'physical-byte-lower-bound' and value['identity_basis'] != 'observed-identity':
-            raise ValueError('model roles do not establish physical byte bounds')
+        if value['quantity_type'] in ('physical-byte-lower-bound', 'backing-capacity-bytes') and value['identity_basis'] != 'observed-identity':
+            raise ValueError('observed identity required for physical bounds or backing capacity')
         return cls(**dict(value, provenance=provenance, scope=scope))
 
 
@@ -132,12 +132,13 @@ def reconcile(document):
         if key not in groups:
             groups[key] = {'scope': dict(zip(('topology', 'run', 'process', 'attempt'), row.scope)),
                           'cut': row.cut, 'observation_ids': [], 'known_object_logical_bytes': None,
-                          'physical_byte_lower_bound': None, 'fit': 'unproved'}
+                          'physical_byte_lower_bound': None, 'known_object_backing_capacity_bytes': None, 'fit': 'unproved'}
         groups[key]['observation_ids'].append(row.id)
     for key, group in groups.items():
         selected = [row for (scope, cut, _, _), row in objects.items() if (scope, cut) == key]
         for kind, field in (('logical-bytes', 'known_object_logical_bytes'),
-                            ('physical-byte-lower-bound', 'physical_byte_lower_bound')):
+                            ('physical-byte-lower-bound', 'physical_byte_lower_bound'),
+                            ('backing-capacity-bytes', 'known_object_backing_capacity_bytes')):
             values = [row.quantity for row in selected if row.quantity_type == kind and row.quantity is not None]
             if values: group[field] = sum(values)
         # Conditional on the supplied bound; this parser does not validate a physical measurement.

@@ -2475,6 +2475,1106 @@
       "alias_class": "object-14",
       "identity_basis": "observed-identity",
       "uncertainty": "selected roots and evidence hex/digest values only; observer references excluded; keys/headers/capacity and physical size unknown; no cross-cut sum"
+    },
+    {
+      "id": "managed-roots:snapshot-1",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "snapshot-1",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 1141,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "snapshot-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:snapshot-1-payload-backing",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "snapshot-1-payload-backing",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 1141,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "snapshot-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:snapshot-2",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "snapshot-2",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 972,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "snapshot-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:snapshot-2-payload-backing",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "snapshot-2-payload-backing",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 972,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "snapshot-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:snapshot-3",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "snapshot-3",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 830,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "snapshot-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:snapshot-3-payload-backing",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "snapshot-3-payload-backing",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 830,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "snapshot-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:snapshot-4",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "snapshot-4",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 917,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "snapshot-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:snapshot-4-payload-backing",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "snapshot-4-payload-backing",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 917,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "snapshot-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:snapshot-5",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "snapshot-5",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 831,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "snapshot-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:snapshot-5-payload-backing",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "snapshot-5-payload-backing",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 831,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "snapshot-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:snapshot-6",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "snapshot-6",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 991,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "snapshot-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:snapshot-6-payload-backing",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "snapshot-6-payload-backing",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 991,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "snapshot-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:result-parser-input",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "result-parser-input",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 2048,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "result-parser-input",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:callback-parser-input",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "callback-parser-input",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 512,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "callback-parser-input",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:result-binding",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "result-binding",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 994,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "result-binding",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:callback-binding",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "callback-binding",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 994,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "callback-binding",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:start-frame",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "start-frame",
+      "representation": "managed-byte-array",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 1123,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "start-frame",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:original-request-1",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "original-request-1",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:endpoint-copy-1",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "endpoint-copy-1",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:original-request-2",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "original-request-2",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:endpoint-copy-2",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "endpoint-copy-2",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:original-request-3",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "original-request-3",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:endpoint-copy-3",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "endpoint-copy-3",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:original-request-4",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "original-request-4",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:endpoint-copy-4",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "endpoint-copy-4",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:original-request-5",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "original-request-5",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:endpoint-copy-5",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "endpoint-copy-5",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:original-request-6",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "original-request-6",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:endpoint-copy-6",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "endpoint-copy-6",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:original-request-7",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "original-request-7",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-7",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:endpoint-copy-7",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "endpoint-copy-7",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-7",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:original-request-8",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "original-request-8",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-8",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:endpoint-copy-8",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "endpoint-copy-8",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-8",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:original-request-9",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "original-request-9",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-9",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:endpoint-copy-9",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "endpoint-copy-9",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-9",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:original-request-10",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "original-request-10",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-10",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:endpoint-copy-10",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "endpoint-copy-10",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-10",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:original-request-11",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "original-request-11",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-11",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:endpoint-copy-11",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "endpoint-copy-11",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-11",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:original-request-12",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "original-request-12",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-12",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:endpoint-copy-12",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "endpoint-copy-12",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-12",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:original-request-13",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "original-request-13",
+      "representation": "managed-byte-array",
+      "quantity_type": "logical-bytes",
+      "quantity": 295,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "original-request-13",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:endpoint-copy-13",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "endpoint-copy-13",
+      "representation": "managed-byte-array",
+      "quantity_type": "object-count",
+      "quantity": 1,
+      "ownership": "managed-endpoint-capture",
+      "alias_class": "endpoint-copy-13",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
+    },
+    {
+      "id": "managed-roots:discovered-current-request",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/FS.GG.Coordination",
+        "revision": "2af47b82f95dea136e9d9f4c2c8edd0be7f90987",
+        "path": "tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs",
+        "sha256": "531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669"
+      },
+      "scope": {
+        "topology": "managed-python-held-terminal",
+        "run": "pr1005-source-witness",
+        "process": "managed-parent-before-python-readback-release",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "ordinal-six-python-readback-held-before-release",
+      "role": "discovered-current-request",
+      "representation": "managed-byte-array",
+      "quantity_type": "logical-bytes",
+      "quantity": 295,
+      "ownership": "selected-managed-live-root",
+      "alias_class": "original-request-13",
+      "identity_basis": "observed-identity",
+      "uncertainty": "source-controlled identity only; headers/padding/runtime/stream/caller/peer/ACK/reader roots unresolved; no physical fit"
     }
   ],
   "aliases": [
@@ -2507,6 +3607,41 @@
       "left": "python-graph-0:sink-identity",
       "right": "python-graph-0:reservation-identity",
       "basis": "same-scoped-object"
+    },
+    {
+      "left": "managed-roots:snapshot-1-payload-backing",
+      "right": "managed-roots:snapshot-1",
+      "basis": "same-scoped-object"
+    },
+    {
+      "left": "managed-roots:snapshot-2-payload-backing",
+      "right": "managed-roots:snapshot-2",
+      "basis": "same-scoped-object"
+    },
+    {
+      "left": "managed-roots:snapshot-3-payload-backing",
+      "right": "managed-roots:snapshot-3",
+      "basis": "same-scoped-object"
+    },
+    {
+      "left": "managed-roots:snapshot-4-payload-backing",
+      "right": "managed-roots:snapshot-4",
+      "basis": "same-scoped-object"
+    },
+    {
+      "left": "managed-roots:snapshot-5-payload-backing",
+      "right": "managed-roots:snapshot-5",
+      "basis": "same-scoped-object"
+    },
+    {
+      "left": "managed-roots:snapshot-6-payload-backing",
+      "right": "managed-roots:snapshot-6",
+      "basis": "same-scoped-object"
+    },
+    {
+      "left": "managed-roots:discovered-current-request",
+      "right": "managed-roots:original-request-13",
+      "basis": "same-scoped-object"
     }
   ],
   "missing_obligations": [
@@ -2516,6 +3651,7 @@
     "Actual host/sink/backend/peer map, metadata/allocated blocks and native memory enforcement",
     "Failure/uncertainty, concurrent and restart populations; original attempts remain consumed or uncertain",
     "Authenticated barrier/readback, original clock continuity/uncertainty, signer/ACK custody and installed/native qualification",
-    "Cross-topology correspondence and a complete simultaneous physical accounting proof; no joined 65536-byte fit"
+    "Cross-topology correspondence and a complete simultaneous physical accounting proof; no joined 65536-byte fit",
+    "PR1005 selected backing capacity is not physical memory; payload slice bytes (4835) are not allocations; unresolved ACK/child-read/callback-reader live-root joins and unselected runtime/stream/caller/peer roots remain unknown"
   ]
 }

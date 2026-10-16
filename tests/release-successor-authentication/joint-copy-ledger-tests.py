@@ -23,12 +23,12 @@ class JointCopyLedgerControls(unittest.TestCase):
         result = ledger.reconcile(self.inputs)
         self.assertEqual(result['fit'], 'unproved')
         self.assertFalse(result['admission'])
-        self.assertEqual(len(result['groups']), 10)
+        self.assertEqual(len(result['groups']), 11)
         python = result['groups'][0]
         self.assertEqual(python['known_object_logical_bytes'], 11660)
         self.assertIsNone(python['physical_byte_lower_bound'])
         for group in result['groups'][1:]:
-            if group['scope']['topology'] != 'python-terminal-controlled':
+            if group['scope']['topology'] not in ('python-terminal-controlled', 'managed-python-held-terminal'):
                 self.assertIsNone(group['known_object_logical_bytes'])
             self.assertIsNone(group['physical_byte_lower_bound'])
             self.assertEqual(group['fit'], 'unproved')
@@ -76,6 +76,108 @@ class JointCopyLedgerControls(unittest.TestCase):
         self.assertEqual((result['fit'], result['admission']), ('unproved', False))
         self.assertNotIn('total_bytes', result)
         self.assertTrue(all(group['physical_byte_lower_bound'] is None for group in result['groups']))
+
+    def managed_rows(self, inputs=None):
+        return [row for row in (inputs or self.inputs)['observations']
+                if row['id'].startswith('managed-roots:')]
+
+    def assert_managed_backing(self, inputs):
+        rows = self.managed_rows(inputs)
+        objects = {row['alias_class']: row for row in rows}
+        capacities = {key: row['quantity'] for key, row in objects.items()
+                      if row['quantity_type'] == 'backing-capacity-bytes'}
+        expected = {f'snapshot-{i}': size for i, size in enumerate((1141, 972, 830, 917, 831, 991), 1)}
+        expected.update({'result-parser-input': 2048, 'callback-parser-input': 512,
+                         'result-binding': 994, 'callback-binding': 994, 'start-frame': 1123})
+        self.assertEqual(capacities, expected)
+        self.assertEqual(len(objects), 37)
+        self.assertEqual(len(rows), 44)
+        for row in rows:
+            self.assertEqual(row['provenance'], {
+                'source_type': 'git-blob', 'repository': 'FS-GG/FS.GG.Coordination',
+                'revision': '2af47b82f95dea136e9d9f4c2c8edd0be7f90987',
+                'path': 'tests/FS.GG.Coordination.Orchestration.Execution.Tests/TerminalCutCorrelationTests.fs',
+                'sha256': '531d296e2a670f2c1a3c2729ae092a5482ccec6cc85efca9beda9ea847a80669'})
+            self.assertEqual(row['scope'], {
+                'topology': 'managed-python-held-terminal', 'run': 'pr1005-source-witness',
+                'process': 'managed-parent-before-python-readback-release', 'attempt': 'original-controlled-attempt'})
+            self.assertEqual(row['cut'], 'ordinal-six-python-readback-held-before-release')
+        aliases = {row['role']: row['alias_class'] for row in rows}
+        for i in range(1, 7):
+            self.assertEqual(aliases[f'snapshot-{i}-payload-backing'], aliases[f'snapshot-{i}'])
+        self.assertEqual(aliases['discovered-current-request'], aliases['original-request-13'])
+        endpoint = {aliases[f'{role}-{i}'] for role in ('original-request', 'endpoint-copy') for i in range(1, 14)}
+        self.assertEqual(len(endpoint), 26)
+        self.assertTrue(endpoint.isdisjoint(capacities))
+        result = ledger.reconcile(inputs)
+        group = next(group for group in result['groups'] if group['scope']['run'] == 'pr1005-source-witness')
+        self.assertEqual(group['known_object_backing_capacity_bytes'], 11353)
+        self.assertEqual(group['known_object_logical_bytes'], 295)
+        self.assertIsNone(group['physical_byte_lower_bound'])
+        self.assertEqual((result['fit'], result['admission']), ('unproved', False))
+
+    def test_protected_managed_backing_capacity_and_request_alias(self):
+        self.assert_managed_backing(self.inputs)
+
+    def test_managed_source_witness_mutations_are_detected(self):
+        # Each mutation must fail the pinned source regression, even if syntactically valid.
+        for mutation in ('capacity', 'alias', 'provenance', 'cut', 'process', 'payload-allocation'):
+            with self.subTest(mutation=mutation):
+                altered = copy.deepcopy(self.inputs)
+                rows = self.managed_rows(altered)
+                if mutation == 'capacity':
+                    for row in rows:
+                        if row['alias_class'] == 'result-parser-input': row['quantity'] += 1
+                elif mutation == 'alias':
+                    for row in rows:
+                        if row['alias_class'] == 'callback-binding': row['alias_class'] = 'result-binding'
+                elif mutation == 'provenance':
+                    for row in rows: row['provenance']['revision'] = '0' * 40
+                elif mutation in ('cut', 'process'):
+                    for row in rows:
+                        if mutation == 'cut': row['cut'] = 'after-release'
+                        else: row['scope']['process'] = 'python-child'
+                else:
+                    extra = copy.deepcopy(rows[0])
+                    extra.update(id='managed-roots:payload-as-allocation', role='payload-as-allocation',
+                                 alias_class='payload-as-allocation', quantity=4835)
+                    altered['observations'].append(extra)
+                with self.assertRaises((AssertionError, ValueError)):
+                    self.assert_managed_backing(altered)
+
+    def test_managed_alias_cannot_cross_provenance_or_cut(self):
+        for field in ('provenance', 'cut', 'process'):
+            altered = copy.deepcopy(self.inputs)
+            row = next(row for row in self.managed_rows(altered) if row['role'] == 'discovered-current-request')
+            if field == 'provenance': row['provenance']['sha256'] = '0' * 64
+            elif field == 'cut': row['cut'] = 'after-release'
+            else: row['scope']['process'] = 'python-child'
+            with self.assertRaises(ValueError): ledger.reconcile(altered)
+
+    def test_backing_capacity_cannot_prove_physical_overflow_or_cross_cut_total(self):
+        for row in self.managed_rows():
+            if row['quantity_type'] == 'backing-capacity-bytes': row['quantity'] += 100000
+        result = ledger.reconcile(self.inputs)
+        group = result['groups'][-1]
+        self.assertGreater(group['known_object_backing_capacity_bytes'], ledger.CAP)
+        self.assertEqual((group['fit'], result['fit'], result['admission']), ('unproved', 'unproved', False))
+        self.assertIsNone(group['physical_byte_lower_bound'])
+        self.assertNotIn('total_bytes', result)
+        # Two individually scoped capacity claims do not acquire a joined total.
+        inputs = copy.deepcopy(self.inputs)
+        prototype = copy.deepcopy(self.managed_rows()[0])
+        inputs['observations'] = []
+        inputs['aliases'] = []
+        for cut in ('synthetic-cut-a', 'synthetic-cut-b'):
+            row = copy.deepcopy(prototype)
+            row.update(id=cut, cut=cut, alias_class='synthetic-backing', quantity=40000)
+            inputs['observations'].append(row)
+        separate = ledger.reconcile(inputs)
+        self.assertEqual([group['known_object_backing_capacity_bytes'] for group in separate['groups']], [40000, 40000])
+        self.assertEqual(separate['fit'], 'unproved')
+        self.assertNotIn('total_bytes', separate)
+        prototype['identity_basis'] = 'modeled-identity'
+        with self.assertRaises(ValueError): ledger.Observation.read(prototype)
 
     def test_equal_bytes_never_establish_alias(self):
         # Candidate/readback lengths match, but the actual Python objects differ.
