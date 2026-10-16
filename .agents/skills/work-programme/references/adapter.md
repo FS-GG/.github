@@ -1,5 +1,9 @@
 # Temporary adapter contract
 
+The [conditional pilot](../SKILL.md#conditional-three-outcome-pilot) makes these helper artifacts
+optional for its three outcomes only after the replacement evidence gate qualifies. It changes no
+CLI/schema behavior or native acceptance boundary; until qualification, existing routing still applies.
+
 This dependency-free F# script is advisory. It performs no model launch, GitHub read/write, process
 termination, workload execution or acceptance minting. Existing native tools remain the authority.
 Caller observations must be checked against their cited sources; JSON shape and hashes do not authenticate

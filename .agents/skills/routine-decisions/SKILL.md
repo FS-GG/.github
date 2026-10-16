@@ -10,6 +10,14 @@ Use this for current programme observations and ordinary same-owner repair. The 
 Apply the full governing instructions once per selected window. This skill does not select
 new work or grant execution, merge, publication, cleanup or ownership transfer.
 
+For the three selected outcomes, apply the [conditional pilot](../work-programme/SKILL.md#conditional-three-outcome-pilot)
+first. Until its protected rule and replacement evidence gate are qualified, keep the current route below.
+After qualification, the six-field owning issue and linked native PR result replace mandatory reducer,
+packet and return artifacts; ordinary same-owner execution and delivery need no per-attempt parent turn.
+The reducer remains optional diagnostics. Required checks, ADR-0084 coherent validation, resource admission,
+original effects and credential custody remain mandatory. Notification and reporting changes have their
+own qualification gate; this skill does not assert either replacement is installed or accepted.
+
 Read the [typed contract](../work-programme/references/adapter.md#additive-routine-decisions)
 when assembling or interpreting inputs. Run the existing helper's `routine-decisions` command
 against explicit observed time, the complete snapshot/reservations, genuine return joins,

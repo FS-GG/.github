@@ -40,6 +40,24 @@ Check that the request landed before waiting for a reply. After a push or commen
 - Make retries idempotent where possible. Before reposting after a timeout or tool error, check whether the original message landed; do not create duplicate requests or claim delivery from a local draft.
 - A message is communication, not a state transition. Verify the actual issue, merge, published artifact, deployment, or test result before declaring completion.
 
+## Conditional programme pilot
+
+For the three outcomes in the [work-programme pilot](../work-programme/SKILL.md#conditional-three-outcome-pilot),
+replace the fixed mailbox checks and unchanged-status reporting below only after protected delivery of
+the reviewed governing change **and** qualification of automatic reply notifications and missed-event/
+restart reconciliation. Until both conditions are met, keep the five-minute check and current updates.
+A proposed watcher or this source edit does not establish qualified notification delivery.
+
+After activation, post an outcome update when a deliverable is ready, a blocker appears or clears, a
+decision is needed or a promised delivery time changes; publish one daily programme summary while active.
+Use the six-field owning issue as current state and link native evidence and necessary private context.
+External requests retain an owner, exact expected reply/channel and escalation time. Check the source
+at that escalation time if a required reply is missing; send one follow-up or escalate when it blocks
+progress. Qualified notifications replace repeated unchanged-mail reads and unchanged-hold comments.
+Notification loss retains the affected hold and requires reconciliation of the original message and
+operation identities before retry; preserve unknown effects, custody and every unresolved reservation.
+This exception changes neither consequential-action verification nor operation-specific admission.
+
 ## Maintain the loop
 
 - During an active handoff or mailbox-monitoring session, check the chosen mailbox at least once every five minutes, measured from the last successful remote read. A shorter requested interval or time-sensitive reply may require earlier checks. Record the last check and the next due time; continue independent work between checks. If a blocking operation makes a check late, read the mailbox immediately afterward and report the gap. Do not imply that checks continue after the session ends unless a real scheduled mechanism is installed.

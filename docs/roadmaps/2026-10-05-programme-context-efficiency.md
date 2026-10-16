@@ -310,6 +310,122 @@ it cannot prove statistical benefit. Existing overhead rules remain in force; th
 mandatory measurement service. If coverage is inadequate, publish an inconclusive result and retain
 only independently justified correctness improvements.
 
+## Selected three-outcome programme pilot — 2026-10-16
+
+The user selected a stronger, outcome-led trial as the priority for V2-CTX-01.4–.6.
+It targets **80% less coordination effort** than a comparable current-route baseline,
+faster delivery and unchanged correctness, credential custody and replay protection.
+This section selects the design and implementation sequence. The existing work-programme,
+handoff, review, CI and operation-specific rules apply until their replacements pass
+review and protected delivery. The earlier optional 30% duplicate-retrieval target is a
+different proxy; it neither proves nor substitutes for this coordination-effort target.
+
+### Owners, completion and the one record
+
+| Outcome | Accountable owner | Completion condition | Required current record |
+|---|---|---|---|
+| Supplier-journal `/3` compatibility | Coordination receiver/fdev1, implementing agent `/root/v3_coordination_receiver` | Merged implementation and passing `/2` compatibility plus `/3` refusal tests. Protected PR1012 supplies this source condition; native host acceptance remains in V3-ENV-01. | One owning issue linked to PR1012 and the accepted source result. |
+| Finite UTEL cap | `.github` copy-accounting owner, Programme `/root` accountable until recorded transfer | Complete conservative simultaneous physical upper bound for one closed production profile; justified finite cap with headroom adopted. | One owning issue linked to ADR-0093 and the protected upper-bound contract. |
+| UTEL authority service | SystemAdmin service owner; Programme owns policy, independent custodian owns enrollment | Qualified implementation and accepted deployment with custody, enrollment, verification and recovery. | One owning issue linking source, operational acceptance and restricted custody reference. |
+
+Each issue's **current state** uses only `Owner`, `Done when`, `Current deliverable`
+(PR or artifact), `Next action`, `Blocked on` (exact missing evidence or decision and
+accountable owner), and `Acceptance evidence` (CI links plus native acceptance links
+or restricted references when the completion condition needs them). GitHub is the source for
+authors, times, commits, reviews and checks; do not transcribe them into packets,
+return files, comments or handoffs. Preserve real operation identities and unknown
+attempts where correctness needs them. A handoff points to the current issue and
+genuinely private context; sensitive evidence and credentials stay in restricted
+custody. The current #4516 and #4517 are cross-repository request mailboxes, not
+three distinct owning issues. Map each outcome to one existing owning issue before
+pilot activation; if the cap has none, resolve that record decision explicitly
+rather than pretending the shared mailbox is three records.
+
+One owner carries implementation, review and delivery through the completion
+condition. A new lane must name the condition it materially advances or an
+independently useful cross-team dependency. Keep one active implementation PR per
+coherent change and one independent source review. Add no process artifact without
+identifying the artifact it replaces, no check without its failure mode and
+maintenance owner, and no parallel task whose coordination cost exceeds its
+contribution to completion.
+
+### Delivery classes and automatic evidence
+
+Classify each coherent change once, revisiting only a material scope change:
+
+| Class | Required route after the rule change |
+|---|---|
+| Non-executable, non-governing documentation and inert evidence | Owner review plus relevant automated validation. |
+| Source, protocol or governing behavior | One independent review, relevant tests and required CI. Code, tests, schema, policy and skill behavior stay here even when described as inert. |
+| Deployment, credentials or irreversible operations | Explicit operational acceptance, including custody, enrollment and recovery checks. |
+
+Existing authorization travels with the outcome. Ask the user again only when an
+action exceeds it or a concrete unresolved user-owned decision remains. These
+classes must replace conflicting governing rules in a reviewed repository change;
+they do not waive branch protection, exact-head coherent validation or original
+effect admission. Source delivery, publication, installation and native acceptance
+remain distinct.
+
+Migration retains the current route until the governing change, issue mapping,
+replacement evidence and notification/recovery gates are separately qualified.
+If a replacement result or notification path fails, return to the current route
+for the affected outcome while retaining its original identities and holds.
+
+Extend the existing `fsgg.routine-delivery/v1` result and relevant CI receipts rather
+than building another evidence ledger. One machine-readable result per PR records
+the actual checkout/commit and changed files, tests, required checks, reviewed
+head, native delivered merge identity, and tested-versus-delivered Git tree or
+canonical file-tree difference, with workflow/run/attempt references. A run's
+`head_sha` alone need not identify its checkout; a synthetic PR merge and a tested
+candidate head differ. Do not compare a `git archive` SHA-256 with a Git tree OID.
+The owner performs the mechanical join once and requests qualification when
+integration changes behavior or coherent validation later fails. Existing
+consumers must accept the versioned result before removing duplicate hash
+recitations, unchanged-code tests or parent file-by-file readbacks. Retain
+independent readback where it crosses a further trust boundary, such as actual
+deployment or credential enrollment. No self-declared result grants authority.
+
+Post outcome updates when a deliverable is ready, a blocker appears or clears, a
+decision is needed, or a promised delivery time changes. Publish one daily
+programme summary while active. External requests retain an owner, exact reply
+contract and escalation time; use automatic reply notifications when qualified.
+Retire five-minute unchanged-mail checks and unchanged-hold comments only after
+the governing handoff rule and notification/reconciliation route change. Capture
+durable accepted contracts, architecture and reusable lessons beside the
+implementation or in one consolidated follow-up; CI may generate Atlas metadata
+and indexes, while the owner still verifies source and content. A dedicated
+capture needs an independently useful finding.
+
+### Blockers and pilot decision
+
+The copy-accounting owner closes every retained-copy constructor and recipient
+population, then proves maxima for authority, managed, Python, backend, peer,
+transport/kernel/cache, diagnostic/export and observation domains. Count capacity,
+headers, allocator rounding, storage metadata, transport/cache bytes, concurrent
+and uncertain replacements through the original retention lifetime without a
+garbage-collection credit. Calculate the conservative total and select finite
+headroom and the replacement cap only after complete reviewed accounting. Send
+one consolidated request to the host owner for the missing provider contract;
+another isolated measurement starts only if it closes a named upper-bound gap.
+The authority owner keeps one source-to-deployment plan for ownership, custody,
+enrollment, verification and recovery. Original `.103` stays attempted-unknown and
+unreplayed; `.104` and other original effects remain held.
+
+Before pilot operation, declare a comparable current-route population, active
+coordination-effort definition, attribution and coverage threshold. Include owner,
+reviewer and parent work; distinguish necessary review/refresh, implementation,
+CI/resource wait, blocked time and unknown intervals. Track elapsed delivery,
+coordination effort per accepted unit, blocked time, escaped defects and replay or
+custody failures with the same acceptance boundaries in both periods. An 80%
+reduction requires a supported effort ratio at or below 0.20, faster delivery and
+no weaker correctness; incomplete coverage or incomparable work yields an
+inconclusive result. Two recent Coordination source PRs had only 30–32 seconds
+between final check and merge, so that interval alone cannot support the target.
+The already protected `/3` compatibility result is historical baseline/recovery
+evidence, not prospective pilot savings; do not rerun it to create pilot activity.
+Adopt, adjust or retire the pilot after accepted results; remove redundant
+requirements only after the replacement has proved its failure and recovery paths.
+
 ## Implementation roadmap and parallelism
 
 The bounded .1–.3 source window below is locally tested; milestone closure and operational adoption
