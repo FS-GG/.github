@@ -141,13 +141,13 @@ qualified adoption with economics inconclusive; its reservation and no-duplicate
 checks remain. These decisions narrow optional comparison and process overhead, not
 required CI cadence or the consumer acceptance boundary.
 
-## 1.4. Proposed three-outcome programme pilot — 2026-10-16
+## 1.4. Selected three-outcome programme pilot — 2026-10-16
 
 Prioritize the [outcome-led pilot](2026-10-05-programme-context-efficiency.md#selected-three-outcome-programme-pilot--2026-10-16)
 under V2-CTX-01.4–.6. The target is **80% less coordination effort** against a
 comparable current-route baseline, with faster delivery and no loss of correctness,
-credential custody or replay protection. This is a selected proposal for a reviewed
-governance change, not an exemption from current skills, required CI or native admission.
+credential custody or replay protection. The reviewed governing change applies only
+after protected delivery; required CI and native admission remain in force.
 
 | Outcome and accountable owner | Done when | Current boundary |
 |---|---|---|
@@ -159,9 +159,11 @@ One owner carries each outcome through implementation, review and delivery. A ne
 must materially advance its completion condition or deliver an independently useful
 cross-team dependency. Use one current issue record per outcome, one independent
 source review, one active PR per coherent implementation change, and CI-produced
-acceptance evidence. Replace repeated packets, hash recitations, duplicate unchanged
-tests and unchanged-status comments only after the governing rule and evidence route
-are protected. Keep private evidence restricted and original-operation identities
+acceptance evidence. The protected governing rule retires duplicate packets, typed
+returns, reducer views, fixed polling and unchanged-status comments. Native exact joins
+replace routine hash/file correspondence recitations; the accountable CI integrator
+qualifies automatic results for additional facts. Required final-head tests remain.
+Keep private evidence restricted and original-operation identities
 where correctness needs them. The owning issue records are [V3 `/3` #4599](https://github.com/FS-GG/.github/issues/4599)
 (closed source baseline), [finite cap #4600](https://github.com/FS-GG/.github/issues/4600)
 and [authority service #4601](https://github.com/FS-GG/.github/issues/4601).
@@ -179,14 +181,17 @@ The [maintained reader](../coordination/routine-delivery-evidence.md) distinguis
 synthetic merge checkout from the PR head and preserves failed checks, coherent disputes and
 unavailable evidence. This witness covers the projection job's entry checkout.
 
-Collection still requires explicit run selection. Full automatic per-PR acceptance-result assembly,
-supported consumer adoption and automatic reply/reconciliation qualification remain activation gates.
+Collection still requires explicit run selection. Full automatic per-PR acceptance-result
+assembly and supported consumer adoption remain open; they qualify replacement of the
+specific mechanical facts they prove. The governing change activates deadline and
+session-start issue reconciliation without a notification platform prerequisite.
 
 The pilot's three change classes, issue fields, CI acceptance result, decision-driven
 updates, knowledge capture, cap-accounting sequence, authority-service plan and
-measurement/retirement rule live in the owning plan. Until the approved rule change
-and qualified notifications land, existing five-minute handoff checks and status
-instructions still apply. `.103` remains attempted-unknown and unreplayed; `.104`
+measurement/retirement rule live in the owning plan. Until the rule is protected,
+existing five-minute handoff checks and status instructions still apply. Measure
+savings during ordinary delivery; measurement is not an activation gate. `.103`
+remains attempted-unknown and unreplayed; `.104`
 and other original effects remain held under their existing admission gates.
 
 ## 2. Open work and owning plans
@@ -203,7 +208,7 @@ Conditional work in section 6 is not automatically scheduled.
 | **Routine activity, review and usage coverage — programme/telemetry owners** | Collect planning, implementation, review, validation, delivery, operations and repair spans; submit selected reviews for settled attempt populations under the bounded assessment policy; reconcile native usage with explicit unknowns; continue CI/delivery reconciliation. Every efficiency view exposes coverage, freshness, unresolved observations and its denominator. | Reliable collection and actual settled populations. Overlapping queue intervals cannot prove human idle time or critical-path delay. Delivery counts cannot prove completed features or adoption. | [Observation guidance](../../.agents/skills/work-programme/references/observation.md), [efficiency measurement](process-efficiency-telemetry.md) | No |
 | **V2-EFF-01.2–.6 — telemetry, dashboard and receiver owners** | Qualify remaining canonical measurement/correction and completion-assessment behavior; install the coherent schema-14/Host-5 route, migrate the store, enroll supported providers, deploy matching dashboard/feed and run finite held-out public-claim calibration plus selected real-item installed checks. Deliver an evidence-backed process-health dashboard with explicit uncertainty, accepted-outcome and effort views, overhead-chain investigation, explainable anomalies and advisory interventions; verify installed private diagnostics and approved public projections with correction and rollback; leave net value inconclusive unless a comparative benefit claim is selected. | Reuse delivered schema-14 and Responses source and published coherent 0.100/Host 0.5. Actual installation, migration, provider execution and end-to-end collection remain separate. | [Efficiency delivery plan](process-efficiency-telemetry.md), [dashboard and process-health phases](utel-telemetry-dashboard.md#development-process-health-dashboard--proposed-2026-10-12) | No |
 | **V2-PROC-01.2–.8 — Coordination; SDD/FsQuint consumers** | Complete reconciled coherent publication, selected receiver adoption, remaining Linux containment and consolidation. | [Coordination #976](https://github.com/FS-GG/FS.GG.Coordination/pull/976) delivers the complete-policy parser/scoped-existing-App source repair at `76e722b5dce2afeec59c367e24f166286b0f39b3`, with required/full coherent checks and exact-tree correspondence. Original [publisher `38495729817/a1`](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38495729817) failed before credentials/package pushes; its successful attestation is retained and dispatch authority consumed. Original archive/four-receiver evidence remains unchanged. [Bounded recovery stages](2026-10-05-shared-process-supervision.md#bounded-original-pair-recovery-window) separate delivered [#977 recovery source](https://github.com/FS-GG/FS.GG.Coordination/pull/977) at `4d998290d2087af95e63a6e163725ea8f4551502` (required/full coherent checks passed), pending genuine scoped-App GET, original reconciliation/runtime admission, one-shot publication and receiver acceptance. Source delivery establishes no actual scoped-App read or publication. All 439 inherited holds remain; global routing stays off, while independently approved ordinary source authority remains. | [Shared process supervision](2026-10-05-shared-process-supervision.md#original-publisher-failure-and-complete-policy-repair--2026-10-14) | No |
-| **V2-CTX-01.4–.6 — `.github` programme driver** | Prioritize the [three-outcome pilot](#14-proposed-three-outcome-programme-pilot--2026-10-16): qualify its governing replacement with full automatic CI acceptance results, supported consumers and notification/recovery, then measure the selected 80% coordination-effort claim against a comparable baseline. Retain one genuine admitted operation/restart check and qualified adoption/retirement; missing usage and coverage remain explicit. | Reuse delivered delta/view/reuse/default guidance and the protected [CI producer/reader](../coordination/routine-delivery-evidence.md). Required checks and effect authority remain in force. The already merged `/3` result is historical, not prospective pilot savings. | [Context efficiency](2026-10-05-programme-context-efficiency.md#selected-three-outcome-programme-pilot--2026-10-16), [driver](unified-programme-driver.md) | No |
+| **V2-CTX-01.4–.6 — `.github` programme driver** | Prioritize the [three-outcome pilot](#14-selected-three-outcome-programme-pilot--2026-10-16): protect the governing replacement, then qualify automatic CI results and supported consumers for their covered facts; use deadline/session-start issue reconciliation immediately after rule delivery. Measure the selected 80% coordination-effort claim during ordinary delivery without making measurement an activation gate. Retain one genuine admitted operation/restart check and qualified adoption/retirement; missing usage and coverage remain explicit. | Reuse delivered delta/view/reuse/default guidance and the protected [CI producer/reader](../coordination/routine-delivery-evidence.md). Required checks and effect authority remain in force. The already merged `/3` result is historical, not prospective pilot savings. | [Context efficiency](2026-10-05-programme-context-efficiency.md#selected-three-outcome-programme-pilot--2026-10-16), [driver](unified-programme-driver.md) | No |
 | **V3-IMPROVE-01 finite development-process trial — `.github` programme** | Finite trial complete: **process changes delivered; throughput benefit unproven**. Retain measured one-workload profile, qualified source changes, prospective V3 source-cohort evaluation and inconclusive benefit. | User-selected closure accepts the one-workload trial; second workload is conditional on genuine ready work, and no ordinary comparison is selected. Original failures and required CI/fail-closed/credential holds remain. **Open transfers:** diagnostic publication/native/installed adoption and necessary-attempt observation stay in V2-DIAG-01.4; packaged skill publication and selected installed receiver adoption stay with their release/receiver owners. Source delivery never counts as installed. V3-ENV, UTEL and the V3 unattended lifecycle requirement retain their own scope/status. | [Finite-trial disposition and transfers](2026-10-15-development-process-improvement.md#finite-trial-disposition-and-open-transfers), [design](../designs/2026-10-15-development-process-improvement.md), [DIAG owner](diagnostic-execution.md), [release owner](utel-release-successor.md) | Yes |
 | **TSDD-KNOWLEDGE-01.4–.5 — SDD/Templates; Wizard release owner** | Finish provider composition, genuine Wizard publication/install qualification, coherent fresh workspace creation and preserving retained extraction. Keep canonical text knowledge bounded to 10 MiB. | Reuse delivered storage/init/path-refusal source and current template inventory. Recover original Wizard publication/custody state before a separately admitted successor; genuinely published dependencies precede full receiver qualification. | [SDD owner](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/roadmaps/tsdd-knowledge-01.md), [Wizard](tsdd-knowledge-wizard.md) | No |
 | **SVG-RELEASE-D — producer and workspace owners** | Close remaining public Wizard/full installed workspace and selected activation outcomes; qualify any later single-lifecycle default separately. | Reuse public Rendering 0.32.1 and Templates 0.18.1 and the Templates-only receiver. A Templates-only pass does not close full Wizard/Release-D adoption. | [Release D](svg-release-d.md), [coherent receiver dependency window](svg-coherence-and-instancing-01.md#svg-coherence-018--wizard-coherent-099-dependency-window) | No |

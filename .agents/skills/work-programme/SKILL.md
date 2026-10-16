@@ -1,6 +1,6 @@
 ---
 name: work-programme
-description: "Advance the FS-GG Unified Roadmap with typed decisions, worker recovery, pinned lane packets and bounded check watchers."
+description: "Advance the FS-GG Unified Roadmap with outcome owners, issue state, native evidence, deadline reply checks and recovery."
 ---
 
 
@@ -16,10 +16,14 @@ Start development only on requested advancement; inspection, maintenance and aud
 ## Conditional three-outcome pilot
 
 The selected [pilot](../../../docs/roadmaps/2026-10-05-programme-context-efficiency.md#selected-three-outcome-programme-pilot--2026-10-16)
-replaces the conflicting coordination requirements below and in this skill's references **only for its
-three outcomes after the applicable activation conditions are met**. This source edit alone activates
-nothing. Until protected delivery of the reviewed governing change, follow the current route. Other
-outcomes retain the default workflow.
+replaces conflicting coordination requirements below and in this skill's references **only for its
+three outcomes after protected delivery of this reviewed governing change**. The replacement applies
+to the default workflow and its adapter, bootstrap, context and crash-recovery references, including
+their mandatory packet, typed-return, reducer/current-view and dispatch-index directions. The owning
+issue, applicable governing instructions and linked native evidence become the assignment and recovery
+route. Preserve owner, scope, authority, resource bounds, acceptance, original identities and all active
+or uncertain reservations. Use old helpers only when they answer a named unresolved obligation; their
+schemas remain valid for other callers. Other outcomes retain the default workflow.
 
 | Outcome | Accountable owner | Done when |
 |---|---|---|
@@ -46,33 +50,41 @@ choices, conflicts and uncertain effects. Ordinary milestones require no extra p
 repeated parent file-by-file review. Keep one active implementation PR per coherent change. Open a lane
 only for a completion condition or independently useful cross-team dependency.
 
-Replace packet/return/reducer obligations, repeated hash recitations and duplicate unchanged-code tests
-only after the existing `fsgg.routine-delivery/v1` route and its consumers qualify one versioned PR result:
+Retire mandatory packet/return/reducer and duplicate current-view artifacts at protected delivery of
+this rule: they repeat the issue and GitHub's native identities. Successful hash recitations and routine
+parent file-by-file readbacks are unnecessary when an exact native source/check/merge join supplies the
+same fact; an unavailable or ambiguous join remains an explicit gap and gets one targeted read, never a
+fabricated pass. Retire duplicate unchanged-code test execution only within the proven scope of accepted
+receipts; final-candidate required CI and coherent validation still run. The existing
+`fsgg.routine-delivery/v1` route and its consumers separately qualify one versioned PR result:
 actual checkout/commit, changed files, tests, required checks, reviewed head, native merge identity,
 tested-versus-delivered Git tree or canonical file-tree difference, and workflow/run/attempt references.
-The owner performs the mechanical join once; changed behavior or failed coherent validation requires
-qualification. A run's `head_sha` alone does not prove checkout identity. Until this evidence gate is
-qualified, retain the existing packet/return/reducer and readback route; do not claim missing automation
-exists. Once qualified, the issue and linked native result replace those coordination artifacts; helpers
-remain optional diagnostics. Read applicable governing instructions at assignment and after relevant
-changes; this rule removes neither instruction discovery nor required operation evidence.
+The CI evidence integrator owns this result and its maintained reader. Until its delivery and genuine
+checkout/consumer qualification, use existing native PR/check results for covered facts and explicitly
+mark missing test/checkout/delivery correspondence; perform a targeted read when acceptance depends on
+the gap. The owner performs the mechanical join once; changed behavior or failed coherent validation
+requires qualification. A run's `head_sha` alone does not prove checkout identity. Read applicable
+governing instructions at assignment and after relevant changes; required operation evidence remains.
 
-After protected delivery of the governing change **and** qualification of reply notifications and
-missed-event/restart reconciliation, replace fixed thirty-minute reporting, five-minute unchanged-mail
+At protected delivery of this rule, replace fixed thirty-minute reporting, five-minute unchanged-mail
 checks and unchanged-hold comments with updates when a deliverable is ready, a blocker appears/clears,
 a decision is needed or a promised delivery time changes, plus one daily programme summary while active.
-External requests retain an owner, exact reply contract and escalation time. Until that notification gate
-is qualified, retain current reporting and handoff checks. Notification loss retains the affected hold
-and requires original-identity reconciliation; it cannot trigger a retry or release a reservation.
+For each external request retain its channel/identity, owner, expected answer and response/escalation
+deadline. Check the relevant thread at session start/resume and at the agreed deadline; check
+earlier when a notification arrives, the user requests it or an action depends on a reply. A failed,
+partial or conflicting read means reply status unknown and preserves the hold. Reconcile changed replies
+since the last complete read, or the full thread when that baseline is unreliable. Give every pending
+or unknown request a next observation deadline, even when no follow-up comment is warranted. Silence never admits
+an operation or replay. Notifications are optional hints, not a prerequisite or authority.
 
 All stages preserve required checks, exact-head coherent validation and
 [ADR-0084](../../../docs/adr/0084-semantic-reuse-never-cancels-coherent-validation.md), resource admission,
 operation-specific authority and independent readback across deployment or credential trust boundaries.
 Source delivery, publication, installation and native acceptance remain distinct. Original `.103` stays
 attempted-unknown and unreplayed; `.104` and other original effects remain held. Capture accepted reusable
-knowledge with implementation or one consolidated follow-up. Before pilot operation, declare the
-comparable baseline, effort attribution and coverage in the owning plan; missing coverage leaves the
-80% effort-reduction claim inconclusive. Activation, adoption and savings each require their own evidence.
+knowledge with implementation or one consolidated follow-up. Measure comparable elapsed delivery,
+coordination effort, blocked time and escaped defects during ordinary work; missing coverage leaves the
+80% effort-reduction claim inconclusive, but measurement is not an activation or delivery gate.
 
 ## Default workflow
 
@@ -291,7 +303,7 @@ skill update alone neither performs nor authorizes such migrations.
 
 ## Report progress every 30 minutes
 
-The activated pilot uses its notification-qualified reporting rule above. Until then, and for other
+The activated pilot uses its deadline and material-event reporting rule above. Until then, and for other
 programme outcomes, apply this cadence.
 
 While the programme is active, send a user-facing update every 30 minutes, starting at programme

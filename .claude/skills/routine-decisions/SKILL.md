@@ -11,12 +11,13 @@ Apply the full governing instructions once per selected window. This skill does 
 new work or grant execution, merge, publication, cleanup or ownership transfer.
 
 For the three selected outcomes, apply the [conditional pilot](../work-programme/SKILL.md#conditional-three-outcome-pilot)
-first. Until its protected rule and replacement evidence gate are qualified, keep the current route below.
-After qualification, the six-field owning issue and linked native PR result replace mandatory reducer,
-packet and return artifacts; ordinary same-owner execution and delivery need no per-attempt parent turn.
-The reducer remains optional diagnostics. Required checks, ADR-0084 coherent validation, resource admission,
-original effects and credential custody remain mandatory. Notification and reporting changes have their
-own qualification gate; this skill does not assert either replacement is installed or accepted.
+first. After its reviewed rule is protected, the six-field owning issue, native PR/check identities and
+linked evidence replace mandatory reducer, packet, return and duplicate current-view artifacts below.
+The reducer remains optional diagnostics. Where an automatic CI result has not yet qualified a required
+join, mark that gap and perform one targeted native read; do not infer it from a PR head alone. Ordinary
+same-owner execution and delivery need no per-attempt parent turn. Required checks, ADR-0084 coherent
+validation, resource admission, original effects and credential custody remain mandatory. Deadline and
+session-start reply reconciliation replaces fixed polling at the same protected rule boundary.
 
 Read the [typed contract](../work-programme/references/adapter.md#additive-routine-decisions)
 when assembling or interpreting inputs. Run the existing helper's `routine-decisions` command
