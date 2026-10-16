@@ -1,91 +1,96 @@
 # Routine delivery checkout evidence
 
-`tools/routine-delivery.py --evidence-run RUN_ID` appends `deliveryEvidence` with schema
-`fsgg.routine-delivery-evidence/1` to its final `fsgg.routine-delivery/v1` result.
-The option collects read-only evidence after the original delivery and telemetry paths.
-The optional supporting library `tools/routine-delivery-evidence.py` must accompany the helper
-when selecting this option. Missing library or unexpected collection failure reports
-`collection-unavailable` while retaining the original JSON and exit status. The installation
-helper stays under its existing 128 KiB source-blob bound; the cap is unchanged.
-It preserves their outcome, coherent-validation state, original merge identity and effect count.
-Default output and telemetry input keep the legacy field set. Installation recovery accepts
-both the exact legacy result and that result with the versioned extension; the extension cannot
-renew an original merge attempt. Other strict consumers must continue using default output
-until they explicitly support this extension. The CLI refuses `--evidence-run` together with
-`--install-routine-producer` before any effect: pilot check populations can exceed the existing
-64 KiB retained installation-result bound. Installation recovery retains that bound and uses
-the legacy output. Supporting an extended shape does not waive its existing file-size bound.
+Ordinary `tools/routine-delivery.py` results for `FS-GG/.github` automatically append
+`deliveryEvidence`, schema `fsgg.routine-delivery-evidence/1`, to the existing
+`fsgg.routine-delivery/v1` result. The maintained route collects one bounded result after the
+original delivery and telemetry paths. It preserves their outcome, coherent-validation state,
+original merge identity, exit status and effect count. Collection never retries a merge.
+
+The automatic reader selects the native run from the receiver-required `projection` check's
+GitHub job link. It requires one exact `coherence`/`projection` PR context, then verifies the
+native job's repository endpoint, run, attempt, name and candidate. It rechecks the projection
+reference after collection; a replacement run or malformed, absent, conflicting or stale
+reference leaves checkout evidence unavailable. It does not guess the newest workflow run.
+`--evidence-run RUN_ID` remains available for explicit historical qualification.
+
+The optional supporting library `tools/routine-delivery-evidence.py` must accompany the helper.
+Missing support or unexpected collection failure produces `collection-unavailable` and an
+`attention` assessment while retaining the original result. The installed helper remains below
+its existing 128 KiB source-blob cap. Installation and recovery continue emitting the exact
+legacy shape; `--evidence-run` cannot combine with `--install-routine-producer`. Recovery accepts
+legacy or recognized extended results without renewing an original effect, within its unchanged
+64 KiB retained-file bound. Other repositories keep legacy output unless explicitly selecting a run.
+
+## Producer and native identity
 
 The sole live producer is the existing required `projection` job in
-[coherence](../../.github/workflows/coherence.yml). Its unfiltered PR events cover opened,
-synchronize, reopened and edited PRs, including docs-only changes. It captures the job-entry Git
-checkout commit and tree, candidate/base, repository, PR, run, attempt and job before validation.
-Its artifact is uploaded even when later steps fail and retained for seven days. Capture and
-upload continue on error so acquisition/reporting failure cannot suppress the existing projection
-validation or replace its verdict. Missing evidence remains unavailable to the reader. This supplies
-one checkout witness for each scheduled PR run; it proves neither every required job's checkout
-nor the filesystem state throughout a test. Conflicting PRs that GitHub does not schedule,
-unavailable runs and population/byte-bound overflow retain explicit gaps.
+[coherence](../../.github/workflows/coherence.yml). Its unfiltered opened, synchronize, reopened
+and edited PR events include docs-only changes. Before validation it captures job-entry Git
+commit/tree, candidate/base, repository, PR, run, attempt and job. Its always-uploaded artifact
+is retained for seven days. Capture and upload continue on error so evidence collection cannot
+suppress projection validation or replace its verdict. Missing artifacts remain unavailable.
+This is one job-entry checkout witness, not proof of every job or its filesystem throughout a test.
 
-The one reader accepts exact workflow/job pairs: `coherence.yml/projection` reports scope
-`github-pr-checkout`; the retired `skill-quality.yml/semantic-skill-quality` producer remains
-readable as `skill-quality-pilot` for historical artifacts. Both use the unchanged
-`fsgg.tested-checkout/1` artifact, `checkout.json`, and `tested-checkout-RUN-ATTEMPT` name. No
-second metadata record, new CI job or check aggregator is added. The caller selects the native
-run with the existing `--evidence-run` option. Strict default telemetry/observer consumers stay
-on the unchanged default delivery shape; this migration does not enable the extension by default.
-The Actions run's `head_sha` associates a run with a candidate; it does not identify its checkout.
+One reader accepts exact workflow/job pairs: `coherence.yml/projection` reports scope
+`github-pr-checkout`; retained artifacts from the retired
+`skill-quality.yml/semantic-skill-quality` pair report `skill-quality-pilot`. Both use
+`fsgg.tested-checkout/1`, `checkout.json`, and `tested-checkout-RUN-ATTEMPT`. No new job, metadata
+ledger or CI check aggregator is introduced. Run `head_sha` associates a candidate; actual
+checkout identity comes from the artifact and its native Git commit/tree.
 
-The reader binds the artifact to native run/repository/PR/head/base/attempt metadata and checks
-its tree against the native Git commit. A checkout is classified as `candidate`, or as
-`synthetic-pr-merge` only when its ordered native parents are the exact base and candidate.
-GitHub can return an empty run `pull_requests` list after merge, as observed for
-[PR4597](https://github.com/FS-GG/.github/pull/4597) and
-[run38860185845](https://github.com/FS-GG/.github/actions/runs/38860185845), while the native PR
-head/base remain unchanged. Only for a confirmed delivered/merged PR, an explicitly empty list
-can use `merged-pr-exact-checkout-parents` association: the native run branch must match the
-unchanged PR branch, its repository/head/event/workflow/attempt must match, the artifact must
-retain the exact PR/head/base/run joins, and its native checkout commit must have the ordered
-exact base/head parents. A missing, malformed or conflicting run association, open/uncertain
-merge, candidate-only checkout or unrelated head/base/branch drift remains unavailable.
-The entire bounded run-link population is validated before selecting a match; malformed,
-duplicate or conflicting entries refuse even after a matching entry. The final native PR
-snapshot rechecks branch identity and the merged predicate, as well as head/base/merge commit.
-This fallback does not relax tree parity or coherent-validation results.
+Artifact joins must match repository/PR/head/base/run/attempt/job. The tested commit is classified
+as `candidate`, or `synthetic-pr-merge` only with native ordered parents `[base, candidate]`.
+After merge, GitHub can return an explicitly empty run `pull_requests` list. Only a confirmed
+native delivery can then use `merged-pr-exact-checkout-parents`: unchanged PR branch, matching
+run branch/repository/head/event/workflow/attempt, exact artifact joins and native synthetic
+checkout parents are all required. Missing, malformed, duplicate or conflicting links, unrelated
+drift, uncertain effects and candidate-only fallback remain unavailable. The complete bounded
+link population and final PR head/base/branch/merged predicate are checked.
 
-[PR4602](https://github.com/FS-GG/.github/pull/4602) qualified the repaired reader on genuine
-[run38862677998](https://github.com/FS-GG/.github/actions/runs/38862677998): pre-merge readiness and
-separate post-merge readback retained the same checkout artifact and confirmed identical tested
-and delivered trees, with all eight native required checks passing. This accepted repair supplies
-neither universal producer deployment nor evidence for other jobs' checkouts.
-`parity` compares that tested tree with the native delivered commit tree: `identical-tree`,
-`different-tree`, `not-delivered` or `unavailable`. Equal trees can coexist with failed or
-pending checks, a late coherent dispute, or an unresolved installation. This field grants
-no acceptance, merge, publication or activation authority.
+`parity` compares the tested tree with the original native delivered commit tree:
+`identical-tree`, `different-tree`, `not-delivered` or `unavailable`. Equal trees can coexist with
+a failed check or coherent dispute. The original delivery result retains that failure.
 
-The result also retains changed filenames/status/previous filenames, native required-check
-rows (including native exit-1 failed checks) and producing-run references. Unknown evidence stays null with a bounded exception label;
-independent available results survive another collection failure. PR identity is checked before
-and after collection; head/base drift invalidates checkout, file and check associations.
-There is no retry or effect replay. Raw hosted artifacts remain the original evidence.
+## Compact delivery assessment and consumers
+
+The extension retains changed file/status/previous filename records, required check rows
+(including native exit-1 failures), producing-run references and explicit collection exceptions.
+Its `assessment` is `ready`, `delivered` or `attention`, with `issues` naming gaps. A clean
+assessment requires the corresponding original ready/delivered outcome, passed coherent and
+routine validation, successful producer run, all observed required checks passing, a verified
+checkout and, after delivery, identical trees. Pending publication remains an issue. This is a
+projection of evidence; it grants no merge, publication or activation authority and changes no gate.
+
+The maintained public [observer](../../tools/routine-observer.py) accepts the bounded versioned
+shape and reports its assessment as `reported`; it does not reauthenticate the supplied JSON or
+promote it to economic qualification. Unknown nested fields are refused by the existing public
+I/O reader. Internal telemetry still receives the unchanged Summary. Other strict consumers
+require their own explicit adoption.
+
+The final compact JSON uses the existing 64 KiB custody budget. If check/file populations exceed
+remaining space, they become null with `result-populations-over-budget` and `attention`; essential
+run/checkout identities remain when they fit. If the extension still exceeds the budget, a compact
+`result-over-budget` exception replaces it. Original native artifacts remain the evidence;
+omitted populations never count as complete. The legacy Summary itself is preserved.
 
 ## Bounds and qualification
 
-The collection gets one 60-second budget including the existing direct-child cleanup reserve.
-Each response uses the existing 256 KiB native-query limit. The reader permits at most 100
-changed files, 128 required checks, 100 artifact records, one 64 KiB ZIP and one 4 KiB checkout
-JSON entry, and 100 run PR links. Larger or incomplete populations remain unavailable. It does not paginate or
-create a second check aggregator. The workflow adds two Git reads, a small JSON write and one
-artifact upload; hosted latency and storage overhead are unmeasured.
+Collection has one 60-second budget, including existing direct-child cleanup reserve. Each native
+response uses the existing 256 KiB limit. Bounds remain 100 changed files, 128 required checks,
+100 artifact records, one 64 KiB ZIP with one 4 KiB JSON entry, and 100 run PR links. No population
+pagination or log ingestion is added. Larger or incomplete evidence stays unavailable. Automatic
+selection adds one native job read, a final run identity read and a required-check reread within that same budget.
 
-Pipeline preflight uses focused Python fixtures and static YAML/step-order inspection. The
-change adds no job dependency, fan-out, cancellation, publication or shared mutable state,
-so a new model would add maintenance without testing a new scheduling interaction. The local
-inspection/fixture budget is ten minutes; the existing full required checks remain applicable.
-The skill-quality PR/push selectors include the producer's coherence workflow so edits to its
-capture/upload steps execute the invariant fixtures. Tests cover candidate/synthetic checkout,
-differing trees, artifact identity/absence, head/base
-drift, late coherent failure, uncertain merge and both prior-result shapes. Local fixture success
-is source qualification only. The next qualification is a genuine matching coherence/projection PR run,
-its retained artifact, and post-delivery native commit/tree readback through this option. Record
-measured collection/upload latency and exceptions before claiming an improvement in delivery latency.
+Pipeline preflight uses focused Python fixtures and existing static checks: no job dependency,
+fan-out, cancellation or shared-state interaction changes, so a new scheduling model has no
+identified benefit. Local qualification is capped at ten minutes before reassessment; existing
+hosted checks remain required. Producer/upload overhead and total delivery savings are unmeasured.
+No measurement or comparison is a new delivery gate.
+
+[PR4602](https://github.com/FS-GG/.github/pull/4602) qualified historical merged-run association.
+[PR4604](https://github.com/FS-GG/.github/pull/4604) delivered the universal producer.
+The genuine docs-only [PR4607](https://github.com/FS-GG/.github/pull/4607) scheduled no skill-quality
+run; coherence run38866764067/artifact12030918081 supplied synthetic checkout7dbb1112 and tree2a7bc98a.
+Its protected native merge638b4b26 retained that tree, with eight required checks passing and no
+collection exception. These observations establish producer coverage and explicit-run readback;
+the automatic selection and consumer changes require their own exact-head hosted qualification.

@@ -1751,7 +1751,7 @@ class WatchGhApi(GhApi):
 
 
 
-def delivery_evidence(summary: Summary, run_id: int, *, api: Any = None) -> dict:
+def delivery_evidence(summary: Summary, run_id: int | None, *, api: Any = None, assembled: bool = False) -> dict:
     """Load optional evidence support without expanding the installed merge helper."""
     path = pathlib.Path(__file__).with_name("routine-delivery-evidence.py")
     spec = importlib.util.spec_from_file_location("routine_delivery_evidence", path)
@@ -1759,8 +1759,9 @@ def delivery_evidence(summary: Summary, run_id: int, *, api: Any = None) -> dict
         raise RuntimeError("optional evidence reader unavailable")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.collect(summary, run_id, api=api or WatchGhApi(time.monotonic() + 60),
-                          native=sys.modules[__name__])
+    evidence = module.collect(summary, run_id, api=api or WatchGhApi(time.monotonic() + 60),
+                              native=sys.modules[__name__])
+    return module.assemble(summary, evidence) if assembled else evidence
 
 
 def watch_checks(
@@ -2032,14 +2033,15 @@ def main(argv: list[str]) -> int:
     if observer is not None or observation_health:
         result = replace(result, telemetryHealth=observation_health[-1] if observation_health else "unavailable")
     output = asdict(result)
-    if args.evidence_run is not None:
+    if args.evidence_run is not None or (args.repo == "FS-GG/.github" and not args.install_routine_producer):
         try:
-            output["deliveryEvidence"] = delivery_evidence(result, args.evidence_run)
+            output = delivery_evidence(result, args.evidence_run, assembled=True)
         except Exception:
             # Optional acquisition/reporting cannot suppress the original effect readback.
             output["deliveryEvidence"] = {"schema": "fsgg.routine-delivery-evidence/1",
                 "scope": "github-pr-checkout", "parity": "unavailable",
-                "exceptions": ["collection-unavailable"]}
+                "exceptions": ["collection-unavailable"], "assessment": "attention",
+                "issues": ["collection-unavailable"]}
     if args.telemetry_publisher_event:
         output["dashboardPublicationHealth"] = dashboard_health
     if unavailable_audit is not None:

@@ -16,6 +16,17 @@ with tempfile.TemporaryDirectory(prefix="fsgg-telemetry-safety-") as scratch:
     assert module.read_public_object(str(source))[1] is None
     source.write_text(json.dumps({"schema":"fsgg.routine-delivery/v1", "telemetryAssignment":"/private/a"}))
     assert module.read_public_object(str(source))[1] == "input-fields-invalid"
+    extension = {"schema":"fsgg.routine-delivery-evidence/1", "scope":"github-pr-checkout",
+                 "parity":"unavailable", "exceptions":["collection-unavailable"],
+                 "assessment":"attention", "issues":["collection-unavailable"]}
+    source.write_text(json.dumps({"schema":"fsgg.routine-delivery/v1", "deliveryEvidence":extension,
+                                 "routineEligibility":"passed", "producerInstallation":"not-selected", "producerSource":None}))
+    assert module.read_public_object(str(source))[1] is None
+    for bad in (dict(extension, secret="private"), dict(extension, run={"private":"value"}),
+                dict(extension, issues=["x"] * 129), dict(extension, requiredChecks=[{"private":"value"}]),
+                dict(extension, assessment="accepted")):
+        source.write_text(json.dumps({"schema":"fsgg.routine-delivery/v1", "deliveryEvidence":bad}))
+        assert module.read_public_object(str(source))[1] == "input-fields-invalid"
     source.write_text('{"schema":"synthetic/1","attempts":1}')
     assert module.write_public_report(str(output), {"attempts":1}, [str(source)]) is None
     output.write_text("preserve")

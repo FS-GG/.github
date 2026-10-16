@@ -18,6 +18,7 @@ PUBLIC_FIELDS = {
     "publication", "mergeCommit", "attempts", "reason", "unit", "scope", "freshInputTokens",
     "validationDisposition", "coherentValidation",
     "outcomeAt", "observedAt", "telemetryHealth",
+    "routineEligibility", "producerInstallation", "producerSource", "deliveryEvidence",
     "cachedInputTokens", "outputTokens", "reasoningTokens", "productiveTokens", "overheadTokens",
     "unclassifiedTokens", "dataStatus", "completeness", "complete", "attemptsExpected", "attemptsObserved",
 }
@@ -68,12 +69,57 @@ def public_shape(value: dict[str, Any]) -> bool:
     for key, item in value.items():
         if key not in PUBLIC_FIELDS:
             return False
-        if key == "completeness":
+        if key == "deliveryEvidence":
+            if value.get("schema") != "fsgg.routine-delivery/v1" or not evidence_shape(item):
+                return False
+        elif key == "completeness":
             if not isinstance(item, dict) or not public_shape(item):
                 return False
         elif not isinstance(item, PUBLIC_SCALARS):
             return False
     return True
+
+
+def evidence_shape(value: Any) -> bool:
+    """Admit only the bounded public extension, not arbitrary nested telemetry."""
+    if not isinstance(value, dict):
+        return False
+    scalar_fields = {"schema", "scope", "candidate", "base", "deliveredCommit", "deliveredTree",
+                     "parity", "observedAt", "assessment"}
+    fields = scalar_fields | {"testedCheckout", "changedFiles", "requiredChecks", "run", "exceptions", "issues"}
+    if (set(value) - fields or value.get("schema") != "fsgg.routine-delivery-evidence/1"
+            or value.get("scope") not in {"github-pr-checkout", "skill-quality-pilot"}
+            or value.get("parity") not in {"identical-tree", "different-tree", "not-delivered", "unavailable"}):
+        return False
+    def scalar(item):
+        return item is None or isinstance(item, str) and len(item) <= 4096
+    def record(item, names, integers=()):
+        return (isinstance(item, dict) and set(item) == set(names)
+                and all(type(v) is int and v > 0 if k in integers else scalar(v) for k, v in item.items()))
+    if any(not scalar(value[k]) for k in scalar_fields & value.keys()):
+        return False
+    if "assessment" in value and value["assessment"] not in {"ready", "delivered", "attention"}:
+        return False
+    for key in ("exceptions", "issues"):
+        rows = value.get(key, [])
+        if not isinstance(rows, list) or len(rows) > 128 or any(not isinstance(x, str) or len(x) > 256 for x in rows):
+            return False
+    records = {
+        "testedCheckout": ("commit tree kind association run attempt job artifact coverage".split(), ("run", "attempt", "artifact")),
+        "run": ("id run_attempt head_sha head_branch path event status conclusion html_url".split(), ("id", "run_attempt")),
+    }
+    for key, (names, integers) in records.items():
+        if value.get(key) is not None and not record(value[key], names, integers):
+            return False
+    for key, limit, names in (
+        ("changedFiles", 100, "filename previous_filename status"),
+        ("requiredChecks", 128, "bucket completedAt event link name startedAt state workflow"),
+    ):
+        rows = value.get(key)
+        if rows is not None and (not isinstance(rows, list) or len(rows) > limit
+                                 or any(not record(row, names.split()) for row in rows)):
+            return False
+    return len(json.dumps(value, separators=(",", ":")).encode()) <= MAX_OUTPUT_BYTES
 
 
 def write_public_report(path: str, report: dict[str, Any], inputs: list[str]) -> str | None:
