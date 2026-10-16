@@ -1,5 +1,11 @@
 # Parent context operations
 
+The [conditional pilot](../SKILL.md#conditional-three-outcome-pilot) replaces mandatory context-helper,
+packet and reducer use for its three outcomes only after the replacement evidence gate qualifies.
+The helper contracts below remain unchanged when used; native resource, reservation, review and
+recovery obligations still apply. Store necessary evidence with the issue-linked original artifacts,
+without requiring duplicate packet/current-view records.
+
 Use `scripts/context.py COMMAND INPUT PRIVATE_ROOT --input-sha256 SHA` for parent reads and context
 diagnostics. Commands are `view`, `review`, `report`, `command`, and `restart`. Python standard library only; no CLR,
 GitHub, model, workload launch or daemon. Fresh native admission still governs every actual effect.

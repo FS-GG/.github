@@ -13,6 +13,67 @@ Temporary replacement for `work-unified-roadmap`. The
 [Unified Roadmap v3](../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md) open index and existing owner plans remain authoritative.
 Start development only on requested advancement; inspection, maintenance and audits retain their own scope.
 
+## Conditional three-outcome pilot
+
+The selected [pilot](../../../docs/roadmaps/2026-10-05-programme-context-efficiency.md#selected-three-outcome-programme-pilot--2026-10-16)
+replaces the conflicting coordination requirements below and in this skill's references **only for its
+three outcomes after the applicable activation conditions are met**. This source edit alone activates
+nothing. Until protected delivery of the reviewed governing change, follow the current route. Other
+outcomes retain the default workflow.
+
+| Outcome | Accountable owner | Done when |
+|---|---|---|
+| Supplier-journal `/3` compatibility | Coordination receiver/fdev1; implementation `/root/v3_coordination_receiver` | Reviewed source merged with passing `/2` compatibility and `/3` refusal tests; host acceptance remains separate. |
+| Finite UTEL cap | `.github` copy-accounting owner; Programme `/root` until recorded transfer | A closed production profile proves the complete conservative simultaneous physical-copy upper bound and a justified finite cap with headroom is adopted. |
+| UTEL authority service | SystemAdmin service owner; Programme policy and independent credential custodian | Implementation and deployment qualify with accepted custody, enrollment, verification and recovery. |
+
+Before activation, map each outcome to one owning issue and record the responsible owner. Shared request
+mailboxes do not substitute for three outcome records. The issue's current state has six fields only:
+`Owner`, `Done when`, `Current deliverable` (PR/artifact), `Next action`, `Blocked on` (exact missing
+evidence/decision and supplying owner), and `Acceptance evidence` (CI links plus native acceptance
+links or restricted references when required). Use native GitHub authors,
+times, heads, reviews and checks directly; retain operation identities and unknown attempts in the
+original restricted evidence where needed. Handoffs link the issue and necessary private context.
+
+Classify a coherent change once, revisiting material scope changes: non-executable, non-governing
+documentation/inert evidence uses owner review and relevant automated validation; source/protocol,
+code, tests, schema, policy or skill behavior uses one independent source
+review, relevant tests and required CI; deployment/credentials/irreversible operations retain explicit
+operational acceptance, custody, enrollment and recovery. One owner carries ordinary implementation,
+repair, PR updates and delivery through existing admission in an isolated worktree; one integrator owns
+shared surfaces. Existing authorization persists. Escalate changed scope/authority, unresolved user
+choices, conflicts and uncertain effects. Ordinary milestones require no extra parent approval or
+repeated parent file-by-file review. Keep one active implementation PR per coherent change. Open a lane
+only for a completion condition or independently useful cross-team dependency.
+
+Replace packet/return/reducer obligations, repeated hash recitations and duplicate unchanged-code tests
+only after the existing `fsgg.routine-delivery/v1` route and its consumers qualify one versioned PR result:
+actual checkout/commit, changed files, tests, required checks, reviewed head, native merge identity,
+tested-versus-delivered Git tree or canonical file-tree difference, and workflow/run/attempt references.
+The owner performs the mechanical join once; changed behavior or failed coherent validation requires
+qualification. A run's `head_sha` alone does not prove checkout identity. Until this evidence gate is
+qualified, retain the existing packet/return/reducer and readback route; do not claim missing automation
+exists. Once qualified, the issue and linked native result replace those coordination artifacts; helpers
+remain optional diagnostics. Read applicable governing instructions at assignment and after relevant
+changes; this rule removes neither instruction discovery nor required operation evidence.
+
+After protected delivery of the governing change **and** qualification of reply notifications and
+missed-event/restart reconciliation, replace fixed thirty-minute reporting, five-minute unchanged-mail
+checks and unchanged-hold comments with updates when a deliverable is ready, a blocker appears/clears,
+a decision is needed or a promised delivery time changes, plus one daily programme summary while active.
+External requests retain an owner, exact reply contract and escalation time. Until that notification gate
+is qualified, retain current reporting and handoff checks. Notification loss retains the affected hold
+and requires original-identity reconciliation; it cannot trigger a retry or release a reservation.
+
+All stages preserve required checks, exact-head coherent validation and
+[ADR-0084](../../../docs/adr/0084-semantic-reuse-never-cancels-coherent-validation.md), resource admission,
+operation-specific authority and independent readback across deployment or credential trust boundaries.
+Source delivery, publication, installation and native acceptance remain distinct. Original `.103` stays
+attempted-unknown and unreplayed; `.104` and other original effects remain held. Capture accepted reusable
+knowledge with implementation or one consolidated follow-up. Before pilot operation, declare the
+comparable baseline, effort attribution and coverage in the owning plan; missing coverage leaves the
+80% effort-reduction claim inconclusive. Activation, adoption and savings each require their own evidence.
+
 ## Default workflow
 
 Use the user-selected V2-CTX-01 default: pinned packets, typed returns, `delta` views, bounded `view`, declared
@@ -229,6 +290,9 @@ consolidation and a new execution platform require the existing material-plannin
 skill update alone neither performs nor authorizes such migrations.
 
 ## Report progress every 30 minutes
+
+The activated pilot uses its notification-qualified reporting rule above. Until then, and for other
+programme outcomes, apply this cadence.
 
 While the programme is active, send a user-facing update every 30 minutes, starting at programme
 entry. State the reporting window and timezone; cover the interval since the previous update.

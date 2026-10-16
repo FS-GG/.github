@@ -1,5 +1,11 @@
 # Delegated bootstrap and restart
 
+For an activated pilot outcome, recover from its owning issue and native evidence under the
+[parent pilot rule](../SKILL.md#conditional-three-outcome-pilot). Snapshot, dispatch-index, packet and
+return construction below are optional diagnostics after the replacement evidence gate qualifies.
+Preserve complete reservations, original identities and unresolved effects; missing replacements retain
+the current route.
+
 Read this when assigned bounded recovery or packet assembly. The parent supplies user scope, known
 campaign/attempt identities, available references and actual capacity/operation constraints. Read the
 parent skill and applicable governing instructions in full; do not inherit the parent's conversation.

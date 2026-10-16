@@ -1,5 +1,10 @@
 # Recover a killed session without a handoff
 
+For an activated pilot outcome, the [parent pilot rule](../SKILL.md#conditional-three-outcome-pilot)
+uses the owning issue and native evidence for recovery. It replaces mandatory snapshot/index/packet
+reconstruction only after the replacement evidence gate qualifies. Every reservation, unknown operation
+and reconciliation obligation below still applies.
+
 Use this during delegated bootstrap when no current handoff exists. This is source/native reconciliation,
 not implementation, a new feature plan or permission to replay operations. A continuation request supplies
 the requested scope; missing history cannot expand it. Existing plans and effect-specific admission still
