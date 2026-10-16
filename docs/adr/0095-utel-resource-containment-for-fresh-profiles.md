@@ -1,6 +1,6 @@
 # ADR-0095: Enforced UTEL resource containment for fresh profiles
 
-- **Status:** Proposed for independent review; production budgets and admission pending
+- **Status:** Accepted policy; implementation, production budgets and admission pending
 - **Date:** 2026-10-16
 - **Affects:** `.github`, Coordination and SystemAdmin UTEL integration
 - **Decision owner:** Programme
