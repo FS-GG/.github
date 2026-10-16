@@ -97,3 +97,7 @@ physical-copy accounting, 65,536-byte operative cap, original-effect safeguards 
 other domain decisions remain in force. `.103` is attempted-unknown and unreplayed;
 `.104` and native/original effects remain held. No key operation, installation,
 signing, grant, ACK, handoff or replay is authorized by this record alone.
+
+[ADR-0095](0095-utel-resource-containment-for-fresh-profiles.md) selects a separate resource
+acceptance objective for fresh UTEL profiles. It changes none of this record's principal,
+credential-custody, enrollment or exact-source review requirements and grants no operation.

@@ -1027,6 +1027,42 @@ source controls do not qualify replacement hosted ordinary settlement, the full
 exact-main workflow or publication. The accepted original `.103` archive and all
 release-effect boundaries remain fixed.
 
+### Fresh-profile resource containment — 2026-10-16
+
+[ADR-0095](../adr/0095-utel-resource-containment-for-fresh-profiles.md) selects enforced
+resource containment for a separately authorized fresh UTEL profile. The acceptance
+result is finite installed budgets and tested refusal/Unknown behavior within explicit
+boundaries, not a universal physical-copy bound or guaranteed availability. The initial
+scope is one operational construction and one retained original. Actual production budgets,
+provider/runtime admission and the fresh original identity remain unset.
+
+The next acceptance target is one integrated maintained parent→Python owner→typed sink→
+owned provider→exact readback→checked source receipt journey, including the same original's
+pre-extraction diagnostic reservation and owned recipient persistence. Producer preparation
+factoring, coherent source closure/vector selection and matching consumer pins must land
+together with their source controls. A controlled backend pass alone does not qualify the
+actual provider; the separate provider's source candidate alone does not qualify the parent.
+Public CI remains independent of private source and credentials.
+
+| Owner | Required contribution before runtime admission |
+| --- | --- |
+| Python producer and Coordination | Exact delivered construction/transport, canonical original/checkpoint/receipt joins, coherent pins and actual integrated success/fault evidence. |
+| SystemAdmin | Exact provider/runtime/storage/supervision and recipient boundaries; finite numeric budgets with justified headroom; independently observed enforcement, persistence/fencing/recovery and original-clock mapping. |
+| Authority owner and independent reviewer | Exact delivered authority-code acceptance; retained-evidence and principal-substitution controls. |
+| Credential custodians and Programme | Separate provisioning/enrollment/readback, explicit coverage/exclusion acceptance and authorization of a distinct fresh profile/original. |
+
+Source acceptance remains separate from runtime acceptance. The integrated matrix must
+cover resource pressure, storage/inode exhaustion, interrupted commit/readback/delivery,
+owner loss, duplicate/concurrent attempts, clock/retention boundaries and alternate egress.
+Supplier measurements inform finite budgets; neither a sampled peak nor a source-test
+ceiling establishes a production maximum. Existing source/job admissions and native holds
+remain unchanged until their own requirements are met.
+
+The following original `.103` section remains the legacy policy. Its 65,536-byte universal
+physical-copy requirement is unproved, physical bound null and admission false. `.103`
+remains attempted-unknown/unreplayed; all 439 reservations and `.104` holds survive. The
+physical-proof outcome must not be marked proved because this future objective was selected.
+
 ### Original .103 authentication domain policy — 2026-10-15
 
 

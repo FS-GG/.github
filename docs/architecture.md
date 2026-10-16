@@ -131,6 +131,12 @@ public pins. This is a selected trust boundary, not an assertion that the
 environments, keys, services, or enrollment already exist; operational authority
 remains held pending verified custody, transport, enrollment, and recovery.
 
+[ADR-0095](adr/0095-utel-resource-containment-for-fresh-profiles.md) selects enforced
+resource containment as the acceptance objective for separately authorized fresh UTEL
+profiles. Runtime budgets and installed enforcement remain unqualified. It supplies no
+universal physical-copy bound and changes none of the legacy original holds or authority
+boundaries.
+
 ---
 
 ## 2. Why it is split this way
