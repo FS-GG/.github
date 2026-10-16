@@ -5125,6 +5125,256 @@
       "alias_class": "endpoint-copy-13",
       "identity_basis": "observed-identity",
       "uncertainty": "Source-controlled scope only; no physical quantity or cross-cut lifetime/fit. Parser-endpoint overlap unproved at early cut; observed memory lengths/offsets and task joins are source-bound contract facts."
+    },
+    {
+      "id": "python-capacity:phase-1",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/.github",
+        "revision": "a6d63d2657ed15c66ca46b07a66ebd25f5789799",
+        "path": "tests/release-successor-authentication/slot-backing-capacity-tests.py",
+        "sha256": "a831e911089a322ccdc5bb1add8b8da5ec3219c2adfb5bb09b5554f89b9221b6"
+      },
+      "scope": {
+        "topology": "python-terminal-backing-capacity-controlled",
+        "run": "pr4588-capacity-source-witness",
+        "process": "python-in-memory-owner",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "phase-1",
+      "representation": "bytearray",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 1142,
+      "ownership": "stable-backend",
+      "alias_class": "phase-1",
+      "identity_basis": "observed-identity",
+      "uncertainty": "PR4588 controlled source witness; actual CPython buffer capacity, not headers/allocator rounding/resident memory or complete population. Separate runtime runs/cuts do not establish simultaneity, release, fit or native authority."
+    },
+    {
+      "id": "python-capacity:phase-2",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/.github",
+        "revision": "a6d63d2657ed15c66ca46b07a66ebd25f5789799",
+        "path": "tests/release-successor-authentication/slot-backing-capacity-tests.py",
+        "sha256": "a831e911089a322ccdc5bb1add8b8da5ec3219c2adfb5bb09b5554f89b9221b6"
+      },
+      "scope": {
+        "topology": "python-terminal-backing-capacity-controlled",
+        "run": "pr4588-capacity-source-witness",
+        "process": "python-in-memory-owner",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "phase-2",
+      "representation": "bytearray",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 973,
+      "ownership": "stable-backend",
+      "alias_class": "phase-2",
+      "identity_basis": "observed-identity",
+      "uncertainty": "PR4588 controlled source witness; actual CPython buffer capacity, not headers/allocator rounding/resident memory or complete population. Separate runtime runs/cuts do not establish simultaneity, release, fit or native authority."
+    },
+    {
+      "id": "python-capacity:phase-3",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/.github",
+        "revision": "a6d63d2657ed15c66ca46b07a66ebd25f5789799",
+        "path": "tests/release-successor-authentication/slot-backing-capacity-tests.py",
+        "sha256": "a831e911089a322ccdc5bb1add8b8da5ec3219c2adfb5bb09b5554f89b9221b6"
+      },
+      "scope": {
+        "topology": "python-terminal-backing-capacity-controlled",
+        "run": "pr4588-capacity-source-witness",
+        "process": "python-in-memory-owner",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "phase-3",
+      "representation": "bytearray",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 831,
+      "ownership": "stable-backend",
+      "alias_class": "phase-3",
+      "identity_basis": "observed-identity",
+      "uncertainty": "PR4588 controlled source witness; actual CPython buffer capacity, not headers/allocator rounding/resident memory or complete population. Separate runtime runs/cuts do not establish simultaneity, release, fit or native authority."
+    },
+    {
+      "id": "python-capacity:phase-4",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/.github",
+        "revision": "a6d63d2657ed15c66ca46b07a66ebd25f5789799",
+        "path": "tests/release-successor-authentication/slot-backing-capacity-tests.py",
+        "sha256": "a831e911089a322ccdc5bb1add8b8da5ec3219c2adfb5bb09b5554f89b9221b6"
+      },
+      "scope": {
+        "topology": "python-terminal-backing-capacity-controlled",
+        "run": "pr4588-capacity-source-witness",
+        "process": "python-in-memory-owner",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "phase-4",
+      "representation": "bytearray",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 918,
+      "ownership": "stable-backend",
+      "alias_class": "phase-4",
+      "identity_basis": "observed-identity",
+      "uncertainty": "PR4588 controlled source witness; actual CPython buffer capacity, not headers/allocator rounding/resident memory or complete population. Separate runtime runs/cuts do not establish simultaneity, release, fit or native authority."
+    },
+    {
+      "id": "python-capacity:phase-5",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/.github",
+        "revision": "a6d63d2657ed15c66ca46b07a66ebd25f5789799",
+        "path": "tests/release-successor-authentication/slot-backing-capacity-tests.py",
+        "sha256": "a831e911089a322ccdc5bb1add8b8da5ec3219c2adfb5bb09b5554f89b9221b6"
+      },
+      "scope": {
+        "topology": "python-terminal-backing-capacity-controlled",
+        "run": "pr4588-capacity-source-witness",
+        "process": "python-in-memory-owner",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "phase-5",
+      "representation": "bytearray",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 832,
+      "ownership": "stable-backend",
+      "alias_class": "phase-5",
+      "identity_basis": "observed-identity",
+      "uncertainty": "PR4588 controlled source witness; actual CPython buffer capacity, not headers/allocator rounding/resident memory or complete population. Separate runtime runs/cuts do not establish simultaneity, release, fit or native authority."
+    },
+    {
+      "id": "python-capacity:phase-6",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/.github",
+        "revision": "a6d63d2657ed15c66ca46b07a66ebd25f5789799",
+        "path": "tests/release-successor-authentication/slot-backing-capacity-tests.py",
+        "sha256": "a831e911089a322ccdc5bb1add8b8da5ec3219c2adfb5bb09b5554f89b9221b6"
+      },
+      "scope": {
+        "topology": "python-terminal-backing-capacity-controlled",
+        "run": "pr4588-capacity-source-witness",
+        "process": "python-in-memory-owner",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "phase-6",
+      "representation": "bytearray",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 992,
+      "ownership": "stable-backend",
+      "alias_class": "phase-6",
+      "identity_basis": "observed-identity",
+      "uncertainty": "PR4588 controlled source witness; actual CPython buffer capacity, not headers/allocator rounding/resident memory or complete population. Separate runtime runs/cuts do not establish simultaneity, release, fit or native authority."
+    },
+    {
+      "id": "python-capacity:old",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/.github",
+        "revision": "a6d63d2657ed15c66ca46b07a66ebd25f5789799",
+        "path": "tests/release-successor-authentication/slot-backing-capacity-tests.py",
+        "sha256": "a831e911089a322ccdc5bb1add8b8da5ec3219c2adfb5bb09b5554f89b9221b6"
+      },
+      "scope": {
+        "topology": "python-terminal-backing-capacity-controlled",
+        "run": "pr4588-capacity-source-witness",
+        "process": "python-in-memory-owner",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "old",
+      "representation": "bytearray",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 832,
+      "ownership": "staging-backend",
+      "alias_class": "old",
+      "identity_basis": "observed-identity",
+      "uncertainty": "PR4588 controlled source witness; actual CPython buffer capacity, not headers/allocator rounding/resident memory or complete population. Separate runtime runs/cuts do not establish simultaneity, release, fit or native authority."
+    },
+    {
+      "id": "python-capacity:candidate",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/.github",
+        "revision": "a6d63d2657ed15c66ca46b07a66ebd25f5789799",
+        "path": "tests/release-successor-authentication/slot-backing-capacity-tests.py",
+        "sha256": "a831e911089a322ccdc5bb1add8b8da5ec3219c2adfb5bb09b5554f89b9221b6"
+      },
+      "scope": {
+        "topology": "python-terminal-backing-capacity-controlled",
+        "run": "pr4588-capacity-source-witness",
+        "process": "python-in-memory-owner",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "candidate",
+      "representation": "bytearray",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 992,
+      "ownership": "staging-backend",
+      "alias_class": "candidate",
+      "identity_basis": "observed-identity",
+      "uncertainty": "PR4588 controlled source witness; actual CPython buffer capacity, not headers/allocator rounding/resident memory or complete population. Separate runtime runs/cuts do not establish simultaneity, release, fit or native authority."
+    },
+    {
+      "id": "python-capacity:readback",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/.github",
+        "revision": "a6d63d2657ed15c66ca46b07a66ebd25f5789799",
+        "path": "tests/release-successor-authentication/slot-backing-capacity-tests.py",
+        "sha256": "a831e911089a322ccdc5bb1add8b8da5ec3219c2adfb5bb09b5554f89b9221b6"
+      },
+      "scope": {
+        "topology": "python-terminal-backing-capacity-controlled",
+        "run": "pr4588-capacity-source-witness",
+        "process": "python-in-memory-owner",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "readback",
+      "representation": "bytearray",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 992,
+      "ownership": "staging-backend",
+      "alias_class": "readback",
+      "identity_basis": "observed-identity",
+      "uncertainty": "PR4588 controlled source witness; actual CPython buffer capacity, not headers/allocator rounding/resident memory or complete population. Separate runtime runs/cuts do not establish simultaneity, release, fit or native authority."
+    },
+    {
+      "id": "python-capacity:decoder_buffer",
+      "provenance": {
+        "source_type": "git-blob",
+        "repository": "FS-GG/.github",
+        "revision": "a6d63d2657ed15c66ca46b07a66ebd25f5789799",
+        "path": "tests/release-successor-authentication/slot-backing-capacity-tests.py",
+        "sha256": "a831e911089a322ccdc5bb1add8b8da5ec3219c2adfb5bb09b5554f89b9221b6"
+      },
+      "scope": {
+        "topology": "python-terminal-backing-capacity-controlled",
+        "run": "pr4588-capacity-source-witness",
+        "process": "python-in-memory-owner",
+        "attempt": "original-controlled-attempt"
+      },
+      "cut": "sixth-readback-selected-value-graphs",
+      "role": "decoder_buffer",
+      "representation": "bytearray",
+      "quantity_type": "backing-capacity-bytes",
+      "quantity": 318,
+      "ownership": "decoder",
+      "alias_class": "decoder_buffer",
+      "identity_basis": "observed-identity",
+      "uncertainty": "PR4588 controlled source witness; actual CPython buffer capacity, not headers/allocator rounding/resident memory or complete population. Separate runtime runs/cuts do not establish simultaneity, release, fit or native authority."
     }
   ],
   "aliases": [
@@ -5219,6 +5469,7 @@
     "Cross-topology correspondence and a complete simultaneous physical accounting proof; no joined 65536-byte fit",
     "PR1005 selected backing capacity is not physical memory; payload slice bytes (4835) are not allocations; unresolved ACK/child-read/callback-reader live-root joins and unselected runtime/stream/caller/peer roots remain unknown",
     "PR1007 early held ACK/read source cut establishes only selected 199/2048 backing capacities and pending joins; parser-endpoint overlap, earlier ACK arrays, terminal survival/reclamation and other populations remain unproved",
-    "PR1009 terminal pending callback reader establishes one backing-capacity byte with disjointness to selected11/endpoint26 only; do not sum across source cuts or infer full physical population, release, fit, installed/native custody or original-operation authority"
+    "PR1009 terminal pending callback reader establishes one backing-capacity byte with disjointness to selected11/endpoint26 only; do not sum across source cuts or infer full physical population, release, fit, installed/native custody or original-operation authority",
+    "PR4588 selected Python ten-buffer capacity remains separate from logical lengths and other source runs; complete simultaneous populations, headers/allocator rounding, OS/stream/caller/failure/restart retention and physical enforcement/fit/native acceptance remain unproved"
   ]
 }
