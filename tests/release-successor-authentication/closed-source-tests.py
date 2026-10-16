@@ -50,6 +50,32 @@ class ClosedSourceControls(unittest.TestCase):
                 self.assertEqual(bytes(subject._original.backend.stores['phase-'+str(row['ordinal'])]), bytes.fromhex(row['bytes']))
             self.assertIs(subject.run(), closed.Status.REFUSED)
             with self.assertRaises(closed.Refused): self.core(original=subject._original)
+    def test_internal_owned_construction_uses_maintained_sink_owner_and_decoder(self):
+        # Controlled SOURCE composition only; this is not a private provider test.
+        original = closed._Original(closed._TOKEN)
+        original.started = True  # Fixed composer owns consumption before reserve.
+        binding = self.vectors['binding']
+        identity = {'path': 'closed-owned-slot', 'binding': closed._wire.validate_auth_binding(binding),
+                    'invocation': binding['invocation'], 'storeGeneration': 1}
+        prepared = closed._slots._validate_preparation(binding, identity, dict(closed._slots.REPORT),
+            binding['clock'], closed._slots.population())
+        owned_sink = closed._slots.InertPhaseSlotSink._initialize_owned(prepared, original.backend)
+        subject = object.__new__(closed._Core)
+        with patch.object(closed, '_Original', side_effect=AssertionError('no second original')):
+            subject._initialize_owned(closed._TOKEN, original, binding, self.raw, owned_sink)
+            self.assertIs(subject._sink, owned_sink)
+            self.assertIs(type(subject._owner), closed._consumer.InertCallbackOwner)
+            self.assertIs(type(subject._decoder), closed._consumer.InertCallbackRequestDecoder)
+            self.assertIs(subject.run(), closed.Status.COMPLETE)
+            self.assertEqual(subject._replies.getvalue(), b''.join(bytes.fromhex(row['response']) for row in self.vectors['exchanges']))
+            self.assertIs(subject.diagnostic('programme-acceptance', 'initial-status'), closed.Status.OBSERVED)
+        with self.assertRaises(closed.Refused):
+            subject._initialize_owned(closed._TOKEN, original, binding, self.raw, owned_sink)
+        with self.assertRaises(closed.Refused):
+            subject._initialize_owned(object(), original, binding, self.raw, owned_sink)
+        with self.assertRaises(closed.Refused):
+            subject._initialize_owned(closed._TOKEN, original, binding, self.raw, object())
+
     def test_failure_cuts_are_sanitized_and_original_never_restarts(self):
         for cut in ('write','short','flush','confirmation','backend'):
             subject = self.core(cut=cut)
