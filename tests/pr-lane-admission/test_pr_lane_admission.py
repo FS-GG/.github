@@ -146,6 +146,23 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
         self.assertEqual("update-readback-mismatch", result["reason"])
         self.assertEqual(1, sum(c["arguments"][2] == "PATCH" for c in calls))
 
+    def test_update_uncertain_write_and_readback_failures_never_succeed_or_retry(self):
+        for failure in ["patch_fail_before", "patch_fail_after", "fail_read_after_patch"]:
+            with self.subTest(failure=failure):
+                state = self.update_state()
+                state[failure] = True
+                completed, result, calls = self.update(state)
+                self.assertEqual(3, completed.returncode, completed.stdout)
+                self.assertFalse(result["ok"])
+                expected = ("post-write-readback-unresolved" if failure == "fail_read_after_patch"
+                            else "update-write-unresolved")
+                self.assertEqual(expected, result["reason"])
+                self.assertEqual("FS-GG/example", result["repo"])
+                self.assertEqual(42, result["number"])
+                self.assertEqual(EXPECTED_SHA, result["headSha"])
+                self.assertEqual(1, sum(c["arguments"][2] == "PATCH" for c in calls))
+                self.assertFalse(any(c["arguments"][2] == "POST" for c in calls))
+
     def test_update_refuses_wrong_candidate_or_moved_ref(self):
         for field in ["sha", "ref", "repo"]:
             state = self.update_state()

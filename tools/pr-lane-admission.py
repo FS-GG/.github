@@ -171,6 +171,7 @@ def update_body(fresh: str, proposed: str, branch: str, head: str,
 
 
 def update_pull(arguments: argparse.Namespace, proposed: str, identity: dict[str, Any]) -> dict[str, Any]:
+    identity = {**identity, "number": arguments.update_pr, "headSha": arguments.head_sha}
     endpoint = f"/repos/{arguments.repo}/pulls/{arguments.update_pr}"
 
     def read() -> dict[str, Any]:
@@ -201,9 +202,16 @@ def update_pull(arguments: argparse.Namespace, proposed: str, identity: dict[str
             raise Refusal("update-conflict", **identity)
         unchanged = before["body"] == body and before.get("title") == arguments.title
         if not arguments.inspect and not unchanged:
-            run_gh(arguments.gh, ["--method", "PATCH", endpoint, "--input", "-"],
-                   stdin=json.dumps({"body": body, "title": arguments.title}, ensure_ascii=False))
-            after = read()
+            try:
+                run_gh(arguments.gh, ["--method", "PATCH", endpoint, "--input", "-"],
+                       stdin=json.dumps({"body": body, "title": arguments.title}, ensure_ascii=False))
+            except ToolError as error:
+                # A failed response does not establish whether GitHub applied it.
+                raise Refusal("update-write-unresolved", **identity) from error
+            try:
+                after = read()
+            except (ToolError, Refusal) as error:
+                raise Refusal("post-write-readback-unresolved", **identity) from error
             if after["body"] != body or after.get("title") != arguments.title:
                 raise Refusal("update-readback-mismatch", **identity)
         return {"ok": True, "action": "admitted" if arguments.inspect else "unchanged" if unchanged else "updated",
