@@ -50,8 +50,11 @@ For routine delivery:
    `claim-generation` remains only the strict item gate and treats routine branches as not applicable.
    Until branch protection is armed after observation, the pilot owner must still require the reported
    `routine-eligibility` success. A moved head refuses. For an existing-PR repair, review the local repair SHA,
-   rebind the PR marker before pushing it, then qualify that exact new head; obsolete-head checks cannot qualify
-   or poison it.
+   push that exact SHA without force, then use `tools/pr-lane-admission.py --update-pr` with
+   `--previous-head-sha` to rebind the marker while preserving native admission metadata. The helper
+   requires the native PR head to equal the new SHA; verify its readback before qualifying fresh
+   exact-head checks. Preserve early stale-marker failures as history; they cannot qualify the repair.
+   Never replace this update route with a manual PR-body write or a fabricated initial admission.
    This is a trusted-repository-writer reliability boundary: it catches accidental mistakes and drift but
    does not claim adversarial protection from a writer able to alter Actions workflows or spoof a name-based
    check context. The accountable human explicitly accepted that smaller guarantee for routine work;
