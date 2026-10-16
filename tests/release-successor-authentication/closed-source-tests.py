@@ -19,6 +19,39 @@ def audit(event, args):
 sys.addaudithook(audit)
 import release_successor_closed_callback as closed
 
+class _NonseekableInput:
+    """Fixed inert test endpoint: positive bounded reads, no file-like extras."""
+    __slots__ = ('data', 'offset', 'reads', 'fragment', 'fail_at')
+    def __init__(self, data, *, fragment=4096, fail_at=None):
+        self.data, self.fragment, self.fail_at = data, fragment, fail_at
+        self.offset, self.reads = 0, []
+    def read(self, count):
+        assert type(count) is int and 1 <= count <= 4096
+        self.reads.append(count)
+        if len(self.reads) == self.fail_at: raise OSError('controlled input loss')
+        piece = self.data[self.offset:self.offset + min(count, self.fragment)]
+        self.offset += len(piece)
+        return piece
+
+class _NonseekableReplies:
+    """Fixed inert test endpoint with real short/write/flush failure behavior."""
+    __slots__ = ('chunks', 'writes', 'flushes', 'cut', 'fail_at')
+    def __init__(self, *, cut=None, fail_at=1):
+        self.chunks, self.writes, self.flushes = [], 0, 0
+        self.cut, self.fail_at = cut, fail_at
+    def write(self, raw):
+        assert type(raw) is bytes and 1 <= len(raw) <= 512
+        self.writes += 1
+        if self.cut == 'write' and self.writes == self.fail_at:
+            raise OSError('controlled output loss')
+        piece = raw[:-1] if self.cut == 'short' and self.writes == self.fail_at else raw
+        self.chunks.append(piece)
+        return len(piece)
+    def flush(self):
+        self.flushes += 1
+        if self.cut == 'flush' and self.flushes == self.fail_at:
+            raise OSError('controlled flush loss')
+
 class ClosedSourceControls(unittest.TestCase):
     def setUp(self):
         self.vectors = json.loads((HERE / 'slot-callback-pair-vectors.json').read_bytes())
@@ -31,7 +64,7 @@ class ClosedSourceControls(unittest.TestCase):
         self.assertEqual(closed.validate_profile(raw), hashlib.sha256(raw).hexdigest())
         with patch.object(closed, '_Original', side_effect=AssertionError('no construction')):
             with self.assertRaisesRegex(closed.Refused, 'unavailable'): closed.prepare(raw)
-        for extra in ('writer', 'backend', 'input_stream', 'output_path', 'runtime'):
+        for extra in ('writer', 'backend', 'input_stream', 'output_path', 'runtime', 'owned_input', 'owned_replies'):
             with self.subTest(extra=extra), self.assertRaises(TypeError): closed.prepare(raw, **{extra: object()})
         variants = [raw+b' ', b'{}', b'x'*65537, bytearray(raw), raw[:-1]+b',"admission":false}']
         value = json.loads(raw)
@@ -75,6 +108,120 @@ class ClosedSourceControls(unittest.TestCase):
             subject._initialize_owned(object(), original, binding, self.raw, owned_sink)
         with self.assertRaises(closed.Refused):
             subject._initialize_owned(closed._TOKEN, original, binding, self.raw, object())
+
+    def endpoint_core(self, incoming, replies, **options):
+        # Fixed controlled SOURCE construction. No private provider or process.
+        original = closed._Original(closed._TOKEN)
+        original.started = True
+        binding = self.vectors['binding']
+        identity = {'path': 'closed-owned-slot', 'binding': closed._wire.validate_auth_binding(binding),
+                    'invocation': binding['invocation'], 'storeGeneration': 1}
+        prepared = closed._slots._validate_preparation(binding, identity, dict(closed._slots.REPORT),
+            binding['clock'], closed._slots.population())
+        sink = closed._slots.InertPhaseSlotSink._initialize_owned(prepared, original.backend)
+        subject = object.__new__(closed._Core)
+        subject._initialize_endpoints_owned(closed._TOKEN, original, binding, sink,
+            incoming, replies, **options)
+        return subject
+
+    def test_owned_nonseekable_endpoints_complete_without_eof_or_fourteenth_read(self):
+        expected = b''.join(bytes.fromhex(row['response']) for row in self.vectors['exchanges'])
+        for fragment in (1, 4096):
+            for input_fragment in (1, 4096):
+                with self.subTest(fragment=fragment, input_fragment=input_fragment):
+                    incoming = _NonseekableInput(self.raw + b'unread-fourteenth', fragment=input_fragment)
+                    replies = _NonseekableReplies()
+                    subject = self.endpoint_core(incoming, replies, fragment=fragment)
+                    self.assertEqual(incoming.reads, [])
+                    self.assertEqual(replies.writes, 0)
+                    for name in ('seek', 'tell', 'getvalue', 'getbuffer', 'fileno', 'close'):
+                        self.assertFalse(hasattr(incoming, name))
+                        self.assertFalse(hasattr(replies, name))
+                    self.assertIs(subject.run(), closed.Status.COMPLETE)
+                    self.assertEqual(incoming.offset, len(self.raw))
+                    self.assertEqual(b''.join(replies.chunks), expected)
+                    self.assertEqual((replies.writes, replies.flushes), (13, 13))
+                    self.assertEqual(subject._decoder.observed_request_bytes, len(self.raw))
+                    for row in self.vectors['slotEvidence']['slots']:
+                        self.assertEqual(bytes(subject._original.backend.stores['phase-'+str(row['ordinal'])]), bytes.fromhex(row['bytes']))
+                    self.assertIs(subject.diagnostic('programme-acceptance', 'initial-status'), closed.Status.OBSERVED)
+                    read_count = len(incoming.reads)
+                    self.assertIs(subject.run(), closed.Status.REFUSED)
+                    self.assertEqual(len(incoming.reads), read_count)
+                    self.assertIs(subject._cleanup, closed.Status.UNKNOWN)
+
+    def test_owned_endpoint_prefix_truncation_read_loss_and_aggregate_refuse(self):
+        for raw in (b'', b'\0\0', (4093).to_bytes(4, 'big') + b'not-read', b'\0'*4, self.raw[:-1]):
+            with self.subTest(raw=raw[:12]):
+                incoming, replies = _NonseekableInput(raw), _NonseekableReplies()
+                subject = self.endpoint_core(incoming, replies)
+                self.assertIs(subject.run(), closed.Status.REFUSED)
+                if raw[:4] in ((4093).to_bytes(4, 'big'), b'\0'*4):
+                    self.assertEqual(incoming.reads, [4])
+                    self.assertEqual(replies.writes, 0)
+        incoming, replies = _NonseekableInput(self.raw, fail_at=2), _NonseekableReplies()
+        subject = self.endpoint_core(incoming, replies)
+        self.assertIs(subject.run(), closed.Status.REFUSED)
+        self.assertEqual(replies.writes, 0)
+        # Controlled counter cut tests the maintained aggregate guard through run;
+        # it is not a claim that these maximum vectors naturally exhaust the cap.
+        incoming, replies = _NonseekableInput(self.raw), _NonseekableReplies()
+        subject = self.endpoint_core(incoming, replies)
+        subject._decoder._observed = closed._consumer.CALLBACK_AGGREGATE
+        self.assertIs(subject.run(), closed.Status.REFUSED)
+        self.assertEqual(incoming.reads, [4])
+        self.assertEqual(replies.writes, 0)
+
+    def test_owned_endpoint_output_failures_stop_without_retry_or_confirmation(self):
+        for cut in ('short', 'write', 'flush'):
+            for fail_at in (1, 13):
+                with self.subTest(cut=cut, fail_at=fail_at):
+                    incoming = _NonseekableInput(self.raw + b'unread-fourteenth')
+                    replies = _NonseekableReplies(cut=cut, fail_at=fail_at)
+                    subject = self.endpoint_core(incoming, replies)
+                    self.assertIs(subject.run(), closed.Status.REFUSED)
+                    self.assertEqual(replies.writes, fail_at)
+                    self.assertEqual(replies.flushes, fail_at if cut == 'flush' else fail_at - 1)
+                    self.assertIs(subject._cleanup, closed.Status.UNKNOWN)
+                    if fail_at == 13:
+                        self.assertEqual(subject._sink.ordinal, 6)
+                        self.assertEqual(incoming.offset, len(self.raw))
+                    before = (len(incoming.reads), replies.writes, replies.flushes)
+                    self.assertIs(subject.run(), closed.Status.REFUSED)
+                    self.assertEqual((len(incoming.reads), replies.writes, replies.flushes), before)
+                    with self.assertRaises(closed.Refused): self.core(original=subject._original)
+        incoming, replies = _NonseekableInput(self.raw), _NonseekableReplies()
+        subject = self.endpoint_core(incoming, replies, cut='confirmation')
+        self.assertIs(subject.run(), closed.Status.REFUSED)
+        self.assertEqual((replies.writes, replies.flushes), (1, 1))
+        self.assertIsNotNone(subject._decoder._reply)
+        self.assertTrue(subject._owner._closed)
+
+    def test_owned_endpoint_initialization_guards_and_bytesio_path_stay_closed(self):
+        incoming, replies = _NonseekableInput(self.raw), _NonseekableReplies()
+        subject = self.endpoint_core(incoming, replies)
+        args = (closed._TOKEN, subject._original, self.vectors['binding'], subject._sink, incoming, replies)
+        with self.assertRaises(closed.Refused): subject._initialize_endpoints_owned(*args)
+        for token, sink in ((object(), subject._sink), (closed._TOKEN, object())):
+            cold = object.__new__(closed._Core)
+            with self.assertRaises(closed.Refused):
+                cold._initialize_endpoints_owned(token, subject._original, self.vectors['binding'], sink, incoming, replies)
+            self.assertFalse(hasattr(cold, '_attempted'))
+        for options in ({'cut': 'foreign'}, {'fragment': 0}, {'fragment': 4097}, {'fragment': True}):
+            cold = object.__new__(closed._Core)
+            with self.assertRaises(closed.Refused): cold._initialize_endpoints_owned(*args, **options)
+            self.assertFalse(hasattr(cold, '_attempted'))
+        self.assertEqual(incoming.reads, [])
+        self.assertEqual((replies.writes, replies.flushes), (0, 0))
+        with patch.object(closed.io, 'BytesIO', wraps=io.BytesIO) as buffers:
+            buffered = self.core()
+            self.assertEqual(buffers.call_args_list, [unittest.mock.call(self.raw), unittest.mock.call()])
+            self.assertIs(buffered.run(), closed.Status.COMPLETE)
+        original = closed._Original(closed._TOKEN)
+        with patch.object(closed._slots.InertPhaseSlotSink, 'prepare', side_effect=closed._slots.Refused('controlled preparation loss')):
+            with self.assertRaises(closed._slots.Refused): self.core(original=original)
+        self.assertTrue(original.started)
+        with self.assertRaises(closed.Refused): self.core(original=original)
 
     def test_failure_cuts_are_sanitized_and_original_never_restarts(self):
         for cut in ('write','short','flush','confirmation','backend'):
