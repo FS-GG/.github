@@ -226,15 +226,18 @@ and inert unsigned ACK SOURCE assertions are delivered. The final [bootstrap](ht
 and [coherent qualification](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38943377854) passed
 at `8f513dd9`. The original [formal-base timeout](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38936797965/job/117097229642)
 remains unexplained and retained. Both successful qualifications used the existing canonical Q2
-lifecycle retry; the new pre-parser retry remains unexercised. Post-merge coherent observation remains
-pending. No further receiver surrogate is selected. Durability remains Unknown; production
+lifecycle retry; the new pre-parser retry remains unexercised. [Post-merge coherent validation](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38949025174)
+also passed at the exact delivered revision. No further receiver surrogate is selected. Durability
+remains Unknown; production
 `prepareAck` and `reserveHost` still refuse, and no live ACK authority is established.
 
 Home's host transaction, current codecs and structural consumption have [accepted bounded SOURCE
 qualification](https://github.com/FS-GG/.github/issues/4516#issuecomment-6222834756): 47/47 cases passed
-with no skips or test/collection errors. The earlier failed qualification remains retained. Private
-source and Atlas integration remain pending. The actual current authentication factory is the next
-source join; receiver residency/custody remains unresolved. Durability remains Unknown, and actual
+with no skips or test/collection errors. The earlier failed qualification remains retained. [Supplied
+private source/Atlas delivery correspondence](https://github.com/FS-GG/.github/issues/4516#issuecomment-6222985659)
+is accepted; native private merge remains Home-observed, with no hosted CI PASS or installed acceptance
+inferred. Current authentication-factory source preparation is underway; receiver residency/custody
+remains unresolved. Durability remains Unknown, and actual
 authentication, physical/native/production qualification and installed acceptance remain unestablished.
 
 Keep source delivery, publication, installed qualification and runtime acceptance separate.
