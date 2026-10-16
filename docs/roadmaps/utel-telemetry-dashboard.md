@@ -10,6 +10,20 @@ Roadmap position: **V2-EFF-01.2–.6 — telemetry, dashboard and receiver owner
 
 Publish a useful, privacy-bounded GitHub Pages dashboard for FS-GG delivery telemetry. Public GitHub Actions and merged-delivery data remain useful on their own. An approved private host may add closed aggregates and bounded item detail only through explicit public aliases, category mappings, links and notes; missing or stale host evidence stays visible and never becomes zero or compliant.
 
+## Facts-first source slice — 2026-10-16
+
+The source candidate presents existing public Actions and merged-delivery samples, completed-item
+coverage, launcher gaps and unknown usage/cost before additional measurements. Each population keeps
+its own denominator. Source observation clocks remain separate from build/browser refresh; missing
+producer, ingestion and publication receipts remain unavailable. Measurements and analysis status
+remain visible while causal explanations, avoidable-work claims, recommendations and savings are deferred.
+Closed privacy validation and last-valid-feed fallback remain enforced.
+
+The retained source passed 153 inert Python tests after integration of the protected facts-first policy.
+Browser regressions remain subject to the required hosted workflow. This is source preparation;
+publication, installed collection, feed activation and real-browser operational acceptance remain open.
+Atlas: `github/telemetry-dashboard-facts-first-presentation`.
+
 ## Delivered source repair — 2026-10-06
 
 [PR4259](https://github.com/FS-GG/.github/pull/4259) merged at
