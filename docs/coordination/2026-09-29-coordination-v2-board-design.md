@@ -6,7 +6,13 @@ only work with a verified remaining outcome. Reuse existing repository issue and
 The board provides planning and visibility; native delivery and the selected V2 operation authorities
 remain the sources of delivery truth.
 
-**Status:** selected design, 2026-09-29; organization pilot passed 2026-10-02.
+**Current selected outcome — 2026-10-17:** [COORD-BOARD-V2-01.7–.11](https://github.com/FS-GG/.github/issues/4634)
+will make Project 3 the Unified Roadmap v3 planning and lane-selection surface. This new programme
+cutover remains open; the original finite .1–.6 acceptance and completed roadmap row stay unchanged.
+The [selected window below](#selected-programme-cutover--2026-10-17) is source preparation,
+not installed adoption, board-mutation admission or consumer activation.
+
+**Historical design/adoption frontier — 2026-09-29 through 2026-10-10:** organization pilot passed 2026-10-02.
 On 2026-10-03 the exact four-target successor, public installed 0.95.0 closure,
 one-shot import with independent readbacks, zero-mutation refresh/inspection and
 root-selected check-board consumer qualified through [.github #4134](https://github.com/FS-GG/.github/pull/4134).
@@ -225,6 +231,156 @@ prove neither workspace can mutate the other's board through the configured adap
 local-only initialization case with no GitHub dependency. Source and organization-board qualification
 alone cannot close product adoption.
 
+## Selected programme cutover — 2026-10-17
+
+**Owner:** `.github` programme integration; [one durable migration outcome](https://github.com/FS-GG/.github/issues/4634)
+owns the entire .7–.11 remainder. The existing nineteen v3 outcomes retain their identities and three
+completed outcomes. Add this distinct open outcome; do not reopen finite COORD-BOARD-V2-01 acceptance
+or create issues for individual edits, failures or review findings. Existing owning issues are reused
+only where their remaining scope genuinely matches. The population reconciliation retains missing
+whole-outcome owner records explicitly rather than treating a mailbox or narrower child as its parent.
+
+The programme owner must be able to determine remaining outcomes, accountable owners, current
+PRs/deliverables, next actions, action-specific blockers and supplying owners, safe continuation/new
+work, and actual acceptance. Programme recovery, board drivers and progress reporting must consume
+the same current facts. This extends the existing inspection/integrator composition; it creates no
+parallel scheduler, lifecycle ledger, persistent current-state store or execution framework.
+
+### Starting source, consumers and unresolved capabilities
+
+The starting protected source is `.github` `5002cf30f3b3c8a5a8a6b325eb0f78893147a787`.
+The canonical inspection producer is this repository's `FS.GG.Coord.Cli` package:
+`BoardV2Application` calls `V2Projection`, `V2ProjectionSource` and `V2ObservationTransport`.
+Its project/package repository identity is `.github`. The separate Coordination pilot importer and
+six copied `Generated/Coordination` V1 admission files are not this inspection implementation and
+are outside the selected source window. Reuse the canonical `TouchSet` parser/conflict rules without
+restoring V1 claims, Class/Phase ranking, lease machinery or a compatibility wrapper.
+
+Source currently declares coherent 0.103.0. The accessible developer global CLI is 0.102.0,
+repository source `6e9be17bacd288ece103b67ecd5842d37a9c8e50`; its 82 installed tool members matched
+the cached package without execution. That observation does not identify the active Project 3
+consumer or authenticate a current feed/channel. The inaccessible protected installed receiver remains
+an attributed runtime-owner gap and is not probed or substituted. Original .103 attempted-Unknown,
+.104 held, all 439 reservations and unrelated Home/SC2 work remain untouched. New source must use the
+release owner's separately admitted fresh coherent candidate before publication/installed acceptance;
+it cannot replay, replace or repack an uncertain original.
+
+The read-only Project 3 baseline has five memberships, three in the previously selected active
+population. Its five statuses lack In review; API metadata reports table layouts, not the requested
+main Board view. The old Active delivery filter can display a closed historical card whose human
+Status remains Ready; visible membership/filter results are not enrollment or acceptance. Historical
+installed/no-dispatch consumers remain accepted only at their recorded finite scope. The nineteen
+v3 outcomes and their native issue/PR mappings require a bounded current reconciliation before
+population migration. Preserve active owners, PRs, dependencies and original operation references.
+
+Actual authenticated UI/browser/computer capability is currently unavailable under the local
+workload hold. API metadata can establish native IDs and configuration but cannot satisfy the
+required UI verification of columns, cards, filters and ordering. This blocks presentation acceptance,
+not independent plan/source work. No local CLR, native or browser workload is authorized by this plan.
+
+### One current contract and its sources of truth
+
+| Surface | Authority and selected behavior |
+|---|---|
+| Owning issue | Six fields only: Owner, Done when, Current deliverable, Next action, Blocked on, Acceptance evidence. Outcome identity is distinct from a current slice's repository, touch-set and existing PR. Independently useful disjoint slices may proceed; partial delivery narrows remaining work without closing the parent. Routine authorized source work does not need a manufactured board item. |
+| Owning plan | Architecture, sequencing, scope, acceptance and action-specific prerequisites. Native dependency edges do not replace plan prerequisites. |
+| Human board fields | Status is accountable-owner planning intent; Roadmap and Track retain their roles. Observation describes read health/freshness. Verified never means Ready, delivered or accepted. Periodic refresh must not overwrite human planning fields. |
+| Native evidence | Actual issue/body/dependency, PR/head/review/check/delivery, publication, installed and operational facts with their observed revisions. A merged PR cannot prove another acceptance category. Private logs/evidence remain in existing restricted custody. |
+| Derived decision | Ready, continue existing work, blocked, needs decision or unknown, with reasons and evidence. The integrator remains accountable; a result grants no execution authority. |
+| Atlas | Reusable decisions and verified lessons with immutable source citations; not another operational ledger. |
+
+Enrollment binds the exact project, organization schema, allowed repository scope and selected native
+issue identities. Keep that selected provenance distinct from fresh issue/body, owning-plan source,
+dependency, PR/head/check/review and capacity observations. Ordinary issue edits, closure, PR/check
+transitions and dependency changes must not require republishing enrollment. Scope, membership or
+schema changes do. Changed determining facts invalidate only affected decisions and trigger targeted
+recomputation before dispatch. Native child propagation, manual cards and view filters never enroll work.
+
+Complete reconciliation exposes selected, historical, deferred, unexpected and unresolved memberships
+separately. Missing pagination or global binding/schema failure blocks new board-derived selection;
+item-specific failure prevents conclusions about that item. Neither becomes an empty/Ready result.
+Independent authorized issue/plan/PR work continues while board-derived selection is unavailable.
+There is no Project 1 fallback. Preserve separately qualified product-board semantics through an
+explicit current organization contract; do not globally add a sixth status to product schema 1 or
+silently migrate its receivers. Exact successor organization version and bounded pagination are
+implementation choices qualified in .7; no duplicate canonical source is created.
+
+### Selection, presentation and truthful progress
+
+Join actual outcome/slice/owner, native dependencies and plan prerequisites, existing PR identity/head,
+review/check/delivery state, repository-qualified current touch-sets, fresh implementation/review/hosted-CI
+capacity and the acceptance/intake required for the proposed action. Replace unconditional unknown
+placeholders with observations or explicitly attributed missing facts. Include non-enrolled work
+already in flight and preserve uncertain reservations; board state, expiry or owner absence never
+settles them. Broad outcome scope must not reserve an entire repository when actual disjoint slices
+are eligible. Free agent slots do not establish review or hosted-CI capacity.
+
+Continue an existing unambiguous owner/PR before proposing new implementation; missing or conflicting
+ownership withholds duplicate assignment. Missing later production acceptance may block deployment
+while independent source work is ready. Closed dependencies do not imply publication or native
+acceptance. Existing single-batch intake, routine owner, independent review, required checks and
+native delivery remain beside execution; no driver-event ledger or heavyweight worker chain returns.
+
+Use Project 1's [Board view](https://github.com/orgs/FS-GG/projects/1/views/3) only as a visual template.
+Project 3 remains private. The main Programme board groups by Status in this order:
+Backlog → Ready → In progress → In review → Blocked → Done. Retain Roadmap, Track and Observation;
+add no priority/phase/lifecycle fields without a concrete need. Current programme work uses the
+selected Track convention; deliberate card order replaces inherited Class/Phase ranking.
+Cards show title, repository, assignees, linked PRs and Observation, with direct owning-issue/roadmap
+navigation. Useful child completion is labelled as such, never as engineering percentage.
+Supporting views are Blocked, Backlog, By repository, unfiltered All items and Completed. All items
+must retain historical/unselected discrepancy visibility. Actual UI inspection must verify columns,
+card fields, filters, ordering, links and private visibility before presentation acceptance.
+
+Surface disagreements: Ready with unresolved prerequisites, In progress without an established owner
+or implementation, In review with a superseded PR, Done without required acceptance, or a Done parent
+with an open required child. One child's PR does not put its multi-slice parent In review. Owners
+update planning status on meaningful transitions; observation cannot silently repair owner intent.
+
+Updates occur for a deliverable, changed blocker, needed decision, changed promised checkpoint or
+recovery, plus relevant deadlines/requested checks. Avoid unchanged comments and projection-only
+work per CI tick. Recovery reads the owning issue, actual PR and unresolved operation references.
+Progress reports accepted submilestones and remaining assertions with coverage/freshness gaps; card
+or child counts and missing cost data are not engineering completion percentages or zero cost.
+Use existing native timestamps and qualified acceptance readers; no reporting-only workload or new
+telemetry service is required. Logging/attribution gaps remain explicit.
+
+### Qualification, migration and cutover gates
+
+The first ready source window is .7/.8 after canonical owner resolution and bounded mapping. It can
+be developed without installed-store or UI access. Initial plan/roadmap delivery does not select a
+new runtime. Then qualify the actual coherent published/installed composition, apply admitted native
+schema/population/view changes, independently read complete results and compare selection with real
+programme work before consumer cutover. Preserve issue identities/discussions and current owners/PRs;
+do not restart ongoing work. Repeating an unchanged migration must produce no additional writes.
+A partial/unknown migration retains its original request/effects and gaps; reconcile the original
+before retry. Board migration never settles or retries an unrelated operation.
+
+| Required case | Acceptance |
+|---|---|
+| Existing active PR / restart | Recover and continue its actual owner/head; no duplicate implementation or dispatch. |
+| Same-repository overlap / disjoint slices | Withhold actual conflicts; permit independent slices within attributed fresh capacity. Parent breadth alone does not serialize them. |
+| Missing/partial reads or changed issue/PR/dependency | Unknown rather than empty/Ready; recompute the affected selection from fresh determining facts. |
+| Dependency closed but publication required | Keep dependent activation blocked; independently eligible source work remains possible. |
+| Concurrent human edit | Observation refresh preserves Status/Track/Roadmap; compare-before-write refuses stale migration intent. |
+| Unexpected membership | Visible in complete reconciliation, never automatically enrolled. |
+| Partial source delivery | Record accepted scope, leave incomplete parent open and preserve separate publication/installed/native evidence. |
+| Repeated unchanged migration | No duplicate membership or mutation; independent complete readback retains exact bindings/values. |
+
+Complete acceptance also needs genuine continuation of existing work, correct handling of a genuinely
+blocked item, and one necessary ordinary work item selected through the new composition, delivered
+through normal independent review/CI/native readback and reflected correctly on the board. Do not
+manufacture a demonstration task. Final evidence includes board/view links, population dispositions,
+exact tool/consumer identities, real-use results, remaining gaps and retired duplicate surfaces.
+
+Only after .11 acceptance do programme, drivers/wrappers, recovery and progress consumers switch
+together and retire duplicate manual v3 current-status maintenance. Strategy, design/acceptance links
+and historical evidence remain. Reconcile the six user-dirty show-progress files before any eventual
+consumer edit; this initial plan leaves them untouched. The first source window changes no generated
+workspace provider/lifecycle default or existing product binding. Later CLI/Kit/Drivers and skill
+publication/installation, any affected SDD/Templates materializer join and clean/retained receiver
+qualification are explicit gates if shared behavior changes. Source merge supplies no fleet upgrade.
+
 ## Delivery and acceptance
 
 - [x] **COORD-BOARD-V2-01.1 — Select the design.** Record the planning boundary, selective carryover,
@@ -264,11 +420,47 @@ alone cannot close product adoption.
   Record adopted workspace/board identities and any unresolved consumers. Depends on .5; each
   product's own verified binding permits its adoption without waiting for all other products.
 
-This feature is follow-on planning work, not a new prerequisite for the already selected full V2
+- [ ] **COORD-BOARD-V2-01.7 — Stable programme enrollment and current observations** — route: routine.
+  Depends on canonical producer resolution and bounded outcome/native-issue mapping. Scope: current
+  organization binding/parser/source/transport/report and existing focused tests. Separate stable
+  enrollment from live revisions, remove pilot-only 3–5/open/empty-dependency assumptions from the
+  new organization contract, and coordinate In review schema/bindings without changing product behavior.
+  Acceptance: ordinary edit/closure/dependency transition changes observations without reenrollment;
+  unexpected members stay unselected; wrong identity/schema, incomplete pages and item gaps refuse
+  truthfully; human planning values remain unchanged. No installed cutover is implied.
+- [ ] **COORD-BOARD-V2-01.8 — Actual action-specific integrator selection** — route: routine.
+  Depends on .7; typed inputs and tests may share its coherent source window. Scope: maintained CLI
+  and integrator seam, actual native PR/evidence readers, canonical touch-set conflict rules and
+  attributed capacity/reservations. Acceptance: existing PR continuation, duplicate-owner refusal,
+  conflicting/disjoint slices, non-enrolled in-flight work, broad-parent independence, source-ready
+  versus activation-blocked and changed-head/prerequisite invalidation. Emit compact reasons/evidence
+  for ready, continue existing, blocked, needs decision and unknown; grant no dispatch authority.
+- [ ] **COORD-BOARD-V2-01.9 — Qualify the published and installed composition** — route: routine.
+  Depends on .7/.8 qualification and a separately admitted fresh coherent candidate. Use the existing
+  release/receiver route; preserve original .103/.104 holds. Prepare paired skills/package sources
+  coherently, authenticate exact delivered package/tool/caller/consumer bytes and run actual installed
+  inspection/selection controls with affected product nonregression. Attribute protected installed-receiver identity/access
+  gaps to the runtime owner; developer 0.102 is not presumed to be the active consumer.
+- [ ] **COORD-BOARD-V2-01.10 — Migrate and verify Project 3** — route: routine.
+  Depends on complete bounded outcome mapping, .9 and admitted native mutation capability. Scope:
+  selected enrollment/issue identities, necessary durable owner records, In review and exact bindings,
+  main Board/supporting views. Independently read complete membership/fields/bindings and explicit
+  current/historical/deferred/unresolved dispositions; unchanged repeat emits zero further writes.
+  Actual UI verifies columns/cards/filters/order/links/private visibility. API metadata alone cannot
+  satisfy this gate; unknown original effects require original-identity reconciliation, not retry.
+- [ ] **COORD-BOARD-V2-01.11 — Adopt programme consumers and retire duplicate tracking** — route: routine.
+  Depends on .9/.10 and discrepancy-free comparison with current in-flight work. Scope: work-programme,
+  organization drivers/wrappers, recovery, show-progress and maintained mirrored/generated/package
+  sources, plus superseded current guidance. Reconcile the six user changes before edits. Prove
+  genuine existing-work continuation, blocked handling and necessary ordinary real-use delivery with
+  correct board reflection, then switch these consumers together. Retire manual v3 current-status
+  maintenance only after acceptance, preserving strategy, evidence, original owners/PRs and holds.
+
+The accepted .1–.6 feature scope is follow-on planning work, not a new prerequisite for the already selected full V2
 acceptance profile. The host execution requirement has its own required qualification outcome;
 design delivery or board adoption cannot stand in for that proof.
 
-This design delivery changes no generated files or published packages. The planned workspace effect
+The original .1–.6 design delivery changed no generated files or published packages. Its planned workspace effect
 is V2 board configuration and guidance for GitHub-coordinated SDD/Templates families. The organization
 pilot first changes planning in .2; shared tooling follows in .3 and explicit organization adoption
 in .4. Product integration is published in .5 and first changes fresh and retained receivers through
