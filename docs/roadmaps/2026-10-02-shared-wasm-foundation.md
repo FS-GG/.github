@@ -462,8 +462,8 @@ deadline, memory or replacement reducer in JavaScript.
   configuration through the current selection path, then pass the opaque selection
   token at load and replacement. Builtin declarations bind independently hashed
   actual build bytes and validated configuration; missing context refuses. Validate
-  exact SC6G configuration ACK at every applicable entrypoint. A current-only
-  registration seam may consume canonical configuration bytes directly, without a
+  exact SC6G configuration ACK at every applicable entrypoint. The current-only
+  registration seam consumes canonical configuration bytes directly, without a
   compatibility overload or reverse-built document.
   Acceptance: actual builtin, imported controller/advisor, realtime, replacement
   and offline entrypoints execute through installed package Workers. Offline trace
@@ -885,7 +885,10 @@ and [protected-main qualification `39023124943/a1`](https://github.com/FS-GG/FS.
 completed successfully. The accepted installed evidence supplies the producer
 prerequisite for the selected SC2 consumer window; it establishes no product pin,
 native authority or consumer acceptance. [Game PR #717](https://github.com/FS-GG/FS.GG.Game/pull/717) records that accepted
-frontier at merged `f139d183bb76b66bb2f0618a16ac343d0781cfd5`.
+frontier at merged `f139d183bb76b66bb2f0618a16ac343d0781cfd5`; its delivered
+[owning Atlas capture `game/current-wasm-custody-source-boundary`](https://github.com/FS-GG/FS.GG.Game/blob/f139d183bb76b66bb2f0618a16ac343d0781cfd5/docs/atlas/records/a38737476856236f33e0aef1b97e2b900677cf99f1dbcfd381c708ceeca8b7f3.json)
+retains the exact accepted P/Q source, package, both-feed evidence and original-failure
+boundaries.
 
 Preserve original [installed `39016307973/a1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39016307973):
 its org consumer/runtime step passed, artifact upload failed on a colon in a copied
