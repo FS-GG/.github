@@ -708,6 +708,140 @@ class ProviderDiagnosticTests(unittest.TestCase):
         self.assertEqual({"category": "provider-refused"}, self.provider.last_dispatch_diagnostic)
 
 
+class InstallMetadataTransportControls(unittest.TestCase):
+    """Actual _request acquisition; fake HTTP only, never a socket or SDK."""
+    def setUp(self):
+        import io
+        import release_successor_provider as module
+        self.module=module;self.io=io;self.budget=module.MetadataRequestBudget()
+        self.api=module.GitHubAPI('SECRET-inert',metadata_budget=self.budget)
+        self.calls=[];self.reads=[];self.handlers=[];self.responses=[]
+
+    def response(self,raw,headers=None,short=False):
+        parent=self
+        class Response(self.io.BytesIO):
+            status=200
+            def read(self,size=-1):
+                parent.assertGreater(size,0);parent.assertLessEqual(size,65536)
+                parent.reads.append(size)
+                return super().read(min(size,7) if short else size)
+        response=Response(raw);response.headers=headers or {};self.responses.append(response);return response
+
+    def opener(self,reply=None,error=None):
+        parent=self
+        def build(*handlers):
+            parent.handlers.extend(handlers)
+            class Opener:
+                def open(self,request,**kwargs):
+                    parent.calls.append((request.get_method(),request.full_url))
+                    parent.assertEqual(kwargs,{'timeout':60})
+                    if error is not None:raise error
+                    return reply
+            return Opener()
+        return build
+
+    def test_exact_cap_and_short_chunks_are_fully_acquired_before_json(self):
+        from unittest.mock import patch
+        cap=self.module.INSTALL_METADATA_RESPONSE_LIMIT
+        raw=b'{"value":"'+b'x'*(cap-12)+b'"}'
+        self.assertEqual(len(raw),cap)
+        with patch.object(self.module.urllib.request,'build_opener',self.opener(self.response(raw))):
+            self.assertEqual(len(self.api.get('repos/FS-GG/.github')['value']),cap-12)
+        self.assertEqual(self.budget.attempted,{'GET':1,'POST':0,'PATCH':0})
+        self.reads.clear()
+        with patch.object(self.module.urllib.request,'build_opener',self.opener(self.response(b'{"valid":true}',short=True))):
+            self.assertEqual(self.api.get('repos/FS-GG/.github'),{'valid':True})
+        self.assertGreater(len(self.reads),2)
+        self.assertTrue(all(response.closed for response in self.responses))
+
+    def test_oversize_and_declared_partial_never_reach_json(self):
+        from unittest.mock import patch
+        cap=self.module.INSTALL_METADATA_RESPONSE_LIMIT
+        for raw,headers in ((b'x'*(cap+2),{}),(b'{}',{'Content-Length':'3'}),(b'{}',{'Content-Length':str(cap+1)})):
+            with self.subTest(headers=headers),patch.object(self.module.urllib.request,'build_opener',self.opener(self.response(raw,headers))), \
+                 patch.object(self.module.json,'loads',side_effect=AssertionError('JSON before acquisition validation')), \
+                 self.assertRaises(self.module.Refused):self.api.get('repos/FS-GG/.github')
+            self.assertTrue(self.responses[-1].closed)
+
+    def test_partial_transport_and_malformed_json_keep_post_unconfirmed_without_retry(self):
+        import http.client
+        from unittest.mock import patch
+        class Broken:
+            status=200;headers={}
+            def __enter__(self):return self
+            def __exit__(self,*args):pass
+            closed=False
+            def read(self,size):raise http.client.IncompleteRead(b'partial',20)
+            def close(self):self.closed=True
+        for response,error_type in ((Broken(),self.module.Refused),(self.response(b'{broken'),ValueError)):
+            before=len(self.calls)
+            with patch.object(self.module.urllib.request,'build_opener',self.opener(response)),self.assertRaises(error_type):
+                self.api.post('repos/FS-GG/.github/git/blobs',{'inert':True})
+            self.assertEqual(len(self.calls),before+1);self.assertTrue(response.closed)
+
+    def test_error_body_is_single_bounded_acquisition_and_original_status_survives(self):
+        from unittest.mock import patch
+        import urllib.error
+        reads=[]
+        class ErrorBody(self.io.BytesIO):
+            def read(self,size=-1):reads.append(size);return super().read(size)
+        body=ErrorBody(b'{"message":"Not Found","padding":"'+b'x'*4096+b'"}')
+        error=urllib.error.HTTPError('https://api.github.com/repos/FS-GG/.github',404,'inert',{},body)
+        with patch.object(self.module.urllib.request,'build_opener',self.opener(error=error)),self.assertRaises(self.module.NotFound):
+            self.api.get('repos/FS-GG/.github')
+        self.assertEqual(reads,[2049]);self.assertTrue(body.closed)
+        self.assertTrue(self.api.last_request_diagnostic['bodyTruncated']);self.assertEqual(self.api.last_request_diagnostic['status'],404)
+
+    def test_partial_error_body_retains_status_without_second_acquisition(self):
+        from unittest.mock import patch
+        import urllib.error
+        import http.client
+        reads=[]
+        class PartialError(self.io.BytesIO):
+            def read(self,size=-1):
+                reads.append(size);raise http.client.IncompleteRead(b'partial',10)
+        body=PartialError(b'')
+        error=urllib.error.HTTPError('https://api.github.com/repos/FS-GG/.github',503,'inert',{},body)
+        with patch.object(self.module.urllib.request,'build_opener',self.opener(error=error)),self.assertRaises(self.module.Refused):
+            self.api.get('repos/FS-GG/.github')
+        self.assertEqual(reads,[2049]);self.assertTrue(body.closed)
+        self.assertEqual(self.api.last_request_diagnostic['status'],503)
+        self.assertTrue(self.api.last_request_diagnostic['bodyUnavailable']);self.assertEqual(len(self.calls),1)
+
+    def test_cleanup_failure_is_separate_and_never_replaces_first_http_or_acquisition_cause(self):
+        from unittest.mock import patch
+        import urllib.error
+        class FailingClose(self.io.BytesIO):
+            status=200
+            def close(self):
+                super().close();raise OSError('inert close failed')
+        for mode in ('success','oversize','http-error'):
+            with self.subTest(mode=mode):
+                response=FailingClose(b'{}');response.headers={'Content-Length':'2097153'} if mode=='oversize' else {}
+                error=urllib.error.HTTPError('https://api.github.com/repos/FS-GG/.github',503,'inert',{},response) if mode=='http-error' else None
+                cause='returned HTTP 503' if mode=='http-error' else 'content length' if mode=='oversize' else 'stream cleanup failed'
+                before=self.budget.stream_close_failures
+                with patch.object(self.module.urllib.request,'build_opener',self.opener(response,error)),self.assertRaisesRegex(self.module.Refused,cause):
+                    self.api.get('repos/FS-GG/.github')
+                self.assertTrue(response.closed);self.assertEqual(self.budget.stream_close_failures,before+1)
+
+    def test_shared_counter_stops_before_open_and_fixed_origin_redirect_never_follow(self):
+        from unittest.mock import patch
+        self.budget.attempted['GET']=255
+        writer=self.module.GitHubAPI('SECRET-writer',metadata_budget=self.budget)
+        with patch.object(self.module.urllib.request,'build_opener',self.opener(self.response(b'{}'))):
+            self.api.get('repos/FS-GG/.github')
+            with self.assertRaisesRegex(self.module.Refused,'ceiling'):writer.patch('repos/FS-GG/.github/git/refs/heads/main',{'sha':'b'*40})
+        self.assertEqual(len(self.calls),1);self.assertEqual(sum(self.budget.attempted.values()),256)
+        with self.assertRaisesRegex(self.module.Refused,'fixed GitHub API origin'):
+            self.api._request('https://other.invalid/redirect')
+        redirect=next(handler for handler in self.handlers if isinstance(handler,self.module._DenyMetadataRedirect))
+        body=self.io.BytesIO(b'undrained')
+        with self.assertRaisesRegex(self.module.Refused,'redirect refused'):
+            redirect.redirect_request(None,body,302,'Found',{},'https://other.invalid/')
+        self.assertTrue(body.closed);self.assertEqual(len(self.calls),1)
+
+
 if __name__ == "__main__":
     qualify_live_provider()
     unittest.main()

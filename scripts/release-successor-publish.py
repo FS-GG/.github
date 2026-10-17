@@ -24,7 +24,7 @@ from release_successor_execution import Refused, advance, ordered_effects
 from release_successor_journal import (ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical,
     ReleaseSuspension, ALLOWED_SUCCESSOR, SUSPENDED_REF, SUSPENSION_PATH, strict_suspension,
     SUSPENSION_SCHEMA, SUSPENDED_ORIGINAL, SUSPENSION_DECISION)
-from release_successor_provider import (GitHubAPI, LiveProvider, NotFound, sanitized_dispatch_diagnostic,
+from release_successor_provider import (GitHubAPI, MetadataRequestBudget, INSTALL_METADATA_REQUEST_CEILING, LiveProvider, NotFound, sanitized_dispatch_diagnostic,
                                        VerifiedOriginalTagTransport, approved_original_tag_transport,
                                        AUTH_PROTOCOL, AUTH_PROFILE, decode_auth_frame, validate_auth_binding, validate_auth_payload)
 
@@ -1798,6 +1798,12 @@ _INSTALL_FLAGS = ("publish", "qualify_original_tag_authentication_only", "suspen
     "repeat_original_nuget_kit_intent", "recover_original_runtime_intent", "recover_original_successor_checkpoint")
 _INSTALL_COORDINATES = ("candidate_run_id", "candidate_artifact_id", "candidate_archive_sha256")
 _INSTALL_PROFILE = "utel-rel-21/install-suspension/1"
+# Two source-selected hosted processes (prepare, apply), each sharing one reader/
+# writer budget: at most512 metadata opens in composition, never one cross-process
+# counter or a JSON grant. Standalone uses one256 budget. The ordinary1500 counter,
+# HTTP60-second timeout and hosted15-minute whole-job deadline remain distinct.
+_INSTALL_METADATA_OPEN_LIMITS = {"perProcess": INSTALL_METADATA_REQUEST_CEILING,
+                                 "hostedProcesses": 2, "hostedComposed": 2 * INSTALL_METADATA_REQUEST_CEILING}
 
 
 def validate_workflow_inputs(value):
@@ -1921,17 +1927,19 @@ def hosted_suspension_main():
     args = parser.parse_args()
     report = {"schema": "fsgg.release-successor-result/1", "profile": _INSTALL_PROFILE, "publicationComplete": False,
               "disposition": "failed-before-installation", "failure": None, "attemptedRequests": [],
+              "metadataOpenLimits": dict(_INSTALL_METADATA_OPEN_LIMITS),
               "credentialCleanup": "existing App action post-step; outcome not independently observed",
               "reportingOutcome": "pending"}
     result_path = None
     result_owned = False
+    metadata_budget = MetadataRequestBudget()
     try:
         prepared_path, result_path = install_paths()
         inputs = workflow_inputs()
         require(validate_workflow_inputs(inputs) == "install-only", "hosted install requires explicit install-only selection")
         require(os.environ.get("ORDINARY_LEDGER_APP_ID") == "4882140", "ordinary writer App identity differs")
         require(args.install_hosted_release_suspension == bool(args.prepared_sha256), "prepared digest requires exactly the install stage")
-        owner_api = GitHubAPI(os.environ["GH_TOKEN"])
+        owner_api = GitHubAPI(os.environ["GH_TOKEN"], metadata_budget=metadata_budget)
         context = hosted_install_context(owner_api)
         raw = fixed_suspension_record()
         prepared = {"schema": "fsgg.release-suspension-prepared/1", "execution": context,
@@ -1946,6 +1954,7 @@ def hosted_suspension_main():
             with prepared_path.open("xb") as stream:
                 os.chmod(prepared_path, 0o600); stream.write(prepared_raw); stream.flush(); os.fsync(stream.fileno())
             require(read_install_file(prepared_path)[0] == prepared_raw, "install preparation readback differs")
+            report["metadataAcquisition"] = metadata_budget.report()
             report["disposition"] = "install-only-prepared"
             report["reportingOutcome"] = "retained"
             write_result(result_path, report)
@@ -1957,16 +1966,25 @@ def hosted_suspension_main():
         require(bool(re.fullmatch(r"[0-9a-f]{64}", args.prepared_sha256)) and args.prepared_sha256 == digest
                 and observed_raw == prepared_raw and observed == prepared, "install prepared source/input/digest binding changed")
         _, prior = read_install_file(result_path)
-        require(prior == {**report, "disposition": "install-only-prepared", "reportingOutcome": "retained"},
+        prepared_counts = prior.get("metadataAcquisition")
+        require(isinstance(prepared_counts, dict) and prepared_counts.get("ceiling") == INSTALL_METADATA_REQUEST_CEILING
+                and isinstance(prepared_counts.get("attempted"), dict)
+                and set(prepared_counts["attempted"]) == {"GET", "POST", "PATCH"}
+                and all(type(value) is int and 0 <= value <= INSTALL_METADATA_REQUEST_CEILING for value in prepared_counts["attempted"].values())
+                and sum(prepared_counts["attempted"].values()) <= INSTALL_METADATA_REQUEST_CEILING
+                and prepared_counts == {**metadata_budget.report(), "attempted": prepared_counts["attempted"]},
+                "install preparation acquisition counts differ")
+        require(prior == {**report, "disposition": "install-only-prepared", "reportingOutcome": "retained", "metadataAcquisition": prepared_counts},
                 "install original result changed or consumed; no retry")
         result_owned = True
         require(os.environ.get("ACTUAL_INSTALLATION_ID") == "160261608"
                 and os.environ.get("EXPECTED_INSTALLATION_ID") == "160261608", "ordinary writer installation identity differs")
-        writer = GitHubAPI(os.environ["ORDINARY_LEDGER_TOKEN"])
+        writer = GitHubAPI(os.environ["ORDINARY_LEDGER_TOKEN"], metadata_budget=metadata_budget)
         scope = writer.get("installation/repositories?per_page=100")
         require(isinstance(scope, dict) and scope.get("total_count") == 1 and isinstance(scope.get("repositories"), list)
                 and [(row.get("id"), row.get("full_name")) for row in scope["repositories"]]
                     == [(1351660651, JOURNAL_REPOSITORY)], "ordinary writer repository scope differs")
+        report["preparationMetadataAcquisition"] = prepared_counts
         report["disposition"] = "install-only-in-progress"
         def guard():
             require(hosted_install_context(owner_api) == context, "hosted install execution changed")
@@ -1974,6 +1992,7 @@ def hosted_suspension_main():
             require(read_install_file(prepared_path)[0] == prepared_raw, "hosted install prepared input changed")
             suspension_install_preconditions(owner_api, prepared["expectedParent"])
         def retain():
+            report["metadataAcquisition"] = metadata_budget.report()
             report["reportingOutcome"] = "retained"
             retain_install_result(result_path, report)
         retain()  # Consume this invocation before its first possible mutation.
@@ -1982,6 +2001,7 @@ def hosted_suspension_main():
         retain()
         return 0
     except (RuntimeError, ValueError, KeyError, TypeError, AttributeError, OSError, subprocess.SubprocessError) as error:
+        report["metadataAcquisition"] = metadata_budget.report()
         report["failure"] = error_chain(error)
         report["disposition"] = "install-only-failed-or-unknown" if report["attemptedRequests"] else "failed-before-installation"
         if result_path is not None and (result_owned or not result_path.exists()):
@@ -2018,6 +2038,7 @@ def suspension_install_main():
     parser.add_argument("--expected-authority-main", required=True)
     parser.add_argument("--publisher-source-sha", required=True)
     args = parser.parse_args()
+    metadata_budget = MetadataRequestBudget()
     try:
         require(bool(re.fullmatch(r"[0-9a-f]{40}", args.publisher_source_sha)), "installer source SHA differs")
         path = args.suspension_file
@@ -2027,7 +2048,7 @@ def suspension_install_main():
         strict_suspension(raw)
         # No credential acquisition occurs here. The operation owner must separately
         # admit custody of the authenticated owner token and ordinary writer token.
-        owner_api = GitHubAPI(os.environ["GH_TOKEN"])
+        owner_api = GitHubAPI(os.environ["GH_TOKEN"], metadata_budget=metadata_budget)
         owner = owner_api.get("user")
         require(isinstance(owner, dict) and owner.get("login") == "EHotwagner"
                 and owner.get("type") == "User", "suspension installer accountable owner differs")
@@ -2039,7 +2060,7 @@ def suspension_install_main():
                 and head.get("object", {}).get("sha") == args.publisher_source_sha,
                 "suspension installer requires exact current protected source")
         require_clean_installer_source(args.publisher_source_sha)
-        writer = GitHubAPI(os.environ["ORDINARY_LEDGER_TOKEN"])
+        writer = GitHubAPI(os.environ["ORDINARY_LEDGER_TOKEN"], metadata_budget=metadata_budget)
         # Refresh the authenticated source beside the protected expected-parent write.
         require(owner_api.get(f"repos/{REPOSITORY}/git/ref/heads/main") == head,
                 "suspension installer source moved before installation")
