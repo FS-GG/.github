@@ -239,6 +239,8 @@ completed outcomes. Add this distinct open outcome; do not reopen finite COORD-B
 or create issues for individual edits, failures or review findings. Existing owning issues are reused
 only where their remaining scope genuinely matches. The population reconciliation retains missing
 whole-outcome owner records explicitly rather than treating a mailbox or narrower child as its parent.
+Where bounded current mapping finds a necessary durable owner missing, create that genuine outcome
+record before enrollment; this does not limit the migration to issue #4634 or manufacture phase cards.
 
 The programme owner must be able to determine remaining outcomes, accountable owners, current
 PRs/deliverables, next actions, action-specific blockers and supplying owners, safe continuation/new
@@ -351,7 +353,10 @@ The first ready source window is .7/.8 after canonical owner resolution and boun
 be developed without installed-store or UI access. Initial plan/roadmap delivery does not select a
 new runtime. Then qualify the actual coherent published/installed composition, apply admitted native
 schema/population/view changes, independently read complete results and compare selection with real
-programme work before consumer cutover. Preserve issue identities/discussions and current owners/PRs;
+programme work before consumer cutover. Milestone .9 authenticates the installed candidate with
+pre-migration controlled/nonmutating controls; it does not require the successor live schema. After
+.10 migration and readback, positive actual Project 3 inspection/selection is required before .11
+adoption. Preserve issue identities/discussions and current owners/PRs;
 do not restart ongoing work. Repeating an unchanged migration must produce no additional writes.
 A partial/unknown migration retains its original request/effects and gaps; reconcile the original
 before retry. Board migration never settles or retries an unrelated operation.
@@ -439,14 +444,17 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   Depends on .7/.8 qualification and a separately admitted fresh coherent candidate. Use the existing
   release/receiver route; preserve original .103/.104 holds. Prepare paired skills/package sources
   coherently, authenticate exact delivered package/tool/caller/consumer bytes and run actual installed
-  inspection/selection controls with affected product nonregression. Attribute protected installed-receiver identity/access
+  pre-migration controlled/nonmutating inspection/selection controls with affected product nonregression.
+  Positive actual successor-schema Project 3 controls follow .10 migration, before .11 adoption.
+  Attribute protected installed-receiver identity/access
   gaps to the runtime owner; developer 0.102 is not presumed to be the active consumer.
 - [ ] **COORD-BOARD-V2-01.10 — Migrate and verify Project 3** — route: routine.
   Depends on complete bounded outcome mapping, .9 and admitted native mutation capability. Scope:
   selected enrollment/issue identities, necessary durable owner records, In review and exact bindings,
   main Board/supporting views. Independently read complete membership/fields/bindings and explicit
   current/historical/deferred/unresolved dispositions; unchanged repeat emits zero further writes.
-  Actual UI verifies columns/cards/filters/order/links/private visibility. API metadata alone cannot
+  Prove positive actual Project 3 successor-schema inspection/selection with the authenticated .9
+  installed composition after migration/readback and before .11 adoption. Actual UI verifies columns/cards/filters/order/links/private visibility. API metadata alone cannot
   satisfy this gate; unknown original effects require original-identity reconciliation, not retry.
 - [ ] **COORD-BOARD-V2-01.11 — Adopt programme consumers and retire duplicate tracking** — route: routine.
   Depends on .9/.10 and discrepancy-free comparison with current in-flight work. Scope: work-programme,
