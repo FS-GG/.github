@@ -202,7 +202,7 @@ class PackagedV2CompositionTests(unittest.TestCase):
         result = subprocess.run([sys.executable, "-B", str(ROOT / "tests/coord-board-v2-cli-join/test_packaged_v2.py")],
                                 capture_output=True, timeout=30, check=False)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
-        self.assertIn(b"Ran 15 tests", result.stderr)
+        self.assertIn(b"Ran 18 tests", result.stderr)
 
 
 class SuccessorRailBindingTests(unittest.TestCase):
