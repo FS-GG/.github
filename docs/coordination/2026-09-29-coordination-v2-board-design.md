@@ -576,16 +576,75 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   no redirects/retries, strict clear-success envelopes, fresh determining facts before effects and
   independently correlated native readback. File flush and Linux x64 directory-entry barriers precede
   dispatch; unavailable barriers refuse. Expiry is rechecked after custody and at actual acquisition.
-  Orthogonal human view configuration remains unchanged. Twenty-seven focused controls are prepared,
-  and independent source review corrected seven connected custody/expiry/scope/readback/envelope/source
-  findings. They have not run locally; source review grants no compiler, runtime filesystem, installed,
-  native mutation or UI acceptance. Fresh hosted compilation, tests and coherent qualification remain
-  mandatory. No live migration is selected by this source implementation.
+  Orthogonal human view configuration remains unchanged. The foundation delivered through
+  [PR #4653](https://github.com/FS-GG/.github/pull/4653) with identical reviewed/tested/delivered trees.
+  Its twenty-seven migration controls passed in the hosted 92-test projection and 38-test CLI suites;
+  all 943 GitHub tests and eight full-engine cohorts (2,743 tests) passed separately. Original failed
+  cohorts and source-review limitations remain retained on the PR. These are source qualifications,
+  not packaged candidate execution, physical durability, private installed/native or UI acceptance.
+  The connected completion below still requires its own exact-source qualification. No live migration
+  is selected by this source implementation.
 
   Default migration writes no existing human Status/Track/Roadmap values. Native updates provide no
   expected-revision/CAS guarantee: fresh comparison detects observed drift, but a local lock cannot
   prevent another principal's edit. Any selected seeding requires genuine bounded owner coordination;
-  otherwise return the exact no-write owner action. API view operations support layout, filters and
+  otherwise return the exact no-write owner action.
+
+  **Selected connected completion (2026-10-17; source preparation only).** Membership addition alone
+  leaves the new programme parents without the Track/Roadmap values required by their selected views.
+  Complete the existing typed migration path with explicit initial planning declarations for the
+  selected seventeen parents, alongside the three retained selected pilot items. Preserve the two
+  other existing memberships without enrolling them. This is twenty selected issues and twenty-two
+  retained native memberships; durable owner records do not automatically enroll further children.
+  Initialize only declared Track single-select, genuine owning-plan Roadmap text and explicitly
+  selected Status. Status is accountable planning judgement, never inferred Ready from issue openness,
+  source success or observation health. Observation, assignee, owner and hierarchy writes remain outside
+  this migration authorization; preserve all existing pilot/historical values and identities.
+
+  Bind each exact issue/field/type/option-or-text value and absent-value precondition into the original
+  prepared scope and request custody. Correlate membership creation to its returned item ID and an
+  independent complete readback before dependent initialization. An equal existing value is a no-op;
+  a different populated value, including project automation after membership addition, is a conflict.
+  Retain the added membership and original partial operation rather than clearing or overwriting it.
+  Initialize one field per bounded mutation, correlate its returned item ID, and independently verify
+  exact value identity/type/content plus preserved values. Uncertain response stops all further writes
+  and retains original-identity readback only. A fully reconciled unchanged repeat writes nothing.
+
+  Use the explicitly selected cooperative accountable-operator initialization window. Fresh guards
+  refuse observed concurrent edits, but GitHub has no if-absent/expected-revision/CAS for these updates:
+  an edit in the last-read-to-send interval cannot be excluded by a local lock. The operator window is
+  a stated live cooperation assumption, not an enforced capability or a caller-JSON authority grant.
+  Without that window, retain the exact no-write owner action. Existing nonempty values are protected.
+
+  Keep the same 500-request/270-second operation envelope. The concrete maximum includes membership,
+  initial values, schema and dependent view updates; six reads per snapshot would make it unreachable.
+  Batch the bounded initial fields/items/views/selected-issue pages in one fresh snapshot query, then
+  independently recheck principal/project identity. Reuse complete first pages only inside that one
+  observation; drain and count every continuation, and discard reuse across effects. Keep both fresh
+  pre-send and independent post-effect guards. Actual caller controls must cover the complete
+  twenty-selected/twenty-two-member/eight-view journey, its seventeen three-field initializations,
+  pagination/error/deadline refusal and retained partial Unknown outcomes within the request cap.
+  Arithmetic request fit does not establish measured live timing acceptance or authorize a cap increase.
+
+  Complete the genuine owning-plan journey through the existing authenticated inspection reader.
+  Accept only canonical FS-GG repository/path/ref URLs declared by the protected enrollment and within
+  the binding's selected repository scope: maintained docs, plus the explicitly selected observation
+  guidance path. Preserve a declared forty-hex revision exactly; resolve main through native GitHub to
+  a fresh exact commit and fetch that immutable blob for each observation. Retain repository/path/
+  commit/blob provenance, excluding navigation fragments from the source lookup. Reject arbitrary
+  hosts, undeclared sources, traversal and encoded ambiguity. Stable plan identity belongs in
+  enrollment; an ordinary plan revision refreshes the observation without enrollment churn. Keep the
+  three genuine #3008 pilot mappings and separately qualified product behavior unchanged. Additional
+  PR-read repositories do not enroll their issues; relevant access gaps remain attributed and localized.
+
+  Final stable enrollment uses the existing protected manifest route and the exact selected population
+  and Roadmap strings. Final binding4/schema2 joins that protected population and the qualified package/
+  assembly provenance after actual native option/item/view IDs are known. No draft invented ID is an
+  executable binding. Positive installed inspection/refresh/selection, explicit planning reconciliation,
+  actual UI verification and coordinated real use still precede current-status retirement. Historical
+  Done outcomes retain genuine acceptance navigation; do not fabricate cards to fill a Completed view.
+
+  API view operations support layout, filters and
   visible fields, with no established grouping/sort/column-order mutation input. Keep unsupported UI
   configuration and actual visual verification open rather than guessing properties or equating API
   readback with UI acceptance. Retain option/card preservation, wrong/incomplete identity refusal,
