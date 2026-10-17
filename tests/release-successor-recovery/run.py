@@ -2969,10 +2969,10 @@ class ContinuationCallerControls(SuspensionFixture):
     private census reads original restricted bytes and leaves those pins intact.
     Both paths retain the audit fence and use execute_publisher and LiveProvider.
     """
-    WINDOW = {'authorityEntries':500,'publisherEntries':5000,'seconds':900,
+    WINDOW = {'authorityEntries':750,'seconds':900,
               'visibilityProbes':32,'quotaFloor':1800}
 
-    def prepare_caller(self, private=None, ceiling=4200):
+    def prepare_caller(self, private=None, ceiling=750, *, use_source_window=False):
         temporary=tempfile.TemporaryDirectory();self.addCleanup(temporary.cleanup)
         self.root=pathlib.Path(temporary.name)
         self.native=Literal104ProviderFixture(self.root,self.reader())
@@ -3022,8 +3022,14 @@ class ContinuationCallerControls(SuspensionFixture):
             decision=self.mod.CONTINUATION_DECISION
             self.sources[decision['path']]=b'synthetic continuation decision; not operation authority\n'
             self.enterContext(patch.dict(decision,{'sha256':hashlib.sha256(self.sources[decision['path']]).hexdigest()}))
-        window={**self.WINDOW,'authorityEntries':ceiling,'quotaFloor':4500 if ceiling>1800 else 1800}
-        self.enterContext(patch.object(self.mod,'CONTINUATION_WINDOW',window))
+        if use_source_window:
+            self.assertIsNotNone(self.mod.CONTINUATION_WINDOW,'selected source allocation is absent')
+            self.allocation='selected-source'
+        else:
+            window={**self.WINDOW,'authorityEntries':ceiling,'quotaFloor':4500 if ceiling>1800 else 1800}
+            self.enterContext(patch.object(self.mod,'CONTINUATION_WINDOW',window))
+            self.allocation='engineering-fixture'
+        self.window=copy.deepcopy(self.mod.CONTINUATION_WINDOW)
         self.install()
         candidate=self.mod.CONTINUATION_CANDIDATE
         intent={'contentId':candidate['contentId'],'sourceSha':candidate['sourceSha'],'version':'0.104.0',
@@ -3183,6 +3189,7 @@ class ContinuationCallerControls(SuspensionFixture):
             try:return publisher.execute_publisher(self.args,self.rows)
             finally:
                 self.census={'fixture':'synthetic-ci' if self.synthetic else 'private-original-bytes-inert-ports',
+                    'allocation':self.allocation,'window':self.window,
                     'authority':self.rows.get('authorityCounter').report() if self.rows.get('authorityCounter') else None,
                     'publisher':self.rows.get('publisherCounter').report() if self.rows.get('publisherCounter') else None,
                     'authorityPortEntries':len(self.authority.calls),'publisherPortEntries':len(self.publisher_ports),
@@ -3221,6 +3228,22 @@ class ContinuationCallerControls(SuspensionFixture):
 
     def test_synthetic_cold_actual_caller_counts_original_authentication_claim_and_remaining_effects(self):
         self.prepare_caller();self.assert_complete()
+
+    def test_750_entry_window_completes_with_total_32_visibility_probes(self):
+        self.prepare_caller();self.delay_probes=29;self.assert_complete()
+        self.assertEqual(len(self.before_visibility),32);self.assertEqual(self.sleeps,[5]*29)
+        self.assertEqual(self.rows['authorityCounter'].ceiling,750)
+        self.assertEqual(self.rows['continuationVisibilityProbes'],32)
+
+    def test_33rd_required_visibility_probe_stops_without_settlement_or_budget_renewal(self):
+        self.prepare_caller();self.delay_probes=30
+        with self.assertRaisesRegex(publisher.Refused,'finite visibility'):self.invoke_caller()
+        self.assertEqual(len(self.before_visibility),32);self.assertEqual(self.sleeps,[5]*30)
+        self.assertEqual(self.rows['continuationVisibilityProbes'],32)
+        self.assertEqual(self.rows['authorityCounter'].ceiling,750)
+        self.assertLessEqual(len(self.authority.calls),750)
+        self.assertEqual(self.dispatches,['channel-asset','manifest-asset','promote'])
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),5)
 
     def test_synthetic_delayed_visibility_uses_no_authority_entries(self):
         self.prepare_caller();self.delay_probes=3;self.assert_complete()
@@ -3319,8 +3342,14 @@ class ContinuationCallerControls(SuspensionFixture):
         self.assertEqual(self.authority.calls,[]);self.assertEqual(self.dispatches,[])
 
     @unittest.skipUnless(os.environ.get('FSGG_CONTINUATION_PRIVATE_CENSUS'),'private original-byte census not selected')
+    def test_private_original_byte_selected_source_window_census(self):
+        if self.mod.CONTINUATION_WINDOW is None:self.skipTest('source allocation remains unselected; engineering census is separate')
+        self.prepare_caller(pathlib.Path(os.environ['FSGG_CONTINUATION_PRIVATE_CENSUS']),use_source_window=True)
+        self.assertEqual(self.allocation,'selected-source');self.assert_complete()
+
+    @unittest.skipUnless(os.environ.get('FSGG_CONTINUATION_PRIVATE_CENSUS'),'private original-byte census not selected')
     def test_private_original_byte_cold_actual_caller_census(self):
-        self.prepare_caller(pathlib.Path(os.environ['FSGG_CONTINUATION_PRIVATE_CENSUS']));self.assert_complete()
+        self.prepare_caller(pathlib.Path(os.environ['FSGG_CONTINUATION_PRIVATE_CENSUS']),ceiling=4200);self.assert_complete()
 
 
 if __name__ == "__main__":
