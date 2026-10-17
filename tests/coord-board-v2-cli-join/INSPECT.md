@@ -100,8 +100,9 @@ Version-4 Observation refresh is source-complete through the existing one-shot w
 current enrollment/source are rechecked even on a Verified no-op, every intended write
 is independently read back, and lost/uncertain responses never dispatch a retry. It
 writes only Observation and does not consume the selection overlay or runtime capacity.
-Concurrent human Status/Track/Roadmap values survive. Source version 0.103 remains held;
-installed qualification, migration, UI and actual consumer cutover remain owner-gated.
+Concurrent human Status/Track/Roadmap values survive. Original .103 uncertainty remains held;
+use the sole release plan and evaluated source/registry for the selected successor. Installed
+qualification, migration, UI and actual consumer cutover remain owner-gated.
 The focused controls require hosted CI; no local CLR/native/browser workload was run.
 
 
@@ -174,6 +175,13 @@ product stdin exclusion, adapter mismatch and migration command syntax. The dist
 and adapter-mismatch refusals avoid counting generic failure as input-validation evidence. No credential
 is inherited; no actual private Project 3, migration-scope validation or active developer-install
 acceptance is claimed.
+
+The package ID is not the entry assembly name. The current CLI source declares
+`fsgg-coord-engine`, so qualification requires the unique
+`tools/net10.0/any/fsgg-coord-engine.dll` and `FS.GG.Coord.GitHub.dll` members and exact isolated
+installed-byte matches. Independent literal/layout and project-source controls retain wrong-name,
+missing, duplicate and hash refusal. A bounded member inventory accompanies identity failure;
+zero reached cases remain unqualified, as in the retained first candidate failure.
 
 A separate V2 artifact retains source/run/attempt, package and exact installed-member/shim hashes,
 case results, bounded exact output bytes, partial results, first failure and independent cleanup status.

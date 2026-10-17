@@ -15,6 +15,8 @@ spec = importlib.util.spec_from_file_location("packaged_v2", Path(__file__).with
 qualifier = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(qualifier)
 SOURCE = "a" * 40
+# Independent package-layout oracle: do not manufacture the fixture from MEMBERS.
+EXPECTED_ASSEMBLIES = ("fsgg-coord-engine.dll", "FS.GG.Coord.GitHub.dll")
 DIAGNOSTICS = (
     b"could not read refresh input", b"unknown, missing or duplicate properties",
     b"read-only V2 inspection token", b"integrator stdin is restricted to organization binding 4 inspection",
@@ -42,7 +44,7 @@ class PackagedControls(unittest.TestCase):
         self.package = self.root / "FS.GG.Coord.Cli.0.103.0.nupkg"
         with zipfile.ZipFile(self.package, "w") as archive:
             archive.writestr("FS.GG.Coord.Cli.nuspec", '<package><metadata><id>FS.GG.Coord.Cli</id><version>0.103.0</version><repository commit="' + SOURCE + '"/></metadata></package>')
-            for name in qualifier.MEMBERS:
+            for name in EXPECTED_ASSEMBLIES:
                 payload = ("inert-" + name).encode()
                 archive.writestr("tools/net10.0/any/" + name, payload)
                 (tools / name).write_bytes(payload)
@@ -56,6 +58,55 @@ class PackagedControls(unittest.TestCase):
             selected = mutate(index, result, home) if mutate else result
             return selected if isinstance(selected, dict) else outcome(*selected)
         return qualifier.qualify(self.engine, self.package, SOURCE, "123", "1", runner)
+
+    def test_literal_layout_matches_project_assembly_identity_and_exact_candidate_members(self):
+        import xml.etree.ElementTree as ET
+        root=Path(__file__).resolve().parents[2]
+        names=[node.text for node in ET.parse(root/'src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj').iter('AssemblyName')]
+        self.assertEqual(names,['fsgg-coord-engine'])
+        self.assertEqual(qualifier.MEMBERS,EXPECTED_ASSEMBLIES)
+        with zipfile.ZipFile(self.package) as archive:
+            self.assertIn('tools/net10.0/any/fsgg-coord-engine.dll',archive.namelist())
+            self.assertNotIn('tools/net10.0/any/FS.GG.Coord.Cli.dll',archive.namelist())
+        identity=qualifier.installed_identity(self.engine,self.package)
+        self.assertEqual(set(identity['assemblies']),{'fsgg-coord-engine.dll','FS.GG.Coord.GitHub.dll'})
+        self.assertEqual(identity['assemblies']['fsgg-coord-engine.dll']['packageMember'],'tools/net10.0/any/fsgg-coord-engine.dll')
+
+    def test_wrong_old_missing_duplicate_and_changed_package_assemblies_refuse_before_process(self):
+        with zipfile.ZipFile(self.package) as archive:original=[(item.filename,archive.read(item)) for item in archive.infolist()]
+        for mode in ('old-name','missing','duplicate','hash'):
+            with self.subTest(mode=mode):
+                path=self.root/(mode+'.nupkg')
+                with zipfile.ZipFile(path,'w') as archive:
+                    for name,raw in original:
+                        if name=='tools/net10.0/any/fsgg-coord-engine.dll':
+                            if mode=='missing':continue
+                            if mode=='old-name':name='tools/net10.0/any/FS.GG.Coord.Cli.dll'
+                            if mode=='hash':raw=b'changed exact CLI assembly bytes'
+                        archive.writestr(name,raw)
+                    if mode=='duplicate':archive.writestr('tools/net10.0/any/duplicate/fsgg-coord-engine.dll',b'duplicate')
+                result=qualifier.qualify(self.engine,path,SOURCE,'123','1',lambda *args:self.fail('must not launch'))
+                self.assertFalse(result['passed']);self.assertEqual(result['outcomes'],[])
+                if mode!='hash':
+                    inventory=result['packageAssemblyInventory']
+                    self.assertEqual(inventory['requiredAssembly'],'fsgg-coord-engine.dll')
+                    self.assertEqual(inventory['matchingEntries'],2 if mode=='duplicate' else 0)
+                    if mode=='old-name':self.assertIn('tools/net10.0/any/FS.GG.Coord.Cli.dll',inventory['observedDllEntries'])
+                    self.assertEqual(result['firstFailure']['reason'],'unique package assembly required')
+                else:self.assertEqual(result['firstFailure']['reason'],'installed assembly differs from candidate')
+
+    def test_missing_identity_inventory_is_bounded_and_does_not_echo_nonliteral_members(self):
+        path=self.root/'bounded-inventory.nupkg'
+        with zipfile.ZipFile(self.package) as archive:metadata=archive.read('FS.GG.Coord.Cli.nuspec')
+        with zipfile.ZipFile(path,'w') as archive:
+            archive.writestr('FS.GG.Coord.Cli.nuspec',metadata)
+            archive.writestr('tools/net10.0/any/private\nmember.dll',b'inert')
+            for index in range(20):archive.writestr(f'tools/net10.0/any/extra{index}.dll',b'inert')
+        result=qualifier.qualify(self.engine,path,SOURCE,'123','1',lambda *args:self.fail('must not launch'))
+        inventory=result['packageAssemblyInventory']
+        self.assertEqual(len(inventory['observedDllEntries']),8);self.assertEqual(inventory['omittedDllEntries'],13)
+        self.assertEqual(inventory['observedDllEntries'][0],'<nonliteral-member>')
+        self.assertNotIn('private',json.dumps(inventory));self.assertLess(len(json.dumps(inventory)),1600)
 
     def test_all_distinct_controls_and_evidence_are_closed_and_repeatable(self):
         result = self.run_fake()

@@ -2832,6 +2832,67 @@ class HostedInstallMetadataHTTPControls(HostedSuspensionInstallControls):
             self.assertTrue(all(stream.closed and stream.close_attempts>=1 for stream in self.http_streams))
             return code
 
+    def test_captured_native_eleven_key_wire_normalizes_to_same_prepared_apply_digest(self):
+        # Sanitized literal shape captured from the original native attempt. Only
+        # the actual Authority parent is replaced by this in-memory fixture head.
+        captured={"expected_authority_main":self.authority.head,"install_release_suspension":True,
+            "original_0103_candidate":False,"publish":False,"qualify_original_tag_authentication_only":False,
+            "recover_original_0103_tag_intent":False,"recover_original_runtime_intent":False,
+            "recover_original_successor_checkpoint":False,"recovery_checkpoint":False,
+            "repeat_original_nuget_kit_intent":False,"suspended_0103_successor":False}
+        canonical_inputs=copy.deepcopy(self.inputs)
+        self.assertEqual(len(captured),11);self.assertEqual(len(canonical_inputs),15)
+        with self.assertRaisesRegex(publisher.Refused,'fields differ'):publisher.validate_workflow_inputs(captured)
+        self.inputs=captured;digest=self.prepare()
+        prepared=json.loads(self.prepared_path.read_bytes())
+        self.assertEqual(prepared['inputSHA256'],hashlib.sha256(canonical(canonical_inputs)).hexdigest())
+        self.inputs=canonical_inputs
+        self.assertEqual(self.invoke('--install-hosted-release-suspension',digest),0,self.last_error)
+        self.assertEqual(json.loads(self.result_path.read_bytes())['disposition'],'install-only-complete')
+
+    def test_publication_wire_optional_defaults_preserve_semantics_and_canonical_digest(self):
+        good={**self.inputs,'install_release_suspension':False,'expected_authority_main':'',
+              'candidate_run_id':'1','candidate_artifact_id':'2','candidate_archive_sha256':'a'*64}
+        wire={key:value for key,value in good.items() if key not in {'expected_checkpoint','expected_authority_main'}}
+        self.inputs=wire
+        self.assertEqual(self.invoke('--check-workflow-inputs'),0,self.last_error)
+        with patch.dict(os.environ,{'FSGG_RELEASE_INPUTS':json.dumps(wire)}):normalized=publisher.workflow_inputs()
+        self.assertEqual(normalized,good);self.assertEqual(canonical(normalized),canonical(good))
+        self.assertEqual(self.tokens,[]);self.assertEqual(self.http_calls,[])
+        for change in ({'expected_authority_main':'e'*40},{'candidate_run_id':''},{'candidate_artifact_id':''},
+                       {'candidate_archive_sha256':''},{'expected_checkpoint':'{}'}):
+            self.inputs={**wire,**change}
+            with self.subTest(change=change):self.assertEqual(self.invoke('--check-workflow-inputs'),1)
+        self.assertEqual(self.tokens,[]);self.assertEqual(self.http_calls,[])
+
+    def test_wire_restores_only_five_declared_empty_strings_without_coercion_or_unknown_keys(self):
+        optional={'candidate_run_id','candidate_artifact_id','candidate_archive_sha256','expected_checkpoint','expected_authority_main'}
+        workflow=(ROOT/'.github/workflows/release-successor-publish.yml').read_text()
+        declared=set()
+        for key,body in re.findall(r'^      ([a-z0-9_]+):\n((?:        [^\n]*\n)+)',workflow,re.M):
+            if "default: ''" in body and 'type: string' in body:declared.add(key)
+        self.assertEqual(declared,optional)
+        full=copy.deepcopy(self.inputs)
+        for key in set(full)-optional:
+            self.inputs={name:value for name,value in full.items() if name!=key}
+            with self.subTest(missing=key):self.assertEqual(self.invoke('--check-workflow-inputs'),1)
+        for key in optional:
+            for value in (None,False,0):
+                self.inputs={**full,key:value}
+                with self.subTest(key=key,value=value):self.assertEqual(self.invoke('--check-workflow-inputs'),1)
+        for change in ({'unknown':''},{'candidateRunId':''},{'publish':'false'},{'expected_authority_main':''},
+                       {'candidate_run_id':'1'},{'expected_checkpoint':'{}'}):
+            self.inputs={**full,**change}
+            with self.subTest(change=change):self.assertEqual(self.invoke('--check-workflow-inputs'),1)
+        duplicate=json.dumps(full)[:-1]+',"publish":false}'
+        with patch.object(sys,'argv',['publisher','--check-workflow-inputs']), \
+             patch.dict(os.environ,{**self.environment,'FSGG_RELEASE_INPUTS':duplicate},clear=True), \
+             patch.object(publisher,'GitHubAPI',side_effect=AssertionError('credentials before valid inputs')), \
+             patch.object(sys,'stderr',io.StringIO()) as errors:
+            self.assertEqual(publisher.main(),1)
+        self.assertIn('duplicate workflow input',errors.getvalue())
+        self.assertEqual(self.tokens,[]);self.assertEqual(self.http_calls,[])
+
     def test_actual_standalone_user_route_uses_same_bounded_reader_writer_and_preserves_original(self):
         record=self.root/'standalone-record.json';record.write_bytes(self.raw)
         argv=['--install-release-suspension','--suspension-file',str(record),
