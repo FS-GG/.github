@@ -374,7 +374,15 @@ passed compiled skill conversion/contracts, package/registry/projection/reportin
 semantic fixture failed one obsolete diagnostic oracle: organization wave literals correctly refused
 at the retired-authority guard. The retained duplicate-literal product test now targets product
 work-board; independent organization retirement controls remain. That failed cohort is retained,
-with fresh exact-head qualification still required.
+with fresh exact-head qualification still required. The complete same-class sweep also found two
+unqualified compiled-consumer siblings: disclosure tests still expected retired organization regions,
+and the product occupancy/legacy-driver reader parsed both organization and product host loops.
+The product reader now consumes only retained work-board facts and checks every existing product
+runtime mirror; absent/conflicting product facts still refuse and organization declarations cannot
+supply them. Actual product-only versus operator-coexistence controls and explicit twelve-region
+absence/shared-product presence assertions are prepared. Source changes select the existing hosted
+full-engine and affected F# caller qualification; no local compiler or new organization V1 route is
+introduced. Historical analyst/review/intake controls remain fenced history/product checks.
 
 The first ready source window is .7/.8 after canonical owner resolution and bounded mapping. It can
 be developed without installed-store or UI access. Initial plan/roadmap delivery does not select a

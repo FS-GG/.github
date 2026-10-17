@@ -693,18 +693,17 @@ module Client =
             for line in Batch.explainRanking result do
                 eprint line
 
-    /// Read the dispatch model from BOTH host loops. The documents govern the numbers; the engine only
-    /// parses them and refuses disagreement. Reading one copy and ignoring the other would let
-    /// `drive-board` and `work-board` silently size different fleets again.
-    let private readWaveModel () : Result<Batch.WaveModel, string> =
+    /// Read only the retained product work-board policy, checking every installed runtime mirror.
+    /// Organization-v4 selection has its own composition and grants no authority through this reader.
+    /// Retired organization host-loop text is neither a prerequisite nor an alternative product model.
+    let private readProductWaveModel () : Result<Batch.WaveModel, string> =
         match KitDigest.kitRoot () with
         | None -> Error "the kit root is unavailable"
         | Some root ->
             let paths =
                 [
                     for skillRoot in [ ".claude/skills"; ".agents/skills" ] do
-                        for driver in [ "drive-board"; "work-board" ] do
-                            $"%s{skillRoot}/%s{driver}/references/host-loop.md"
+                        $"%s{skillRoot}/work-board/references/host-loop.md"
                 ]
 
             let read (relative: string) =
@@ -723,12 +722,11 @@ module Client =
             let existing = paths |> List.filter (fun p -> File.Exists(Path.Combine(root, p)))
 
             match existing with
-            | [] -> Error "no drive-board or work-board host-loop document exists"
+            | [] -> Error "no work-board product host-loop document exists"
             | documents ->
-                // Receiver topology is intentionally asymmetric: `work-board` materializes always while
-                // operator-only `drive-board` never does. Validate every copy that EXISTS and require them
-                // to agree, without turning an intentionally absent operator skill into an unavailable
-                // signal for the product driver.
+                // Product receivers may carry one or both runtime mirrors. Every existing product
+                // copy must parse and agree; an operator checkout's retired organization text cannot
+                // poison the product model or supply missing product facts.
                 let results = documents |> List.map read
 
                 let errors =
@@ -746,7 +744,7 @@ module Client =
 
                 match errors, models with
                 | [], [ model ] -> Ok model
-                | [], _ -> Error "drive-board and work-board declare different fsgg:wave-model:v1 values"
+                | [], _ -> Error "work-board product mirrors declare different fsgg:wave-model:v1 values"
                 | _, _ -> errors |> String.concat "; " |> Error
 
     /// `batch`'s implementer-slot projection over the very snapshot it scheduled from (.github#2678).
@@ -774,7 +772,7 @@ module Client =
     /// typed at the decision point, where a host can act on the measured deficit instead of remembering
     /// prose from the start of a long run. STDERR preserves `batch`'s stdout machine contract byte-for-byte.
     let private sayWaveOccupancy (doc: string) (result: Batch.BatchResult) : unit =
-        match readWaveModel (), slotOccupancyOf doc with
+        match readProductWaveModel (), slotOccupancyOf doc with
         | Ok model, Ok slots ->
             let occupancy = Batch.waveOccupancy model slots.Occupying
             eprint (Batch.renderWaveOccupancy occupancy)
@@ -1301,7 +1299,7 @@ module Client =
                     true
                     rows)
 
-        match scanAndDecide ctx opts Cache.Scheduling, readWaveModel () with
+        match scanAndDecide ctx opts Cache.Scheduling, readProductWaveModel () with
         | Error e, _ ->
             eprint (Errors.explain e)
             ExitError
