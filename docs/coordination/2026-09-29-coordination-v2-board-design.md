@@ -515,6 +515,17 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   Inert candidate/helper/artifact controls and independent source review passed; actual packaged
   execution, private native positives, migration-scope validation and timing remain unqualified.
   The original 45-minute workflow cap and seven-member publisher archive are unchanged.
+  **First hosted source cohort retained.** [PR #4653](https://github.com/FS-GG/.github/pull/4653)
+  at `c57e651a` failed before migration tests: an offside record/map continuation blocked
+  [compilation](https://github.com/FS-GG/.github/actions/runs/39052670010), migration envelope selectors
+  violated the [typed GraphQL boundary](https://github.com/FS-GG/.github/actions/runs/39052670020), and
+  the helper argument collided with the [retired-flag guard](https://github.com/FS-GG/.github/actions/runs/39052670017). The complete terminal cohort has 64 passed checks,
+  11 failures in those three source families and five skips; the compiler-first barrier withheld full
+  engine execution. Static source review missed these contracts and does not establish compiler
+  confidence. The coherent correction normalizes production/test/fixture sibling forms, moves only
+  strict migration parsing into the canonical envelope boundary with generic behavior unchanged,
+  and uses only `--installed-cli` at all helper callers. Existing direct guards/inert controls pass;
+  corrected hosted compilation, migration tests, packaged execution and acceptance remain required.
 
 - [ ] **COORD-BOARD-V2-01.10 — Migrate and verify Project 3** — route: routine.
   Depends on complete bounded outcome mapping, .9 and admitted native mutation capability. Scope:
