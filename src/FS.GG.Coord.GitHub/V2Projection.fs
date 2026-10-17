@@ -120,15 +120,15 @@ module V2Projection =
         let subject = "the Coordination V2 binding"
         let allFieldIds = [ binding.Status.Id; binding.RoadmapFieldId; binding.Track.Id; binding.Observation.Id ]
 
-        if binding.BindingVersion <> 2 && binding.BindingVersion <> 3 then
-            invalid subject "only organization binding version 2 or repository binding version 3 is supported"
+        if binding.BindingVersion <> 2 && binding.BindingVersion <> 3 && binding.BindingVersion <> 4 then
+            invalid subject "only historical organization v2, product v3 or programme v4 is supported"
         elif String.IsNullOrWhiteSpace binding.ImportRecipeRevision || binding.ImportRecipeRevision.Length <> 40 || binding.ImportRecipeRevision |> Seq.exists (Uri.IsHexDigit >> not)
              || String.IsNullOrWhiteSpace binding.ImportArtifactSha256 || binding.ImportArtifactSha256.Length <> 64 || binding.ImportArtifactSha256 |> Seq.exists (Uri.IsHexDigit >> not) then
             invalid subject "distinct reviewed import constructor provenance is incomplete"
-        elif binding.SelectedIssues.Count < (if binding.BindingVersion = 3 then 1 else 3) || binding.SelectedIssues.Count > 5 || binding.SelectedIssues |> Map.exists (fun node issue -> String.IsNullOrWhiteSpace node || String.IsNullOrWhiteSpace issue) then
+        elif binding.SelectedIssues.Count < (if binding.BindingVersion = 2 then 3 else 1) || binding.SelectedIssues.Count > (if binding.BindingVersion = 4 then 100 else 5) || binding.SelectedIssues |> Map.exists (fun node issue -> String.IsNullOrWhiteSpace node || String.IsNullOrWhiteSpace issue) then
             invalid subject "explicit selected native cohort is incomplete"
-        elif binding.SchemaVersion <> 1 then
-            invalid subject "only schema version 1 is supported"
+        elif binding.SchemaVersion <> (if binding.BindingVersion = 4 then 2 else 1) then
+            invalid subject "binding and schema versions disagree"
         elif not (nonBlank binding.RecipeRevision) || binding.RecipeRevision.Length <> 40 || binding.RecipeRevision |> Seq.exists (Uri.IsHexDigit >> not) then
             invalid subject "the reviewed recipe revision must be an immutable Git SHA"
         elif not (nonBlank binding.PopulationRevision) || binding.PopulationRevision.Length <> 40 || binding.PopulationRevision |> Seq.exists (Uri.IsHexDigit >> not) then
@@ -145,10 +145,20 @@ module V2Projection =
             || (binding.BindingVersion = 3 && binding.ProjectId = "PVT_kwDOEYAWY84Bb08W")
         then
             invalid subject "the legacy Coordination Project 1 identity is not a V2 projection target"
-        elif binding.BindingVersion = 2 && (binding.Owner <> "FS-GG" || binding.ProjectTitle <> "Coordination V2") then
+        elif (binding.BindingVersion = 2 || binding.BindingVersion = 4) && (binding.Owner <> "FS-GG" || binding.ProjectTitle <> "Coordination V2") then
             invalid subject "this restricted organization pilot requires the FS-GG Coordination V2 target"
         elif binding.BindingVersion = 3 && (binding.ProjectId = "PVT_kwDOEYAWY84Bldpa" || (binding.Owner = "FS-GG" && binding.ProjectNumber = 3)) then
             invalid subject "a repository binding cannot select the organization Coordination V2 target"
+        elif binding.BindingVersion = 4 && (binding.ProjectNumber <> 3 || binding.ProjectId <> "PVT_kwDOEYAWY84Bldpa" || binding.OrganizationId <> "O_kgDOEYAWYw"
+                                           || (binding.Repositories |> Set.exists (fun repo -> not (repo.StartsWith("FS-GG/", StringComparison.Ordinal))))
+                                           || (binding.SelectedIssues |> Map.exists (fun _ value ->
+                                               let hash = value.LastIndexOf '#'
+                                               let mutable number = 0
+                                               hash <= 0 || not (binding.Repositories.Contains(value.Substring(0, max 0 hash)))
+                                               || not (Int32.TryParse(value.Substring(hash + 1), &number)) || number <= 0
+                                               || value <> value.Substring(0, hash) + "#" + string number))
+                                           || (binding.SelectedIssues |> Map.values |> Set.ofSeq |> Set.count) <> binding.SelectedIssues.Count) then
+            invalid subject "programme enrollment requires exact Project 3 identities and distinct allowed native issues"
         elif binding.BindingVersion = 3 && not (productPopulation binding) then
             invalid subject "a repository binding requires one owner-local repository and an exact bounded native cohort"
         elif not (nonBlank binding.RoadmapFieldId) then
@@ -158,7 +168,7 @@ module V2Projection =
         elif Set.isEmpty binding.Repositories || binding.Repositories |> Seq.exists (canonicalRepository >> not) then
             invalid subject "the repository allowlist is empty or non-canonical"
         else
-            match validateSelect "Status" expectedStatus binding.Status with
+            match validateSelect "Status" (if binding.BindingVersion = 4 then expectedStatus.Add "In review" else expectedStatus) binding.Status with
             | Error error -> Error error
             | Ok() ->
                 match validateSelect "Track" expectedTrack binding.Track with
@@ -278,6 +288,46 @@ module V2Projection =
             with :? Collections.Generic.KeyNotFoundException ->
                 Error(Malformed(subject, "the response is missing data.node")))
 
+    /// Complete project population, including unselected issues, PRs and drafts. No enrollment occurs.
+    type Membership =
+        { ItemId: string; ContentId: string; Kind: string; Issue: IssueRef option; Enrolled: bool }
+
+    let readMemberships (transport: IGitHubTransport) (binding: Binding) =
+        validateBinding binding |> Result.bind (fun () -> verifyOrganization transport binding) |> Result.bind (fun () ->
+            let expected: ExactProject = { Owner = binding.Owner; Number = binding.ProjectNumber; Title = binding.ProjectTitle; Id = binding.ProjectId }
+            bootstrapExactProject transport expected |> Result.bind (fun board -> verifyFieldSchema binding board) |> Result.bind (fun () ->
+                let subject = "complete V2 project memberships"
+                let fetch after =
+                    let document = "query($projectId: ID!, $after: String) { node(id: $projectId) { ... on ProjectV2 { id items(first: 50, after: $after) { totalCount nodes { id content { __typename ... on Issue { id number repository { nameWithOwner } } ... on PullRequest { id } ... on DraftIssue { id } } } pageInfo { hasNextPage endCursor } } } } rateLimit { cost remaining } }"
+                    let variables = [ "projectId", VId binding.ProjectId ] @ (after |> Option.map (fun cursor -> [ "after", VString cursor ]) |> Option.defaultValue [])
+                    GraphQl.read transport (graphRequest document variables subject) (fun data ->
+                        let project = data.GetProperty "node"
+                        if project.GetProperty("id").GetString() <> binding.ProjectId then Error(Malformed(subject, "project identity differs"))
+                        else
+                            let decode (node: JsonElement) =
+                                let item = node.GetProperty("id").GetString()
+                                let content = node.GetProperty "content"
+                                if not (nonBlank item) || content.ValueKind = JsonValueKind.Null then Error(Malformed(subject, "item/content inaccessible"))
+                                else
+                                    let kind = content.GetProperty("__typename").GetString()
+                                    let id = content.GetProperty("id").GetString()
+                                    let issue =
+                                        if kind <> "Issue" then None
+                                        else
+                                            let repository = content.GetProperty("repository").GetProperty("nameWithOwner").GetString().Split('/')
+                                            if repository.Length <> 2 then None
+                                            else Some { Owner = repository[0]; Repository = repository[1]; Number = content.GetProperty("number").GetInt32() }
+                                    if (kind = "Issue" && issue.IsNone) || not (nonBlank id) || not (List.contains kind [ "Issue"; "PullRequest"; "DraftIssue" ]) || (issue |> Option.exists (fun value -> value.Number <= 0)) then
+                                        Error(Malformed(subject, "unsupported or unreadable content identity"))
+                                    else
+                                        let enrolled = issue |> Option.exists (fun value -> Map.tryFind id binding.SelectedIssues = Some $"{value.Owner}/{value.Repository}#{value.Number}")
+                                        if binding.SelectedIssues.ContainsKey id && not enrolled then Error(Malformed(subject, "enrolled node has mismatched native identity"))
+                                        else Ok { ItemId = item; ContentId = id; Kind = kind; Issue = issue; Enrolled = enrolled }
+                            GraphQl.page subject "project memberships" (fun (value: Membership) -> value.ItemId) decode (project.GetProperty "items"))
+                GraphQl.drain subject "project memberships" { MaxPages = 10; MaxItems = 500 } fetch |> Result.bind (fun members ->
+                    if (members |> List.map _.ContentId |> Set.ofList |> Set.count) <> members.Length then Error(Malformed(subject, "duplicate content memberships"))
+                    else Ok members)))
+
     type PlanningObservation =
         { ItemId: string; Status: string option; Roadmap: string option; Track: string option
           Observation: string option; MembershipPages: int }
@@ -329,6 +379,7 @@ module V2Projection =
     let runOneShot (verifySource: SourceVerifier) (transport: IGitHubTransport) (binding: Binding) (request: Request) =
         match validateBinding binding with
         | Error error -> Error error
+        | Ok() when binding.BindingVersion = 4 -> invalid "programme projection" "successor source window is inspection-only; migration/writer qualification is separate"
         | Ok() when request.Issue.Number <= 0 || not (nonBlank request.Issue.Owner) || not (nonBlank request.Issue.Repository) || not (nonBlank request.ExpectedNodeId) ->
             invalid "the projection request" "the issue identity is incomplete"
         | Ok() when not (repositoryAllowed binding request.Issue) ->

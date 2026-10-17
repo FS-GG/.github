@@ -4,6 +4,7 @@ namespace FS.GG.Coord.GitHub
 module V2ProjectionSource =
     open Errors
     open Transport
+    open System
     open V2Projection
 
     type NativeObservation =
@@ -62,20 +63,52 @@ module V2ProjectionSource =
             BatchReport
 
     /// Read evidence and human intent remain distinct. No new verification timestamp or write is minted.
+    /// Native head-bound observations; none of these facts establishes deployment acceptance.
+    type PullRequestFacts =
+        { Id: string; Repository: string; Number: int; Url: string; Head: string; UpdatedAt: string
+          Author: string option; Issues: string list; Files: string list; ReviewDecision: string option
+          Reviews: string list; Checks: string list; Gaps: string list }
+
+    type NativeIntegratorFacts =
+        { PullRequests: PullRequestFacts list; RepositoryGaps: Map<string, string>; ObservedAt: DateTimeOffset }
+
+    /// Trusted caller inputs for one current slice, not a parent outcome reservation or authority.
+    type Action = Source | Activation
+    type Prerequisite = { Action: Action; Reference: string; Satisfied: bool option; SupplyingOwner: string }
+    type CurrentSlice =
+        { Issue: IssueRef; Owner: string; Repository: string; Paths: string list; Action: Action
+          Prerequisites: Prerequisite list; PrerequisitesComplete: bool; IntakeAuthorized: bool option }
+    type Reservation = { Owner: string; Repository: string; Paths: string list }
+    type SelectionContext =
+        { Slices: CurrentSlice list; ImplementationSlots: int option; ReviewSlots: int option; HostedCiSlots: int option
+          Reservations: Reservation list option; ObservedAt: DateTimeOffset; ValidUntil: DateTimeOffset; Evidence: string }
+    type Selection =
+        { Issue: IssueRef; Action: Action; Decision: string; Owner: string option; PullRequest: string option
+          Head: string option; Reasons: string list; Evidence: string list }
+
     type InspectionItem =
         { Evidence: ItemReport; ExpectedNodeId: string; SourceCurrentness: string
-          Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list }
+          Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list; Owner: string option; SourceRevision: string option }
+
     type InspectionReport =
-        { Binding: Binding; Evidence: BatchReport; Items: InspectionItem list }
+        { Binding: Binding; Evidence: BatchReport; Items: InspectionItem list
+          Memberships: Membership list; MembershipGap: IoError option; NativeIntegrator: NativeIntegratorFacts }
+
     /// Facts supplied by the existing integrator; None means unknown and grants no authority.
     type IntegratorFacts =
         { OpenPullRequests: string list option; TouchSets: Map<string, string list> option; AvailableSlots: int option }
     type PlanningCandidate =
         { Issue: IssueRef; HumanStatus: string option; Track: string option; Roadmap: string option
           SourceCurrentness: string; Observation: string option; UnmetOrUnknown: string list; Integrator: IntegratorFacts }
+    /// Programme v4 enrollment/v2 separates exact native/plan identities from current issue, closure,
+    /// dependencies and protected-main plan revisions. Native PR observations include non-enrolled
+    /// in-flight work, bounded full connection reads, head-bound reviews/checks and final head barriers.
     /// Fixed queries/selected GET reads only. No writer, mutation or durable retry composition.
     val createInspectionTransport: binding: Binding -> token: string -> IoResult<IGitHubTransport * System.IDisposable>
     /// Reuse admitted source collection and exact planning readers. Never calls runOneShot or any writer.
     val inspectFixed: transport: IGitHubTransport -> binding: Binding -> previous: BatchReport option -> InspectionReport
     /// Deterministic display of selected human intent and known/unknown evidence. No scheduling decision.
     val planningCandidates: report: InspectionReport -> facts: IntegratorFacts -> PlanningCandidate list
+
+    /// Action-specific, read-only selection with a trusted current-slice/resource seam. Never dispatches.
+    val selectActions: report: InspectionReport -> context: SelectionContext option -> now: System.DateTimeOffset -> Selection list

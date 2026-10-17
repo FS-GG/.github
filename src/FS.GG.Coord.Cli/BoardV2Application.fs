@@ -76,12 +76,17 @@ module BoardV2Application =
                       projection = item.Projection |> Option.map projectionWire; gap = item.Gap |> Option.map Errors.explain
                       lastVerified = item.LastVerified |> Option.map projectionWire |}) |}
 
-    let encodeInspection (report: InspectionReport) =
-        let facts: IntegratorFacts = { OpenPullRequests = None; TouchSets = None; AvailableSlots = None }
+    let encodeInspectionWithContext (report: InspectionReport) context now =
+        let complete = report.Binding.BindingVersion = 4 && report.Evidence.PopulationGap.IsNone && report.MembershipGap.IsNone && report.NativeIntegrator.RepositoryGaps.IsEmpty && (report.NativeIntegrator.PullRequests |> List.forall (fun pull -> pull.Gaps.IsEmpty))
+        let facts: IntegratorFacts =
+            { OpenPullRequests = if complete then Some(report.NativeIntegrator.PullRequests |> List.map _.Url) else None
+              TouchSets = if complete then Some(report.NativeIntegrator.PullRequests |> List.map (fun pull -> pull.Url, pull.Files) |> Map.ofList) else None
+              AvailableSlots = None }
+        let actionName = function Source -> "source" | Activation -> "activation"
         let planningWire (value: PlanningObservation) =
             {| itemId = value.ItemId; status = value.Status; roadmap = value.Roadmap; track = value.Track; observation = value.Observation; membershipPages = value.MembershipPages |}
         JsonSerializer.Serialize
-            {| schema = "fsgg.coord.board-v2-inspection/1"; bindingVersion = report.Binding.BindingVersion; organizationId = report.Binding.OrganizationId
+            {| schema = (if report.Binding.BindingVersion = 4 then "fsgg.coord.board-v2-inspection/2" else "fsgg.coord.board-v2-inspection/1"); bindingVersion = report.Binding.BindingVersion; organizationId = report.Binding.OrganizationId
                owner = report.Binding.Owner; projectNumber = report.Binding.ProjectNumber; projectId = report.Binding.ProjectId; projectTitle = report.Binding.ProjectTitle
                schemaVersion = report.Binding.SchemaVersion; ownerKind = "organization"; repositories = report.Binding.Repositories |> Set.toList
                status = {| id = report.Binding.Status.Id; options = report.Binding.Status.Options |}; roadmapFieldId = report.Binding.RoadmapFieldId
@@ -93,14 +98,29 @@ module BoardV2Application =
                items = report.Items |> List.map (fun item ->
                    {| issue = issueWire item.Evidence.Issue; expectedNodeId = item.ExpectedNodeId; native = item.Evidence.Native |> Option.map nativeWire
                       dependencyObservations = item.Evidence.DependencyObservations |> List.map nativeWire; dependencyReadComplete = item.Evidence.DependencyReadComplete
-                      planObservation = item.Evidence.PlanObservation |> Option.map nativeWire; sourceCurrentness = item.SourceCurrentness
+                      planObservation = item.Evidence.PlanObservation |> Option.map nativeWire; sourceCurrentness = item.SourceCurrentness; sourceRevision = item.SourceRevision; accountableOwner = item.Owner
                       planning = item.Planning |> Option.map planningWire; planningGap = item.PlanningGap |> Option.map Errors.explain; discrepancies = item.Discrepancies
                       health = item.Evidence.Health; delivery = item.Evidence.Delivery; publication = item.Evidence.Publication; nativeAcceptance = item.Evidence.NativeAcceptance
                       reads = item.Evidence.Reads; mutationAttempts = 0; gap = item.Evidence.Gap |> Option.map Errors.explain; lastVerified = item.Evidence.LastVerified |> Option.map projectionWire |})
+               membershipGap = report.MembershipGap |> Option.map Errors.explain
+               memberships = report.Memberships |> List.map (fun memberItem ->
+                   {| itemId = memberItem.ItemId; contentId = memberItem.ContentId; kind = memberItem.Kind
+                      issue = memberItem.Issue |> Option.map issueWire; enrolled = memberItem.Enrolled
+                      discrepancy = if memberItem.Enrolled then None else Some "Unexpected/unselected membership; no automatic enrollment" |})
+               nativeIntegrator = {| observedAt = report.NativeIntegrator.ObservedAt; repositoryGaps = report.NativeIntegrator.RepositoryGaps
+                                     pullRequests = report.NativeIntegrator.PullRequests
+                                     resourceGap = "Runtime/integrator owners have not supplied fresh implementation/review/hosted-CI capacity or original/uncertain reservations" |}
+               selectionCoverage = "Partial .8: native PR recovery is observed; action-specific plan/intake/slice/resource/reservation observations require the trusted integrator seam"
+               selection = selectActions report context now |> List.map (fun selected ->
+                   {| issue = issueWire selected.Issue; action = actionName selected.Action; decision = selected.Decision
+                      owner = selected.Owner; pullRequest = selected.PullRequest; head = selected.Head; reasons = selected.Reasons; evidence = selected.Evidence
+                      dispatchAuthority = false |})
                candidates = planningCandidates report facts |> List.map (fun candidate ->
                    {| issue = issueWire candidate.Issue; humanStatus = candidate.HumanStatus; track = candidate.Track; roadmap = candidate.Roadmap
                       sourceCurrentness = candidate.SourceCurrentness; observation = candidate.Observation; unmetOrUnknown = candidate.UnmetOrUnknown
                       openPullRequests = candidate.Integrator.OpenPullRequests; touchSets = candidate.Integrator.TouchSets; availableSlots = candidate.Integrator.AvailableSlots |}) |}
+
+    let encodeInspection report = encodeInspectionWithContext report None DateTimeOffset.UtcNow
 
     let decodePreviousReport json =
         try
@@ -205,7 +225,7 @@ module BoardV2Application =
         try
             let report = V2ProjectionSource.inspectFixed (bounded transport) binding previous
             File.WriteAllText(reportPath, encodeInspection report + Environment.NewLine)
-            if report.Evidence.PopulationGap.IsSome || (report.Items |> List.exists (fun item -> item.SourceCurrentness <> "Current" || item.PlanningGap.IsSome)) then 3 else 0
+            if report.Evidence.PopulationGap.IsSome || report.MembershipGap.IsSome || (report.Items |> List.exists (fun item -> item.SourceCurrentness <> "Current" || item.PlanningGap.IsSome)) then 3 else 0
         with error -> refuse ("inspection/report failed: " + error.Message)
 
     let runWithTransport transport arguments =

@@ -47,7 +47,7 @@ module V2ProjectionSource =
         { Method = "POST"; Path = "graphql"; Query = []; Body = Query(document, variables)
           Budget = GraphQl; IfNoneMatch = None; Subject = subject }
 
-    let private readIssue (transport: IGitHubTransport) (issue: IssueRef) =
+    let private readIssueDetails (transport: IGitHubTransport) (issue: IssueRef) =
         let subject = $"{issue.Owner}/{issue.Repository}#{issue.Number} native observation"
         let document = "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { nameWithOwner issue(number: $number) { id number updatedAt state url body repository { nameWithOwner } } } rateLimit { cost remaining } }"
         GraphQl.read transport (query document [ "owner", VString issue.Owner; "repo", VString issue.Repository; "number", VNumber(double issue.Number) ] subject) (fun data ->
@@ -65,9 +65,18 @@ module V2ProjectionSource =
                            && (state = "OPEN" || state = "CLOSED")
                            && native.GetProperty("body").ValueKind = JsonValueKind.String
                            && native.GetProperty("url").GetString() = $"https://github.com/{expected}/issues/{issue.Number}" ->
-                Ok { Issue = issue; NodeId = nodeId; UpdatedAt = updated; State = state; Url = native.GetProperty("url").GetString()
-                     BodySha256 = native.GetProperty("body").GetString() |> System.Text.Encoding.UTF8.GetBytes |> System.Security.Cryptography.SHA256.HashData |> Convert.ToHexStringLower }
+                Ok({ Issue = issue; NodeId = nodeId; UpdatedAt = updated; State = state; Url = native.GetProperty("url").GetString()
+                     BodySha256 = native.GetProperty("body").GetString() |> System.Text.Encoding.UTF8.GetBytes |> System.Security.Cryptography.SHA256.HashData |> Convert.ToHexStringLower }, native.GetProperty("body").GetString())
             | _ -> Error(Malformed(subject, "native identity or revision is unreadable/mismatched")))
+
+    let private readIssue transport issue = readIssueDetails transport issue |> Result.map fst
+
+    // Six-field owner record text is current input, never acceptance or dispatch authority.
+    let private ownerField (body: string) =
+        let values = body.Replace("\r", "").Split('\n') |> Array.choose (fun line ->
+            let text = line.Trim().TrimStart('*').Trim()
+            if text.StartsWith("Owner:", StringComparison.Ordinal) then Some(text.Substring(6).Trim().Trim('*').Trim()) else None)
+        match values with [| owner |] when not (String.IsNullOrWhiteSpace owner) -> Some owner | _ -> None
 
     let private sourceRepository (binding: Binding) =
         if binding.BindingVersion = 3 then Set.minElement binding.Repositories else "FS-GG/.github"
@@ -88,13 +97,14 @@ module V2ProjectionSource =
                     [ "owner", VString binding.Owner; "repo", VString (expectedRepository.Split('/')[1]) ]
                 else
                     "query($expression: String!, $currentExpression: String!) { repository(owner: \"FS-GG\", name: \".github\") { nameWithOwner ref(qualifiedName: \"refs/heads/main\") { target { oid } } object(expression: $expression) { ... on Blob { oid text } } current: object(expression: $currentExpression) { ... on Blob { oid text } } } rateLimit { cost remaining } }", []
-            GraphQl.read transport (query document (ownerVariables @ [ "expression", VString $"{revision}:{path}"; "currentExpression", VString $"main:{path}" ]) subject) (fun data ->
+            GraphQl.read transport (query document (ownerVariables @ [ "expression", VString (if binding.BindingVersion = 4 && path <> populationPath then $"main:{path}" else $"{revision}:{path}"); "currentExpression", VString $"main:{path}" ]) subject) (fun data ->
                 let repository = data.GetProperty "repository"
                 let text = repository.GetProperty("object").GetProperty("text").GetString()
                 if repository.GetProperty("nameWithOwner").GetString() <> expectedRepository
                    || repository.GetProperty("object").GetProperty("oid").GetString() <> repository.GetProperty("current").GetProperty("oid").GetString()
                    || text <> repository.GetProperty("current").GetProperty("text").GetString()
-                   || String.IsNullOrWhiteSpace(repository.GetProperty("object").GetProperty("oid").GetString())
+                   || (let oid = repository.GetProperty("object").GetProperty("oid").GetString() in String.IsNullOrWhiteSpace oid || oid.Length <> 40 || oid |> Seq.exists (Uri.IsHexDigit >> not))
+                   || (let oid = repository.GetProperty("ref").GetProperty("target").GetProperty("oid").GetString() in String.IsNullOrWhiteSpace oid || oid.Length <> 40 || oid |> Seq.exists (Uri.IsHexDigit >> not))
                    || String.IsNullOrWhiteSpace text then
                     Error(Malformed(subject, "canonical source blob is unavailable"))
                 else Ok(text, repository.GetProperty("ref").GetProperty("target").GetProperty("oid").GetString(), repository.GetProperty("object").GetProperty("oid").GetString()))
@@ -164,7 +174,7 @@ module V2ProjectionSource =
                 if native.Url <> path || native.BodySha256 = emptyDigest then Error(Malformed("programme issue", "native URL/body is unreadable or mismatched"))
                 else Ok(Some native, $"{native.NodeId}@{native.UpdatedAt}:{native.Url}:{native.BodySha256}"))
         elif path.StartsWith("docs/", StringComparison.Ordinal) then
-            readProtectedBlob transport binding binding.PopulationRevision path |> Result.map (fun (_, _, blob) -> None, $"{path}:{blob}")
+            readProtectedBlob transport binding binding.PopulationRevision path |> Result.map (fun (_, revision, blob) -> None, $"{path}@{revision}:{blob}")
         else Error(Malformed("owning plan", "only canonical protected docs or the selected programme issue URL is admitted"))
 
     type private Selected =
@@ -191,6 +201,8 @@ module V2ProjectionSource =
                || target.GetProperty("id").GetString() <> binding.ProjectId
                || target.GetProperty("number").GetInt32() <> binding.ProjectNumber then
                 Error(Malformed("reviewed population", "manifest is not bound to the exact admitted project"))
+            elif binding.BindingVersion = 4 then
+                Error(Malformed("reviewed population", "programme binding requires enrollment/v2, never pilot fallback"))
             else
                 let rows = root.GetProperty("items").EnumerateArray() |> Seq.filter (fun row -> row.GetProperty("pilot").GetBoolean() && (row.GetProperty("decision").GetString() = "import" || row.GetProperty("decision").GetString() = "follow-up") && row.GetProperty("adjudication").GetString() = "verified-remaining") |> Seq.toList
                 if rows.Length < (if binding.BindingVersion = 3 then 1 else 3) || rows.Length > 5 then Error(Malformed("reviewed population", "admitted population is outside the selected bounded cohort"))
@@ -224,22 +236,61 @@ module V2ProjectionSource =
         | :? Collections.Generic.KeyNotFoundException
         | :? InvalidOperationException -> Error(Malformed("reviewed population", "manifest is incomplete or nonexecutable"))
 
+    let private programmePopulation (binding: Binding) (text: string) =
+        try
+            use document = JsonDocument.Parse text
+            let root = document.RootElement
+            let closed (names: string list) (value: JsonElement) =
+                let actual = value.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+                if actual.Length <> names.Length || Set.ofList actual <> Set.ofList names then invalidArg "enrollment" "closed schema required"
+            closed [ "schema"; "target"; "binding"; "items" ] root
+            if root.GetProperty("schema").GetString() <> "fsgg.coordination-board-v2-enrollment/v2" then invalidArg "schema" "programme enrollment/v2 required"
+            let target = root.GetProperty "target"
+            closed [ "owner"; "organizationId"; "projectId"; "projectNumber"; "schemaVersion" ] target
+            let admission = root.GetProperty "binding"
+            closed [ "recipeRevision"; "artifactSha256"; "repositories" ] admission
+            let repositories = admission.GetProperty("repositories").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+            if target.GetProperty("owner").GetString() <> binding.Owner || target.GetProperty("organizationId").GetString() <> binding.OrganizationId
+               || target.GetProperty("projectId").GetString() <> binding.ProjectId || target.GetProperty("projectNumber").GetInt32() <> binding.ProjectNumber
+               || target.GetProperty("schemaVersion").GetInt32() <> binding.SchemaVersion
+               || admission.GetProperty("recipeRevision").GetString() <> binding.ImportRecipeRevision
+               || admission.GetProperty("artifactSha256").GetString() <> binding.ImportArtifactSha256
+               || Set.ofList repositories <> binding.Repositories || repositories.Length <> binding.Repositories.Count then
+                invalidArg "enrollment" "target/provenance/repository mismatch"
+            let rows = root.GetProperty("items").EnumerateArray() |> Seq.map (fun row ->
+                closed [ "issue"; "nodeId"; "roadmap" ] row
+                let issue = parseIssue (row.GetProperty("issue").GetString()) |> Result.defaultWith (Errors.explain >> failwith)
+                let node = row.GetProperty("nodeId").GetString()
+                let roadmap = row.GetProperty("roadmap").GetString()
+                if Map.tryFind node binding.SelectedIssues <> Some $"{issue.Owner}/{issue.Repository}#{issue.Number}" || String.IsNullOrWhiteSpace roadmap then
+                    invalidArg "enrollment" "issue identity/owning plan differs"
+                { Issue = issue; NodeId = node; UpdatedAt = ""; Roadmap = roadmap; Dependencies = [] }) |> Seq.toList
+            if rows.Length <> binding.SelectedIssues.Count || (rows |> List.map _.NodeId |> Set.ofList |> Set.count) <> rows.Length then
+                invalidArg "enrollment" "exact selected population required"
+            Ok rows
+        with error -> Error(Malformed("programme enrollment", error.Message))
+
+    let private selectedPopulation binding text =
+        if binding.BindingVersion = 4 then programmePopulation binding text else population binding text
+
     type private SourceCollection =
         { Verification: IoResult<SourceVerification>; Native: NativeObservation option
-          Dependencies: NativeObservation list; DependenciesComplete: bool; Plan: NativeObservation option }
+          Dependencies: NativeObservation list; DependenciesComplete: bool; Plan: NativeObservation option; Owner: string option }
 
     let private collectSource (transport: IGitHubTransport) (binding: Binding) (row: Selected) =
         let mutable native = None
         let mutable dependencies = []
         let mutable dependenciesComplete = false
         let mutable plan = None
+        let mutable owner = None
         let verification =
-            match readIssue transport row.Issue with
+            match readIssueDetails transport row.Issue with
             | Error error -> Error error
-            | Ok observation ->
+            | Ok(observation, body) ->
+                owner <- ownerField body
                 native <- Some observation
                 if observation.NodeId <> row.NodeId then Ok(Refused "native issue node identity changed")
-                elif observation.UpdatedAt <> row.UpdatedAt || observation.State <> "OPEN" then Ok(Stale None)
+                elif binding.BindingVersion <> 4 && (observation.UpdatedAt <> row.UpdatedAt || observation.State <> "OPEN") then Ok(Stale None)
                 else
                     match readBlockedBy transport binding row.Issue with
                     | Error error -> Error error
@@ -247,15 +298,15 @@ module V2ProjectionSource =
                         dependencies <- observed
                         dependenciesComplete <- true
                         let actual = observed |> List.map _.Issue |> Set.ofList
-                        if actual <> Set.ofList row.Dependencies then Ok(Stale None)
+                        if binding.BindingVersion <> 4 && actual <> Set.ofList row.Dependencies then Ok(Stale None)
                         else
                             match readPlan transport binding row.Roadmap with
                             | Error error -> Error error
                             | Ok(planObservation, planRevision) ->
                                 plan <- planObservation
                                 let dependencyRevision = dependencies |> List.map (fun dependency -> $"{dependency.NodeId}@{dependency.UpdatedAt}:{dependency.State}") |> List.sort |> String.concat ";"
-                                Ok(Current $"{observation.NodeId}@{observation.UpdatedAt};dependencies=complete:{dependencyRevision};plan={planRevision};recipe={binding.RecipeRevision}")
-        { Verification = verification; Native = native; Dependencies = dependencies; DependenciesComplete = dependenciesComplete; Plan = plan }
+                                Ok(Current $"{observation.NodeId}@{observation.UpdatedAt}:{observation.BodySha256};dependencies=complete:{dependencyRevision};plan={planRevision};recipe={binding.RecipeRevision}")
+        { Verification = verification; Native = native; Dependencies = dependencies; DependenciesComplete = dependenciesComplete; Plan = plan; Owner = owner }
 
     let private artifactCheck (binding: Binding) =
         try
@@ -275,8 +326,9 @@ module V2ProjectionSource =
               PopulationGap = Some error; Cleanup = "No resources, claims or background work created" }
         match validateBinding binding |> Result.bind (fun () -> artifactCheck binding) with
         | Error error -> failed error
+        | Ok() when binding.BindingVersion = 4 -> failed (Malformed("programme refresh", "successor source window is inspection-only"))
         | Ok() ->
-            match readProtectedBlob transport binding binding.PopulationRevision populationPath |> Result.bind (fun (text, current, blob) -> population binding text |> Result.map (fun selected -> selected, current, blob)) with
+            match readProtectedBlob transport binding binding.PopulationRevision populationPath |> Result.bind (fun (text, current, blob) -> selectedPopulation binding text |> Result.map (fun selected -> selected, current, blob)) with
             | Error error -> failed error
             | Ok(selected, protectedRevision, populationBlob) ->
                 let items = selected |> List.map (fun row ->
@@ -325,12 +377,36 @@ module V2ProjectionSource =
                   Attempted = items.Length; Verified = items |> List.filter (fun item -> item.Health = "Verified") |> List.length
                   Items = items; PopulationGap = None; Cleanup = "No resources, claims or background work created" }
 
+    /// Native head-bound observations; none of these facts establishes deployment acceptance.
+    type PullRequestFacts =
+        { Id: string; Repository: string; Number: int; Url: string; Head: string; UpdatedAt: string
+          Author: string option; Issues: string list; Files: string list; ReviewDecision: string option
+          Reviews: string list; Checks: string list; Gaps: string list }
+
+    type NativeIntegratorFacts =
+        { PullRequests: PullRequestFacts list; RepositoryGaps: Map<string, string>; ObservedAt: DateTimeOffset }
+
+    /// Trusted caller inputs for one current slice, not a parent outcome reservation or authority.
+    type Action = Source | Activation
+    type Prerequisite = { Action: Action; Reference: string; Satisfied: bool option; SupplyingOwner: string }
+    type CurrentSlice =
+        { Issue: IssueRef; Owner: string; Repository: string; Paths: string list; Action: Action
+          Prerequisites: Prerequisite list; PrerequisitesComplete: bool; IntakeAuthorized: bool option }
+    type Reservation = { Owner: string; Repository: string; Paths: string list }
+    type SelectionContext =
+        { Slices: CurrentSlice list; ImplementationSlots: int option; ReviewSlots: int option; HostedCiSlots: int option
+          Reservations: Reservation list option; ObservedAt: DateTimeOffset; ValidUntil: DateTimeOffset; Evidence: string }
+    type Selection =
+        { Issue: IssueRef; Action: Action; Decision: string; Owner: string option; PullRequest: string option
+          Head: string option; Reasons: string list; Evidence: string list }
+
     type InspectionItem =
         { Evidence: ItemReport; ExpectedNodeId: string; SourceCurrentness: string
-          Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list }
+          Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list; Owner: string option; SourceRevision: string option }
 
     type InspectionReport =
-        { Binding: Binding; Evidence: BatchReport; Items: InspectionItem list }
+        { Binding: Binding; Evidence: BatchReport; Items: InspectionItem list
+          Memberships: Membership list; MembershipGap: IoError option; NativeIntegrator: NativeIntegratorFacts }
 
     type IntegratorFacts =
         { OpenPullRequests: string list option; TouchSets: Map<string, string list> option; AvailableSlots: int option }
@@ -361,6 +437,106 @@ module V2ProjectionSource =
                 let transport = new HttpTransport("https://api.github.com", token)
                 Ok(inspectionReads transport binding, transport :> IDisposable))
 
+    let private nativeIntegrator (transport: IGitHubTransport) (binding: Binding) =
+        let mutable repositoryGaps = Map.empty
+        let mutable all = []
+        let sha (value: string) = not (String.IsNullOrWhiteSpace value) && value.Length = 40 && value |> Seq.forall Uri.IsHexDigit
+        for repository in binding.Repositories do
+            let parts = repository.Split('/')
+            let subject = repository + " open PR inventory"
+            let fetch after =
+                let document = "query($owner: String!, $repo: String!, $after: String) { repository(owner: $owner, name: $repo) { nameWithOwner pullRequests(first: 50, after: $after, states: OPEN) { totalCount nodes { id number url headRefOid updatedAt author { login } reviewDecision } pageInfo { hasNextPage endCursor } } } rateLimit { cost remaining } }"
+                let variables = [ "owner", VString parts[0]; "repo", VString parts[1] ] @ (after |> Option.map (fun cursor -> [ "after", VString cursor ]) |> Option.defaultValue [])
+                GraphQl.read transport (query document variables subject) (fun data ->
+                    let native = data.GetProperty "repository"
+                    if native.GetProperty("nameWithOwner").GetString() <> repository then Error(Malformed(subject, "repository differs"))
+                    else
+                        let decode (node: JsonElement) =
+                            let id = node.GetProperty("id").GetString()
+                            let number = node.GetProperty("number").GetInt32()
+                            let head = node.GetProperty("headRefOid").GetString()
+                            let url = node.GetProperty("url").GetString()
+                            let updated = node.GetProperty("updatedAt").GetString()
+                            if String.IsNullOrWhiteSpace id || number <= 0 || not (sha head) || not (fst (DateTimeOffset.TryParse updated)) || url <> $"https://github.com/{repository}/pull/{number}" then
+                                Error(Malformed(subject, "PR identity/head/revision differs"))
+                            else
+                                let optional (name: string) (value: JsonElement) = let property = value.GetProperty name in if property.ValueKind = JsonValueKind.Null then None else Some(property.GetString())
+                                let author = node.GetProperty "author"
+                                Ok { Id = id; Repository = repository; Number = number; Url = url; Head = head; UpdatedAt = updated
+                                     Author = if author.ValueKind = JsonValueKind.Null then None else optional "login" author
+                                     ReviewDecision = optional "reviewDecision" node; Issues = []; Files = []; Reviews = []; Checks = []; Gaps = [] }
+                        GraphQl.page subject "open PRs" (fun (value: PullRequestFacts) -> value.Id) decode (native.GetProperty "pullRequests"))
+            match GraphQl.drain subject "open PRs" { MaxPages = 10; MaxItems = 500 } fetch with
+            | Error error -> repositoryGaps <- repositoryGaps.Add(repository, Errors.explain error)
+            | Ok pulls ->
+                for pull in pulls do
+                    let mutable gaps = []
+                    let connection field selection (decode: JsonElement -> IoResult<'a>) (key: 'a -> string) =
+                        let fetch after =
+                            let document = "query($id: ID!, $after: String) { node(id: $id) { ... on PullRequest { id number state headRefOid updatedAt repository { nameWithOwner } " + field + "(first: 50, after: $after) { totalCount nodes { " + selection + " } pageInfo { hasNextPage endCursor } } } } rateLimit { cost remaining } }"
+                            let variables = [ "id", VId pull.Id ] @ (after |> Option.map (fun cursor -> [ "after", VString cursor ]) |> Option.defaultValue [])
+                            GraphQl.read transport (query document variables (pull.Url + " " + field)) (fun data ->
+                                let node = data.GetProperty "node"
+                                if node.GetProperty("id").GetString() <> pull.Id || node.GetProperty("number").GetInt32() <> pull.Number
+                                   || node.GetProperty("repository").GetProperty("nameWithOwner").GetString() <> repository
+                                   || node.GetProperty("state").GetString() <> "OPEN" || node.GetProperty("headRefOid").GetString() <> pull.Head
+                                   || node.GetProperty("updatedAt").GetString() <> pull.UpdatedAt then Error(Malformed(pull.Url, "PR/head/revision changed; recompute affected selection"))
+                                else GraphQl.page pull.Url field key decode (node.GetProperty field))
+                        match GraphQl.drain pull.Url field { MaxPages = 10; MaxItems = 500 } fetch with
+                        | Ok values -> values
+                        | Error error -> gaps <- gaps @ [ Errors.explain error ]; []
+                    let issues = connection "closingIssuesReferences" "id number repository { nameWithOwner }" (fun node ->
+                        let issueRepository = node.GetProperty("repository").GetProperty("nameWithOwner").GetString()
+                        let number = node.GetProperty("number").GetInt32()
+                        let id = node.GetProperty("id").GetString()
+                        if number <= 0 || String.IsNullOrWhiteSpace id || not (issueRepository.StartsWith(binding.Owner + "/", StringComparison.Ordinal)) then Error(Malformed(pull.Url, "closing issue identity outside owner scope"))
+                        else Ok(id, $"{issueRepository}#{number}")) fst
+                    let files = connection "files" "path" (fun node ->
+                        let path = node.GetProperty("path").GetString()
+                        if String.IsNullOrWhiteSpace path then Error(Malformed(pull.Url, "empty changed file")) else Ok path) id
+                    let reviews = connection "reviews" "id state commit { oid } author { login }" (fun node ->
+                        let id = node.GetProperty("id").GetString()
+                        let state = node.GetProperty("state").GetString()
+                        let commit = node.GetProperty "commit"
+                        let head = if commit.ValueKind = JsonValueKind.Null then "unknown" else commit.GetProperty("oid").GetString()
+                        if String.IsNullOrWhiteSpace id || String.IsNullOrWhiteSpace state then Error(Malformed(pull.Url, "review identity/state unavailable"))
+                        else Ok(id, state + "@" + head)) fst
+                    let checks =
+                        let fetch after =
+                            let document = "query($owner: String!, $repo: String!, $head: String!, $after: String) { repository(owner: $owner, name: $repo) { nameWithOwner object(expression: $head) { ... on Commit { oid statusCheckRollup { contexts(first: 50, after: $after) { totalCount nodes { __typename ... on CheckRun { id name status conclusion } ... on StatusContext { id context state } } pageInfo { hasNextPage endCursor } } } } } } rateLimit { cost remaining } }"
+                            let variables = [ "owner", VString parts[0]; "repo", VString parts[1]; "head", VString pull.Head ] @ (after |> Option.map (fun cursor -> [ "after", VString cursor ]) |> Option.defaultValue [])
+                            GraphQl.read transport (query document variables (pull.Url + " head checks")) (fun data ->
+                                let native = data.GetProperty "repository"
+                                let commit = native.GetProperty "object"
+                                let rollup = commit.GetProperty "statusCheckRollup"
+                                if native.GetProperty("nameWithOwner").GetString() <> repository || commit.GetProperty("oid").GetString() <> pull.Head || rollup.ValueKind = JsonValueKind.Null then
+                                    Error(Malformed(pull.Url, "head checks unavailable/mismatched; no required-check acceptance inferred"))
+                                else
+                                    let decode (node: JsonElement) =
+                                        let kind = node.GetProperty("__typename").GetString()
+                                        let id = node.GetProperty("id").GetString()
+                                        let value =
+                                            if kind = "CheckRun" then
+                                                let conclusion = node.GetProperty "conclusion"
+                                                node.GetProperty("name").GetString() + ":" + node.GetProperty("status").GetString() + ":" + (if conclusion.ValueKind = JsonValueKind.Null then "pending" else conclusion.GetString())
+                                            elif kind = "StatusContext" then node.GetProperty("context").GetString() + ":" + node.GetProperty("state").GetString()
+                                            else ""
+                                        if String.IsNullOrWhiteSpace id || String.IsNullOrWhiteSpace value then Error(Malformed(pull.Url, "unreadable check context")) else Ok(id, value)
+                                    GraphQl.page pull.Url "head checks" fst decode (rollup.GetProperty "contexts"))
+                        match GraphQl.drain pull.Url "head checks" { MaxPages = 10; MaxItems = 500 } fetch with
+                        | Ok values -> values |> List.map snd
+                        | Error error -> gaps <- gaps @ [ Errors.explain error ]; []
+                    // Final barrier prevents a stale inventory head from licensing continuation.
+                    let document = "query($id: ID!) { node(id: $id) { ... on PullRequest { id state headRefOid updatedAt repository { nameWithOwner } } } rateLimit { cost remaining } }"
+                    let barrier = GraphQl.read transport (query document [ "id", VId pull.Id ] (pull.Url + " final head barrier")) (fun data ->
+                        let node = data.GetProperty "node"
+                        if node.GetProperty("id").GetString() = pull.Id && node.GetProperty("state").GetString() = "OPEN" && node.GetProperty("headRefOid").GetString() = pull.Head
+                           && node.GetProperty("updatedAt").GetString() = pull.UpdatedAt && node.GetProperty("repository").GetProperty("nameWithOwner").GetString() = repository then Ok()
+                        else Error(Malformed(pull.Url, "PR/head/revision changed; recompute affected selection")))
+                    match barrier with Error error -> gaps <- gaps @ [ Errors.explain error ] | _ -> ()
+                    all <- all @ [ { pull with Issues = issues |> List.map snd; Files = files; Reviews = reviews |> List.map snd; Checks = checks; Gaps = gaps } ]
+        { PullRequests = all; RepositoryGaps = repositoryGaps; ObservedAt = DateTimeOffset.UtcNow }
+
     let inspectFixed (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
         let reads = inspectionReads transport binding
         let metadata items selected protectedInputs gap : BatchReport =
@@ -369,13 +545,18 @@ module V2ProjectionSource =
               NativeDispatch = []; ProtectedInputs = protectedInputs; Selected = selected; Attempted = items |> List.length
               Verified = items |> List.filter (fun item -> item.Health = "Verified") |> List.length; Items = items
               PopulationGap = gap; Cleanup = "Read-only inspection; no project lock, claims, mutation, durable effect or background work" }
-        let failed error = { Binding = binding; Evidence = metadata [] None [] (Some error); Items = [] }
+        let emptyNative =
+            { PullRequests = []; ObservedAt = DateTimeOffset.UtcNow
+              RepositoryGaps = if binding.BindingVersion = 4 then binding.Repositories |> Seq.map (fun repository -> repository, "Native integrator not collected because global enrollment/project/schema/membership admission is incomplete") |> Map.ofSeq else Map.empty }
+        let failed error = { Binding = binding; Evidence = metadata [] None [] (Some error); Items = []; Memberships = []; MembershipGap = Some error; NativeIntegrator = emptyNative }
         match validateBinding binding |> Result.bind (fun () -> artifactCheck binding) with
         | Error error -> failed error
         | Ok() ->
-            match readProtectedBlob reads binding binding.PopulationRevision populationPath |> Result.bind (fun (text, current, blob) -> population binding text |> Result.map (fun selected -> selected, current, blob)) with
+            match readProtectedBlob reads binding binding.PopulationRevision populationPath |> Result.bind (fun (text, current, blob) -> selectedPopulation binding text |> Result.map (fun selected -> selected, current, blob)) with
             | Error error -> failed error
             | Ok(selected, current, blob) ->
+                let membership = if binding.BindingVersion = 4 then readMemberships reads binding else Ok []
+                let members, membershipGap = match membership with Ok values -> values, None | Error error -> [], Some error
                 let items = selected |> List.map (fun row ->
                     let mutable calls = 0
                     let counted =
@@ -408,8 +589,18 @@ module V2ProjectionSource =
                           Health = if planningGap.IsSome then "Unknown" elif currentness = "Stale" then "Stale" elif currentness = "Current" && (observed |> Option.exists (fun value -> value.Observation = Some "Verified")) then "Verified" else "Unknown"
                           Reads = calls; MutationAttempts = 0; MembershipPages = observed |> Option.map _.MembershipPages
                           Projection = None; Gap = sourceGap; LastVerified = historical }
-                    { Evidence = evidence; ExpectedNodeId = row.NodeId; SourceCurrentness = currentness; Planning = observed; PlanningGap = planningGap; Discrepancies = discrepancies })
-                { Binding = binding; Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) [ (if binding.BindingVersion = 3 then sourceRepository binding + ":" + populationPath else populationPath), current, blob ] None; Items = items }
+                    { Evidence = evidence; ExpectedNodeId = row.NodeId; SourceCurrentness = currentness; Planning = observed; PlanningGap = planningGap; Discrepancies = discrepancies; Owner = collection.Owner
+                      SourceRevision = match collection.Verification with Ok(Current revision) -> Some revision | _ -> None })
+                let integration = if binding.BindingVersion = 4 && membershipGap.IsNone then nativeIntegrator reads binding else emptyNative
+                let items =
+                    if binding.BindingVersion <> 4 then items
+                    else List.map2 (fun row item ->
+                        let barrier = collectSource reads binding row
+                        match barrier.Verification with
+                        | Ok(Current revision) when item.SourceRevision = Some revision && barrier.Owner = item.Owner -> item
+                        | _ -> { item with SourceCurrentness = "Unknown"; Evidence = { item.Evidence with Health = "Unknown"; Gap = Some(Malformed("final source barrier", "issue/dependency/plan changed or became unavailable; refresh affected selection")) } }) selected items
+                { Binding = binding; Memberships = members; MembershipGap = membershipGap; NativeIntegrator = integration
+                  Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) [ (if binding.BindingVersion = 3 then sourceRepository binding + ":" + populationPath else populationPath), current, blob ] membershipGap; Items = items }
 
     let planningCandidates (report: InspectionReport) (facts: IntegratorFacts) =
         if report.Evidence.Selected.IsNone || report.Evidence.PopulationGap.IsSome then []
@@ -420,8 +611,98 @@ module V2ProjectionSource =
                   item.Discrepancies @
                   [ if item.SourceCurrentness <> "Current" then yield "Current source/native coverage is unavailable or stale"
                     if item.Evidence.Gap.IsSome || item.PlanningGap.IsSome then yield "One or more selected reads failed"
-                    yield item.Evidence.Delivery; yield item.Evidence.Publication; yield item.Evidence.NativeAcceptance
+                    if report.Binding.BindingVersion <> 4 then
+                        yield item.Evidence.Delivery; yield item.Evidence.Publication; yield item.Evidence.NativeAcceptance
                     if facts.OpenPullRequests.IsNone then yield "Open PR facts are unknown"
                     if facts.TouchSets.IsNone then yield "Touch-set facts are unknown"
                     if facts.AvailableSlots.IsNone then yield "Current capacity is unknown"
                     yield "Intake authorization and scheduling selection remain the current integrator's responsibility" ] })
+
+    /// A current read proposes an action only. The existing integrator retains dispatch authority.
+    let selectActions (report: InspectionReport) (context: SelectionContext option) (now: DateTimeOffset) =
+        let fresh observed = observed <= now && now - observed <= TimeSpan.FromMinutes 5.0
+        let trusted = context |> Option.filter (fun value -> value.ObservedAt <= now && now <= value.ValidUntil && fresh value.ObservedAt && not (String.IsNullOrWhiteSpace value.Evidence))
+        let paths values = FS.GG.Coord.TouchSet.parse ("Paths: " + String.concat " " values)
+        let usable values = not (List.isEmpty values) && FS.GG.Coord.TouchSet.usability (paths values) = FS.GG.Coord.TouchSet.Usable
+        let overlaps (leftRepo: string) leftPaths (rightRepo: string) rightPaths =
+            let left = leftRepo.Split('/')
+            let right = rightRepo.Split('/')
+            left.Length = 2 && right.Length = 2 &&
+            not (FS.GG.Coord.TouchSet.scopedConflicts left[0] left[1] right[0] right[1] (paths leftPaths) (paths rightPaths) |> List.isEmpty)
+        report.Items |> List.map (fun item ->
+            let identity = $"{item.Evidence.Issue.Owner}/{item.Evidence.Issue.Repository}#{item.Evidence.Issue.Number}"
+            let slices = trusted |> Option.map (fun value -> value.Slices |> List.filter (fun slice -> slice.Issue = item.Evidence.Issue)) |> Option.defaultValue []
+            let slice = match slices with [ value ] -> Some value | _ -> None
+            let action = slice |> Option.map _.Action |> Option.defaultValue Source
+            let owner = slice |> Option.map _.Owner |> Option.orElse item.Owner
+            let repository = slice |> Option.map _.Repository |> Option.defaultValue $"{item.Evidence.Issue.Owner}/{item.Evidence.Issue.Repository}"
+            let pulls = report.NativeIntegrator.PullRequests |> List.filter (fun pull -> List.contains identity pull.Issues)
+            let pull = match pulls with [ value ] -> Some value | _ -> None
+            let evidence =
+                [ yield identity
+                  match item.Evidence.Native with Some native -> yield native.NodeId + "@" + native.UpdatedAt | _ -> ()
+                  match pull with Some value -> yield value.Url + "@" + value.Head; yield! value.Reviews; yield! value.Checks | _ -> ()
+                  match trusted with Some value -> yield value.Evidence | _ -> () ]
+            let result decision reasons =
+                { Issue = item.Evidence.Issue; Action = action; Decision = decision; Owner = owner
+                  PullRequest = pull |> Option.map _.Url; Head = pull |> Option.map _.Head; Reasons = reasons; Evidence = evidence }
+            let gaps =
+                [ if report.Evidence.PopulationGap.IsSome || report.MembershipGap.IsSome then "Global enrollment/project/schema/membership read is incomplete"
+                  if item.SourceCurrentness <> "Current" || item.Evidence.Gap.IsSome || item.PlanningGap.IsSome then "Current issue/dependency/plan/planning read is unavailable or changed"
+                  if report.Binding.BindingVersion <> 4 then "Historical pilot/product inspection does not select programme actions"
+                  if not (fresh report.NativeIntegrator.ObservedAt) then "Native integrator snapshot expired or is from the future; refresh before action" ]
+            let prerequisites = slice |> Option.map _.Prerequisites |> Option.defaultValue [] |> List.filter (fun value -> value.Action = action)
+            let unsatisfied = prerequisites |> List.filter (fun value -> value.Satisfied = Some false)
+            let unknown = prerequisites |> List.filter (fun value -> value.Satisfied.IsNone)
+            let nativeOpen = item.Evidence.DependencyObservations |> List.filter (fun value -> value.State <> "CLOSED")
+            if not gaps.IsEmpty then result "unknown" gaps
+            elif slices.Length > 1 || pulls.Length > 1 || (owner |> Option.forall String.IsNullOrWhiteSpace) then
+                result "needs-decision" [ "Current slice/owner or linked PR is missing or ambiguous; withhold duplicate assignment" ]
+            elif slice |> Option.exists (fun value -> not (report.Binding.Repositories.Contains value.Repository) || value.Owner <> (item.Owner |> Option.defaultValue value.Owner)) then
+                result "needs-decision" [ "Current slice repository/owner conflicts with enrollment or owning issue" ]
+            elif item.Evidence.Native |> Option.exists (fun value -> value.State = "CLOSED") then
+                result "needs-decision" [ "Native issue is closed; reconcile remaining outcome and acceptance rather than assigning work" ]
+            elif item.Planning |> Option.exists (fun value -> value.Status = Some "Done") then
+                result "needs-decision" [ "Human Done requires outcome acceptance reconciliation; source PRs cannot close the whole outcome" ]
+            elif not unsatisfied.IsEmpty || not nativeOpen.IsEmpty then
+                result "blocked" ([ yield! unsatisfied |> List.map (fun value -> value.Reference + " supplied by " + value.SupplyingOwner)
+                                    yield! nativeOpen |> List.map (fun value -> value.Url + " remains open") ])
+            elif not unknown.IsEmpty then result "unknown" (unknown |> List.map (fun value -> value.Reference + " unknown; supplying owner " + value.SupplyingOwner))
+            elif action = Activation then
+                result "unknown" [ "Activation requires action-specific publication/installed/native acceptance and intake evidence from its owning reader; native PR checks do not supply it" ]
+            elif report.NativeIntegrator.RepositoryGaps.Count > 0 || (report.NativeIntegrator.PullRequests |> List.exists (fun value -> not value.Gaps.IsEmpty)) then
+                result "unknown" [ "Complete in-flight PR/association/file inventory is unavailable, including non-enrolled work" ]
+            elif pull.IsSome && (slice.IsNone || not slice.Value.PrerequisitesComplete || slice.Value.IntakeAuthorized <> Some true) then
+                result "unknown" [ "Existing PR/head recovered; action-specific owning-plan prerequisite/intake coverage is unavailable from the integrator, so continuation eligibility is unknown"
+                                   "New-dispatch capacity is separate and does not require restarting this work" ]
+            elif pull.IsSome then
+                let current = pull.Value
+                if not current.Gaps.IsEmpty then result "unknown" current.Gaps
+                elif current.Files.IsEmpty || not (usable current.Files) then result "unknown" [ "Current PR file scope is missing or unusable" ]
+                else result "continue-existing" [ "Continue the established owner and exact native PR/head; do not start duplicate implementation"
+                                                 "Review/check observations are head-bound; required-check and delivery acceptance remain with the normal delivery route"
+                                                 "Unknown new-dispatch capacity/reservations do not restart existing work; refresh determining facts before the proposed action" ]
+            elif slice.IsNone then result "unknown" [ "Exact current implementation slice is unavailable; parent outcome scope is not a reservation" ]
+            elif not slice.Value.PrerequisitesComplete then result "unknown" [ "Action-specific native and owning-plan prerequisite coverage is incomplete; supplying owner is the integrator" ]
+            elif not (usable slice.Value.Paths) then result "unknown" [ "Exact current slice touch-set is missing or unusable" ]
+            else
+                let current = slice.Value
+                let conflicts = report.NativeIntegrator.PullRequests |> List.filter (fun value -> overlaps current.Repository current.Paths value.Repository value.Files)
+                let peerConflicts = trusted |> Option.map (fun value -> value.Slices |> List.filter (fun other -> other.Issue <> current.Issue && overlaps current.Repository current.Paths other.Repository other.Paths)) |> Option.defaultValue []
+                let reservationConflicts = trusted |> Option.bind _.Reservations |> Option.defaultValue [] |> List.filter (fun value -> overlaps current.Repository current.Paths value.Repository value.Paths)
+                let invalidReservations = trusted |> Option.bind _.Reservations |> Option.exists (List.exists (fun value -> not (usable value.Paths) || value.Repository.Split('/').Length <> 2))
+                if not conflicts.IsEmpty || not reservationConflicts.IsEmpty || not peerConflicts.IsEmpty then
+                    result "blocked" ([ yield! conflicts |> List.map (fun value -> "Conflicts with in-flight " + value.Url)
+                                        yield! reservationConflicts |> List.map (fun value -> "Conflicts with reservation held by " + value.Owner)
+                                        yield! peerConflicts |> List.map (fun value -> "Conflicts with proposed slice owned by " + value.Owner) ])
+                elif invalidReservations then result "unknown" [ "Reservation scope is unreadable; existing uncertain reservations remain held" ]
+                else
+                    match trusted with
+                    | Some capacity when capacity.Reservations.IsSome && current.IntakeAuthorized = Some true ->
+                        match capacity.ImplementationSlots, capacity.ReviewSlots, capacity.HostedCiSlots with
+                        | Some implementation, Some review, Some ci when implementation > 0 && review > 0 && ci > 0 ->
+                            result "ready" [ "Current source slice is disjoint within attributed implementation/review/CI capacity and reservations"
+                                             "Later publication/installed/native acceptance is not a source-development prerequisite; selection grants no dispatch authority" ]
+                        | Some implementation, Some review, Some ci when implementation <= 0 || review <= 0 || ci <= 0 -> result "blocked" [ "Required implementation/review/hosted-CI capacity is exhausted" ]
+                        | _ -> result "unknown" [ "Implementation, review or hosted-CI capacity is unavailable from its supplying owner" ]
+                    | _ -> result "unknown" [ "Fresh attributed reservation/capacity/intake facts are unavailable from the integrator/runtime owners" ])

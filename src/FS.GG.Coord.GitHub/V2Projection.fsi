@@ -20,8 +20,10 @@ module V2Projection =
         }
 
     /// Immutable identities copied from an independently reviewed board binding.
-    /// BindingVersion 2 preserves the organization pilot; version 3 selects one organization-owned
-    /// product project and one owner-local repository with one-to-five explicit native issues.
+    /// BindingVersion 2 retains historical organization pilot controls; version 3 selects one
+    /// organization-owned product project and one owner-local repository with one-to-five issues.
+    /// Version 4 is the source-only Project 3 successor, schema 2, with one-to-100 exact native issues
+    /// and In review. It never falls back to an older binding and cannot invoke a writer.
     /// The wire properties are unchanged. Version 3 never selects the organization/legacy target.
     type Binding =
         {
@@ -105,6 +107,11 @@ module V2Projection =
         binding: Binding ->
         request: Request ->
             IoResult<Report>
+
+    /// Complete exact-project population. Unexpected members remain visible but unenrolled.
+    type Membership =
+        { ItemId: string; ContentId: string; Kind: string; Issue: IssueRef option; Enrolled: bool }
+    val readMemberships: transport: IGitHubTransport -> binding: Binding -> IoResult<Membership list>
 
     /// Fresh immutable owner/schema/native membership and four planning values. Performs queries only;
     /// unseeded fields remain None, incomplete or mismatched identities remain errors. No projection.

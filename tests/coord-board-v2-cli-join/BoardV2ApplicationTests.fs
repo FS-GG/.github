@@ -219,3 +219,32 @@ let ``product inspect missing receiver provenance stays Unknown and never querie
             Assert.Equal(0, root.GetProperty("mutationAttempts").GetInt32())
         Assert.True(BoardV2Application.tryRun [] |> Option.isNone)
     finally Directory.Delete(directory, true)
+
+[<Fact>]
+let ``actual programme CLI caller joins native PR facts and retains attributed selection gaps`` () =
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-programme-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory directory |> ignore
+    try
+        let bindingPath = Path.Combine(directory, "binding.json")
+        let reportPath = Path.Combine(directory, "inspection.json")
+        File.WriteAllText(bindingPath, ProgrammeFixture.bindingJson ())
+        let transport = ProgrammeFixture.transport ProgrammeFixture.unchanged
+        Assert.Equal(0, BoardV2Application.runWithTransport transport [ "inspect"; "--binding-file"; bindingPath; "--report-file"; reportPath ])
+        Assert.Empty transport.Mutations
+        use document = JsonDocument.Parse(File.ReadAllText reportPath)
+        let root = document.RootElement
+        Assert.Equal("fsgg.coord.board-v2-inspection/2", root.GetProperty("schema").GetString())
+        Assert.Equal(2, root.GetProperty("memberships").GetArrayLength())
+        let candidate = root.GetProperty("candidates")[0]
+        Assert.Equal(1, candidate.GetProperty("openPullRequests").GetArrayLength())
+        Assert.Equal(JsonValueKind.Object, candidate.GetProperty("touchSets").ValueKind)
+        let selected = root.GetProperty("selection")[0]
+        Assert.Equal("unknown", selected.GetProperty("decision").GetString())
+        Assert.Equal("https://github.com/FS-GG/.github/pull/42", selected.GetProperty("pullRequest").GetString())
+        Assert.Equal(ProgrammeFixture.head, selected.GetProperty("head").GetString())
+        Assert.False(selected.GetProperty("dispatchAuthority").GetBoolean())
+        Assert.Contains("Partial .8", root.GetProperty("selectionCoverage").GetString())
+        let refreshPath = Path.Combine(directory, "refresh.json")
+        Assert.Equal(3, BoardV2Application.runWithTransport transport [ "refresh"; "--binding-file"; bindingPath; "--report-file"; refreshPath ])
+        Assert.Empty transport.Mutations
+    finally Directory.Delete(directory, true)

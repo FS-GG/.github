@@ -930,3 +930,108 @@ let ``receiver population blob drift before dispatch preserves the field`` () =
         Assert.Equal(0, report.Items.Head.MutationAttempts)
         Assert.Equal(0, writes)
         Assert.True(report.Items.Head.Gap.IsSome)
+
+let private programmeSnapshot change =
+    let transport = ProgrammeFixture.transport change
+    let report = V2ProjectionSource.inspectFixed transport (ProgrammeFixture.binding ()) None
+    Assert.Empty transport.Mutations
+    report
+
+let private selectionContext (report: V2ProjectionSource.InspectionReport) : V2ProjectionSource.SelectionContext =
+    { Slices = [ { Issue = ProgrammeFixture.issue; Owner = "worker"; Repository = "FS-GG/.github"; Paths = [ "src/new.fs" ]; Action = V2ProjectionSource.Source
+                   Prerequisites = []; PrerequisitesComplete = true; IntakeAuthorized = Some true } ]
+      ImplementationSlots = Some 1; ReviewSlots = Some 1; HostedCiSlots = Some 1; Reservations = Some []
+      ObservedAt = report.NativeIntegrator.ObservedAt; ValidUntil = report.NativeIntegrator.ObservedAt.AddMinutes 1.0; Evidence = "trusted current integrator observation" }
+
+[<Fact>]
+let ``programme production composition reads current source and complete native facts without enrollment edits`` () =
+    let report = programmeSnapshot ProgrammeFixture.unchanged
+    Assert.True(report.Evidence.PopulationGap.IsNone, string report.Evidence.PopulationGap)
+    Assert.Equal(Some 1, report.Evidence.Selected)
+    Assert.Equal("Current", report.Items.Head.SourceCurrentness)
+    Assert.Equal(Some "In review", report.Items.Head.Planning |> Option.bind _.Status)
+    Assert.Equal(Some "Unknown", report.Items.Head.Planning |> Option.bind _.Observation)
+    Assert.Equal(2, report.Memberships.Length)
+    Assert.Single(report.Memberships |> List.filter (fun value -> not value.Enrolled)) |> ignore
+    let pull = Assert.Single report.NativeIntegrator.PullRequests
+    Assert.Equal(ProgrammeFixture.head, pull.Head)
+    Assert.Equal<string list>([ "src/current.fs" ], pull.Files)
+    Assert.NotEmpty pull.Reviews
+    Assert.NotEmpty pull.Checks
+    Assert.Empty pull.Gaps
+    let context = selectionContext report
+    let selected = V2ProjectionSource.selectActions report (Some { context with ImplementationSlots = None; ReviewSlots = None; HostedCiSlots = None; Reservations = None }) report.NativeIntegrator.ObservedAt
+    Assert.Equal("continue-existing", selected.Head.Decision)
+    Assert.Equal(Some pull.Url, selected.Head.PullRequest)
+    Assert.Equal(Some "worker", selected.Head.Owner)
+    Assert.DoesNotContain(selected.Head.Evidence, fun value -> value = "author")
+    let unavailable = V2ProjectionSource.selectActions report None report.NativeIntegrator.ObservedAt
+    Assert.Equal("unknown", unavailable.Head.Decision)
+    Assert.Equal(Some pull.Url, unavailable.Head.PullRequest)
+
+[<Fact>]
+let ``ordinary closure dependency and plan revisions are fresh programme observations`` () =
+    let change request response =
+        response |> Result.map (fun result ->
+            if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then { result with Body = result.Body.Replace("\"state\":\"OPEN\"", "\"state\":\"CLOSED\"").Replace(ProgrammeFixture.revision, "2026-10-17T13:00:00Z") }
+            elif request.Subject.EndsWith("programme.md", StringComparison.Ordinal) then { result with Body = result.Body.Replace(ProgrammeFixture.head, String.replicate 40 "f") }
+            elif request.Path.EndsWith("/dependencies/blocked_by", StringComparison.Ordinal) then
+                { result with Body = """[{"html_url":"https://github.com/FS-GG/.github/issues/1","number":1,"node_id":"I_dependency","updated_at":"2026-10-17T13:00:00Z","state":"closed"}]""" }
+            else result)
+    let report = programmeSnapshot change
+    Assert.Equal("Current", report.Items.Head.SourceCurrentness)
+    Assert.Equal("CLOSED", report.Items.Head.Evidence.Native.Value.State)
+    Assert.Single report.Items.Head.Evidence.DependencyObservations |> ignore
+    Assert.Equal("needs-decision", (V2ProjectionSource.selectActions report (Some(selectionContext report)) report.NativeIntegrator.ObservedAt).Head.Decision)
+
+[<Fact>]
+let ``programme missing partial foreign and moved native facts never produce continuation or ready`` () =
+    for subjectPart in [ "open PR inventory"; "closingIssuesReferences"; "files"; "reviews"; "head checks"; "final head barrier"; "complete V2 project memberships" ] do
+        let report = programmeSnapshot (fun request response -> if request.Subject.Contains subjectPart then Error(Http(403, "inert denied read")) else response)
+        let selected = V2ProjectionSource.selectActions report (Some(selectionContext report)) report.NativeIntegrator.ObservedAt
+        Assert.Equal("unknown", selected.Head.Decision)
+    for oldValue, newValue, subject in [ ProgrammeFixture.head, String.replicate 40 "f", "final head barrier"
+                                       "I_outcome", "I_foreign", "native observation"
+                                       "FS-GG/.github", "Outside/Foreign", "open PR inventory" ] do
+        let report = programmeSnapshot (fun request response ->
+            response |> Result.map (fun value -> if request.Subject.Contains subject then { value with Body = value.Body.Replace(oldValue, newValue) } else value))
+        Assert.Equal("unknown", (V2ProjectionSource.selectActions report (Some(selectionContext report)) report.NativeIntegrator.ObservedAt).Head.Decision)
+
+[<Fact>]
+let ``programme selection uses actual slices nonenrolled work and action specific prerequisites`` () =
+    let report = programmeSnapshot ProgrammeFixture.unchanged
+    let current = report.NativeIntegrator.PullRequests.Head
+    let report = { report with NativeIntegrator = { report.NativeIntegrator with PullRequests = [ { current with Issues = [ "FS-GG/.github#999" ] } ] } }
+    let context = selectionContext report
+    let choose context report = (V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt).Head
+    Assert.Equal("ready", (choose context report).Decision)
+    let conflict = { context with Slices = [ { context.Slices.Head with Paths = [ "src/current.fs" ] } ] }
+    Assert.Equal("blocked", (choose conflict report).Decision)
+    Assert.Equal("unknown", (choose { context with Reservations = None } report).Decision)
+    Assert.Equal("blocked", (choose { context with ReviewSlots = Some 0 } report).Decision)
+    Assert.Equal("unknown", (choose { context with Slices = [ { context.Slices.Head with PrerequisitesComplete = false } ] } report).Decision)
+    let later: V2ProjectionSource.Prerequisite = { Action = V2ProjectionSource.Activation; Reference = "publication still required"; Satisfied = Some false; SupplyingOwner = "publisher" }
+    let source = { context with Slices = [ { context.Slices.Head with Prerequisites = [ later ] } ] }
+    Assert.Equal("ready", (choose source report).Decision)
+    let activate = { source with Slices = [ { source.Slices.Head with Action = V2ProjectionSource.Activation } ] }
+    Assert.Equal("blocked", (choose activate report).Decision)
+    let duplicate = { context with Slices = context.Slices @ context.Slices }
+    Assert.Equal("needs-decision", (choose duplicate report).Decision)
+    let reservation: V2ProjectionSource.Reservation = { Owner = "unknown-original"; Repository = "FS-GG/.github"; Paths = [ "src/new.fs" ] }
+    Assert.Equal("blocked", (choose { context with Reservations = Some [ reservation ] } report).Decision)
+    Assert.Equal("unknown", (choose { context with ValidUntil = context.ObservedAt.AddSeconds(-1.0) } report).Decision)
+    let ambiguous = { report with NativeIntegrator = { report.NativeIntegrator with PullRequests = [ { current with Issues = [ "FS-GG/.github#4634" ] }; { current with Id = "second"; Url = current.Url + "0"; Issues = [ "FS-GG/.github#4634" ] } ] } }
+    Assert.Equal("needs-decision", (choose context ambiguous).Decision)
+
+[<Fact>]
+let ``programme successor refuses every writer before transport or verifier and preserves product schema`` () =
+    let binding = ProgrammeFixture.binding ()
+    let transport = scripted []
+    Assert.True(V2ObservationTransport.validateScope binding |> Result.isError)
+    let result = runOneShot (fun _ -> failwith "successor must not invoke verifier") transport binding { Issue = ProgrammeFixture.issue; ExpectedNodeId = "I_outcome" }
+    Assert.True(Result.isError result)
+    Assert.True((V2ProjectionSource.runFixed transport binding None).PopulationGap.IsSome)
+    Assert.Equal(0, transport.GraphQlCalls)
+    Assert.True(validateBinding { binding with SchemaVersion = 1 } |> Result.isError)
+    Assert.True(validateBinding { binding with ProjectId = "PVT_foreign" } |> Result.isError)
+    Assert.True(validateBinding { productA with Status = binding.Status } |> Result.isError)
