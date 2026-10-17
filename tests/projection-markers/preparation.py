@@ -206,6 +206,56 @@ class Preparation(unittest.TestCase):
                 self.assertEqual(before, [manifest.read_bytes() for manifest in manifests])
                 path.write_text(original)
 
+    def test_extra_retired_markers_and_overlap_preserve_all_inputs(self):
+        groups = {}
+        originals = {}
+        for target in self.retired_targets():
+            kind, relative = target.split(":", 1)
+            groups.setdefault(relative, []).append(kind)
+            path = self.root / relative
+            originals.setdefault(relative, path.read_text())
+            path.write_text(path.read_text() + self.old_region(kind))
+        # A valid pair in each file precedes a later malformed marker: no earlier
+        # target or dependent manifest may change before complete integrity checks.
+        kind, relative = self.retired_targets()[-1].split(":", 1)
+        path = self.root / relative
+        valid = path.read_text()
+        begin = f"<!-- BEGIN GENERATED: fsgg-protocol:{kind} -->"
+        end = f"<!-- END GENERATED: fsgg-protocol:{kind} -->"
+        mutations = (valid + "inline " + begin + "\n", valid + begin + " trailing\n",
+                     valid + " " + begin + "\n", valid + "inline " + end + "\n",
+                     valid + end + " trailing\n", valid + " " + end + "\n",
+                     valid.replace(begin, begin + "\ninline " + begin, 1),
+                     valid.replace(end, " " + end + "\n" + end, 1), valid + self.old_region(kind))
+        for malformed in mutations:
+            with self.subTest(marker=malformed):
+                path.write_text(malformed)
+                before = snapshot(self.root)
+                for mode in ("--check", "--write"):
+                    output = self.run_mode(mode, expected=1)
+                    self.assertIn("exactly one raw and standalone", output)
+                    self.assertIn("dependent status BLOCKED", output)
+                    self.assertEqual(before, snapshot(self.root))
+        path.write_text(valid)
+        # Different retired kinds share files. Both nesting and crossing are corrupt,
+        # even with one raw/standalone pair per kind; check and write must both refuse.
+        relative, kinds = next((relative, kinds) for relative, kinds in groups.items() if len(kinds) == 2)
+        path = self.root / relative
+        left, right = kinds
+        markers = lambda kind: (f"<!-- BEGIN GENERATED: fsgg-protocol:{kind} -->\n",
+                                f"<!-- END GENERATED: fsgg-protocol:{kind} -->\n")
+        left_begin, left_end = markers(left)
+        right_begin, right_end = markers(right)
+        for body in (left_begin + right_begin + right_end + left_end,
+                     left_begin + right_begin + left_end + right_end):
+            path.write_text(originals[relative] + body)
+            before = snapshot(self.root)
+            for mode in ("--check", "--write"):
+                output = self.run_mode(mode, expected=1)
+                self.assertIn("overlapping retired organization regions", output)
+                self.assertIn("dependent status BLOCKED", output)
+                self.assertEqual(before, snapshot(self.root))
+
     def test_missing_prerequisite_and_full_mode_guard(self):
         environment = dict(os.environ, FSGG_COORD_ENGINE_BIN=str(self.root / "absent-engine"))
         full = subprocess.run(["bash", str(self.root / "scripts/generate-projections"), "--check"],

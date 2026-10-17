@@ -1045,16 +1045,12 @@ try:
         ends = [i for i, line in enumerate(lines) if line.rstrip("\r\n") == end]
         if begin not in text and end not in text:
             continue  # Already retired, including an unchanged repeat.
-        if len(starts) != 1 or len(ends) != 1:
-            raise ValueError(f"{relative}: retired '{kind}' needs exactly one standalone BEGIN and END marker")
+        if text.count(begin) != 1 or text.count(end) != 1 or len(starts) != 1 or len(ends) != 1:
+            raise ValueError(f"{relative}: retired '{kind}' needs exactly one raw and standalone BEGIN and END marker")
         if starts[0] >= ends[0]:
             raise ValueError(f"{relative}: retired '{kind}' END before BEGIN")
         # Several retired kinds can share a file; collect ranges against its original bytes.
         changes.append((path, starts[0], ends[0], relative, kind))
-    if check:
-        for _, _, _, relative, kind in changes:
-            print(f"::error::{relative}: retired organization '{kind}' region remains", file=sys.stderr)
-        sys.exit(1 if changes else 0)
     # Validate the complete retired set before changing any target or dependent manifest.
     by_path = {}
     for path, start, end, relative, kind in changes:
@@ -1064,6 +1060,10 @@ try:
         ordered = sorted(ranges)
         if any(left[1] >= right[0] for left, right in zip(ordered, ordered[1:])):
             raise ValueError(f"{path.relative_to(root)}: overlapping retired organization regions")
+    if check:
+        for _, _, _, relative, kind in changes:
+            print(f"::error::{relative}: retired organization '{kind}' region remains", file=sys.stderr)
+        sys.exit(1 if changes else 0)
     for path, ranges in by_path.items():
         lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
         for start, end in sorted(ranges, reverse=True):
