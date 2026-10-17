@@ -24,7 +24,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 
 SCHEMA = "fsgg.coord.packaged-v2-qualification/1"
-MEMBERS = ("FS.GG.Coord.Cli.dll", "FS.GG.Coord.GitHub.dll")
+MEMBERS = ("fsgg-coord-engine.dll", "FS.GG.Coord.GitHub.dll")
 MAX_OUTPUT = 32768
 
 
@@ -60,7 +60,17 @@ def installed_identity(engine, package):
         result = {}
         for member in MEMBERS:
             names = [name for name in archive.namelist() if name.startswith("tools/net10.0/any/") and name.endswith("/" + member)]
-            require(len(names) == 1, "unique package assembly required")
+            if len(names) != 1:
+                # Bound the actual package-layout diagnostic instead of hiding the
+                # failed identity behind a zero-case generic refusal. Never aliases.
+                candidates = [name for name in archive.namelist()
+                              if name.startswith("tools/net10.0/any/") and name.lower().endswith(".dll")]
+                failure = QualificationFailure("unique package assembly required")
+                failure.package_inventory = {"requiredAssembly": member, "matchingEntries": len(names),
+                    "observedDllEntries": [name if re.fullmatch(r"[A-Za-z0-9._/-]{1,160}", name) else "<nonliteral-member>"
+                                           for name in candidates[:8]],
+                    "omittedDllEntries": max(0, len(candidates) - 8)}
+                raise failure
             require(archive.getinfo(names[0]).file_size <= 128 * 1024 * 1024, "candidate assembly bound")
             expected = hashlib.sha256(archive.read(names[0])).hexdigest()
             paths = list(root.rglob(member))
@@ -292,6 +302,8 @@ def qualify(engine, package, source, run_id, attempt, runner=process):
         return _qualify(engine, package, source, run_id, attempt, runner, evidence)
     except Exception as error:
         evidence["failureClass"] = type(error).__name__
+        if isinstance(error, QualificationFailure) and hasattr(error, "package_inventory"):
+            evidence["packageAssemblyInventory"] = error.package_inventory
         if evidence["firstFailure"] is None:
             evidence["firstFailure"] = {"case": None, "reason": str(error) if isinstance(error, QualificationFailure) else "qualification-unavailable"}
         return evidence

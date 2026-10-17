@@ -1843,6 +1843,12 @@ def workflow_inputs():
             value[key] = item
         return value
     value = json.loads(raw, object_pairs_hook=pairs)
+    # Native Actions may omit declared optional strings whose default is empty.
+    # Restore only that wire omission; the closed semantic validator and digest
+    # still receive all fifteen fields with their original exact types/values.
+    if type(value) is dict:
+        for key in (*_INSTALL_COORDINATES, "expected_checkpoint", "expected_authority_main"):
+            value.setdefault(key, "")
     validate_workflow_inputs(value)
     return value
 
