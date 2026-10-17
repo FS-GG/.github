@@ -1,5 +1,22 @@
 # Backlog triage between reconciliation and dispatch
 
+## Prepared organization planning
+
+Use the [organization contract](../../check-board/references/organization-v2-inspection.md) after its
+installed/migration/real-use gates. Source preparation does not activate it. Human Backlog is planning
+intent, not a place to hide overlap or missing evidence. Read the actual owning issue and plan, stable
+slice IDs and native PRs. Explain ready/continue-existing/blocked/needs-decision/unknown and ordered
+defer reasons; preserve supplier, deadline and action-specific prerequisites. Do not promote Status or
+manufacture a claim, issue, Phase, Class or intake receipt to obtain source eligibility. Observation
+refresh cannot repair planning intent. A parent remains open when a delivered slice leaves acceptance.
+
+## Historical triage mechanics
+
+The remaining batch/take, Class/Phase and strict-route recipes are retained historical V1 context,
+not organization queue instructions. They are never a fallback for partial V2 reads or unknown owners.
+Separately qualified product guidance keeps its own scope.
+
+
 `Backlog` means parked, not irrelevant. A plain `batch`/`take` wave intentionally reads `Ready`, so the
 host must classify parked work before sizing workers. This phase belongs to the host; workers still
 self-select only through the typed scheduler.

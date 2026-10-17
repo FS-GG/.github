@@ -142,10 +142,17 @@ def assert_live_status_contract(skill_name: str) -> None:
     assert not missing, f"{skill_name} lost its live status reporting contract: {missing}"
 
 
-for board_driver in ("drive-board", "work-board"):
-    assert_live_status_contract(board_driver)
+# The product host retains its qualified event-ledger contract. The organization
+# consumer retires that authority and is validated by its actual prepared-v4 predicate.
+assert_live_status_contract("work-board")
+quality_spec = importlib.util.spec_from_file_location("skill_quality", REPO / "scripts/check-skill-quality.py")
+quality = importlib.util.module_from_spec(quality_spec)
+quality_spec.loader.exec_module(quality)
+org_errors = []
+quality.validate_organization_consumer(REPO, org_errors)
+assert not org_errors, org_errors
 
-print("board-driver live status contract: ok")
+print("product live status and prepared organization contracts: ok")
 
 
 def mirrored_skill_files(skill_name: str, relative_path: str) -> list[pathlib.Path]:

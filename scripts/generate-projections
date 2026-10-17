@@ -28,6 +28,8 @@
 #   scripts/generate-projections --list     # print `kind<TAB>path<TAB>BEGIN-marker` per region; the gate's subject list
 #   scripts/generate-projections --registry-only [--check]
 #                                           # preparation only: all registry/roster regions, no protocol facts
+#   scripts/generate-projections --local-preparation [--check]
+#                                           # registry plus retired-org removal; no protocol facts
 #   scripts/generate-projections --contract-version
 #                                           # print the derived version of the agent contract
 #
@@ -53,13 +55,15 @@ CHECK=""
 LIST=""
 CONTRACT_VERSION=""
 REGISTRY_ONLY=""
+LOCAL_PREPARATION=""
 for argument in "$@"; do
   case "$argument" in
     --check) CHECK=1 ;;
     --list) LIST=1 ;;
     --contract-version) CONTRACT_VERSION=1 ;;
     --registry-only) REGISTRY_ONLY=1 ;;
-    *) echo "::error::unknown argument: $argument (expected --check, --list, --contract-version, --registry-only)" >&2; exit 2 ;;
+    --local-preparation) LOCAL_PREPARATION=1; REGISTRY_ONLY=1 ;;
+    *) echo "::error::unknown argument: $argument (expected --check, --list, --contract-version, --registry-only, --local-preparation)" >&2; exit 2 ;;
   esac
 done
 if [ -n "$CHECK" ] && [ -n "$LIST" ]; then
@@ -135,14 +139,8 @@ TARGETS=(
   "landable-exit-codes:.agents/skills/pnext-item/references/command-contracts.md"
   "release-columns:.claude/skills/pnext-item/references/merge-and-release.md"
   "release-columns:.agents/skills/pnext-item/references/merge-and-release.md"
-  "filing-rules:.claude/skills/cross-repo-coordination/references/mailbox-and-board.md"
-  "filing-rules:.agents/skills/cross-repo-coordination/references/mailbox-and-board.md"
-  "reconcile-rules:.claude/skills/check-board/references/mechanical-reconciliation.md"
-  "reconcile-rules:.agents/skills/check-board/references/mechanical-reconciliation.md"
   "driver-rules:.claude/skills/pnext-item/references/command-contracts.md"
   "driver-rules:.agents/skills/pnext-item/references/command-contracts.md"
-  "wave-policy:.claude/skills/drive-board/references/host-loop.md"
-  "wave-policy:.agents/skills/drive-board/references/host-loop.md"
   "wave-policy:.claude/skills/work-board/references/host-loop.md"
   "wave-policy:.agents/skills/work-board/references/host-loop.md"
   "review-policy:.claude/skills/pnext-item/references/independent-review.md"
@@ -153,18 +151,30 @@ TARGETS=(
   "ledger-policy:.agents/skills/pnext-item/references/independent-review.md"
   "release-inventory:.claude/skills/publishing-and-deployment/SKILL.md"
   "release-inventory:.agents/skills/publishing-and-deployment/SKILL.md"
-  "blocker-states:.claude/skills/check-board/references/mechanical-reconciliation.md"
-  "blocker-states:.agents/skills/check-board/references/mechanical-reconciliation.md"
-  "board-statuses:.claude/skills/cross-repo-coordination/references/mailbox-and-board.md"
-  "board-statuses:.agents/skills/cross-repo-coordination/references/mailbox-and-board.md"
-  "snapshot-shape:.claude/skills/check-board/references/mechanical-reconciliation.md"
-  "snapshot-shape:.agents/skills/check-board/references/mechanical-reconciliation.md"
   "versions:docs/architecture.md"
   "contract-versions:docs/registry/compatibility.md"
   "skill-registry-counts:docs/registry/compatibility.md"
   "component-count:docs/components.md"
   "component-inventory:docs/components.md"
   "component-inventory:docs/consumer/versioning-and-updates.md"
+)
+
+# Retire only these organization-consumer projections. Core facts and separately scoped
+# product/legacy targets retain their original semantics. Absence is the intended result;
+# malformed/duplicate/partial old regions refuse instead of deleting surrounding prose.
+RETIRED_ORG_TARGETS=(
+  "filing-rules:.claude/skills/cross-repo-coordination/references/mailbox-and-board.md"
+  "filing-rules:.agents/skills/cross-repo-coordination/references/mailbox-and-board.md"
+  "reconcile-rules:.claude/skills/check-board/references/mechanical-reconciliation.md"
+  "reconcile-rules:.agents/skills/check-board/references/mechanical-reconciliation.md"
+  "wave-policy:.claude/skills/drive-board/references/host-loop.md"
+  "wave-policy:.agents/skills/drive-board/references/host-loop.md"
+  "blocker-states:.claude/skills/check-board/references/mechanical-reconciliation.md"
+  "blocker-states:.agents/skills/check-board/references/mechanical-reconciliation.md"
+  "board-statuses:.claude/skills/cross-repo-coordination/references/mailbox-and-board.md"
+  "board-statuses:.agents/skills/cross-repo-coordination/references/mailbox-and-board.md"
+  "snapshot-shape:.claude/skills/check-board/references/mechanical-reconciliation.md"
+  "snapshot-shape:.agents/skills/check-board/references/mechanical-reconciliation.md"
 )
 
 # The marker a kind uses. One function, so the BEGIN a target is searched for, the BEGIN written into
@@ -216,7 +226,11 @@ if [ -n "$REGISTRY_ONLY" ]; then
   done
   TARGETS=("${selected[@]}")
   [ "${#TARGETS[@]}" -gt 0 ] || { echo "::error::no registry projection targets" >&2; exit 2; }
-  echo "registry preparation only: protocol/full qualification NOT RUN" >&2
+  if [ -n "$LOCAL_PREPARATION" ]; then
+    echo "local registry and retired-org preparation only: protocol/full qualification NOT RUN" >&2
+  else
+    echo "registry preparation only: protocol/full qualification NOT RUN" >&2
+  fi
 fi
 
 if [ -n "$LIST" ]; then
@@ -1008,7 +1022,70 @@ render_component_inventory() {
   echo ""
 }
 
+# This structural retirement needs no engine facts. The default full route has already
+# required genuine facts above; only explicit local preparation can use it without them.
+retire_org_regions() {
+  local spec
+  for spec in "${RETIRED_ORG_TARGETS[@]}"; do reject_symlink_chain "${spec#*:}"; done
+  python3 - "$HERE" "$CHECK" "${RETIRED_ORG_TARGETS[@]}" <<'PY_RETIRE'
+from pathlib import Path
+import sys
+
+root, check = Path(sys.argv[1]), bool(sys.argv[2])
+changes = []
+try:
+    for spec in sys.argv[3:]:
+        kind, relative = spec.split(":", 1)
+        path = root / relative
+        text = path.read_text(encoding="utf-8")
+        begin = f"<!-- BEGIN GENERATED: fsgg-protocol:{kind} -->"
+        end = f"<!-- END GENERATED: fsgg-protocol:{kind} -->"
+        lines = text.splitlines(keepends=True)
+        starts = [i for i, line in enumerate(lines) if line.rstrip("\r\n") == begin]
+        ends = [i for i, line in enumerate(lines) if line.rstrip("\r\n") == end]
+        if begin not in text and end not in text:
+            continue  # Already retired, including an unchanged repeat.
+        if text.count(begin) != 1 or text.count(end) != 1 or len(starts) != 1 or len(ends) != 1:
+            raise ValueError(f"{relative}: retired '{kind}' needs exactly one raw and standalone BEGIN and END marker")
+        if starts[0] >= ends[0]:
+            raise ValueError(f"{relative}: retired '{kind}' END before BEGIN")
+        # Several retired kinds can share a file; collect ranges against its original bytes.
+        changes.append((path, starts[0], ends[0], relative, kind))
+    # Validate the complete retired set before changing any target or dependent manifest.
+    by_path = {}
+    for path, start, end, relative, kind in changes:
+        by_path.setdefault(path, []).append((start, end))
+    for path, ranges in by_path.items():
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        ordered = sorted(ranges)
+        if any(left[1] >= right[0] for left, right in zip(ordered, ordered[1:])):
+            raise ValueError(f"{path.relative_to(root)}: overlapping retired organization regions")
+    if check:
+        for _, _, _, relative, kind in changes:
+            print(f"::error::{relative}: retired organization '{kind}' region remains", file=sys.stderr)
+        sys.exit(1 if changes else 0)
+    for path, ranges in by_path.items():
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        for start, end in sorted(ranges, reverse=True):
+            del lines[start:end + 1]
+        path.write_text("".join(lines), encoding="utf-8")
+        print(f"prepared retired organization regions: {path.relative_to(root)}")
+except (OSError, ValueError) as error:
+    print(f"::error::retired-org preparation unavailable: {error}", file=sys.stderr)
+    sys.exit(2)
+PY_RETIRE
+}
+
 drift=0
+if [ -n "$LOCAL_PREPARATION" ] || [ -z "$REGISTRY_ONLY" ]; then
+  retirement_status=0
+  retire_org_regions || retirement_status=$?
+  case "$retirement_status" in
+    0) ;;
+    1) drift=1 ;;
+    *) exit "$retirement_status" ;;
+  esac
+fi
 for spec in "${TARGETS[@]}"; do
   kind="${spec%%:*}"
   rel="${spec#*:}"
@@ -1106,7 +1183,9 @@ if [ -n "$CHECK" ]; then
     fi
     exit 1
   fi
-  if [ -n "$REGISTRY_ONLY" ]; then
+  if [ -n "$LOCAL_PREPARATION" ]; then
+    echo "local registry/retired-org projections: current; protocol/full qualification NOT RUN"
+  elif [ -n "$REGISTRY_ONLY" ]; then
     echo "registry projections: current; protocol/full qualification NOT RUN"
   else
     echo "projections: current — the protocol is stated once, and every projection agrees with it."

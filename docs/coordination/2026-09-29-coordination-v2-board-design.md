@@ -349,6 +349,41 @@ telemetry service is required. Logging/attribution gaps remain explicit.
 
 ### Qualification, migration and cutover gates
 
+The .7/.8 maintained source now includes actual CLI/native selection composition and the v4
+Observation-only writer: [PR4643](https://github.com/FS-GG/.github/pull/4643) delivered protected
+`b2a1191a0a60be6d503b695242ff1a1e782a047c` with the identical qualified tree. Its
+[focused qualification](https://github.com/FS-GG/.github/actions/runs/39041450291) passed 943 GitHub,
+82 projection, 20 actual CLI and 66 producer-oracle controls; full engine, package and exact-tree
+coherent qualification passed separately. This establishes source behavior, not installed or live
+Project 3 acceptance; the milestones remain open for their complete acceptance. The durable
+[population mapping milestone](https://github.com/FS-GG/.github/issues/4634#issuecomment-6235044165)
+records seventeen open whole-outcome owners and three unchanged historical Done outcomes, without
+changing Project 3 membership or selecting final enrollment. Prepared consumer sources remain
+inactive until the coordinated cutover gates below are accepted.
+
+The first consumer preparation qualification at [PR4652](https://github.com/FS-GG/.github/pull/4652)
+failed its original package/registry, projection-inventory and reporter fixtures: two stale raw Kit
+source-lock rows, four obsolete projection census expectations and organization/product reporting
+assertions that still required retired organization V1 prose. Those failures are retained. The
+connected source correction adds maintained raw Kit relocking after projection preparation and before
+manifest/own-row reconciliation, independent named retirement/product controls, and separate current
+organization reporting assertions. It preserves the product reporter utility and genuine-engine full
+qualification fence. Inert preparation is not package execution or hosted qualification; fresh
+required CI remains necessary before this consumer source can be delivered. The corrected cohort
+passed compiled skill conversion/contracts, package/registry/projection/reporting checks, then its
+semantic fixture failed one obsolete diagnostic oracle: organization wave literals correctly refused
+at the retired-authority guard. The retained duplicate-literal product test now targets product
+work-board; independent organization retirement controls remain. That failed cohort is retained,
+with fresh exact-head qualification still required. The complete same-class sweep also found two
+unqualified compiled-consumer siblings: disclosure tests still expected retired organization regions,
+and the product occupancy/legacy-driver reader parsed both organization and product host loops.
+The product reader now consumes only retained work-board facts and checks every existing product
+runtime mirror; absent/conflicting product facts still refuse and organization declarations cannot
+supply them. Actual product-only versus operator-coexistence controls and explicit twelve-region
+absence/shared-product presence assertions are prepared. Source changes select the existing hosted
+full-engine and affected F# caller qualification; no local compiler or new organization V1 route is
+introduced. Historical analyst/review/intake controls remain fenced history/product checks.
+
 The first ready source window is .7/.8 after canonical owner resolution and bounded mapping. It can
 be developed without installed-store or UI access. Initial plan/roadmap delivery does not select a
 new runtime. Then qualify the actual coherent published/installed composition, apply admitted native
@@ -456,6 +491,46 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   Prove positive actual Project 3 successor-schema inspection/selection with the authenticated .9
   installed composition after migration/readback and before .11 adoption. Actual UI verifies columns/cards/filters/order/links/private visibility. API metadata alone cannot
   satisfy this gate; unknown original effects require original-identity reconciliation, not retry.
+
+  **Selected maintained migration route (2026-10-17; source preparation only).** Extend the existing
+  packaged `board-v2` CLI and shared GitHub adapter with typed prepare/apply/readback composition and
+  a separate exact migration authorizer. The historical nonpackable `BoardV2Import` constructor
+  remains offline; neither its pilot acceptance nor the Observation-only transport authorizes
+  schema, membership or view mutations. Preserve the latter's accepted request set, product binding3
+  and V1 transport. Qualify the changed migration caller through the admitted coherent package and
+  installed receiver route before any native operation; original .103/.104 identities remain intact.
+
+  Read-only preparation binds the actual principal/project, complete predecessor schema, memberships,
+  values and selected view identities to the selected semantic delta. Preserve every existing Status
+  option ID and its card values when adding In review: the API replaces the supplied option list.
+  New native option/view IDs remain unresolved preparation slots, never invented consumer bindings.
+  Apply uses freshly checked exact identities and a bounded one-shot authorizer/provider composition,
+  retaining the exact original request before sending. The existing CLI only has post-run reporting:
+  implement a narrow exclusive private per-invocation evidence sink for original intent, requests and
+  outcomes before the first send; this is operation custody, not a global journal. Lost or
+  ambiguous responses stop writes and enter original-identity readback only; no blind retries or
+  rollback. A fully reconciled unchanged repeat emits no mutations. Actual readback resolves new IDs;
+  then land the final stable enrollment/binding before positive installed v4 inspection/refresh/selection.
+
+  The concrete production approval supplier is the accountable owner's explicit invocation of this
+  reviewed bounded CLI for the exact prepared operation, separately selected at the live stage after
+  installed qualification. At the CLI boundary construct private typed invocation admission only
+  after exact prepared digest/source/principal/scope and fresh preconditions validate. Native principal
+  and project capability prove permission, not operation approval. Neither caller JSON, an
+  `authorized:true` flag, BoardIntake author eligibility nor a synthetic absent-supplier placeholder
+  supplies approval; no cryptographic authority service or V1 permit is introduced. Source controls
+  qualify this actual manual invocation route without granting a live operation here.
+
+  Default migration writes no existing human Status/Track/Roadmap values. Native updates provide no
+  expected-revision/CAS guarantee: fresh comparison detects observed drift, but a local lock cannot
+  prevent another principal's edit. Any selected seeding requires genuine bounded owner coordination;
+  otherwise return the exact no-write owner action. API view operations support layout, filters and
+  visible fields, with no established grouping/sort/column-order mutation input. Keep unsupported UI
+  configuration and actual visual verification open rather than guessing properties or equating API
+  readback with UI acceptance. Retain option/card preservation, wrong/incomplete identity refusal,
+  no-op, partial-effect, lost-response, drift and Observation/product-isolation controls through the
+  actual CLI-to-authorizer-to-provider-to-readback path.
+
 - [ ] **COORD-BOARD-V2-01.11 — Adopt programme consumers and retire duplicate tracking** — route: routine.
   Depends on .9/.10 and discrepancy-free comparison with current in-flight work. Scope: work-programme,
   organization drivers/wrappers, recovery, show-progress and maintained mirrored/generated/package

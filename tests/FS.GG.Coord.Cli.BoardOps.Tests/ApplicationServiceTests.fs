@@ -4499,7 +4499,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
                 // at all. `who` needs nothing this fixture does not already serve — the board scan, the
                 // repo's open issues, and each issue's comments are the same three reads `take` makes.
                 | Options.Who -> Client.who (context transport) opts
-                | other -> failwithf "this fixture drives take/next/batch/who only, got %A" other
+                | Options.DriverCmd -> Client.driver (context transport) opts
+                | other -> failwithf "this fixture drives take/next/batch/who/driver only, got %A" other
 
             Console.Out.Flush()
             Console.Error.Flush()
@@ -4704,10 +4705,57 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         File.WriteAllText(Path.Combine(directory, "host-loop.md"), declaration)
 
     let private installDisagreeingWaveModels (root: string) =
-        for skill, implementers in [ "drive-board", 4; "work-board", 3 ] do
-            let directory = Path.Combine(root, ".claude", "skills", skill, "references")
+        for runtime, implementers in [ (".agents", 4); (".claude", 3) ] do
+            let directory = Path.Combine(root, runtime, "skills", "work-board", "references")
             Directory.CreateDirectory directory |> ignore
             File.WriteAllText(Path.Combine(directory, "host-loop.md"), waveModelDeclaration implementers)
+
+    [<Theory>]
+    [<InlineData("batch")>]
+    [<InlineData("driver")>]
+    let ``product wave callers work in receivers and operator checkouts without organization wave authority`` (verb: string) =
+        let arguments = [ verb; "--repo"; "FS.GG.SDD"; "--json" ]
+        let baselineCode, _, _ = runQueueWithKit installWaveModel (emptyQueue ()) arguments
+        Assert.Equal(0, baselineCode)
+
+        for organizationText in [ "Retired organization mechanics without product facts."; (waveModelDeclaration 4) ] do
+            let configure (root: string) =
+                installWaveModel root
+                for runtime in [ ".claude"; ".agents" ] do
+                    let directory = Path.Combine(root, runtime, "skills", "drive-board", "references")
+                    Directory.CreateDirectory directory |> ignore
+                    File.WriteAllText(Path.Combine(directory, "host-loop.md"), organizationText)
+
+            let code, output, errors = runQueueWithKit configure (emptyQueue ()) arguments
+            Assert.Equal(0, code)
+            Assert.DoesNotContain("wave occupancy: unavailable", errors)
+            if verb = "batch" then
+                Assert.Equal("[]" + Environment.NewLine, output)
+                Assert.Contains("\"waveCapacity\":6", errors)
+            else
+                use document = JsonDocument.Parse output
+                Assert.Equal("fsgg.coord.driver-live/1", document.RootElement.GetProperty("schema").GetString())
+                Assert.Equal(2, document.RootElement.GetProperty("reviewSlotsReserved").GetInt32())
+
+    [<Theory>]
+    [<InlineData("batch")>]
+    [<InlineData("driver")>]
+    let ``organization declarations cannot substitute for missing product wave facts`` (verb: string) =
+        let configure (root: string) =
+            let directory = Path.Combine(root, ".claude", "skills", "drive-board", "references")
+            Directory.CreateDirectory directory |> ignore
+            File.WriteAllText(Path.Combine(directory, "host-loop.md"), waveModelDeclaration 3)
+
+        let code, output, errors =
+            runQueueWithKit configure (emptyQueue ()) [ verb; "--repo"; "FS.GG.SDD"; "--json" ]
+        Assert.Contains("no work-board product host-loop document exists", errors)
+        if verb = "batch" then
+            Assert.Equal(0, code)
+            Assert.Equal("[]" + Environment.NewLine, output)
+            Assert.Contains("wave occupancy: unavailable", errors)
+        else
+            Assert.Equal(1, code)
+            Assert.Equal("", output)
 
     [<Theory>]
     [<InlineData(6, true, 0, false)>]
@@ -4759,7 +4807,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         Assert.Equal(0, code)
 
     [<Fact>]
-    let ``#2096 installed driver contracts that disagree fail the occupancy read closed`` () =
+    let ``#2096 installed product runtime mirrors that disagree fail the occupancy read closed`` () =
         let transport =
             worldIn "Ready" (Map.ofList [ 74, "Paths: scripts/fsgg-coord" ]) Map.empty false
 

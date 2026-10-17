@@ -1,8 +1,9 @@
 # The failure legs of the coordination session reporter (.github#2556, epic #266).
 #
 # `scripts/fsgg-coord-report` is a PUBLISHED client: `registry/repos.yml` ships it in the kit,
-# `src/FS.GG.Kit/verify-package.sh` asserts it materializes executable, and both board skills instruct
-# every driver to report live item state through it. Its fixture landed with it (f6321969) and no
+# `src/FS.GG.Kit/verify-package.sh` asserts it materializes executable, and the product board skill
+# instructs its driver to report live item state through it. Organization consumers use owning/native
+# evidence instead. Its fixture landed with it (f6321969) and no
 # workflow has ever run a line of it — the reporter that tells a human what the board is doing had no
 # CI opinion at all. It was HALF-BLOCKED on .github#2555 until that row put `python3` into
 # `scripts/test`'s scrape vocabulary; before then a `run:` step here would have executed the suite and
@@ -19,8 +20,8 @@
 # and a foreign Coordination scope receipt is REFUSED even when the supplied snapshot is entirely
 # self-consistent about being foreign.
 #
-# WHY THE SKILL BODIES ARE IN THE FILTER. The fixture also asserts that both canonical board skills
-# still name this reporter and its typed lane-capacity vocabulary, and that each routed variant still
+# WHY THE SKILL BODIES ARE IN THE FILTER. The fixture also asserts the product reporter contract,
+# organization owning/native reporting boundary, and that each routed variant still
 # inherits its canonical driver rather than growing a sixth reporting recipe — in BOTH runtime roots.
 # Those are SKILL.md reads, so an edit to one is a change to this suite's corpus and must re-run it.
 # The glob covers `drive-board`, `work-board` and their four routed variants in one line rather than

@@ -31,6 +31,8 @@ on:
       - "registry/repos.yml"
       - "registry/repos.lock"
       - "dist/**"
+      - ".agents/skills/**"
+      - ".claude/skills/**"
   push:
     branches: [main]
     paths:
@@ -40,6 +42,8 @@ on:
       - "registry/repos.yml"
       - "registry/repos.lock"
       - "dist/**"
+      - ".agents/skills/**"
+      - ".claude/skills/**"
   workflow_dispatch:
 
 permissions:

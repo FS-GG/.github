@@ -35,6 +35,17 @@ runtime supports it. A stop request does not mean the roadmap is complete.
 
 ## Save a restartable handoff
 
+For .9/.11 source preparation, retain the
+[organization consumer boundary](../check-board/references/organization-v2-inspection.md) in recovery
+and handoff. Source delivery does not activate v4 or retire manual v3 current-status maintenance.
+After accepted cutover, preserve final binding/enrollment, exact outcome/slice/attempt and owner,
+existing Current deliverable/native PR/head, issue/body/current-plan revisions, pending requests and
+all original/uncertain reservations. Fresh-read determining native/action/intake/runtime facts through
+the existing integrator before resuming an operation; a saved inspection or stdin digest supplies no
+authority or renewed freshness. Missing facts keep scoped Unknowns without duplicate implementation
+or V1 fallback. Hand off original unresolved effects; never settle or retry them from board status.
+
+
 Resolve the owning FS-GG `.github` repository. `/docs/handoffs` means its
 repo-relative `docs/handoffs` directory; create that directory if absent.
 Use `YYYY-MM-DD-HHMMSS-unified-roadmap-handoff.md` with current UTC time. Never

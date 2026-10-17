@@ -35,6 +35,13 @@ on:
       - "src/FS.GG.ProjectionPolicy/**"
       - "scripts/generate-projections"
       - "scripts/prepare-registry"
+      - "scripts/repos.sh"
+      - "scripts/fsgg-coord"
+      - "scripts/fsgg-coord-report"
+      - "scripts/skill-view"
+      - "scripts/lib/args.sh"
+      - "scripts/lib/roots.sh"
+      - "registry/repos.lock"
       - "tests/component-count/**"
       - "tests/FS.GG.ProjectionPolicy.Tests/**"
       - "tests/projection-markers/**"
@@ -69,6 +76,13 @@ on:
       - "src/FS.GG.ProjectionPolicy/**"
       - "scripts/generate-projections"
       - "scripts/prepare-registry"
+      - "scripts/repos.sh"
+      - "scripts/fsgg-coord"
+      - "scripts/fsgg-coord-report"
+      - "scripts/skill-view"
+      - "scripts/lib/args.sh"
+      - "scripts/lib/roots.sh"
+      - "registry/repos.lock"
       - "tests/component-count/**"
       - "tests/FS.GG.ProjectionPolicy.Tests/**"
       - "tests/projection-markers/**"
@@ -175,7 +189,10 @@ jobs:
           # 27 → 39: #2136 adds wave, review, lifecycle, ledger, and registry-derived release facts to
           #          the two live skill roots (six new facts × two roots). The hard count keeps that
           #          declared projection expansion non-vacuous.
-          expected=39
+          # 39 → 27: retire twelve organization-only V1 consumer regions.
+          # Shared Core/product facts and targets remain; the preparation fixture checks
+          # the exact retired set, marker integrity and product preservation.
+          expected=27
 
           list="$(bash scripts/generate-projections --list)"
           n="$(printf '%s\n' "$list" | grep -c .)"

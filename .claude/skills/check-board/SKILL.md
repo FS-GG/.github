@@ -6,64 +6,78 @@ description: Use when the FS-GG Coordination board looks stale, blockers may hav
 # check-board (FS-GG)
 
 The board is a planning projection; native issues, owning plans and actual delivery evidence remain
-authority. Select the organization V2 or explicitly historical/product scope before running a pass.
+authority. Select the current organization V2 or independently qualified product scope before a pass.
+Historical organization examples are data only; selecting history cannot authorize live operations.
 
 ## Selected organization V2 scope
 
-Read [organization-v2-inspection](references/organization-v2-inspection.md). Its root adoption gate is
-pending until actual four-target qualification and selected consumer readback. Source/manifest changes
-do not activate it. A missing or failed V2 read reports Unknown and preserves current source work.
+Read [organization-v2-inspection](references/organization-v2-inspection.md). This .9/.11 source edition
+prepares binding-v4/inspection2 and its one-invocation integrator stdin/native composition. Exact
+installed qualification, admitted schema/membership/views and real-use consumer cutover remain held;
+finite three-active/four-target/no-dispatch history is not successor permission. No draft field IDs,
+old report or source merge activates this route. Keep manual v3 current-status upkeep until acceptance.
 
-After root selects adoption, use only the bound read-only inspection for this organization scope.
-Report exact selected population and read coverage, source/native/dependency/plan gaps, human planning
-values beside Observation, and unresolved acceptance or owner disagreements. Do not reconcile, apply,
-flush, auto-repair or claim these V2 items. Before any resulting dispatch, the current integrator still
-checks intake authorization, actual PRs, touch sets, available capacity and owning-plan prerequisites.
+After accepted coordinated cutover, report complete selected/historical/deferred/unexpected/unresolved
+membership, scoped read gaps, current native issue/owner/plan/PR/head evidence and per-slice ordered
+selected/deferred decisions. Keep human Status/Track/Roadmap beside Observation; never infer Ready or
+Done from healthy reads or merge alone. Do not reconcile/apply/flush, auto-repair or claim V2 items.
+Inspection grants no dispatch. The existing integrator verifies genuine action/prerequisite/intake/
+capacity/reservation suppliers and refreshes determining facts beside actual owner execution. Missing
+or failed V2 reads preserve Unknown and independent authorized issue/plan/PR work, with no V1 fallback.
 
-## Separately selected historical or product scope
+## Separately qualified product scope
 
-The commands below retain their existing legacy/product binding. They are not a V2 fallback.
-`fsgg:claim` markers retain meaning only for the selected legacy lifecycle. Reconcile that scope before
-legacy planning and after its worker changes its board.
+Product bindingVersion3/schemaVersion1 keeps its qualified inspection/1 contract and five-status
+planning schema. Use the actual authenticated product binding and installed caller; never substitute
+the organization binding or add the organization-only integrator stdin flag:
 
-### Run the legacy/product pass
-
-```bash
-scripts/fsgg-coord budget
-scripts/fsgg-coord reconcile --json
-scripts/fsgg-coord lint --json
+```sh
+fsgg-coord-engine board-v2 inspect --binding-file product-binding.json --report-file new-product-inspection.json
 ```
 
-`reconcile` is always fresh and is a dry-run unless `--apply` is present. Its findings are the typed
-mechanical chores the engine can prove and safely repair. Review the JSON, then:
+Inspection remains read-only and grants no writes, selection or operation authority. Local-only workspaces
+retain their existing route. This organization preparation changes no product source or acceptance.
+
+### Independently qualified legacy-product reconciliation
+
+The legacy recipes below apply only to a separately qualified legacy-product target and lifecycle.
+Before any product command, verify the actual product target/binding and configured product repository;
+a repository filter alone does not select a board. Refuse missing or organization-default target facts.
+No historical organization live opt-in exists. These recipes cannot repair unavailable V2 evidence or
+select Project 1, including when a caller requests a historical organization scope.
+
+For that verified product target, replace `<configured-product-repo>` with its actual repository:
 
 ```bash
-scripts/fsgg-coord reconcile --apply
-scripts/fsgg-coord flush
-scripts/fsgg-coord reconcile --json
-scripts/fsgg-coord lint --json
+scripts/fsgg-coord reconcile --repo <configured-product-repo> --json
+scripts/fsgg-coord lint --repo <configured-product-repo> --json
 ```
 
-Never translate a failed read into an empty board. `reconcile --apply` reports a repair as applied only when its own fresh post-mutation scan observes every intended field value; an accepted mutation with a stale or missing row is failed, not clean. Exit 75 means back off until the reported reset.
-A queued write is not landed until `flush` and the final fresh pass confirm it.
-Run the bounded executable positive, partial-projection, and missing-row receipt examples in
-[mechanical reconciliation](references/mechanical-reconciliation.md#executable-receipt-examples) when
-validating automation that consumes the apply document.
+`reconcile` is fresh and dry-run unless `--apply` is present. Review its typed mechanical findings and
+the product's existing write authority before the scoped apply; this skill grants no new effect:
 
-### Legacy/product judgement boundary
+```bash
+scripts/fsgg-coord reconcile --repo <configured-product-repo> --apply
+scripts/fsgg-coord reconcile --repo <configured-product-repo> --json
+scripts/fsgg-coord lint --repo <configured-product-repo> --json
+```
 
-`lint` findings are report-only. Investigate unreadable/unparseable blockers, undeclared paths,
-unclaimed `In progress` items, open issues in `Done`, and epic roll-up questions. Do not change issue
-bodies, close work, invent dependencies, or decide an epic from the reconcile pass. File or surface the
-decision with evidence.
+A repair is applied only after its fresh post-mutation scan observes the intended fields. Failed or
+stale readback remains failed, never clean. Exit75 retains the reported backoff. Queued writes are not
+landed: queue-wide replay has no repository filter and needs its separately admitted original-effect
+recovery route and genuine target readback. No replay command is authorized by this check-board pass.
+The [offline receipt examples](references/mechanical-reconciliation.md#executable-receipt-examples)
+retain their independently qualified meaning and perform no live writes.
 
-For the typed rule set, wire vocabulary, output schema, and manual investigation recipes, load
-[mechanical-reconciliation](references/mechanical-reconciliation.md). For epic and decision handling,
-load [judgement-findings](references/judgement-findings.md).
-For rare edge cases, REST recipes, and the incident rationale behind the boundaries, load
-[deep detail](references/deep-detail.md).
+`lint` findings are report-only. Investigate unknown blockers, undeclared paths, unclaimed work and
+outcome/child disagreements without rewriting issues, inventing dependencies or closing work. Report
+product-scoped mechanical results, queued/failed writes, judgement findings and the final fresh result.
+Use [mechanical reconciliation](references/mechanical-reconciliation.md) and
+[judgement findings](references/judgement-findings.md) within that product boundary.
 
-### Finish the legacy/product pass
+## Historical organization examples are data only
 
-Report mechanical changes, queued/failed writes, judgement findings, and the fresh post-apply result.
-If planning follows, use only that final result.
+[Deep detail](references/deep-detail.md) retains incident and protocol evidence. Organization
+reconcile/apply/flush, claim/done, Class/Phase and scheduling-ledger recipes there are historical data,
+not a live opt-in or fallback. Product live use requires the verified product scope above; archival
+examples alone grant no current operation, enrollment, retry or field-write permission.

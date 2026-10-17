@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -27,8 +28,15 @@ class Preparation(unittest.TestCase):
             shutil.copytree(ROOT / relative, self.root / relative)
         scripts = self.root / "scripts"
         scripts.mkdir()
-        for name in ("prepare-registry", "generate-projections", "generate-driver-manifest", "fsgg-skill-registry-check"):
+        for name in ("prepare-registry", "generate-projections", "generate-driver-manifest", "fsgg-skill-registry-check", "repos.sh"):
             shutil.copy2(ROOT / "scripts" / name, scripts / name)
+        kit = subprocess.check_output(["bash", str(ROOT / "scripts/repos.sh"), "kit", "--field", "source"], text=True)
+        for relative in kit.splitlines():
+            source = ROOT / relative
+            if source.is_file():
+                target = self.root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
         roster = subprocess.check_output(["bash", str(ROOT / "scripts/generate-projections"), "--list"], text=True)
         for line in roster.splitlines():
             relative = line.split("\t")[1]
@@ -45,6 +53,48 @@ class Preparation(unittest.TestCase):
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         self.assertIn("protocol/full qualification NOT RUN", result.stdout)
         return result.stdout + result.stderr
+
+    def test_raw_kit_lock_is_readonly_then_repaired_and_idempotent(self):
+        relative = ".claude/skills/check-board/SKILL.md"
+        source = self.root / relative
+        source.write_bytes(source.read_bytes() + b"\r\nRaw Kit lock fixture.\r\n")
+        before = snapshot(self.root)
+        output = self.run_mode(expected=1)
+        self.assertIn("kit-source-lock: STALE", output)
+        self.assertEqual(before, snapshot(self.root))
+        self.run_mode("--write")
+        expected = hashlib.sha256(source.read_bytes()).hexdigest()
+        self.assertIn(expected + "  " + relative.removesuffix("/SKILL.md"),
+                      (self.root / "registry/repos.lock").read_text())
+        repaired = snapshot(self.root)
+        self.run_mode("--write")
+        self.assertEqual(repaired, snapshot(self.root))
+
+    def test_kit_file_sources_refuse_outside_and_nonregular_before_writes(self):
+        roster = self.root / "registry/repos.yml"
+        original = roster.read_text()
+        for source in ("/etc/passwd", "../outside", "registry", "scripts/poison"):
+            with self.subTest(source=source):
+                poison = self.root / "scripts/poison"
+                if not poison.exists():
+                    poison.symlink_to(self.root / "registry/repos.yml")
+                roster.write_text(original.replace("source: scripts/fsgg-coord", "source: " + source, 1))
+                before = snapshot(self.root)
+                output = self.run_mode("--write", expected=1)
+                self.assertIn("kit-source-lock: UNAVAILABLE", output)
+                self.assertIn("skill-manifests: BLOCKED", output)
+                self.assertEqual(before, snapshot(self.root))
+        roster.write_text(original)
+
+    def test_failed_relock_never_claims_prepared_or_mutates_dependents(self):
+        script = self.root / "scripts/repos.sh"
+        script.write_text(script.read_text().replace('cmd_relock() {', 'cmd_relock() {\n  return 7'))
+        before = snapshot(self.root)
+        output = self.run_mode("--write", expected=1)
+        self.assertIn("kit-source-lock: UNAVAILABLE", output)
+        self.assertNotIn("kit-source-lock: prepared", output)
+        self.assertIn("skill-manifests: BLOCKED", output)
+        self.assertEqual(before, snapshot(self.root))
 
     def test_current_read_only_and_idempotent(self):
         before = snapshot(self.root)
@@ -120,11 +170,142 @@ class Preparation(unittest.TestCase):
             self.assertEqual(before, snapshot(self.root))
             manifest = self.root / "registry/driver-skill-manifest.json"
             old = manifest.read_bytes()
+            old_lock = (self.root / "registry/repos.lock").read_bytes()
             written = self.run_mode("--write", expected=1)
             self.assertIn("registry-projections: FAILED", written)
             self.assertNotIn("registry-projections: prepared", written)
             self.assertEqual(old, manifest.read_bytes())
+            self.assertEqual(old_lock, (self.root / "registry/repos.lock").read_bytes())
             target.write_text(original)
+
+    def retired_targets(self):
+        source = (self.root / "scripts/generate-projections").read_text()
+        block = re.search(r"^RETIRED_ORG_TARGETS=\(\n(.*?)^\)", source, re.M | re.S)
+        self.assertIsNotNone(block)
+        targets = re.findall(r'^  "([^"\n]+)"$', block[1], re.M)
+        self.assertEqual(len(targets), 12)
+        self.assertEqual(len(set(targets)), 12)
+        expected = {
+            "wave-policy": "drive-board/references/host-loop.md",
+            "filing-rules": "cross-repo-coordination/references/mailbox-and-board.md",
+            "board-statuses": "cross-repo-coordination/references/mailbox-and-board.md",
+            "reconcile-rules": "check-board/references/mechanical-reconciliation.md",
+            "blocker-states": "check-board/references/mechanical-reconciliation.md",
+            "snapshot-shape": "check-board/references/mechanical-reconciliation.md",
+        }
+        self.assertEqual(set(targets), {f"{kind}:{root}/{relative}" for kind, relative in expected.items()
+                                       for root in (".agents/skills", ".claude/skills")})
+        active = subprocess.check_output(["bash", str(self.root / "scripts/generate-projections"), "--list"], text=True)
+        entries = [row.split("\t") for row in active.splitlines()]
+        self.assertEqual(len(entries), 27)
+        self.assertFalse(set(targets) & {kind + ":" + path for kind, path, _ in entries})
+        self.assertIn("wave-policy:.agents/skills/work-board/references/host-loop.md",
+                      {kind + ":" + path for kind, path, _ in entries})
+        workflow = (ROOT / ".github/workflows/projections.yml").read_text()
+        self.assertEqual(int(re.search(r"^          expected=(\d+)$", workflow, re.M)[1]), len(entries))
+        return targets
+
+    @staticmethod
+    def old_region(kind):
+        return (f"<!-- BEGIN GENERATED: fsgg-protocol:{kind} -->\n"
+                "Historical organization fixture, not engine facts.\n"
+                f"<!-- END GENERATED: fsgg-protocol:{kind} -->\n")
+
+    def test_retired_org_regions_prepare_before_digests_and_preserve_product(self):
+        before = {}
+        product = {str(path): path.read_bytes() for root in (".agents", ".claude")
+                   for path in (self.root / root / "skills/work-board").rglob("*") if path.is_file()}
+        for target in self.retired_targets():
+            kind, relative = target.split(":", 1)
+            path = self.root / relative
+            before.setdefault(relative, path.read_text())
+            path.write_text(path.read_text() + self.old_region(kind))
+        current = snapshot(self.root)
+        output = self.run_mode(expected=1)
+        self.assertIn("retired organization", output)
+        self.assertIn("dependent status BLOCKED", output)
+        self.assertEqual(current, snapshot(self.root))
+        self.run_mode("--write")
+        for relative, original in before.items():
+            self.assertEqual((self.root / relative).read_text(), original)
+        self.assertEqual(product, {str(path): path.read_bytes() for root in (".agents", ".claude")
+                                  for path in (self.root / root / "skills/work-board").rglob("*") if path.is_file()})
+        self.run_mode()
+        current = snapshot(self.root)
+        self.run_mode("--write")
+        self.assertEqual(current, snapshot(self.root))
+
+    def test_retired_marker_corruption_blocks_manifest_writes(self):
+        kind, relative = self.retired_targets()[0].split(":", 1)
+        path = self.root / relative
+        original = path.read_text()
+        begin = f"<!-- BEGIN GENERATED: fsgg-protocol:{kind} -->"
+        end = f"<!-- END GENERATED: fsgg-protocol:{kind} -->"
+        region = self.old_region(kind)
+        mutations = (None, region.replace(end, "missing END"), region + region,
+                     end + "\n" + begin + "\n", region.replace(begin, " " + begin))
+        for malformed in mutations:
+            with self.subTest(malformed=malformed):
+                if malformed is None: path.unlink()
+                else: path.write_text(original + malformed)
+                manifests = [self.root / "registry" / name for name in
+                             ("driver-skill-manifest.json", "coordination-kit-skill-manifest.json")]
+                before = [manifest.read_bytes() for manifest in manifests]
+                output = self.run_mode("--write", expected=1)
+                self.assertIn("registry-projections: FAILED", output)
+                self.assertIn("dependent status BLOCKED", output)
+                self.assertEqual(before, [manifest.read_bytes() for manifest in manifests])
+                path.write_text(original)
+
+    def test_extra_retired_markers_and_overlap_preserve_all_inputs(self):
+        groups = {}
+        originals = {}
+        for target in self.retired_targets():
+            kind, relative = target.split(":", 1)
+            groups.setdefault(relative, []).append(kind)
+            path = self.root / relative
+            originals.setdefault(relative, path.read_text())
+            path.write_text(path.read_text() + self.old_region(kind))
+        # A valid pair in each file precedes a later malformed marker: no earlier
+        # target or dependent manifest may change before complete integrity checks.
+        kind, relative = self.retired_targets()[-1].split(":", 1)
+        path = self.root / relative
+        valid = path.read_text()
+        begin = f"<!-- BEGIN GENERATED: fsgg-protocol:{kind} -->"
+        end = f"<!-- END GENERATED: fsgg-protocol:{kind} -->"
+        mutations = (valid + "inline " + begin + "\n", valid + begin + " trailing\n",
+                     valid + " " + begin + "\n", valid + "inline " + end + "\n",
+                     valid + end + " trailing\n", valid + " " + end + "\n",
+                     valid.replace(begin, begin + "\ninline " + begin, 1),
+                     valid.replace(end, " " + end + "\n" + end, 1), valid + self.old_region(kind))
+        for malformed in mutations:
+            with self.subTest(marker=malformed):
+                path.write_text(malformed)
+                before = snapshot(self.root)
+                for mode in ("--check", "--write"):
+                    output = self.run_mode(mode, expected=1)
+                    self.assertIn("exactly one raw and standalone", output)
+                    self.assertIn("dependent status BLOCKED", output)
+                    self.assertEqual(before, snapshot(self.root))
+        path.write_text(valid)
+        # Different retired kinds share files. Both nesting and crossing are corrupt,
+        # even with one raw/standalone pair per kind; check and write must both refuse.
+        relative, kinds = next((relative, kinds) for relative, kinds in groups.items() if len(kinds) == 2)
+        path = self.root / relative
+        left, right = kinds
+        markers = lambda kind: (f"<!-- BEGIN GENERATED: fsgg-protocol:{kind} -->\n",
+                                f"<!-- END GENERATED: fsgg-protocol:{kind} -->\n")
+        left_begin, left_end = markers(left)
+        right_begin, right_end = markers(right)
+        for body in (left_begin + right_begin + right_end + left_end,
+                     left_begin + right_begin + left_end + right_end):
+            path.write_text(originals[relative] + body)
+            before = snapshot(self.root)
+            for mode in ("--check", "--write"):
+                output = self.run_mode(mode, expected=1)
+                self.assertIn("overlapping retired organization regions", output)
+                self.assertIn("dependent status BLOCKED", output)
+                self.assertEqual(before, snapshot(self.root))
 
     def test_missing_prerequisite_and_full_mode_guard(self):
         environment = dict(os.environ, FSGG_COORD_ENGINE_BIN=str(self.root / "absent-engine"))

@@ -5,41 +5,22 @@ description: Use when explicitly asked to burn down the FS-GG Coordination board
 
 # drive-board-normal
 
-Run the complete canonical [drive-board](../drive-board/SKILL.md) host workflow. This variant changes
-only the model routing of deployed workers; reconciliation, triage, lane selection, verification,
-engine-currency repair, and termination remain owned by `drive-board`.
-The selected organization V2 adoption gate and read-only inspection route are inherited too; the
-legacy host loop applies only to a separately selected historical scope, never to V2 planning rows.
+Inherit the complete canonical [drive-board](../drive-board/SKILL.md) organization route, including
+its prepare-only .9/.11 boundary, native joins, per-slice ordered capacity accounting, routine owner,
+independent review, required CI and ADR-0084 delivery. This variant changes only requested worker
+routing. Historical no-dispatch acceptance supplies no successor activation or worker permission.
 
-Inherit `drive-board`'s routine route unchanged. The table below selects the single routine owner only
-when a delegated owner is needed; it does not authorize a critic, confirmation worker, or any
-strict-route artifact.
-That inheritance explicitly includes canonical `drive-board`'s ADR-0084 selection/reuse, coherent-pending,
-late-dispute, and dependent-activation behavior; this variant changes none of it.
-
-Before every worker dispatch, identify the active host runtime. Pass this route explicitly to every
-subagent spawn:
+Before every authorized worker dispatch, identify the active runtime. Pass this route explicitly to every
+subagent spawn and verify the actual selected model/effort:
 
 | runtime | model | effort |
 |---|---|---|
-| Codex | `gpt-5.6-terra` | `medium` |
+| Codex | `gpt-6.1-sol` | `medium` |
 | Claude Code | `sonnet` | `high` |
 
-Never let a host default choose the model or effort. If the active runtime cannot request this exact
-model and effort, report the unsupported route and stop before dispatching a worker; do not downgrade,
-fall back, or continue a partial wave.
-
-**Repair-phase route.** When a strict item's three-round review chain exhausts, automatically enter the
-[repair phase](../pnext-item/references/independent-review.md#repair-phase) and dispatch its fresh
-implementer and fresh critic at `drive-board-best`'s route instead
-of the table above:
-
-| runtime | model | effort |
-|---|---|---|
-| Codex | `gpt-5.6-sol` | `medium` |
-| Claude Code | `opus` | `high` |
-
-Never let a host default choose the model or effort for the repair-phase dispatch either. If the active
-runtime cannot request this exact model and effort, report the unsupported route and stop before
-dispatching a repair-phase worker; do not downgrade, fall back, or continue a partial repair-phase
-chain.
+Never let a host default choose model or effort. If the active runtime cannot request and establish
+this exact route, report the unsupported route and stop before that dispatch; do not downgrade,
+fall back, silently substitute or start a partial assignment. Actual runtime capabilities govern;
+a model name in this table proves neither availability nor execution. Product work-board model
+routes are unchanged. A repair preserves the same accountable owner and existing PR; there is no
+automatic heavier worker/critic chain, claim, ledger or new attempt merely because a check failed.

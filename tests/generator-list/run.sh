@@ -333,18 +333,18 @@ echo "== §12 PROJECTION INVENTORY — all three skill roots are complete"
 
 projection_inventory="$("$REPO_ROOT/scripts/generate-projections" --list)"
 projection_count="$(grep -c . <<<"$projection_inventory")"
-if [ "$projection_count" -eq 39 ]; then
-  ok "§12 the progressive-disclosure inventory has exactly 39 generated regions"
+if [ "$projection_count" -eq 27 ]; then
+  ok "§12 the progressive-disclosure inventory has exactly 27 generated regions"
 else
-  bad "§12 expected exactly 39 generated regions, found $projection_count" "$projection_inventory"
+  bad "§12 expected exactly 27 generated regions, found $projection_count" "$projection_inventory"
 fi
 
 for root in .claude .agents; do
   root_count="$(awk -F '\t' -v prefix="$root/skills/" 'index($2, prefix) == 1 { n++ } END { print n + 0 }' <<<"$projection_inventory")"
-  if [ "$root_count" -eq 16 ]; then
-    ok "§12 $root carries all 16 generated skill-reference regions"
+  if [ "$root_count" -eq 10 ]; then
+    ok "§12 $root carries all 10 generated skill-reference regions"
   else
-    bad "§12 $root expected 16 generated skill-reference regions, found $root_count"
+    bad "§12 $root expected 10 generated skill-reference regions, found $root_count"
   fi
 done
 
@@ -356,11 +356,34 @@ normalized_skill_inventory="$(
 )"
 normalized_unique_count="$(uniq <<<"$normalized_skill_inventory" | wc -l)"
 normalized_triplicate_count="$(uniq -c <<<"$normalized_skill_inventory" | awk '$1 == 2 { n++ } END { print n + 0 }')"
-if [ "$normalized_unique_count" -eq 16 ] && [ "$normalized_triplicate_count" -eq 16 ]; then
+if [ "$normalized_unique_count" -eq 10 ] && [ "$normalized_triplicate_count" -eq 10 ]; then
   ok "§12 each generated skill-reference region has one byte-equivalent target in every active root"
 else
   bad "§12 generated skill-reference rows are not exact two-root duplicates" "$normalized_skill_inventory"
 fi
+
+# Independent retirement/product assertions: a smaller census alone must not pass
+# by dropping a retained product region or restoring an organization V1 region.
+for root in .agents .claude; do
+  for spec in \
+    'filing-rules:cross-repo-coordination/references/mailbox-and-board.md' \
+    'board-statuses:cross-repo-coordination/references/mailbox-and-board.md' \
+    'reconcile-rules:check-board/references/mechanical-reconciliation.md' \
+    'blocker-states:check-board/references/mechanical-reconciliation.md' \
+    'snapshot-shape:check-board/references/mechanical-reconciliation.md' \
+    'wave-policy:drive-board/references/host-loop.md'; do
+    kind="${spec%%:*}"; target="$root/skills/${spec#*:}"
+    if grep -Fq "BEGIN GENERATED: fsgg-protocol:$kind" "$REPO_ROOT/$target" ||
+       awk -F '\t' -v k="$kind" -v p="$target" '$1==k && $2==p { found=1 } END { exit !found }' <<<"$projection_inventory"; then
+      bad "§12 retired organization region returned: $kind $target"
+    else ok "§12 retired organization region absent: $kind $target"; fi
+  done
+  target="$root/skills/work-board/references/host-loop.md"
+  if grep -Fq 'BEGIN GENERATED: fsgg-protocol:wave-policy' "$REPO_ROOT/$target" &&
+     awk -F '\t' -v p="$target" '$1=="wave-policy" && $2==p { found=1 } END { exit !found }' <<<"$projection_inventory"; then
+    ok "§12 retained product wave-policy remains generated: $root"
+  else bad "§12 retained product wave-policy missing: $root"; fi
+done
 
 echo
 echo "-------- $pass passed, $failcount failed"

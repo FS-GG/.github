@@ -97,13 +97,21 @@ module SkillProgressiveDisclosureTests =
             let body = body skill
             Assert.DoesNotContain("BEGIN GENERATED:", body)
 
-        let reference skill name =
-            File.ReadAllText(Path.Combine(skillPath ".claude" skill, "references", name))
+        for root in [ ".claude"; ".agents" ] do
+            let reference skill name =
+                File.ReadAllText(Path.Combine(skillPath root skill, "references", name))
 
-        Assert.Contains("fsgg-protocol:reconcile-rules", reference "check-board" "mechanical-reconciliation.md")
-        Assert.Contains("fsgg-protocol:take-exit-codes", reference "pnext-item" "command-contracts.md")
-        Assert.Contains("BEGIN GENERATED: fsgg-protocol -->", reference "intra-repo-parallel-work" "protocol-facts.md")
-        Assert.Contains("fsgg-protocol:filing-rules", reference "cross-repo-coordination" "mailbox-and-board.md")
+            // Organization V1 projections are retired in both runtimes. Their
+            // absence cannot be established by dropping the retained shared/product facts.
+            Assert.DoesNotContain("fsgg-protocol:reconcile-rules", reference "check-board" "mechanical-reconciliation.md")
+            Assert.DoesNotContain("fsgg-protocol:blocker-states", reference "check-board" "mechanical-reconciliation.md")
+            Assert.DoesNotContain("fsgg-protocol:snapshot-shape", reference "check-board" "mechanical-reconciliation.md")
+            Assert.DoesNotContain("fsgg-protocol:filing-rules", reference "cross-repo-coordination" "mailbox-and-board.md")
+            Assert.DoesNotContain("fsgg-protocol:board-statuses", reference "cross-repo-coordination" "mailbox-and-board.md")
+            Assert.DoesNotContain("fsgg-protocol:wave-policy", reference "drive-board" "host-loop.md")
+            Assert.Contains("fsgg-protocol:take-exit-codes", reference "pnext-item" "command-contracts.md")
+            Assert.Contains("BEGIN GENERATED: fsgg-protocol -->", reference "intra-repo-parallel-work" "protocol-facts.md")
+            Assert.Contains("fsgg-protocol:wave-policy", reference "work-board" "host-loop.md")
 
     [<Fact>]
     let ``moving detail into references does not break relative markdown links`` () =

@@ -30,6 +30,8 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-10-17** — Prepare current organization programme consumers for COORD-BOARD-V2-01.9/.11 ([owner #4634](https://github.com/FS-GG/.github/issues/4634)): reconcile paired programme/driver/check/recovery/reporting and cross-repository guidance, explicit supported model routing, generator-owned retirement of organization V1 projections, and their maintained driver/coordination-Kit manifest, raw Kit source lock and own-registry digests. Preserve product contracts and the six reporting user edits. This source preparation grants no publication, installed adoption, live Project 3 mutation, consumer switch or manual-status retirement; full qualification remains required. Kit membership, foreign producer rows and materialization predicates are unchanged.
+
 ### 2026-10-13 — Reconcile existing producer skill digests (.github; ADR-0017)
 
 Reconcile `fable-bindings` from FS.GG.Templates at

@@ -39,6 +39,16 @@ the completion unless it contains a blocking exception or the user asks for stat
 An ordinary chat question about progress stays in the current conversation; do not
 spawn a worker or save a report unless the user invokes reporting or requests saving.
 
+## Prepared organization consumer
+
+Read the [organization contract](../check-board/references/organization-v2-inspection.md). This source
+prepares .9/.11 consumption and grants no installed/live switch, schema mutation or manual v3 status
+retirement. After accepted cutover, report the same exact v4 enrollment/inspection2, six-field owner
+records, per-slice/native PR facts and actual acceptance used by programme/recovery. Keep human
+planning, observation health, advisory selection and acceptance distinct. Reuse existing observations;
+do not launch an inspection, test or other workload solely to make a report look fresh. State its
+original time, coverage and any scoped gaps; never renew old evidence or infer Done from a merged slice.
+
 ## Scope and evidence
 
 1. Resolve the FS-GG `.github` repository from the workspace or its existing configuration.
@@ -144,10 +154,11 @@ unless saving is requested; automatic skill selection alone does not authorize s
 landing. A request to modify this skill does not itself invoke reporting or schedule automation.
 
 Use [report-template.md](references/report-template.md) for the saved report. Open with a
-brief process-health verdict against expectations, then one current-state table with one
+brief process-health verdict against expectations and material pathologies, then one current-state table with one
 row per selected outcome. Each row carries accepted capability and remaining acceptance
 boundary, meaningful change, remaining work/blocker, comparable effort and completion
-forecast, health/confidence and evidence links. Link the previous report visibly.
+forecast, health/confidence and evidence links. Use explicit unknown/not-applicable values;
+keep optional readiness percentages secondary to concrete progress. Link the previous report visibly.
 
 Expand only changed claims or material exceptions: expectation or scope changes,
 complications, recurring failures, unknown effects and estimates needing explanation.

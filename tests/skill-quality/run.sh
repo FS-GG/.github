@@ -58,6 +58,66 @@ else
   python3 -B "$ROOT/tests/atlas/check.py"
 fi
 seed_layout
+# These source-only organization consumer checks use the production predicate without
+# importing a synthetic engine contract or launching the full CLR semantic gate.
+python3 -B - "$ROOT" "$WORK/tree" <<'PY_ORG'
+import importlib.util
+import re
+from pathlib import Path
+import sys
+
+root, tree = map(Path, sys.argv[1:])
+spec = importlib.util.spec_from_file_location("skill_quality", root / "scripts/check-skill-quality.py")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+def check():
+    errors = []
+    module.validate_organization_consumer(tree, errors)
+    return errors
+assert not check(), check()
+contract = "check-board/references/organization-v2-inspection.md"
+mutations = (
+    (contract, "This is .9/.11 consumer source preparation", "This activates the successor", "inspection contract lost"),
+    (contract, "actual installed executable", "source-built executable only", "inspection contract lost"),
+    (contract, "never invent IDs", "use desired-state IDs", "inspection contract lost"),
+    (contract, "do not authenticate their author", "authenticate their author", "inspection contract lost"),
+    (contract, "accountable parent verifies the genuine suppliers", "stdin names supply authority", "inspection contract lost"),
+    (contract, "Counts mean remaining capacity after active work", "Counts mean total capacity before active work", "inspection contract lost"),
+    (contract, "Recheck determining issue/body/owner/action", "Reuse the saved issue/body/owner/action", "inspection contract lost"),
+    (contract, "with no V1 fallback", "with a V1 fallback", "inspection contract lost"),
+    ("drive-board/SKILL.md", "Continue an existing unambiguous owner and PR/head", "Assign another implementation", "driver contract lost"),
+    ("check-board/SKILL.md", "No historical organization live opt-in exists", "Historical organization live operations may opt in", "check-board scope contract lost"),
+    ("check-board/SKILL.md", "Before any product command, verify the actual product target/binding and configured product repository", "A repository filter alone chooses a board", "check-board scope contract lost"),
+)
+for relative, old, new, expected in mutations:
+    originals = {}
+    for runtime in (".agents", ".claude"):
+        path = tree / runtime / "skills" / relative
+        original = path.read_text()
+        pattern = r"\s+".join(re.escape(word) for word in old.split())
+        assert re.search(pattern, original), old
+        originals[path] = original
+        path.write_text(re.sub(pattern, lambda _: new, original, count=1))
+    assert any(expected in error for error in check()), (relative, old, check())
+    for path, original in originals.items(): path.write_text(original)
+for relative, content, expected in (
+    ("drive-board/SKILL.md", "\n```sh\nscripts/fsgg-coord intake apply request.json\n```\n", "V1 operation prescribed"),
+    ("drive-board/SKILL.md", "\n```sh\nscripts/fsgg-coord driver --events --cursor current.json --text\n```\n", "V1 operation prescribed"),
+    ("drive-board/SKILL.md", "\n```sh\nscripts/fsgg-coord-report --scope current.json\n```\n", "V1 operation prescribed"),
+    ("check-board/SKILL.md", "\n## Historical organization live pass\n```sh\nscripts/fsgg-coord reconcile --apply\n```\n", "explicit qualified product repository"),
+    ("check-board/SKILL.md", "\n```sh\nscripts/fsgg-coord flush\n```\n", "cannot authorize queue-wide replay"),
+    ("drive-board/references/host-loop.md", "\n<!-- BEGIN GENERATED: fsgg-protocol:wave-policy -->\n<!-- fsgg:wave-model:v1 waves=2 -->\n<!-- END GENERATED: fsgg-protocol:wave-policy -->\n", "retired generated wave authority"),
+):
+    originals = {}
+    for runtime in (".agents", ".claude"):
+        path = tree / runtime / "skills" / relative
+        originals[path] = path.read_text()
+        path.write_text(originals[path] + content)
+    assert any(expected in error for error in check()), check()
+    for path, original in originals.items(): path.write_text(original)
+assert not check(), check()
+print("PASS prepared organization source contract and 17 negative controls; full Protocol/CLR NOT RUN")
+PY_ORG
 python3 "$ROOT/scripts/check-skill-quality.py" --root "$WORK/tree" --links-only
 skill_byte_state >"$WORK/skill-bytes.after"
 if ! cmp -s "$WORK/skill-bytes.before" "$WORK/skill-bytes.after"; then
@@ -384,10 +444,10 @@ from pathlib import Path
 root = Path(sys.argv[1])
 for runtime in (".claude", ".agents"):
     path = root / runtime / "skills/drive-board/references/backlog-triage.md"
-    path.write_text(path.read_text().replace("An empty Ready batch is not completion", "A dry wave may stop"))
+    path.write_text(path.read_text().replace("A parent remains open when a delivered slice leaves acceptance", "A merged slice completes its parent"))
 PY
-expect_rejection "drive-board cannot terminate over actionable backlog" \
-  "backlog planning contract lost 'An empty Ready batch is not completion'"
+expect_rejection "drive-board cannot complete a parent from one merged slice" \
+  "organization successor: triage contract lost"
 
 seed
 python3 - "$WORK/tree" <<'PY'
@@ -462,9 +522,10 @@ PY
 }
 
 seed
-mutate_hostloop_phrase drive-board "consolidation-threshold=3" "consolidation-threshold=2"
-expect_rejection "drive-board cannot vary the generated consolidation threshold" \
-  "generated process contract is stale"
+printf '\n<!-- BEGIN GENERATED: fsgg-protocol:wave-policy -->\n<!-- fsgg:wave-model:v1 waves=2 -->\n<!-- END GENERATED: fsgg-protocol:wave-policy -->\n' \
+  >>"$WORK/tree/.claude/skills/drive-board/references/host-loop.md"
+expect_rejection "organization driver cannot restore retired generated wave authority" \
+  "organization successor: retired generated wave authority returned"
 
 seed
 mutate_hostloop_phrase work-board "RESERVED, not advisory" "reserved when convenient"
@@ -478,8 +539,8 @@ expect_rejection "work-board cannot scope an EX_RATE stop to a single wave" \
 
 seed
 mutate_hostloop_phrase work-board "consolidation-threshold=3" "consolidation-threshold=2"
-expect_rejection "the two host-loop copies cannot state the wave model differently" \
-  "two-wave contract: drive-board and work-board host-loop copies state the wave model differently"
+expect_rejection "product host-loop must still match the genuine generated wave policy" \
+  "generated process contract is stale"
 
 seed
 python3 - "$WORK/tree" <<'PY'
@@ -781,14 +842,15 @@ else
 fi
 
 # A machine declaration outside its managed region is a second source even when its value happens to
-# agree. The semantic gate must reject that duplicate before a later value change splits the skills.
+# agree. The retained product semantic gate must reject that duplicate. Organization wave authority
+# is retired and is refused independently above, so this leg must reach the product duplicate check.
 seed
 for runtime in .claude .agents; do
   printf '\n<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->\n' \
-    >>"$WORK/tree/$runtime/skills/drive-board/references/host-loop.md"
+    >>"$WORK/tree/$runtime/skills/work-board/references/host-loop.md"
 done
 expect_rejection "hand-authored duplicate wave literals are rejected" \
-  "drive-board: hand-authored duplicate of generated wave policy"
+  "work-board: hand-authored duplicate of generated wave policy"
 
 # --- .github#2510: routed dispatch must resolve from THIS repo ---------------------------------
 #
