@@ -10,6 +10,7 @@ import base64
 from contextlib import contextmanager
 import datetime as dt
 import hashlib
+import http.client
 import json
 import pathlib
 import re
@@ -886,10 +887,80 @@ class InertOriginalTagCredentialFactory:
                     raise Refused('inert original tag cleanup or reporting unqualified')
 
 
+# Only newly selected installer metadata instances opt into these acquisition
+# bounds. These are raw HTTP response bytes/application opens, not heap or wire
+# memory accounting; historical publication/recovery transports retain defaults.
+INSTALL_METADATA_RESPONSE_LIMIT = 2 * 1024 * 1024
+INSTALL_METADATA_REQUEST_CEILING = 256
+
+
+class MetadataRequestBudget:
+    """One install process shares this finite counter across reader and writer."""
+    def __init__(self):
+        self.attempted = {"GET": 0, "POST": 0, "PATCH": 0}
+        self.stream_close_failures = 0
+
+    def reserve(self, method):
+        if method not in self.attempted or sum(self.attempted.values()) >= INSTALL_METADATA_REQUEST_CEILING:
+            raise Refused("install metadata request ceiling exhausted; preserve original operation")
+        self.attempted[method] += 1
+
+    def report(self):
+        return {"scope": "this process metadata opens; redirects/retries forbidden",
+                "ceiling": INSTALL_METADATA_REQUEST_CEILING, "attempted": dict(self.attempted),
+                "responseByteLimit": INSTALL_METADATA_RESPONSE_LIMIT, "errorByteLimit": 2049,
+                "streamCloseFailures": self.stream_close_failures}
+
+
+def _close_metadata_stream(response, budget, *, preserving_failure):
+    try:
+        response.close()
+    except Exception:
+        budget.stream_close_failures += 1
+        if not preserving_failure:
+            raise Refused("install metadata stream cleanup failed; response or effect unconfirmed") from None
+
+
+class _DenyMetadataRedirect(urllib.request.HTTPRedirectHandler):
+    def __init__(self, budget):
+        self.budget = budget
+
+    def redirect_request(self, req, fp, code, msg, headers, target):
+        if fp is not None:
+            # Refuse before urllib's ordinary unbounded redirect body drain.
+            _close_metadata_stream(fp, self.budget, preserving_failure=True)
+        raise Refused("install metadata redirect refused; original request not retried")
+
+
+def _bounded_metadata_response(response):
+    limit = INSTALL_METADATA_RESPONSE_LIMIT
+    length = response.headers.get("Content-Length")
+    if length is not None and (not length.isascii() or not length.isdecimal() or int(length) > limit):
+        raise Refused("install metadata content length exceeds acquisition bound")
+    expected = int(length) if length is not None else None
+    raw = bytearray()
+    while len(raw) <= limit:
+        requested = min(65536, limit + 1 - len(raw))
+        chunk = response.read(requested)
+        if not isinstance(chunk, bytes) or len(chunk) > requested:
+            raise Refused("install metadata stream response is malformed")
+        raw.extend(chunk)
+        if len(raw) > limit:
+            raise Refused("install metadata response exceeds acquisition bound")
+        if not chunk:
+            break
+    if expected is not None and len(raw) != expected:
+        raise Refused("install metadata response is partial or has conflicting length")
+    return bytes(raw)
+
+
 class GitHubAPI:
-    def __init__(self, token: str):
+    def __init__(self, token: str, *, metadata_budget=None):
         if not token:
             raise Refused("GitHub token is missing")
+        if metadata_budget is not None and not isinstance(metadata_budget, MetadataRequestBudget):
+            raise Refused("install metadata counter binding differs")
+        self.metadata_budget = metadata_budget
         self.token = token
         self.last_request_diagnostic = None
 
@@ -908,12 +979,30 @@ class GitHubAPI:
             },
         )
         try:
+            if self.metadata_budget is not None:
+                parsed = urllib.parse.urlsplit(url)
+                if parsed.scheme != "https" or parsed.netloc != "api.github.com" or parsed.fragment:
+                    raise Refused("install metadata requires the fixed GitHub API origin")
+                self.metadata_budget.reserve(method)  # Before the sole possible open.
+                opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _DenyMetadataRedirect(self.metadata_budget))
+                response = opener.open(request, timeout=60)
+                try:
+                    self.last_request_diagnostic = best_effort_request_diagnostic(url, method, getattr(response, "status", None),
+                                                                      getattr(response, "headers", None))
+                    return _bounded_metadata_response(response)
+                finally:
+                    _close_metadata_stream(response, self.metadata_budget, preserving_failure=sys.exc_info()[0] is not None)
             with urllib.request.urlopen(request, timeout=60) as response:
                 self.last_request_diagnostic = best_effort_request_diagnostic(url, method, getattr(response, "status", None),
                                                                   getattr(response, "headers", None))
                 return response.read()
         except urllib.error.HTTPError as error:
-            row = best_effort_request_diagnostic(url, method, error.code, error.headers, error)
+            try:
+                row = best_effort_request_diagnostic(url, method, error.code, error.headers, error)
+            finally:
+                if self.metadata_budget is not None:
+                    # Original HTTP status/cause survives a separate close failure.
+                    _close_metadata_stream(error, self.metadata_budget, preserving_failure=True)
             self.last_request_diagnostic = row
             if error.code == 404:
                 failure = NotFound(url)
@@ -926,6 +1015,10 @@ class GitHubAPI:
             failure = Refused(f"GitHub {method} {url} returned HTTP {error.code}{detail}")
             failure.diagnostic = row
             raise failure from error
+        except (http.client.HTTPException, OSError):
+            if self.metadata_budget is None:
+                raise
+            raise Refused("install metadata acquisition failed; response or effect unconfirmed") from None
 
     def get(self, path: str) -> dict:
         return json.loads(self._request(f"https://api.github.com/{path}"))

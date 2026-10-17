@@ -2105,7 +2105,7 @@ class SuspensionControls(SuspensionFixture):
                 return types.SimpleNamespace(stdout='b'*40+'\n' if command[1]=='rev-parse' else '',returncode=0)
             environment={'GH_TOKEN':'inert-owner','ORDINARY_LEDGER_TOKEN':'inert-writer'}
             with patch.object(sys,'argv',argv),patch.dict(os.environ,environment,clear=True), \
-                 patch.object(publisher,'GitHubAPI',side_effect=lambda token:native if token=='inert-owner' else self.authority), \
+                 patch.object(publisher,'GitHubAPI',side_effect=lambda token,**kwargs:native if token=='inert-owner' else self.authority), \
                  patch.object(publisher.subprocess,'run',side_effect=local):
                 self.assertEqual(publisher.main(),0)
             self.assertEqual(self.reader().read(),self.record)
@@ -2121,7 +2121,7 @@ class SuspensionControls(SuspensionFixture):
                 path.write_bytes(body)
                 with self.subTest(mutation=mutation),patch.object(sys,'argv',argv), \
                      patch.dict(os.environ,environment,clear=True), \
-                     patch.object(publisher,'GitHubAPI',side_effect=lambda token:native if token=='inert-owner' else api), \
+                     patch.object(publisher,'GitHubAPI',side_effect=lambda token,**kwargs:native if token=='inert-owner' else api), \
                      patch.object(publisher.subprocess,'run',side_effect=lambda command,**k:types.SimpleNamespace(stdout=(('e' if mutation=='local' else 'b')*40+'\n') if command[1]=='rev-parse' else '',returncode=0)):
                     self.assertEqual(publisher.main(),1)
                 self.assertEqual([row for row in api.calls if row[0] in {'post','patch'}],[])
@@ -2605,7 +2605,7 @@ class HostedSuspensionInstallControls(SuspensionFixture):
 
     def invoke(self,flag,digest=None):
         argv=['publisher',flag]+(['--prepared-sha256',digest] if digest is not None else [])
-        def api(token):
+        def api(token,**kwargs):
             self.tokens.append(token)
             return self.native if token=='inert-reader' else self.authority
         def local(command,**kwargs):
@@ -2765,6 +2765,136 @@ class HostedSuspensionInstallControls(SuspensionFixture):
         self.assertIn('repositories: FS.GG.Coordination.Authority',install)
         self.assertIn('permission-contents: write',install)
         self.assertIn('cancel-in-progress: false',publish)
+
+
+class HostedInstallMetadataHTTPControls(HostedSuspensionInstallControls):
+    """Same maintained CLI/control cases through actual metadata acquisition code.
+
+    Only opener.open's external I/O is replaced; journal/protection/native admission,
+    JSON decoding, stream caps, shared request charging and both CLI stages are real.
+    """
+    def setUp(self):
+        super().setUp()
+        self.http_calls=[];self.http_reads=[];self.http_streams=[];self.budgets=[];self.http_failure=None;self.exhaust_after_post=False
+
+    def invoke(self,flag,digest=None):
+        import release_successor_provider as module
+        real_api=module.GitHubAPI;parent=self
+        argv=['publisher',*flag] if isinstance(flag,list) else ['publisher',flag]+(['--prepared-sha256',digest] if digest is not None else [])
+        def api(token,**kwargs):
+            self.tokens.append(token);self.budgets.append(kwargs['metadata_budget'])
+            return real_api(token,**kwargs)
+        def local(command,**kwargs):
+            self.assertIn(command,(['git','rev-parse','HEAD'],['git','diff','--quiet','HEAD'],
+                                  ['git','status','--porcelain=v1','--untracked-files=all','--','scripts']))
+            return types.SimpleNamespace(stdout='b'*40+'\n' if command[1]=='rev-parse' else self.status if command[1]=='status' else '',returncode=0)
+        class Response(io.BytesIO):
+            status=200
+            def read(self,size=-1):
+                parent.assertGreater(size,0);parent.assertLessEqual(size,65536);parent.http_reads.append(size)
+                return super().read(size)
+            def close(self):
+                self.close_attempts+=1
+                super().close()
+                if self.close_mode=='cleanup':raise OSError('inert close failed')
+        def response(raw,headers,mode=None):
+            row=Response(raw);row.headers=headers;row.close_mode=mode;row.close_attempts=0
+            parent.http_streams.append(row);return row
+        def build(*handlers):
+            parent.assertTrue(any(isinstance(handler,module._DenyMetadataRedirect) for handler in handlers))
+            class Opener:
+                def open(self,request,**kwargs):
+                    parent.assertEqual(kwargs,{'timeout':60})
+                    method=request.get_method();path=request.full_url.removeprefix('https://api.github.com/')
+                    token=request.get_header('Authorization');parent.http_calls.append((method,path,token))
+                    target=parent.native if token=='Bearer inert-reader' else parent.authority
+                    if path=='user':value={'login':'EHotwagner','type':'User'}
+                    else:
+                        try:value=getattr(target,method.lower())(path,*([json.loads(request.data)] if request.data is not None else []))
+                        except NotFound:
+                            raise urllib.error.HTTPError(request.full_url,404,'inert',{},response(b'{"message":"Not Found"}',{}))
+                    raw=canonical(value);headers={'Content-Length':str(len(raw))}
+                    mode=parent.http_failure(method,path) if parent.http_failure else None
+                    if mode in {'oversize','oversize-cleanup'}:raw=b'x'*(module.INSTALL_METADATA_RESPONSE_LIMIT+1);headers={}
+                    elif mode=='partial':headers={'Content-Length':str(len(raw)+1)}
+                    elif mode=='malformed':raw=b'{broken';headers={'Content-Length':str(len(raw))}
+                    elif mode in {'error','error-cleanup'}:
+                        raise urllib.error.HTTPError(request.full_url,503,'inert',{},response(b'x'*4096,{},'cleanup' if mode=='error-cleanup' else None))
+                    if parent.exhaust_after_post and method=='POST':
+                        budget=parent.budgets[-1];budget.attempted['GET']=256-budget.attempted['POST']-budget.attempted['PATCH']
+                    return response(raw,headers,'cleanup' if mode in {'cleanup','oversize-cleanup'} else None)
+            return Opener()
+        environment={**self.environment,'FSGG_RELEASE_INPUTS':json.dumps(self.inputs)}
+        with patch.object(sys,'argv',argv),patch.dict(os.environ,environment,clear=True), \
+             patch.object(publisher,'GitHubAPI',side_effect=api),patch.object(publisher.subprocess,'run',side_effect=local), \
+             patch.object(module.urllib.request,'build_opener',side_effect=build),patch.object(sys,'stderr',io.StringIO()) as errors:
+            code=publisher.main();self.last_error=errors.getvalue()
+            self.assertTrue(all(stream.closed and stream.close_attempts>=1 for stream in self.http_streams))
+            return code
+
+    def test_actual_standalone_user_route_uses_same_bounded_reader_writer_and_preserves_original(self):
+        record=self.root/'standalone-record.json';record.write_bytes(self.raw)
+        argv=['--install-release-suspension','--suspension-file',str(record),
+              '--expected-authority-main',self.authority.head,'--publisher-source-sha','b'*40]
+        self.assertEqual(self.invoke(argv),0,self.last_error)
+        self.assertIs(self.budgets[0],self.budgets[1])
+        self.assertEqual(sum(self.budgets[0].attempted.values()),len(self.http_calls))
+        self.assertEqual(self.budgets[0].attempted['POST'],3);self.assertEqual(self.budgets[0].attempted['PATCH'],1)
+        self.assertEqual(self.reader().file(self.authority.head,'state/releases/utel-rel-21/release-state.json'),self.raw_state)
+        print(json.dumps({'standaloneInstallMetadataHTTP':self.budgets[0].report(),'actualTotalOpens':len(self.http_calls)},sort_keys=True))
+
+    def test_actual_stage_counts_are_shared_and_composed_without_cross_process_counter_claim(self):
+        digest=self.prepare();prepare_calls=len(self.http_calls)
+        self.assertEqual(self.invoke('--install-hosted-release-suspension',digest),0,self.last_error)
+        result=json.loads(self.result_path.read_bytes())
+        prep=result['preparationMetadataAcquisition'];apply=result['metadataAcquisition']
+        self.assertIsNot(self.budgets[0],self.budgets[1]);self.assertIs(self.budgets[1],self.budgets[2])
+        self.assertEqual(sum(prep['attempted'].values()),prepare_calls)
+        self.assertEqual(sum(apply['attempted'].values()),len(self.http_calls)-prepare_calls)
+        self.assertEqual(apply['attempted']['POST'],3);self.assertEqual(apply['attempted']['PATCH'],1)
+        self.assertLessEqual(sum(prep['attempted'].values()),256);self.assertLessEqual(sum(apply['attempted'].values()),256)
+        print(json.dumps({'installMetadataHTTP':{'prepare':prep,'apply':apply,'actualTotalOpens':len(self.http_calls),
+            'conservativeTwoStageCeiling':512,'counterInstances':2,'nativeQualification':False}},sort_keys=True))
+
+    def test_actual_preissuer_transport_oversize_partial_error_refuses_without_writer(self):
+        for mode in ('oversize','partial','error'):
+            with self.subTest(mode=mode):
+                self.http_failure=lambda method,path:mode
+                self.assertEqual(self.invoke('--prepare-hosted-release-suspension'),1)
+                self.assertEqual(self.writes(),[]);self.assertNotIn('inert-writer',self.tokens)
+                self.assertFalse(self.prepared_path.exists())
+                self.result_path.unlink(missing_ok=True)
+
+    def test_actual_post_and_patch_bad_acquisition_preserve_unknown_and_stop_all_later_writes(self):
+        # Each selected operation is isolated; never retry an uncertain mutation.
+        for method in ('POST','PATCH'):
+            for mode in ('oversize','partial','malformed','error','cleanup','error-cleanup','oversize-cleanup'):
+                with self.subTest(method=method,mode=mode):
+                    case=type(self)('test_actual_stage_counts_are_shared_and_composed_without_cross_process_counter_claim')
+                    case.setUp()
+                    try:
+                        digest=case.prepare();case.http_failure=lambda actual,path:mode if actual==method else None
+                        self.assertEqual(case.invoke('--install-hosted-release-suspension',digest),1,case.last_error)
+                        rows=json.loads(case.result_path.read_bytes());attempts=rows['attemptedRequests']
+                        self.assertEqual(len(attempts),1 if method=='POST' else 4)
+                        self.assertEqual(attempts[-1]['outcome'],'unknown');self.assertFalse(rows['publicationComplete'])
+                        self.assertEqual(rows['metadataAcquisition']['streamCloseFailures'],1 if 'cleanup' in mode else 0)
+                        cause=rows['failure']['chain'][0]['message']
+                        if mode=='error-cleanup':self.assertIn('returned HTTP 503',cause)
+                        if mode=='oversize-cleanup':self.assertIn('exceeds acquisition bound',cause)
+                        before=list(case.http_calls);retained=case.result_path.read_bytes()
+                        self.assertEqual(case.invoke('--install-hosted-release-suspension',digest),1)
+                        self.assertEqual(case.result_path.read_bytes(),retained)
+                        self.assertFalse(any(row[0] in {'POST','PATCH'} for row in case.http_calls[len(before):]))
+                    finally:case.doCleanups()
+
+    def test_actual_request_exhaustion_after_first_post_forbids_next_guard_and_write(self):
+        digest=self.prepare();self.exhaust_after_post=True
+        self.assertEqual(self.invoke('--install-hosted-release-suspension',digest),1,self.last_error)
+        rows=json.loads(self.result_path.read_bytes())
+        self.assertEqual(len(rows['attemptedRequests']),1);self.assertEqual(rows['attemptedRequests'][0]['outcome'],'response-received')
+        self.assertEqual(sum(rows['metadataAcquisition']['attempted'].values()),256)
+        self.assertEqual(len(self.writes()),1)
 
 
 if __name__ == "__main__":
