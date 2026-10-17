@@ -1620,3 +1620,15 @@ and distinct; no new global request bound or provider ceiling is inferred. Quali
 case and refusal/Unknown/claim-loss paths under750. Any deficit stops qualification for disposition,
 not silent enlargement. These are executable source-profile limits, not selection of an actual
 native invocation, native timing acceptance or publication completion.
+
+The selected window was based on the initial cold actual-caller census of624 Authority entries,
+499 publisher entries and138 separate feed acquisitions. The repaired caller removes duplicated
+unvalidated visibility reads:624 Authority entries remain, with494 publisher entries and138 feed
+acquisitions. Full32-probe success leaves Authority consumption unchanged; the33rd-required-probe
+case refuses. These are inert external-port measurements of the actual caller, not native network
+latency, a global request ceiling or an operational grant. Independent fixture post-assertions of
+sibling preservation occur outside the measured production caller; the source preserves those
+entries through its existing base-tree overlays. Original1500 consumption and500-target exhaustion
+remain retained. The ordinary full-sixteen-effect fixture now observes1471 Authority entries under
+its unchanged1500 ceiling after adding the claimed-marker sender fence; historical1439 evidence is
+not repinned or represented as a new native fit result.
