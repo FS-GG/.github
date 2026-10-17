@@ -1,0 +1,99 @@
+namespace FS.GG.Coord.GitHub
+
+/// Bounded organization Project 3 migration preparation. This is separate from the
+/// normal v4 binding: unresolved native option/view IDs never grant consumer authority.
+module V2Migration =
+    open System
+    open Errors
+    open Transport
+
+    type SelectedIssue =
+        { Id: string; Repository: string; Number: int; Slice: string }
+
+    type DesiredView =
+        { Id: string option; Name: string; Layout: string; Filter: string
+          VisibleFieldIds: string list }
+
+    type Scope =
+        { SourceRevision: string; ArtifactSha256: string; CliArtifactSha256: string; PrincipalId: string
+          PrincipalLogin: string; SelectedIssues: SelectedIssue list
+          StatusFieldId: string; RoadmapFieldId: string; TrackFieldId: string
+          ObservationFieldId: string; InReviewColor: string; InReviewDescription: string
+          Views: DesiredView list }
+
+    type SelectOption =
+        { Id: string; Name: string; Color: string; Description: string }
+
+    type Field =
+        { Id: string; Name: string; DataType: string; Options: SelectOption list }
+
+    /// Full selected scalar planning payloads; untouched system values retain native kind/field identity.
+    /// Nested labels/users/repositories are not reconstructed or written by this scoped migration.
+    type ItemValue =
+        { Id: string; FieldId: string; Kind: string; Value: string }
+
+    type Item =
+        { Id: string; ContentId: string; ContentKind: string; Repository: string option
+          Number: int option; UpdatedAt: string; Archived: bool; Values: ItemValue list }
+
+    type NativeIssue =
+        { Id: string; Repository: string; Number: int; UpdatedAt: string; State: string }
+
+    type View =
+        { Id: string; Name: string; Layout: string; Filter: string
+          VisibleFieldIds: string list; UnsupportedConfiguration: string }
+
+    type Snapshot =
+        { ObservedAt: DateTimeOffset; PrincipalId: string; PrincipalLogin: string
+          OrganizationId: string; ProjectId: string; ProjectTitle: string
+          ProjectNumber: int; Private: bool; CanUpdate: bool; UpdatedAt: string
+          Fields: Field list; Items: Item list; Views: View list; Issues: NativeIssue list }
+
+    type Change =
+        | AddInReview of fieldId: string * retained: SelectOption list * color: string * description: string
+        | AddMembership of issueId: string
+        | CreateView of DesiredView
+        | UpdateView of viewId: string * DesiredView
+
+    type Prepared =
+        { Scope: Scope; Snapshot: Snapshot; Changes: Change list; OwnerActions: string list
+          Digest: string }
+
+    /// Validate planning input; it is scope data, never operation admission.
+    val validateScope: scope: Scope -> IoResult<unit>
+
+    /// Read complete native schema, membership, selected planning values, view configuration and issues.
+    /// Complete nested first pages are invocation-local observations; only genuine continuations reread.
+    /// A later effect always invalidates the prior determining snapshot and triggers fresh native reads.
+    /// All reads share one 500-request/270-second invocation budget supplied by the caller.
+    val collect: transport: IGitHubTransport -> scope: Scope -> IoResult<Snapshot>
+
+    /// Derive the exact allowlisted delta without IO. Existing human planning values are retained.
+    val prepare: scope: Scope -> snapshot: Snapshot -> IoResult<Prepared>
+
+    /// Reconstruct a request only if the change occurs in the freshly derived prepared delta.
+    /// This is an operation-specific boundary, not a generic GraphQL input route.
+    val request: prepared: Prepared -> change: Change -> IoResult<Transport.Request>
+
+    /// Closed bounded planning input. Unknown approval/authority properties are refused.
+    val parseScope: json: string -> IoResult<Scope>
+
+    /// Preparation report retains exact stable native tokens and unresolved semantic changes.
+    val encodePrepared: prepared: Prepared -> string
+
+    /// Decode only scope and selected prepared identity; apply must freshly reproduce all native facts.
+    val decodePrepared: json: string -> IoResult<Scope * string * DateTimeOffset>
+
+    /// Resolve a newly created view only from one independently observed exact identity. The
+    /// original semantic filter remains selected; a dependent exact-ID update stays in the same invocation.
+    val resolveReadback: scope: Scope -> before: Snapshot -> after: Snapshot -> change: Change -> IoResult<Scope>
+
+    /// Check one independent readback. Only the selected effect may differ; retained human values,
+    /// option identities, unrelated cards/fields/views and determining native issue facts must agree.
+    val validateTransition: scope: Scope -> before: Snapshot -> after: Snapshot -> change: Change -> IoResult<unit>
+
+    /// Stable determining native identity excluding collection time.
+    val snapshotDigest: snapshot: Snapshot -> string
+
+    /// Recovery evidence only; never accepted as prepared apply input or renewed approval.
+    val encodeReadback: scope: Scope -> snapshot: Snapshot -> string

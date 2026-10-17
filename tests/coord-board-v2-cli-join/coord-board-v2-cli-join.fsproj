@@ -8,7 +8,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../coord-board-v2-projection/ProgrammeFixture.fs" />
+    <Compile Include="../coord-board-v2-projection/MigrationFixture.fs" Link="MigrationFixture.fs" />
     <Compile Include="BoardV2ApplicationTests.fs" />
+    <Compile Include="BoardV2MigrationTests.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" />

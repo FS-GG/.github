@@ -47,5 +47,32 @@ module BoardV2Application =
         transport: Transport.IGitHubTransport -> reader: System.IO.TextReader -> arguments: string list -> int
     /// Fixed refresh or read-only inspect command against an injected transport, for offline fixtures.
     val runWithTransport: transport: Transport.IGitHubTransport -> arguments: string list -> int
+    /// Actual packaged migration composition against an inert/provider connection.
+    /// Commands (without the board-v2 prefix):
+    /// migration-prepare --scope-file PATH --report-file NEW_PATH;
+    /// migration-apply --prepared-file PATH --prepared-sha256 SHA256 --accountable-owner TEXT
+    /// --selection-reference TEXT --planning-window-until RFC3339;
+    /// migration-readback --prepared-file ORIGINAL_PATH.
+    /// Planning input is a closed 256 KiB object; prepared input is bounded to 4 MiB.
+    /// Executing CLI/adapter bytes and their source metadata must match the selected identities.
+    /// Native preparation uses complete pages and two stable determining snapshots. It supplies no
+    /// final enrollment/binding IDs until actual native readback; migration reports are not v4 bindings.
+    /// Inputs and exclusive outputs require a private Unix parent and refuse symlink/reparse paths.
+    /// Apply binds the separately selected exact prepared-file byte digest and a finite planning window.
+    /// It reserves ORIGINAL_PATH.invocation-reserved and writes ORIGINAL_PATH.invocation evidence;
+    /// reservations and original intent/response files are never overwritten, removed or replayed.
+    /// Each effect receives fresh full determining facts, flushed exact request bytes/digest, and an
+    /// independent complete readback. A created view's returned ID must match its unique native readback
+    /// before an original semantic filter becomes a dependent exact-ID update in that same invocation.
+    /// All reads/effects share the connection's 500-request/270-second ceiling. Lost/partial/error
+    /// responses and post-send custody failure stop further writes; reopening an invocation reads only.
+    /// No Status/Track/Roadmap item values, issue/PR data, enrollment or unsupported view grouping/sort
+    /// configuration is written. No atomic CAS or distributed exactly-once guarantee is asserted.
+    /// Public diagnostics are fixed bounded labels; original private native outcomes stay in custody. The explicit
+    /// operator invocation binds prepared bytes, executing source/assemblies, principal/scope and
+    /// fresh native preconditions. Private exclusive evidence precedes every send; retained invocations
+    /// permit readback only. Owner/reference text is accountability, not authentication or a JSON grant.
+    val runMigrationWithConnection:
+        connection: V2MigrationTransport.IConnection -> arguments: string list -> int
     /// Recognize board-v2 after validation; refresh composes the qualified writer, inspect only canonical reads.
     val tryRun: arguments: string list -> int option
