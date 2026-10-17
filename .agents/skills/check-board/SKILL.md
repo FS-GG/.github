@@ -10,15 +10,19 @@ authority. Select the organization V2 or explicitly historical/product scope bef
 
 ## Selected organization V2 scope
 
-Read [organization-v2-inspection](references/organization-v2-inspection.md). Its root adoption gate is
-pending until actual four-target qualification and selected consumer readback. Source/manifest changes
-do not activate it. A missing or failed V2 read reports Unknown and preserves current source work.
+Read [organization-v2-inspection](references/organization-v2-inspection.md). This .9/.11 source edition
+prepares binding-v4/inspection2 and its one-invocation integrator stdin/native composition. Exact
+installed qualification, admitted schema/membership/views and real-use consumer cutover remain held;
+finite three-active/four-target/no-dispatch history is not successor permission. No draft field IDs,
+old report or source merge activates this route. Keep manual v3 current-status upkeep until acceptance.
 
-After root selects adoption, use only the bound read-only inspection for this organization scope.
-Report exact selected population and read coverage, source/native/dependency/plan gaps, human planning
-values beside Observation, and unresolved acceptance or owner disagreements. Do not reconcile, apply,
-flush, auto-repair or claim these V2 items. Before any resulting dispatch, the current integrator still
-checks intake authorization, actual PRs, touch sets, available capacity and owning-plan prerequisites.
+After accepted coordinated cutover, report complete selected/historical/deferred/unexpected/unresolved
+membership, scoped read gaps, current native issue/owner/plan/PR/head evidence and per-slice ordered
+selected/deferred decisions. Keep human Status/Track/Roadmap beside Observation; never infer Ready or
+Done from healthy reads or merge alone. Do not reconcile/apply/flush, auto-repair or claim V2 items.
+Inspection grants no dispatch. The existing integrator verifies genuine action/prerequisite/intake/
+capacity/reservation suppliers and refreshes determining facts beside actual owner execution. Missing
+or failed V2 reads preserve Unknown and independent authorized issue/plan/PR work, with no V1 fallback.
 
 ## Separately selected historical or product scope
 

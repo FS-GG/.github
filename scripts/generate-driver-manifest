@@ -264,8 +264,8 @@ DRIVERS = [
 # catalog validation below reads the shipped skill bodies and fails if a route, explicit effort, or
 # fail-closed dispatch rule drifts.
 ROUTED_VARIANTS = {
-    "drive-board-normal": ("gpt-5.6-terra", "medium", "sonnet", "high", "operator", "false"),
-    "drive-board-best": ("gpt-5.6-sol", "medium", "opus", "high", "operator", "false"),
+    "drive-board-normal": ("gpt-6.1-sol", "medium", "sonnet", "high", "operator", "false"),
+    "drive-board-best": ("gpt-6-astra", "high", "opus", "high", "operator", "false"),
     "work-board-normal": ("gpt-5.6-terra", "medium", "sonnet", "high", "driver", "always"),
     "work-board-best": ("gpt-5.6-sol", "medium", "opus", "high", "driver", "always"),
 }

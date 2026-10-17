@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -125,6 +126,85 @@ class Preparation(unittest.TestCase):
             self.assertNotIn("registry-projections: prepared", written)
             self.assertEqual(old, manifest.read_bytes())
             target.write_text(original)
+
+    def retired_targets(self):
+        source = (self.root / "scripts/generate-projections").read_text()
+        block = re.search(r"^RETIRED_ORG_TARGETS=\(\n(.*?)^\)", source, re.M | re.S)
+        self.assertIsNotNone(block)
+        targets = re.findall(r'^  "([^"\n]+)"$', block[1], re.M)
+        self.assertEqual(len(targets), 12)
+        self.assertEqual(len(set(targets)), 12)
+        expected = {
+            "wave-policy": "drive-board/references/host-loop.md",
+            "filing-rules": "cross-repo-coordination/references/mailbox-and-board.md",
+            "board-statuses": "cross-repo-coordination/references/mailbox-and-board.md",
+            "reconcile-rules": "check-board/references/mechanical-reconciliation.md",
+            "blocker-states": "check-board/references/mechanical-reconciliation.md",
+            "snapshot-shape": "check-board/references/mechanical-reconciliation.md",
+        }
+        self.assertEqual(set(targets), {f"{kind}:{root}/{relative}" for kind, relative in expected.items()
+                                       for root in (".agents/skills", ".claude/skills")})
+        active = subprocess.check_output(["bash", str(self.root / "scripts/generate-projections"), "--list"], text=True)
+        entries = [row.split("\t") for row in active.splitlines()]
+        self.assertEqual(len(entries), 27)
+        self.assertFalse(set(targets) & {kind + ":" + path for kind, path, _ in entries})
+        self.assertIn("wave-policy:.agents/skills/work-board/references/host-loop.md",
+                      {kind + ":" + path for kind, path, _ in entries})
+        workflow = (ROOT / ".github/workflows/projections.yml").read_text()
+        self.assertEqual(int(re.search(r"^          expected=(\d+)$", workflow, re.M)[1]), len(entries))
+        return targets
+
+    @staticmethod
+    def old_region(kind):
+        return (f"<!-- BEGIN GENERATED: fsgg-protocol:{kind} -->\n"
+                "Historical organization fixture, not engine facts.\n"
+                f"<!-- END GENERATED: fsgg-protocol:{kind} -->\n")
+
+    def test_retired_org_regions_prepare_before_digests_and_preserve_product(self):
+        before = {}
+        product = {str(path): path.read_bytes() for root in (".agents", ".claude")
+                   for path in (self.root / root / "skills/work-board").rglob("*") if path.is_file()}
+        for target in self.retired_targets():
+            kind, relative = target.split(":", 1)
+            path = self.root / relative
+            before.setdefault(relative, path.read_text())
+            path.write_text(path.read_text() + self.old_region(kind))
+        current = snapshot(self.root)
+        output = self.run_mode(expected=1)
+        self.assertIn("retired organization", output)
+        self.assertIn("dependent status BLOCKED", output)
+        self.assertEqual(current, snapshot(self.root))
+        self.run_mode("--write")
+        for relative, original in before.items():
+            self.assertEqual((self.root / relative).read_text(), original)
+        self.assertEqual(product, {str(path): path.read_bytes() for root in (".agents", ".claude")
+                                  for path in (self.root / root / "skills/work-board").rglob("*") if path.is_file()})
+        self.run_mode()
+        current = snapshot(self.root)
+        self.run_mode("--write")
+        self.assertEqual(current, snapshot(self.root))
+
+    def test_retired_marker_corruption_blocks_manifest_writes(self):
+        kind, relative = self.retired_targets()[0].split(":", 1)
+        path = self.root / relative
+        original = path.read_text()
+        begin = f"<!-- BEGIN GENERATED: fsgg-protocol:{kind} -->"
+        end = f"<!-- END GENERATED: fsgg-protocol:{kind} -->"
+        region = self.old_region(kind)
+        mutations = (None, region.replace(end, "missing END"), region + region,
+                     end + "\n" + begin + "\n", region.replace(begin, " " + begin))
+        for malformed in mutations:
+            with self.subTest(malformed=malformed):
+                if malformed is None: path.unlink()
+                else: path.write_text(original + malformed)
+                manifests = [self.root / "registry" / name for name in
+                             ("driver-skill-manifest.json", "coordination-kit-skill-manifest.json")]
+                before = [manifest.read_bytes() for manifest in manifests]
+                output = self.run_mode("--write", expected=1)
+                self.assertIn("registry-projections: FAILED", output)
+                self.assertIn("dependent status BLOCKED", output)
+                self.assertEqual(before, [manifest.read_bytes() for manifest in manifests])
+                path.write_text(original)
 
     def test_missing_prerequisite_and_full_mode_guard(self):
         environment = dict(os.environ, FSGG_COORD_ENGINE_BIN=str(self.root / "absent-engine"))

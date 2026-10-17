@@ -1,6 +1,17 @@
 
 # drive-board (FS-GG)
 
+## Historical reference boundary
+
+The legacy scheduler, claims, wave/critic chains, rank, done-stamps and driver-event ledger below are
+retained incident/protocol history, not current organization instructions. No current organization
+route may select them, including when V2 is unavailable. Use the prepared
+[organization contract](../../check-board/references/organization-v2-inspection.md) and canonical
+[driver](../SKILL.md); source preparation does not activate the successor. Preserve product bindings
+and the product work-board guidance independently. Native original operations and holds remain in
+their actual custody; this archive neither releases nor retries them.
+
+
 One command's worth of intent: **"take the whole Coordination board and burn it down — across every
 repo, as parallel as it is safe to be — and don't make me drive."** This skill is the **cross-repo
 sibling of [work-roadmap](../../work-roadmap/SKILL.md)**: same parent-loop-of-disposable-subagents shape,

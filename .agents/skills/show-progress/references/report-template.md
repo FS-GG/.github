@@ -23,7 +23,8 @@ status: "[evidence snapshot / partial evidence snapshot]"
 
 Give a short verdict against the recorded plan or forecast, with evidence coverage and
 confidence. Compare accepted outcomes and useful intermediate milestones with expectations;
-name the most consequential rework pattern, external wait or unknown. State material effort
+name the most consequential recurring failure, rework pattern, reopened decision, external
+wait or unknown, when it first appeared and its practical effect. State material effort
 and calendar revisions separately, the affected IDs, owner and next corrective step. A mixed
 picture may need several labels. Missing baseline or telemetry means insufficient evidence.
 PR counts and lack of whole-outcome closure alone do not establish progress or churn.
@@ -31,6 +32,11 @@ PR counts and lack of whole-outcome closure alone do not establish progress or c
 Previous report: [relative link and embedded UTC cutoff, or first snapshot].
 Comparison: [since previous report; separate trailing 24-hour baseline when different;
 unavailable comparisons and why]. Scope: [selected population; additions/removals and exclusions].
+
+Consumer boundary: [prepared-only or actual accepted cutover evidence; exact binding/enrollment and
+inspection2 identity if consumed, native observation time/coverage and scoped gaps]. Planning Status,
+Observation health, per-slice advisory eligibility and accepted outcomes remain separate. Source
+preparation leaves manual v3 current-status upkeep intact. Use existing facts, not reporting workloads.
 
 ## Current state
 

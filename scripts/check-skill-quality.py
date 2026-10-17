@@ -335,6 +335,65 @@ def validate_invocations(root: Path, contract_path: Path, errors: list[str]) -> 
         fail(errors, f"documented-invocation audit examined only {found} commands; expected at least 50")
 
 
+def validate_organization_consumer(root: Path, errors: list[str]) -> None:
+    """Current organization guidance is prepared V4; legacy/product rules keep their own scope."""
+    for runtime in ROOTS:
+        base = root / runtime
+        contract = (base / "check-board/references/organization-v2-inspection.md").read_text(encoding="utf-8")
+        drive = (base / "drive-board/SKILL.md").read_text(encoding="utf-8")
+        host = (base / "drive-board/references/host-loop.md").read_text(encoding="utf-8")
+        triage = (base / "drive-board/references/backlog-triage.md").read_text(encoding="utf-8")
+        cross = (base / "cross-repo-coordination/SKILL.md").read_text(encoding="utf-8")
+        obligations = (
+            ("inspection", contract, (
+                "This is .9/.11 consumer source preparation",
+                "none grants organization-v4 inspection, dispatch or field-write permission",
+                "actual installed executable", "final authenticated binding", "never invent IDs",
+                "Only accepted cutover retires manual v3 current-status upkeep",
+                "`bindingVersion: 4`", "`schemaVersion: 2`", "`fsgg.coord.board-v2-inspection/2`",
+                "--integrator-stdin", "`fsgg.coord.board-v2-integrator-observations/1`",
+                "`integrator-reported`", "do not authenticate their author",
+                "accountable parent verifies the genuine suppliers",
+                "Counts mean remaining capacity after active work",
+                "Self exemption requires the exact slice/attempt/operation/PR/head",
+                "Recheck determining issue/body/owner/action",
+                "beside actual owner execution", "with no V1 fallback",
+            )),
+            ("driver", drive, (
+                "This edition prepares .9/.11 consumers only",
+                "the explicit ordered capacity-safe subset per slice",
+                "Continue an existing unambiguous owner and PR/head",
+                "no mandatory critic/confirmation chain", "Routine is default",
+                "recorded explicit human instruction", "not process selectors",
+                "valid exact-head reuse", "Pending and disputed validation remain visible",
+                "dependent acceptance or activation",
+                "A merged slice narrows remaining work and does not auto-set the outcome Done",
+            )),
+            ("host", host.partition("## Historical host mechanics")[0], (
+                "This .9/.11 source preparation grants no live consumer activation or dispatch",
+                "Recheck determining facts beside execution",
+                "actual remaining implementation/review/hosted-CI capacity and existing reservations",
+            )),
+            ("triage", triage.partition("## Historical triage mechanics")[0], (
+                "Source preparation does not activate it",
+                "A parent remains open when a delivered slice leaves acceptance",
+            )),
+        )
+        for name, text, required in obligations:
+            normalized = " ".join(text.split())
+            for clause in required:
+                if clause not in normalized:
+                    fail(errors, f"organization successor: {name} contract lost {clause!r}")
+        # Retired machine authority must not reappear, even inside the historical host text.
+        if "fsgg:wave-model:v1" in host or "<!-- BEGIN GENERATED: fsgg-protocol:wave-policy -->" in host:
+            fail(errors, "organization successor: retired generated wave authority returned")
+        current_text = "\n".join((drive, cross, host.partition("## Historical host mechanics")[0],
+                                  triage.partition("## Historical triage mechanics")[0], contract))
+        if (re.search(r"(?:scripts/)?fsgg-coord(?![\w-])\s+(?:intake|claim|take|batch|driver|reconcile|set-field|done|flush)(?:\s|$)", current_text)
+                or re.search(r"(?:scripts/)?fsgg-coord-report(?![\w-])(?:\s|$)", current_text)):
+            fail(errors, "organization successor: V1 operation prescribed in current consumer guidance")
+
+
 def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> None:
     try:
         contract = json.loads(contract_path.read_text(encoding="utf-8"))
@@ -394,28 +453,7 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
         if required not in publishing:
             fail(errors, f"publishing-and-deployment: missing current-truth statement: {required}")
 
-    drive_root = root / ROOTS[0] / "drive-board"
-    drive = (drive_root / "SKILL.md").read_text(encoding="utf-8")
-    host_loop = (drive_root / "references/host-loop.md").read_text(encoding="utf-8")
-    triage = (drive_root / "references/backlog-triage.md").read_text(encoding="utf-8")
-    if "backlog-triage" not in drive:
-        fail(errors, "drive-board: triggered body does not route through backlog triage")
-    planning_order = ("four-part `check-board` result", "backlog-triage", "batch")
-    positions = [host_loop.find(term) for term in planning_order]
-    if any(position < 0 for position in positions) or positions != sorted(positions):
-        fail(errors, "drive-board: host loop must order check-board result, backlog triage, then batch")
-    for required in (
-        "Promote to Ready",
-        "Retain in Backlog",
-        "Set Blocked",
-        "Await human judgement",
-        "follow-up filed by the preceding wave",
-        "An empty Ready batch is not completion",
-        "never use",
-        "`--include-backlog`",
-    ):
-        if required not in triage:
-            fail(errors, f"drive-board: backlog planning contract lost {required!r}")
+    validate_organization_consumer(root, errors)
 
     p_add = (root / ROOTS[0] / "p-add/SKILL.md").read_text(encoding="utf-8")
     p_add_order = ("check-board", "ready --status Backlog", "fsgg-coord add")
@@ -494,7 +532,7 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
         "fleet-wide stop for BOTH waves",
         "flush --dry-run` before resuming either",
     )
-    for driver_name, contract_text in (("drive-board", host_loop), ("work-board", work_host_loop)):
+    for driver_name, contract_text in (("work-board", work_host_loop),):
         for required in wave_model_required:
             if required not in contract_text:
                 fail(errors, f"{driver_name}: host-loop lost two-wave contract statement {required!r}")
@@ -509,18 +547,11 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
             return ""
         return text[start : finish + len(end)]
 
-    drive_wave_block = _wave_model_block(host_loop)
     work_wave_block = _wave_model_block(work_host_loop)
-    if not drive_wave_block or not work_wave_block:
-        fail(errors, "two-wave contract: could not locate the wave-model block in one or both host-loop copies")
-    elif drive_wave_block != work_wave_block:
-        fail(
-            errors,
-            "two-wave contract: drive-board and work-board host-loop copies state the wave model "
-            "differently — the #916 near-duplicate-drift failure this gate exists to catch",
-        )
+    if not work_wave_block:
+        fail(errors, "work-board: could not locate the generated wave-model block")
 
-    for driver_name, contract_text in (("drive-board", host_loop), ("work-board", work_host_loop)):
+    for driver_name, contract_text in (("work-board", work_host_loop),):
         machine = _wave_model_block(contract_text)
         outside = contract_text.replace(machine, "")
         if re.search(r"fsgg:wave-model:v1|waves=\d+|implementer-slots-per-wave=\d+|review-slots=\d+|consolidation-threshold=\d+", outside):
