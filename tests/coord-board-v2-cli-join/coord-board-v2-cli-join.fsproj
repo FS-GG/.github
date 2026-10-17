@@ -7,6 +7,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../coord-board-v2-projection/ProgrammeFixture.fs" />
     <Compile Include="BoardV2ApplicationTests.fs" />
   </ItemGroup>
   <ItemGroup>

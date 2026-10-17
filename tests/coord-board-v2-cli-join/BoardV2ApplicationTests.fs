@@ -219,3 +219,99 @@ let ``product inspect missing receiver provenance stays Unknown and never querie
             Assert.Equal(0, root.GetProperty("mutationAttempts").GetInt32())
         Assert.True(BoardV2Application.tryRun [] |> Option.isNone)
     finally Directory.Delete(directory, true)
+
+[<Fact>]
+let ``actual programme CLI caller joins native PR facts and retains attributed selection gaps`` () =
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-programme-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory directory |> ignore
+    try
+        let bindingPath = Path.Combine(directory, "binding.json")
+        let reportPath = Path.Combine(directory, "inspection.json")
+        File.WriteAllText(bindingPath, ProgrammeFixture.bindingJson ())
+        let transport = ProgrammeFixture.transport ProgrammeFixture.unchanged
+        Assert.Equal(0, BoardV2Application.runWithTransport transport [ "inspect"; "--binding-file"; bindingPath; "--report-file"; reportPath ])
+        Assert.Empty transport.Mutations
+        use document = JsonDocument.Parse(File.ReadAllText reportPath)
+        let root = document.RootElement
+        Assert.Equal("fsgg.coord.board-v2-inspection/2", root.GetProperty("schema").GetString())
+        Assert.Equal(2, root.GetProperty("memberships").GetArrayLength())
+        for name in [ "membershipGap"; "memberships"; "nativeIntegrator"; "selectionCoverage"; "selection" ] do
+            Assert.True(root.TryGetProperty(name) |> fst, name)
+        let item = (root.GetProperty("items")).[0]
+        Assert.True(item.TryGetProperty("sourceRevision") |> fst)
+        Assert.True(item.TryGetProperty("accountableOwner") |> fst)
+        let candidate = (root.GetProperty("candidates")).[0]
+        Assert.Equal(1, candidate.GetProperty("openPullRequests").GetArrayLength())
+        Assert.Equal(JsonValueKind.Object, candidate.GetProperty("touchSets").ValueKind)
+        let selected = (root.GetProperty("selection")).[0]
+        Assert.Equal("unknown", selected.GetProperty("decision").GetString())
+        Assert.Equal("https://github.com/FS-GG/.github/pull/42", selected.GetProperty("pullRequest").GetString())
+        Assert.Equal(ProgrammeFixture.head, selected.GetProperty("head").GetString())
+        Assert.False(selected.GetProperty("dispatchAuthority").GetBoolean())
+        Assert.Contains("Partial .8", root.GetProperty("selectionCoverage").GetString())
+        Assert.Equal(JsonValueKind.String, root.GetProperty("nativeIntegrator").GetProperty("observedAt").ValueKind)
+        let missingPath = Path.Combine(directory, "uncollected.json")
+        let missingReads =
+            ProgrammeFixture.transport (fun request response ->
+                if request.Subject = "complete V2 project memberships" then Error(Errors.Unauthorized "membership unavailable") else response)
+        Assert.Equal(3, BoardV2Application.runWithTransport missingReads [ "inspect"; "--binding-file"; bindingPath; "--report-file"; missingPath ])
+        use missingDocument = JsonDocument.Parse(File.ReadAllText missingPath)
+        Assert.Equal(JsonValueKind.Null, missingDocument.RootElement.GetProperty("nativeIntegrator").GetProperty("observedAt").ValueKind)
+        Assert.Empty missingReads.Mutations
+        let refreshPath = Path.Combine(directory, "refresh.json")
+        Assert.Equal(3, BoardV2Application.runWithTransport transport [ "refresh"; "--binding-file"; bindingPath; "--report-file"; refreshPath ])
+        Assert.Empty transport.Mutations
+    finally Directory.Delete(directory, true)
+
+
+[<Fact>]
+let ``actual product CLI retains closed schema one top level and item property sets`` () =
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-product-wire-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory directory |> ignore
+    try
+        let input = Path.Combine(directory, "binding.json")
+        let output = Path.Combine(directory, "inspection.json")
+        File.WriteAllText(input, productJson "WidgetA" "product_a" 81)
+        let rows =
+            [ 1; 2; 3 ]
+            |> List.map (fun number ->
+                {| issue = $"ExampleOrg/WidgetA#{number}"; nodeId = $"I_{number}"; observedUpdatedAt = "2026-10-17T12:00:00Z"
+                   observedState = "open"; decision = "import"; adjudication = "verified-remaining"; pilot = true
+                   roadmap = "docs/product.md"; dependencies = ([]: obj list) |})
+        let manifest =
+            JsonSerializer.Serialize(
+                {| schema = "fsgg.coordination-board-v2-import/v1"
+                   target = {| ownerKind = "organization"; owner = "ExampleOrg"; title = "product_a V2"; id = "PVT_product_a"; number = 81; creationState = "created-and-read-back" |}
+                   binding = {| organizationId = "O_products"; visibility = "complete"; authorization = "root-selected"
+                                recipeRevision = String.replicate 40 "e"; artifactSha256 = String.replicate 64 "f"; repositories = [ "ExampleOrg/WidgetA" ] |}
+                   items = rows |})
+        let mutable reads = 0
+        let transport =
+            { new IGitHubTransport with
+                member _.Send request =
+                    reads <- reads + 1
+                    if reads = 1 then
+                        let blob = {| oid = String.replicate 40 "b"; text = manifest |}
+                        Ok { Status = 200; ETag = None; NextLink = None; Headers = Map.empty
+                             Body = JsonSerializer.Serialize ({| data = {| repository = {| nameWithOwner = "ExampleOrg/WidgetA"; ref = {| target = {| oid = String.replicate 40 "c" |} |}; object = blob; current = blob |} |} |}) }
+                    else Error(Errors.Unauthorized request.Subject)
+                member _.SendMutation _ = failwith "product inspect cannot mutate"
+                member _.RetryMutation _ = failwith "product inspect cannot retry" }
+        Assert.Equal(3, BoardV2Application.runWithTransport transport [ "inspect"; "--binding-file"; input; "--report-file"; output ])
+        use document = JsonDocument.Parse(File.ReadAllText output)
+        let root = document.RootElement
+        let names (value: JsonElement) = value.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+        let expectedTop =
+            Set.ofList(
+                [ "schema"; "bindingVersion"; "organizationId"; "owner"; "projectNumber"; "projectId"; "projectTitle"; "schemaVersion"; "ownerKind"; "repositories";
+                  "status"; "roadmapFieldId"; "track"; "observation"; "selectedIssues"; "recipeRevision"; "artifactSha256"; "populationRevision"; "importRecipeRevision";
+                  "importArtifactSha256"; "protectedInputs"; "selected"; "attempted"; "verified"; "mutationAttempts"; "populationGap"; "cleanup"; "items"; "candidates" ])
+        let expectedItem =
+            Set.ofList(
+                [ "issue"; "expectedNodeId"; "native"; "dependencyObservations"; "dependencyReadComplete"; "planObservation"; "sourceCurrentness"; "planning"; "planningGap";
+                  "discrepancies"; "health"; "delivery"; "publication"; "nativeAcceptance"; "reads"; "mutationAttempts"; "gap"; "lastVerified" ])
+        Assert.Equal("fsgg.coord.board-v2-inspection/1", root.GetProperty("schema").GetString())
+        Assert.Equal<Set<string>>(expectedTop, names root)
+        Assert.Equal(3, root.GetProperty("items").GetArrayLength())
+        for item in root.GetProperty("items").EnumerateArray() do Assert.Equal<Set<string>>(expectedItem, names item)
+    finally Directory.Delete(directory, true)

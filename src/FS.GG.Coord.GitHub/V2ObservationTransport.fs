@@ -27,6 +27,8 @@ module V2ObservationTransport =
     let validateScope (binding: Binding) =
         match validateBinding binding with
         | Error error -> Error error
+        | Ok() when binding.BindingVersion = 4 ->
+            Error(Malformed("programme Observation authority", "successor source window is inspection-only; no writer is admitted"))
         | Ok() when binding.BindingVersion = 2 && (binding.Owner <> "FS-GG" || binding.OrganizationId <> "O_kgDOEYAWYw" || binding.ProjectNumber <> 3 || binding.ProjectId <> project
                     || binding.Observation.Id <> field || Map.tryFind "Verified" binding.Observation.Options <> Some verified || (binding.SelectedIssues <> cohort && binding.SelectedIssues <> successorCohort)) ->
             Error(Malformed("V2 Observation authority", "selected root-local project/field/native cohort differs from the reviewed three-target pilot or four-target successor"))
