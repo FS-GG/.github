@@ -46,7 +46,111 @@ def canonical(value: dict) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode()
 
 
+# Exact original .104 operation; no later candidate or generic recovery profile.
+CONTINUATION_CANDIDATE = {"runId": 39072586985, "artifactId": 12115444808,
+    "archiveSha256": "ddd8a273fab400e963dffcf2dd07db19332af78c22939d97822f3d9f644b0a7f",
+    "sourceSha": "912eba8bbd707dabcbc5011d508c479109010b71",
+    "contentId": "sha256:86a776fe591b5b98bf189fdf2c47148b1b417551c44f091146a1d6ce1acfd987"}
+CONTINUATION_CHECKPOINT = {"generation": 28, "logicalHead": "d96332d4c3af8aacea7b91fbb619b6e8cf09abb6",
+    "stateSHA256": "e8fa80c167c5944b92da6b09628b54fba9b754b65eed94ee0f6ea413c55bc5be"}
+CONTINUATION_PROOF = {"runId": 39073648848, "attempt": 1, "artifactId": 12116094456,
+    "sourceSha": CONTINUATION_CANDIDATE["sourceSha"], "archiveBytes": 1525,
+    "archiveSha256": "52da2bd625645e83c4baff91a244351670f5bcf52fb8a730b9b01a25ef35d22b",
+    "memberBytes": 3573, "memberSha256": "349430ba1fdd1c80d9d1ce82c31113da5f21758a8da6f496ff715d96ceacb6c8",
+    "originalAuthorityEntries": 1500}
+# The immutable source decision is separate from the original suspension. Runtime
+# window is the root-selected source qualification tuple after cold caller census.
+# It grants no native invocation; the original exhausted allocation is unchanged.
+CONTINUATION_DECISION = {"repository": "FS-GG/.github", "path": "docs/roadmaps/utel-release-successor.md",
+    "revision": "9a9580535af7be0bbd1750a3e8dcb6dd5ddbada4",
+    "sha256": "6c395548d45d2559b351372839118c44aa36a99becd37b1e499e6ba6b38bb2cb"}
+CONTINUATION_WINDOW = {"authorityEntries": 750, "quotaFloor": 1800, "seconds": 900, "visibilityProbes": 32}
+CONTINUATION_ACTIONS = ("channel-asset", "manifest-asset", "promote")
+_STATE_KEYS = {"schema", "contentId", "sourceSha", "version", "candidateArchiveSha256", "operator", "generation", "effects"}
+
+
+_CONTINUATION_SEAL = object()
+
+
+class ContinuationPermit:
+    """Invocation-local, never reconstructed from a found durable claim."""
+    def __init__(self, seal, record, head):
+        if seal is not _CONTINUATION_SEAL or not valid_continuation(record):
+            raise Refused("continuation permit requires confirmed independent claim readback")
+        self.record, self.head = json.loads(canonical(record)), head
+        self.spent, self.active_effect = set(), None
+
+    def consume(self, identity):
+        if identity not in CONTINUATION_ACTIONS or identity in self.spent or self.active_effect is not None:
+            raise Refused("continuation send permit is consumed or outside remaining actions")
+        self.spent.add(identity)  # Before every later local check/delegate.
+        self.active_effect = identity
+
+    def finish_dispatch(self):
+        self.active_effect = None
+
+
+def continuation_record(execution):
+    value = {"schema": "fsgg.release-successor-continuation/1", "candidate": CONTINUATION_CANDIDATE,
+             "checkpoint": CONTINUATION_CHECKPOINT, "originalProof": CONTINUATION_PROOF,
+             "execution": execution, "decision": CONTINUATION_DECISION,
+             "actions": list(CONTINUATION_ACTIONS), "window": CONTINUATION_WINDOW}
+    if not valid_continuation(value):
+        raise Refused("current .104 continuation decision/window/execution is not admitted")
+    return json.loads(canonical(value))
+
+
+def valid_continuation(value):
+    if CONTINUATION_DECISION is None or CONTINUATION_WINDOW is None or type(value) is not dict:
+        return False
+    execution = value.get("execution")
+    if (type(execution) is not dict or set(execution) != {"runId", "attempt", "sourceSha", "operator"}
+            or type(execution["runId"]) is not int or execution["runId"] <= 0
+            or execution["runId"] == CONTINUATION_PROOF["runId"]
+            or type(execution["attempt"]) is not int or execution["attempt"] != 1
+            or execution["operator"] != "EHotwagner" or type(execution["sourceSha"]) is not str
+            or re.fullmatch(r"[0-9a-f]{40}", execution["sourceSha"]) is None):
+        return False
+    expected = {"schema": "fsgg.release-successor-continuation/1", "candidate": CONTINUATION_CANDIDATE,
+                "checkpoint": CONTINUATION_CHECKPOINT, "originalProof": CONTINUATION_PROOF,
+                "execution": execution, "decision": CONTINUATION_DECISION,
+                "actions": list(CONTINUATION_ACTIONS), "window": CONTINUATION_WINDOW}
+    return canonical(value) == canonical(expected)
+
+
+def continuation_effects(generation):
+    from release_successor_execution import PACKAGES
+    prefix = ["tag", "draft", *[f"{feed}:{package}" for feed in ("github", "nuget") for package in PACKAGES],
+              *[f"archive-asset:{package}" for package in PACKAGES], "qualification-asset:evidence", "qualification-asset:runtime"]
+    effects = {identity: "verified" for identity in prefix}
+    if generation in {28, 29}: effects["channel-asset"] = "intent"
+    if generation >= 30: effects["channel-asset"] = "verified"
+    if generation == 31: effects["manifest-asset"] = "intent"
+    if generation >= 32: effects["manifest-asset"] = "verified"
+    if generation == 33: effects["promote"] = "intent"
+    if generation == 34: effects["promote"] = "verified"
+    return effects
+
+
+def _claimed_state(value):
+    candidate = CONTINUATION_CANDIDATE
+    return (set(value) == _STATE_KEYS | {"continuation"} and valid_continuation(value["continuation"])
+            and type(value.get("generation")) is int and 29 <= value["generation"] <= 34
+            and value.get("schema") == SCHEMA and value.get("version") == "0.104.0"
+            and value.get("sourceSha") == candidate["sourceSha"] and value.get("contentId") == candidate["contentId"]
+            and value.get("candidateArchiveSha256") == candidate["archiveSha256"] and value.get("operator") == "EHotwagner"
+            and value.get("effects") == continuation_effects(value["generation"]))
+
+
 def valid_transition(before: dict, after: dict) -> bool:
+    if "continuation" in after and "continuation" not in before:
+        return (set(before) == _STATE_KEYS and type(before.get("generation")) is int and before["generation"] == 28
+                and hashlib.sha256(canonical(before)).hexdigest() == CONTINUATION_CHECKPOINT["stateSHA256"]
+                and _claimed_state(after) and after["generation"] == 29 and before["effects"] == after["effects"])
+    if "continuation" in before or "continuation" in after:
+        if (not _claimed_state(before) or not _claimed_state(after)
+                or canonical(before["continuation"]) != canonical(after["continuation"])):
+            return False
     if after.get("generation") != before.get("generation", 0) + 1:
         return False
     fixed = ("schema", "contentId", "sourceSha", "version", "candidateArchiveSha256", "operator")
@@ -223,7 +327,7 @@ class ProtectedReleaseJournal:
     _MAX_IMMUTABLE_BYTES = 16 * 1024 * 1024
     _MAX_IMMUTABLE_OBJECT_BYTES = 1024 * 1024
 
-    def __init__(self, api: GitAPI, ref: str = REF, *, main_directory: bool = False, suspension=None):
+    def __init__(self, api: GitAPI, ref: str = REF, *, main_directory: bool = False, suspension=None, continuation_owner=None):
         if type(main_directory) is not bool:
             raise Refused("main-directory selection must be explicit boolean")
         if not ref.startswith("refs/heads/fsgg/v2/journal/release/"):
@@ -243,6 +347,10 @@ class ProtectedReleaseJournal:
         if suspension is not None and (not isinstance(suspension, ReleaseSuspension)
                 or suspension.api is not api or ref != ALLOWED_SUCCESSOR["logicalRef"] or not main_directory):
             raise Refused("shared successor immutable reader has a different owner or binding")
+        if continuation_owner is not None and (ref != ALLOWED_SUCCESSOR["logicalRef"] or not main_directory
+                or type(continuation_owner) is not dict):
+            raise Refused("continuation journal owner binding differs")
+        self.continuation_owner = json.loads(canonical(continuation_owner)) if continuation_owner is not None else None
         self._suspension = suspension
         self._immutable_reader = suspension.objects if suspension is not None else None
         self._observed: Observed | None = None
@@ -498,6 +606,9 @@ class ProtectedReleaseJournal:
         second = self.api.get(path)
         if second.get("object", {}).get("sha") != physical:
             raise Refused("journal head moved during read")
+        if "continuation" in current and (not _claimed_state(current) or self.continuation_owner is None
+                or canonical(current["continuation"]["execution"]) != canonical(self.continuation_owner)):
+            raise Refused("claimed .104 continuation is consumed by another invocation/profile")
         self._physical_head = physical
         self._observed = Observed(head, current)
         self._lineage_length = length
@@ -573,6 +684,23 @@ class ProtectedReleaseJournal:
         return commit["sha"]
 
     def compare_and_swap(self, expected: JournalState, effect: str, state: str) -> bool:
+        if self._observed is None:
+            raise Refused("journal CAS has no matching prior read")
+        next_state = {**self._observed.state, "generation": expected.generation + 1,
+                      "effects": {**expected.effects, effect: state}}
+        return self._compare_state(expected, next_state)
+
+    def claim_continuation(self, expected: JournalState, record: dict) -> ContinuationPermit:
+        observed = self._observed
+        if (self.ref != ALLOWED_SUCCESSOR["logicalRef"] or not self.main_directory or observed is None
+                or observed.head != CONTINUATION_CHECKPOINT["logicalHead"] or expected.generation != 28
+                or not valid_continuation(record) or self.continuation_owner != record["execution"]):
+            raise Refused("exact original .104 continuation claim binding differs")
+        if not self._compare_state(expected, {**observed.state, "generation": 29, "continuation": record}, claim=True):
+            raise Refused("continuation claim independent readback differs")
+        return ContinuationPermit(_CONTINUATION_SEAL, record, self._observed.head)
+
+    def _compare_state(self, expected: JournalState, next_state: dict, *, claim=False) -> bool:
         # Only the current shared .104 caller joins overlapping observations at
         # one local boundary. Historical and original-release routes stay intact.
         joined = self.ref == ALLOWED_SUCCESSOR["logicalRef"] and self.main_directory and self._immutable_reader is not None
@@ -585,7 +713,6 @@ class ProtectedReleaseJournal:
             expected.effects,
         ):
             raise Refused("journal CAS has no matching prior read")
-        next_state = {**observed.state, "generation": expected.generation + 1, "effects": {**expected.effects, effect: state}}
         if not valid_transition(observed.state, next_state):
             raise Refused("journal CAS transition is invalid")
         physical = self._physical_head
@@ -633,10 +760,15 @@ class ProtectedReleaseJournal:
         if not joined:
             self._authorize_release(observed.state.get("version"))
         try:
-            self.api.patch(
+            response = self.api.patch(
                 f"repos/{REPOSITORY}/git/refs/{self.physical_ref.removeprefix('refs/')}",
                 {"sha": physical_commit, "force": False},
             )
+            if claim and (type(response) is not dict or response.get("ref") != self.physical_ref
+                          or type(response.get("object")) is not dict
+                          or response["object"].get("type") != "commit"
+                          or response["object"].get("sha") != physical_commit):
+                raise Refused("continuation claim PATCH response unconfirmed")
         except Exception as error:
             raise Refused(f"journal CAS response uncertain; reread before further effects: {error}") from error
         self.read()

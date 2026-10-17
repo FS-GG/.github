@@ -898,3 +898,76 @@ assert caller_assertions >= 14, "publisher caller qualification disappeared from
 caller_result = unittest.TextTestRunner().run(caller_suite)
 assert caller_result.wasSuccessful(), "actual publisher caller assertions failed"
 print(f"PR-wired actual publisher caller assertions passed: {caller_assertions}")
+
+# Explicit test-only allocation. These pure transition/permit controls do not
+# select a native window or replace the cold production-caller census.
+import release_successor_journal as continuation_policy
+class ContinuationTransitionControls(unittest.TestCase):
+    def setUp(self):
+        self.window = patch.object(continuation_policy, 'CONTINUATION_WINDOW',
+            {'authorityEntries':500,'seconds':900,'visibilityProbes':32,'quotaFloor':1800})
+        self.window.start(); self.addCleanup(self.window.stop)
+        self.execution = {'runId':39080000000,'attempt':1,'sourceSha':'a'*40,'operator':'EHotwagner'}
+        candidate = continuation_policy.CONTINUATION_CANDIDATE
+        self.original = {'schema':continuation_policy.SCHEMA,'contentId':candidate['contentId'],
+            'sourceSha':candidate['sourceSha'],'version':'0.104.0','candidateArchiveSha256':candidate['archiveSha256'],
+            'operator':'EHotwagner','generation':28,'effects':continuation_policy.continuation_effects(28)}
+        self.record = continuation_policy.continuation_record(self.execution)
+        self.claimed = {**self.original,'generation':29,'continuation':self.record}
+
+    def test_exact_claim_and_frozen_six_transition_path(self):
+        self.assertEqual(hashlib.sha256(continuation_policy.canonical(self.original)).hexdigest(),
+                         continuation_policy.CONTINUATION_CHECKPOINT['stateSHA256'])
+        self.assertTrue(continuation_policy.valid_transition(self.original,self.claimed))
+        prior = self.claimed
+        for generation in range(30,35):
+            current = {**prior,'generation':generation,'effects':continuation_policy.continuation_effects(generation)}
+            self.assertTrue(continuation_policy.valid_transition(prior,current));prior=current
+        self.assertEqual(len(prior['effects']),16)
+        self.assertEqual(set(prior['effects'].values()),{'verified'})
+
+    def test_claim_cannot_change_effect_or_rebind_any_identity(self):
+        for key,value in (('generation',30),('effects',{**self.original['effects'],'channel-asset':'verified'}),
+                          ('sourceSha','b'*40),('operator','other'),('unexpected',True)):
+            with self.subTest(key=key):
+                self.assertFalse(continuation_policy.valid_transition(self.original,{**self.claimed,key:value}))
+        for field in self.record:
+            changed=copy.deepcopy(self.claimed);changed['continuation'][field]=None
+            with self.subTest(field=field):self.assertFalse(continuation_policy.valid_transition(self.original,changed))
+        self.assertFalse(continuation_policy.valid_transition({**self.original,'extra':1},self.claimed))
+        self.assertFalse(continuation_policy.valid_transition({**self.original,'generation':27},self.claimed))
+
+    def test_claim_is_never_replaceable_or_removable(self):
+        settled={**self.claimed,'generation':30,'effects':continuation_policy.continuation_effects(30)}
+        for value in (None,{**self.record,'execution':{**self.execution,'runId':39080000001}},
+                      {**self.record,'window':{**self.record['window'],'authorityEntries':501}}):
+            changed={**settled,'continuation':value}
+            self.assertFalse(continuation_policy.valid_transition(self.claimed,changed))
+        del settled['continuation']
+        self.assertFalse(continuation_policy.valid_transition(self.claimed,settled))
+
+    def test_permit_is_private_consumed_before_delegate_and_never_reconstructed(self):
+        with self.assertRaises(Refused):continuation_policy.ContinuationPermit(object(),self.record,'b'*40)
+        permit=continuation_policy.ContinuationPermit(continuation_policy._CONTINUATION_SEAL,self.record,'b'*40)
+        permit.consume('channel-asset')
+        self.assertIn('channel-asset',permit.spent)
+        with self.assertRaises(Refused):permit.consume('manifest-asset')
+        permit.finish_dispatch()
+        with self.assertRaises(Refused):permit.consume('channel-asset')
+        for identity in ('manifest-asset','promote'):
+            permit.consume(identity);permit.finish_dispatch()
+            with self.assertRaises(Refused):permit.consume(identity)
+        with self.assertRaises(Refused):permit.consume('tag')
+
+    def test_unselected_window_and_wrong_execution_remain_inert(self):
+        for changed in ({**self.execution,'attempt':True},{**self.execution,'attempt':2},
+                        {**self.execution,'runId':continuation_policy.CONTINUATION_PROOF['runId']},
+                        {**self.execution,'operator':'other'},{**self.execution,'extra':True}):
+            with self.assertRaises(Refused):continuation_policy.continuation_record(changed)
+        with patch.object(continuation_policy,'CONTINUATION_WINDOW',None):
+            self.assertFalse(continuation_policy.valid_transition(self.original,self.claimed))
+            with self.assertRaises(Refused):continuation_policy.continuation_record(self.execution)
+
+continuation_suite=unittest.defaultTestLoader.loadTestsFromTestCase(ContinuationTransitionControls)
+assert continuation_suite.countTestCases()==5
+assert unittest.TextTestRunner().run(continuation_suite).wasSuccessful(), 'typed continuation controls failed'

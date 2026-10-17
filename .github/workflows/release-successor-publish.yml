@@ -37,6 +37,12 @@ on:
         default: false
         type: boolean
 
+      continue_original_0104_checkpoint:
+        description: One-use fixed original .104 checkpoint remainder; no package sends
+        required: true
+        default: false
+        type: boolean
+
       qualify_original_tag_authentication_only:
         description: Inactive source-prepared authentication-only route; acquires no credentials
         required: true
@@ -85,7 +91,7 @@ on:
         default: false
         type: boolean
       expected_checkpoint:
-        description: Exact admitted generation, logicalHead and stateSHA256 JSON for .102 continuation only
+        description: Exact admitted generation, logicalHead and stateSHA256 JSON for selected .102 or .104 continuation
         required: false
         default: ''
         type: string
@@ -120,6 +126,7 @@ jobs:
         if: inputs.qualify_original_tag_authentication_only != true
         env:
           GH_TOKEN: ${{ github.token }}
+          CONTINUE_ORIGINAL_0104_CHECKPOINT: ${{ inputs.continue_original_0104_checkpoint }}
           SUSPENDED_0103_SUCCESSOR: ${{ inputs.suspended_0103_successor }}
           ORIGINAL_0103_CANDIDATE: ${{ inputs.original_0103_candidate }}
           RECOVER_ORIGINAL_0103_TAG_INTENT: ${{ inputs.recover_original_0103_tag_intent }}
@@ -130,6 +137,7 @@ jobs:
         run: |
           set -euo pipefail
           profile=()
+          if test "$CONTINUE_ORIGINAL_0104_CHECKPOINT" = true; then profile+=(--continue-original-0104-checkpoint); fi
           if test "$SUSPENDED_0103_SUCCESSOR" = true; then profile+=(--suspended-0103-successor); fi
           if test "$ORIGINAL_0103_CANDIDATE" = true; then profile+=(--original-0103-candidate); fi
           if test "$RECOVER_ORIGINAL_0103_TAG_INTENT" = true; then profile+=(--recover-original-0103-tag-intent); fi
@@ -182,7 +190,7 @@ jobs:
           EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
         run: test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
       - name: Exchange nuget.org trusted publishing identity
-        if: inputs.qualify_original_tag_authentication_only != true
+        if: inputs.qualify_original_tag_authentication_only != true && inputs.continue_original_0104_checkpoint != true
         id: nuget
         uses: NuGet/login@v1
         with:
@@ -198,6 +206,7 @@ jobs:
           CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
           CANDIDATE_ARCHIVE_SHA256: ${{ inputs.candidate_archive_sha256 }}
           PUBLISH: ${{ inputs.publish }}
+          CONTINUE_ORIGINAL_0104_CHECKPOINT: ${{ inputs.continue_original_0104_checkpoint }}
           SUSPENDED_0103_SUCCESSOR: ${{ inputs.suspended_0103_successor }}
           ORIGINAL_0103_CANDIDATE: ${{ inputs.original_0103_candidate }}
           RECOVER_ORIGINAL_0103_TAG_INTENT: ${{ inputs.recover_original_0103_tag_intent }}
@@ -230,11 +239,14 @@ jobs:
             profile+=(--recover-original-runtime-intent)
           fi
           checkpoint=()
-          if test "$RECOVER_ORIGINAL_SUCCESSOR_CHECKPOINT" = true; then
+          if test "$CONTINUE_ORIGINAL_0104_CHECKPOINT" = true; then
+            profile+=(--continue-original-0104-checkpoint)
+            checkpoint=(--expected-checkpoint "$EXPECTED_CHECKPOINT")
+          elif test "$RECOVER_ORIGINAL_SUCCESSOR_CHECKPOINT" = true; then
             profile+=(--recover-original-successor-checkpoint)
             checkpoint=(--expected-checkpoint "$EXPECTED_CHECKPOINT")
           elif test -n "$EXPECTED_CHECKPOINT"; then
-            echo 'Expected checkpoint requires original successor recovery.' >&2
+            echo 'Expected checkpoint requires a selected continuation.' >&2
             exit 1
           fi
           python3 scripts/release-successor-publish.py \
@@ -254,6 +266,7 @@ jobs:
             ${{ runner.temp }}/release-successor-result-kit-repeat-attempt.json
             ${{ runner.temp }}/release-successor-result-runtime-recovery-attempt.json
             ${{ runner.temp }}/release-successor-result-original-tag-attempt.json
+            ${{ runner.temp }}/release-successor-result-continuation-*.json
           if-no-files-found: error
       - name: Report the actual publication disposition
         if: steps.publication.outcome == 'success'
