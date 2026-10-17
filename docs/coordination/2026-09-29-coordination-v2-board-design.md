@@ -512,8 +512,10 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   through existing secret custody: the CLI accepts `GITHUB_TOKEN`, otherwise `GH_TOKEN`; a repository
   Actions token is not presumed to cover the organization project. Independently prove private project
   and private Checks capabilities; an endpoint permission header does not establish token-type support,
-  and stored `gh` OAuth is not automatically a CLI credential. Retain the actionable credential boundary
-  in the [operator contract](../../tests/coord-board-v2-cli-join/INSPECT.md#bounded-migration-source-contract).
+  and stored `gh` OAuth is not automatically a CLI credential. A private item's unavailable checks
+  remain item/action-specific; they do not globally block supported project/public reads or migration
+  preparation. Full private-caller acceptance retains its separate evidence requirement. Retain the
+  actionable credential boundary in the [operator contract](../../tests/coord-board-v2-cli-join/INSPECT.md#bounded-migration-source-contract).
   Missing/malformed/mismatched input
   refusal and controlled pre-migration evidence are not postmigration positive v4 acceptance. No new
   In review option ID or final binding is invented. After actual native migration/readback, final stable
