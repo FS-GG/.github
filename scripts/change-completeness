@@ -54,14 +54,14 @@ COMPILE_PROJECTS=(
 
 # Read only project/reference metadata. Unknown changed paths or MSBuild expressions cannot
 # silently omit V2 qualification. No source-generated inventory or second persisted plan.
-python3 - "$ROOT" "$PATHS" "$WORK/v2-impact" "${COMPILE_PROJECTS[@]}" <<'PY_CLOSURE'
+python3 - "$ROOT" "$PATHS" "$WORK/v2-impact" "$WORK/compiler.proj" "${COMPILE_PROJECTS[@]}" <<'PY_CLOSURE'
 import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-root, paths_file, output = map(Path, sys.argv[1:4])
-projects = sys.argv[4:]
+root, paths_file, output, traversal = map(Path, sys.argv[1:5])
+projects = sys.argv[5:]
 def require(condition, message):
     if not condition:
         raise ValueError(message)
@@ -103,6 +103,19 @@ try:
                    or path in ("scripts/change-completeness", "scripts/read-trx-count.py", ".github/workflows/coord-github.yml", ".github/workflows/coord-engine.yml")
                    or path.startswith("tests/change-completeness/") for path in changed)
     output.write_text("true" if affected else "false")
+    # Non-SDK, invocation-local traversal: the same literal roots and ordinary
+    # child imports/properties, with one serial process and shared caches per phase.
+    plan = ET.Element("Project")
+    items = ET.SubElement(plan, "ItemGroup")
+    for project in projects:
+        ET.SubElement(items, "CompilerRoot", Include=str(root / project))
+    for name, target, properties in (("RestoreRoots", "Restore", "RestoreLockedMode=true"),
+                                     ("BuildRoots", "Build", "Configuration=Release")):
+        phase = ET.SubElement(plan, "Target", Name=name)
+        ET.SubElement(phase, "MSBuild", Projects="@(CompilerRoot)", Targets=target,
+                      Properties=properties, BuildInParallel="false", StopOnFirstFailure="false",
+                      SkipNonexistentProjects="false", SkipNonexistentTargets="false")
+    ET.ElementTree(plan).write(traversal, encoding="utf-8", xml_declaration=True)
 except (OSError, ValueError, ET.ParseError) as error:
     print(f"change-completeness: incomplete compiler/V2 subject: {error}", file=sys.stderr)
     sys.exit(1)
@@ -160,24 +173,16 @@ if [ "$engine_changed" = true ] || [ "$v2_changed" = true ]; then
   sdk="$(run_dotnet --version)" || { echo "change-completeness: SDK prerequisite unavailable" >&2; exit 1; }
   [[ "$sdk" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+.][A-Za-z0-9.-]+)?$ ]] \
     || { echo "change-completeness: SDK response is malformed" >&2; exit 1; }
-  restore_failed=false
-  for project in "${COMPILE_PROJECTS[@]}"; do
-    if run_dotnet restore "$ROOT/$project" --locked-mode; then :; else
-      echo "change-completeness: locked restore failed: $project" >&2
-      restore_failed=true
-    fi
-  done
-  [ "$restore_failed" = false ] \
-    || { echo "change-completeness: restore prerequisites failed; builds and tests blocked" >&2; exit 1; }
-  compile_failed=false
-  for project in "${COMPILE_PROJECTS[@]}"; do
-    if run_dotnet build "$ROOT/$project" --no-restore -c Release; then :; else
-      echo "change-completeness: compile failed: $project" >&2
-      compile_failed=true
-    fi
-  done
-  [ "$compile_failed" = false ] \
-    || { echo "change-completeness: compiler barrier failed; all dependent tests blocked" >&2; exit 1; }
+  # Separate processes keep Build evaluation after successful locked Restore.
+  # Each task visits all independent roots serially and retains ordinary errors.
+  if run_dotnet msbuild "$WORK/compiler.proj" -target:RestoreRoots -maxCpuCount:1; then :; else
+    echo "change-completeness: locked restore prerequisites failed; builds and tests blocked" >&2
+    exit 1
+  fi
+  if run_dotnet msbuild "$WORK/compiler.proj" -target:BuildRoots -maxCpuCount:1; then :; else
+    echo "change-completeness: compiler barrier failed; all dependent tests blocked" >&2
+    exit 1
+  fi
 fi
 
 qualification_failed=false

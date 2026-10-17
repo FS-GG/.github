@@ -29,7 +29,7 @@ import subprocess
 import sys
 
 root, work = map(Path, sys.argv[1:])
-fixture = work / "caller"
+fixture = work / "caller & source"
 for name in ("scripts/change-completeness", "scripts/read-trx-count.py",
              "scripts/check-ship-verdict-provenance.py", "scripts/lib/gate.py"):
     target = fixture / name
@@ -51,6 +51,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import xml.etree.ElementTree as ET
 args = sys.argv[1:]
 with open(os.environ["MOCK_LOG"], "a") as log:
     log.write(json.dumps(args) + "\n")
@@ -61,11 +62,40 @@ if args == ["--version"]:
     elif mode != "empty-sdk": print("10.0.401")
     sys.exit(0)
 verb, project = args[:2]
+if verb == "msbuild":
+    assert len(args) == 4 and args[2] in ("-target:RestoreRoots", "-target:BuildRoots") and args[3] == "-maxCpuCount:1", args
+    plan = ET.parse(project).getroot()
+    assert plan.tag == "Project" and not plan.attrib
+    assert [item.tag for item in plan] == ["ItemGroup", "Target", "Target"]
+    items, restore, build = list(plan)
+    assert not items.attrib
+    roots = [item.attrib["Include"] for item in items]
+    assert roots == json.loads(os.environ["MOCK_ROOTS"])
+    assert all(item.tag == "CompilerRoot" and set(item.attrib) == {"Include"} and len(item) == 0 and Path(item.attrib["Include"]).is_absolute() for item in items)
+    for phase, name, target, properties in ((restore, "RestoreRoots", "Restore", "RestoreLockedMode=true"),
+                                            (build, "BuildRoots", "Build", "Configuration=Release")):
+        assert phase.attrib == {"Name": name} and len(phase) == 1
+        task = phase[0]
+        assert task.tag == "MSBuild" and len(task) == 0 and task.attrib == {
+            "Projects": "@(CompilerRoot)", "Targets": target, "Properties": properties,
+            "BuildInParallel": "false", "StopOnFirstFailure": "false",
+            "SkipNonexistentProjects": "false", "SkipNonexistentTargets": "false"}, task.attrib
+    assert "&amp;" in Path(project).read_text(), "fixture must exercise XML path escaping"
+    phase = "restore-root" if args[2] == "-target:RestoreRoots" else "build-root"
+    failures = 0
+    for item in roots:
+        with open(os.environ["MOCK_LOG"], "a") as log:
+            log.write(json.dumps([phase, item]) + "\n")
+        if phase == "build-root" and mode == "timeout": sys.exit(124)
+        if phase == "build-root" and mode == "signal": sys.exit(130)
+        fails = ((mode == "restore-error" and phase == "restore-root")
+                 or (mode == "build-error" and phase == "build-root")
+                 or (mode == "missing-target" and phase == "build-root")) and ("Cli.Tests/" in item or "cli-join/" in item)
+        if fails:
+            failures += 1
+            print("fixture MSBuild root failed: " + item, file=sys.stderr)
+    sys.exit(1 if failures else 0)
 is_v2 = "/tests/coord-board-v2-" in project
-if mode == "restore-error" and verb == "restore": sys.exit(1)
-if mode == "build-error" and verb == "build" and ("Cli.Tests/" in project or "cli-join/" in project): sys.exit(1)
-if mode == "timeout" and verb == "build": sys.exit(124)
-if mode == "signal" and verb == "build": sys.exit(130)
 if verb == "test":
     if "--results-directory" in args:
         output = Path(args[args.index("--results-directory") + 1])
@@ -164,7 +194,8 @@ def invoke(paths, mode="good", expected=0, engine=False, extra_env=None, revisio
     paths_file, output, log = [work / f"{count}.{suffix}" for suffix in ("paths", "out", "calls")]
     paths_file.write_text("\n".join(paths) + "\n")
     log.write_text("")
-    env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ["PATH"], MOCK_LOG=str(log), MOCK_MODE=mode)
+    env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ["PATH"], MOCK_LOG=str(log), MOCK_MODE=mode,
+               MOCK_ROOTS=json.dumps([str(fixture / project) for project in projects]))
     env.update(extra_env or {})
     subject = ["--base", revisions[0], "--head", revisions[1]] if revisions else ["--paths-file", str(paths_file)]
     result = subprocess.run(["bash", str(fixture / "scripts/change-completeness"), *subject, "--github-output", str(output)],
@@ -181,15 +212,17 @@ def v2_tests(calls): return [call for call in tests(calls) if "/tests/coord-boar
 
 def compiled(calls):
     assert calls and calls[0] == ["--version"]
-    restores = [call for call in calls if call[0] == "restore"]
-    builds = [call for call in calls if call[0] == "build"]
+    phases = [call for call in calls if call[0] == "msbuild"]
+    restores = [call for call in calls if call[0] == "restore-root"]
+    builds = [call for call in calls if call[0] == "build-root"]
+    assert len(phases) == 2 and phases[0][1] == phases[1][1]
+    assert [call[2:] for call in phases] == [["-target:RestoreRoots", "-maxCpuCount:1"], ["-target:BuildRoots", "-maxCpuCount:1"]]
     assert [Path(call[1]).relative_to(fixture).as_posix() for call in restores] == projects
     assert [Path(call[1]).relative_to(fixture).as_posix() for call in builds] == projects
-    assert all("--locked-mode" in call for call in restores)
-    assert all("--no-restore" in call and call[-2:] == ["-c", "Release"] for call in builds)
+    assert not any(call[0] in {"restore", "build"} for call in calls), "no repeated per-root process/evaluation"
     verbs = [call[0] for call in calls]
-    assert max(i for i, v in enumerate(verbs) if v == "restore") < min(i for i, v in enumerate(verbs) if v == "build")
-    assert max(i for i, v in enumerate(verbs) if v == "build") < min(i for i, v in enumerate(verbs) if v == "test")
+    assert max(i for i, v in enumerate(verbs) if v == "restore-root") < min(i for i, v in enumerate(verbs) if v == "build-root")
+    assert max(i for i, v in enumerate(verbs) if v == "build-root") < min(i for i, v in enumerate(verbs) if v == "test")
     assert all("--no-build" in call and "--no-restore" in call and "Release" in call for call in tests(calls))
     assert len(v2_tests(calls)) == 2
     assert not any("FS.GG.Coord.GitHub.Tests/" in call[1] for call in tests(calls)), "broad GitHub tests remain independent"
@@ -213,14 +246,38 @@ for path, engine in (
     assert len(tests(calls)) == (5 if engine else 2), path
 calls, _ = invoke(["scripts/ci-gate-impact.py", "src/FS.GG.Coord.Core/Review.fs"], engine=True)
 compiled(calls)
-for mode in ("restore-error", "build-error", "timeout", "signal", "missing-tool", "empty-sdk", "malformed-sdk"):
+for mode in ("restore-error", "build-error", "missing-target", "timeout", "signal", "missing-tool", "empty-sdk", "malformed-sdk"):
     calls, diagnostic = invoke(["src/FS.GG.Coord.Core/Review.fs"], mode, expected=1, engine=True)
     assert not tests(calls), mode
-    if mode == "restore-error": assert len([c for c in calls if c[0] == "restore"]) == 12 and not any(c[0] == "build" for c in calls)
-    if mode == "build-error":
-        assert len([c for c in calls if c[0] == "build"]) == 12
-        assert diagnostic.count("change-completeness: compile failed:") == 2, diagnostic
-    if mode in ("timeout", "signal"): assert len([c for c in calls if c[0] == "build"]) == 1
+    if mode == "restore-error":
+        assert len([c for c in calls if c[0] == "restore-root"]) == 12 and not any(c[0] == "build-root" for c in calls)
+        assert len([c for c in calls if c[0] == "msbuild"]) == 1
+        assert diagnostic.count("fixture MSBuild root failed:") == 2
+    if mode in ("build-error", "missing-target"):
+        assert len([c for c in calls if c[0] == "build-root"]) == 12
+        assert diagnostic.count("fixture MSBuild root failed:") == 2, diagnostic
+    if mode in ("timeout", "signal"): assert len([c for c in calls if c[0] == "build-root"]) == 1
+# The real generated XML/commands, rather than a duplicate planned traversal, are
+# checked at each fake transport entry. Mutating those contracts blocks tests.
+gate = fixture / "scripts/change-completeness"
+original_gate = gate.read_text()
+for old,new in (
+    ('BuildInParallel="false"','BuildInParallel="true"'),
+    ('StopOnFirstFailure="false"','StopOnFirstFailure="true"'),
+    ('SkipNonexistentProjects="false"','SkipNonexistentProjects="true"'),
+    ('SkipNonexistentTargets="false"','SkipNonexistentTargets="true"'),
+    ('"RestoreLockedMode=true"','"RestoreLockedMode=false"'),
+    ('"Configuration=Release"','"Configuration=Debug"'),
+    ('for project in projects:\n        ET.SubElement(items','for project in projects[:-1]:\n        ET.SubElement(items'),
+    ('-target:BuildRoots -maxCpuCount:1','-target:BuildRoots -maxCpuCount:1 -restore'),
+    ('-maxCpuCount:1','-maxCpuCount:2'),
+):
+    assert old in original_gate, old
+    gate.write_text(original_gate.replace(old,new))
+    calls,_ = invoke(["src/FS.GG.Coord.Core/Review.fs"],expected=1,engine=True)
+    assert not tests(calls), (old,new)
+gate.write_text(original_gate)
+print("PASS  actual generated traversal/phase/cache-property mutations block dependent tests")
 # Reach the real elapsed-budget refusal without sleeping or invoking a compiler.
 budget_env = work / "elapsed-budget.sh"
 budget_env.write_text("SECONDS=240\n")
