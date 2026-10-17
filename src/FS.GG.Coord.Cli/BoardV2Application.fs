@@ -85,8 +85,8 @@ module BoardV2Application =
         let actionName = function Source -> "source" | Activation -> "activation"
         let planningWire (value: PlanningObservation) =
             {| itemId = value.ItemId; status = value.Status; roadmap = value.Roadmap; track = value.Track; observation = value.Observation; membershipPages = value.MembershipPages |}
-        JsonSerializer.Serialize
-            {| schema = (if report.Binding.BindingVersion = 4 then "fsgg.coord.board-v2-inspection/2" else "fsgg.coord.board-v2-inspection/1"); bindingVersion = report.Binding.BindingVersion; organizationId = report.Binding.OrganizationId
+        let common =
+            {| schema = "fsgg.coord.board-v2-inspection/1"; bindingVersion = report.Binding.BindingVersion; organizationId = report.Binding.OrganizationId
                owner = report.Binding.Owner; projectNumber = report.Binding.ProjectNumber; projectId = report.Binding.ProjectId; projectTitle = report.Binding.ProjectTitle
                schemaVersion = report.Binding.SchemaVersion; ownerKind = "organization"; repositories = report.Binding.Repositories |> Set.toList
                status = {| id = report.Binding.Status.Id; options = report.Binding.Status.Options |}; roadmapFieldId = report.Binding.RoadmapFieldId
@@ -98,27 +98,41 @@ module BoardV2Application =
                items = report.Items |> List.map (fun item ->
                    {| issue = issueWire item.Evidence.Issue; expectedNodeId = item.ExpectedNodeId; native = item.Evidence.Native |> Option.map nativeWire
                       dependencyObservations = item.Evidence.DependencyObservations |> List.map nativeWire; dependencyReadComplete = item.Evidence.DependencyReadComplete
-                      planObservation = item.Evidence.PlanObservation |> Option.map nativeWire; sourceCurrentness = item.SourceCurrentness; sourceRevision = item.SourceRevision; accountableOwner = item.Owner
+                      planObservation = item.Evidence.PlanObservation |> Option.map nativeWire; sourceCurrentness = item.SourceCurrentness
                       planning = item.Planning |> Option.map planningWire; planningGap = item.PlanningGap |> Option.map Errors.explain; discrepancies = item.Discrepancies
                       health = item.Evidence.Health; delivery = item.Evidence.Delivery; publication = item.Evidence.Publication; nativeAcceptance = item.Evidence.NativeAcceptance
                       reads = item.Evidence.Reads; mutationAttempts = 0; gap = item.Evidence.Gap |> Option.map Errors.explain; lastVerified = item.Evidence.LastVerified |> Option.map projectionWire |})
-               membershipGap = report.MembershipGap |> Option.map Errors.explain
-               memberships = report.Memberships |> List.map (fun memberItem ->
-                   {| itemId = memberItem.ItemId; contentId = memberItem.ContentId; kind = memberItem.Kind
-                      issue = memberItem.Issue |> Option.map issueWire; enrolled = memberItem.Enrolled
-                      discrepancy = if memberItem.Enrolled then None else Some "Unexpected/unselected membership; no automatic enrollment" |})
-               nativeIntegrator = {| observedAt = report.NativeIntegrator.ObservedAt; repositoryGaps = report.NativeIntegrator.RepositoryGaps
-                                     pullRequests = report.NativeIntegrator.PullRequests
-                                     resourceGap = "Runtime/integrator owners have not supplied fresh implementation/review/hosted-CI capacity or original/uncertain reservations" |}
-               selectionCoverage = "Partial .8: native PR recovery is observed; action-specific plan/intake/slice/resource/reservation observations require the trusted integrator seam"
-               selection = selectActions report context now |> List.map (fun selected ->
-                   {| issue = issueWire selected.Issue; action = actionName selected.Action; decision = selected.Decision
-                      owner = selected.Owner; pullRequest = selected.PullRequest; head = selected.Head; reasons = selected.Reasons; evidence = selected.Evidence
-                      dispatchAuthority = false |})
                candidates = planningCandidates report facts |> List.map (fun candidate ->
                    {| issue = issueWire candidate.Issue; humanStatus = candidate.HumanStatus; track = candidate.Track; roadmap = candidate.Roadmap
                       sourceCurrentness = candidate.SourceCurrentness; observation = candidate.Observation; unmetOrUnknown = candidate.UnmetOrUnknown
                       openPullRequests = candidate.Integrator.OpenPullRequests; touchSets = candidate.Integrator.TouchSets; availableSlots = candidate.Integrator.AvailableSlots |}) |}
+
+        if report.Binding.BindingVersion <> 4 then JsonSerializer.Serialize common
+        else
+            let successor =
+                {| membershipGap = report.MembershipGap |> Option.map Errors.explain
+                   memberships = report.Memberships |> List.map (fun memberItem ->
+                       {| itemId = memberItem.ItemId; contentId = memberItem.ContentId; kind = memberItem.Kind
+                          issue = memberItem.Issue |> Option.map issueWire; enrolled = memberItem.Enrolled
+                          discrepancy = if memberItem.Enrolled then None else Some "Unexpected/unselected membership; no automatic enrollment" |})
+                   nativeIntegrator = {| observedAt = report.NativeIntegrator.ObservedAt; repositoryGaps = report.NativeIntegrator.RepositoryGaps
+                                         pullRequests = report.NativeIntegrator.PullRequests
+                                         resourceGap = "Runtime/integrator owners have not supplied fresh implementation/review/hosted-CI capacity or original/uncertain reservations" |}
+                   selectionCoverage = "Partial .8: native PR recovery is observed; action-specific plan/intake/slice/resource/reservation observations require the trusted integrator seam"
+                   selection = selectActions report context now |> List.map (fun selected ->
+                       {| issue = issueWire selected.Issue; action = actionName selected.Action; decision = selected.Decision
+                          owner = selected.Owner; pullRequest = selected.PullRequest; head = selected.Head; reasons = selected.Reasons; evidence = selected.Evidence
+                          dispatchAuthority = false |}) |}
+            let wire = JsonSerializer.SerializeToNode common
+            wire["schema"] <- JsonSerializer.SerializeToNode "fsgg.coord.board-v2-inspection/2"
+            let extension = JsonSerializer.SerializeToNode successor
+            for name in [ "membershipGap"; "memberships"; "nativeIntegrator"; "selectionCoverage"; "selection" ] do
+                let value = extension[name]
+                wire[name] <- if isNull value then null else value.DeepClone()
+            report.Items |> List.iteri (fun index item ->
+                wire["items"][index]["sourceRevision"] <- JsonSerializer.SerializeToNode item.SourceRevision
+                wire["items"][index]["accountableOwner"] <- JsonSerializer.SerializeToNode item.Owner)
+            wire.ToJsonString()
 
     let encodeInspection report = encodeInspectionWithContext report None DateTimeOffset.UtcNow
 
