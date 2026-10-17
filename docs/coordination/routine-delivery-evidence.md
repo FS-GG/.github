@@ -117,6 +117,15 @@ before a PR or its checks exist. It requires the complete canonical five-file de
 receiver tree, current protected producer bytes and no partial or native producer installation. Full
 PR identity, markers, file listing, native checks and qualification remain delivery requirements.
 
+Producer identity reads start at each exact commit root and traverse complete non-recursive ancestor
+directories for the five canonical files, the executing helper and maintained workspace inventory.
+Shared ancestors are read once per traversal. The existing Templates assertion-pin exception also reads
+its exact bundle path at the selected and prior pins. Every directory retains its native SHA, complete
+non-truncated unique entries, modes and types; missing paths, symlink ancestors, malformed identities
+or read limits refuse. Unrelated producer history is not enumerated. The 1 MiB native-read ceiling and
+ordinary blob bounds remain unchanged. Receiver tree comparison still proves that every leaf outside
+the selected installation delta is unchanged; this producer optimization does not reduce that proof.
+
 The selected SC2 predecessor uses `pr-lane-admission.py --sc2-producer-predecessor-source <protected-sha>`
 on the existing `outcome-led-programme-20261016` campaign and `sc2-routine-producer-bootstrap-20261017`
 chain. It permits one third managed PR only for native private `FS-GG/FS.GG.SC2.Client` (repository ID 1390567199),
