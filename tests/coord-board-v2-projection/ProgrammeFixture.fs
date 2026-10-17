@@ -48,6 +48,8 @@ module ProgrammeFixture =
                binding = {| recipeRevision = value.ImportRecipeRevision; artifactSha256 = value.ImportArtifactSha256; repositories = [ "FS-GG/.github" ] |}
                items = [ {| issue = "FS-GG/.github#4634"; nodeId = "I_outcome"; roadmap = "docs/coordination/programme.md" |} ] |}
 
+    let ownerBody = "## Owner\n\nworker\n\n## Done when\n\nAccepted outcome\n\n## Current deliverable\n\nExisting PR\n\n## Next action\n\nCurrent source\n\n## Blocked on\n\nSee owning plan\n\n## Acceptance evidence\n\nNative links"
+
     let private content = {| id = "I_outcome"; number = 4634; repository = {| nameWithOwner = "FS-GG/.github" |} |}
     let private prNode field value =
         let fields = Map.ofList [ "id", box "PR_current"; "number", box 42; "state", box "OPEN"; "headRefOid", box head; "updatedAt", box revision; "repository", box {| nameWithOwner = "FS-GG/.github" |}; field, box value ]
@@ -60,7 +62,7 @@ module ProgrammeFixture =
                 | Query(document, _) when document.Contains("currentExpression") ->
                     if request.Subject.EndsWith("board-v2-import-manifest.json", StringComparison.Ordinal) then blob (enrollment ()) else blob "Current owning plan; later deployment acceptance is separate"
                 | Query(document, _) when document.Contains("issue(number:") && document.Contains("updatedAt state") ->
-                    wire {| repository = {| nameWithOwner = "FS-GG/.github"; issue = {| id = "I_outcome"; number = 4634; updatedAt = revision; state = "OPEN"; url = "https://github.com/FS-GG/.github/issues/4634"; body = "Owner: worker\nDone when: accepted outcome\nNext action: current source"; repository = {| nameWithOwner = "FS-GG/.github" |} |} |} |}
+                    wire {| repository = {| nameWithOwner = "FS-GG/.github"; issue = {| id = "I_outcome"; number = 4634; updatedAt = revision; state = "OPEN"; url = "https://github.com/FS-GG/.github/issues/4634"; body = ownerBody; repository = {| nameWithOwner = "FS-GG/.github" |} |} |} |}
                 | NoBody when request.Path.EndsWith("/dependencies/blocked_by", StringComparison.Ordinal) -> response "[]"
                 | Query(document, _) when document.Contains("organization(login:") && not (document.Contains("projectV2")) -> wire {| organization = {| id = "O_kgDOEYAWYw"; login = "FS-GG" |} |}
                 | Query(document, _) when document.Contains("projectV2(number:") ->

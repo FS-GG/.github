@@ -288,7 +288,7 @@ module V2Projection =
             with :? Collections.Generic.KeyNotFoundException ->
                 Error(Malformed(subject, "the response is missing data.node")))
 
-    /// Complete project population, including unselected issues, PRs and drafts. No enrollment occurs.
+    // Complete project population, including unselected issues, PRs and drafts. No enrollment occurs.
     type Membership =
         { ItemId: string; ContentId: string; Kind: string; Issue: IssueRef option; Enrolled: bool }
 

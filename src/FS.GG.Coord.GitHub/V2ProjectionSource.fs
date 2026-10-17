@@ -73,10 +73,25 @@ module V2ProjectionSource =
 
     // Six-field owner record text is current input, never acceptance or dispatch authority.
     let private ownerField (body: string) =
-        let values = body.Replace("\r", "").Split('\n') |> Array.choose (fun line ->
-            let text = line.Trim().TrimStart('*').Trim()
-            if text.StartsWith("Owner:", StringComparison.Ordinal) then Some(text.Substring(6).Trim().Trim('*').Trim()) else None)
-        match values with [| owner |] when not (String.IsNullOrWhiteSpace owner) -> Some owner | _ -> None
+        let lines = FS.GG.Coord.Markdown.unfenced body |> List.toArray
+        let names = Set.ofList [ "Owner"; "Done when"; "Current deliverable"; "Next action"; "Blocked on"; "Acceptance evidence" ]
+        let headings = lines |> Array.indexed |> Array.choose (fun (index, line) ->
+            let value = line.Trim()
+            if value.StartsWith("##", StringComparison.Ordinal) then Some(index, value) else None)
+        if headings.Length > 0 then
+            let parsed = headings |> Array.map (fun (_, value) -> if value.StartsWith("## ", StringComparison.Ordinal) then value.Substring(3).Trim() else "")
+            if parsed.Length <> names.Count || Set.ofArray parsed <> names then None
+            else
+                let index = parsed |> Array.findIndex ((=) "Owner")
+                let start, _ = headings[index]
+                let finish = if index + 1 < headings.Length then fst headings[index + 1] else lines.Length
+                let owner = lines[(start + 1)..(finish - 1)] |> String.concat "\n" |> _.Trim()
+                if String.IsNullOrWhiteSpace owner then None else Some owner
+        else
+            let values = lines |> Array.choose (fun line ->
+                let text = line.Trim().TrimStart('*').Trim()
+                if text.StartsWith("Owner:", StringComparison.Ordinal) then Some(text.Substring(6).Trim().Trim('*').Trim()) else None)
+            match values with [| owner |] when not (String.IsNullOrWhiteSpace owner) -> Some owner | _ -> None
 
     let private sourceRepository (binding: Binding) =
         if binding.BindingVersion = 3 then Set.minElement binding.Repositories else "FS-GG/.github"
@@ -377,7 +392,7 @@ module V2ProjectionSource =
                   Attempted = items.Length; Verified = items |> List.filter (fun item -> item.Health = "Verified") |> List.length
                   Items = items; PopulationGap = None; Cleanup = "No resources, claims or background work created" }
 
-    /// Native head-bound observations; none of these facts establishes deployment acceptance.
+    // Native head-bound observations; none of these facts establishes deployment acceptance.
     type PullRequestFacts =
         { Id: string; Repository: string; Number: int; Url: string; Head: string; UpdatedAt: string
           Author: string option; Issues: string list; Files: string list; ReviewDecision: string option
@@ -386,7 +401,7 @@ module V2ProjectionSource =
     type NativeIntegratorFacts =
         { PullRequests: PullRequestFacts list; RepositoryGaps: Map<string, string>; ObservedAt: DateTimeOffset }
 
-    /// Trusted caller inputs for one current slice, not a parent outcome reservation or authority.
+    // Trusted caller inputs for one current slice, not a parent outcome reservation or authority.
     type Action = Source | Activation
     type Prerequisite = { Action: Action; Reference: string; Satisfied: bool option; SupplyingOwner: string }
     type CurrentSlice =
@@ -595,10 +610,25 @@ module V2ProjectionSource =
                 let items =
                     if binding.BindingVersion <> 4 then items
                     else List.map2 (fun row item ->
-                        let barrier = collectSource reads binding row
-                        match barrier.Verification with
-                        | Ok(Current revision) when item.SourceRevision = Some revision && barrier.Owner = item.Owner -> item
-                        | _ -> { item with SourceCurrentness = "Unknown"; Evidence = { item.Evidence with Health = "Unknown"; Gap = Some(Malformed("final source barrier", "issue/dependency/plan changed or became unavailable; refresh affected selection")) } }) selected items
+                        let mutable additionalReads = 0
+                        let counted =
+                            { new IGitHubTransport with
+                                member _.Send request = additionalReads <- additionalReads + 1; reads.Send request
+                                member _.SendMutation _ = Error(Malformed("final inspection barrier", "mutation is unavailable"))
+                                member _.RetryMutation _ = Error(Malformed("final inspection barrier", "replay is unavailable")) }
+                        let barrier = collectSource counted binding row
+                        let planning = readPlanning counted binding { Issue = row.Issue; ExpectedNodeId = row.NodeId }
+                        let evidence = { item.Evidence with Reads = item.Evidence.Reads + additionalReads }
+                        match barrier.Verification, planning with
+                        | Ok(Current revision), Ok intent when item.SourceRevision = Some revision && barrier.Owner = item.Owner && item.Planning = Some intent -> { item with Evidence = evidence }
+                        | _ -> { item with SourceCurrentness = "Unknown"; Evidence = { evidence with Health = "Unknown"; Gap = Some(Malformed("final source/planning barrier", "issue/dependency/plan or human planning changed/became unavailable; refresh affected selection")) } }) selected items
+                let membershipGap =
+                    if binding.BindingVersion <> 4 || membershipGap.IsSome then membershipGap
+                    else
+                        match readMemberships reads binding with
+                        | Ok final when List.sortBy _.ItemId final = List.sortBy _.ItemId members -> None
+                        | Ok _ -> Some(Malformed("final membership barrier", "project membership changed; reconcile complete population before selection"))
+                        | Error error -> Some error
                 { Binding = binding; Memberships = members; MembershipGap = membershipGap; NativeIntegrator = integration
                   Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) [ (if binding.BindingVersion = 3 then sourceRepository binding + ":" + populationPath else populationPath), current, blob ] membershipGap; Items = items }
 
@@ -618,7 +648,7 @@ module V2ProjectionSource =
                     if facts.AvailableSlots.IsNone then yield "Current capacity is unknown"
                     yield "Intake authorization and scheduling selection remain the current integrator's responsibility" ] })
 
-    /// A current read proposes an action only. The existing integrator retains dispatch authority.
+    // A current read proposes an action only. The existing integrator retains dispatch authority.
     let selectActions (report: InspectionReport) (context: SelectionContext option) (now: DateTimeOffset) =
         let fresh observed = observed <= now && now - observed <= TimeSpan.FromMinutes 5.0
         let trusted = context |> Option.filter (fun value -> value.ObservedAt <= now && now <= value.ValidUntil && fresh value.ObservedAt && not (String.IsNullOrWhiteSpace value.Evidence))
@@ -656,10 +686,12 @@ module V2ProjectionSource =
             let unknown = prerequisites |> List.filter (fun value -> value.Satisfied.IsNone)
             let nativeOpen = item.Evidence.DependencyObservations |> List.filter (fun value -> value.State <> "CLOSED")
             if not gaps.IsEmpty then result "unknown" gaps
-            elif slices.Length > 1 || pulls.Length > 1 || (owner |> Option.forall String.IsNullOrWhiteSpace) then
+            elif slices.Length > 1 || pulls.Length > 1 || (owner |> Option.forall String.IsNullOrWhiteSpace) || (item.Owner |> Option.forall String.IsNullOrWhiteSpace) then
                 result "needs-decision" [ "Current slice/owner or linked PR is missing or ambiguous; withhold duplicate assignment" ]
             elif slice |> Option.exists (fun value -> not (report.Binding.Repositories.Contains value.Repository) || value.Owner <> (item.Owner |> Option.defaultValue value.Owner)) then
                 result "needs-decision" [ "Current slice repository/owner conflicts with enrollment or owning issue" ]
+            elif item.Discrepancies |> List.contains "Human Roadmap differs from the admitted owning plan" then
+                result "needs-decision" [ "Human Roadmap differs from the enrolled owning plan; reconcile the selected action scope" ]
             elif item.Evidence.Native |> Option.exists (fun value -> value.State = "CLOSED") then
                 result "needs-decision" [ "Native issue is closed; reconcile remaining outcome and acceptance rather than assigning work" ]
             elif item.Planning |> Option.exists (fun value -> value.Status = Some "Done") then

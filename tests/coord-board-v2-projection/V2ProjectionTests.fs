@@ -1035,3 +1035,36 @@ let ``programme successor refuses every writer before transport or verifier and 
     Assert.True(validateBinding { binding with SchemaVersion = 1 } |> Result.isError)
     Assert.True(validateBinding { binding with ProjectId = "PVT_foreign" } |> Result.isError)
     Assert.True(validateBinding { productA with Status = binding.Status } |> Result.isError)
+
+
+[<Fact>]
+let ``programme concurrent human planning membership and source edits invalidate selection`` () =
+    for oldValue, newValue, subject in [ "In review", "Ready", "bound V2 planning fields"
+                                       "docs/coordination/programme.md", "docs/other-plan.md", "bound V2 planning fields"
+                                       "I_extra", "I_new_extra", "complete V2 project memberships"
+                                       ProgrammeFixture.revision, "2026-10-17T14:00:00Z", "native observation" ] do
+        let mutable matches = 0
+        let report = programmeSnapshot (fun request response ->
+            if request.Subject.Contains subject then
+                matches <- matches + 1
+                if matches >= 2 then response |> Result.map (fun value -> { value with Body = value.Body.Replace(oldValue, newValue) }) else response
+            else response)
+        Assert.Equal("unknown", (V2ProjectionSource.selectActions report (Some(selectionContext report)) report.NativeIntegrator.ObservedAt).Head.Decision)
+
+
+[<Fact>]
+let ``actual six heading owner record preserves owner and refuses missing duplicate or malformed fields`` () =
+    let bodyChange body request response =
+        if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
+            response |> Result.map (fun value -> { value with Body = value.Body.Replace(Text.Json.JsonSerializer.Serialize ProgrammeFixture.ownerBody, Text.Json.JsonSerializer.Serialize(body: string)) })
+        else response
+    let owner = "Programme owner /root/programme\nMaintainer supplies continuation"
+    let report = programmeSnapshot (bodyChange (ProgrammeFixture.ownerBody.Replace("\nworker\n", "\n" + owner + "\n")))
+    Assert.Equal(Some owner, report.Items.Head.Owner)
+    for body in [ ProgrammeFixture.ownerBody.Replace("## Owner", "## Missing owner")
+                  ProgrammeFixture.ownerBody + "\n\n## Owner\n\nsecond owner"
+                  ProgrammeFixture.ownerBody.Replace("## Owner", "##Owner")
+                  ProgrammeFixture.ownerBody.Replace("\nworker\n", "\n\n") ] do
+        let report = programmeSnapshot (bodyChange body)
+        Assert.True(report.Items.Head.Owner.IsNone)
+        Assert.Equal("needs-decision", (V2ProjectionSource.selectActions report None report.NativeIntegrator.ObservedAt).Head.Decision)
