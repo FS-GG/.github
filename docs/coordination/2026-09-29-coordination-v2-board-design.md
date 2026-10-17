@@ -261,10 +261,13 @@ restoring V1 claims, Class/Phase ranking, lease machinery or a compatibility wra
 Source currently declares coherent 0.103.0. The accessible developer global CLI is 0.102.0,
 repository source `6e9be17bacd288ece103b67ecd5842d37a9c8e50`; its 82 installed tool members matched
 the cached package without execution. That observation does not identify the active Project 3
-consumer or authenticate a current feed/channel. The actual installed Project 3 caller and update
-owner remain a runtime-owner discovery gap. An inaccessible protected telemetry Store does not
-identify that caller and is not an established prerequisite for native-GitHub inspection; do not
-substitute developer installation or telemetry permissions for actual caller/update-route evidence. Original .103 attempted-Unknown,
+consumer or authenticate a current feed/channel. Root has selected the existing accessible developer
+installation as the .9 successor target, maintained by Home/SystemAdmin through its existing
+versioned coherent-release updater. The observed 0.102 bytes remain old installed evidence, not
+successor qualification or an existing current Project 3 binding. Protected telemetry Store access
+neither identifies that caller nor establishes a native-GitHub inspection prerequisite. Actual
+successor package/executable identity, private binding and consumer invocation remain to be qualified;
+the promoted-channel updater does not activate unpromoted candidate bytes. Original .103 attempted-Unknown,
 .104 held, all 439 reservations and unrelated Home/SC2 work remain untouched. New source must use the
 release owner's separately admitted fresh coherent candidate before publication/installed acceptance;
 it cannot replay, replace or repack an uncertain original.
@@ -483,9 +486,25 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   coherently, authenticate exact delivered package/tool/caller/consumer bytes and run actual installed
   pre-migration controlled/nonmutating inspection/selection controls with affected product nonregression.
   Positive actual successor-schema Project 3 controls follow .10 migration, before .11 adoption.
-  Establish the actual installed caller and update owner with the runtime owner. A protected telemetry
-  Store is not an established native-inspection prerequisite; developer 0.102 is not presumed to be the
-  active consumer.
+  The existing accessible developer installation is the selected successor target and Home/SystemAdmin
+  retains its maintained updater. Observed 0.102 is not successor qualification. A protected telemetry
+  Store is not an established native-inspection prerequisite; qualify the exact package/caller,
+  privately reviewed binding, credential principal and invocation instead.
+  **Selected candidate qualification composition.** Extend the existing source/byte candidate workflow
+  with packaged-process V2 pre-migration controls against the same isolated installed candidate. Keep
+  its current .103 profile, six feed/predecessor freshness reads and tag gates intact; actual gate
+  failure remains a gap, not permission for another release profile. Preserve the strict seven-member
+  publisher artifact and verifier; retain V2 process/package/loaded-assembly evidence separately under
+  exact source/run/attempt custody. Source/byte qualification remains separately admitted and does not
+  settle .103 Unknown, publish, promote or activate a release. The normal Home updater still requires
+  an actually promoted coherent channel; no candidate installer or publisher workaround is introduced.
+  Actual private Project 3 reads require the selected approved local caller/environment and credential
+  through existing secret custody: the CLI accepts `GITHUB_TOKEN`, otherwise `GH_TOKEN`; a repository
+  Actions token is not presumed to cover the organization project. Missing/malformed/mismatched input
+  refusal and controlled pre-migration evidence are not postmigration positive v4 acceptance. No new
+  In review option ID or final binding is invented. After actual native migration/readback, final stable
+  binding and positive installed inspect/refresh/selection remain required before consumer adoption.
+
 - [ ] **COORD-BOARD-V2-01.10 — Migrate and verify Project 3** — route: routine.
   Depends on complete bounded outcome mapping, .9 and admitted native mutation capability. Scope:
   selected enrollment/issue identities, necessary durable owner records, In review and exact bindings,
