@@ -297,6 +297,57 @@ class GhApi:
             entries[row["path"]] = row
         return entries
 
+    def installation_paths(self, repo: str, commit: str, paths: tuple[str, ...]) -> dict[str, dict]:
+        """Read only authenticated ancestor directories of the fixed installation closure."""
+        if (not isinstance(commit, str) or not SHA_RE.fullmatch(commit)
+                or not 1 <= len(paths) <= 8 or len(set(paths)) != len(paths)
+                or any(not isinstance(path, str) or not 1 <= len(path.split("/")) <= 5
+                       or any(part in ("", ".", "..") for part in path.split("/")) for path in paths)):
+            raise RuntimeError("installation selected path population is malformed")
+        value = self.installation_read(f"repos/{repo}/git/commits/{commit}")
+        root = (value.get("tree") or {}).get("sha") if isinstance(value, dict) else None
+        if (not isinstance(value, dict) or value.get("sha") != commit
+                or not isinstance(root, str) or not SHA_RE.fullmatch(root)):
+            raise RuntimeError("installation selected commit/root identity differs")
+        cache: dict[str, dict[str, dict]] = {}
+        def directory(sha: str) -> dict[str, dict]:
+            if sha in cache:
+                return cache[sha]
+            tree = self.installation_read(f"repos/{repo}/git/trees/{sha}")
+            if (not isinstance(tree, dict) or tree.get("sha") != sha
+                    or tree.get("truncated") is not False or not isinstance(tree.get("tree"), list)
+                    or len(tree["tree"]) > 10000):
+                raise RuntimeError("installation selected directory population is incomplete")
+            entries = {}
+            for row in tree["tree"]:
+                if (not isinstance(row, dict) or not isinstance(row.get("path"), str)
+                        or not row["path"] or "/" in row["path"] or row["path"] in (".", "..")
+                        or row["path"] in entries or not isinstance(row.get("sha"), str)
+                        or not SHA_RE.fullmatch(row["sha"]) or row.get("type") not in ("tree", "blob", "commit")
+                        or row.get("mode") not in {"tree": ("040000",), "blob": ("100644", "100755", "120000"),
+                                                   "commit": ("160000",)}[row["type"]]):
+                    raise RuntimeError("installation selected directory entry is malformed")
+                entries[row["path"]] = row
+            cache[sha] = entries
+            return entries
+        selected = {}
+        for path in paths:
+            sha = root
+            parts = path.split("/")
+            for index, part in enumerate(parts):
+                row = directory(sha).get(part)
+                if row is None:
+                    raise RuntimeError("installation selected path is missing")
+                if index == len(parts) - 1:
+                    if row.get("type") != "blob" or row.get("mode") not in ("100644", "100755"):
+                        raise RuntimeError("installation selected leaf is not a regular blob")
+                    selected[path] = dict(row, path=path)
+                else:
+                    if row.get("type") != "tree" or row.get("mode") != "040000":
+                        raise RuntimeError("installation selected ancestor is not a regular tree")
+                    sha = row["sha"]
+        return selected
+
     def installation_blob(self, repo: str, row: dict, *, max_bytes: int = 131072) -> bytes:
         if row.get("type") != "blob" or row.get("mode") not in ("100644", "100755"):
             raise RuntimeError("installation payload is not a regular canonical file")
@@ -343,14 +394,16 @@ class GhApi:
                 or (lineage.get("base_commit") or {}).get("sha") != source
                 or lineage.get("status") not in ("identical", "ahead")):
             raise RuntimeError("installation producer is not a protected-main ancestor")
-        canonical = self.installation_tree(PRODUCER_REPOSITORY, source)
+        canonical = self.installation_paths(PRODUCER_REPOSITORY, source,
+            PRODUCER_PATHS + ((ASSERTION_BUNDLE,) if repo == "FS-GG/FS.GG.Templates" else ()))
         def protected_owner_still_current():
             latest = self.installation_read(f"repos/{PRODUCER_REPOSITORY}/git/ref/heads/main")
             if (not isinstance(latest, dict) or latest.get("ref") != "refs/heads/main"
                     or (latest.get("object") or {}).get("type") != "commit"
                     or (latest.get("object") or {}).get("sha") != owner_head):
                 raise RuntimeError("protected producer moved")
-        current_owner = self.installation_tree(PRODUCER_REPOSITORY, owner_head)
+        current_owner = self.installation_paths(PRODUCER_REPOSITORY, owner_head,
+            (*PRODUCER_PATHS, "tools/routine-delivery.py", "src/FS.GG.Drivers/workspace-inventory.json"))
         inventory_row = current_owner.get("src/FS.GG.Drivers/workspace-inventory.json")
         if inventory_row is None:
             raise RuntimeError("maintained driver workspace inventory is missing")
@@ -412,7 +465,7 @@ class GhApi:
                     or (old_lineage.get("merge_base_commit") or {}).get("sha") != old_pin
                     or old_lineage.get("status") not in ("identical", "ahead")):
                 raise RuntimeError("old assertion pin is not a selected protected producer ancestor")
-            pinned = self.installation_tree(PRODUCER_REPOSITORY, old_pin)
+            pinned = self.installation_paths(PRODUCER_REPOSITORY, old_pin, (ASSERTION_BUNDLE,))
             before_bundle, selected_bundle = pinned.get(ASSERTION_BUNDLE), canonical.get(ASSERTION_BUNDLE)
             if (before_bundle is None or selected_bundle is None
                     or before_bundle.get("type") != "blob" or before_bundle.get("mode") not in ("100644", "100755")
