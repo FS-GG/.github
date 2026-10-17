@@ -48,6 +48,12 @@ slice, action-specific prerequisite/intake and attributed resource/reservation f
 The ordinary CLI has no authenticated supplier for those facts yet and reports the
 missing owning integrator/runtime inputs explicitly. It recovers the actual existing
 PR/head without claiming continuation eligibility when action prerequisites are unknown.
+Native `closingIssuesReferences` supplies an observed association, not the complete
+owning-issue Current deliverable, accountable owner and proposed-action join. Routine
+whole-outcome PRs may use Related instead of Closes. An absent closing edge therefore
+does not prove that no current deliverable exists. The production Current deliverable/
+owner/action join remains open with the integrator alongside the other missing suppliers;
+new dispatch cannot infer an empty existing-work population from closing edges alone.
 With complete current action evidence, continuation preserves that PR/owner without
 requiring new-dispatch capacity. New source readiness separately requires fresh
 implementation, review, CI and original/uncertain reservation coverage. Canonical
