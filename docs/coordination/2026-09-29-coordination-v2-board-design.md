@@ -497,7 +497,13 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   [sole release plan](../roadmaps/utel-release-successor.md#selected-source-completion-prospective-103-suspension-and-one-104-successor).
   Preserve six feed/predecessor freshness reads and initial release/tag absence gates; terminal
   retention repeats main plus feed/predecessor checks only. Actual gate failure remains a gap,
-  not permission for another qualification-only profile. Preserve the strict seven-member
+  not permission for another qualification-only profile. The first selected install-only invocation
+  refused before credentials because the native input context omitted declared optional empty strings.
+  Its current wire decoder restores only the five source-declared empty-string defaults before the
+  unchanged closed semantic/digest checks; required booleans, unknown keys, wrong supplied types and
+  nonempty mode conflicts still refuse. Install still requires an exact nonempty Authority parent;
+  publication requires that parent input empty. The original refusal, skipped issuer/effects and
+  retained result remain distinct from actual installation. Preserve the strict seven-member
   publisher artifact and verifier; retain V2 process/package/loaded-assembly evidence separately under
   exact source/run/attempt custody. Source/byte qualification remains separately admitted and does not
   settle .103 Unknown, publish, promote or activate a release. The normal Home updater still requires
@@ -520,9 +526,19 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   Linux non-reaping observation pins root identity until one group signal; bounded reap/read-only
   absence checks refuse unknown cleanup, with no escaped-process-tree claim. Bounded exact outputs,
   partial identities/outcomes and original first failure survive separately from cleanup status.
-  Inert candidate/helper/artifact controls and independent source review passed; actual packaged
-  execution, private native positives, migration-scope validation and timing remain unqualified.
-  The original 45-minute workflow cap and seven-member publisher archive are unchanged.
+  Package identity follows the canonical CLI `AssemblyName`: the entry member is
+  `tools/net10.0/any/fsgg-coord-engine.dll`, distinct from package ID `FS.GG.Coord.Cli`.
+  Require that unique entry and the adapter member to match the isolated installed bytes;
+  independently stated source/layout expectations prevent a fixture from repeating the same wrong
+  producer constant. Identity failure retains bounded member counts/names and partial evidence;
+  zero reached controls cannot qualify the nine-control scope.
+  The [first selected candidate](https://github.com/FS-GG/.github/actions/runs/39070328114) passed
+  actual six-feed/predecessor, build/package and installed-surface gates, then stopped before any V2
+  case because the helper expected a package-ID-derived entry name. Its authentic separate result
+  and original failure remain retained; no seven-member publication candidate was produced.
+  The connected correction is source-reviewed/inert-qualified, not a repaired native result.
+  Fresh exact-source candidate execution, private native positives, migration-scope validation and
+  timing remain unqualified. The original 45-minute cap and publisher archive are unchanged.
   **First hosted source cohort retained.** [PR #4653](https://github.com/FS-GG/.github/pull/4653)
   at `c57e651a` failed before migration tests: an offside record/map continuation blocked
   [compilation](https://github.com/FS-GG/.github/actions/runs/39052670010), migration envelope selectors
