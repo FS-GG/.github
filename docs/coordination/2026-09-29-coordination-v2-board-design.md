@@ -261,8 +261,13 @@ restoring V1 claims, Class/Phase ranking, lease machinery or a compatibility wra
 Source currently declares coherent 0.103.0. The accessible developer global CLI is 0.102.0,
 repository source `6e9be17bacd288ece103b67ecd5842d37a9c8e50`; its 82 installed tool members matched
 the cached package without execution. That observation does not identify the active Project 3
-consumer or authenticate a current feed/channel. The inaccessible protected installed receiver remains
-an attributed runtime-owner gap and is not probed or substituted. Original .103 attempted-Unknown,
+consumer or authenticate a current feed/channel. Root has selected the existing accessible developer
+installation as the .9 successor target, maintained by Home/SystemAdmin through its existing
+versioned coherent-release updater. The observed 0.102 bytes remain old installed evidence, not
+successor qualification or an existing current Project 3 binding. Protected telemetry Store access
+neither identifies that caller nor establishes a native-GitHub inspection prerequisite. Actual
+successor package/executable identity, private binding and consumer invocation remain to be qualified;
+the promoted-channel updater does not activate unpromoted candidate bytes. Original .103 attempted-Unknown,
 .104 held, all 439 reservations and unrelated Home/SC2 work remain untouched. New source must use the
 release owner's separately admitted fresh coherent candidate before publication/installed acceptance;
 it cannot replay, replace or repack an uncertain original.
@@ -481,8 +486,47 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   coherently, authenticate exact delivered package/tool/caller/consumer bytes and run actual installed
   pre-migration controlled/nonmutating inspection/selection controls with affected product nonregression.
   Positive actual successor-schema Project 3 controls follow .10 migration, before .11 adoption.
-  Attribute protected installed-receiver identity/access
-  gaps to the runtime owner; developer 0.102 is not presumed to be the active consumer.
+  The existing accessible developer installation is the selected successor target and Home/SystemAdmin
+  retains its maintained updater. Observed 0.102 is not successor qualification. A protected telemetry
+  Store is not an established native-inspection prerequisite; qualify the exact package/caller,
+  privately reviewed binding, credential principal and invocation instead.
+  **Selected candidate qualification composition.** Extend the existing source/byte candidate workflow
+  with packaged-process V2 pre-migration controls against the same isolated installed candidate. Keep
+  its current .103 profile, six feed/predecessor freshness reads and tag gates intact; actual gate
+  failure remains a gap, not permission for another release profile. Preserve the strict seven-member
+  publisher artifact and verifier; retain V2 process/package/loaded-assembly evidence separately under
+  exact source/run/attempt custody. Source/byte qualification remains separately admitted and does not
+  settle .103 Unknown, publish, promote or activate a release. The normal Home updater still requires
+  an actually promoted coherent channel; no candidate installer or publisher workaround is introduced.
+  Actual private Project 3 reads require the selected approved local caller/environment and credential
+  through existing secret custody: the CLI accepts `GITHUB_TOKEN`, otherwise `GH_TOKEN`; a repository
+  Actions token is not presumed to cover the organization project. Missing/malformed/mismatched input
+  refusal and controlled pre-migration evidence are not postmigration positive v4 acceptance. No new
+  In review option ID or final binding is invented. After actual native migration/readback, final stable
+  binding and positive installed inspect/refresh/selection remain required before consumer adoption.
+  **Prepared source implementation.** The retained candidate workflow now invokes nine isolated
+  packaged refusal controls and uploads separate V2 evidence. Package/nuspec source, installed
+  CLI/adapter members, invoked shim hashes and the distinct loaded-adapter refusal bind the stated
+  local-refusal scope; they are not runtime attestation or developer-install adoption. Each process
+  has a 20-second acquisition deadline and a separate five-second owned-group cleanup deadline.
+  Linux non-reaping observation pins root identity until one group signal; bounded reap/read-only
+  absence checks refuse unknown cleanup, with no escaped-process-tree claim. Bounded exact outputs,
+  partial identities/outcomes and original first failure survive separately from cleanup status.
+  Inert candidate/helper/artifact controls and independent source review passed; actual packaged
+  execution, private native positives, migration-scope validation and timing remain unqualified.
+  The original 45-minute workflow cap and seven-member publisher archive are unchanged.
+  **First hosted source cohort retained.** [PR #4653](https://github.com/FS-GG/.github/pull/4653)
+  at `c57e651a` failed before migration tests: an offside record/map continuation blocked
+  [compilation](https://github.com/FS-GG/.github/actions/runs/39052670010), migration envelope selectors
+  violated the [typed GraphQL boundary](https://github.com/FS-GG/.github/actions/runs/39052670020), and
+  the helper argument collided with the [retired-flag guard](https://github.com/FS-GG/.github/actions/runs/39052670017). The complete terminal cohort has 64 passed checks,
+  11 failures in those three source families and five skips; the compiler-first barrier withheld full
+  engine execution. Static source review missed these contracts and does not establish compiler
+  confidence. The coherent correction normalizes production/test/fixture sibling forms, moves only
+  strict migration parsing into the canonical envelope boundary with generic behavior unchanged,
+  and uses only `--installed-cli` at all helper callers. Existing direct guards/inert controls pass;
+  corrected hosted compilation, migration tests, packaged execution and acceptance remain required.
+
 - [ ] **COORD-BOARD-V2-01.10 — Migrate and verify Project 3** — route: routine.
   Depends on complete bounded outcome mapping, .9 and admitted native mutation capability. Scope:
   selected enrollment/issue identities, necessary durable owner records, In review and exact bindings,
@@ -505,9 +549,10 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   option ID and its card values when adding In review: the API replaces the supplied option list.
   New native option/view IDs remain unresolved preparation slots, never invented consumer bindings.
   Apply uses freshly checked exact identities and a bounded one-shot authorizer/provider composition,
-  retaining the exact original request before sending. The existing CLI only has post-run reporting:
-  implement a narrow exclusive private per-invocation evidence sink for original intent, requests and
-  outcomes before the first send; this is operation custody, not a global journal. Lost or
+  retaining the exact original request before sending. Earlier CLI post-run reporting did not establish
+  that custody. The new source adds a narrow exclusive private per-invocation evidence sink for
+  original intent, requests and outcomes before the first send; this is operation custody, not a
+  global journal. Lost or
   ambiguous responses stop writes and enter original-identity readback only; no blind retries or
   rollback. A fully reconciled unchanged repeat emits no mutations. Actual readback resolves new IDs;
   then land the final stable enrollment/binding before positive installed v4 inspection/refresh/selection.
@@ -520,6 +565,22 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   `authorized:true` flag, BoardIntake author eligibility nor a synthetic absent-supplier placeholder
   supplies approval; no cryptographic authority service or V1 permit is introduced. Source controls
   qualify this actual manual invocation route without granting a live operation here.
+
+  **Current source boundary.** The existing packaged route now contains `migration-prepare`,
+  `migration-apply` and `migration-readback`, with the exact invocation documented in the maintained
+  [caller contract](../../tests/coord-board-v2-cli-join/INSPECT.md#bounded-migration-source-contract).
+  Preparation is read-only and may report denied update capability; apply requires actual executing
+  CLI/adapter identities, native permission and separately selected owner invocation. Prepared bytes
+  bind the original private path; copying them cannot create another invocation. One shared
+  500-request/270-second budget covers reads and effects, with bounded fixed-origin HTTP acquisition,
+  no redirects/retries, strict clear-success envelopes, fresh determining facts before effects and
+  independently correlated native readback. File flush and Linux x64 directory-entry barriers precede
+  dispatch; unavailable barriers refuse. Expiry is rechecked after custody and at actual acquisition.
+  Orthogonal human view configuration remains unchanged. Twenty-seven focused controls are prepared,
+  and independent source review corrected seven connected custody/expiry/scope/readback/envelope/source
+  findings. They have not run locally; source review grants no compiler, runtime filesystem, installed,
+  native mutation or UI acceptance. Fresh hosted compilation, tests and coherent qualification remain
+  mandatory. No live migration is selected by this source implementation.
 
   Default migration writes no existing human Status/Track/Roadmap values. Native updates provide no
   expected-revision/CAS guarantee: fresh comparison detects observed drift, but a local lock cannot
