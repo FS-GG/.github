@@ -396,7 +396,7 @@ def pull_summary(pull: dict[str, Any]) -> dict[str, Any]:
 
 
 def enforce_lane(
-    pulls: list[dict[str, Any]], campaign_id: str, chain_id: str
+    pulls: list[dict[str, Any]], campaign_id: str, chain_id: str, *, sc2_bootstrap: bool = False
 ) -> int:
     managed_in_repo: list[dict[str, Any]] = []
     same_chain: list[dict[str, Any]] = []
@@ -429,7 +429,7 @@ def enforce_lane(
             **population,
             matchingPullRequests=[pull_summary(pull) for pull in same_chain],
         )
-    if len(managed_in_repo) >= 2:
+    if len(managed_in_repo) >= (3 if sc2_bootstrap else 2):
         raise Refusal(
             "repository-open-pr-cap",
             **population,
@@ -442,6 +442,80 @@ def enforce_lane(
             matchingPullRequests=[pull_summary(pull) for pull in unresolved],
         )
     return len(managed_in_repo)
+
+
+SC2_PREDECESSOR_CHAIN = "sc2-routine-producer-bootstrap-20261017"
+SC2_PRESERVED = {
+    43: ("routine/sc2-headless-runtime-image-20261014", "bce493a635ec6f0286eeb7b61778a9b773ae764e",
+         "unified-roadmap-20261003", "sc2-headless-runtime-image"),
+    44: ("routine/sc2-shared-wasm-adapter-source-20261017", "7bee6a9b7d61ff819f0672426f6675cf6c5b3194",
+         "outcome-led-programme-20261016", "sc2-shared-wasm-adapter-source-20261017"),
+}
+
+
+def installation_api(gh: str):
+    # Import the maintained source predicate, never a candidate validator or PR's code.
+    path = pathlib.Path(__file__).with_name("routine-delivery.py")
+    spec = importlib.util.spec_from_file_location("lane_source_installation", path)
+    module = importlib.util.module_from_spec(spec); assert spec and spec.loader
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    class SourceApi(module.GhApi):
+        def installation_read(self, endpoint):
+            return run_gh(gh, ["--method", "GET", endpoint])
+    return module, SourceApi()
+
+
+def sc2_predecessor(arguments: argparse.Namespace, pulls: list[dict[str, Any]]) -> None:
+    """One selected predecessor, not a caller-selected general PR-cap override."""
+    if (arguments.repo != "FS-GG/FS.GG.SC2.Client" or arguments.base != "main"
+            or arguments.campaign_id != "outcome-led-programme-20261016"
+            or arguments.dependency_chain_id != SC2_PREDECESSOR_CHAIN
+            or not arguments.head.startswith("routine/")
+            or len(pulls) != 2 or {row.get("number") for row in pulls} != set(SC2_PRESERVED)):
+        raise Refusal("sc2-predecessor-reservation-mismatch")
+    module, api = installation_api(arguments.gh)
+    for pull in pulls:
+        number = pull["number"]
+        branch, head, campaign, chain = SC2_PRESERVED[number]
+        if (pull.get("state") != "open" or metadata_field(pull, "head.ref") != branch
+                or metadata_field(pull, "head.sha") != head
+                or marker_from_body(pull.get("body")) != (campaign, chain)
+                or pull["body"].count("fsgg-pr-lane-admission") != 1):
+            raise Refusal("sc2-predecessor-reservation-mismatch")
+        native = run_gh(arguments.gh, ["--method", "GET", f"/repos/{arguments.repo}/pulls/{number}"])
+        if (not isinstance(native, dict) or native.get("number") != number or native.get("state") != "open"
+                or metadata_field(native, "head.sha") != head
+                or metadata_field(native, "head.ref") != branch
+                or marker_from_body(native.get("body")) != (campaign, chain)
+                or metadata_field(native, "head.repo.id") != 1390567199
+                or metadata_field(native, "base.repo.id") != 1390567199
+                or metadata_field(native, "base.ref") != "main"
+                or type(native.get("changed_files")) is not int):
+            raise Refusal("sc2-predecessor-preserved-pr-mismatch")
+        pages = run_gh(arguments.gh, ["--method", "GET", "--paginate", "--slurp",
+            f"/repos/{arguments.repo}/pulls/{number}/files?per_page=100"])
+        if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
+            raise Refusal("sc2-predecessor-preserved-files-unreadable")
+        files = [row for page in pages for row in page]
+        if len(files) != native["changed_files"] or any(not isinstance(row, dict) for row in files):
+            raise Refusal("sc2-predecessor-preserved-files-incomplete")
+        paths = [row.get("filename") for row in files]
+        if len(paths) != native["changed_files"] or not all(isinstance(path, str) for path in paths) or len(set(paths)) != len(paths):
+            raise Refusal("sc2-predecessor-preserved-files-incomplete")
+        if set(paths) & set(module.PRODUCER_PATHS):
+            raise Refusal("sc2-predecessor-preserved-path-overlap")
+    metadata = api.installation_read(f"repos/{arguments.repo}")
+    if (not isinstance(metadata, dict) or metadata.get("id") != 1390567199
+            or metadata.get("private") is not True):
+        raise Refusal("sc2-predecessor-receiver-mismatch")
+    default = api.installation_read(f"repos/{arguments.repo}/git/ref/heads/main")
+    base = (default.get("object") or {}).get("sha") if isinstance(default, dict) else None
+    try:
+        api.installation_source(arguments.repo, arguments.head_sha, arguments.base, base,
+                                arguments.sc2_producer_predecessor_source)
+    except (RuntimeError, KeyError, ValueError, TypeError, AttributeError) as error:
+        raise Refusal("sc2-predecessor-source-refused") from error
 
 
 def lock_root() -> pathlib.Path:
@@ -492,12 +566,16 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--body-file", required=True, type=pathlib.Path)
     result.add_argument("--update-pr", type=int, help="Update an existing managed PR, preserving native machine metadata")
     result.add_argument("--previous-head-sha", help="Explicit previous routine marker head for an update")
+    result.add_argument("--sc2-producer-predecessor-source", help="Protected canonical producer pin for the selected SC2 first-install predecessor")
     result.add_argument("--inspect", action="store_true", help="Check admission without creating a PR")
     result.add_argument("--gh", default="gh", help=argparse.SUPPRESS)
     return result
 
 
 def validate(arguments: argparse.Namespace) -> None:
+    if arguments.sc2_producer_predecessor_source and (arguments.update_pr is not None
+            or not re.fullmatch(r"[0-9a-f]{40}", arguments.sc2_producer_predecessor_source)):
+        raise ToolError("SC2 predecessor requires an exact producer pin and a new PR")
     if arguments.update_pr is not None and (arguments.update_pr <= 0 or not arguments.previous_head_sha
             or not SHA_RE.fullmatch(arguments.previous_head_sha)):
         raise ToolError("update requires a positive PR number and an exact previous head SHA")
@@ -539,9 +617,15 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
                                 arguments.campaign_id, arguments.dependency_chain_id)
     with repository_lock(arguments.repo):
         pulls = open_pulls(arguments.gh, arguments.repo)
+        bootstrap = bool(arguments.sc2_producer_predecessor_source)
+        if bootstrap:
+            gate = routine_validator()
+            if gate.marker_fields(gate.ROUTINE_MARKER_RE, managed_body)[0].get("operation") != "source-change":
+                raise Refusal("sc2-predecessor-operation-mismatch", **identity)
+            sc2_predecessor(arguments, pulls)
         try:
             open_count = enforce_lane(
-                pulls, arguments.campaign_id, arguments.dependency_chain_id
+                pulls, arguments.campaign_id, arguments.dependency_chain_id, sc2_bootstrap=bootstrap
             )
         except Refusal as refusal:
             refusal.details = {**identity, **refusal.details}
@@ -565,8 +649,18 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
             "openNativePullRequestCount": len(pulls),
             "nativeOpenPullRequests": [pull_summary(pull) for pull in pulls],
         }
+        if bootstrap:
+            common["selectedException"] = "sc2-exact-five-file-predecessor"
+            managed_body += "\nSelected SC2 first-install predecessor; preserved PR43/44 remain owned and unchanged.\n"
         if arguments.inspect:
             return {"ok": True, "action": "admitted", **common}
+        if bootstrap:
+            # Recheck complete reservations and source immediately before the one possible create.
+            deciding = open_pulls(arguments.gh, arguments.repo)
+            # The closed predicate rechecks relevant identities; volatile REST fields are not a lock.
+            sc2_predecessor(arguments, deciding)
+            if current_head_sha(arguments.gh, arguments.repo, arguments.head) != arguments.head_sha:
+                raise Refusal("head-moved", **common)
 
         payload = json.dumps(
             {
@@ -577,12 +671,19 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
             },
             ensure_ascii=False,
         )
-        created = run_gh(
-            arguments.gh,
-            ["--method", "POST", f"/repos/{arguments.repo}/pulls", "--input", "-"],
-            stdin=payload,
-        )
-        if not isinstance(created, dict) or not isinstance(created.get("number"), int):
+        try:
+            created = run_gh(
+                arguments.gh,
+                ["--method", "POST", f"/repos/{arguments.repo}/pulls", "--input", "-"],
+                stdin=payload,
+            )
+        except ToolError as error:
+            if bootstrap:
+                raise Refusal("sc2-predecessor-create-unresolved", **common, writeAttempted=True) from error
+            raise
+        if not isinstance(created, dict) or type(created.get("number")) is not int or created["number"] <= 0:
+            if bootstrap:
+                raise Refusal("sc2-predecessor-create-unresolved", **common, writeAttempted=True)
             raise ToolError("created pull-request response did not contain a number")
         return {
             "ok": True,
