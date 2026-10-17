@@ -1386,3 +1386,61 @@ proof does not establish current issuance, scope, expiry or effect authority.
 Publication needs all 16 durable effects and both-feed readback. SDD pin updates,
 materialization and installed receiver qualification follow normal owner routes;
 no candidate, package staging or version output establishes them.
+
+#### Selected source completion: prospective .103 suspension and one .104 successor
+
+The programme owner selects the following bounded source completion under the user's direction to
+proceed without unavailable old publication artifacts. This supersedes the draft's separate
+`release-improvement-candidate.yml` proposal: reuse the maintained
+`release-successor-candidate.yml`, its exact seven-member publisher archive and separate V2 evidence,
+with one closed literal 0.104.0 / `utel-rel-22` successor selection. Retain historical selections and
+their refusals; add no caller-supplied version, journal or artifact profile. No intermediate .103
+candidate qualification is needed for this new source composition. Actual version/journal absence,
+promoted predecessor and six feed coordinates remain fresh native gates, not facts allocated by a
+source literal. The existing updater still requires a genuinely promoted coherent channel.
+
+Use the existing protected Authority main and writer for one strict release-specific object at
+`state/release-dispositions/utel-rel-21.json`, outside the original two-file release directory.
+The closed `fsgg.release-successor-suspension/1` record binds `disposition=suspended`, the exact
+original journal/ref/head/state digest/generation, version/content/source/archive and run/attempt/
+publisher identity, its unresolved tag effect, one allowed successor, and the accountable decision.
+The existing sole publisher operator remains `EHotwagner`. The decision must match the immutable
+repository/path/revision/body digest of this accepted source decision; an arbitrary URL, workflow
+input or caller string cannot supply that authority. Install through the maintained protected writer
+with exact expected-parent non-forced CAS and preservation of unrelated tree entries. Creation is a
+separately admitted operation, not a side effect of reading or source delivery.
+
+One maintained strict reader governs current entry, journal initialization/continuation, original
+candidate/tag recovery, direct provider admission and each intent/dispatch/settle boundary. Read the
+disposition before credential acquisition and recheck fresh authority during execution/recovery.
+Missing, malformed, unsupported, changed or conflicting evidence refuses the new successor. An
+installed matching suspension refuses further original .103 continuation; no automatic resume branch
+is introduced. The successor must match the one literal allowed binding and the unchanged original
+state. Unrelated historical journals retain their separately selected semantics. Read access to the
+Authority repository before credential exchange is itself a capability to establish, never inferred
+from the source repository's Actions token or an inaccessible response.
+
+Prospective exclusion preserves every old Unknown. Original run
+[38580684077, attempt 1](https://github.com/FS-GG/.github/actions/runs/38580684077) is terminal;
+the existing first-attempt/in-progress/current-main and ordered per-effect admissions exclude new
+admitted effects from that completed original process, a rerun, or stale source. An already sent tag
+may still complete at its own coordinate, but cannot independently run later feed or promotion code.
+The durable suspension neither proves rollback/non-dispatch nor settles credentials, effects or any
+of the inherited 439 reservations. Do not recreate missing original artifacts, reset its journal,
+overwrite/delete a late tag, or relabel old effects as verified or absent.
+
+Old immutable source cannot retroactively consume the reader. Before native cutover, authenticate
+the original terminal job/attempt, current source and workflow entry points, competing-run/entry
+census, and actual credential custody. Do not admit a prohibited historical credential route. A known
+independent ungated writer or live credential holder requires fencing that existing route before
+acceptance; a marker is not universal bearer revocation. This is a bounded exclusion argument, not
+a new authority service or global pending-release ledger.
+
+Focused controls must traverse actual maintained entry/recovery/provider callers, prove refusal
+before exchanges and prohibited writes, and cover exact successor selection, malformed/duplicate
+records, crossed original/decision/successor bindings, changing authority between effects, immutable
+original state, CAS conflicts and unrelated-tree preservation. Preserve the existing sixteen-effect
+order, original-candidate dependency-pin refusals, independent failure/cleanup reporting and unchanged
+candidate resource bounds. Source-only qualification does not install the disposition, allocate a
+journal, mint credentials, publish/promote, replay an original effect or activate installed V2. Root
+retains separate native operation selection after reviewed source delivery and fresh exact inputs.
