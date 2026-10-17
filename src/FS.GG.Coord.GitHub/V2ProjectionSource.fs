@@ -729,15 +729,18 @@ module V2ProjectionSource =
             elif report.NativeIntegrator.RepositoryGaps.Count > 0 || (report.NativeIntegrator.PullRequests |> List.exists (fun value -> not value.Gaps.IsEmpty || not (canonicalScope value.Repository) || not (usable value.Files))) then
                 result "unknown" [ "Complete in-flight PR/association/file inventory is unavailable, including non-enrolled work" ]
             elif pull.IsSome && (slice.IsNone || not slice.Value.PrerequisitesComplete || slice.Value.IntakeAuthorized <> Some true) then
-                result "unknown" [ yield "Existing PR/head recovered; action-specific owning-plan prerequisite/intake coverage is unavailable from the integrator, so continuation eligibility is unknown"
-                                   yield "New-dispatch capacity is separate and does not require restarting this work" ]
+                result "unknown"
+                    [ "Existing PR/head recovered; action-specific owning-plan prerequisite/intake coverage is unavailable from the integrator, so continuation eligibility is unknown";
+                      "New-dispatch capacity is separate and does not require restarting this work" ]
             elif pull.IsSome then
                 let current = pull.Value
                 if not current.Gaps.IsEmpty then result "unknown" current.Gaps
                 elif current.Files.IsEmpty || not (usable current.Files) then result "unknown" [ "Current PR file scope is missing or unusable" ]
-                else result "continue-existing" [ yield "Continue the established owner and exact native PR/head; do not start duplicate implementation"
-                                                 yield "Review/check observations are head-bound; required-check and delivery acceptance remain with the normal delivery route"
-                                                 yield "Unknown new-dispatch capacity/reservations do not restart existing work; refresh determining facts before the proposed action" ]
+                else
+                    result "continue-existing"
+                        [ "Continue the established owner and exact native PR/head; do not start duplicate implementation";
+                          "Review/check observations are head-bound; required-check and delivery acceptance remain with the normal delivery route";
+                          "Unknown new-dispatch capacity/reservations do not restart existing work; refresh determining facts before the proposed action" ]
             elif slice.IsNone then result "unknown" [ "Exact current implementation slice is unavailable; parent outcome scope is not a reservation" ]
             elif not slice.Value.PrerequisitesComplete then result "unknown" [ "Action-specific native and owning-plan prerequisite coverage is incomplete; supplying owner is the integrator" ]
             elif not (usable slice.Value.Paths) then result "unknown" [ "Exact current slice touch-set is missing or unusable" ]
@@ -758,8 +761,9 @@ module V2ProjectionSource =
                     | Some capacity when capacity.Reservations.IsSome && current.IntakeAuthorized = Some true ->
                         match capacity.ImplementationSlots, capacity.ReviewSlots, capacity.HostedCiSlots with
                         | Some implementation, Some review, Some ci when implementation > 0 && review > 0 && ci > 0 ->
-                            result "ready" [ yield "Current source slice is disjoint within attributed implementation/review/CI capacity and reservations"
-                                             yield "Later publication/installed/native acceptance is not a source-development prerequisite; selection grants no dispatch authority" ]
+                            result "ready"
+                                [ "Current source slice is disjoint within attributed implementation/review/CI capacity and reservations";
+                                  "Later publication/installed/native acceptance is not a source-development prerequisite; selection grants no dispatch authority" ]
                         | Some implementation, Some review, Some ci when implementation <= 0 || review <= 0 || ci <= 0 -> result "blocked" [ "Required implementation/review/hosted-CI capacity is exhausted" ]
                         | _ -> result "unknown" [ "Implementation, review or hosted-CI capacity is unavailable from its supplying owner" ]
                     | _ -> result "unknown" [ "Fresh attributed reservation/capacity/intake facts are unavailable from the integrator/runtime owners" ])
