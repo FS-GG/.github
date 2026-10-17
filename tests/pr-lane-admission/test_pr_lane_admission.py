@@ -1,5 +1,8 @@
 import json
 import argparse
+import copy
+import hashlib
+from unittest import mock
 import importlib.util
 import os
 import pathlib
@@ -35,7 +38,7 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
                     raise RuntimeError("offline qualification refuses nonfixture child")
         sys.addaudithook(inert)
 
-    def invoke(self, state, body="First line\nSecond line\n", branch="feature/combined", head=EXPECTED_SHA, extra=()):
+    def invoke(self, state, body="First line\nSecond line\n", branch="feature/combined", head=EXPECTED_SHA, extra=(), repo="FS-GG/example"):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         directory = pathlib.Path(temporary.name)
@@ -52,7 +55,7 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
                 "-I", "-S", "-B",
                 str(TOOL),
                 "--repo",
-                "FS-GG/example",
+                repo,
                 "--campaign-id",
                 "campaign-7",
                 "--dependency-chain-id",
@@ -83,17 +86,26 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
         return completed, json.loads(completed.stdout), calls
 
     def update_state(self, body=None):
-        return {"head_sha": EXPECTED_SHA, "pull": {
-            "number": 42, "state": "open", "title": "Deliver coherent feature",
-            "head": {"ref": "routine/fixture", "sha": EXPECTED_SHA,
-                     "repo": {"full_name": "FS-GG/example"}},
-            "base": {"ref": "main"},
+        # Real GET identity/authority shape; guard coverage cannot rely on omitted fields/defaults.
+        owner = {"id": 7, "node_id": "O_owner", "login": "FS-GG", "type": "Organization"}
+        author = {"id": 8, "node_id": "U_author", "login": "fixture", "type": "User"}
+        repository = {"id": 9, "node_id": "R_repository", "full_name": "FS-GG/example", "owner": owner,
+                      "private": True, "archived": False, "disabled": False, "visibility": "private",
+                      "permissions": {"admin": False, "maintain": True, "push": True, "triage": True, "pull": True}}
+        value = {"head_sha": EXPECTED_SHA, "pull": {
+            "number": 42, "id": 1042, "node_id": "PR_fixture", "state": "open", "merged": False,
+            "draft": False, "locked": False, "maintainer_can_modify": True, "author_association": "MEMBER",
+            "user": author, "html_url": "https://github.com/FS-GG/example/pull/42", "title": "Deliver coherent feature",
+            "head": {"ref": "routine/fixture", "sha": EXPECTED_SHA, "repo": repository, "user": owner},
+            "base": {"ref": "main", "sha": "c" * 40, "repo": repository, "user": owner},
+            "mergeable": None, "rebaseable": None, "mergeable_state": "unknown", "merge_commit_sha": "d" * 40,
             "body": body if body is not None else managed_body("campaign-7", "chain-3") +
                 "<!-- fsgg:routine-development/v1 head=" + "b" * 40 + " operation=source-change extra=value -->\n"}}
+        return json.loads(json.dumps(value))
 
-    def update(self, state, body="Revised prose\n"):
+    def update(self, state, body="Revised prose\n", repo="FS-GG/example"):
         return self.invoke(state, body, "routine/fixture", extra=(
-            "--update-pr", "42", "--previous-head-sha", "b" * 40))
+            "--update-pr", "42", "--previous-head-sha", "b" * 40), repo=repo)
 
     def test_update_preserves_fresh_metadata_and_rebinds_only_routine_head(self):
         state = self.update_state()
@@ -177,6 +189,224 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
         self.assertEqual(3, completed.returncode, completed.stdout)
         self.assertEqual("head-moved", result["reason"])
         self.assertFalse(any(c["arguments"][2] == "PATCH" for c in calls))
+
+    @staticmethod
+    def set_field(value, path, item, *, remove=False):
+        parts = path.split(".")
+        for part in parts[:-1]:
+            value = value[part]
+        if remove:
+            del value[parts[-1]]
+        else:
+            value[parts[-1]] = item
+
+    def test_update_ignores_only_action_irrelevant_native_observation_churn(self):
+        volatile = {"mergeable": True, "rebaseable": True, "mergeable_state": "unstable", "merge_commit_sha": "e" * 40}
+        for changes in [{field: value} for field, value in volatile.items()] + [volatile]:
+            with self.subTest(changes=tuple(changes)):
+                state = self.update_state()
+                changed = copy.deepcopy(state["pull"])
+                changed.update(changes)
+                state["read_sequence"] = [state["pull"], changed]
+                completed, result, calls = self.update(state)
+                self.assertEqual(0, completed.returncode, completed.stdout)
+                self.assertEqual("updated", result["action"])
+                self.assertEqual(1, sum(call["arguments"][2] == "PATCH" for call in calls))
+                self.assertEqual(3, sum(any(argument.endswith("/pulls/42") for argument in call["arguments"]) and call["arguments"][2] == "GET" for call in calls))
+
+    def test_update_repo_argument_case_preserves_exact_native_github_url_contract(self):
+        for repo in ("fs-gg/example", "fS-gG/eXaMpLe"):
+            with self.subTest(repo=repo):
+                completed, result, calls = self.update(self.update_state(), repo=repo)
+                self.assertEqual(0, completed.returncode, completed.stdout)
+                self.assertEqual("updated", result["action"])
+                self.assertEqual("https://github.com/FS-GG/example/pull/42", result["url"])
+                self.assertEqual(1, sum(call["arguments"][2] == "PATCH" for call in calls))
+        for url in ("https://other.example/FS-GG/example/pull/42", "http://github.com/FS-GG/example/pull/42",
+                    "https://github.com/FS-GG/example/issues/42", "https://github.com/FS-GG/example/pull/43",
+                    "https://github.com@other.example/FS-GG/example/pull/42"):
+            for stage in ("initial-candidate", "prewrite-comparison"):
+                with self.subTest(url=url, stage=stage):
+                    state = self.update_state()
+                    changed = copy.deepcopy(state["pull"])
+                    changed["html_url"] = url
+                    if stage == "initial-candidate":
+                        state["pull"] = changed
+                    else:
+                        state["read_sequence"] = [state["pull"], changed]
+                    completed, result, calls = self.update(state, repo="fs-gg/example")
+                    self.assertEqual(3, completed.returncode, completed.stdout)
+                    self.assertEqual(stage, result["stage"])
+                    self.assertFalse(result["writeAttempted"])
+                    self.assertIn("html_url", [item["field"] for item in result["diagnostic"]["fields"]])
+                    self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+
+    def test_every_metadata_identity_authority_and_prose_change_refuses_before_patch(self):
+        changes = {"number": 43, "id": 1043, "node_id": "PR_other", "state": "closed", "merged": True,
+                   "draft": True, "locked": True, "maintainer_can_modify": False, "author_association": "NONE",
+                   "html_url": "https://github.com/FS-GG/example/pull/43", "title": "Concurrent private title",
+                   "body": self.update_state()["pull"]["body"] + "Concurrent private prose\n",
+                   "head.ref": "routine/other", "head.sha": "e" * 40, "base.ref": "other", "base.sha": "e" * 40}
+        for prefix in ("user", "head.user", "base.user", "head.repo.owner", "base.repo.owner"):
+            for field, value in (("id", 999), ("node_id", "U_other"), ("login", "other"), ("type", "Bot")):
+                changes[prefix + "." + field] = value
+        for prefix in ("head.repo", "base.repo"):
+            changes.update({prefix + ".id": 999, prefix + ".node_id": "R_other", prefix + ".full_name": "Other/repository",
+                            prefix + ".private": False, prefix + ".archived": True, prefix + ".disabled": True,
+                            prefix + ".visibility": "public", prefix + ".permissions": {"push": False}})
+        for field, value in changes.items():
+            with self.subTest(field=field):
+                state = self.update_state()
+                changed = copy.deepcopy(state["pull"])
+                self.set_field(changed, field, value)
+                state["read_sequence"] = [state["pull"], changed]
+                completed, result, calls = self.update(state)
+                self.assertEqual(3, completed.returncode, completed.stdout)
+                self.assertEqual("prewrite-comparison", result["stage"])
+                self.assertFalse(result["writeAttempted"])
+                self.assertIn(field, [entry["field"] for entry in result["diagnostic"]["fields"]])
+                self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+                self.assertNotIn("Concurrent private", completed.stdout)
+
+    def test_required_metadata_fields_missing_and_malformed_are_distinct_and_never_defaulted(self):
+        required = ["number", "id", "node_id", "state", "merged", "draft", "locked", "maintainer_can_modify",
+                    "author_association", "html_url", "title", "body", "head.ref", "head.sha", "base.ref", "base.sha"]
+        for prefix in ("user", "head.user", "base.user", "head.repo.owner", "base.repo.owner"):
+            required += [prefix + "." + field for field in ("id", "node_id", "login", "type")]
+        for prefix in ("head.repo", "base.repo"):
+            required += [prefix + "." + field for field in ("id", "node_id", "full_name")]
+        for field in required:
+            for remove in (True, False):
+                with self.subTest(field=field, remove=remove):
+                    state = self.update_state()
+                    self.set_field(state["pull"], field, None, remove=remove)
+                    completed, result, calls = self.update(state)
+                    self.assertEqual(3, completed.returncode, completed.stdout)
+                    self.assertEqual("initial-candidate", result["stage"])
+                    self.assertFalse(result["writeAttempted"])
+                    problem = next(item for item in result["diagnostic"]["fields"] if item["field"] == field)
+                    self.assertEqual("missing" if remove else "malformed", problem["status"])
+                    self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+        for value in (None, [], {"body": {"credential-secret": "raw native blob"}}):
+            state = self.update_state()
+            state["read_sequence"] = [value]
+            completed, result, calls = self.update(state)
+            self.assertEqual(3, completed.returncode)
+            self.assertEqual("initial-candidate", result["stage"])
+            self.assertNotIn("credential-secret", completed.stdout)
+            self.assertNotIn("raw native blob", completed.stdout)
+            self.assertFalse(result["writeAttempted"])
+
+    def test_optional_capability_presence_and_malformed_types_remain_guarded(self):
+        for field in ("head.repo.private", "base.repo.archived", "head.repo.disabled", "base.repo.visibility", "head.repo.permissions"):
+            for missing_before in (True, False):
+                with self.subTest(field=field, missing_before=missing_before):
+                    state = self.update_state()
+                    changed = copy.deepcopy(state["pull"])
+                    self.set_field(state["pull"] if missing_before else changed, field, None, remove=True)
+                    state["read_sequence"] = [state["pull"], changed]
+                    completed, result, calls = self.update(state)
+                    self.assertEqual(3, completed.returncode)
+                    self.assertEqual("update-conflict", result["reason"])
+                    difference = next(item for item in result["diagnostic"]["fields"] if item["field"] == field)
+                    self.assertEqual("missing", difference["expected" if missing_before else "observed"]["kind"])
+                    self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+            state = self.update_state()
+            self.set_field(state["pull"], field, ["private-secret"])
+            completed, result, calls = self.update(state)
+            self.assertEqual(3, completed.returncode)
+            self.assertEqual("malformed", result["diagnostic"]["fields"][0]["status"])
+            self.assertNotIn("private-secret", completed.stdout)
+
+    def test_metadata_marker_policy_and_branch_ref_failures_have_safe_actual_stage(self):
+        for field, replacement in (("campaign-7", "other"), ("source-change", "deploy"), ("b" * 40, "f" * 40)):
+            state = self.update_state()
+            state["pull"]["body"] = state["pull"]["body"].replace(field, replacement)
+            completed, result, calls = self.update(state)
+            self.assertEqual(3, completed.returncode)
+            self.assertEqual("metadata-preparation", result["stage"])
+            self.assertFalse(result["writeAttempted"])
+            self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+        for head in ("f" * 40, None, 123, "malformed-private-secret"):
+            state = self.update_state()
+            state["head_sha"] = head
+            completed, result, calls = self.update(state)
+            self.assertEqual(3, completed.returncode)
+            self.assertEqual("branch-ref", result["stage"])
+            self.assertEqual("branch.sha", result["diagnostic"]["fields"][0]["field"])
+            self.assertFalse(result["writeAttempted"])
+            self.assertNotIn("malformed-private-secret", completed.stdout)
+            self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+
+    def test_diagnostic_fingerprints_bind_deciding_read_without_later_substitute(self):
+        state = self.update_state()
+        changed = copy.deepcopy(state["pull"])
+        changed["body"] += "private deciding response\n"
+        state["read_sequence"] = [state["pull"], changed, state["pull"]]
+        completed, result, calls = self.update(state)
+        self.assertEqual(3, completed.returncode)
+        self.assertEqual("prewrite-comparison", result["stage"])
+        difference = next(item for item in result["diagnostic"]["fields"] if item["field"] == "body")
+        encoded = json.dumps(changed["body"], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        self.assertEqual(hashlib.sha256(encoded).hexdigest(), difference["observed"]["sha256"])
+        self.assertEqual(len(encoded), difference["observed"]["bytes"])
+        self.assertEqual(2, sum(any(argument.endswith("/pulls/42") for argument in call["arguments"]) for call in calls))
+        self.assertNotIn("private deciding response", completed.stdout)
+        self.assertLess(len(completed.stdout), 2000)
+
+    def test_stale_then_current_native_head_are_separate_attempts(self):
+        stale = self.update_state()
+        stale["pull"]["head"]["sha"] = "b" * 40
+        completed, refused, calls = self.update(stale)
+        self.assertEqual(3, completed.returncode)
+        self.assertEqual("initial-candidate", refused["stage"])
+        self.assertFalse(refused["writeAttempted"])
+        self.assertEqual(1, len(calls))
+        completed, accepted, current_calls = self.update(self.update_state())
+        self.assertEqual(0, completed.returncode)
+        self.assertEqual("updated", accepted["action"])
+        self.assertEqual(1, sum(call["arguments"][2] == "PATCH" for call in current_calls))
+        self.assertEqual("update-candidate-mismatch", refused["reason"])
+
+    def test_postwrite_base_drift_remains_unresolved_with_exact_updated_prose_and_no_retry(self):
+        state = self.update_state()
+        completed, _, calls = self.update(state)
+        self.assertEqual(0, completed.returncode)
+        patch = next(call for call in calls if call["arguments"][2] == "PATCH")
+        after = copy.deepcopy(state["pull"])
+        after.update(json.loads(patch["stdin"]))
+        after["base"]["sha"] = "e" * 40
+        state["read_sequence"] = [state["pull"], state["pull"], after]
+        completed, result, calls = self.update(state)
+        self.assertEqual(3, completed.returncode)
+        self.assertEqual("update-readback-mismatch", result["reason"])
+        self.assertEqual("postwrite-readback", result["stage"])
+        self.assertTrue(result["writeAttempted"])
+        self.assertEqual(["base.sha"], [item["field"] for item in result["diagnostic"]["fields"]])
+        self.assertEqual(1, sum(call["arguments"][2] == "PATCH" for call in calls))
+        self.assertEqual("GET", calls[-1]["arguments"][2])
+
+    def test_update_read_errors_have_actual_stage_and_never_emit_exception_secrets_or_retry(self):
+        spec = importlib.util.spec_from_file_location("lane_read_errors", TOOL)
+        lane = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(lane)
+        args = lane.parser().parse_args(["--repo", "FS-GG/example", "--campaign-id", "campaign-7", "--dependency-chain-id", "chain-3",
+            "--head", "routine/fixture", "--head-sha", EXPECTED_SHA, "--base", "main", "--title", "Deliver coherent feature",
+            "--body-file", "unused", "--update-pr", "42", "--previous-head-sha", "b" * 40])
+        pull = self.update_state()["pull"]
+        branch = {"object": {"sha": EXPECTED_SHA}}
+        for stage, sequence in (("initial-candidate", []), ("branch-ref", [pull]),
+                                ("prewrite-comparison", [pull, branch]), ("postwrite-readback", [pull, branch, pull, {}])):
+            with self.subTest(stage=stage), mock.patch.object(lane, "run_gh", side_effect=sequence + [lane.ToolError("credential-secret raw native stderr")]) as transport:
+                with self.assertRaises(lane.Refusal) as failure:
+                    lane.update_pull(args, "Revised prose\n", {"repo": "FS-GG/example"})
+                result = failure.exception.details
+                self.assertEqual(stage, result["stage"])
+                self.assertEqual(stage == "postwrite-readback", result["writeAttempted"])
+                self.assertEqual("read-error", result["diagnostic"]["status"])
+                self.assertEqual(len(sequence) + 1, transport.call_count)
+                self.assertNotIn("credential-secret", json.dumps(result))
+                self.assertLessEqual(sum(call.args[1][1] == "PATCH" for call in transport.call_args_list), 1)
 
     def test_refuses_when_same_dependency_chain_is_open_across_paginated_results(self):
         state = {
