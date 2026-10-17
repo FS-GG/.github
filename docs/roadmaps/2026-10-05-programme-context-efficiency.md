@@ -438,6 +438,19 @@ never omit required final-candidate CI or coherent validation. Retain
 independent readback where it crosses a further trust boundary, such as actual
 deployment or credential enrollment. No self-declared result grants authority.
 
+When relevant compile subjects are affected, the maintained `change-completeness` predecessor must
+compile its declared engine and edge project roots before reporting compiler preparation complete. Preserve its existing focused checks and the
+separate expensive-engine selector. When actual V2 dependencies are affected, run the existing
+projection and actual CLI suites from those current Release outputs, with no rebuild/restore and
+non-vacuous TRX checks. Collect both independent suite results before aggregate failure; failed or
+unknown compiler prerequisites block them and the dependent engine. The original
+[CLI compilation failure](https://github.com/FS-GG/.github/actions/runs/39040430406) and
+[compiled fixture failure](https://github.com/FS-GG/.github/actions/runs/39040923947) establish distinct
+coverage gaps, not passing qualification. Keep the existing five-minute predecessor cap until actual
+cold/warm measurements justify a change; mock controls prove invocation/refusal wiring only. This
+bounded source correction adds no workflow coordinator, model or evidence ledger and never replaces
+required independent checks or complete final-candidate coherent qualification.
+
 Post outcome updates when a deliverable is ready, a blocker appears or clears, a
 decision is needed, or a promised delivery time changes. Publish one daily
 programme summary while active. External requests retain an owner, exact reply
