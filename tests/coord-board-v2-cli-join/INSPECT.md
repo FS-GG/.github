@@ -103,3 +103,63 @@ writes only Observation and does not consume the selection overlay or runtime ca
 Concurrent human Status/Track/Roadmap values survive. Source version 0.103 remains held;
 installed qualification, migration, UI and actual consumer cutover remain owner-gated.
 The focused controls require hosted CI; no local CLR/native/browser workload was run.
+
+
+## Bounded migration source contract
+
+The packaged `board-v2` route also prepares the selected .10 migration. This source is not an
+installed candidate or a live-operation grant. The accountable owner separately selects the exact
+operation after installed qualification; native principal/capability establishes permission only.
+The original .103/.104 operations and all unresolved holds remain separate.
+
+```text
+board-v2 migration-prepare --scope-file PRIVATE_SCOPE --report-file ORIGINAL_NEW_PRIVATE_PATH
+board-v2 migration-apply --prepared-file ORIGINAL_PRIVATE_PATH --prepared-sha256 SELECTED_SHA256 --accountable-owner OWNER --selection-reference EVIDENCE_REFERENCE --planning-window-until RFC3339
+board-v2 migration-readback --prepared-file ORIGINAL_PRIVATE_PATH
+```
+
+Scope input is closed and bounded to 256 KiB; it is planning data, never an approval flag. Preparation
+uses two complete stable native snapshots, records the original report path, and leaves new native
+option/view IDs unresolved. It can report unavailable update capability without requiring write access
+for the read-only report. Apply binds selected prepared bytes, actual executing source/CLI/adapter
+identities, native principal/capability, exact fresh scope and a finite planning window. Copying
+unchanged prepared bytes to a different path refuses before native reads or a new reservation.
+
+The original path owns its exclusive reservation and private invocation directory. Exact intent and
+request bytes precede each one-shot send; file flush and production Linux x64 directory-entry barriers
+must succeed. Unsupported barriers refuse; source review is not runtime filesystem qualification.
+Expiry is checked after custody and at native acquisition. Reopening a retained invocation is
+readback-only, including partial, malformed, lost or uncertain responses; no retry, overwrite,
+rollback, alternate evidence path or caller-JSON grant is introduced.
+
+All native reads/effects share 500 requests / 270 seconds. The fixed-origin sender bounds request bytes,
+response acquisition and remaining time, with no redirect or automatic retry. Determining read and
+mutation responses require clear envelopes; incomplete pages/errors retain gaps. Each effect refreshes
+schema/views/memberships and independently reads back exact native identities. A clear correlated
+created-view ID plus complete same-ID readback may resolve only its originally selected dependent
+filter update within the same invocation. Existing human planning values, option/card identities,
+unrelated views and orthogonal grouping/vertical/sort configuration remain preserved. API metadata
+cannot verify UI columns/cards/order or replace actual installed Project 3 acceptance.
+
+The 27 focused migration controls are prepared for hosted qualification; no local CLR/native/browser
+execution or live effect was performed. The Observation-only authorizer, product binding3/schema1,
+V1 transport and historical offline constructor retain their separate scope.
+
+
+## Packaged pre-migration source qualification
+
+The existing `release-successor-candidate.yml` installs one source-bound candidate and runs
+`packaged_v2.py` against that same isolated tool. Nine controls cover local refusal diagnostics,
+product stdin exclusion, adapter mismatch and migration command syntax. The distinct credential-missing
+and adapter-mismatch refusals avoid counting generic failure as input-validation evidence. No credential
+is inherited; no actual private Project 3, migration-scope validation or active developer-install
+acceptance is claimed.
+
+A separate V2 artifact retains source/run/attempt, package and exact installed-member/shim hashes,
+case results, bounded exact output bytes, partial results, first failure and independent cleanup status.
+These identities support the stated local-refusal scope, not runtime attestation. Each acquisition is
+bounded at 20 seconds; the five-second cleanup deadline covers one owned-group signal while the root
+is unreaped, bounded reap and read-only absence checks. Unsupported/lost custody or unconfirmed cleanup
+refuses; escaped process trees are not qualified. The original candidate profile, predecessor/feed/tag
+gates, 45-minute workflow cap and exact seven-member publisher artifact remain unchanged. Candidate
+execution still needs separately selected admission, exact inputs and actual budget qualification.

@@ -93,6 +93,10 @@
     <Compile Include="V2ObservationTransport.fs" />
     <Compile Include="V2ProjectionSource.fsi" />
     <Compile Include="V2ProjectionSource.fs" />
+    <Compile Include="V2Migration.fsi" />
+    <Compile Include="V2Migration.fs" />
+    <Compile Include="V2MigrationTransport.fsi" />
+    <Compile Include="V2MigrationTransport.fs" />
     <Compile Include="Done.fsi" />
     <Compile Include="Done.fs" />
     <Compile Include="Scan.fsi" />
