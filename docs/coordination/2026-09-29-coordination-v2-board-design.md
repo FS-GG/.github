@@ -637,6 +637,17 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   three genuine #3008 pilot mappings and separately qualified product behavior unchanged. Additional
   PR-read repositories do not enroll their issues; relevant access gaps remain attributed and localized.
 
+  Preserve action-specific PR evidence in that same real caller journey. Classify native gaps by
+  purpose: identity/association/head/files/scope, review availability and check availability. Only
+  ObserveExisting and Implement may continue with review/check availability gaps when exact current
+  native owner/PR/head/files/associations and all relevant action prerequisites, intake and resources
+  are established. Keep every gap visible and aggregate inspection incomplete; this never creates
+  Verified evidence or acceptance by omission. ReviewWork, QualifyWork and Activation retain their
+  conservative gates. Identity/head/repository contradictions inside a review/check read are scope
+  failures, not skippable availability. Denied errors plus partial data remain unread, and unknown or
+  unclassified gaps fail closed. Qualify the actual CLI/TextReader path for source continuation versus
+  missing associations/files/head barriers and the unchanged normal delivery check boundary.
+
   Final stable enrollment uses the existing protected manifest route and the exact selected population
   and Roadmap strings. Final binding4/schema2 joins that protected population and the qualified package/
   assembly provenance after actual native option/item/view IDs are known. No draft invented ID is an
