@@ -57,7 +57,7 @@ module V2Migration =
 
     type Prepared =
         { Scope: Scope; Snapshot: Snapshot; Changes: Change list; OwnerActions: string list
-          Digest: string }
+          Digest: string; PreparedPath: string option }
 
     /// Validate planning input; it is scope data, never operation admission.
     val validateScope: scope: Scope -> IoResult<unit>
@@ -78,11 +78,12 @@ module V2Migration =
     /// Closed bounded planning input. Unknown approval/authority properties are refused.
     val parseScope: json: string -> IoResult<Scope>
 
-    /// Preparation report retains exact stable native tokens and unresolved semantic changes.
+    /// Preparation report retains exact stable native tokens, unresolved semantic changes and its
+    /// canonical original prepared-file/custody path. An unbound pure plan cannot become apply input.
     val encodePrepared: prepared: Prepared -> string
 
     /// Decode only scope and selected prepared identity; apply must freshly reproduce all native facts.
-    val decodePrepared: json: string -> IoResult<Scope * string * DateTimeOffset>
+    val decodePrepared: json: string -> IoResult<Scope * string * DateTimeOffset * string>
 
     /// Resolve a newly created view only from one independently observed exact identity. The
     /// original semantic filter remains selected; a dependent exact-ID update stays in the same invocation.

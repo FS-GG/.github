@@ -30,7 +30,7 @@ module V2MigrationTests =
                 Assert.Equal(retained.Options.[index].Description, options.[index].GetProperty("description").GetString())
             Assert.False(options.[5].TryGetProperty("id") |> fst)
         | _ -> failwith "typed JSON request expected"
-        connection.Dispatch(planned, change) |> get |> ignore
+        connection.Dispatch(planned, change, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
         let after = collect connection.Reads scope |> get
         validateTransition scope actual after change |> get
         Assert.Equal(1, native.Mutations.Length)
@@ -77,7 +77,7 @@ module V2MigrationTests =
         let native = Native original
         use connection = native.Connection()
         let planned = prepare scope original |> get
-        connection.Dispatch(planned, planned.Changes.Head) |> get |> ignore
+        connection.Dispatch(planned, planned.Changes.Head, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
         let changed = { native.Snapshot with Items = [ { item with UpdatedAt = "human-edit" } ] }
         Assert.True(Result.isError (validateTransition scope original changed planned.Changes.Head))
         Assert.Equal(item, native.Snapshot.Items.Head)
@@ -92,14 +92,14 @@ module V2MigrationTests =
         use connection = native.Connection()
         let before = prepare scope snapshot |> get
         let create = before.Changes |> List.find (function CreateView _ -> true | _ -> false)
-        connection.Dispatch(before, create) |> get |> ignore
+        connection.Dispatch(before, create, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
         let after = collect connection.Reads scope |> get
         validateTransition scope snapshot after create |> get
         let resolved = resolveReadback scope snapshot after create |> get
         Assert.Equal(Some "synthetic-new-view", resolved.Views.Head.Id)
         let update = (prepare resolved after |> get).Changes |> List.find (function UpdateView _ -> true | _ -> false)
         let next = prepare resolved after |> get
-        connection.Dispatch(next, update) |> get |> ignore
+        connection.Dispatch(next, update, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
         let final = collect connection.Reads resolved |> get
         validateTransition resolved after final update |> get
         Assert.Equal(desired.Filter, final.Views.Head.Filter)
@@ -108,8 +108,10 @@ module V2MigrationTests =
     [<Fact>]
     let ``prepared report stays separate from v4 binding and arbitrary authority fields refuse`` () =
         let prepared = prepare scope snapshot |> get
-        let report = encodePrepared prepared
-        let parsedScope, digest, _ = decodePrepared report |> get
+        let originalPath = System.IO.Path.GetFullPath "synthetic-original-prepared.json"
+        let report = encodePrepared { prepared with PreparedPath = Some originalPath }
+        let parsedScope, digest, _, boundPath = decodePrepared report |> get
+        Assert.Equal(originalPath, boundPath)
         Assert.Equal(scope, parsedScope)
         Assert.Equal(prepared.Digest, digest)
         use document = JsonDocument.Parse report
@@ -139,7 +141,7 @@ module V2MigrationTests =
                         System.Threading.Tasks.Task.FromResult(response()) }
             use connection = V2MigrationTransport.createWithHandler "synthetic-not-a-credential" handler |> get
             let prepared = prepare scope snapshot |> get
-            let outcome = connection.Dispatch(prepared, prepared.Changes.Head)
+            let outcome = connection.Dispatch(prepared, prepared.Changes.Head, DateTimeOffset.UtcNow.AddMinutes 4.0)
             if name = "redirect" then
                 let receipt = outcome |> get
                 Assert.Equal(307, receipt.Status)
@@ -154,7 +156,7 @@ module V2MigrationTests =
                     System.Threading.Tasks.Task.FromException<System.Net.Http.HttpResponseMessage>(new System.Net.Http.HttpRequestException("synthetic private error")) }
         use connection = V2MigrationTransport.createWithHandler "synthetic-not-a-credential" failed |> get
         let prepared = prepare scope snapshot |> get
-        let outcome = connection.Dispatch(prepared, prepared.Changes.Head)
+        let outcome = connection.Dispatch(prepared, prepared.Changes.Head, DateTimeOffset.UtcNow.AddMinutes 4.0)
         Assert.True(Result.isError outcome)
         Assert.Equal(1, failedCalls)
         match outcome with
@@ -171,9 +173,22 @@ module V2MigrationTests =
                     System.Threading.Tasks.Task.FromCanceled<System.Net.Http.HttpResponseMessage>(System.Threading.CancellationToken(true)) }
         use connection = V2MigrationTransport.createWithHandler "synthetic-not-a-credential" handler |> get
         let prepared = prepare scope snapshot |> get
-        let outcome = connection.Dispatch(prepared, prepared.Changes.Head)
+        let outcome = connection.Dispatch(prepared, prepared.Changes.Head, DateTimeOffset.UtcNow.AddMinutes 4.0)
         Assert.True(Result.isError outcome)
         Assert.Equal(1, calls)
         match outcome with
         | Error error -> Assert.Contains("Unknown; readback only", Errors.explain error)
         | Ok _ -> failwith "a cancelled acquisition cannot authorize a retry"
+
+    [<Fact>]
+    let ``expired explicit window refuses at actual bounded dispatch edge without HTTP acquisition`` () =
+        let mutable calls = 0
+        let handler =
+            { new System.Net.Http.HttpMessageHandler() with
+                override _.SendAsync(_: System.Net.Http.HttpRequestMessage, _: System.Threading.CancellationToken) =
+                    calls <- calls + 1
+                    System.Threading.Tasks.Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)) }
+        use connection = V2MigrationTransport.createWithHandler "synthetic-not-a-credential" handler |> get
+        let prepared = prepare scope snapshot |> get
+        Assert.True(Result.isError (connection.Dispatch(prepared, prepared.Changes.Head, DateTimeOffset.UtcNow.AddMinutes(-1.0))))
+        Assert.Equal(0, calls)

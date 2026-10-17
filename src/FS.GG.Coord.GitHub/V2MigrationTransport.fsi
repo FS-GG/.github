@@ -9,7 +9,11 @@ module V2MigrationTransport =
         inherit IDisposable
         abstract Reads: Transport.IGitHubTransport
         /// Reconstructs exactly one allowlisted typed effect. No automatic retry or redirect.
-        abstract Dispatch: prepared: V2Migration.Prepared * change: V2Migration.Change -> IoResult<Transport.Response>
+        abstract Dispatch: prepared: V2Migration.Prepared * change: V2Migration.Change * planningWindowUntil: DateTimeOffset -> IoResult<Transport.Response>
+
+    /// Migration-only clear-success envelope: present errors must be an empty array; complete data
+    /// and duplicate-free JSON objects are required. This does not change generic/product GraphQl.
+    val validateClearEnvelope: body: string -> IoResult<unit>
 
     /// Inert/provider composition. Both read and effect paths share 500 requests/270 seconds.
     /// The native effect callback is called at most once per explicit Dispatch.

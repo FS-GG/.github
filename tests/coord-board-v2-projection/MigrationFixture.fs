@@ -130,7 +130,7 @@ module MigrationFixture =
                         let options =
                             input.GetProperty("singleSelectOptions").EnumerateArray() |> Seq.map (fun option ->
                                 let mutable id = Unchecked.defaultof<JsonElement>
-                                { Id = if option.TryGetProperty("id", &id) then id.GetString() else "synthetic-new-option"
+                                { Id = (if option.TryGetProperty("id", &id) then id.GetString() else "synthetic-new-option")
                                   Name = option.GetProperty("name").GetString(); Color = option.GetProperty("color").GetString(); Description = option.GetProperty("description").GetString() }) |> Seq.toList
                         snapshot <- { snapshot with Fields = snapshot.Fields |> List.map (fun (field: Field) -> if field.Id = text "fieldId" then { field with Options = options } else field) }
                         "updateProjectV2Field"
@@ -143,9 +143,9 @@ module MigrationFixture =
                     else
                         let visible = input.GetProperty("configuration").GetProperty("visibleFieldIds").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
                         let create = query.Contains "createProjectV2View("
-                        let view = { Id = if create then "synthetic-new-view" else text "viewId"; Name = text "name"; Layout = text "layout"
-                                     Filter = if create then "" else text "filter"; VisibleFieldIds = visible; UnsupportedConfiguration = "[[],[],[]]" }
-                        snapshot <- { snapshot with Views = if create then snapshot.Views @ [ view ] else snapshot.Views |> List.map (fun (existing: View) -> if existing.Id = view.Id then view else existing) }
+                        let view = { Id = (if create then "synthetic-new-view" else text "viewId"); Name = text "name"; Layout = text "layout"
+                                     Filter = (if create then "" else text "filter"); VisibleFieldIds = visible; UnsupportedConfiguration = "[[],[],[]]" }
+                        snapshot <- { snapshot with Views = (if create then snapshot.Views @ [ view ] else snapshot.Views |> List.map (fun (existing: View) -> if existing.Id = view.Id then view else existing)) }
                         if create then "createProjectV2View" else "updateProjectV2View"
                 if failAfterEffect then Error(Transport "synthetic lost response")
                 else

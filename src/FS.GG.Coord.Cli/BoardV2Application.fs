@@ -368,14 +368,35 @@ module BoardV2Application =
             captured.Write(buffer, 0, count)
             count <- stream.Read(buffer, 0, buffer.Length)
         captured.ToArray()
-    let private privateWrite (path: string) (bytes: byte array) =
+    module private MigrationDirectoryNative =
+        [<System.Runtime.InteropServices.DllImport("libc", EntryPoint = "open", SetLastError = true)>]
+        extern int openDirectory(string path, int flags)
+        [<System.Runtime.InteropServices.DllImport("libc", SetLastError = true)>]
+        extern int fsync(int descriptor)
+        [<System.Runtime.InteropServices.DllImport("libc", SetLastError = true)>]
+        extern int close(int descriptor)
+
+    let private syncMigrationDirectory (path: string) =
+        if not (OperatingSystem.IsLinux())
+           || System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture <> System.Runtime.InteropServices.Architecture.X64 then
+            raise (IOException "supported directory durability barrier unavailable")
+        // Linux O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW; no fallback claims durability.
+        let descriptor = MigrationDirectoryNative.openDirectory(path, 0x10000 ||| 0x80000 ||| 0x20000)
+        if descriptor < 0 then raise (IOException "directory durability barrier unavailable")
+        try
+            if MigrationDirectoryNative.fsync descriptor <> 0 then raise (IOException "directory durability barrier unavailable")
+        finally
+            MigrationDirectoryNative.close descriptor |> ignore
+
+    let private privateWrite (syncDirectory: string -> unit) (path: string) (bytes: byte array) =
         privatePath path
         let options = FileStreamOptions(Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None,
                                         Options = FileOptions.WriteThrough, UnixCreateMode = Nullable(UnixFileMode.UserRead ||| UnixFileMode.UserWrite))
         use stream = new FileStream(path, options)
         stream.Write(bytes, 0, bytes.Length)
         stream.Flush true
-    let private privateJson (path: string) (json: string) = privateWrite path (System.Text.UTF8Encoding(false, true).GetBytes json)
+        syncDirectory (Path.GetDirectoryName path)
+    let private privateJson (syncDirectory: string -> unit) (path: string) (json: string) = privateWrite syncDirectory path (System.Text.UTF8Encoding(false, true).GetBytes json)
     let private migrationIdentity (scope: V2Migration.Scope) =
         let adapter = typeof<V2Migration.Scope>.Assembly
         let cli = System.Reflection.Assembly.GetExecutingAssembly()
@@ -436,26 +457,29 @@ module BoardV2Application =
             | _ -> invalidOp "reconstructed migration request has no typed JSON body"
         if response.Status <> 200 then Error(Errors.Malformed("migration", "non-success native response; Unknown"))
         else
-            GraphQl.decode "migration response" response.Body (fun data ->
-                try
-                    let payload = data.GetProperty name
-                    let identityName =
-                        match change with
-                        | V2Migration.AddInReview _ -> "projectV2Field"
-                        | V2Migration.AddMembership _ -> "item"
-                        | V2Migration.CreateView _ | V2Migration.UpdateView _ -> "projectV2View"
-                    let identity = payload.GetProperty(identityName).GetProperty("id").GetString()
-                    if payload.GetProperty("clientMutationId").GetString() = expected
-                       && not (String.IsNullOrWhiteSpace identity) && identity.Length <= 256 then Ok identity
-                    else Error(Errors.Malformed("migration", "mutation correlation or native result identity differs; Unknown"))
-                with _ -> Error(Errors.Malformed("migration", "mutation response is incomplete; Unknown")))
+            V2MigrationTransport.validateClearEnvelope response.Body |> Result.bind (fun () ->
+                GraphQl.decode "migration response" response.Body (fun data ->
+                    try
+                        let payload = data.GetProperty name
+                        let identityName =
+                            match change with
+                            | V2Migration.AddInReview _ -> "projectV2Field"
+                            | V2Migration.AddMembership _ -> "item"
+                            | V2Migration.CreateView _ | V2Migration.UpdateView _ -> "projectV2View"
+                        let identity = payload.GetProperty(identityName).GetProperty("id").GetString()
+                        if payload.GetProperty("clientMutationId").GetString() = expected
+                           && not (String.IsNullOrWhiteSpace identity) && identity.Length <= 256 then Ok identity
+                        else Error(Errors.Malformed("migration", "mutation correlation or native result identity differs; Unknown"))
+                    with _ -> Error(Errors.Malformed("migration", "mutation response is incomplete; Unknown"))))
 
     // This capability is private to the explicit manual CLI boundary. Owner/selection strings are
     // accountability bindings, not authentication. Actual authorized invocation supplies approval.
     type private MigrationAdmission =
         { Prepared: V2Migration.Prepared; Directory: string; WindowUntil: DateTimeOffset }
 
-    let private executeMigration (connection: V2MigrationTransport.IConnection) (command: MigrationCommand) =
+    let private executeMigration (connection: V2MigrationTransport.IConnection) (syncDirectory: string -> unit) (clock: TimeProvider) (command: MigrationCommand) =
+        let privateWrite = privateWrite syncDirectory
+        let privateJson = privateJson syncDirectory
         let utf8 = System.Text.UTF8Encoding(false, true)
         let mutable ownsInvocation = false
         let fail () =
@@ -471,16 +495,17 @@ module BoardV2Application =
                     migrationIdentity scope |> Result.bind (fun () ->
                         migrationStable connection scope |> Result.mapError migrationErrorClass))
                 |> Result.map (fun prepared ->
-                    privateJson reportPath (V2Migration.encodePrepared prepared)
+                    privateJson reportPath (V2Migration.encodePrepared { prepared with PreparedPath = Some reportPath })
                     0)
             | MigrationApply(preparedPath, expectedHash, owner, selection, windowUntil) ->
                 let raw = privateRead (4L * 1024L * 1024L) preparedPath
                 if migrationDigest raw <> expectedHash then Error "selected-prepared-byte-digest-differs"
                 else
                     V2Migration.decodePrepared (utf8.GetString raw) |> Result.mapError migrationErrorClass
-                    |> Result.bind (fun (scope, digest, observedAt) ->
-                        let now = DateTimeOffset.UtcNow
-                        if observedAt = DateTimeOffset.MinValue || observedAt > now || now - observedAt > TimeSpan.FromMinutes 30.0
+                    |> Result.bind (fun (scope, digest, observedAt, boundPath) ->
+                        let now = clock.GetUtcNow()
+                        if not (String.Equals(boundPath, preparedPath, StringComparison.Ordinal)) then Error "original-prepared-custody-path-differs"
+                        elif observedAt = DateTimeOffset.MinValue || observedAt > now || now - observedAt > TimeSpan.FromMinutes 30.0
                            || windowUntil <= now || windowUntil - now > TimeSpan.FromMinutes 5.0 then Error "prepared-or-planning-window-expired"
                         else
                             migrationIdentity scope |> Result.bind (fun () ->
@@ -491,6 +516,8 @@ module BoardV2Application =
                                 ownsInvocation <- true
                                 if Directory.Exists directory || File.Exists directory then invalidArg "evidence" "retained invocation permits readback only"
                                 Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+                                syncDirectory directory
+                                syncDirectory (Path.GetDirectoryName directory)
                                 privateWrite (Path.Combine(directory, "prepared.json")) raw
                                 privateJson (Path.Combine(directory, "invocation.json"))
                                     (JsonSerializer.Serialize({| accountableOwner = owner; selectionReference = selection; preparedSha256 = expectedHash
@@ -501,14 +528,15 @@ module BoardV2Application =
                                     if fresh.Digest <> digest then Error "fresh-preconditions-differ-from-selected-preparation"
                                     elif not fresh.Snapshot.CanUpdate then Error "native-project-update-capability-absent"
                                     else
-                                        let admission = { Prepared = fresh; Directory = directory; WindowUntil = windowUntil }
+                                        let admission = { Prepared = { fresh with PreparedPath = Some boundPath }; Directory = directory; WindowUntil = windowUntil }
                                         let lockPath = Path.Combine(Path.GetTempPath(), "fsgg-v2-migration-PVT_kwDOEYAWY84Bldpa.lock")
                                         use lease = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
                                         let rec effects (sequence: int) (expected: V2Migration.Prepared) =
-                                            if DateTimeOffset.UtcNow >= admission.WindowUntil then Error "planning-window-expired"
+                                            if clock.GetUtcNow() >= admission.WindowUntil then Error "planning-window-expired"
                                             else
                                                 migrationFresh connection expected.Scope |> Result.mapError migrationErrorClass
-                                                |> Result.bind (fun current ->
+                                                |> Result.bind (fun observed ->
+                                                    let current = { observed with PreparedPath = expected.PreparedPath }
                                                     if current.Digest <> expected.Digest then Error "determining-facts-changed-before-effect"
                                                     else
                                                         match current.Changes with
@@ -521,7 +549,7 @@ module BoardV2Application =
                                                                 let prefix = Path.Combine(directory, sequence.ToString("D3", Globalization.CultureInfo.InvariantCulture))
                                                                 let exact = match request.Body with Json json -> json | _ -> invalidOp "typed JSON request expected"
                                                                 privateJson (prefix + "-precondition.json") (V2Migration.encodePrepared current)
-                                                                if DateTimeOffset.UtcNow >= admission.WindowUntil then invalidOp "planning window expired before send"
+                                                                if clock.GetUtcNow() >= admission.WindowUntil then invalidOp "planning window expired before send"
                                                                 privateJson (prefix + "-intent.json") exact
                                                                 privateJson (prefix + "-intent-metadata.json")
                                                                     (JsonSerializer.Serialize({| method = request.Method; path = request.Path; budget = "GraphQl"
@@ -529,7 +557,8 @@ module BoardV2Application =
                                                                                                bodySha256 = migrationDigest (utf8.GetBytes exact); bodyBytes = utf8.GetByteCount exact
                                                                                                originalPreparedSha256 = expectedHash; sequence = sequence |}))
                                                                 // Once this durable intent exists, every later exception remains uncertain.
-                                                                let outcome = connection.Dispatch(current, change)
+                                                                if clock.GetUtcNow() >= admission.WindowUntil then invalidOp "planning window expired after custody before dispatch"
+                                                                let outcome = connection.Dispatch(current, change, admission.WindowUntil)
                                                                 let accepted =
                                                                     match outcome with
                                                                     | Ok response ->
@@ -551,7 +580,8 @@ module BoardV2Application =
                                                                         |> Result.bind (fun resolved -> V2Migration.prepare resolved snapshot)
                                                                     match resolved with
                                                                     | Error _ -> Error "Unknown-original-outcome-retained-readback-only"
-                                                                    | Ok after ->
+                                                                    | Ok observed ->
+                                                                        let after = { observed with PreparedPath = current.PreparedPath }
                                                                         privateJson (prefix + "-readback.json") (V2Migration.encodePrepared after)
                                                                         let observedIdentity =
                                                                             match change with
@@ -571,20 +601,22 @@ module BoardV2Application =
                 let original = Path.Combine(preparedPath + ".invocation", "prepared.json")
                 let raw = privateRead (4L * 1024L * 1024L) original
                 V2Migration.decodePrepared (utf8.GetString raw) |> Result.mapError migrationErrorClass
-                |> Result.bind (fun (scope, _, _) ->
-                    migrationIdentity scope |> Result.bind (fun () ->
-                        V2Migration.collect connection.Reads scope |> Result.mapError migrationErrorClass
-                        |> Result.bind (fun first ->
+                |> Result.bind (fun (scope, _, _, boundPath) ->
+                    if not (String.Equals(boundPath, preparedPath, StringComparison.Ordinal)) then Error "original-readback-custody-path-differs"
+                    else
+                        migrationIdentity scope |> Result.bind (fun () ->
                             V2Migration.collect connection.Reads scope |> Result.mapError migrationErrorClass
-                            |> Result.bind (fun final ->
-                                let destination = Path.Combine(preparedPath + ".invocation", "readback-" + Guid.NewGuid().ToString("N") + ".json")
-                                privateJson destination (V2Migration.encodeReadback scope final)
-                                if V2Migration.snapshotDigest first <> V2Migration.snapshotDigest final then Error "readback-changed"
-                                else
-                                    // Current state does not rewrite original response/unknown attribution.
-                                    match V2Migration.prepare scope final with
-                                    | Ok observed when observed.Changes.IsEmpty -> Ok 0
-                                    | _ -> Ok 3))))
+                            |> Result.bind (fun first ->
+                                V2Migration.collect connection.Reads scope |> Result.mapError migrationErrorClass
+                                |> Result.bind (fun final ->
+                                    let destination = Path.Combine(preparedPath + ".invocation", "readback-" + Guid.NewGuid().ToString("N") + ".json")
+                                    privateJson destination (V2Migration.encodeReadback scope final)
+                                    if V2Migration.snapshotDigest first <> V2Migration.snapshotDigest final then Error "readback-changed"
+                                    else
+                                        // Current state does not rewrite original response/unknown attribution.
+                                        match V2Migration.prepare scope final with
+                                        | Ok observed when observed.Changes.IsEmpty -> Ok 0
+                                        | _ -> Ok 3))))
         let terminal (failureCode: string) =
             match command with
             | MigrationApply(preparedPath, _, _, _, _) ->
@@ -604,12 +636,15 @@ module BoardV2Application =
             | Error code -> terminal code
         with _ -> terminal "invocation-io-or-unexpected-failure"
 
-    let runMigrationWithConnection (connection: V2MigrationTransport.IConnection) (arguments: string list) =
+    let runMigrationWithCustody (connection: V2MigrationTransport.IConnection) (syncDirectory: string -> unit) (clock: TimeProvider) (arguments: string list) =
         try
             match migrationSyntax arguments with
-            | Ok command -> executeMigration connection command
+            | Ok command -> executeMigration connection syncDirectory clock command
             | Error _ -> 1
         with _ -> 1
+
+    let runMigrationWithConnection (connection: V2MigrationTransport.IConnection) (arguments: string list) =
+        runMigrationWithCustody connection syncMigrationDirectory TimeProvider.System arguments
 
     let private parseSyntax arguments =
         let rec flags values = function
@@ -726,7 +761,7 @@ module BoardV2Application =
                         | Error _ -> 1
                         | Ok connection ->
                             use connection = connection
-                            executeMigration connection selected
+                            executeMigration connection syncMigrationDirectory TimeProvider.System selected
                 with _ -> 1)
         | "board-v2" :: rest ->
             Some(match prepare Console.In rest with

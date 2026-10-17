@@ -53,9 +53,10 @@ module V2Migration =
 
     type Prepared =
         { Scope: Scope; Snapshot: Snapshot; Changes: Change list; OwnerActions: string list
-          Digest: string }
+          Digest: string; PreparedPath: string option }
 
     open System.Collections.Generic
+    open System.IO
     open System.Text
     open System.Text.Json
     open System.Text.Json.Nodes
@@ -82,6 +83,7 @@ module V2Migration =
             scope.SelectedIssues |> List.exists (fun (issue: SelectedIssue) ->
                 not (bounded 256 issue.Id && bounded 256 issue.Repository && repository issue.Repository
                      && issue.Number > 0 && bounded 128 issue.Slice))
+        let existingViewIds = scope.Views |> List.choose (fun (view: DesiredView) -> view.Id)
         let invalidViews =
             scope.Views |> List.exists (fun (view: DesiredView) ->
                 not (bounded 100 view.Name)
@@ -102,7 +104,7 @@ module V2Migration =
             invalid "explicit distinct native issue/slice identities are required; membership never selects enrollment"
         elif not (colors.Contains scope.InReviewColor) || isNull scope.InReviewDescription || scope.InReviewDescription.Length > 1024 then
             invalid "bounded native In review option descriptor is required"
-        elif scope.Views.Length > 10 || invalidViews || not (unique (scope.Views |> List.map (fun (view: DesiredView) -> view.Name))) then
+        elif scope.Views.Length > 10 || invalidViews || not (unique existingViewIds) || not (unique (scope.Views |> List.map (fun (view: DesiredView) -> view.Name))) then
             invalid "view requests must use distinct bounded names, native IDs and supported API configuration only"
         else Ok()
 
@@ -449,7 +451,7 @@ module V2Migration =
                               "Readback IDs must be independently finalized into protected enrollment before v4 consumer activation.";
                               "Compare-before-write is not CAS; apply requires a bounded participating single-writer planning window." ]
                             @ (if snapshot.CanUpdate then [] else [ "Native principal lacks project update capability; this read-only preparation grants no effect permission." ])
-                        { Scope = scope; Snapshot = snapshot; Changes = all; OwnerActions = ownerActions
+                        { Scope = scope; Snapshot = snapshot; Changes = all; OwnerActions = ownerActions; PreparedPath = None
                           Digest = hash (scopeTokens scope @ snapshotTokens snapshot @ [ string all.Length ] @ (all |> List.collect changeTokens)) })
 
     let private jsonString (value: string) : JsonNode = JsonValue.Create value
@@ -517,7 +519,7 @@ module V2Migration =
             array 10 (node.GetProperty "views") |> List.map (fun view ->
                 closed [ "id"; "name"; "layout"; "filter"; "visibleFieldIds" ] view
                 let id = view.GetProperty "id"
-                { Id = if id.ValueKind = JsonValueKind.Null then None else Some(nonempty "id" view)
+                { Id = (if id.ValueKind = JsonValueKind.Null then None else Some(nonempty "id" view))
                   Name = nonempty "name" view; Layout = nonempty "layout" view; Filter = propertyString "filter" view
                   VisibleFieldIds = array 50 (view.GetProperty "visibleFieldIds") |> List.map (fun field -> field.GetString()) })
         { SourceRevision = nonempty "sourceRevision" node; ArtifactSha256 = nonempty "artifactSha256" node
@@ -553,10 +555,15 @@ module V2Migration =
                      "observationFieldId", jsonString scope.ObservationFieldId; "inReviewColor", jsonString scope.InReviewColor;
                      "inReviewDescription", jsonString scope.InReviewDescription; "views", arrayNode (scope.Views |> List.map desiredNode) ] :> JsonNode
     let encodePrepared (prepared: Prepared) : string =
+        let preparedPath =
+            match prepared.PreparedPath with
+            | Some path when bounded 4096 path && Path.IsPathFullyQualified path && Path.GetFullPath path = path -> path
+            | _ -> invalidArg "prepared" "canonical original invocation path must be bound before encoding apply input"
         // Exact stable token arrays retain every determining native value without union/option
         // serializer defaults. This is an operation report, never a normal v4 binding.
         let root =
             objectNode [ "schema", jsonString "fs.gg.board-v2.migration-prepare/1";
+                         "preparedPath", jsonString preparedPath;
                          "observedAt", jsonString (prepared.Snapshot.ObservedAt.ToString "O");
                          "scope", scopeNode prepared.Scope; "snapshot", stringsNode (snapshotTokens prepared.Snapshot);
                          "changes", arrayNode (prepared.Changes |> List.map (changeTokens >> stringsNode));
@@ -564,22 +571,25 @@ module V2Migration =
         let json = root.ToJsonString(JsonSerializerOptions(WriteIndented = true))
         if Encoding.UTF8.GetByteCount json > 4 * 1024 * 1024 then invalidOp "bounded private migration report exceeds 4 MiB"
         json
-    let decodePrepared (json: string) : IoResult<Scope * string * DateTimeOffset> =
+    let decodePrepared (json: string) : IoResult<Scope * string * DateTimeOffset * string> =
         if Encoding.UTF8.GetByteCount json > 4 * 1024 * 1024 then invalid "prepared input exceeds 4 MiB"
         else
             decode (fun () ->
                 use document = JsonDocument.Parse(json, JsonDocumentOptions(MaxDepth = 16))
                 let root = document.RootElement
-                closed [ "schema"; "observedAt"; "scope"; "snapshot"; "changes"; "ownerActions"; "digest" ] root
+                closed [ "schema"; "preparedPath"; "observedAt"; "scope"; "snapshot"; "changes"; "ownerActions"; "digest" ] root
                 if propertyString "schema" root <> "fs.gg.board-v2.migration-prepare/1" then invalidArg "schema" "different prepared schema"
+                let preparedPath = nonempty "preparedPath" root
+                if not (Path.IsPathFullyQualified preparedPath) || Path.GetFullPath preparedPath <> preparedPath then
+                    invalidArg "preparedPath" "canonical original invocation path required"
                 let scope = parseScopeNode (root.GetProperty "scope")
                 let digest = nonempty "digest" root
                 if not (hex 64 digest) then invalidArg "digest" "malformed prepared digest"
                 // Report payload remains retained verbatim; no JSON assertion supplies native facts.
                 // The complete fresh native planner must reproduce this separately selected digest.
-                scope, digest, root.GetProperty("observedAt").GetDateTimeOffset())
-            |> Result.bind (fun (scope, digest, observedAt) ->
-                validateScope scope |> Result.map (fun () -> scope, digest, observedAt))
+                scope, digest, root.GetProperty("observedAt").GetDateTimeOffset(), preparedPath)
+            |> Result.bind (fun (scope, digest, observedAt, preparedPath) ->
+                validateScope scope |> Result.map (fun () -> scope, digest, observedAt, preparedPath))
     let resolveReadback (scope: Scope) (before: Snapshot) (after: Snapshot) (change: Change) : IoResult<Scope> =
         match change with
         | CreateView desired ->
@@ -597,6 +607,12 @@ module V2Migration =
     let validateTransition (scope: Scope) (before: Snapshot) (after: Snapshot) (change: Change) : IoResult<unit> =
         let normalize (snapshot: Snapshot) = { snapshot with ObservedAt = before.ObservedAt; UpdatedAt = before.UpdatedAt }
         let unchanged (snapshot: Snapshot) = snapshotTokens (normalize snapshot) = snapshotTokens (normalize before)
+        let orthogonal (view: View) : IoResult<string list list> =
+            decode (fun () ->
+                let parts = JsonSerializer.Deserialize<string array array> view.UnsupportedConfiguration
+                if isNull parts || parts.Length <> 4 || (parts |> Array.exists isNull) || parts.[0].Length <> 1 then
+                    invalidArg "view" "complete native orthogonal configuration required"
+                parts |> Array.skip 1 |> Array.map Array.toList |> Array.toList)
         let sameView (desired: DesiredView) (actual: View) =
             desired.Name = actual.Name && desired.Layout = actual.Layout && desired.Filter = actual.Filter
             && desired.VisibleFieldIds = actual.VisibleFieldIds
@@ -631,7 +647,9 @@ module V2Migration =
                     | _ -> false
                 | UpdateView(viewId, desired) ->
                     match before.Views |> List.filter (fun (view: View) -> view.Id = viewId), after.Views |> List.filter (fun (view: View) -> view.Id = viewId) with
-                    | [ original ], [ current ] when sameView desired current ->
+                    | [ original ], [ current ] when sameView desired current
+                                                     && orthogonal original = orthogonal current
+                                                     && Result.isOk (orthogonal original) ->
                         unchanged { after with Views = after.Views |> List.map (fun (view: View) -> if view.Id = viewId then original else view) }
                     | _ -> false
             if reconciled then Ok()

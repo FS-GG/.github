@@ -35,11 +35,14 @@ module BoardV2MigrationTests =
         member _.Native = native
         member _.Scope with get() = scope and set value = scope <- value
         member _.Run arguments = run arguments
+        member _.RunWithCustody(syncDirectory: string -> unit, clock: TimeProvider, arguments: string list) =
+            use connection = native.Connection()
+            BoardV2Application.runMigrationWithCustody connection syncDirectory clock arguments
         member _.Prepare(name: string) =
             let input = Path.Combine(directory, name + "-scope.json")
             let report = Path.Combine(directory, name + "-prepared.json")
-            let planned = V2Migration.prepare scope snapshot |> get
-            use document = JsonDocument.Parse(V2Migration.encodePrepared planned)
+            let planned = V2Migration.prepare scope native.Snapshot |> get
+            use document = JsonDocument.Parse(V2Migration.encodePrepared { planned with PreparedPath = Some report })
             File.WriteAllText(input, document.RootElement.GetProperty("scope").GetRawText())
             let code = run [ "migration-prepare"; "--scope-file"; input; "--report-file"; report ]
             code, report
@@ -48,6 +51,12 @@ module BoardV2MigrationTests =
               "--accountable-owner"; "synthetic-accountable-owner"; "--selection-reference"; "synthetic-explicit-operation-selection";
               "--planning-window-until"; DateTimeOffset.UtcNow.AddMinutes(4.0).ToString("O") ]
         interface IDisposable with member _.Dispose() = Directory.Delete(directory, true)
+
+    type private ManualTime(initial: DateTimeOffset) =
+        inherit TimeProvider()
+        let mutable now = initial
+        override _.GetUtcNow() = now
+        member _.Advance(duration: TimeSpan) = now <- now + duration
 
     [<Fact>]
     let ``actual CLI performs exact typed stages including dependent view filter and unchanged repeat writes nothing`` () =
@@ -153,7 +162,8 @@ module BoardV2MigrationTests =
             match BoardV2Application.validateInvocation arguments with
             | Some(Error _) -> ()
             | _ -> failwith "closed migration grammar should refuse"
-        let prepared = V2Migration.prepare scope snapshot |> get |> V2Migration.encodePrepared
+        let planned = V2Migration.prepare scope snapshot |> get
+        let prepared = V2Migration.encodePrepared { planned with PreparedPath = Some(Path.GetFullPath "synthetic-prepared.json") }
         Assert.True(Result.isError (BoardV2Application.parseBinding prepared))
 
     [<Fact>]
@@ -168,9 +178,9 @@ module BoardV2MigrationTests =
                 { Id = issue.Id; Repository = issue.Repository; Number = issue.Number; UpdatedAt = "2026-10-17T12:00:00Z"; State = "OPEN" }) }
         // Scope-only fixture construction must use the genuine selected identity snapshot too.
         let planned = V2Migration.prepare fixture.Scope fixture.Native.Snapshot |> get
-        use document = JsonDocument.Parse(V2Migration.encodePrepared planned)
         let input = Path.Combine(fixture.Directory, "seventeen-scope.json")
         let path = Path.Combine(fixture.Directory, "seventeen-prepared.json")
+        use document = JsonDocument.Parse(V2Migration.encodePrepared { planned with PreparedPath = Some path })
         File.WriteAllText(input, document.RootElement.GetProperty("scope").GetRawText())
         Assert.Equal(0, fixture.Run [ "migration-prepare"; "--scope-file"; input; "--report-file"; path ])
         Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
@@ -251,9 +261,9 @@ module BoardV2MigrationTests =
             { fixture.Native.Snapshot with Issues = selected |> List.map (fun (issue: SelectedIssue) ->
                 { Id = issue.Id; Repository = issue.Repository; Number = issue.Number; UpdatedAt = "2026-10-17T12:00:00Z"; State = "OPEN" }) }
         let planned = V2Migration.prepare fixture.Scope fixture.Native.Snapshot |> get
-        use document = JsonDocument.Parse(V2Migration.encodePrepared planned)
         let input = Path.Combine(fixture.Directory, "bounded-scope.json")
         let path = Path.Combine(fixture.Directory, "bounded-prepared.json")
+        use document = JsonDocument.Parse(V2Migration.encodePrepared { planned with PreparedPath = Some path })
         File.WriteAllText(input, document.RootElement.GetProperty("scope").GetRawText())
         Assert.Equal(0, fixture.Run [ "migration-prepare"; "--scope-file"; input; "--report-file"; path ])
         let beforeReads = fixture.Native.Requests.Length
@@ -297,3 +307,175 @@ module BoardV2MigrationTests =
         Assert.Equal(3, fixture.Native.Mutations.Length)
         Assert.Equal("owner-selected-filter", fixture.Native.Snapshot.Views.Head.Filter)
         Assert.False(File.Exists(Path.Combine(path + ".invocation", "004-intent.json")))
+
+    [<Fact>]
+    let ``actual CLI refuses copied prepared bytes without escaping original uncertain custody`` () =
+        use fixture = new Fixture()
+        let code, path = fixture.Prepare "bound-original"
+        Assert.Equal(0, code)
+        fixture.Native.FailAfterEffect <- true
+        Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
+        let directory = path + ".invocation"
+        let original = Directory.GetFiles(directory) |> Array.map (fun (file: string) -> Path.GetFileName file, File.ReadAllBytes file) |> Map.ofArray
+        let reads = fixture.Native.Requests.Length
+        let effects = fixture.Native.Mutations.Length
+        let copy = Path.Combine(fixture.Directory, "copied-identical-prepared.json")
+        File.Copy(path, copy)
+        Assert.Equal<byte>(File.ReadAllBytes path, File.ReadAllBytes copy)
+        Assert.Equal(3, fixture.Run(fixture.ApplyArguments copy))
+        Assert.Equal(reads, fixture.Native.Requests.Length)
+        Assert.Equal(effects, fixture.Native.Mutations.Length)
+        Assert.False(File.Exists(copy + ".invocation-reserved"))
+        Assert.False(Directory.Exists(copy + ".invocation"))
+        Assert.True((original |> Map.keys |> Set.ofSeq) = (Directory.GetFiles(directory) |> Seq.map (fun (file: string) -> Path.GetFileName file) |> Set.ofSeq))
+        for KeyValue(name, bytes) in original do Assert.Equal<byte>(bytes, File.ReadAllBytes(Path.Combine(directory, name)))
+
+    [<Fact>]
+    let ``actual CLI expiry during intent directory barrier prevents dispatch`` () =
+        use fixture = new Fixture()
+        let code, path = fixture.Prepare "custody-expiry"
+        Assert.Equal(0, code)
+        let clock = ManualTime(DateTimeOffset.UtcNow)
+        let metadata = Path.Combine(path + ".invocation", "001-intent-metadata.json")
+        let mutable advanced = false
+        let syncDirectory (_: string) =
+            if File.Exists metadata && not advanced then
+                advanced <- true
+                clock.Advance(TimeSpan.FromMinutes 6.0)
+        Assert.Equal(3, fixture.RunWithCustody(syncDirectory, clock, fixture.ApplyArguments path))
+        Assert.True advanced
+        Assert.True(File.Exists metadata)
+        Assert.Empty fixture.Native.Mutations
+
+    [<Fact>]
+    let ``actual CLI directory durability failures refuse before any possible send`` () =
+        for stage in [ "reservation-parent"; "new-directory"; "intent-directory" ] do
+            use fixture = new Fixture()
+            let code, path = fixture.Prepare stage
+            Assert.Equal(0, code)
+            let directory = path + ".invocation"
+            let mutable refused = false
+            let syncDirectory (target: string) =
+                let selected =
+                    match stage with
+                    | "reservation-parent" -> File.Exists(path + ".invocation-reserved") && not (Directory.Exists directory)
+                    | "new-directory" -> target = directory && not (File.Exists(Path.Combine(directory, "prepared.json")))
+                    | _ -> target = directory && File.Exists(Path.Combine(directory, "001-intent.json"))
+                if selected then
+                    refused <- true
+                    raise (IOException "synthetic unsupported directory barrier")
+            Assert.Equal(3, fixture.RunWithCustody(syncDirectory, TimeProvider.System, fixture.ApplyArguments path))
+            Assert.True(refused, stage)
+            Assert.Empty fixture.Native.Mutations
+
+    [<Fact>]
+    let ``actual CLI acknowledges reservation directory and exact intent barriers before provider send`` () =
+        use fixture = new Fixture()
+        let code, path = fixture.Prepare "barrier-order"
+        Assert.Equal(0, code)
+        let directory = path + ".invocation"
+        let mutable reservationParent = false
+        let mutable newDirectory = false
+        let mutable newDirectoryParent = false
+        let metadataBarriers = System.Collections.Generic.HashSet<string>()
+        let syncDirectory (target: string) =
+            if File.Exists(path + ".invocation-reserved") && not (Directory.Exists directory) then reservationParent <- true
+            if target = directory then newDirectory <- true
+            if target = fixture.Directory && Directory.Exists directory then newDirectoryParent <- true
+            if target = directory then
+                for file in Directory.GetFiles(directory, "*-intent-metadata.json") do metadataBarriers.Add(Path.GetFileName file) |> ignore
+        fixture.Native.BeforeDispatch <- fun (_: Transport.Request) ->
+            Assert.True reservationParent
+            Assert.True newDirectory
+            Assert.True newDirectoryParent
+            let metadata = fixture.Native.Mutations.Length.ToString("D3") + "-intent-metadata.json"
+            Assert.True(metadataBarriers.Contains metadata)
+        Assert.Equal(0, fixture.RunWithCustody(syncDirectory, TimeProvider.System, fixture.ApplyArguments path))
+        Assert.Equal(2, fixture.Native.Mutations.Length)
+
+    [<Fact>]
+    let ``actual CLI duplicate explicit native view IDs refuse before reads and preserve existing view`` () =
+        use fixture = new Fixture()
+        let existing : View =
+            { Id = "synthetic-existing-view"; Name = "original owner view"; Layout = "TABLE_LAYOUT"; Filter = "owner-filter"
+              VisibleFieldIds = [ scope.StatusFieldId ]; UnsupportedConfiguration = "[]" }
+        fixture.Native.Snapshot <- { fixture.Native.Snapshot with Views = [ existing ] }
+        let scopeFile = Path.Combine(fixture.Directory, "duplicate-view-id-scope.json")
+        let reportPath = Path.Combine(fixture.Directory, "duplicate-view-id-prepared.json")
+        let prepared = V2Migration.prepare fixture.Scope snapshot |> get
+        let root = System.Text.Json.Nodes.JsonNode.Parse(V2Migration.encodePrepared { prepared with PreparedPath = Some reportPath })
+        let scopeNode = root.["scope"]
+        let views = scopeNode.["views"].AsArray()
+        let item (name: string) =
+            System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize({| id = "synthetic-existing-view"; name = name; layout = "TABLE_LAYOUT"; filter = ""; visibleFieldIds = [ scope.StatusFieldId ] |}))
+        views.Add(item "synthetic one")
+        views.Add(item "synthetic two")
+        File.WriteAllText(scopeFile, scopeNode.ToJsonString())
+        let original = fixture.Native.Snapshot
+        Assert.Equal(3, fixture.Run [ "migration-prepare"; "--scope-file"; scopeFile; "--report-file"; reportPath ])
+        Assert.Empty fixture.Native.Requests
+        Assert.Empty fixture.Native.Mutations
+        Assert.Equal(original, fixture.Native.Snapshot)
+
+    [<Fact>]
+    let ``actual target grouping vertical grouping and sorting drift stop later view effects`` () =
+        for connectionName in [ "groupByFields"; "verticalGroupByFields"; "sortByFields" ] do
+            use fixture = new Fixture()
+            let view (id: string) (name: string) (filter: string) : View =
+                { Id = id; Name = name; Layout = "TABLE_LAYOUT"; Filter = filter; VisibleFieldIds = [ scope.StatusFieldId ]; UnsupportedConfiguration = "[]" }
+            let originalA = view "synthetic-view-a" "synthetic A" "old-a"
+            let originalB = view "synthetic-view-b" "synthetic B" "old-b"
+            fixture.Native.Snapshot <- { fixture.Native.Snapshot with Views = [ originalA; originalB ] }
+            fixture.Scope <-
+                { fixture.Scope with Views = [ { Id = Some originalA.Id; Name = originalA.Name; Layout = originalA.Layout; Filter = "new-a"; VisibleFieldIds = originalA.VisibleFieldIds };
+                                              { Id = Some originalB.Id; Name = originalB.Name; Layout = originalB.Layout; Filter = "new-b"; VisibleFieldIds = originalB.VisibleFieldIds } ] }
+            let code, path = fixture.Prepare "target-group-drift"
+            Assert.Equal(0, code)
+            fixture.Native.Transform <- fun (request: Transport.Request) (response: Transport.Response) ->
+                match request.Body with
+                | Transport.Query(document, _) when document.Contains "views(first:" && fixture.Native.Mutations.Length = 3 ->
+                    let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+                    let data = root.["data"]
+                    let project = data.["node"]
+                    let inventory = project.["views"]
+                    let nodes = inventory.["nodes"].AsArray()
+                    let target = nodes |> Seq.find (fun (node: System.Text.Json.Nodes.JsonNode) -> node.["id"].GetValue<string>() = originalA.Id)
+                    let grouped = target.[connectionName]
+                    let values = grouped.["nodes"].AsArray()
+                    let inserted =
+                        if connectionName = "sortByFields" then JsonSerializer.Serialize({| direction = "ASC"; field = {| id = scope.StatusFieldId |} |})
+                        else JsonSerializer.Serialize({| id = scope.StatusFieldId |})
+                    values.Add(System.Text.Json.Nodes.JsonNode.Parse inserted)
+                    grouped.["totalCount"] <- System.Text.Json.Nodes.JsonValue.Create 1
+                    Ok { response with Body = root.ToJsonString() }
+                | _ -> Ok response
+            Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
+            Assert.Equal(3, fixture.Native.Mutations.Length)
+            Assert.Equal("old-b", (fixture.Native.Snapshot.Views |> List.find (fun (view: View) -> view.Id = originalB.Id)).Filter)
+            Assert.False(File.Exists(Path.Combine(path + ".invocation", "004-intent.json")))
+
+    [<Fact>]
+    let ``actual migration reads and post-send responses reject every malformed present errors member`` () =
+        for malformed in [ "null"; "{}"; "\"synthetic unreadable failure\""; "7"; "[null]" ] do
+            use reader = new Fixture()
+            reader.Native.Transform <- fun (_: Transport.Request) (response: Transport.Response) ->
+                let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+                root.["errors"] <- System.Text.Json.Nodes.JsonNode.Parse malformed
+                Ok { response with Body = root.ToJsonString() }
+            let readCode, readPath = reader.Prepare "malformed-read-errors"
+            Assert.Equal(3, readCode)
+            Assert.False(File.Exists readPath)
+            Assert.Empty reader.Native.Mutations
+            use writer = new Fixture()
+            let code, path = writer.Prepare "malformed-write-errors"
+            Assert.Equal(0, code)
+            let mutable exactResponse = ""
+            writer.Native.TransformDispatch <- fun (_: Transport.Request) (response: Transport.Response) ->
+                let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+                root.["errors"] <- System.Text.Json.Nodes.JsonNode.Parse malformed
+                exactResponse <- root.ToJsonString()
+                Ok { response with Body = exactResponse }
+            Assert.Equal(3, writer.Run(writer.ApplyArguments path))
+            Assert.Single writer.Native.Mutations |> ignore
+            Assert.Equal(exactResponse, File.ReadAllText(Path.Combine(path + ".invocation", "001-response.json")))
+            Assert.True(File.Exists(Path.Combine(path + ".invocation", "001-native-readback.json")))

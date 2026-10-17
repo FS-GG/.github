@@ -47,6 +47,11 @@ module BoardV2Application =
         transport: Transport.IGitHubTransport -> reader: System.IO.TextReader -> arguments: string list -> int
     /// Fixed refresh or read-only inspect command against an injected transport, for offline fixtures.
     val runWithTransport: transport: Transport.IGitHubTransport -> arguments: string list -> int
+    /// Trusted inert custody/time seam for the same actual migration caller. Production command
+    /// composition always binds the real supported directory barrier and TimeProvider.System.
+    /// A callback is test/provider infrastructure, never approval or a filesystem qualification claim.
+    val runMigrationWithCustody:
+        connection: V2MigrationTransport.IConnection -> syncDirectory: (string -> unit) -> clock: System.TimeProvider -> arguments: string list -> int
     /// Actual packaged migration composition against an inert/provider connection.
     /// Commands (without the board-v2 prefix):
     /// migration-prepare --scope-file PATH --report-file NEW_PATH;
@@ -57,7 +62,10 @@ module BoardV2Application =
     /// Executing CLI/adapter bytes and their source metadata must match the selected identities.
     /// Native preparation uses complete pages and two stable determining snapshots. It supplies no
     /// final enrollment/binding IDs until actual native readback; migration reports are not v4 bindings.
-    /// Inputs and exclusive outputs require a private Unix parent and refuse symlink/reparse paths.
+    /// Inputs and exclusive outputs require a private Unix parent and refuse symlink/reparse paths. Production durability uses
+    /// Linux x64 directory open/fsync after file Flush(true), including new-directory/parent barriers;
+    /// unavailable/error barriers refuse before dispatch. Kernel acknowledgements do not establish
+    /// physical-filesystem or crash qualification; those remain runtime custody requirements.
     /// Apply binds the separately selected exact prepared-file byte digest and a finite planning window.
     /// It reserves ORIGINAL_PATH.invocation-reserved and writes ORIGINAL_PATH.invocation evidence;
     /// reservations and original intent/response files are never overwritten, removed or replayed.
