@@ -500,7 +500,11 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   an actually promoted coherent channel; no candidate installer or publisher workaround is introduced.
   Actual private Project 3 reads require the selected approved local caller/environment and credential
   through existing secret custody: the CLI accepts `GITHUB_TOKEN`, otherwise `GH_TOKEN`; a repository
-  Actions token is not presumed to cover the organization project. Missing/malformed/mismatched input
+  Actions token is not presumed to cover the organization project. Independently prove private project
+  and private Checks capabilities; an endpoint permission header does not establish token-type support,
+  and stored `gh` OAuth is not automatically a CLI credential. Retain the actionable credential boundary
+  in the [operator contract](../../tests/coord-board-v2-cli-join/INSPECT.md#bounded-migration-source-contract).
+  Missing/malformed/mismatched input
   refusal and controlled pre-migration evidence are not postmigration positive v4 acceptance. No new
   In review option ID or final binding is invented. After actual native migration/readback, final stable
   binding and positive installed inspect/refresh/selection remain required before consumer adoption.
