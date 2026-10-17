@@ -141,9 +141,29 @@ filter update within the same invocation. Existing human planning values, option
 unrelated views and orthogonal grouping/vertical/sort configuration remain preserved. API metadata
 cannot verify UI columns/cards/order or replace actual installed Project 3 acceptance.
 
-The 27 focused migration controls are prepared for hosted qualification; no local CLR/native/browser
-execution or live effect was performed. The Observation-only authorizer, product binding3/schema1,
-V1 transport and historical offline constructor retain their separate scope.
+The closed scope now includes `initialPlanning`: explicit selected issue identities, exact Track
+option ID/name, genuine Roadmap text and an optional selected Status option. Use an empty array when
+no initial values are selected. An absent value may be initialized within the selected cooperative
+owner window; an equal existing value is a no-op and a different human/automation value stops the
+operation. This is no provider if-absent/CAS guarantee. Each returned item ID and initialized field
+requires independent readback; Observation, assignee, owner and hierarchy remain outside this route.
+
+Bounded initial schema/items/views/issue pages share one fresh query. Complete first pages are reused
+only within that observation; continuations count against the same budget, and no determining pages
+are reused across effects. The connected caller controls cover the full 77-effect, 22-membership,
+eight-view journey and a zero-write unchanged repeat. Request-count fit does not prove live timing.
+The foundation's 27 controls passed hosted qualification; this completion requires fresh exact-source
+compilation/tests. No local CLR/native/browser execution or live effect was performed. The
+Observation-only authorizer, product binding3/schema1, V1 transport and historical offline constructor
+retain their separate scope.
+
+Actual successor inspection must independently prove private Project 3 and private-repository Checks
+read capabilities with the selected caller credential. An `X-Accepted-Github-Permissions: checks=read`
+header describes the endpoint permission; it does not prove a token type can configure it. GitHub's
+[fine-grained PAT limitations](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#fine-grained-personal-access-tokens-limitations)
+exclude the Checks API. Browser OAuth that reads checks can still lack the project scope. The CLI
+reads `GITHUB_TOKEN` first, then `GH_TOKEN`; stored `gh` OAuth is not automatically its credential.
+Keep token values and private principal details out of reports and public evidence.
 
 
 ## Packaged pre-migration source qualification

@@ -186,7 +186,7 @@ module BoardV2Application =
                       lastVerified = item.LastVerified |> Option.map projectionWire |}) |}
 
     let encodeInspectionWithContext (report: InspectionReport) (context: SelectionContext option) (now: DateTimeOffset) =
-        let complete = report.Binding.BindingVersion = 4 && report.Evidence.PopulationGap.IsNone && report.MembershipGap.IsNone && report.NativeIntegrator.RepositoryGaps.IsEmpty && (report.NativeIntegrator.PullRequests |> List.forall (fun pull -> pull.Gaps.IsEmpty))
+        let complete = report.Binding.BindingVersion = 4 && report.Evidence.PopulationGap.IsNone && report.MembershipGap.IsNone && report.NativeIntegrator.RepositoryGaps.IsEmpty && (report.NativeIntegrator.PullRequests |> List.forall (fun pull -> pull.Gaps.IsEmpty && pull.GapDetails.IsEmpty))
         let facts: IntegratorFacts =
             { OpenPullRequests = if complete then Some(report.NativeIntegrator.PullRequests |> List.filter (fun pull -> pull.State = "OPEN") |> List.map _.Url) else None
               TouchSets = if complete then Some(report.NativeIntegrator.PullRequests |> List.filter (fun pull -> pull.State = "OPEN") |> List.map (fun pull -> pull.Url, pull.Files) |> Map.ofList) else None
@@ -447,6 +447,7 @@ module BoardV2Application =
             match change with
             | V2Migration.AddInReview _ -> "updateProjectV2Field"
             | V2Migration.AddMembership _ -> "addProjectV2ItemById"
+            | V2Migration.InitializePlanningValue _ -> "updateProjectV2ItemFieldValue"
             | V2Migration.CreateView _ -> "createProjectV2View"
             | V2Migration.UpdateView _ -> "updateProjectV2View"
         let expected =
@@ -465,6 +466,7 @@ module BoardV2Application =
                             match change with
                             | V2Migration.AddInReview _ -> "projectV2Field"
                             | V2Migration.AddMembership _ -> "item"
+                            | V2Migration.InitializePlanningValue _ -> "projectV2Item"
                             | V2Migration.CreateView _ | V2Migration.UpdateView _ -> "projectV2View"
                         let identity = payload.GetProperty(identityName).GetProperty("id").GetString()
                         if payload.GetProperty("clientMutationId").GetString() = expected
@@ -614,6 +616,7 @@ module BoardV2Application =
                                                                             | V2Migration.CreateView desired ->
                                                                                 snapshot.Views |> List.filter (fun (view: V2Migration.View) -> view.Name = desired.Name)
                                                                                 |> function [ view ] -> Some view.Id | _ -> None
+                                                                            | V2Migration.InitializePlanningValue(_, itemId, _, _) -> Some itemId
                                                                             | V2Migration.UpdateView(viewId, _) -> Some viewId
                                                                         match accepted, V2Migration.validateTransition current.Scope current.Snapshot snapshot change with
                                                                         | Ok returnedId, Ok() when observedIdentity = Some returnedId -> effects (sequence + 1) after
