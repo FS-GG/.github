@@ -1,0 +1,189 @@
+#!/usr/bin/env python3
+"""Prepare the local public registry delivery closure; never full qualification.
+
+Uses the existing projection roster/renderers, Atlas archive validator, manifest
+builders and own-row reconciliation. No remote producers or private archives.
+Authored decisions, registry dates/changelogs and required full CI remain manual.
+"""
+import argparse
+import json
+import os
+from pathlib import Path
+import runpy
+import subprocess
+import sys
+
+sys.dont_write_bytecode = True
+os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def local(relative):
+    path = ROOT
+    for part in Path(relative).parts:
+        if part in ("..", "/"):
+            raise ValueError("non-local path refused: " + relative)
+        path = path / part
+        if path.is_symlink():
+            raise ValueError("symlink refused: " + str(path.relative_to(ROOT)))
+    return path
+
+
+def files(directory):
+    result = {}
+    for path in directory.rglob("*"):
+        if path.is_symlink():
+            raise ValueError("seed/archive symlink refused: " + str(path))
+        if path.is_file():
+            result[path.relative_to(directory).as_posix()] = path.read_bytes()
+        elif not path.is_dir():
+            raise ValueError("non-regular archive entry: " + str(path))
+    return result
+
+
+def seeds(write):
+    atlas = runpy.run_path(str(local(".agents/skills/atlas/scripts/atlas.py")))
+    source = local("docs/atlas")
+    atlas["load_archives"]([source])
+    expected = files(source)
+    changed = []
+    for root in (".agents/skills", ".claude/skills"):
+        target = local(root + "/atlas/assets/seed")
+        actual = files(target)
+        if actual != expected:
+            changed.append(str(target.relative_to(ROOT)))
+            if write:
+                # These are explicitly selected public delivery seeds, never an
+                # archive discovered through user configuration or a home path.
+                for relative in actual.keys() - expected.keys():
+                    (target / relative).unlink()
+                for relative, body in expected.items():
+                    destination = target / relative
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(body)
+    return changed
+
+
+def projections(write):
+    command = ["bash", str(local("scripts/generate-projections")), "--registry-only"]
+    if not write:
+        command.append("--check")
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
+    if result.returncode:
+        print(result.stdout + result.stderr, file=sys.stderr, end="")
+    return result.returncode
+
+
+def manifests(write):
+    generator = runpy.run_path(str(local("scripts/generate-driver-manifest")))
+    changed = []
+    for key, builder in (("MANIFEST_PATH", "build_manifest"),
+                         ("KIT_MANIFEST_PATH", "build_kit_manifest")):
+        target = local(generator[key])
+        expected = generator[builder](str(ROOT))
+        if not target.is_file() or target.read_text() != expected:
+            changed.append(generator[key])
+            if write:
+                target.write_text(expected)
+    return changed, generator
+
+
+def own_rows(write, generator):
+    checker = runpy.run_path(str(local("scripts/fsgg-skill-registry-check")))
+    registry_path = local("registry/skills.yml")
+    registry = checker["_load_registry"](str(registry_path))
+    rows = registry["skills"]
+    owned = [row for row in rows if row.get("owner") == ".github"]
+    ids = [row["id"] for row in rows]
+    entries = json.loads(generator["build_manifest"](str(ROOT)))["skills"]
+    by_id = {entry["id"]: entry for entry in entries}
+    kit = {entry["supplied-by"] for entry in json.loads(generator["build_kit_manifest"](str(ROOT)))["skills"]}
+    findings = []
+    for row in owned:
+        identity = row["id"]
+        if ids.count(identity) != 1:
+            raise ValueError("ambiguous registry id: " + identity)
+        entry = by_id.get(identity)
+        if entry is None:
+            # Kit process rows have no canonical-body row in the driver
+            # manifest. Their maintained digest is the same body function.
+            source = row["source"]
+            if not source.startswith(".github/.claude/skills/") or not source.endswith("/SKILL.md"):
+                raise ValueError("unexpected own source: " + source)
+            relative = source[len(".github/"):]
+            if relative.removesuffix("/SKILL.md") not in kit:
+                raise ValueError("own row absent from both manifests: " + identity)
+            actual = checker["canonical_digest"](local(relative).read_bytes())
+        else:
+            if row["source"] != ".github/" + entry["supplied-by"] + "/SKILL.md" or row["scope"] != entry["scope"]:
+                raise ValueError("own row identity differs from manifest: " + identity)
+            actual = entry["sha256"]
+            findings.extend(checker["predicates"]([row], {identity: [{"repo": ".github", "entry": entry}]}))
+        if str(row["sha256"]) != actual:
+            findings.append({"id": identity, "check": "digest-matches", "actual": actual})
+    # Completeness/schema changes require authored review. This preparation
+    # command only reconciles existing own rows, never invents a foreign row.
+    missing = set(by_id) - {row["id"] for row in owned}
+    if missing:
+        raise ValueError("missing own registry rows require authored reconciliation: " + ", ".join(sorted(missing)))
+    if write:
+        checker["reconcile"](str(registry_path), findings)
+        checker["reconcile_predicates"](str(registry_path), findings)
+    return [finding["id"] for finding in findings]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true", help="read-only; default")
+    mode.add_argument("--write", action="store_true", help="prepare local generated bytes")
+    args = parser.parse_args()
+    print("LOCAL PUBLIC REGISTRY PREPARATION ONLY; protocol/full qualification NOT RUN; "
+          "remote producer coherence/publication NOT RUN")
+    failed = False
+    upstream = False
+    generator = None
+    for family in ("public-atlas-seeds", "registry-projections", "skill-manifests", "own-registry-rows"):
+        try:
+            dependent = upstream and family in ("skill-manifests", "own-registry-rows")
+            write = args.write and not dependent
+            if family == "public-atlas-seeds":
+                changed = seeds(write)
+            elif family == "registry-projections":
+                code = projections(write)
+                changed = ["see generator diagnostics"] if code else []
+            elif family == "skill-manifests":
+                changed, generator = manifests(write)
+            else:
+                if generator is None:
+                    generator = runpy.run_path(str(local("scripts/generate-driver-manifest")))
+                changed = own_rows(write, generator)
+            state = "BLOCKED by stale/invalid inputs" if dependent else "current"
+            if changed:
+                state = ("prepared" if write else "STALE") + ": " + ", ".join(changed)
+                if dependent:
+                    state += "; dependent status BLOCKED"
+            print(f"{family}: {state}")
+            if changed and not args.write:
+                failed = True
+                upstream = True
+            if family == "registry-projections" and code:
+                failed = upstream = True
+        except (Exception, SystemExit) as exc:
+            print(f"{family}: UNAVAILABLE: {exc}", file=sys.stderr)
+            failed = upstream = True
+    # Own-row reconciliation can affect registry counts. Reuse the complete
+    # selected renderer set, then verify every family without further mutation.
+    if args.write and not failed:
+        if projections(True):
+            failed = True
+        if not failed:
+            if seeds(False) or manifests(False)[0] or own_rows(False, generator) or projections(False):
+                failed = True
+        print("Review authored registry dates/changelogs before delivery.")
+    print("preparation " + ("INCOMPLETE" if failed else "current") + "; full required CI remains mandatory")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

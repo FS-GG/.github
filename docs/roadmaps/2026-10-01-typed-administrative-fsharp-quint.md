@@ -152,3 +152,37 @@ OPS-TYPED-01.1–.3 have **no generated workspace/default effect**. The first en
 The SC2 diagnostic slice has no generated-workspace/default effect. Its first operational change requires the clean browser artifact and selected runner/failure-summary successor to retain the typed terminal. Historical attempt n keeps its unknown cause.
 
 Feature completion requires the first production seams adopted and the selected administrative ownership/retirement outcomes resolved or explicitly scoped by root; checking the current ready window does not silently declare the broader migration finished. Root records source delivery, publication, adoption, native acceptance and cleanup separately in the existing programme report. Telemetry remains the existing observer route; missing configuration and usage are unknown, not zero-cost/compliant. Current dispatch telemetry is not configured; usage and economics remain unknown.
+
+### Local registry preparation closure — 2026-10-17
+
+[Shared registry PR #4631](https://github.com/FS-GG/.github/pull/4631) reconciled the genuinely
+published Game WASM 0.4 inventory while retaining open installed/product acceptance. Its original
+Atlas seed and component-inventory failures exposed a local preparation gap: registry regions,
+packaged public knowledge, complete skill-tree manifests and own registry digests must travel
+together. This is a bounded source preparation correction, with no change to typed operation
+authority, current published packages or installed consumers.
+
+Run `python3 -B scripts/prepare-registry --check` for a read-only diagnosis, or `--write` to prepare
+the generated closure. Python with PyYAML, bash and jq remain prerequisites; CLR is not invoked.
+The command uses the existing public Atlas archive validator, the generator's canonical targets
+and source declarations, both maintained manifest builders and existing own-row digest/predicate
+reconciliation. Its order is public seeds, every non-protocol registry projection, both skill
+manifests, existing `.github` registry rows, then affected-output verification. It reads neither
+private archives nor foreign producer checkouts. Foreign rows, authored capture decisions,
+registry dates/changelogs and publication judgement remain outside automatic reconciliation.
+
+Check reports all independently checkable stale families; manifests and own rows are explicitly
+blocked when upstream seed/projection inputs are stale or unavailable. Write stops dependent
+mutation on invalid inputs and rechecks the prepared closure. `generate-projections --registry-only`
+is the underlying explicit preparation subset, selected from its sole target/source declarations;
+the default full generation and `--check` still require genuine compiled protocol facts.
+Every preparation result states that protocol/full qualification was not run.
+
+Static dependency inspection and inert production-caller controls cover the actual version-to-six
+region join, both public seed mirrors, projected skill/tree/own-row binding, foreign-row preservation,
+ambiguous identity refusal, missing/malformed targets, unavailable prerequisites, read-only checks,
+idempotence and the unchanged full-mode engine fence. Reuse the existing projection test runner
+and hosted workflow; no separate model or workflow is needed for this finite composition.
+Local checks were observed at about half a second and the focused suite at about twenty seconds;
+cache state was uncontrolled and comparative effort/latency savings remain unknown. Full canonical
+projection, typed registry, semantic and required hosted checks remain final delivery obligations.

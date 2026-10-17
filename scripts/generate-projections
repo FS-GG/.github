@@ -26,6 +26,8 @@
 #   scripts/generate-projections            # rewrite every generated region in place
 #   scripts/generate-projections --check    # verify they are current; exit 1 on any drift (the GATE)
 #   scripts/generate-projections --list     # print `kind<TAB>path<TAB>BEGIN-marker` per region; the gate's subject list
+#   scripts/generate-projections --registry-only [--check]
+#                                           # preparation only: all registry/roster regions, no protocol facts
 #   scripts/generate-projections --contract-version
 #                                           # print the derived version of the agent contract
 #
@@ -50,13 +52,20 @@ reject_symlink_chain() {
 CHECK=""
 LIST=""
 CONTRACT_VERSION=""
-case "${1:-}" in
-  --check) CHECK=1 ;;
-  --list)  LIST=1 ;;
-  --contract-version) CONTRACT_VERSION=1 ;;
-  "") ;;
-  *) echo "::error::unknown argument: $1 (expected --check, --list, --contract-version, or nothing)" >&2; exit 2 ;;
-esac
+REGISTRY_ONLY=""
+for argument in "$@"; do
+  case "$argument" in
+    --check) CHECK=1 ;;
+    --list) LIST=1 ;;
+    --contract-version) CONTRACT_VERSION=1 ;;
+    --registry-only) REGISTRY_ONLY=1 ;;
+    *) echo "::error::unknown argument: $argument (expected --check, --list, --contract-version, --registry-only)" >&2; exit 2 ;;
+  esac
+done
+if [ -n "$CONTRACT_VERSION" ] && { [ -n "$REGISTRY_ONLY" ] || [ -n "$CHECK" ] || [ -n "$LIST" ]; }; then
+  echo "::error::--contract-version cannot be combined with generation modes" >&2
+  exit 2
+fi
 
 # The operator's agent contract is the complete byte surface under both live skill roots. Its version
 # is derived from one canonical stream: sorted root-relative path, byte length, then bytes, for every
@@ -192,6 +201,20 @@ source_of() { # kind
   esac
 }
 
+# The existing source declaration selects the complete non-protocol subset. No
+# second target roster or renderer is carried by the preparation route.
+if [ -n "$REGISTRY_ONLY" ]; then
+  selected=()
+  for spec in "${TARGETS[@]}"; do
+    if [ "$(source_of "${spec%%:*}")" != "src/FS.GG.Coord.Core/Protocol.fs" ]; then
+      selected+=("$spec")
+    fi
+  done
+  TARGETS=("${selected[@]}")
+  [ "${#TARGETS[@]}" -gt 0 ] || { echo "::error::no registry projection targets" >&2; exit 2; }
+  echo "registry preparation only: protocol/full qualification NOT RUN" >&2
+fi
+
 if [ -n "$LIST" ]; then
   for spec in "${TARGETS[@]}"; do
     kind="${spec%%:*}"
@@ -204,11 +227,11 @@ fi
 # takes the engine from the feed — that asymmetry is deliberate (ADR-0034 §4.3): fixing coord would
 # otherwise require publishing, and publishing would require coord to schedule the fix.
 #
-# It is required unconditionally even though `versions` does not read it, because this script rewrites
-# EVERY region on every run: a mode that regenerated only the registry-sourced ones would be a way to
-# leave the protocol regions stale without noticing, and `--check` has to answer for all of them anyway.
+# Default generation and --check require genuine engine facts for EVERY region.
+# Explicit --registry-only is preparation, reports protocol/full qualification
+# NOT RUN, and cannot replace this complete gate.
 ENGINE="${FSGG_COORD_ENGINE_BIN:-$HERE/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}"
-if [ ! -x "$ENGINE" ]; then
+if [ -z "$REGISTRY_ONLY" ] && [ ! -x "$ENGINE" ]; then
   echo "::error::no engine at $ENGINE — build it: dotnet build src/FS.GG.Coord.Cli -c Release" >&2
   exit 2
 fi
@@ -218,7 +241,7 @@ REG="$(mktemp)"
 SKILLS="$(mktemp)"
 ROSTER="$(mktemp)"
 trap 'rm -f "$FACTS" "$REG" "$SKILLS" "$ROSTER"' EXIT
-"$ENGINE" facts --json >"$FACTS"
+if [ -z "$REGISTRY_ONLY" ]; then "$ENGINE" facts --json >"$FACTS"; fi
 
 # THE SECOND SOURCE. `versions` is emitted from the REGISTRY, not the engine — the two regions project
 # different truths and neither is the other's source. Python is a YAML→JSON transcoder here and nothing
@@ -1072,8 +1095,16 @@ done
 if [ -n "$CHECK" ]; then
   if [ "$drift" -ne 0 ]; then
     echo "" >&2
-    echo "Regenerate with: dotnet build src/FS.GG.Coord.Cli -c Release && scripts/generate-projections" >&2
+    if [ -n "$REGISTRY_ONLY" ]; then
+      echo "Prepare with: python3 scripts/prepare-registry --write (full CI still required)" >&2
+    else
+      echo "Regenerate with: dotnet build src/FS.GG.Coord.Cli -c Release && scripts/generate-projections" >&2
+    fi
     exit 1
   fi
-  echo "projections: current — the protocol is stated once, and every projection agrees with it."
+  if [ -n "$REGISTRY_ONLY" ]; then
+    echo "registry projections: current; protocol/full qualification NOT RUN"
+  else
+    echo "projections: current — the protocol is stated once, and every projection agrees with it."
+  fi
 fi
