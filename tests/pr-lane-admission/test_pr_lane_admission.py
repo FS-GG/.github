@@ -38,7 +38,7 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
                     raise RuntimeError("offline qualification refuses nonfixture child")
         sys.addaudithook(inert)
 
-    def invoke(self, state, body="First line\nSecond line\n", branch="feature/combined", head=EXPECTED_SHA, extra=()):
+    def invoke(self, state, body="First line\nSecond line\n", branch="feature/combined", head=EXPECTED_SHA, extra=(), repo="FS-GG/example"):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         directory = pathlib.Path(temporary.name)
@@ -55,7 +55,7 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
                 "-I", "-S", "-B",
                 str(TOOL),
                 "--repo",
-                "FS-GG/example",
+                repo,
                 "--campaign-id",
                 "campaign-7",
                 "--dependency-chain-id",
@@ -103,9 +103,9 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
                 "<!-- fsgg:routine-development/v1 head=" + "b" * 40 + " operation=source-change extra=value -->\n"}}
         return json.loads(json.dumps(value))
 
-    def update(self, state, body="Revised prose\n"):
+    def update(self, state, body="Revised prose\n", repo="FS-GG/example"):
         return self.invoke(state, body, "routine/fixture", extra=(
-            "--update-pr", "42", "--previous-head-sha", "b" * 40))
+            "--update-pr", "42", "--previous-head-sha", "b" * 40), repo=repo)
 
     def test_update_preserves_fresh_metadata_and_rebinds_only_routine_head(self):
         state = self.update_state()
@@ -213,6 +213,33 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
                 self.assertEqual("updated", result["action"])
                 self.assertEqual(1, sum(call["arguments"][2] == "PATCH" for call in calls))
                 self.assertEqual(3, sum(any(argument.endswith("/pulls/42") for argument in call["arguments"]) and call["arguments"][2] == "GET" for call in calls))
+
+    def test_update_repo_argument_case_preserves_exact_native_github_url_contract(self):
+        for repo in ("fs-gg/example", "fS-gG/eXaMpLe"):
+            with self.subTest(repo=repo):
+                completed, result, calls = self.update(self.update_state(), repo=repo)
+                self.assertEqual(0, completed.returncode, completed.stdout)
+                self.assertEqual("updated", result["action"])
+                self.assertEqual("https://github.com/FS-GG/example/pull/42", result["url"])
+                self.assertEqual(1, sum(call["arguments"][2] == "PATCH" for call in calls))
+        for url in ("https://other.example/FS-GG/example/pull/42", "http://github.com/FS-GG/example/pull/42",
+                    "https://github.com/FS-GG/example/issues/42", "https://github.com/FS-GG/example/pull/43",
+                    "https://github.com@other.example/FS-GG/example/pull/42"):
+            for stage in ("initial-candidate", "prewrite-comparison"):
+                with self.subTest(url=url, stage=stage):
+                    state = self.update_state()
+                    changed = copy.deepcopy(state["pull"])
+                    changed["html_url"] = url
+                    if stage == "initial-candidate":
+                        state["pull"] = changed
+                    else:
+                        state["read_sequence"] = [state["pull"], changed]
+                    completed, result, calls = self.update(state, repo="fs-gg/example")
+                    self.assertEqual(3, completed.returncode, completed.stdout)
+                    self.assertEqual(stage, result["stage"])
+                    self.assertFalse(result["writeAttempted"])
+                    self.assertIn("html_url", [item["field"] for item in result["diagnostic"]["fields"]])
+                    self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
 
     def test_every_metadata_identity_authority_and_prose_change_refuses_before_patch(self):
         changes = {"number": 43, "id": 1043, "node_id": "PR_other", "state": "closed", "merged": True,

@@ -276,7 +276,9 @@ def update_pull(arguments: argparse.Namespace, proposed: str, identity: dict[str
                     "head.ref": arguments.head, "head.sha": arguments.head_sha,
                     "head.repo.full_name": arguments.repo, "base.ref": arguments.base,
                     "base.repo.full_name": arguments.repo,
-                    "html_url": f"https://github.com/{arguments.repo}/pull/{arguments.update_pr}"}
+                    # Repository argument spelling is case-insensitive; native URL spelling is
+                    # canonical only after the native base repository passes the scope check below.
+                    "html_url": f"https://github.com/{guarded['base.repo.full_name']}/pull/{arguments.update_pr}"}
         differences = [metadata_difference(field, item, guarded[field]) for field, item in expected.items()
                        if (item.lower() != guarded[field].lower() if field.endswith("repo.full_name")
                            else item != guarded[field])]
