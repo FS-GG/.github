@@ -401,8 +401,8 @@ fi
 # docstring QUOTES nuget.org's refusal verbatim — "may not be more than 35000 characters long" — and
 # that citation is the point of naming the constraint as external rather than a second authority to
 # drift from. This leg asserts exactly one assignment and no executable copy elsewhere.
-# The captured 0.91.4 and 0.102.0 release manifests are immutable publication evidence:
-# editing their recorded preflight limits would falsify the release records.
+# Captured 0.91.4, 0.102.0 and original attempted 0.103.0 manifests are immutable
+# release evidence; editing their recorded limits would falsify those original records.
 holder="scripts/check-engine-release-notes.py"
 assignments="$(cd "$ROOT" && grep -c "^NUGET_ORG_RELEASE_NOTES_LIMIT = $LIMIT\$" "$holder" || true)"
 secondary_limit_occurrences() {
@@ -411,7 +411,8 @@ secondary_limit_occurrences() {
     | grep -v "^$holder:" \
     | grep -v '^tests/engine-release-notes/run\.sh:' \
     | grep -v '^tests/kit-bump-shape/release-manifest-v0\.91\.4\.json:' \
-    | grep -v '^tests/release-successor-recovery/original-0102-manifest\.json:' || true)
+    | grep -v '^tests/release-successor-recovery/original-0102-manifest\.json:' \
+    | grep -v '^tests/release-successor-recovery/original-0103-manifest\.json:' || true)
 }
 elsewhere="$(secondary_limit_occurrences "$ROOT")"
 if [ "$assignments" = "1" ] && [ -z "$elsewhere" ]; then
@@ -430,10 +431,12 @@ printf '{"maxReleaseNotesCharacters":%s}\n' "$LIMIT" \
   > "$scan_fixture/tests/kit-bump-shape/release-manifest-v0.91.4.json"
 printf '{"maxReleaseNotesCharacters":%s}\n' "$LIMIT" \
   > "$scan_fixture/tests/release-successor-recovery/original-0102-manifest.json"
+printf '{"maxReleaseNotesCharacters":%s}\n' "$LIMIT" \
+  > "$scan_fixture/tests/release-successor-recovery/original-0103-manifest.json"
 if [ -z "$(secondary_limit_occurrences "$scan_fixture")" ]; then
-  ok "both immutable published manifests are treated as evidence"
+  ok "all three exact immutable release manifests are treated as evidence"
 else
-  bad "both immutable published manifests must be treated as evidence"
+  bad "all three exact immutable release manifests must be treated as evidence"
 fi
 printf '{"maxReleaseNotesCharacters":%s}\n' "$LIMIT" \
   > "$scan_fixture/tests/release-successor-recovery/adjacent-active-limit.json"
@@ -450,6 +453,14 @@ if grep -q '^tests/release-successor-recovery/original-0102-manifestXjson:' <<<"
   ok "a near-name historical manifest is not exempted by regex punctuation"
 else
   bad "a near-name historical manifest must fail the scan"
+fi
+printf '{"maxReleaseNotesCharacters":%s}\n' "$LIMIT" \
+  > "$scan_fixture/tests/release-successor-recovery/original-0103-manifestXjson"
+original_near_name="$(secondary_limit_occurrences "$scan_fixture")"
+if grep -q '^tests/release-successor-recovery/original-0103-manifestXjson:' <<<"$original_near_name"; then
+  ok "an original-attempt near-name is not exempted by regex punctuation"
+else
+  bad "an original-attempt near-name must fail the scan"
 fi
 printf 'NUGET_ORG_RELEASE_NOTES_LIMIT = %s\n' "$LIMIT" \
   > "$scan_fixture/scripts/duplicate-release-limit.py"
