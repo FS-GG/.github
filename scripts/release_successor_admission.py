@@ -43,20 +43,32 @@ class SingleOperatorAdmission:
             or action not in {"intent", "dispatch", "settle"}
         ):
             return False
-        repository = self.api.get(f"repos/{REPOSITORY}")
-        if repository.get("id") != REPOSITORY_ID or repository.get("full_name") != REPOSITORY:
-            return False
-        run = self.api.get(f"repos/{REPOSITORY}/actions/runs/{self.run_id}")
-        if (
-            run.get("repository", {}).get("id") != REPOSITORY_ID
-            or run.get("path") != WORKFLOW
-            or run.get("event") != "workflow_dispatch"
-            or run.get("head_branch") != "main"
-            or run.get("head_sha") != self.publisher_sha
-            or run.get("run_attempt") != 1
-            or run.get("actor", {}).get("login") != OPERATOR
-            or run.get("status") != "in_progress"
-        ):
-            return False
-        head = self.api.get(f"repos/{REPOSITORY}/git/ref/heads/main")
-        return head.get("object", {}).get("sha") == self.publisher_sha
+        return publisher_context_authorized(self.api, self.publisher_sha, self.run_id)
+
+
+def publisher_context_authorized(api, publisher_sha, run_id, *, hosted_install=False):
+    """Share the maintained native run/current-main predicate without a fake manifest."""
+    repository = api.get(f"repos/{REPOSITORY}")
+    if repository.get("id") != REPOSITORY_ID or repository.get("full_name") != REPOSITORY:
+        return False
+    run = api.get(f"repos/{REPOSITORY}/actions/runs/{run_id}")
+    if (
+        run.get("repository", {}).get("id") != REPOSITORY_ID
+        or run.get("path") != WORKFLOW
+        or run.get("event") != "workflow_dispatch"
+        or run.get("head_branch") != "main"
+        or run.get("head_sha") != publisher_sha
+        or run.get("run_attempt") != 1
+        or run.get("actor", {}).get("login") != OPERATOR
+        or run.get("status") != "in_progress"
+    ):
+        return False
+    if hosted_install and (
+        type(run.get("id")) is not int or run.get("id") != run_id or type(run.get("run_attempt")) is not int
+        or run.get("triggering_actor", {}).get("login") != OPERATOR
+        or run.get("repository", {}).get("full_name") != REPOSITORY
+    ):
+        return False
+    head = api.get(f"repos/{REPOSITORY}/git/ref/heads/main")
+    return (head.get("object", {}).get("sha") == publisher_sha
+            and (not hosted_install or head.get("object", {}).get("type") == "commit"))

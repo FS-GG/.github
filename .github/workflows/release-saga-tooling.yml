@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "scripts/release-saga.py"
+      - "scripts/release_successor_admission.py"
+      - "scripts/release_successor_journal.py"
       - "scripts/release_successor_execution.py"
       - "scripts/release_successor_provider.py"
       - "scripts/release_successor_auth_consumer.py"
@@ -11,6 +13,8 @@ on:
       - "scripts/release-successor-artifact.py"
       - "scripts/release-saga-ci.sh"
       - "tests/release-saga/**"
+      - "tests/release-successor-recovery/**"
+      - "tests/release-successor-live/**"
       - "tests/release-successor-execution/**"
       - "tests/release-successor-authentication/**"
       - "tests/release-successor-artifact/**"
@@ -20,6 +24,7 @@ on:
       - "docs/reports/gs2-08-8-bridge-adoption.json"
       - "dist/dotnet/.config/dotnet-tools.json"
       - "evidence/gs2-08-7/**"
+      - ".github/workflows/release-successor-publish.yml"
       - ".github/workflows/release-saga-tooling.yml"
       - ".github/workflows/release-saga-prepare.yml"
       - ".github/workflows/release-saga-start.yml"
@@ -31,6 +36,8 @@ on:
     branches: [main]
     paths:
       - "scripts/release-saga.py"
+      - "scripts/release_successor_admission.py"
+      - "scripts/release_successor_journal.py"
       - "scripts/release_successor_execution.py"
       - "scripts/release_successor_provider.py"
       - "scripts/release_successor_auth_consumer.py"
@@ -38,6 +45,8 @@ on:
       - "scripts/release-successor-artifact.py"
       - "scripts/release-saga-ci.sh"
       - "tests/release-saga/**"
+      - "tests/release-successor-recovery/**"
+      - "tests/release-successor-live/**"
       - "tests/release-successor-execution/**"
       - "tests/release-successor-authentication/**"
       - "tests/release-successor-artifact/**"
@@ -47,6 +56,7 @@ on:
       - "docs/reports/gs2-08-8-bridge-adoption.json"
       - "dist/dotnet/.config/dotnet-tools.json"
       - "evidence/gs2-08-7/**"
+      - ".github/workflows/release-successor-publish.yml"
       - ".github/workflows/release-saga-tooling.yml"
       - ".github/workflows/release-saga-prepare.yml"
       - ".github/workflows/release-saga-start.yml"
@@ -74,6 +84,8 @@ jobs:
         run: bash tests/release-saga/run.sh
       - name: Prove successor admission and fake-provider recovery
         run: python3 tests/release-successor-execution/run.py
+      - name: Prove protected suspension installation and ordinary forward recovery
+        run: python3 tests/release-successor-recovery/run.py
       - name: Prove inert original-tag authentication factory and inactive selection
         run: python3 tests/release-successor-authentication/run.py --current-source-suspension
       - name: Prove retained candidate identity and extraction

@@ -1415,8 +1415,8 @@ class CurrentSourceSuspensionControls(unittest.TestCase):
         for name,paths in (
             ('callable-source-manifest.json',{'scripts/release-successor-publish.py','scripts/release_successor_provider.py'}),
             ('callback-pair-manifest.json',{'scripts/release-successor-publish.py','scripts/release_successor_provider.py'}),
-            ('slot-callback-pair-manifest.json',{'scripts/release_successor_provider.py'}),
-            ('closed-source-manifest.json',{'scripts/release_successor_provider.py'})):
+            ('slot-callback-pair-manifest.json',{'scripts/release_successor_execution.py','scripts/release_successor_provider.py'}),
+            ('closed-source-manifest.json',{'scripts/release_successor_execution.py','scripts/release_successor_provider.py'})):
             rows=json.loads((pathlib.Path(__file__).parent/name).read_bytes())['files']
             changed={row['path'] for row in rows if row.get('repository','FS-GG/.github')=='FS-GG/.github'
                 and hashlib.sha256((ROOT/row['path']).read_bytes()).hexdigest()!=row['sha256']}
@@ -1425,7 +1425,7 @@ class CurrentSourceSuspensionControls(unittest.TestCase):
     def test_closed_historical_profiles_refuse_exact_changed_source(self):
         import callback_pair_profile as pair
         for profile,path in ((pair.PROFILE,'scripts/release-successor-publish.py'),
-                             (pair.SLOT_PROFILE,'scripts/release_successor_provider.py')):
+                             (pair.SLOT_PROFILE,'scripts/release_successor_execution.py')):
             with self.subTest(profile=profile),self.assertRaisesRegex(ValueError,'source mismatch: '+path):
                 pair.select(ROOT,profile)
         import release_successor_closed_callback as closed
