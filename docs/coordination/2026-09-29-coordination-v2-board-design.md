@@ -456,6 +456,35 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   Prove positive actual Project 3 successor-schema inspection/selection with the authenticated .9
   installed composition after migration/readback and before .11 adoption. Actual UI verifies columns/cards/filters/order/links/private visibility. API metadata alone cannot
   satisfy this gate; unknown original effects require original-identity reconciliation, not retry.
+
+  **Selected maintained migration route (2026-10-17; source preparation only).** Extend the existing
+  packaged `board-v2` CLI and shared GitHub adapter with typed prepare/apply/readback composition and
+  a separate exact migration authorizer. The historical nonpackable `BoardV2Import` constructor
+  remains offline; neither its pilot acceptance nor the Observation-only transport authorizes
+  schema, membership or view mutations. Preserve the latter's accepted request set, product binding3
+  and V1 transport. Qualify the changed migration caller through the admitted coherent package and
+  installed receiver route before any native operation; original .103/.104 identities remain intact.
+
+  Read-only preparation binds the actual principal/project, complete predecessor schema, memberships,
+  values and selected view identities to the selected semantic delta. Preserve every existing Status
+  option ID and its card values when adding In review: the API replaces the supplied option list.
+  New native option/view IDs remain unresolved preparation slots, never invented consumer bindings.
+  Apply uses freshly checked exact identities and a bounded one-shot authorizer/provider composition,
+  retaining the exact original request in existing private operation custody before sending. Lost or
+  ambiguous responses stop writes and enter original-identity readback only; no blind retries or
+  rollback. A fully reconciled unchanged repeat emits no mutations. Actual readback resolves new IDs;
+  then land the final stable enrollment/binding before positive installed v4 inspection/refresh/selection.
+
+  Default migration writes no existing human Status/Track/Roadmap values. Native updates provide no
+  expected-revision/CAS guarantee: fresh comparison detects observed drift, but a local lock cannot
+  prevent another principal's edit. Any selected seeding requires genuine bounded owner coordination;
+  otherwise return the exact no-write owner action. API view operations support layout, filters and
+  visible fields, with no established grouping/sort/column-order mutation input. Keep unsupported UI
+  configuration and actual visual verification open rather than guessing properties or equating API
+  readback with UI acceptance. Retain option/card preservation, wrong/incomplete identity refusal,
+  no-op, partial-effect, lost-response, drift and Observation/product-isolation controls through the
+  actual CLI-to-authorizer-to-provider-to-readback path.
+
 - [ ] **COORD-BOARD-V2-01.11 — Adopt programme consumers and retire duplicate tracking** — route: routine.
   Depends on .9/.10 and discrepancy-free comparison with current in-flight work. Scope: work-programme,
   organization drivers/wrappers, recovery, show-progress and maintained mirrored/generated/package
