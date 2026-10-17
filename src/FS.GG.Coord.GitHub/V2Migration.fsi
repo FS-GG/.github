@@ -14,12 +14,25 @@ module V2Migration =
         { Id: string option; Name: string; Layout: string; Filter: string;
           VisibleFieldIds: string list }
 
+    type PlanningOption =
+        { Id: string; Name: string }
+
+    /// One selected issue's explicit initial human planning values. Absent native values may
+    /// be initialized within a cooperative owner-controlled window; equal values are no-ops,
+    /// conflicting human/automation values refuse. Omitted Status remains an explicit owner action.
+    type InitialPlanning =
+        { IssueId: string; Track: PlanningOption; Roadmap: string; Status: PlanningOption option }
+
+    type PlanningValue =
+        | PlanningText of string
+        | PlanningSelect of PlanningOption
+
     type Scope =
         { SourceRevision: string; ArtifactSha256: string; CliArtifactSha256: string; PrincipalId: string;
           PrincipalLogin: string; SelectedIssues: SelectedIssue list;
           StatusFieldId: string; RoadmapFieldId: string; TrackFieldId: string;
           ObservationFieldId: string; InReviewColor: string; InReviewDescription: string;
-          Views: DesiredView list }
+          Views: DesiredView list; InitialPlanning: InitialPlanning list }
 
     type SelectOption =
         { Id: string; Name: string; Color: string; Description: string }
@@ -52,6 +65,7 @@ module V2Migration =
     type Change =
         | AddInReview of fieldId: string * retained: SelectOption list * color: string * description: string
         | AddMembership of issueId: string
+        | InitializePlanningValue of issueId: string * itemId: string * fieldId: string * value: PlanningValue
         | CreateView of DesiredView
         | UpdateView of viewId: string * DesiredView
 
@@ -63,7 +77,9 @@ module V2Migration =
     val validateScope: scope: Scope -> IoResult<unit>
 
     /// Read complete native schema, membership, selected planning values, view configuration and issues.
-    /// Complete nested first pages are invocation-local observations; only genuine continuations reread.
+    /// Schema, item, view and selected issue first pages share one bounded native query. Complete
+    /// nested first pages are observation-local; genuine continuations retain their exact parent identity.
+    /// An independent final read rechecks project/principal metadata; this is not an atomic snapshot.
     /// A later effect always invalidates the prior determining snapshot and triggers fresh native reads.
     /// All reads share one 500-request/270-second invocation budget supplied by the caller.
     val collect: transport: IGitHubTransport -> scope: Scope -> IoResult<Snapshot>

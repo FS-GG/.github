@@ -202,6 +202,59 @@ module V2ProjectionSource =
             | :? UriFormatException
             | :? ArgumentException -> Error(Malformed(subject, "unreadable native dependency snapshot"))
 
+    // This URL comes only from the exact protected enrollment row. Repository scope and
+    // path grammar are closed here; the URL itself never authenticates an enrollment.
+    let private readDeclaredPlan (transport: IGitHubTransport) (binding: Binding) (url: string) : IoResult<NativeObservation option * string> =
+        let subject = "enrolled native owning plan"
+        let refuse detail = Error(Malformed(subject, detail))
+        let hex (value: string) = value.Length = 40 && (value |> Seq.forall Uri.IsHexDigit)
+        let mutable uri = Unchecked.defaultof<Uri>
+        let rawPath = url.Split('#').[0]
+        if url.Length > 4096 || not (url.StartsWith("https://github.com/", StringComparison.Ordinal)) || not (Uri.TryCreate(url, UriKind.Absolute, &uri))
+           || uri.Scheme <> "https" || uri.Host <> "github.com" || uri.Port <> 443
+           || uri.UserInfo <> "" || uri.Query <> "" || rawPath.Contains('%')
+           || rawPath.Contains('\\') || (url |> Seq.exists Char.IsControl) then
+            refuse "plan URL must be an exact HTTPS github.com repository blob URL"
+        else
+            let parts = uri.AbsolutePath.TrimStart('/').Split('/')
+            let segments = rawPath.Substring("https://github.com/".Length).Split('/')
+            let repository =
+                if parts.Length >= 5 then
+                    binding.Repositories |> Seq.tryFind (fun repository ->
+                        String.Equals(repository, parts.[0] + "/" + parts.[1], StringComparison.OrdinalIgnoreCase))
+                else None
+            let path = if parts.Length >= 5 then String.Join("/", parts |> Array.skip 4) else ""
+            let allowedPath = path.StartsWith("docs/", StringComparison.Ordinal) || path = ".agents/skills/work-programme/references/observation.md"
+            if repository.IsNone || parts.Length < 5 || parts.[2] <> "blob"
+               || (parts.[3] <> "main" && not (hex parts.[3])) || not allowedPath
+               || (segments |> Array.exists (fun part -> part = "" || part = "." || part = ".." || part.Contains(':')))
+               || String.Join("/", segments) <> String.Join("/", parts) then
+                refuse "plan repository/ref/path is outside the exact enrolled source grammar"
+            else
+                let repository = repository.Value
+                let split = repository.Split('/')
+                let variables = [ "owner", VString split.[0]; "repo", VString split.[1] ]
+                let revision =
+                    if parts.[3] <> "main" then Ok parts.[3]
+                    else
+                        let document = "query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){nameWithOwner ref(qualifiedName:\"refs/heads/main\"){target{oid}}}}"
+                        GraphQl.read transport (query document variables subject) (fun data ->
+                            let native = data.GetProperty "repository"
+                            let oid = native.GetProperty("ref").GetProperty("target").GetProperty("oid").GetString()
+                            if native.GetProperty("nameWithOwner").GetString() <> repository || isNull oid || not (hex oid) then
+                                refuse "declared plan main ref is missing or mismatched"
+                            else Ok oid)
+                revision |> Result.bind (fun revision ->
+                    let document = "query($owner:String!,$repo:String!,$expression:String!){repository(owner:$owner,name:$repo){nameWithOwner object(expression:$expression){... on Blob{oid text}}}}"
+                    GraphQl.read transport (query document (variables @ [ "expression", VString(revision + ":" + path) ]) subject) (fun data ->
+                        let native = data.GetProperty "repository"
+                        let blob = native.GetProperty "object"
+                        let oid = blob.GetProperty("oid").GetString()
+                        let text = blob.GetProperty("text").GetString()
+                        if native.GetProperty("nameWithOwner").GetString() <> repository || isNull oid || not (hex oid) || String.IsNullOrWhiteSpace text then
+                            refuse "declared plan commit/blob identity or content is unavailable"
+                        else Ok(None, $"{repository}/{path}@{revision}:{oid}:{url}")))
+
     let private readPlan (transport: IGitHubTransport) (binding: Binding) (path: string) =
         if binding.BindingVersion = 3 && not (path.StartsWith("docs/", StringComparison.Ordinal)) then
             let prefix = $"https://github.com/{sourceRepository binding}/issues/"
@@ -219,6 +272,8 @@ module V2ProjectionSource =
                 let emptyDigest = System.Security.Cryptography.SHA256.HashData(Array.empty<byte>) |> Convert.ToHexStringLower
                 if native.Url <> path || native.BodySha256 = emptyDigest then Error(Malformed("programme issue", "native URL/body is unreadable or mismatched"))
                 else Ok(Some native, $"{native.NodeId}@{native.UpdatedAt}:{native.Url}:{native.BodySha256}"))
+        elif binding.BindingVersion = 4 && path.StartsWith("https://", StringComparison.Ordinal) then
+            readDeclaredPlan transport binding path
         elif path.StartsWith("docs/", StringComparison.Ordinal) then
             readProtectedBlob transport binding binding.PopulationRevision path |> Result.map (fun (_, revision, blob) -> None, $"{path}@{revision}:{blob}")
         else Error(Malformed("owning plan", "only canonical protected docs or the selected programme issue URL is admitted"))
@@ -429,10 +484,18 @@ module V2ProjectionSource =
                   Items = items; PopulationGap = None; Cleanup = "No resources, claims or background work created" }
 
     // Native head-bound observations; none of these facts establishes deployment acceptance.
+    type NativeReadPurpose =
+        | Unclassified = 0
+        | ScopeEvidence = 1
+        | ReviewAvailability = 2
+        | CheckAvailability = 3
+
+    type NativeReadGap = { Purpose: NativeReadPurpose; Detail: string }
+
     type PullRequestFacts =
         { Id: string; Repository: string; Number: int; Url: string; State: string; Head: string; UpdatedAt: string
           Author: string option; Issues: string list; Files: string list; ScopeCurrent: bool; ReviewDecision: string option
-          Reviews: string list; Checks: string list; Gaps: string list }
+          Reviews: string list; Checks: string list; Gaps: string list; GapDetails: NativeReadGap list }
 
     type NativeIntegratorFacts =
         { PullRequests: PullRequestFacts list; RepositoryGaps: Map<string, string>; ObservedAt: DateTimeOffset }
@@ -558,24 +621,34 @@ module V2ProjectionSource =
                                 let author = node.GetProperty "author"
                                 Ok { Id = id; Repository = repository; Number = number; Url = url; State = "OPEN"; Head = head; UpdatedAt = updated
                                      Author = if author.ValueKind = JsonValueKind.Null then None else optional "login" author
-                                     ReviewDecision = optional "reviewDecision" node; Issues = []; Files = []; ScopeCurrent = false; Reviews = []; Checks = []; Gaps = [] }
+                                     ReviewDecision = optional "reviewDecision" node; Issues = []; Files = []; ScopeCurrent = false; Reviews = []; Checks = []; Gaps = []; GapDetails = [] }
                         GraphQl.page subject "open PRs" (fun (value: PullRequestFacts) -> value.Id) decode (native.GetProperty "pullRequests"))
             match GraphQl.drain subject "open PRs" { MaxPages = 10; MaxItems = 500 } fetch with
             | Error error -> repositoryGaps <- repositoryGaps.Add(repository, Errors.explain error)
             | Ok pulls ->
                 for pull in pulls do
-                    let mutable gaps = []
+                    let mutable gaps: NativeReadGap list = []
                     let mutable scopeCurrent = true
+                    let addGap (purpose: NativeReadPurpose) error =
+                        gaps <- gaps @ [ { Purpose = purpose; Detail = Errors.explain error } ]
+                    let samePull (node: JsonElement) =
+                        try
+                            node.GetProperty("id").GetString() = pull.Id && node.GetProperty("number").GetInt32() = pull.Number
+                            && node.GetProperty("repository").GetProperty("nameWithOwner").GetString() = repository
+                            && node.GetProperty("state").GetString() = "OPEN" && node.GetProperty("headRefOid").GetString() = pull.Head
+                            && node.GetProperty("updatedAt").GetString() = pull.UpdatedAt
+                        with :? Collections.Generic.KeyNotFoundException | :? InvalidOperationException | :? FormatException -> false
                     let connection field selection (decode: JsonElement -> IoResult<'a>) (key: 'a -> string) =
+                        let mutable identityCurrent = true
                         let fetch after =
                             let document = "query($id: ID!, $after: String) { node(id: $id) { ... on PullRequest { id number state headRefOid updatedAt repository { nameWithOwner } " + field + "(first: 50, after: $after) { totalCount nodes { " + selection + " } pageInfo { hasNextPage endCursor } } } } rateLimit { cost remaining } }"
                             let variables = [ "id", VId pull.Id ] @ (after |> Option.map (fun cursor -> [ "after", VString cursor ]) |> Option.defaultValue [])
                             GraphQl.read transport (query document variables (pull.Url + " " + field)) (fun data ->
-                                let node = data.GetProperty "node"
-                                if node.GetProperty("id").GetString() <> pull.Id || node.GetProperty("number").GetInt32() <> pull.Number
-                                   || node.GetProperty("repository").GetProperty("nameWithOwner").GetString() <> repository
-                                   || node.GetProperty("state").GetString() <> "OPEN" || node.GetProperty("headRefOid").GetString() <> pull.Head
-                                   || node.GetProperty("updatedAt").GetString() <> pull.UpdatedAt then
+                                let node =
+                                    if data.ValueKind <> JsonValueKind.Object then Unchecked.defaultof<JsonElement>
+                                    else match data.TryGetProperty "node" with true, value -> value | _ -> Unchecked.defaultof<JsonElement>
+                                if not (samePull node) then
+                                    identityCurrent <- false
                                     scopeCurrent <- false
                                     Error(Malformed(pull.Url, "PR/head/revision changed; recompute affected selection"))
                                 else GraphQl.page pull.Url field key decode (node.GetProperty field))
@@ -583,7 +656,10 @@ module V2ProjectionSource =
                         | Ok values -> values
                         | Error error ->
                             if field = "files" || field = "closingIssuesReferences" then scopeCurrent <- false
-                            gaps <- gaps @ [ Errors.explain error ]
+                            let purpose =
+                                if field = "reviews" && identityCurrent then NativeReadPurpose.ReviewAvailability
+                                else NativeReadPurpose.ScopeEvidence
+                            addGap purpose error
                             []
                     let issues = connection "closingIssuesReferences" "id number repository { nameWithOwner }" (fun node ->
                         let issueRepository = node.GetProperty("repository").GetProperty("nameWithOwner").GetString()
@@ -602,16 +678,25 @@ module V2ProjectionSource =
                         if String.IsNullOrWhiteSpace id || String.IsNullOrWhiteSpace state then Error(Malformed(pull.Url, "review identity/state unavailable"))
                         else Ok(id, state + "@" + head)) fst
                     let checks =
+                        let mutable identityCurrent = true
                         let fetch after =
                             let document = "query($owner: String!, $repo: String!, $head: String!, $after: String) { repository(owner: $owner, name: $repo) { nameWithOwner object(expression: $head) { ... on Commit { oid statusCheckRollup { contexts(first: 50, after: $after) { totalCount nodes { __typename ... on CheckRun { id name status conclusion } ... on StatusContext { id context state } } pageInfo { hasNextPage endCursor } } } } } } rateLimit { cost remaining } }"
                             let variables = [ "owner", VString parts[0]; "repo", VString parts[1]; "head", VString pull.Head ] @ (after |> Option.map (fun cursor -> [ "after", VString cursor ]) |> Option.defaultValue [])
                             GraphQl.read transport (query document variables (pull.Url + " head checks")) (fun data ->
-                                let native = data.GetProperty "repository"
-                                let commit = native.GetProperty "object"
-                                let rollup = commit.GetProperty "statusCheckRollup"
-                                if native.GetProperty("nameWithOwner").GetString() <> repository || commit.GetProperty("oid").GetString() <> pull.Head || rollup.ValueKind = JsonValueKind.Null then
-                                    Error(Malformed(pull.Url, "head checks unavailable/mismatched; no required-check acceptance inferred"))
+                                let identity =
+                                    try
+                                        let native = data.GetProperty "repository"
+                                        let commit = native.GetProperty "object"
+                                        if native.GetProperty("nameWithOwner").GetString() = repository && commit.GetProperty("oid").GetString() = pull.Head then Some commit
+                                        else None
+                                    with :? Collections.Generic.KeyNotFoundException | :? InvalidOperationException -> None
+                                if identity.IsNone then
+                                    identityCurrent <- false
+                                    scopeCurrent <- false
+                                    Error(Malformed(pull.Url, "check response repository/head identity is unavailable or changed"))
                                 else
+                                    let commit = identity.Value
+                                    let rollup = commit.GetProperty "statusCheckRollup"
                                     let decode (node: JsonElement) =
                                         let kind = node.GetProperty("__typename").GetString()
                                         let id = node.GetProperty("id").GetString()
@@ -625,7 +710,9 @@ module V2ProjectionSource =
                                     GraphQl.page pull.Url "head checks" fst decode (rollup.GetProperty "contexts"))
                         match GraphQl.drain pull.Url "head checks" { MaxPages = 10; MaxItems = 500 } fetch with
                         | Ok values -> values |> List.map snd
-                        | Error error -> gaps <- gaps @ [ Errors.explain error ]; []
+                        | Error error ->
+                            addGap (if identityCurrent then NativeReadPurpose.CheckAvailability else NativeReadPurpose.ScopeEvidence) error
+                            []
                     // Final barrier prevents a stale inventory head from licensing continuation.
                     let document = "query($id: ID!) { node(id: $id) { ... on PullRequest { id state headRefOid updatedAt repository { nameWithOwner } } } rateLimit { cost remaining } }"
                     let barrier = GraphQl.read transport (query document [ "id", VId pull.Id ] (pull.Url + " final head barrier")) (fun data ->
@@ -634,9 +721,9 @@ module V2ProjectionSource =
                            && node.GetProperty("updatedAt").GetString() = pull.UpdatedAt && node.GetProperty("repository").GetProperty("nameWithOwner").GetString() = repository then Ok()
                         else Error(Malformed(pull.Url, "PR/head/revision changed; recompute affected selection")))
                     match barrier with
-                    | Error error -> scopeCurrent <- false; gaps <- gaps @ [ Errors.explain error ]
+                    | Error error -> scopeCurrent <- false; addGap NativeReadPurpose.ScopeEvidence error
                     | _ -> ()
-                    all <- all @ [ { pull with Issues = issues |> List.map snd; Files = files; ScopeCurrent = scopeCurrent; Reviews = reviews |> List.map snd; Checks = checks; Gaps = gaps } ]
+                    all <- all @ [ { pull with Issues = issues |> List.map snd; Files = files; ScopeCurrent = scopeCurrent; Reviews = reviews |> List.map snd; Checks = checks; Gaps = (gaps |> List.map _.Detail); GapDetails = gaps } ]
         // Current deliverable URLs are discovery hints. Re-read their native identity/state/head,
         // even when an open-inventory association agrees; prose never supplies PR facts.
         for url in references |> List.distinct do
@@ -659,7 +746,7 @@ module V2ProjectionSource =
                         Error(Malformed(url, "Current deliverable native identity/state/head is unavailable or mismatched"))
                     else
                         Ok { Id = id; Repository = repository; Number = number; Url = url; State = state; Head = head; UpdatedAt = updated
-                             Author = None; Issues = []; Files = []; ScopeCurrent = false; ReviewDecision = None; Reviews = []; Checks = []; Gaps = [] })
+                             Author = None; Issues = []; Files = []; ScopeCurrent = false; ReviewDecision = None; Reviews = []; Checks = []; Gaps = []; GapDetails = [] })
             match observed with
             | Error error -> repositoryGaps <- repositoryGaps.Add(repository, Errors.explain error)
             | Ok pull ->
@@ -669,7 +756,7 @@ module V2ProjectionSource =
                 | None when pull.State = "OPEN" ->
                     let gap = "Current deliverable open PR was absent from complete inventory; files/reviews/checks are incomplete; re-observe affected slices"
                     repositoryGaps <- repositoryGaps.Add(repository, gap)
-                    all <- all @ [ { pull with Gaps = [ gap ] } ]
+                    all <- all @ [ { pull with Gaps = [ gap ]; GapDetails = [ { Purpose = NativeReadPurpose.ScopeEvidence; Detail = gap } ] } ]
                 | None -> all <- all @ [ pull ]
         { PullRequests = all; RepositoryGaps = repositoryGaps; ObservedAt = observedAt }
 
@@ -912,10 +999,16 @@ module V2ProjectionSource =
                         |> Set.ofList
                     let repositoryGaps = report.NativeIntegrator.RepositoryGaps |> Map.toList |> List.filter (fun (repository, _) -> relevantRepos.Contains repository)
                     let relevantPulls = report.NativeIntegrator.PullRequests |> List.filter (fun candidate -> candidate.State = "OPEN" && relevantRepos.Contains candidate.Repository)
+                    let sourceEditing = action = Source && (current.Operation = ObserveExisting || current.Operation = Implement)
                     let unreadablePulls =
                         relevantPulls |> List.filter (fun candidate ->
-                            not candidate.ScopeCurrent || not (usable candidate.Files)
-                            || (Some candidate.Url = current.PullRequest && not candidate.Gaps.IsEmpty))
+                            let classified = candidate.GapDetails |> List.map _.Detail
+                            let availabilityOnly =
+                                classified = candidate.Gaps
+                                && (candidate.GapDetails |> List.forall (fun gap ->
+                                    gap.Purpose = NativeReadPurpose.ReviewAvailability || gap.Purpose = NativeReadPurpose.CheckAvailability))
+                            not candidate.ScopeCurrent || not (usable candidate.Files) || not availabilityOnly
+                            || (Some candidate.Url = current.PullRequest && not candidate.Gaps.IsEmpty && not sourceEditing))
                     let unassignedAssociations =
                         associations |> List.filter (fun candidate ->
                             candidate.Repository = current.Repository

@@ -359,6 +359,129 @@ let private inspectProgrammeBindingInput (selectedBinding: string) (json: string
 
 let private inspectProgrammeInput json change = inspectProgrammeBindingInput (ProgrammeFixture.bindingJson ()) json change
 
+let private inspectDeclaredPopulation (rows: (string * IssueRef * string) list) (repositories: Set<string>) change =
+    let selected: Binding =
+        { ProgrammeFixture.binding () with
+            SelectedIssues = (rows |> List.map (fun (id, issue, _) -> id, $"{issue.Owner}/{issue.Repository}#{issue.Number}") |> Map.ofList);
+            Repositories = repositories }
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-native-plans-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory directory |> ignore
+    try
+        let bindingPath = Path.Combine(directory, "binding.json")
+        let reportPath = Path.Combine(directory, "report.json")
+        File.WriteAllText(bindingPath, ProgrammeFixture.bindingJsonFor selected)
+        let requests = ResizeArray<Transport.Request>()
+        let transport = ProgrammeFixture.populationTransport selected rows (fun request response ->
+            requests.Add request
+            change request response)
+        let code = BoardV2Application.runWithTransport transport [ "inspect"; "--binding-file"; bindingPath; "--report-file"; reportPath ]
+        use document = JsonDocument.Parse(File.ReadAllText reportPath)
+        Assert.Empty transport.Mutations
+        code, document.RootElement.Clone(), List.ofSeq requests
+    finally Directory.Delete(directory, true)
+
+[<Fact>]
+let ``actual CLI joins twenty enrolled issues to current native plan blobs across nine declared repositories`` () =
+    let repositories =
+        [ ".github"; "FS.GG.Coordination"; "FS.GG.Game"; "FS.GG.Governance"; "FS.GG.Rendering";
+          "FS.GG.SC2.Client"; "FS.GG.SDD"; "FS.GG.Templates"; "FS.GG.Unity.Client" ]
+    let plans: (string * string) list =
+        [ (".github", ".agents/skills/work-programme/references/observation.md");
+          ("FS.GG.SDD", "docs/roadmaps/tsdd-knowledge-01.md");
+          ("FS.GG.Templates", "docs/roadmaps/fable-bindings-xantham-candidates.md");
+          ("FS.GG.Unity.Client", "docs/roadmaps/unityc-01-reference-admission.md") ]
+    let rows: (string * IssueRef * string) list =
+        [ 1 .. 20 ] |> List.map (fun index ->
+            let repo, path = plans.[(index - 1) % plans.Length]
+            let issue: IssueRef = { Owner = "FS-GG"; Repository = ".github"; Number = 100 + index }
+            let reference = if repo = "FS.GG.Templates" then String.replicate 40 "a" else "main"
+            "synthetic-enrolled-" + string index, issue, $"https://github.com/fs-gg/{repo}/blob/{reference}/{path}#selected-outcome")
+    let scope = repositories |> List.map (fun repo -> "FS-GG/" + repo) |> Set.ofList
+    let code, report, transport = inspectDeclaredPopulation rows scope ProgrammeFixture.unchanged
+    Assert.Equal(0, code)
+    Assert.Equal(20, report.GetProperty("items").GetArrayLength())
+    for item in report.GetProperty("items").EnumerateArray() do
+        Assert.Equal("Current", item.GetProperty("sourceCurrentness").GetString())
+        let provenance = item.GetProperty("sourceRevision").GetString()
+        Assert.Contains("plan=FS-GG/", provenance)
+        Assert.Contains("#selected-outcome", provenance)
+    let planReads = transport |> List.filter (fun (request: Transport.Request) -> request.Subject = "enrolled native owning plan")
+    Assert.NotEmpty planReads
+    Assert.True(transport.Length < 500)
+    for request in planReads do
+        match request.Body with
+        | Transport.Query(document, variables) when document.Contains("object(expression:") ->
+            let expression = variables |> List.pick (function "expression", VString value -> Some value | _ -> None)
+            Assert.DoesNotContain("main:", expression)
+            let repo = variables |> List.pick (function "repo", VString value -> Some value | _ -> None)
+            let commit = if repo = "FS.GG.Templates" then String.replicate 40 "a" else ProgrammeFixture.head
+            Assert.StartsWith(commit + ":", expression)
+        | Transport.Query(document, variables) when document.Contains("qualifiedName:") ->
+            let repo = variables |> List.pick (function "repo", VString value -> Some value | _ -> None)
+            Assert.NotEqual("FS.GG.Templates", repo)
+        | _ -> ()
+
+[<Fact>]
+let ``actual CLI enrolled main plan content advances without enrollment republish but mid-snapshot drift refuses`` () =
+    let url = "https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/roadmap.md"
+    let rows = [ "I_outcome", ProgrammeFixture.issue, url ]
+    let repositories = Set.ofList [ "FS-GG/.github"; "FS-GG/FS.GG.SDD" ]
+    let observe revision =
+        inspectDeclaredPopulation rows repositories (fun (request: Transport.Request) result ->
+            if request.Subject = "enrolled native owning plan" then
+                result |> Result.map (fun (response: Transport.Response) -> { response with Body = response.Body.Replace(ProgrammeFixture.head, revision) })
+            else result)
+    let before, old, _ = observe (String.replicate 40 "1")
+    let after, current, _ = observe (String.replicate 40 "2")
+    Assert.Equal(0, before)
+    Assert.Equal(0, after)
+    let first = old.GetProperty("items").[0].GetProperty("sourceRevision").GetString()
+    let second = current.GetProperty("items").[0].GetProperty("sourceRevision").GetString()
+    Assert.NotEqual(first, second)
+    let mutable reads = 0
+    let code, report, _ =
+        inspectDeclaredPopulation rows repositories (fun (request: Transport.Request) result ->
+            if request.Subject = "enrolled native owning plan" then
+                reads <- reads + 1
+                result |> Result.map (fun (response: Transport.Response) ->
+                    { response with Body = response.Body.Replace(ProgrammeFixture.head, String.replicate 40 (if reads <= 2 then "1" else "2")) })
+            else result)
+    Assert.Equal(3, code)
+    Assert.Equal("Unknown", report.GetProperty("items").[0].GetProperty("sourceCurrentness").GetString())
+
+[<Fact>]
+let ``actual CLI refuses undeclared origin repository path ref and unreadable plan identity without fallback`` () =
+    let invalid: string list =
+        [ "https://example.invalid/FS-GG/FS.GG.SDD/blob/main/docs/roadmap.md";
+          "https://github.com/FS-GG/Other/blob/main/docs/roadmap.md";
+          "https://github.com/FS-GG/FS.GG.SDD/raw/main/docs/roadmap.md";
+          "https://github.com/FS-GG/FS.GG.SDD/blob/feature/docs/roadmap.md";
+          "https://github.com/FS-GG/FS.GG.SDD/blob/main/src/roadmap.md";
+          "https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/../secret.md";
+          "https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/%2e%2e/secret.md";
+          "https://github.com/FS-GG/FS.GG.SDD/blob/main/.agents/skills/other/SKILL.md";
+          "https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/roadmap.md?raw=1" ]
+    let repositories = Set.ofList [ "FS-GG/.github"; "FS-GG/FS.GG.SDD" ]
+    for url in invalid do
+        let code, report, _ = inspectDeclaredPopulation [ "I_outcome", ProgrammeFixture.issue, url ] repositories ProgrammeFixture.unchanged
+        Assert.Equal(3, code)
+        Assert.Equal("Unknown", report.GetProperty("items").[0].GetProperty("sourceCurrentness").GetString())
+    for mutation in [ "repository"; "missing"; "denied"; "revision"; "empty-blob" ] do
+        let code, _, _ =
+            inspectDeclaredPopulation [ "I_outcome", ProgrammeFixture.issue, "https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/roadmap.md" ] repositories
+                (fun (request: Transport.Request) result ->
+                    if request.Subject <> "enrolled native owning plan" then result
+                    elif mutation = "denied" then Error(Errors.Http(403, "synthetic denied"))
+                    else result |> Result.map (fun (response: Transport.Response) ->
+                        let body =
+                            match mutation with
+                            | "repository" -> response.Body.Replace("FS-GG/FS.GG.SDD", "FS-GG/Other")
+                            | "revision" -> response.Body.Replace(ProgrammeFixture.head, "not-a-native-commit")
+                            | "empty-blob" -> response.Body.Replace("Synthetic current owning plan", "")
+                            | _ -> "{\"data\":{\"repository\":null}}"
+                        { response with Body = body }))
+        Assert.Equal(3, code)
+
 let private observedContext (change: Transport.Request -> Errors.IoResult<Transport.Response> -> Errors.IoResult<Transport.Response>) =
     V2ProjectionSource.inspectFixed (ProgrammeFixture.transport change) (ProgrammeFixture.binding ()) None
     |> ProgrammeFixture.context
@@ -489,6 +612,59 @@ let private currentDeliverableBody (body: string) (request: Transport.Request) (
         response |> Result.map (fun value ->
             { value with Body = value.Body.Replace(JsonSerializer.Serialize ProgrammeFixture.ownerBody, JsonSerializer.Serialize body) })
     else response
+
+[<Fact>]
+let ``actual stdin caller keeps source eligibility with typed review check availability while aggregate remains incomplete`` () =
+    for denied in [ "head checks"; "reviews"; "both" ] do
+        let change (request: Transport.Request) (result: Errors.IoResult<Transport.Response>) =
+            let selected = request.Subject.EndsWith("head checks", StringComparison.Ordinal) || request.Subject.EndsWith("reviews", StringComparison.Ordinal)
+            if selected && (denied = "both" || request.Subject.EndsWith(denied, StringComparison.Ordinal)) then
+                // Actual GraphQL shape: errors with partial/null check nodes must never be decoded.
+                Ok { Status = 200; Headers = Map.empty; ETag = None; NextLink = None;
+                     Body = "{\"data\":{\"repository\":{\"nameWithOwner\":\"FS-GG/.github\",\"object\":{\"oid\":\"wrong-partial-head\",\"statusCheckRollup\":{\"contexts\":{\"nodes\":[null]}}}}},\"errors\":[{\"type\":\"FORBIDDEN\",\"message\":\"Resource not accessible by integration\"}]}" }
+            else result
+        let context = observedContext change
+        for operation in [ ObserveExisting; Implement; ReviewWork; QualifyWork; ActivateWork ] do
+            let slice =
+                { context.Slices.Head with Operation = operation;
+                                           Action = (if operation = ActivateWork then Activation else Source) }
+            let input =
+                { context with Slices = [ slice ];
+                               ImplementationSlots = (if operation = ObserveExisting then None else Some 1);
+                               ReviewSlots = (if operation = ObserveExisting then None else Some 1);
+                               HostedCiSlots = (if operation = ObserveExisting then None else Some 1) }
+            let _, report, transport = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson input)) change
+            let selected = (inputSelections report.Value).[0]
+            let expected = if operation = ObserveExisting then "continue-existing" elif operation = Implement then "ready" else "unknown"
+            Assert.Equal(expected, selected.GetProperty("decision").GetString())
+            Assert.False(selected.GetProperty("dispatchAuthority").GetBoolean())
+            let native = report.Value.GetProperty("nativeIntegrator").GetProperty("pullRequests").[0]
+            Assert.True(native.GetProperty("ScopeCurrent").GetBoolean())
+            Assert.NotEmpty(native.GetProperty("Gaps").EnumerateArray())
+            Assert.NotEmpty(native.GetProperty("GapDetails").EnumerateArray())
+            Assert.Equal(JsonValueKind.Null, report.Value.GetProperty("candidates").[0].GetProperty("openPullRequests").ValueKind)
+            Assert.Empty transport.Mutations
+
+[<Fact>]
+let ``actual stdin caller never ignores native scope association identity head or files failures`` () =
+    let cases: (string * (Transport.Request -> Errors.IoResult<Transport.Response> -> Errors.IoResult<Transport.Response>)) list =
+        [ ("review identity", fun (request: Transport.Request) (result: Errors.IoResult<Transport.Response>) ->
+              result |> Result.map (fun (response: Transport.Response) -> if request.Subject.EndsWith("reviews", StringComparison.Ordinal) then { response with Body = response.Body.Replace(ProgrammeFixture.head, String.replicate 40 "f") } else response));
+          ("check repository", fun (request: Transport.Request) (result: Errors.IoResult<Transport.Response>) ->
+              result |> Result.map (fun (response: Transport.Response) -> if request.Subject.EndsWith("head checks", StringComparison.Ordinal) then { response with Body = response.Body.Replace("FS-GG/.github", "FS-GG/Other") } else response));
+          ("check head", fun (request: Transport.Request) (result: Errors.IoResult<Transport.Response>) ->
+              result |> Result.map (fun (response: Transport.Response) -> if request.Subject.EndsWith("head checks", StringComparison.Ordinal) then { response with Body = response.Body.Replace(ProgrammeFixture.head, String.replicate 40 "f") } else response));
+          ("files", fun (request: Transport.Request) (result: Errors.IoResult<Transport.Response>) -> if request.Subject.EndsWith(" files", StringComparison.Ordinal) then Error(Errors.Http(403, "synthetic files denial")) else result);
+          ("association", fun (request: Transport.Request) (result: Errors.IoResult<Transport.Response>) -> if request.Subject.EndsWith("closingIssuesReferences", StringComparison.Ordinal) then Error(Errors.Http(403, "synthetic association denial")) else result);
+          ("final head", fun (request: Transport.Request) (result: Errors.IoResult<Transport.Response>) -> if request.Subject.EndsWith("final head barrier", StringComparison.Ordinal) then Error(Errors.Http(403, "synthetic final head denial")) else result);
+          ("Current deliverable", fun (request: Transport.Request) (result: Errors.IoResult<Transport.Response>) -> if request.Subject.EndsWith("Current deliverable native join", StringComparison.Ordinal) then Error(Errors.Http(403, "synthetic native join denial")) else result) ]
+    for name, change in cases do
+        let context = observedContext ProgrammeFixture.unchanged
+        for operation in [ ObserveExisting; Implement ] do
+            let input = { context with Slices = [ { context.Slices.Head with Operation = operation } ] }
+            let _, report, transport = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson input)) change
+            Assert.True((inputSelections report.Value).[0].GetProperty("decision").GetString() = "unknown", name)
+            Assert.Empty transport.Mutations
 
 [<Fact>]
 let ``actual caller recovers Current deliverable only PR and retains mixed delivered history without outcome acceptance`` () =

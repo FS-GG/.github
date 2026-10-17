@@ -43,7 +43,8 @@ module V2MigrationTests =
         let mutations : Change list =
             [ AddInReview(scope.StatusFieldId, status.Options.Tail, "BLUE", scope.InReviewDescription);
               AddInReview("other-field", status.Options, "BLUE", scope.InReviewDescription);
-              AddMembership "unselected-native-issue" ]
+              AddMembership "unselected-native-issue";
+              InitializePlanningValue("synthetic-issue", "synthetic-item", scope.ObservationFieldId, PlanningText "forged Observation") ]
         for change in mutations do Assert.True(Result.isError (request planned change))
         Assert.True(Result.isError (request ({ planned with Digest = String.replicate 64 "f" }) planned.Changes.Head))
 
@@ -96,7 +97,7 @@ module V2MigrationTests =
         let after = collect connection.Reads scope |> get
         validateTransition scope snapshot after create |> get
         let resolved = resolveReadback scope snapshot after create |> get
-        Assert.Equal(Some "synthetic-new-view", resolved.Views.Head.Id)
+        Assert.Equal(Some "synthetic-new-view-0", resolved.Views.Head.Id)
         let update = (prepare resolved after |> get).Changes |> List.find (function UpdateView _ -> true | _ -> false)
         let next = prepare resolved after |> get
         connection.Dispatch(next, update, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
@@ -212,3 +213,55 @@ module V2MigrationTests =
             | Ok _ -> failwith "native errors cannot be hidden by missing or malformed data"
             Assert.Single native.Requests |> ignore
             Assert.Empty native.Mutations
+
+    [<Fact>]
+    let ``planning declarations bind digest exact schema and native membership without overwrite`` () =
+        let selected: PlanningOption = { Id = "synthetic-active"; Name = "Active delivery" }
+        let initial: InitialPlanning =
+            { IssueId = scope.SelectedIssues.Head.Id; Track = selected; Roadmap = "https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/roadmap.md";
+              Status = Some { Id = snapshot.Fields.Head.Options.Head.Id; Name = "Backlog" } }
+        let fields: Field list =
+            snapshot.Fields |> List.map (fun (field: Field) ->
+                if field.Id = scope.TrackFieldId then
+                    { field with Options = [ { Id = selected.Id; Name = selected.Name; Color = "BLUE"; Description = "synthetic" } ] }
+                else field)
+        let scoped: Scope = { scope with InitialPlanning = [ initial ] }
+        let native: Snapshot = { snapshot with Fields = fields }
+        let planned = prepare scoped native |> get
+        let changed = prepare ({ scoped with InitialPlanning = [ { initial with Roadmap = initial.Roadmap + "#changed" } ] }) native |> get
+        Assert.NotEqual(planned.Digest, changed.Digest)
+        for invalid in [ { scoped with InitialPlanning = [ initial; initial ] };
+                         { scoped with InitialPlanning = [ { initial with IssueId = "unselected" } ] };
+                         { scoped with InitialPlanning = [ { initial with Track = { selected with Id = "wrong-option" } } ] } ] do
+            Assert.True(Result.isError (prepare invalid native))
+        let memberItem: Item =
+            { Id = "synthetic-live-item"; ContentId = initial.IssueId; ContentKind = "Issue"; Repository = Some "FS-GG/.github";
+              Number = Some 42; UpdatedAt = "2026-10-17T12:00:00Z"; Archived = false; Values = [] }
+        let populated = { native with Items = [ memberItem ] }
+        let current = prepare scoped populated |> get
+        let initialized = current.Changes |> List.filter (function InitializePlanningValue _ -> true | _ -> false)
+        Assert.Equal(3, initialized.Length)
+        for change in initialized do request current change |> get |> ignore
+        for memberItem in [ { memberItem with Repository = Some "FS-GG/Other" };
+                            { memberItem with Number = Some 99 };
+                            { memberItem with Archived = true } ] do
+            Assert.True(Result.isError (prepare scoped ({ native with Items = [ memberItem ] })))
+        for fieldId, kind, tokens in
+            [ (scope.RoadmapFieldId, "ProjectV2ItemFieldTextValue", [ "text"; "\"Preserve another owner's plan\"" ]);
+              (scope.TrackFieldId, "ProjectV2ItemFieldSingleSelectValue", [ "optionId"; "\"other-track\""; "name"; "\"Follow-up\"" ]);
+              (scope.StatusFieldId, "ProjectV2ItemFieldSingleSelectValue", [ "optionId"; "\"other-status\""; "name"; "\"Done\"" ]) ] do
+            let existing: ItemValue =
+                { Id = fieldId; FieldId = fieldId; Kind = kind;
+                  Value = JsonSerializer.Serialize([ "id"; "\"retained-native-value\""; "updatedAt"; "\"2026-10-17T12:00:00Z\"" ] @ tokens) }
+            let candidate: Snapshot = { native with Items = [ { memberItem with Values = [ existing ] } ] }
+            Assert.True(Result.isError (prepare scoped candidate))
+            Assert.Equal(existing, candidate.Items.Head.Values.Head)
+        let omitted = prepare ({ scoped with InitialPlanning = [ { initial with Status = None } ] }) populated |> get
+        Assert.Contains(omitted.OwnerActions, fun action -> action.Contains("intentionally unresolved"))
+        Assert.Equal(2, omitted.Changes |> List.filter (function InitializePlanningValue _ -> true | _ -> false) |> List.length)
+        let encoded = encodePrepared ({ current with PreparedPath = Some(System.IO.Path.GetFullPath "synthetic-initialization.json") })
+        use document = JsonDocument.Parse encoded
+        let scopeJson = document.RootElement.GetProperty("scope").GetRawText()
+        Assert.Equal(scoped, parseScope scopeJson |> get)
+        let unknown = scopeJson.Replace("\"initialPlanning\":", "\"authorized\":true,\"initialPlanning\":")
+        Assert.True(Result.isError (parseScope unknown))

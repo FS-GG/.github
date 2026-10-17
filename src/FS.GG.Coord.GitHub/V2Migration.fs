@@ -12,12 +12,22 @@ module V2Migration =
         { Id: string option; Name: string; Layout: string; Filter: string;
           VisibleFieldIds: string list }
 
+    type PlanningOption =
+        { Id: string; Name: string }
+
+    type InitialPlanning =
+        { IssueId: string; Track: PlanningOption; Roadmap: string; Status: PlanningOption option }
+
+    type PlanningValue =
+        | PlanningText of string
+        | PlanningSelect of PlanningOption
+
     type Scope =
         { SourceRevision: string; ArtifactSha256: string; CliArtifactSha256: string; PrincipalId: string;
           PrincipalLogin: string; SelectedIssues: SelectedIssue list;
           StatusFieldId: string; RoadmapFieldId: string; TrackFieldId: string;
           ObservationFieldId: string; InReviewColor: string; InReviewDescription: string;
-          Views: DesiredView list }
+          Views: DesiredView list; InitialPlanning: InitialPlanning list }
 
     type SelectOption =
         { Id: string; Name: string; Color: string; Description: string }
@@ -48,6 +58,7 @@ module V2Migration =
     type Change =
         | AddInReview of fieldId: string * retained: SelectOption list * color: string * description: string
         | AddMembership of issueId: string
+        | InitializePlanningValue of issueId: string * itemId: string * fieldId: string * value: PlanningValue
         | CreateView of DesiredView
         | UpdateView of viewId: string * DesiredView
 
@@ -92,6 +103,14 @@ module V2Migration =
                 || view.VisibleFieldIds.IsEmpty || view.VisibleFieldIds.Length > 50
                 || not (unique view.VisibleFieldIds) || (view.VisibleFieldIds |> List.exists (bounded 256 >> not))
                 || (view.Id |> Option.exists (bounded 256 >> not)))
+        let selectedIds = scope.SelectedIssues |> List.map (fun (issue: SelectedIssue) -> issue.Id) |> Set.ofList
+        let optionValid (value: PlanningOption) = bounded 256 value.Id && bounded 100 value.Name
+        let invalidPlanning =
+            scope.InitialPlanning.Length > 100
+            || not (unique (scope.InitialPlanning |> List.map (fun (initial: InitialPlanning) -> initial.IssueId)))
+            || (scope.InitialPlanning |> List.exists (fun (initial: InitialPlanning) ->
+                not (selectedIds.Contains initial.IssueId) || not (optionValid initial.Track)
+                || not (bounded 4096 initial.Roadmap) || (initial.Status |> Option.exists (optionValid >> not))))
         if not (hex 40 scope.SourceRevision && hex 64 scope.ArtifactSha256 && hex 64 scope.CliArtifactSha256)
            || not (bounded 256 scope.PrincipalId && bounded 100 scope.PrincipalLogin) then
             invalid "reviewed source/package or expected principal identity is incomplete"
@@ -104,6 +123,8 @@ module V2Migration =
             invalid "explicit distinct native issue/slice identities are required; membership never selects enrollment"
         elif not (colors.Contains scope.InReviewColor) || isNull scope.InReviewDescription || scope.InReviewDescription.Length > 1024 then
             invalid "bounded native In review option descriptor is required"
+        elif invalidPlanning then
+            invalid "planning initialization requires one exact selected issue declaration and bounded explicit values"
         elif scope.Views.Length > 10 || invalidViews || not (unique existingViewIds) || not (unique (scope.Views |> List.map (fun (view: DesiredView) -> view.Name))) then
             invalid "view requests must use distinct bounded names, native IDs and supported API configuration only"
         else Ok()
@@ -141,8 +162,6 @@ module V2Migration =
                         | Error error -> Error error
                         | Ok(actual, connection) when actual = id -> GraphQl.page subject what key node connection
                         | Ok _ -> invalid "connection returned a different parent identity"))
-
-    let private drain transport id what document key node = drainCached None transport id what document key node
 
     let private option (node: JsonElement) : IoResult<SelectOption> =
         decode (fun () ->
@@ -209,36 +228,38 @@ module V2Migration =
             { Id = fieldId; Kind = kind; FieldId = fieldId; Value = JsonSerializer.Serialize values })
     let private projectDocument =
         "query{viewer{id login} organization(login:\"FS-GG\"){id login projectV2(number:3){id number title public viewerCanUpdate updatedAt}}}"
+    let private projectObservation (observedAt: DateTimeOffset) (data: JsonElement) : IoResult<Snapshot> =
+        decode (fun () ->
+            let principal = data.GetProperty "viewer"
+            let owner = data.GetProperty "organization"
+            if nonempty "login" owner <> "FS-GG" then invalidArg "owner" "different native owner"
+            let project = owner.GetProperty "projectV2"
+            { ObservedAt = observedAt; PrincipalId = nonempty "id" principal; PrincipalLogin = nonempty "login" principal;
+              OrganizationId = nonempty "id" owner; ProjectId = nonempty "id" project;
+              ProjectTitle = nonempty "title" project; ProjectNumber = project.GetProperty("number").GetInt32();
+              Private = not (project.GetProperty("public").GetBoolean()); CanUpdate = project.GetProperty("viewerCanUpdate").GetBoolean();
+              UpdatedAt = nonempty "updatedAt" project; Fields = []; Items = []; Views = []; Issues = [] })
     let private project (transport: IGitHubTransport) (observedAt: DateTimeOffset) : IoResult<Snapshot> =
-        GraphQl.read transport (query projectDocument []) (fun data ->
-            decode (fun () ->
-                let principal = data.GetProperty "viewer"
-                let owner = data.GetProperty "organization"
-                if nonempty "login" owner <> "FS-GG" then invalidArg "owner" "different native owner"
-                let project = owner.GetProperty "projectV2"
-                { ObservedAt = observedAt; PrincipalId = nonempty "id" principal; PrincipalLogin = nonempty "login" principal;
-                  OrganizationId = nonempty "id" owner; ProjectId = nonempty "id" project;
-                  ProjectTitle = nonempty "title" project; ProjectNumber = project.GetProperty("number").GetInt32();
-                  Private = not (project.GetProperty("public").GetBoolean()); CanUpdate = project.GetProperty("viewerCanUpdate").GetBoolean();
-                  UpdatedAt = nonempty "updatedAt" project; Fields = []; Items = []; Views = []; Issues = [] }))
-    let private nativeIssues (transport: IGitHubTransport) (selected: SelectedIssue list) : IoResult<NativeIssue list> =
-        let indexed = selected |> List.mapi (fun index issue -> "issue" + string index, issue)
+        GraphQl.read transport (query projectDocument []) (projectObservation observedAt)
+
+    let private issueBatch (selected: SelectedIssue list) =
+        let indexed: (string * SelectedIssue) list = selected |> List.mapi (fun index issue -> "issue" + string index, issue)
         let declaration = indexed |> List.map (fun (name, _) -> "$" + name + ":ID!") |> String.concat ","
         let nodes =
             indexed |> List.map (fun (name, _) ->
                 name + ":node(id:$" + name + "){__typename ... on Issue{id number updatedAt state repository{nameWithOwner}}}") |> String.concat " "
-        let variables = indexed |> List.map (fun (name, issue) -> name, VId issue.Id)
-        GraphQl.read transport (query ("query(" + declaration + "){" + nodes + "}") variables) (fun data ->
-            indexed |> List.map (fun (name, expected) ->
-                match decode (fun () ->
-                    let issue = data.GetProperty name
-                    if nonempty "__typename" issue <> "Issue" then invalidArg "issue" "selected native node is not an issue"
-                    { Id = nonempty "id" issue; Repository = nonempty "nameWithOwner" (issue.GetProperty "repository");
-                      Number = issue.GetProperty("number").GetInt32(); UpdatedAt = nonempty "updatedAt" issue; State = nonempty "state" issue }) with
-                | Ok actual when actual.Id = expected.Id && actual.Repository = expected.Repository && actual.Number = expected.Number -> Ok actual
-                | Ok _ -> invalid "selected native issue identity differs"
-                | Error error -> Error error) |> sequence)
-
+        let variables: (string * Var) list = indexed |> List.map (fun (name, issue) -> name, VId issue.Id)
+        indexed, declaration, nodes, variables
+    let private issueObservations (indexed: (string * SelectedIssue) list) (data: JsonElement) : IoResult<NativeIssue list> =
+        indexed |> List.map (fun (name, expected) ->
+            match decode (fun () ->
+                let issue = data.GetProperty name
+                if nonempty "__typename" issue <> "Issue" then invalidArg "issue" "selected native node is not an issue"
+                { Id = nonempty "id" issue; Repository = nonempty "nameWithOwner" (issue.GetProperty "repository");
+                  Number = issue.GetProperty("number").GetInt32(); UpdatedAt = nonempty "updatedAt" issue; State = nonempty "state" issue }) with
+            | Ok actual when actual.Id = expected.Id && actual.Repository = expected.Repository && actual.Number = expected.Number -> Ok actual
+            | Ok _ -> invalid "selected native issue identity differs"
+            | Error error -> Error error) |> sequence
     let private viewsDocument =
         "query($id:ID!,$after:String){node(id:$id){... on ProjectV2{id views(first:50,after:$after){pageInfo{hasNextPage endCursor} nodes{id name layout filter configuration{visibleFields(first:50){pageInfo{hasNextPage endCursor} nodes{... on ProjectV2FieldCommon{id name dataType}}}} groupByFields(first:50){pageInfo{hasNextPage endCursor} nodes{... on ProjectV2FieldCommon{id name dataType}}} verticalGroupByFields(first:50){pageInfo{hasNextPage endCursor} nodes{... on ProjectV2FieldCommon{id name dataType}}} sortByFields(first:50){pageInfo{hasNextPage endCursor} nodes{direction field{... on ProjectV2FieldCommon{id name dataType}}}}}}}}}"
     let private viewNode (node: JsonElement) : IoResult<View> =
@@ -274,14 +295,14 @@ module V2Migration =
                         else parent.GetProperty connection) with
                     | Error error -> Error error
                     | Ok values -> GraphQl.page subject connection (fun (entry: string) -> if connection = "sortByFields" then entry.Substring(0, entry.LastIndexOf ':') else entry) decodeNode values))
-    let private collectViews (transport: IGitHubTransport) (projectId: string) : IoResult<View list> =
+    let private collectViews (first: JsonElement option) (transport: IGitHubTransport) (projectId: string) : IoResult<View list> =
         let firstPages = Dictionary<string, JsonElement>()
         let node (element: JsonElement) =
             viewNode element |> Result.bind (fun view ->
                 decode (fun () ->
                     firstPages.Add(view.Id, element.Clone())
                     view))
-        drain transport projectId "views" viewsDocument (fun (view: View) -> view.Id) node
+        drainCached first transport projectId "views" viewsDocument (fun (view: View) -> view.Id) node
         |> Result.bind (fun views ->
             views |> List.map (fun (view: View) ->
                 let groups = [ "visibleFields"; "groupByFields"; "verticalGroupByFields"; "sortByFields" ]
@@ -299,18 +320,34 @@ module V2Migration =
                                     UnsupportedConfiguration = JsonSerializer.Serialize([ [ view.UnsupportedConfiguration ]; grouped; vertical; sorted ]) }
                     | _ -> invalidOp "fixed view configuration shape")) |> sequence)
 
+    type private FirstSnapshot =
+        { Project: Snapshot; Fields: JsonElement; Items: JsonElement; Views: JsonElement; Issues: NativeIssue list }
+
+    let private firstSnapshot (transport: IGitHubTransport) (observedAt: DateTimeOffset) (scope: Scope) : IoResult<FirstSnapshot> =
+        let indexed, declaration, nodes, variables = issueBatch scope.SelectedIssues
+        let document =
+            "query(" + declaration + "){viewer{id login} organization(login:\"FS-GG\"){id login projectV2(number:3){id number title public viewerCanUpdate updatedAt fields(first:50){totalCount pageInfo{hasNextPage endCursor} nodes{__typename ... on ProjectV2FieldCommon{id name dataType} ... on ProjectV2SingleSelectField{options{id name color description}}}} items(first:50){totalCount pageInfo{hasNextPage endCursor} nodes{id updatedAt isArchived content{__typename ... on Issue{id number repository{nameWithOwner}} ... on PullRequest{id number repository{nameWithOwner}} ... on DraftIssue{id}} fieldValues(first:50){pageInfo{hasNextPage endCursor} nodes{__typename ... on ProjectV2ItemFieldValueCommon{id updatedAt field{... on ProjectV2FieldCommon{id}}} ... on ProjectV2ItemFieldTextValue{text} ... on ProjectV2ItemFieldSingleSelectValue{optionId name} ... on ProjectV2ItemFieldDateValue{date} ... on ProjectV2ItemFieldNumberValue{number} ... on ProjectV2ItemFieldIterationValue{iterationId title startDate duration} ... on ProjectV2ItemFieldMultiSelectValue{field{... on ProjectV2FieldCommon{id}}} ... on ProjectV2ItemFieldRepositoryValue{field{... on ProjectV2FieldCommon{id}}} ... on ProjectV2ItemFieldLabelValue{field{... on ProjectV2FieldCommon{id}}} ... on ProjectV2ItemFieldMilestoneValue{field{... on ProjectV2FieldCommon{id}}} ... on ProjectV2ItemFieldPullRequestValue{field{... on ProjectV2FieldCommon{id}}} ... on ProjectV2ItemFieldReviewerValue{field{... on ProjectV2FieldCommon{id}}} ... on ProjectV2ItemFieldUserValue{field{... on ProjectV2FieldCommon{id}}} ... on ProjectV2ItemIssueFieldValue{field{... on ProjectV2FieldCommon{id}}}}}}} views(first:50){pageInfo{hasNextPage endCursor} nodes{id name layout filter configuration{visibleFields(first:50){pageInfo{hasNextPage endCursor} nodes{... on ProjectV2FieldCommon{id name dataType}}}} groupByFields(first:50){pageInfo{hasNextPage endCursor} nodes{... on ProjectV2FieldCommon{id name dataType}}} verticalGroupByFields(first:50){pageInfo{hasNextPage endCursor} nodes{... on ProjectV2FieldCommon{id name dataType}}} sortByFields(first:50){pageInfo{hasNextPage endCursor} nodes{direction field{... on ProjectV2FieldCommon{id name dataType}}}}}}}} " + nodes + "}"
+        GraphQl.read transport (query document variables) (fun data ->
+            projectObservation observedAt data |> Result.bind (fun project ->
+                issueObservations indexed data |> Result.bind (fun issues ->
+                    decode (fun () ->
+                        let node = data.GetProperty("organization").GetProperty "projectV2"
+                        { Project = project; Fields = node.GetProperty("fields").Clone();
+                          Items = node.GetProperty("items").Clone(); Views = node.GetProperty("views").Clone(); Issues = issues }))))
+
     let collect (transport: IGitHubTransport) (scope: Scope) : IoResult<Snapshot> =
         let observedAt = DateTimeOffset.UtcNow
         match validateScope scope with
         | Error error -> Error error
         | Ok() ->
-            project transport observedAt |> Result.bind (fun initial ->
+            firstSnapshot transport observedAt scope |> Result.bind (fun first ->
+                let initial = first.Project
                 if initial.OrganizationId <> "O_kgDOEYAWYw" || initial.ProjectId <> "PVT_kwDOEYAWY84Bldpa"
                    || initial.ProjectNumber <> 3 || initial.ProjectTitle <> "Coordination V2" || not initial.Private
                    || initial.PrincipalId <> scope.PrincipalId || initial.PrincipalLogin <> scope.PrincipalLogin then
                     invalid "native principal/private project identity differs before snapshot collection"
                 else
-                    drain transport initial.ProjectId "fields" fieldsDocument (fun (field: Field) -> field.Id) field
+                    drainCached (Some first.Fields) transport initial.ProjectId "fields" fieldsDocument (fun (field: Field) -> field.Id) field
                     |> Result.bind (fun fields ->
                         let firstPages = Dictionary<string, JsonElement>()
                         let node (element: JsonElement) : IoResult<Item> =
@@ -318,29 +355,36 @@ module V2Migration =
                                 decode (fun () ->
                                     firstPages.Add(item.Id, element.GetProperty("fieldValues").Clone())
                                     item))
-                        drain transport initial.ProjectId "items" itemsDocument (fun (item: Item) -> item.Id) node
+                        drainCached (Some first.Items) transport initial.ProjectId "items" itemsDocument (fun (item: Item) -> item.Id) node
                         |> Result.bind (fun items ->
                             items |> List.map (fun (item: Item) ->
                                 drainCached (Some firstPages.[item.Id]) transport item.Id "fieldValues" valuesDocument (fun (value: ItemValue) -> value.Id) value
                                 |> Result.map (fun values -> { item with Values = values })) |> sequence
                             |> Result.bind (fun items ->
-                                collectViews transport initial.ProjectId |> Result.bind (fun views ->
-                                    nativeIssues transport scope.SelectedIssues
-                                    |> Result.bind (fun issues ->
-                                        project transport observedAt |> Result.bind (fun final ->
-                                            if final <> initial then invalid "project/principal changed during complete snapshot collection"
-                                            else Ok ({ initial with Fields = fields; Items = items; Views = views; Issues = issues }))))))))
+                                collectViews (Some first.Views) transport initial.ProjectId |> Result.bind (fun views ->
+                                    project transport observedAt |> Result.bind (fun final ->
+                                        if final <> initial then invalid "project/principal changed during complete snapshot collection"
+                                        else Ok ({ initial with Fields = fields; Items = items; Views = views; Issues = first.Issues })))))))
 
     let private desiredTokens (view: DesiredView) =
         [ view.Id |> Option.defaultValue ""; view.Name; view.Layout; view.Filter;
           string view.VisibleFieldIds.Length ] @ view.VisibleFieldIds
     let private optionTokens (value: SelectOption) = [ value.Id; value.Name; value.Color; value.Description ]
+    let private planningOptionTokens (value: PlanningOption) = [ value.Id; value.Name ]
+    let private planningValueTokens (value: PlanningValue) =
+        match value with
+        | PlanningText text -> [ "text"; text ]
+        | PlanningSelect option -> "select" :: planningOptionTokens option
     let private scopeTokens (scope: Scope) =
         [ scope.SourceRevision; scope.ArtifactSha256; scope.CliArtifactSha256; scope.PrincipalId; scope.PrincipalLogin;
           scope.StatusFieldId; scope.RoadmapFieldId; scope.TrackFieldId; scope.ObservationFieldId;
           scope.InReviewColor; scope.InReviewDescription; string scope.SelectedIssues.Length ]
         @ (scope.SelectedIssues |> List.collect (fun (issue: SelectedIssue) -> [ issue.Id; issue.Repository; string issue.Number; issue.Slice ]))
         @ [ string scope.Views.Length ] @ (scope.Views |> List.collect desiredTokens)
+        @ [ string scope.InitialPlanning.Length ]
+        @ (scope.InitialPlanning |> List.collect (fun (initial: InitialPlanning) ->
+            [ initial.IssueId; initial.Roadmap ] @ planningOptionTokens initial.Track
+            @ (match initial.Status with None -> [ "status-omitted" ] | Some status -> "status-selected" :: planningOptionTokens status)))
     let private snapshotTokens (snapshot: Snapshot) =
         [ snapshot.PrincipalId; snapshot.PrincipalLogin; snapshot.OrganizationId; snapshot.ProjectId;
           snapshot.ProjectTitle; string snapshot.ProjectNumber; string snapshot.Private;
@@ -364,10 +408,59 @@ module V2Migration =
         | AddInReview(id, retained, color, description) ->
             [ "status"; id; color; description; string retained.Length ] @ (retained |> List.collect optionTokens)
         | AddMembership id -> [ "membership"; id ]
+        | InitializePlanningValue(issueId, itemId, fieldId, value) ->
+            [ "initialize-absent"; issueId; itemId; fieldId ] @ planningValueTokens value
         | CreateView view -> "create-view" :: desiredTokens view
         | UpdateView(id, view) -> [ "update-view"; id ] @ desiredTokens view
     let private hash (tokens: string list) =
         SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize tokens)) |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let private samePlanningValue (expected: PlanningValue) (actual: ItemValue) =
+        try
+            let tokens = JsonSerializer.Deserialize<string array>(actual.Value)
+            if isNull tokens || tokens.Length % 2 <> 0 then false
+            else
+                let fields = tokens |> Array.chunkBySize 2 |> Array.map (fun (pair: string array) -> pair.[0], pair.[1]) |> Map.ofArray
+                let text (name: string) =
+                    use document = JsonDocument.Parse(fields.[name])
+                    document.RootElement.GetString()
+                match expected with
+                | PlanningText value -> actual.Kind = "ProjectV2ItemFieldTextValue" && text "text" = value
+                | PlanningSelect value ->
+                    actual.Kind = "ProjectV2ItemFieldSingleSelectValue" && text "optionId" = value.Id && text "name" = value.Name
+        with _ -> false
+
+    let private initialChanges (scope: Scope) (snapshot: Snapshot) (fields: Map<string, Field>) : IoResult<Change list> =
+        scope.InitialPlanning
+        |> List.map (fun (initial: InitialPlanning) ->
+            let declarations: (string * PlanningValue) list =
+                [ (scope.TrackFieldId, PlanningSelect initial.Track);
+                  (scope.RoadmapFieldId, PlanningText initial.Roadmap) ]
+                @ (initial.Status |> Option.map (fun status -> [ (scope.StatusFieldId, PlanningSelect status) ]) |> Option.defaultValue [])
+            let selected = scope.SelectedIssues |> List.find (fun (issue: SelectedIssue) -> issue.Id = initial.IssueId)
+            let values =
+                declarations |> List.map (fun (fieldId, desired) ->
+                    let field = fields.[fieldId]
+                    let declared =
+                        match desired with
+                        | PlanningText _ -> field.DataType = "TEXT"
+                        | PlanningSelect selected ->
+                            field.DataType = "SINGLE_SELECT"
+                            && (field.Options |> List.filter (fun (option: SelectOption) -> option.Id = selected.Id && option.Name = selected.Name) |> List.length) = 1
+                    if not declared then invalid "declared planning field type or exact option ID/name differs from native schema"
+                    else
+                        match snapshot.Items |> List.filter (fun (item: Item) -> item.ContentId = initial.IssueId) with
+                        | [] -> Ok [] // Membership must first correlate and independently read back its native ID.
+                        | [ item ] when item.ContentKind = "Issue" && not item.Archived
+                                      && item.Repository = Some selected.Repository && item.Number = Some selected.Number ->
+                            match item.Values |> List.filter (fun (value: ItemValue) -> value.FieldId = fieldId) with
+                            | [] -> Ok [ InitializePlanningValue(initial.IssueId, item.Id, fieldId, desired) ]
+                            | [ existing ] when samePlanningValue desired existing -> Ok []
+                            | _ -> invalid "existing planning value conflicts with initialization; preserve human/automation value and stop"
+                        | _ -> invalid "initial planning membership identity is ambiguous or archived")
+            sequence values |> Result.map List.concat)
+        |> sequence
+        |> Result.map List.concat
 
     let prepare (scope: Scope) (snapshot: Snapshot) : IoResult<Prepared> =
         match validateScope scope with
@@ -443,16 +536,20 @@ module V2Migration =
                                     elif desired.Id.IsNone then invalid "same-name existing view differs; select its exact native ID before updating"
                                     else Ok [ UpdateView(current.Id, desired) ]
                                 | _ -> invalid "view identity/name discovery is ambiguous")
-                    sequence viewChanges |> Result.map (fun changes ->
-                        let all = statusChange @ membership @ List.concat changes
-                        let ownerActions =
-                            [ "No Status, Track or Roadmap values are seeded or overwritten; reconcile desired planning values with their owners.";
-                              "Grouping, sorting, column order and visual verification require supported authenticated UI actions.";
-                              "Readback IDs must be independently finalized into protected enrollment before v4 consumer activation.";
-                              "Compare-before-write is not CAS; apply requires a bounded participating single-writer planning window." ]
-                            @ (if snapshot.CanUpdate then [] else [ "Native principal lacks project update capability; this read-only preparation grants no effect permission." ])
-                        { Scope = scope; Snapshot = snapshot; Changes = all; OwnerActions = ownerActions; PreparedPath = None;
-                          Digest = hash (scopeTokens scope @ snapshotTokens snapshot @ [ string all.Length ] @ (all |> List.collect changeTokens)) })
+                    sequence viewChanges |> Result.bind (fun changes ->
+                        initialChanges scope snapshot fields |> Result.map (fun initializations ->
+                            let all = statusChange @ membership @ initializations @ List.concat changes
+                            let ownerActions =
+                                [ "Only explicitly declared absent Status, Track and Roadmap values may be initialized; existing values are never overwritten.";
+                                  "Initialization assumes a cooperative owner-controlled no-edit window; no provider if-absent/CAS exists, and final read-to-send races cannot be prevented.";
+                                  "Grouping, sorting, column order and visual verification require supported authenticated UI actions.";
+                                  "Readback IDs must be independently finalized into protected enrollment before v4 consumer activation.";
+                                  "Compare-before-write is not CAS; apply requires a bounded participating single-writer planning window." ]
+                                @ (if snapshot.CanUpdate then [] else [ "Native principal lacks project update capability; this read-only preparation grants no effect permission." ])
+                                @ (scope.InitialPlanning |> List.choose (fun (initial: InitialPlanning) ->
+                                    if initial.Status.IsNone then Some("Initial Status is intentionally unresolved for " + initial.IssueId) else None))
+                            { Scope = scope; Snapshot = snapshot; Changes = all; OwnerActions = ownerActions; PreparedPath = None;
+                              Digest = hash (scopeTokens scope @ snapshotTokens snapshot @ [ string all.Length ] @ (all |> List.collect changeTokens)) }))
 
     let private jsonString (value: string) : JsonNode = JsonValue.Create value
     let private objectNode (values: (string * JsonNode) list) : JsonObject =
@@ -487,6 +584,14 @@ module V2Migration =
                 | AddMembership issueId ->
                     (selection "AddProjectV2ItemByIdInput" "addProjectV2ItemById" "item{id}",
                      objectNode [ id "projectId" prepared.Snapshot.ProjectId; id "contentId" issueId ])
+                | InitializePlanningValue(_, itemId, fieldId, desired) ->
+                    let selectedValue: JsonNode =
+                        match desired with
+                        | PlanningText text -> objectNode [ id "text" text ] :> JsonNode
+                        | PlanningSelect option -> objectNode [ id "singleSelectOptionId" option.Id ] :> JsonNode
+                    (selection "UpdateProjectV2ItemFieldValueInput" "updateProjectV2ItemFieldValue" "projectV2Item{id}",
+                     objectNode [ id "projectId" prepared.Snapshot.ProjectId; id "itemId" itemId;
+                                  id "fieldId" fieldId; "value", selectedValue ])
                 | CreateView view ->
                     (selection "CreateProjectV2ViewInput" "createProjectV2View" "projectV2View{id}",
                      objectNode [ id "projectId" prepared.Snapshot.ProjectId; id "name" view.Name; id "layout" view.Layout; "configuration", visible view ])
@@ -510,7 +615,7 @@ module V2Migration =
     let private parseScopeNode (node: JsonElement) : Scope =
         closed [ "sourceRevision"; "artifactSha256"; "cliArtifactSha256"; "principalId"; "principalLogin";
                  "selectedIssues"; "statusFieldId"; "roadmapFieldId"; "trackFieldId"; "observationFieldId";
-                 "inReviewColor"; "inReviewDescription"; "views" ] node
+                 "inReviewColor"; "inReviewDescription"; "views"; "initialPlanning" ] node
         let issues: SelectedIssue list =
             array 100 (node.GetProperty "selectedIssues") |> List.map (fun (issue: JsonElement) ->
                 closed [ "id"; "repository"; "number"; "slice" ] issue
@@ -523,13 +628,25 @@ module V2Migration =
                 { Id = (if id.ValueKind = JsonValueKind.Null then None else Some(nonempty "id" view));
                   Name = nonempty "name" view; Layout = nonempty "layout" view; Filter = propertyString "filter" view;
                   VisibleFieldIds = (array 50 (view.GetProperty "visibleFieldIds") |> List.map (fun field -> field.GetString())) })
+        let planningOption (value: JsonElement) : PlanningOption =
+            closed [ "id"; "name" ] value
+            { Id = nonempty "id" value; Name = nonempty "name" value }
+        let initialPlanning: InitialPlanning list =
+            array 100 (node.GetProperty "initialPlanning")
+            |> List.map (fun (initial: JsonElement) ->
+                closed [ "issueId"; "track"; "roadmap"; "status" ] initial
+                let status = initial.GetProperty "status"
+                { IssueId = nonempty "issueId" initial;
+                  Track = planningOption (initial.GetProperty "track");
+                  Roadmap = propertyString "roadmap" initial;
+                  Status = (if status.ValueKind = JsonValueKind.Null then None else Some(planningOption status)) })
         { SourceRevision = nonempty "sourceRevision" node; ArtifactSha256 = nonempty "artifactSha256" node;
           CliArtifactSha256 = nonempty "cliArtifactSha256" node;
           PrincipalId = nonempty "principalId" node; PrincipalLogin = nonempty "principalLogin" node;
           SelectedIssues = issues; StatusFieldId = nonempty "statusFieldId" node;
           RoadmapFieldId = nonempty "roadmapFieldId" node; TrackFieldId = nonempty "trackFieldId" node;
           ObservationFieldId = nonempty "observationFieldId" node; InReviewColor = nonempty "inReviewColor" node;
-          InReviewDescription = propertyString "inReviewDescription" node; Views = views }
+          InReviewDescription = propertyString "inReviewDescription" node; Views = views; InitialPlanning = initialPlanning }
     let parseScope (json: string) : IoResult<Scope> =
         if Encoding.UTF8.GetByteCount json > 262144 then invalid "scope input exceeds 256 KiB"
         else
@@ -548,13 +665,23 @@ module V2Migration =
             scope.SelectedIssues |> List.map (fun (issue: SelectedIssue) ->
                 objectNode [ "id", jsonString issue.Id; "repository", jsonString issue.Repository;
                              "number", JsonValue.Create issue.Number; "slice", jsonString issue.Slice ] :> JsonNode)
+        let optionNode (option: PlanningOption) : JsonNode =
+            objectNode [ "id", jsonString option.Id; "name", jsonString option.Name ] :> JsonNode
+        let initialPlanning: JsonNode list =
+            scope.InitialPlanning
+            |> List.map (fun (initial: InitialPlanning) ->
+                objectNode [ "issueId", jsonString initial.IssueId;
+                             "track", optionNode initial.Track;
+                             "roadmap", jsonString initial.Roadmap;
+                             "status", (initial.Status |> Option.map optionNode |> Option.defaultValue null) ] :> JsonNode)
         objectNode [ "sourceRevision", jsonString scope.SourceRevision; "artifactSha256", jsonString scope.ArtifactSha256;
                      "cliArtifactSha256", jsonString scope.CliArtifactSha256;
                      "principalId", jsonString scope.PrincipalId; "principalLogin", jsonString scope.PrincipalLogin;
                      "selectedIssues", arrayNode issues; "statusFieldId", jsonString scope.StatusFieldId;
                      "roadmapFieldId", jsonString scope.RoadmapFieldId; "trackFieldId", jsonString scope.TrackFieldId;
                      "observationFieldId", jsonString scope.ObservationFieldId; "inReviewColor", jsonString scope.InReviewColor;
-                     "inReviewDescription", jsonString scope.InReviewDescription; "views", arrayNode (scope.Views |> List.map desiredNode) ] :> JsonNode
+                     "inReviewDescription", jsonString scope.InReviewDescription;
+                     "views", arrayNode (scope.Views |> List.map desiredNode); "initialPlanning", arrayNode initialPlanning ] :> JsonNode
     let encodePrepared (prepared: Prepared) : string =
         let preparedPath =
             match prepared.PreparedPath with
@@ -643,6 +770,19 @@ module V2Migration =
                                                && item.Number = Some issue.Number && not item.Archived
                                                && (before.Items |> List.forall (fun (existing: Item) -> existing.Id <> item.Id && existing.ContentId <> issueId)) ->
                         unchanged ({ after with Items = (after.Items |> List.filter (fun (existing: Item) -> existing.Id <> item.Id)) })
+                    | _ -> false
+                | InitializePlanningValue(issueId, itemId, fieldId, desired) ->
+                    let prior = before.Items |> List.filter (fun (item: Item) -> item.Id = itemId && item.ContentId = issueId)
+                    let current = after.Items |> List.filter (fun (item: Item) -> item.Id = itemId && item.ContentId = issueId)
+                    match prior, current with
+                    | [ original ], [ observed ] when not (original.Values |> List.exists (fun (value: ItemValue) -> value.FieldId = fieldId)) ->
+                        match observed.Values |> List.filter (fun (value: ItemValue) -> value.FieldId = fieldId) with
+                        | [ initialized ] when samePlanningValue desired initialized ->
+                            let retained: ItemValue list = observed.Values |> List.filter (fun (value: ItemValue) -> value.FieldId <> fieldId)
+                            let normalized: Item = { observed with UpdatedAt = original.UpdatedAt; Values = retained }
+                            let items: Item list = after.Items |> List.map (fun (item: Item) -> if item.Id = itemId then normalized else item)
+                            unchanged ({ after with Items = items })
+                        | _ -> false
                     | _ -> false
                 | CreateView desired ->
                     match after.Views |> List.filter (fun (view: View) -> view.Name = desired.Name) with

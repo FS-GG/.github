@@ -168,6 +168,198 @@ module BoardV2MigrationTests =
         let prepared = V2Migration.encodePrepared ({ planned with PreparedPath = Some(Path.GetFullPath "synthetic-prepared.json") })
         Assert.True(Result.isError (BoardV2Application.parseBinding prepared))
 
+    let private activeOption: PlanningOption = { Id = "synthetic-active"; Name = "Active delivery" }
+    let private planningSchema (snapshot: Snapshot) : Snapshot =
+        let fields: Field list =
+            snapshot.Fields |> List.map (fun (field: Field) ->
+                if field.Id = scope.TrackFieldId then
+                    { field with Options = [ { Id = activeOption.Id; Name = activeOption.Name; Color = "BLUE"; Description = "synthetic track" } ] }
+                else field)
+        { snapshot with Fields = fields }
+    let private declaration (issueId: string) (statusName: string) : InitialPlanning =
+        let native = snapshot.Fields.Head.Options |> List.find (fun (option: SelectOption) -> option.Name = statusName)
+        { IssueId = issueId; Track = activeOption;
+          Roadmap = "https://github.com/FS-GG/.github/blob/main/docs/coordination/synthetic.md";
+          Status = Some { Id = native.Id; Name = native.Name } }
+
+    [<Fact>]
+    let ``actual CLI initializes only absent planning values after native membership and repeats without writes`` () =
+        use fixture = new Fixture()
+        fixture.Native.Snapshot <- planningSchema fixture.Native.Snapshot
+        fixture.Scope <- { fixture.Scope with InitialPlanning = [ declaration "synthetic-issue" "Blocked" ] }
+        let code, path = fixture.Prepare "initial-planning"
+        Assert.Equal(0, code)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        Assert.Equal(5, fixture.Native.Mutations.Length)
+        let item = Assert.Single fixture.Native.Snapshot.Items
+        Assert.Equal(3, item.Values.Length)
+        Assert.DoesNotContain(item.Values, fun (value: ItemValue) -> value.FieldId = scope.ObservationFieldId)
+        for request in fixture.Native.Mutations |> List.skip 2 do
+            match request.Body with
+            | Transport.Json json ->
+                use document = JsonDocument.Parse json
+                let root = document.RootElement
+                Assert.Contains("projectV2Item{id}", root.GetProperty("query").GetString())
+                let input = root.GetProperty("variables").GetProperty "input"
+                Assert.Equal(item.Id, input.GetProperty("itemId").GetString())
+                Assert.Single(input.GetProperty("value").EnumerateObject()) |> ignore
+            | _ -> failwith "exact typed planning request expected"
+        let ready, repeated = fixture.Prepare "equal-planning-repeat"
+        Assert.Equal(0, ready)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments repeated))
+        Assert.Equal(5, fixture.Native.Mutations.Length)
+
+    [<Fact>]
+    let ``actual CLI automation value after membership conflicts and is preserved without initialization`` () =
+        use fixture = new Fixture()
+        fixture.Native.Snapshot <- planningSchema fixture.Native.Snapshot
+        fixture.Scope <- { fixture.Scope with InitialPlanning = [ declaration "synthetic-issue" "Blocked" ] }
+        let code, path = fixture.Prepare "automation-default"
+        Assert.Equal(0, code)
+        fixture.Native.BeforeRead <- fun (_: Transport.Request) ->
+            if fixture.Native.Mutations.Length = 2 && not fixture.Native.Snapshot.Items.IsEmpty then
+                let card = fixture.Native.Snapshot.Items.Head
+                if card.Values.IsEmpty then
+                    let option = snapshot.Fields.Head.Options.Head
+                    let value: ItemValue =
+                        { Id = scope.StatusFieldId; FieldId = scope.StatusFieldId; Kind = "ProjectV2ItemFieldSingleSelectValue";
+                          Value = JsonSerializer.Serialize([ "id"; "\"synthetic-automation\""; "updatedAt"; "\"2026-10-17T13:00:00Z\"";
+                                                             "optionId"; JsonSerializer.Serialize(option.Id); "name"; JsonSerializer.Serialize(option.Name) ]) }
+                    fixture.Native.Snapshot <- { fixture.Native.Snapshot with Items = [ { card with Values = [ value ] } ] }
+        Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
+        Assert.Equal(2, fixture.Native.Mutations.Length)
+        Assert.Equal("ProjectV2ItemFieldSingleSelectValue", fixture.Native.Snapshot.Items.Head.Values.Head.Kind)
+        Assert.True(File.Exists(path + ".invocation/002-native-readback.json"))
+        Assert.False(File.Exists(path + ".invocation/003-intent.json"))
+
+    [<Fact>]
+    let ``actual twenty-issue twenty-two-item eight-view planning journey stays below unchanged request cap`` () =
+        use fixture = new Fixture()
+        let selected: SelectedIssue list =
+            [ 1 .. 20 ] |> List.map (fun index ->
+                { Id = "synthetic-population-" + string index; Repository = "FS-GG/.github";
+                  Number = 100 + index; Slice = "synthetic-slice-" + string index })
+        let issues: NativeIssue list =
+            selected |> List.map (fun (issue: SelectedIssue) ->
+                { Id = issue.Id; Repository = issue.Repository; Number = issue.Number; UpdatedAt = "2026-10-17T12:00:00Z"; State = "OPEN" })
+        let item (index: int) : Item =
+            let retained (fieldId: string) (kind: string) (tokens: string list) : ItemValue =
+                { Id = fieldId; FieldId = fieldId; Kind = kind;
+                  Value = JsonSerializer.Serialize([ "id"; JsonSerializer.Serialize("synthetic-retained-" + string index + fieldId);
+                                                     "updatedAt"; JsonSerializer.Serialize("2026-10-17T12:00:00Z") ] @ tokens) }
+            let values: ItemValue list =
+                if index <= 3 then
+                    [ retained scope.StatusFieldId "ProjectV2ItemFieldSingleSelectValue"
+                          [ "optionId"; JsonSerializer.Serialize(snapshot.Fields.Head.Options.Head.Id); "name"; "\"Backlog\"" ];
+                      retained scope.TrackFieldId "ProjectV2ItemFieldSingleSelectValue"
+                          [ "optionId"; JsonSerializer.Serialize(activeOption.Id); "name"; JsonSerializer.Serialize(activeOption.Name) ];
+                      retained scope.RoadmapFieldId "ProjectV2ItemFieldTextValue" [ "text"; "\"Synthetic retained pilot plan\"" ] ]
+                else [ retained scope.RoadmapFieldId "ProjectV2ItemFieldTextValue" [ "text"; "\"Synthetic unselected plan\"" ] ]
+            { Id = "synthetic-retained-item-" + string index; ContentId = "synthetic-population-" + string index;
+              ContentKind = "Issue"; Repository = Some "FS-GG/.github"; Number = Some(100 + index);
+              UpdatedAt = "2026-10-17T12:00:00Z"; Archived = false; Values = values }
+        let originalItems = [ item 1; item 2; item 3; item 21; item 22 ]
+        let view (index: int) : View =
+            { Id = "synthetic-retained-view-" + string index; Name = "synthetic retained " + string index;
+              Layout = "TABLE_LAYOUT"; Filter = ""; VisibleFieldIds = [ scope.StatusFieldId ]; UnsupportedConfiguration = "[]" }
+        let originalViews = [ 1 .. 5 ] |> List.map view
+        let extraFields: Field list =
+            [ 1 .. 12 ] |> List.map (fun index ->
+                { Id = "synthetic-extra-field-" + string index; Name = "Synthetic extra " + string index; DataType = "TEXT"; Options = [] })
+        let native = planningSchema fixture.Native.Snapshot
+        fixture.Native.Snapshot <- { native with Issues = issues; Items = originalItems; Views = originalViews; Fields = native.Fields @ extraFields }
+        let existing: DesiredView list =
+            originalViews |> List.take 3 |> List.map (fun (view: View) ->
+                { Id = Some view.Id; Name = view.Name; Layout = view.Layout; Filter = "status:Blocked"; VisibleFieldIds = view.VisibleFieldIds })
+        let created: DesiredView list =
+            [ 1 .. 3 ] |> List.map (fun index ->
+                { Id = None; Name = "synthetic created " + string index; Layout = "TABLE_LAYOUT";
+                  Filter = (if index < 3 then "status:Blocked" else ""); VisibleFieldIds = [ scope.StatusFieldId ] })
+        let initial: InitialPlanning list =
+            selected |> List.skip 3 |> List.mapi (fun index (issue: SelectedIssue) ->
+                declaration issue.Id (if index < 5 then "Backlog" elif index < 9 then "In progress" else "Blocked"))
+        fixture.Scope <- { fixture.Scope with SelectedIssues = selected; InitialPlanning = initial; Views = existing @ created }
+        let code, path = fixture.Prepare "full-synthetic-journey"
+        Assert.Equal(0, code)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        Assert.Equal(77, fixture.Native.Mutations.Length)
+        Assert.Equal(22, fixture.Native.Snapshot.Items.Length)
+        Assert.Equal(8, fixture.Native.Snapshot.Views.Length)
+        Assert.Equal(16, fixture.Native.Snapshot.Fields.Length)
+        Assert.True(fixture.Native.Requests.Length + fixture.Native.Mutations.Length < 500)
+        for retained in originalItems do Assert.Contains(retained, fixture.Native.Snapshot.Items)
+        Assert.Equal(62, fixture.Native.Snapshot.Items |> List.sumBy (fun (item: Item) -> item.Values.Length))
+        let before = fixture.Native.Mutations.Length
+        let repeatCode, repeatPath = fixture.Prepare "full-synthetic-repeat"
+        Assert.Equal(0, repeatCode)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments repeatPath))
+        Assert.Equal(before, fixture.Native.Mutations.Length)
+
+    [<Fact>]
+    let ``actual caller drains bundled top-level continuations under the same collection budget`` () =
+        for name in [ "fields"; "items"; "views" ] do
+            use fixture = new Fixture()
+            let card (index: int) : Item =
+                { Id = "synthetic-unselected-item-" + string index; ContentId = "synthetic-unselected-content-" + string index;
+                  ContentKind = "Issue"; Repository = Some "FS-GG/.github"; Number = Some(900 + index);
+                  UpdatedAt = "2026-10-17T12:00:00Z"; Archived = false; Values = [] }
+            let view (index: int) : View =
+                { Id = "synthetic-existing-" + string index; Name = "synthetic existing " + string index;
+                  Layout = "TABLE_LAYOUT"; Filter = ""; VisibleFieldIds = [ scope.StatusFieldId ]; UnsupportedConfiguration = "[]" }
+            fixture.Native.Snapshot <- { fixture.Native.Snapshot with Items = [ card 1; card 2 ]; Views = [ view 1; view 2 ] }
+            let mutable continuations = 0
+            fixture.Native.Transform <- fun (request: Transport.Request) (response: Transport.Response) ->
+                match request.Body with
+                | Transport.Query(document, variables) when document.Contains(name + "(first:") ->
+                    let continued = variables |> List.exists (function "after", VString _ -> true | _ -> false)
+                    if continued then continuations <- continuations + 1
+                    let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+                    let data = root.["data"]
+                    let parent = if isNull data.["node"] then (data.["organization"]).["projectV2"] else data.["node"]
+                    let connection = parent.[name]
+                    let nodes = connection.["nodes"].AsArray()
+                    let retained = nodes |> Seq.skip (if continued then 1 else 0) |> Seq.take (if continued then nodes.Count - 1 else 1) |> Seq.map (fun (node: System.Text.Json.Nodes.JsonNode) -> node.DeepClone()) |> Seq.toArray
+                    nodes.Clear()
+                    for node in retained do nodes.Add node
+                    let page = connection.["pageInfo"]
+                    page.["hasNextPage"] <- System.Text.Json.Nodes.JsonValue.Create(not continued)
+                    let cursor: System.Text.Json.Nodes.JsonNode =
+                        if continued then null else System.Text.Json.Nodes.JsonValue.Create("synthetic-next")
+                    page.["endCursor"] <- cursor
+                    Ok ({ response with Body = root.ToJsonString() })
+                | _ -> Ok response
+            let code, path = fixture.Prepare ("complete-" + name)
+            Assert.Equal(0, code)
+            Assert.Equal(2, continuations)
+            Assert.Equal(6, fixture.Native.Requests.Length)
+            Assert.Empty fixture.Native.Mutations
+            use report = JsonDocument.Parse(File.ReadAllText path)
+            Assert.False(String.IsNullOrWhiteSpace(report.RootElement.GetProperty("digest").GetString()))
+
+    [<Fact>]
+    let ``actual planning write uncertain response retains original identity and prohibits later writes`` () =
+        for failure in [ "lost"; "wrong-item"; "partial-errors" ] do
+            use fixture = new Fixture()
+            fixture.Native.Snapshot <- planningSchema fixture.Native.Snapshot
+            fixture.Scope <- { fixture.Scope with InitialPlanning = [ declaration "synthetic-issue" "Blocked" ] }
+            let code, path = fixture.Prepare ("uncertain-planning-" + failure)
+            Assert.Equal(0, code)
+            fixture.Native.TransformDispatch <- fun (request: Transport.Request) (response: Transport.Response) ->
+                match request.Body with
+                | Transport.Json json when json.Contains("updateProjectV2ItemFieldValue") ->
+                    if failure = "lost" then Error(Errors.Transport "synthetic response deadline after possible planning send")
+                    elif failure = "wrong-item" then Ok { response with Body = response.Body.Replace("synthetic-item-synthetic-issue", "synthetic-other-item") }
+                    else Ok { response with Body = "{\"data\":{\"updateProjectV2ItemFieldValue\":null},\"errors\":[{\"message\":\"synthetic partial response\"}]}" }
+                | _ -> Ok response
+            Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
+            Assert.Equal(3, fixture.Native.Mutations.Length)
+            let prefix = path + ".invocation/003"
+            Assert.True(File.Exists(prefix + "-intent.json"))
+            Assert.True(File.Exists(prefix + "-native-readback.json"))
+            Assert.False(File.Exists(path + ".invocation/004-intent.json"))
+            Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
+            Assert.Equal(3, fixture.Native.Mutations.Length)
+
     [<Fact>]
     let ``actual CLI selected seventeen-issue population stays within shared request budget`` () =
         use fixture = new Fixture()
@@ -198,7 +390,7 @@ module BoardV2MigrationTests =
                 match request.Body with Transport.Query(document, _) -> document.Contains "viewer{id login}" | _ -> false)
             |> List.length
             |> fun count -> count / 2
-        Assert.Equal(expectedCollections * 6, fixture.Native.Requests.Length)
+        Assert.Equal(expectedCollections * 2, fixture.Native.Requests.Length)
 
     [<Fact>]
     let ``actual CLI incomplete nested inventory and malformed mutation payload never become empty success`` () =
@@ -212,7 +404,8 @@ module BoardV2MigrationTests =
             | Transport.Query(document, _) when document.Contains "items(first:" ->
                 let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
                 let data = root.["data"]
-                let project = data.["node"]
+                let project =
+                    if isNull data.["node"] then (data.["organization"]).["projectV2"] else data.["node"]
                 let inventory = project.["items"]
                 let items = inventory.["nodes"].AsArray()
                 let fields = items.[0].["fieldValues"]
@@ -454,7 +647,8 @@ module BoardV2MigrationTests =
                 | Transport.Query(document, _) when document.Contains "views(first:" && fixture.Native.Mutations.Length = 3 ->
                     let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
                     let data = root.["data"]
-                    let project = data.["node"]
+                    let project =
+                        if isNull data.["node"] then (data.["organization"]).["projectV2"] else data.["node"]
                     let inventory = project.["views"]
                     let nodes = inventory.["nodes"].AsArray()
                     let target = nodes |> Seq.find (fun (node: System.Text.Json.Nodes.JsonNode) -> node.["id"].GetValue<string>() = originalA.Id)
