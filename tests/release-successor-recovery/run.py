@@ -1976,7 +1976,7 @@ class Literal104ProviderFixture(MemoryPublisher):
             if self.release is None:raise NotFound(path)
             return copy.deepcopy(self.release)
         if '/releases?' in path:return [] if self.release is None else [copy.deepcopy(self.release)]
-        if path.endswith('/releases/1/assets?per_page=100'):
+        if self.release is not None and path.endswith(f"/releases/{self.release['id']}/assets?per_page=100"):
             return [{'id':ident,'name':name,'size':len(raw),'state':'uploaded','digest':'sha256:'+hashlib.sha256(raw).hexdigest()} for ident,(name,raw) in self.assets.items()]
         return super().get(path)
 
@@ -1988,12 +1988,16 @@ class Literal104ProviderFixture(MemoryPublisher):
         self.release={**body,'id':1};return copy.deepcopy(self.release)
 
     def patch(self,path,body):
-        assert path.endswith('/releases/1') and self.release['draft'] is True and body=={'draft':False,'make_latest':'true'}
+        assert path.endswith(f"/releases/{self.release['id']}") and self.release['draft'] is True and body=={'draft':False,'make_latest':'true'}
         self.release.update(body);return copy.deepcopy(self.release)
 
-    def upload_asset(self,release,name,path):
-        assert release==1 and all(value[0]!=name for value in self.assets.values())
-        ident=len(self.assets)+1;self.assets[ident]=(name,path.read_bytes());return {'id':ident}
+    def upload_asset(self,release,name,path,expected_sha256=None):
+        assert release==self.release['id'] and all(value[0]!=name for value in self.assets.values())
+        if expected_sha256 is None:raw=path.read_bytes()
+        else:
+            with path.open('rb') as stream:raw=stream.read(1024*1024+1)
+            assert len(raw)<=1024*1024 and hashlib.sha256(raw).hexdigest()==expected_sha256
+        ident=len(self.assets)+1;self.assets[ident]=(name,raw);return {'id':ident}
 
     def download_asset(self,ident):return self.assets[ident][1]
 
@@ -2575,7 +2579,7 @@ class HostedSuspensionInstallControls(SuspensionFixture):
         self.inputs={
             'install_release_suspension':True,'expected_authority_main':self.authority.head,
             'candidate_run_id':'','candidate_artifact_id':'','candidate_archive_sha256':'',
-            'publish':False,'qualify_original_tag_authentication_only':False,'suspended_0103_successor':False,
+            'publish':False,'continue_original_0104_checkpoint':False,'qualify_original_tag_authentication_only':False,'suspended_0103_successor':False,
             'original_0103_candidate':False,'recover_original_0103_tag_intent':False,'recovery_checkpoint':False,
             'repeat_original_nuget_kit_intent':False,'recover_original_runtime_intent':False,
             'recover_original_successor_checkpoint':False,'expected_checkpoint':''}
@@ -2832,7 +2836,7 @@ class HostedInstallMetadataHTTPControls(HostedSuspensionInstallControls):
             self.assertTrue(all(stream.closed and stream.close_attempts>=1 for stream in self.http_streams))
             return code
 
-    def test_captured_native_eleven_key_wire_normalizes_to_same_prepared_apply_digest(self):
+    def test_captured_eleven_key_wire_requires_explicit_new_boolean_then_preserves_digest(self):
         # Sanitized literal shape captured from the original native attempt. Only
         # the actual Authority parent is replaced by this in-memory fixture head.
         captured={"expected_authority_main":self.authority.head,"install_release_suspension":True,
@@ -2841,9 +2845,9 @@ class HostedInstallMetadataHTTPControls(HostedSuspensionInstallControls):
             "recover_original_successor_checkpoint":False,"recovery_checkpoint":False,
             "repeat_original_nuget_kit_intent":False,"suspended_0103_successor":False}
         canonical_inputs=copy.deepcopy(self.inputs)
-        self.assertEqual(len(captured),11);self.assertEqual(len(canonical_inputs),15)
+        self.assertEqual(len(captured),11);self.assertEqual(len(canonical_inputs),16)
         with self.assertRaisesRegex(publisher.Refused,'fields differ'):publisher.validate_workflow_inputs(captured)
-        self.inputs=captured;digest=self.prepare()
+        self.inputs={**captured,'continue_original_0104_checkpoint':False};digest=self.prepare()
         prepared=json.loads(self.prepared_path.read_bytes())
         self.assertEqual(prepared['inputSHA256'],hashlib.sha256(canonical(canonical_inputs)).hexdigest())
         self.inputs=canonical_inputs
@@ -2880,7 +2884,7 @@ class HostedInstallMetadataHTTPControls(HostedSuspensionInstallControls):
             for value in (None,False,0):
                 self.inputs={**full,key:value}
                 with self.subTest(key=key,value=value):self.assertEqual(self.invoke('--check-workflow-inputs'),1)
-        for change in ({'unknown':''},{'candidateRunId':''},{'publish':'false'},{'expected_authority_main':''},
+        for change in ({'unknown':''},{'candidateRunId':''},{'publish':'false'},{'continue_original_0104_checkpoint':'false'},{'expected_authority_main':''},
                        {'candidate_run_id':'1'},{'expected_checkpoint':'{}'}):
             self.inputs={**full,**change}
             with self.subTest(change=change):self.assertEqual(self.invoke('--check-workflow-inputs'),1)
@@ -2956,6 +2960,367 @@ class HostedInstallMetadataHTTPControls(HostedSuspensionInstallControls):
         self.assertEqual(len(rows['attemptedRequests']),1);self.assertEqual(rows['attemptedRequests'][0]['outcome'],'response-received')
         self.assertEqual(sum(rows['metadataAcquisition']['attempted'].values()),256)
         self.assertEqual(len(self.writes()),1)
+
+
+class ContinuationCallerControls(SuspensionFixture):
+    """Cold actual caller; external ports are inert, never effect authority.
+
+    Public CI uses explicitly synthetic candidate/proof/source pins. The optional
+    private census reads original restricted bytes and leaves those pins intact.
+    Both paths retain the audit fence and use execute_publisher and LiveProvider.
+    """
+    WINDOW = {'authorityEntries':500,'publisherEntries':5000,'seconds':900,
+              'visibilityProbes':32,'quotaFloor':1800}
+
+    def prepare_caller(self, private=None, ceiling=4200):
+        temporary=tempfile.TemporaryDirectory();self.addCleanup(temporary.cleanup)
+        self.root=pathlib.Path(temporary.name)
+        self.native=Literal104ProviderFixture(self.root,self.reader())
+        self.synthetic=private is None
+        self.sources={}
+        if private is not None:
+            # Explicit custody root is supplied only to the private inert census.
+            # No private bytes or paths are committed or printed by these tests.
+            candidate_dir=private/'candidate';original_dir=private/'original'
+            self.archive=(candidate_dir/'original-candidate-artifact.zip').read_bytes()
+            self.proof_archive=(original_dir/'original-result-artifact.zip').read_bytes()
+            with zipfile.ZipFile(io.BytesIO(self.archive)) as archive:
+                for entry in archive.infolist():
+                    self.assertEqual(pathlib.PurePosixPath(entry.filename).name,entry.filename)
+                    (self.root/entry.filename).write_bytes(archive.read(entry))
+            self.native.candidate=json.loads(self.native.path.read_bytes())
+            self.native.provider=LiveProvider(self.native,self.native.path,'inert-github','inert-nuget',
+                suspension=self.reader(),logical_ref=self.allowed['logicalRef'])
+            for path in publisher.CONTINUATION_SOURCE_PINS:
+                self.sources[path]=(private/'sources'/path).read_bytes()
+            decision=self.mod.CONTINUATION_DECISION
+            self.sources[decision['path']]=(private/'sources'/decision['path']).read_bytes()
+            # Restore the genuine suspension source after inherited synthetic setup.
+            self.pin.stop()
+            suspension=self.mod.SUSPENSION_DECISION
+            raw=(private/'suspension-source').read_bytes()
+            self.assertEqual(hashlib.sha256(raw).hexdigest(),suspension['sha256'])
+            self.authority.override[self.decision_path]={'encoding':'base64','content':base64.b64encode(raw).decode()}
+            self.record['decision']=copy.deepcopy(suspension);self.raw=canonical(self.record)
+        else:
+            # Synthetic ZIPs/metadata test the exact composition, not native bytes.
+            stream=io.BytesIO()
+            with zipfile.ZipFile(stream,'w') as archive:
+                for name in [*(f'{package}.0.104.0.nupkg' for package in PACKAGES),
+                             'release-manifest.json','previous-stable-channel.json',
+                             'standalone-telemetry-evidence.json','standalone-telemetry-runtime-evidence.json']:
+                    archive.writestr(name,(self.root/name).read_bytes())
+            # Keep the source-owned acquisition byte bound under test as well.
+            self.archive=b'\0'*(33326837-len(stream.getvalue()))+stream.getvalue()
+            candidate={**self.mod.CONTINUATION_CANDIDATE,'sourceSha':self.native.head,
+                       'contentId':self.native.candidate['contentId'],
+                       'archiveSha256':hashlib.sha256(self.archive).hexdigest()}
+            self.enterContext(patch.dict(self.mod.CONTINUATION_CANDIDATE,candidate))
+            for path in publisher.CONTINUATION_SOURCE_PINS:self.sources[path]=(ROOT/path).read_bytes()
+            self.enterContext(patch.dict(publisher.CONTINUATION_SOURCE_PINS,
+                {path:hashlib.sha256(raw).hexdigest() for path,raw in self.sources.items()}))
+            decision=self.mod.CONTINUATION_DECISION
+            self.sources[decision['path']]=b'synthetic continuation decision; not operation authority\n'
+            self.enterContext(patch.dict(decision,{'sha256':hashlib.sha256(self.sources[decision['path']]).hexdigest()}))
+        window={**self.WINDOW,'authorityEntries':ceiling,'quotaFloor':4500 if ceiling>1800 else 1800}
+        self.enterContext(patch.object(self.mod,'CONTINUATION_WINDOW',window))
+        self.install()
+        candidate=self.mod.CONTINUATION_CANDIDATE
+        intent={'contentId':candidate['contentId'],'sourceSha':candidate['sourceSha'],'version':'0.104.0',
+                'candidateArchiveSha256':candidate['archiveSha256'],'operator':'EHotwagner'}
+        journal=ProtectedReleaseJournal(self.authority,self.allowed['logicalRef'],main_directory=True,suspension=self.reader())
+        logical=None;effects={}
+        sequence=[None]+[(effect.identity,state) for effect in ordered_effects(self.native.candidate)[:13]
+                        for state in ('intent','verified')]+[('channel-asset','intent')]
+        self.assertEqual(len(sequence),28)
+        for generation,change in enumerate(sequence,1):
+            if change is not None:effects[change[0]]=change[1]
+            state={'schema':'fsgg.release-successor-journal/1',**intent,'generation':generation,'effects':copy.deepcopy(effects)}
+            logical=journal._create_commit(state,[] if logical is None else [logical])
+            if generation==28:
+                if self.synthetic:
+                    self.enterContext(patch.dict(self.mod.CONTINUATION_CHECKPOINT,
+                        {'stateSHA256':hashlib.sha256(canonical(state)).hexdigest()}))
+                self.assertEqual(hashlib.sha256(canonical(state)).hexdigest(),self.mod.CONTINUATION_CHECKPOINT['stateSHA256'])
+                # Git object IDs are synthetic ports; the selected last identity is
+                # labelled with the fixed checkpoint only after all28 transitions.
+                fixed=self.mod.CONTINUATION_CHECKPOINT['logicalHead']
+                self.authority.objects['commits',fixed]={**self.authority.objects['commits',logical],'sha':fixed}
+                logical=fixed
+            physical=journal._overlay(self.authority.head,logical,state)
+            self.authority.patch(PREFIX+'/git/refs/heads/main',{'sha':physical,'force':False})
+        self.checkpoint_state=copy.deepcopy(state)
+        self.native.tag=candidate['sourceSha']
+        self.native.release={'id':416097241,'tag_name':'coherent-set/v0.104.0','target_commitish':candidate['sourceSha'],
+            'body':self.native.provider.marker,'draft':True,'prerelease':False}
+        self.native.assets={index:(name,(self.root/name).read_bytes()) for index,name in enumerate(
+            [*(f'{package}.0.104.0.nupkg' for package in PACKAGES),
+             'standalone-telemetry-evidence.json','standalone-telemetry-runtime-evidence.json'],1)}
+        self.native.feeds={(feed,package) for feed in ('github','nuget') for package in PACKAGES}
+        if self.synthetic:
+            fixed=self.mod.CONTINUATION_PROOF
+            original={'schema':'fsgg.release-successor-result/1','profile':self.allowed['profile'],
+                'execution':{'sourceSha':fixed['sourceSha'],'runId':fixed['runId'],'runAttempt':'1','operator':'EHotwagner'},
+                'candidate':{**candidate,'version':'0.104.0'},'journalRef':self.allowed['logicalRef'],
+                'disposition':'checkpoint','publicationComplete':False,'failure':None,
+                'lastObservedJournal':{**self.mod.CONTINUATION_CHECKPOINT,'effects':effects},
+                'lastDispatch':{'effect':'qualification-asset:runtime','state':'applied','attempted':True},
+                'authorityRequests':{'ceiling':1500,'attemptedByMethod':{'get':1276,'post':196,'patch':28},
+                    'blockedBeforeSend':{'method':'get','path':PREFIX+'/rulesets/24802698'}}}
+            body=canonical(original);stream=io.BytesIO()
+            with zipfile.ZipFile(stream,'w') as archive:archive.writestr('release-successor-result.json',body)
+            self.proof_archive=stream.getvalue()
+            self.enterContext(patch.dict(fixed,{'archiveBytes':len(self.proof_archive),'archiveSha256':hashlib.sha256(self.proof_archive).hexdigest(),
+                'memberBytes':len(body),'memberSha256':hashlib.sha256(body).hexdigest()}))
+        self.authority.override['installation/repositories?per_page=100']={
+            'total_count':1,'repositories':[{'id':1351660651,'full_name':REPOSITORY}]}
+        self.authority.calls.clear();self.native.calls.clear()
+        self.original_native_get=self.native.get
+        self.native.get=self.native_get
+        self.native.download_continuation_result=lambda:self.proof_archive
+        self.native.download_continuation_candidate=lambda:self.archive
+        self.publisher_ports=[]
+        for name in ('get','post','patch','download_asset','upload_asset','download_continuation_result','download_continuation_candidate'):
+            original=getattr(self.native,name)
+            def port(*args,_name=name,_original=original):
+                self.publisher_ports.append(_name)
+                return _original(*args)
+            setattr(self.native,name,port)
+        self.ticks=[publisher.time.monotonic()];self.sleeps=[];self.dispatches=[];self.providers=[]
+        self.feed_ports=[];self.local_ports=[]
+        self.before_visibility=[];self.delay_probes=0
+        self.rows=report();self.rows['candidate']={}
+        self.args=types.SimpleNamespace(publish=True,preflight_only=False,continue_original_0104_checkpoint=True,
+            suspended_0103_successor=False,original_0103_candidate=False,recover_original_0103_tag_intent=False,
+            recovery_checkpoint=False,repeat_original_nuget_kit_intent=False,recover_original_runtime_intent=False,
+            recover_original_successor_checkpoint=False,expected_checkpoint=json.dumps(self.mod.CONTINUATION_CHECKPOINT),
+            candidate_run_id=candidate['runId'],candidate_artifact_id=candidate['artifactId'],candidate_archive_sha256=candidate['archiveSha256'],
+            workdir=self.root/'invocation',result_path=self.root/'result.json')
+
+    def native_get(self,path):
+        candidate=self.mod.CONTINUATION_CANDIDATE;proof=self.mod.CONTINUATION_PROOF
+        if '/contents/' in path:
+            name=path.split('/contents/',1)[1].split('?ref=',1)[0]
+            return {'encoding':'base64','content':base64.b64encode(self.sources[name]).decode()}
+        if path.endswith('/actions/runs/1'):
+            return {'id':1,'repository':{'id':1269292704,'full_name':'FS-GG/.github'},
+                'path':'.github/workflows/release-successor-publish.yml','event':'workflow_dispatch','head_branch':'main',
+                'head_sha':'b'*40,'actor':{'login':'EHotwagner'},'triggering_actor':{'login':'EHotwagner'},
+                'run_attempt':1,'status':'in_progress'}
+        if path.endswith('/actions/runs/'+str(proof['runId'])):
+            return {'id':proof['runId'],'workflow_id':362181999,'repository':{'id':1269292704,'full_name':'FS-GG/.github'},
+                'path':'.github/workflows/release-successor-publish.yml','event':'workflow_dispatch','head_branch':'main',
+                'head_sha':proof['sourceSha'],'actor':{'login':'EHotwagner'},'run_attempt':1,'status':'completed','conclusion':'success'}
+        if path.endswith('/actions/runs/'+str(candidate['runId'])):
+            return {'id':candidate['runId'],'path':'.github/workflows/release-successor-candidate.yml',
+                'event':'workflow_dispatch','head_branch':'main','head_sha':candidate['sourceSha'],
+                'conclusion':'success','run_attempt':1}
+        if '/actions/artifacts/' in path:
+            original=path.endswith('/'+str(proof['artifactId']));pin=proof if original else candidate
+            return {'id':pin['artifactId'],'name':'release-successor-result' if original else
+                    f"release-successor-candidate-{candidate['sourceSha']}-{candidate['runId']}",
+                'expired':False,'expires_at':'2099-01-01T00:00:00Z','size_in_bytes':len(self.proof_archive if original else self.archive),
+                'digest':'sha256:'+pin['archiveSha256'],'workflow_run':{'id':pin['runId'],'head_sha':pin['sourceSha'],
+                    'head_branch':'main','repository_id':1269292704,'head_repository_id':1269292704}}
+        if '/actions/workflows/' in path:
+            active='status=in_progress' in path
+            return {'total_count':int(active),'workflow_runs':[{'id':1}] if active else []}
+        if '/compare/' in path:return {'status':'ahead','merge_base_commit':{'sha':candidate['sourceSha']}}
+        value=self.original_native_get(path)
+        if path.endswith('/git/ref/heads/main'):value['object']['type']='commit'
+        return value
+
+    def invoke_caller(self):
+        real_provider=publisher.LiveProvider
+        def provider(api,path,github,nuget):
+            value=real_provider(api,path,github,nuget)
+            def download(feed,package):
+                # Full real package observer/saga verifier; only acquisition is inert.
+                self.feed_ports.append((feed,package))
+                old=self.native.provider;self.native.provider=value
+                try:return self.native.download_package(feed,package)
+                finally:self.native.provider=old
+            value._download_package=download
+            original=value.dispatch
+            def dispatch(effect):self.dispatches.append(effect.identity);return original(effect)
+            value.dispatch=dispatch
+            visibility=value.continuation_visibility
+            def probe(effect):
+                before=len(self.authority.calls);result=visibility(effect)
+                self.before_visibility.append((before,len(self.authority.calls)))
+                if self.delay_probes:
+                    self.delay_probes-=1;return 'absent'
+                return result
+            value.continuation_visibility=probe
+            self.providers.append(value);return value
+        def process(argv,**kwargs):
+            self.local_ports.append('git-cleanliness' if argv[0]=='git' else
+                'artifact-verifier' if len(argv)>1 and argv[1].endswith('release-successor-artifact.py') else
+                'saga:'+argv[2] if len(argv)>2 and argv[1]==str(ROOT/'scripts/release-saga.py') else 'unsupported')
+            if len(argv)>1 and argv[1].endswith('release-successor-artifact.py'):
+                spec=importlib.util.spec_from_file_location('continuation_artifact_fixture',ROOT/'scripts/release-successor-artifact.py')
+                module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+                with patch.object(sys,'argv',argv[1:]),redirect_stdout(io.StringIO()):self.assertEqual(module.main(),0)
+                return types.SimpleNamespace(returncode=0)
+            if len(argv)>2 and argv[1]==str(ROOT/'scripts/release-saga.py') and argv[2]=='assert-artifacts':
+                self.native.run_saga(self.native.saga.parser().parse_args(argv[2:]))
+                return types.SimpleNamespace(returncode=0)
+            if argv[0]=='git':
+                self.assertIn(argv,(['git','rev-parse','HEAD'],['git','diff','--quiet','HEAD'],
+                    ['git','status','--porcelain=v1','--untracked-files=all','--','scripts']))
+                return types.SimpleNamespace(stdout='b'*40+'\n' if argv[1]=='rev-parse' else '',returncode=0)
+            return self.native.process(argv,**kwargs)
+        def sleep(seconds):self.sleeps.append(seconds);self.ticks[0]+=seconds
+        environment={'GH_TOKEN':'inert-publisher','ORDINARY_LEDGER_TOKEN':'inert-authority','GITHUB_SHA':'b'*40,
+            'GITHUB_RUN_ID':'1','GITHUB_RUN_ATTEMPT':'1','GITHUB_ACTOR':'EHotwagner','GITHUB_REPOSITORY':'FS-GG/.github',
+            'GITHUB_REF':'refs/heads/main','GITHUB_EVENT_NAME':'workflow_dispatch'}
+        with patch.dict(os.environ,environment,clear=True),patch.object(publisher,'GitHubAPI',side_effect=
+                lambda token,**kwargs:self.native if token=='inert-publisher' else self.authority), \
+             patch.object(publisher,'LiveProvider',side_effect=provider),patch.object(publisher.subprocess,'run',side_effect=process), \
+             patch.object(publisher.time,'monotonic',side_effect=lambda:self.ticks[0]),patch.object(publisher.time,'sleep',side_effect=sleep), \
+             patch.object(publisher.run_0104_continuation,'__kwdefaults__',{'clock':lambda:self.ticks[0],'sleep':sleep}), \
+             patch.object(publisher.ContinuationPublisherAPI.__init__,'__defaults__',(lambda:self.ticks[0],)):
+            try:return publisher.execute_publisher(self.args,self.rows)
+            finally:
+                self.census={'fixture':'synthetic-ci' if self.synthetic else 'private-original-bytes-inert-ports',
+                    'authority':self.rows.get('authorityCounter').report() if self.rows.get('authorityCounter') else None,
+                    'publisher':self.rows.get('publisherCounter').report() if self.rows.get('publisherCounter') else None,
+                    'authorityPortEntries':len(self.authority.calls),'publisherPortEntries':len(self.publisher_ports),
+                    'phases':copy.deepcopy(self.rows.get('continuationPhases',[])),'sends':list(self.dispatches),
+                    'virtualSleepSeconds':sum(self.sleeps),'feedDownloadEntries':len(self.feed_ports),
+                    'localPortCounts':{label:self.local_ports.count(label) for label in sorted(set(self.local_ports))}}
+                print(json.dumps({'continuationColdActualCaller':self.census},sort_keys=True))
+
+    def assert_complete(self):
+        self.assertEqual(self.invoke_caller(),'complete')
+        self.assertEqual(self.dispatches,['channel-asset','manifest-asset','promote'])
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),6)
+        counter=self.rows['authorityCounter']
+        self.assertEqual(sum(counter.attempted.values()),len(self.authority.calls))
+        self.assertEqual(sum(self.rows['publisherCounter'].attempted.values()),len(self.publisher_ports))
+        self.assertEqual([row['phase'] for row in self.rows['continuationPhases']],
+            ['startup','candidateAuthenticated','proofAuthenticated','coldJournalRead','claimPrerequisites','claimReadback',
+             'channel-asset:dispatch','channel-asset:settled','manifest-asset:dispatch','manifest-asset:settled',
+             'promote:dispatch','promote:settled','finalReadback'])
+        self.assertTrue(all(before==after for before,after in self.before_visibility))
+        self.assertFalse(self.native.release['draft'])
+        final=ProtectedReleaseJournal(self.authority,self.allowed['logicalRef'],main_directory=True,suspension=self.reader(),
+            continuation_owner={'runId':1,'attempt':1,'sourceSha':'b'*40,'operator':'EHotwagner'})
+        self.assertEqual(final.read().generation,34)
+        self.assertEqual(final._observed.state['effects'],{effect.identity:'verified' for effect in ordered_effects(self.native.candidate)})
+        self.assertEqual(self.reader().file(self.authority.head,'state/releases/utel-rel-21/release-state.json'),self.raw_state)
+        self.assertEqual(self.reader().file(self.authority.head,'state/ordinary/sibling.json'),b'original sibling bytes\n')
+
+    def test_first_engineering_500_target_exhausts_without_later_send_or_budget_renewal(self):
+        self.prepare_caller(ceiling=500)
+        with self.assertRaises(publisher.AuthorityQuotaWaiting):self.invoke_caller()
+        self.assertEqual(len(self.authority.calls),500)
+        self.assertEqual(self.rows['authorityCounter'].ceiling,500)
+        self.assertEqual(self.dispatches,['channel-asset','manifest-asset'])
+        self.assertTrue(self.native.release['draft'])
+
+    def test_synthetic_cold_actual_caller_counts_original_authentication_claim_and_remaining_effects(self):
+        self.prepare_caller();self.assert_complete()
+
+    def test_synthetic_delayed_visibility_uses_no_authority_entries(self):
+        self.prepare_caller();self.delay_probes=3;self.assert_complete()
+        self.assertEqual(self.sleeps,[5]*3)
+
+    def assert_no_mutation(self):
+        self.assertEqual(self.dispatches,[])
+        self.assertEqual([row for row in self.authority.calls if row[0] in {'post','patch'}],[])
+
+    def test_original_result_archive_tampering_refuses_before_claim(self):
+        self.prepare_caller();self.proof_archive=b'x'+self.proof_archive[1:]
+        with self.assertRaisesRegex(publisher.Refused,'proof ZIP'):self.invoke_caller()
+        self.assert_no_mutation()
+
+    def test_original_source_closure_tampering_refuses_before_claim(self):
+        self.prepare_caller();self.sources['scripts/release-successor-publish.py']+=b'x'
+        with self.assertRaisesRegex(publisher.Refused,'source/control-flow binding'):self.invoke_caller()
+        self.assert_no_mutation()
+
+    def test_candidate_archive_tampering_refuses_before_claim(self):
+        self.prepare_caller();self.archive=self.archive[:-1]+b'x'
+        with self.assertRaisesRegex(publisher.Refused,'candidate ZIP'):self.invoke_caller()
+        self.assert_no_mutation()
+
+    def test_competing_native_publisher_refuses_before_claim(self):
+        self.prepare_caller();original=self.native.get
+        def changed(path):
+            value=original(path)
+            if '/actions/workflows/' in path and 'status=queued' in path:
+                value={'total_count':1,'workflow_runs':[{'id':2}]}
+            return value
+        self.native.get=changed
+        with self.assertRaisesRegex(publisher.Refused,'another publisher'):self.invoke_caller()
+        self.assert_no_mutation()
+
+    def test_channel_upload_lost_response_keeps_original_intent_without_later_effect(self):
+        self.prepare_caller();original=self.native.upload_asset
+        def uncertain(*args):original(*args);raise RuntimeError('inert upload response unknown')
+        self.native.upload_asset=uncertain
+        with self.assertRaisesRegex(RuntimeError,'inert upload response unknown'):self.invoke_caller()
+        self.assertEqual(self.dispatches,['channel-asset'])
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),1)
+        self.assertTrue(self.native.release['draft'])
+        self.assertTrue(any(name=='stable-channel.json' for name,raw in self.native.assets.values()))
+
+    def test_absence_window_is_finite_without_authority_polling_or_second_send(self):
+        self.prepare_caller();self.delay_probes=100
+        with self.assertRaisesRegex(publisher.Refused,'finite absence'):self.invoke_caller()
+        self.assertEqual(self.dispatches,['channel-asset'])
+        self.assertEqual(len(self.before_visibility),self.WINDOW['visibilityProbes'])
+        self.assertEqual(self.sleeps,[5]*(self.WINDOW['visibilityProbes']-1))
+        self.assertTrue(all(before==after for before,after in self.before_visibility))
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),1)
+
+    def test_original_invocation_deadline_stops_absence_without_renewing_budget(self):
+        self.prepare_caller();self.delay_probes=100
+        self.mod.CONTINUATION_WINDOW['seconds']=12
+        with self.assertRaisesRegex(publisher.Refused,'finite absence'):self.invoke_caller()
+        self.assertEqual(self.dispatches,['channel-asset']);self.assertEqual(self.sleeps,[5,5])
+        self.assertTrue(all(before==after for before,after in self.before_visibility))
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),1)
+
+    def test_claim_lost_response_never_enters_provider_and_found_claim_is_not_reusable(self):
+        self.prepare_caller();original=self.authority.patch
+        def lost(path,body):
+            original(path,body)
+            raise RuntimeError('inert lost claim response')
+        self.authority.patch=lost
+        with self.assertRaisesRegex(JournalRefused,'uncertain|confirmed'):self.invoke_caller()
+        self.assertEqual(self.dispatches,[])
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),1)
+        self.authority.patch=original
+        for owner in (None,{'runId':2,'attempt':1,'sourceSha':'b'*40,'operator':'EHotwagner'}):
+            found=ProtectedReleaseJournal(self.authority,self.allowed['logicalRef'],main_directory=True,
+                suspension=self.reader(),continuation_owner=owner)
+            with self.subTest(owner=owner),self.assertRaisesRegex(JournalRefused,'another invocation/profile'):found.read()
+
+    def test_claim_readback_failure_never_enters_provider(self):
+        self.prepare_caller();original_get=self.authority.get;original_patch=self.authority.patch;sent=[False]
+        def write(path,body):original_patch(path,body);sent[0]=True
+        def unread(path):
+            if sent[0] and path==PREFIX+'/git/ref/heads/main':
+                self.authority.call('get',path)
+                raise RuntimeError('inert claim readback unavailable')
+            return original_get(path)
+        self.authority.patch=write;self.authority.get=unread
+        with self.assertRaisesRegex(RuntimeError,'readback|uncertain|confirmed'):self.invoke_caller()
+        self.assertEqual(self.dispatches,[])
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),1)
+
+    def test_duplicate_continuation_checkpoint_text_refuses_before_credential_or_write(self):
+        self.prepare_caller()
+        text=self.args.expected_checkpoint
+        self.args.expected_checkpoint=text[:-1]+',"generation":28}'
+        with self.assertRaises(publisher.Refused):self.invoke_caller()
+        self.assertEqual(self.authority.calls,[]);self.assertEqual(self.dispatches,[])
+
+    @unittest.skipUnless(os.environ.get('FSGG_CONTINUATION_PRIVATE_CENSUS'),'private original-byte census not selected')
+    def test_private_original_byte_cold_actual_caller_census(self):
+        self.prepare_caller(pathlib.Path(os.environ['FSGG_CONTINUATION_PRIVATE_CENSUS']));self.assert_complete()
 
 
 if __name__ == "__main__":
