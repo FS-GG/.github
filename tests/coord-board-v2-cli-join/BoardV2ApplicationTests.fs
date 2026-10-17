@@ -263,16 +263,19 @@ let ``actual product CLI retains closed schema one top level and item property s
         let input = Path.Combine(directory, "binding.json")
         let output = Path.Combine(directory, "inspection.json")
         File.WriteAllText(input, productJson "WidgetA" "product_a" 81)
-        let rows = [ 1; 2; 3 ] |> List.map (fun number ->
-            {| issue = $"ExampleOrg/WidgetA#{number}"; nodeId = $"I_{number}"; observedUpdatedAt = "2026-10-17T12:00:00Z"
-               observedState = "open"; decision = "import"; adjudication = "verified-remaining"; pilot = true
-               roadmap = "docs/product.md"; dependencies = ([]: obj list) |})
-        let manifest = JsonSerializer.Serialize
-            {| schema = "fsgg.coordination-board-v2-import/v1"
-               target = {| ownerKind = "organization"; owner = "ExampleOrg"; title = "product_a V2"; id = "PVT_product_a"; number = 81; creationState = "created-and-read-back" |}
-               binding = {| organizationId = "O_products"; visibility = "complete"; authorization = "root-selected"
-                            recipeRevision = String.replicate 40 "e"; artifactSha256 = String.replicate 64 "f"; repositories = [ "ExampleOrg/WidgetA" ] |}
-               items = rows |}
+        let rows =
+            [ 1; 2; 3 ]
+            |> List.map (fun number ->
+                {| issue = $"ExampleOrg/WidgetA#{number}"; nodeId = $"I_{number}"; observedUpdatedAt = "2026-10-17T12:00:00Z"
+                   observedState = "open"; decision = "import"; adjudication = "verified-remaining"; pilot = true
+                   roadmap = "docs/product.md"; dependencies = ([]: obj list) |})
+        let manifest =
+            JsonSerializer.Serialize(
+                {| schema = "fsgg.coordination-board-v2-import/v1"
+                   target = {| ownerKind = "organization"; owner = "ExampleOrg"; title = "product_a V2"; id = "PVT_product_a"; number = 81; creationState = "created-and-read-back" |}
+                   binding = {| organizationId = "O_products"; visibility = "complete"; authorization = "root-selected"
+                                recipeRevision = String.replicate 40 "e"; artifactSha256 = String.replicate 64 "f"; repositories = [ "ExampleOrg/WidgetA" ] |}
+                   items = rows |})
         let mutable reads = 0
         let transport =
             { new IGitHubTransport with
@@ -281,7 +284,7 @@ let ``actual product CLI retains closed schema one top level and item property s
                     if reads = 1 then
                         let blob = {| oid = String.replicate 40 "b"; text = manifest |}
                         Ok { Status = 200; ETag = None; NextLink = None; Headers = Map.empty
-                             Body = JsonSerializer.Serialize {| data = {| repository = {| nameWithOwner = "ExampleOrg/WidgetA"; ref = {| target = {| oid = String.replicate 40 "c" |} |}; object = blob; current = blob |} |} |} }
+                             Body = JsonSerializer.Serialize ({| data = {| repository = {| nameWithOwner = "ExampleOrg/WidgetA"; ref = {| target = {| oid = String.replicate 40 "c" |} |}; object = blob; current = blob |} |} |}) }
                     else Error(Errors.Unauthorized request.Subject)
                 member _.SendMutation _ = failwith "product inspect cannot mutate"
                 member _.RetryMutation _ = failwith "product inspect cannot retry" }
@@ -289,13 +292,15 @@ let ``actual product CLI retains closed schema one top level and item property s
         use document = JsonDocument.Parse(File.ReadAllText output)
         let root = document.RootElement
         let names (value: JsonElement) = value.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
-        let expectedTop = Set.ofList
-            [ "schema"; "bindingVersion"; "organizationId"; "owner"; "projectNumber"; "projectId"; "projectTitle"; "schemaVersion"; "ownerKind"; "repositories";
-              "status"; "roadmapFieldId"; "track"; "observation"; "selectedIssues"; "recipeRevision"; "artifactSha256"; "populationRevision"; "importRecipeRevision";
-              "importArtifactSha256"; "protectedInputs"; "selected"; "attempted"; "verified"; "mutationAttempts"; "populationGap"; "cleanup"; "items"; "candidates" ]
-        let expectedItem = Set.ofList
-            [ "issue"; "expectedNodeId"; "native"; "dependencyObservations"; "dependencyReadComplete"; "planObservation"; "sourceCurrentness"; "planning"; "planningGap";
-              "discrepancies"; "health"; "delivery"; "publication"; "nativeAcceptance"; "reads"; "mutationAttempts"; "gap"; "lastVerified" ]
+        let expectedTop =
+            Set.ofList(
+                [ "schema"; "bindingVersion"; "organizationId"; "owner"; "projectNumber"; "projectId"; "projectTitle"; "schemaVersion"; "ownerKind"; "repositories";
+                  "status"; "roadmapFieldId"; "track"; "observation"; "selectedIssues"; "recipeRevision"; "artifactSha256"; "populationRevision"; "importRecipeRevision";
+                  "importArtifactSha256"; "protectedInputs"; "selected"; "attempted"; "verified"; "mutationAttempts"; "populationGap"; "cleanup"; "items"; "candidates" ])
+        let expectedItem =
+            Set.ofList(
+                [ "issue"; "expectedNodeId"; "native"; "dependencyObservations"; "dependencyReadComplete"; "planObservation"; "sourceCurrentness"; "planning"; "planningGap";
+                  "discrepancies"; "health"; "delivery"; "publication"; "nativeAcceptance"; "reads"; "mutationAttempts"; "gap"; "lastVerified" ])
         Assert.Equal("fsgg.coord.board-v2-inspection/1", root.GetProperty("schema").GetString())
         Assert.Equal<Set<string>>(expectedTop, names root)
         Assert.Equal(3, root.GetProperty("items").GetArrayLength())

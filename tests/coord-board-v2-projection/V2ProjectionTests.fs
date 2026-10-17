@@ -1065,10 +1065,12 @@ let ``actual six heading owner record preserves owner and refuses missing duplic
     let owner = "Programme owner /root/programme\nMaintainer supplies continuation"
     let report = programmeSnapshot (bodyChange (ProgrammeFixture.ownerBody.Replace("\nworker\n", "\n" + owner + "\n")))
     Assert.Equal(Some owner, report.Items.Head.Owner)
-    for body in [ ProgrammeFixture.ownerBody.Replace("## Owner", "## Missing owner");
-                  ProgrammeFixture.ownerBody + "\n\n## Owner\n\nsecond owner";
-                  ProgrammeFixture.ownerBody.Replace("## Owner", "##Owner");
-                  ProgrammeFixture.ownerBody.Replace("\nworker\n", "\n\n") ] do
+    let bodies: string list =
+        [ ProgrammeFixture.ownerBody.Replace("## Owner", "## Missing owner");
+          ProgrammeFixture.ownerBody + "\n\n## Owner\n\nsecond owner";
+          ProgrammeFixture.ownerBody.Replace("## Owner", "##Owner");
+          ProgrammeFixture.ownerBody.Replace("\nworker\n", "\n\n") ]
+    for body in bodies do
         let report = programmeSnapshot (bodyChange body)
         Assert.True(report.Items.Head.Owner.IsNone)
         Assert.Equal("needs-decision", (V2ProjectionSource.selectActions report None report.NativeIntegrator.ObservedAt).Head.Decision)

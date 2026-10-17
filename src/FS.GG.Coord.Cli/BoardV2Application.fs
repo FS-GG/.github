@@ -107,7 +107,7 @@ module BoardV2Application =
                       sourceCurrentness = candidate.SourceCurrentness; observation = candidate.Observation; unmetOrUnknown = candidate.UnmetOrUnknown
                       openPullRequests = candidate.Integrator.OpenPullRequests; touchSets = candidate.Integrator.TouchSets; availableSlots = candidate.Integrator.AvailableSlots |}) |}
 
-        if report.Binding.BindingVersion <> 4 then JsonSerializer.Serialize common
+        if report.Binding.BindingVersion <> 4 then JsonSerializer.Serialize(common)
         else
             let successor =
                 {| membershipGap = report.MembershipGap |> Option.map Errors.explain
@@ -123,17 +123,17 @@ module BoardV2Application =
                        {| issue = issueWire selected.Issue; action = actionName selected.Action; decision = selected.Decision
                           owner = selected.Owner; pullRequest = selected.PullRequest; head = selected.Head; reasons = selected.Reasons; evidence = selected.Evidence
                           dispatchAuthority = false |}) |}
-            let wire = JsonSerializer.SerializeToNode common
-            wire.["schema"] <- JsonSerializer.SerializeToNode "fsgg.coord.board-v2-inspection/2"
-            let extension = JsonSerializer.SerializeToNode successor
+            let wire = JsonSerializer.SerializeToNode(common)
+            wire.["schema"] <- JsonSerializer.SerializeToNode("fsgg.coord.board-v2-inspection/2")
+            let extension = JsonSerializer.SerializeToNode(successor)
             for name in [ "membershipGap"; "memberships"; "nativeIntegrator"; "selectionCoverage"; "selection" ] do
                 let value = extension.[name]
                 wire.[name] <- if isNull value then null else value.DeepClone()
             let itemNodes = wire.["items"].AsArray()
             report.Items |> List.iteri (fun index (item: InspectionItem) ->
                 let itemNode = itemNodes.[index]
-                itemNode.["sourceRevision"] <- JsonSerializer.SerializeToNode item.SourceRevision
-                itemNode.["accountableOwner"] <- JsonSerializer.SerializeToNode item.Owner)
+                itemNode.["sourceRevision"] <- JsonSerializer.SerializeToNode(item.SourceRevision)
+                itemNode.["accountableOwner"] <- JsonSerializer.SerializeToNode(item.Owner))
             wire.ToJsonString()
 
     let encodeInspection report = encodeInspectionWithContext report None DateTimeOffset.UtcNow
