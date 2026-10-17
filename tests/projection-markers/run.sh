@@ -3,6 +3,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
+python3 -B "$root/tests/projection-markers/preparation.py"
 engine="${FSGG_COORD_ENGINE_BIN:?set FSGG_COORD_ENGINE_BIN to a built coordination engine}"
 work="$(mktemp -d "${TMPDIR:-/tmp}/projection-markers.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
