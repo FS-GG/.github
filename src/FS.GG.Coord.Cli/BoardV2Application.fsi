@@ -1,6 +1,6 @@
 namespace FS.GG.Coord.Cli
 
-/// Fixed restricted Observation refresh; input files carry identity and historical evidence only.
+/// Restricted Observation refresh and read-only programme inspection; files carry identity/history only.
 module BoardV2Application =
     open FS.GG.Coord.GitHub
 
@@ -10,9 +10,12 @@ module BoardV2Application =
     val parseBinding: json: string -> Result<V2Projection.Binding, string>
     /// Emit an explicit report wire shape, including gaps and independent acceptance facts.
     val encodeReport: report: V2ProjectionSource.BatchReport -> string
-    /// Encode structurally read-only inspection, human planning values and native PR facts and action-specific selection.
+    /// Encode structurally read-only inspection, human planning values, native PR facts and action-specific selection.
+    /// Product inspection/1 retains its closed wire shape; programme inspection/2 alone exposes successor fields.
+    /// Ordinary CLI inspection has no trusted action/resource supplier and cannot infer eligibility from missing facts.
     val encodeInspection: report: V2ProjectionSource.InspectionReport -> string
     /// Existing integrators may supply typed current action facts; no command/file can mint acceptance.
+    /// Context is caller-asserted evidence, not authentication; every derived action still grants no dispatch authority.
     val encodeInspectionWithContext:
         report: V2ProjectionSource.InspectionReport -> context: V2ProjectionSource.SelectionContext option -> now: System.DateTimeOffset -> string
     /// Decode historical verification evidence. It cannot authorize a current observation or write.
