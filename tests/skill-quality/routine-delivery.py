@@ -2062,6 +2062,23 @@ jobs:
                                                                 content=MODULE.base64.b64encode(body).decode())
             responses[f"repos/{repo}/git/commits/{revision}"] = dict(sha=revision, tree={"sha": tree_sha})
             responses[f"repos/{repo}/git/trees/{tree_sha}?recursive=1"] = dict(sha=tree_sha, truncated=False, tree=rows)
+            # Actual Git one-directory objects supply the maintained selected-path traversal.
+            pending = [tree_sha]
+            while pending:
+                directory_sha = pending.pop()
+                endpoint = f"repos/{repo}/git/trees/{directory_sha}"
+                if endpoint in responses:
+                    continue
+                children = []
+                for raw in fixture_git(root, "ls-tree", "-z", directory_sha).split(b"\0"):
+                    if not raw:
+                        continue
+                    meta, name = raw.split(b"\t", 1)
+                    mode, kind, sha = meta.decode().split()
+                    children.append(dict(path=name.decode(), mode=mode, type=kind, sha=sha))
+                    if kind == "tree":
+                        pending.append(sha)
+                responses[endpoint] = dict(sha=directory_sha, truncated=False, tree=children)
             return rows, tree_sha
         objects("FS-GG/.github", cls.owner, source); objects("FS-GG/.github", cls.owner, obsolete)
         objects("FS-GG/.github", cls.owner, cls.assertion_old_pin)
@@ -2618,8 +2635,10 @@ jobs:
         for change in ('lineage','base','mergebase','commit','tree','truncated','bundle','mode','forgedblob'):
             with self.subTest(change=change):
                 api,pr=self.templates_api();r=api.fixture['responses']; lineage=r[f'{prefix}/compare/{old}...{source}?per_page=1&page=2']
-                tree=r[f"{prefix}/git/trees/{r[f'{prefix}/git/commits/{old}']['tree']['sha']}?recursive=1"]
-                row=next(x for x in tree['tree'] if x['path']==MODULE.ASSERTION_BUNDLE)
+                root=r[f"{prefix}/git/trees/{r[f'{prefix}/git/commits/{old}']['tree']['sha']}"]
+                dist=next(x['sha'] for x in root['tree'] if x['path']=='dist')
+                tree=r[f"{prefix}/git/trees/{dist}"]
+                row=next(x for x in tree['tree'] if x['path']=='skill-union-assert.sh')
                 if change=='lineage':lineage['status']='diverged'
                 elif change=='base':lineage['base_commit']['sha']='f'*40
                 elif change=='mergebase':lineage['merge_base_commit']['sha']='f'*40
@@ -2627,7 +2646,13 @@ jobs:
                 elif change=='tree':tree['sha']='f'*40
                 elif change=='truncated':tree['truncated']=True
                 elif change=='bundle':row['sha']='f'*40
-                elif change=='mode':row['mode']='100755'
+                elif change=='mode':
+                    # A different old mode has a different immutable directory identity;
+                    # do not mutate the content-addressed node shared with the source.
+                    altered=copy.deepcopy(tree);altered['sha']='e'*40
+                    next(x for x in altered['tree'] if x['path']=='skill-union-assert.sh')['mode']='100755'
+                    next(x for x in root['tree'] if x['path']=='dist')['sha']='e'*40
+                    r[f"{prefix}/git/trees/"+('e'*40)]=altered
                 elif change=='forgedblob':r[f"{prefix}/git/blobs/{row['sha']}"]['content']=MODULE.base64.b64encode(b'forged').decode()
                 with self.assertRaises(RuntimeError):self.templates_contract(api,pr)
 
@@ -2836,14 +2861,56 @@ jobs:
         api=self.api();value=copy.deepcopy(self.fixture['responses'][endpoint]);value['content']=MODULE.base64.b64encode(b'wrong').decode();api.overrides[endpoint]=value
         self.assertEqual(self.invoke(api)[0],2)
 
+    def test_selected_producer_paths_share_ancestors_without_unrelated_history(self):
+        api=self.api();owner='FS-GG/.github';revision=self.fixture['owner_head']
+        root_sha=self.fixture['responses'][f'repos/{owner}/git/commits/{revision}']['tree']['sha']
+        root_endpoint=f'repos/{owner}/git/trees/{root_sha}'
+        root=copy.deepcopy(self.fixture['responses'][root_endpoint])
+        root['tree'].append(dict(path='unrelated-history',type='tree',mode='040000',sha='f'*40))
+        api.overrides[root_endpoint]=root
+        api.overrides[f'repos/{owner}/git/trees/'+('f'*40)]=RuntimeError('unrelated history must not be read')
+        api.overrides[f'repos/{owner}/git/trees/{root_sha}?recursive=1']=RuntimeError('recursive owner read forbidden')
+        paths=(*MODULE.PRODUCER_PATHS,'tools/routine-delivery.py','src/FS.GG.Drivers/workspace-inventory.json')
+        with mock.patch.object(api,'installation_read',wraps=api.installation_read) as reads:
+            selected=api.installation_paths(owner,revision,paths)
+        self.assertEqual(set(selected),set(paths))
+        endpoints=[call.args[0] for call in reads.call_args_list]
+        self.assertEqual(len(endpoints),len(set(endpoints)))
+        self.assertLessEqual(len(endpoints),1+sum(len(path.split('/')) for path in paths))
+        self.assertFalse(any('recursive=' in endpoint for endpoint in endpoints))
+
+    def test_selected_producer_directories_refuse_incomplete_or_unsafe_identity(self):
+        owner='FS-GG/.github';revision=self.fixture['owner_head']
+        commit_endpoint=f'repos/{owner}/git/commits/{revision}'
+        root_sha=self.fixture['responses'][commit_endpoint]['tree']['sha']
+        endpoint=f'repos/{owner}/git/trees/{root_sha}'
+        original=self.fixture['responses'][endpoint]
+        mutations=[]
+        for key,value in [('sha','e'*40),('truncated',True),('tree',None)]:
+            tree=copy.deepcopy(original);tree[key]=value;mutations.append(tree)
+        tree=copy.deepcopy(original);tree['tree'].append(copy.deepcopy(tree['tree'][0]));mutations.append(tree)
+        for key,value in [('mode','120000'),('type','blob'),('sha','bad'),('path','scripts/escape')]:
+            tree=copy.deepcopy(original);row=next(r for r in tree['tree'] if r['path']=='scripts');row[key]=value;mutations.append(tree)
+        tree=copy.deepcopy(original);tree['tree']=[r for r in tree['tree'] if r['path']!='scripts'];mutations.append(tree)
+        tree=copy.deepcopy(original);tree['tree']=[dict(path=f'p{i}',mode='100644',type='blob',sha='a'*40) for i in range(10001)];mutations.append(tree)
+        for tree in mutations:
+            api=self.api();api.overrides[endpoint]=tree
+            with self.assertRaises(RuntimeError):api.installation_paths(owner,revision,MODULE.PRODUCER_PATHS)
+        api=self.api();api.overrides[endpoint]=RuntimeError('native read denied or exceeded unchanged byte bound')
+        with self.assertRaises(RuntimeError):api.installation_paths(owner,revision,MODULE.PRODUCER_PATHS)
+        api=self.api();wrong=copy.deepcopy(self.fixture['responses'][commit_endpoint]);wrong['sha']='e'*40;api.overrides[commit_endpoint]=wrong
+        with self.assertRaises(RuntimeError):api.installation_paths(owner,revision,MODULE.PRODUCER_PATHS)
+
     def test_self_correspondence_is_exact_and_other_blob_bound_is_unchanged(self):
         owner='FS-GG/.github'
         owner_tree=self.fixture['responses'][f"repos/{owner}/git/commits/{self.fixture['owner_head']}"]['tree']['sha']
-        endpoint=f'repos/{owner}/git/trees/{owner_tree}?recursive=1'
+        root=self.fixture['responses'][f'repos/{owner}/git/trees/{owner_tree}']
+        tools=next(row['sha'] for row in root['tree'] if row['path']=='tools')
+        endpoint=f'repos/{owner}/git/trees/{tools}'
         for wrong_path in (True,False):
             api=self.api();tree=copy.deepcopy(self.fixture['responses'][endpoint])
-            helper=next(row for row in tree['tree'] if row['path']=='tools/routine-delivery.py')
-            if wrong_path:helper['path']='tools/not-the-maintained-helper.py'
+            helper=next(row for row in tree['tree'] if row['path']=='routine-delivery.py')
+            if wrong_path:helper['path']='not-the-maintained-helper.py'
             else:
                 body=b'other real Git blob bytes'
                 sha=hashlib.sha1(f'blob {len(body)}\0'.encode()+body).hexdigest();helper['sha']=sha
