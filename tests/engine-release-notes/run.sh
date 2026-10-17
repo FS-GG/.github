@@ -577,6 +577,12 @@ for want in ("pull_request", "push"):
     for entry in subject:
         if entry not in have and f"{entry}/**" not in have:
             problems.append(f"{want}: does not select declared subject {entry!r}")
+    # Captured evidence is also read by the no-duplicate-limit scan above. Select
+    # new captures when introduced, rather than first discovering them at a later version bump.
+    for evidence in ("tests/release-successor-recovery/original-*-manifest.json",
+                     "tests/kit-bump-shape/release-manifest-*.json"):
+        if evidence not in have:
+            problems.append(f"{want}: does not select captured release evidence {evidence!r}")
 
 if problems:
     print("; ".join(problems))
