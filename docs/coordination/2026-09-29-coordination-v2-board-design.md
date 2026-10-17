@@ -349,6 +349,18 @@ telemetry service is required. Logging/attribution gaps remain explicit.
 
 ### Qualification, migration and cutover gates
 
+The .7/.8 maintained source now includes actual CLI/native selection composition and the v4
+Observation-only writer: [PR4643](https://github.com/FS-GG/.github/pull/4643) delivered protected
+`b2a1191a0a60be6d503b695242ff1a1e782a047c` with the identical qualified tree. Its
+[focused qualification](https://github.com/FS-GG/.github/actions/runs/39041450291) passed 943 GitHub,
+82 projection, 20 actual CLI and 66 producer-oracle controls; full engine, package and exact-tree
+coherent qualification passed separately. This establishes source behavior, not installed or live
+Project 3 acceptance; the milestones remain open for their complete acceptance. The durable
+[population mapping milestone](https://github.com/FS-GG/.github/issues/4634#issuecomment-6235044165)
+records seventeen open whole-outcome owners and three unchanged historical Done outcomes, without
+changing Project 3 membership or selecting final enrollment. Prepared consumer sources remain
+inactive until the coordinated cutover gates below are accepted.
+
 The first ready source window is .7/.8 after canonical owner resolution and bounded mapping. It can
 be developed without installed-store or UI access. Initial plan/roadmap delivery does not select a
 new runtime. Then qualify the actual coherent published/installed composition, apply admitted native
