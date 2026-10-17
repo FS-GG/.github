@@ -11,6 +11,16 @@ open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.GitHub.V2Projection
 open FS.GG.Coord.GitHub.V2ProjectionSource
 
+type private UnreadableInput() =
+    inherit TextReader()
+    let mutable reads = 0
+    member _.Reads = reads
+    override _.Read(_: char[], _: int, _: int) =
+        reads <- reads + 1
+        failwith "stdin must not be consumed for this invocation"
+
+let private unreadableInput () = new UnreadableInput()
+
 let private bindingJson artifact =
     JsonSerializer.Serialize
         {| bindingVersion = 2; importRecipeRevision = String.replicate 40 "e"; importArtifactSha256 = String.replicate 64 "f"
@@ -229,7 +239,8 @@ let ``actual programme CLI caller joins native PR facts and retains attributed s
         let reportPath = Path.Combine(directory, "inspection.json")
         File.WriteAllText(bindingPath, ProgrammeFixture.bindingJson ())
         let transport = ProgrammeFixture.transport ProgrammeFixture.unchanged
-        Assert.Equal(0, BoardV2Application.runWithTransport transport [ "inspect"; "--binding-file"; bindingPath; "--report-file"; reportPath ])
+        use unusedInput = unreadableInput ()
+        Assert.Equal(0, BoardV2Application.runWithTransportAndInput transport unusedInput [ "inspect"; "--binding-file"; bindingPath; "--report-file"; reportPath ])
         Assert.Empty transport.Mutations
         use document = JsonDocument.Parse(File.ReadAllText reportPath)
         let root = document.RootElement
@@ -259,7 +270,9 @@ let ``actual programme CLI caller joins native PR facts and retains attributed s
         Assert.Equal(JsonValueKind.Null, missingDocument.RootElement.GetProperty("nativeIntegrator").GetProperty("observedAt").ValueKind)
         Assert.Empty missingReads.Mutations
         let refreshPath = Path.Combine(directory, "refresh.json")
-        Assert.Equal(3, BoardV2Application.runWithTransport transport [ "refresh"; "--binding-file"; bindingPath; "--report-file"; refreshPath ])
+        use refreshInput = unreadableInput ()
+        Assert.Equal(1, BoardV2Application.runWithTransportAndInput transport refreshInput [ "refresh"; "--binding-file"; bindingPath; "--report-file"; refreshPath; "--integrator-stdin" ])
+        Assert.Equal(0, refreshInput.Reads)
         Assert.Empty transport.Mutations
     finally Directory.Delete(directory, true)
 
@@ -297,6 +310,12 @@ let ``actual product CLI retains closed schema one top level and item property s
                     else Error(Errors.Unauthorized request.Subject)
                 member _.SendMutation _ = failwith "product inspect cannot mutate"
                 member _.RetryMutation _ = failwith "product inspect cannot retry" }
+        use rejectedInput = unreadableInput ()
+        let rejectedOutput = Path.Combine(directory, "rejected.json")
+        Assert.Equal(1, BoardV2Application.runWithTransportAndInput transport rejectedInput [ "inspect"; "--binding-file"; input; "--report-file"; rejectedOutput; "--integrator-stdin" ])
+        Assert.Equal(0, reads)
+        Assert.Equal(0, rejectedInput.Reads)
+        Assert.False(File.Exists rejectedOutput)
         Assert.Equal(3, BoardV2Application.runWithTransport transport [ "inspect"; "--binding-file"; input; "--report-file"; output ])
         use document = JsonDocument.Parse(File.ReadAllText output)
         let root = document.RootElement
@@ -315,3 +334,399 @@ let ``actual product CLI retains closed schema one top level and item property s
         Assert.Equal(3, root.GetProperty("items").GetArrayLength())
         for item in root.GetProperty("items").EnumerateArray() do Assert.Equal<Set<string>>(expectedItem, names item)
     finally Directory.Delete(directory, true)
+
+let private inspectProgrammeBindingInput (selectedBinding: string) (json: string option) (change: Transport.Request -> Errors.IoResult<Transport.Response> -> Errors.IoResult<Transport.Response>) =
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-input-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory directory |> ignore
+    try
+        let binding = Path.Combine(directory, "binding.json")
+        let output = Path.Combine(directory, "report.json")
+        File.WriteAllText(binding, selectedBinding)
+        let transport = ProgrammeFixture.transport change
+        let arguments =
+            [ "inspect"; "--binding-file"; binding; "--report-file"; output ]
+            @ (if json.IsSome then [ "--integrator-stdin" ] else [])
+        use reader = new StringReader(json |> Option.defaultValue "must not be read")
+        let code = BoardV2Application.runWithTransportAndInput transport reader arguments
+        let report =
+            if File.Exists output then
+                use document = JsonDocument.Parse(File.ReadAllText output)
+                Some(document.RootElement.Clone())
+            else None
+        Assert.Empty transport.Mutations
+        code, report, transport
+    finally Directory.Delete(directory, true)
+
+let private inspectProgrammeInput json change = inspectProgrammeBindingInput (ProgrammeFixture.bindingJson ()) json change
+
+let private observedContext (change: Transport.Request -> Errors.IoResult<Transport.Response> -> Errors.IoResult<Transport.Response>) =
+    V2ProjectionSource.inspectFixed (ProgrammeFixture.transport change) (ProgrammeFixture.binding ()) None
+    |> ProgrammeFixture.context
+
+let private inputSelections (root: JsonElement) = root.GetProperty("selection").EnumerateArray() |> Seq.toArray
+
+[<Fact>]
+let ``actual stdin caller joins attributed observations and folds independent outcome slices within remaining capacity`` () =
+    let context = observedContext ProgrammeFixture.newAssignment
+    let first = context.Slices.Head
+    let slices =
+        [ { first with Id = "implementation-one"; Owner = "implementation-owner"; Paths = [ "src/one.fs" ] };
+          { first with Id = "implementation-two"; Owner = "second-owner"; Paths = [ "src/two.fs" ] };
+          { first with Id = "implementation-three"; Owner = "third-owner"; Paths = [ "src/three.fs" ] } ]
+    let input = { context with Slices = slices; ImplementationSlots = Some 1; ReviewSlots = Some 0; HostedCiSlots = None }
+    let json = ProgrammeFixture.integratorJson input
+    let code, report, _ = inspectProgrammeInput (Some json) ProgrammeFixture.newAssignment
+    Assert.Equal(0, code)
+    let root = report.Value
+    let selected = inputSelections root
+    Assert.Equal<string list>([ "ready"; "deferred"; "deferred" ], selected |> Array.map (fun value -> value.GetProperty("decision").GetString()) |> Array.toList)
+    Assert.Equal<string list>(slices |> List.map _.Id, selected |> Array.map (fun value -> value.GetProperty("sliceId").GetString()) |> Array.toList)
+    Assert.Equal("implementation-owner", selected.[0].GetProperty("owner").GetString())
+    Assert.Equal("integrator-reported", root.GetProperty("integratorObservation").GetProperty("provenance").GetString())
+    let digest = SHA256.HashData(Text.Encoding.UTF8.GetBytes json) |> Convert.ToHexStringLower
+    Assert.Equal(digest, root.GetProperty("integratorObservation").GetProperty("inputSha256").GetString())
+    for value in selected do Assert.False(value.GetProperty("dispatchAuthority").GetBoolean())
+    let alternative = { first with Id = "unselected-alternative"; Paths = [ "src/one.fs" ]; IntakeAuthorized = Some false }
+    let independent = { input with Slices = [ alternative; slices.Head ] }
+    let _, second, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson independent)) ProgrammeFixture.newAssignment
+    Assert.Equal<string list>([ "blocked"; "ready" ], inputSelections second.Value |> Array.map (fun value -> value.GetProperty("decision").GetString()) |> Array.toList)
+    let existing = observedContext ProgrammeFixture.unchanged
+    for operation, resource in [ (ReviewWork, "review"); (QualifyWork, "ci") ] do
+        let slice = { existing.Slices.Head with Operation = operation; Paths = [ "src/current.fs" ] }
+        let available =
+            { existing with
+                Slices = [ slice ]
+                ImplementationSlots = Some 0
+                ReviewSlots = if resource = "review" then Some 1 else None
+                HostedCiSlots = if resource = "ci" then Some 1 else None }
+        let _, ready, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson available)) ProgrammeFixture.unchanged
+        Assert.Equal("ready", (inputSelections ready.Value).[0].GetProperty("decision").GetString())
+        let exhausted = { available with ReviewSlots = Some 0; HostedCiSlots = Some 0 }
+        let _, deferred, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson exhausted)) ProgrammeFixture.unchanged
+        Assert.Equal("deferred", (inputSelections deferred.Value).[0].GetProperty("decision").GetString())
+
+[<Fact>]
+let ``actual stdin caller refuses stale native joins and original per group expiry without renewing evidence`` () =
+    let context = observedContext ProgrammeFixture.newAssignment
+    let slice = context.Slices.Head
+    let old = slice.Observation.ObservedAt.AddMinutes(-6.0)
+    let expired = { slice.Observation with ObservedAt = old; ValidUntil = old.AddMinutes 1.0 }
+    let future = { slice.Observation with ObservedAt = DateTimeOffset.UtcNow.AddMinutes 1.0; ValidUntil = DateTimeOffset.UtcNow.AddMinutes 2.0 }
+    let cases: SelectionContext list =
+        [ { context with Slices = [ { slice with Join = { slice.Join with BodySha256 = String.replicate 64 "f" } } ] };
+          { context with Slices = [ { slice with Join = { slice.Join with UpdatedAt = "2026-10-17T01:00:00Z" } } ] };
+          { context with Slices = [ { slice with Join = { slice.Join with SourceRevision = "old owning-plan revision" } } ] };
+          { context with Slices = [ { slice with Observation = expired } ] };
+          { context with Slices = [ { slice with Observation = future } ] };
+          { context with Slices = [ { slice with PrerequisitesComplete = false } ] };
+          { context with Slices = [ { slice with IntakeAuthorized = None } ] };
+          { context with CapacityObservation = Some expired };
+          { context with ReservationObservation = Some expired };
+          { context with CapacityMeaning = "total-before-active" };
+          { context with EnrollmentBlob = String.replicate 40 "f" } ]
+    for candidate in cases do
+        let _, report, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson candidate)) ProgrammeFixture.newAssignment
+        let selected = (inputSelections report.Value).[0]
+        Assert.Equal("unknown", selected.GetProperty("decision").GetString())
+    let changedPlan (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+        let response = ProgrammeFixture.newAssignment request response
+        if request.Subject.EndsWith("programme.md", StringComparison.Ordinal) then
+            response |> Result.map (fun value -> { value with Body = value.Body.Replace(ProgrammeFixture.head, String.replicate 40 "f") })
+        else response
+    let _, changed, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson context)) changedPlan
+    Assert.Equal("unknown", (inputSelections changed.Value).[0].GetProperty("decision").GetString())
+
+[<Fact>]
+let ``actual stdin caller keeps original holds and matches self by exact attempt operation PR and head`` () =
+    let context = observedContext ProgrammeFixture.unchanged
+    let slice = { context.Slices.Head with Operation = Implement; Paths = [ "src/current.fs" ] }
+    let hold: Reservation =
+        { SliceId = slice.Id; Attempt = slice.Attempt; Operation = slice.Operation; Owner = slice.Owner
+          Repository = slice.Repository; Paths = slice.Paths; PullRequest = slice.PullRequest; Head = slice.Head; CustodyReference = "original-operation/439" }
+    let current = { context with Slices = [ slice ]; Reservations = Some [ hold ] }
+    let _, exact, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson current)) ProgrammeFixture.unchanged
+    Assert.Equal("ready", (inputSelections exact.Value).[0].GetProperty("decision").GetString())
+    let holds: Reservation list =
+        [ { hold with Attempt = "different-attempt" };
+          { hold with Operation = ReviewWork };
+          { hold with Head = Some(String.replicate 40 "f") };
+          { hold with PullRequest = Some "https://github.com/FS-GG/.github/pull/43" } ]
+    for other in holds do
+        let _, report, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson { current with Reservations = Some [ other ] })) ProgrammeFixture.unchanged
+        Assert.Equal("blocked", (inputSelections report.Value).[0].GetProperty("decision").GetString())
+    let expired = { context.ReservationObservation.Value with ObservedAt = context.ObservedAt.AddMinutes(-6.0); ValidUntil = context.ObservedAt.AddMinutes(-5.0) }
+    let _, retained, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson { current with Reservations = Some [ { hold with Attempt = "uncertain-original" } ]; ReservationObservation = Some expired })) ProgrammeFixture.unchanged
+    Assert.Equal("blocked", (inputSelections retained.Value).[0].GetProperty("decision").GetString())
+    let readOnly = { context with ImplementationSlots = Some 0; ReviewSlots = None; HostedCiSlots = None; CapacityObservation = None; Reservations = None; ReservationObservation = None }
+    let _, continuation, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson readOnly)) ProgrammeFixture.unchanged
+    Assert.Equal("continue-existing", (inputSelections continuation.Value).[0].GetProperty("decision").GetString())
+
+[<Fact>]
+let ``actual stdin closed parser refuses duplicate unknown malformed oversized and wrong binding input before native reads`` () =
+    let context = observedContext ProgrammeFixture.newAssignment
+    let valid = ProgrammeFixture.integratorJson context
+    let invalid: string list =
+        [ valid.Insert(1, "\"schema\":\"duplicate\",");
+          valid.Insert(1, "\"authority\":\"root\",");
+          valid + "{}";
+          valid.Replace("\"schemaVersion\":2", "\"schemaVersion\":999");
+          valid.Replace("inert-invocation", String.replicate 129 "x");
+          valid.Replace("remaining-after-active", "not-an-authority").Replace("\"implementation\":1", "\"implementation\":-1");
+          valid.Replace("\"repository\":\"FS-GG/.github\"", "\"repository\":\"https://evil.invalid/path\"");
+          valid.Replace("\"id\":\"source-slice\"", "\"id\":\"source-slice\",\"id\":\"again\"");
+          String.replicate 262145 "x" ]
+    for json in invalid do
+        let code, report, transport = inspectProgrammeInput (Some json) ProgrammeFixture.newAssignment
+        Assert.Equal(1, code)
+        Assert.True(report.IsNone)
+        Assert.Equal(0, transport.GraphQlCalls)
+        Assert.Equal(0, transport.RestCalls)
+    let negative = { context with ImplementationSlots = Some -1 }
+    Assert.True(BoardV2Application.parseIntegratorObservations (ProgrammeFixture.binding ()) (ProgrammeFixture.integratorJson negative) |> Result.isError)
+
+let private currentDeliverableBody (body: string) (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+    if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
+        response |> Result.map (fun value ->
+            { value with Body = value.Body.Replace(JsonSerializer.Serialize ProgrammeFixture.ownerBody, JsonSerializer.Serialize body) })
+    else response
+
+[<Fact>]
+let ``actual caller recovers Current deliverable only PR and retains mixed delivered history without outcome acceptance`` () =
+    let relatedOnly (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+        if request.Subject.EndsWith("closingIssuesReferences", StringComparison.Ordinal) then
+            response |> Result.map (fun value -> { value with Body = value.Body.Replace("I_outcome", "I_related").Replace("\"number\":4634", "\"number\":999") })
+        else response
+    let mixedBody =
+        ProgrammeFixture.ownerBody.Replace(
+            "https://github.com/FS-GG/.github/pull/42",
+            "Delivered initial plan: https://github.com/FS-GG/.github/pull/41\nCurrent implementation: https://github.com/FS-GG/.github/pull/42")
+    let mixed (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) = relatedOnly request response |> currentDeliverableBody mixedBody request
+    let mixedCase = currentDeliverableBody (ProgrammeFixture.ownerBody.Replace("FS-GG/.github/pull/42", "fs-gg/.GITHUB/pull/42"))
+    let variants =
+        [ ("closing and Current deliverable", ProgrammeFixture.unchanged);
+          ("Current deliverable only", relatedOnly);
+          ("historical merged plus current open", mixed);
+          ("mixed-case repository link", mixedCase) ]
+    for variant, change in variants do
+        let context = observedContext change
+        let _, report, transport = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson context)) change
+        let selected = (inputSelections report.Value).[0]
+        Assert.Equal("continue-existing", selected.GetProperty("decision").GetString())
+        Assert.Equal("https://github.com/FS-GG/.github/pull/42", selected.GetProperty("pullRequest").GetString())
+        Assert.True(transport.Logged "https://github.com/FS-GG/.github/pull/42 Current deliverable native join", variant)
+        Assert.True(transport.Count "get FS-GG/.github collaborators/author/permission" = 2, variant + ": initial and final permission reads must use the canonical native GET path")
+        Assert.True(transport.RestCalls >= 4, variant + ": both dependency and permission snapshots must be read twice")
+        let item = (report.Value.GetProperty("items")).[0]
+        Assert.StartsWith("Unknown", item.GetProperty("nativeAcceptance").GetString())
+        Assert.Equal("native-observed", item.GetProperty("nativeIntake").GetProperty("provenance").GetString())
+    let mixedContext = observedContext mixed
+    let _, history, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson mixedContext)) mixed
+    Assert.Equal(2, history.Value.GetProperty("nativeIntegrator").GetProperty("pullRequests").GetArrayLength())
+    for replacement in [ "https://evil.invalid/FS-GG/.github/pull/42"; "https://github.com/FS-GG/foreign/pull/42"; "Existing PR"; "https://github.com/FS-GG/.github/pull/42?replace=43"; "https://github.com/FS-GG/.github/PULL/42"; "https://github.com/FS-GG/.github/pull/042"; "https://github.com/FS-GG/.github/pull/43" ] do
+        let body = ProgrammeFixture.ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", replacement)
+        let change = currentDeliverableBody body
+        let context = observedContext change
+        let _, report, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson context)) change
+        Assert.Equal("unknown", (inputSelections report.Value).[0].GetProperty("decision").GetString())
+
+[<Fact>]
+let ``actual native caller refuses conflicting open deliverables changed heads and native intake read gaps`` () =
+    let ambiguous (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+        let body = ProgrammeFixture.ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", "https://github.com/FS-GG/.github/pull/42\nhttps://github.com/FS-GG/.github/pull/43")
+        let response = currentDeliverableBody body request response
+        if request.Subject.EndsWith("open PR inventory", StringComparison.Ordinal) then
+            response |> Result.map (fun value ->
+                let root = Text.Json.Nodes.JsonNode.Parse value.Body
+                let repository = root.["data"].["repository"]
+                let inventory = repository.["pullRequests"]
+                let nodes = inventory.["nodes"].AsArray()
+                let second = nodes.[0].DeepClone()
+                second.["id"] <- Text.Json.Nodes.JsonValue.Create("PR_second")
+                second.["number"] <- Text.Json.Nodes.JsonValue.Create(43)
+                second.["url"] <- Text.Json.Nodes.JsonValue.Create("https://github.com/FS-GG/.github/pull/43")
+                nodes.Add second
+                inventory.["totalCount"] <- Text.Json.Nodes.JsonValue.Create(2)
+                { value with Body = root.ToJsonString() })
+        else response
+    let context = observedContext ambiguous
+    let _, ambiguousReport, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson context)) ambiguous
+    Assert.Equal("needs-decision", (inputSelections ambiguousReport.Value).[0].GetProperty("decision").GetString())
+    let baseline = observedContext ProgrammeFixture.unchanged
+    let wrongHead = { baseline with Slices = [ { baseline.Slices.Head with Head = Some(String.replicate 40 "f") } ] }
+    let _, changed, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson wrongHead)) ProgrammeFixture.unchanged
+    Assert.Equal("unknown", (inputSelections changed.Value).[0].GetProperty("decision").GetString())
+    for subject in [ "repository policy"; "intake identity"; "permission for author" ] do
+        let denied (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+            if request.Subject.Contains subject then Error(Errors.Unauthorized "native intake unavailable") else response
+        let _, report, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson baseline)) denied
+        Assert.Equal("unknown", (inputSelections report.Value).[0].GetProperty("decision").GetString())
+        Assert.Equal("Current", (report.Value.GetProperty("items")).[0].GetProperty("sourceCurrentness").GetString())
+
+[<Fact>]
+let ``actual native inventory gaps stay within proposed repository scope while binding gaps remain global`` () =
+    let binding = { ProgrammeFixture.binding () with Repositories = Set.ofList [ "FS-GG/.github"; "FS-GG/independent" ] }
+    let bindingNode = Text.Json.Nodes.JsonNode.Parse(ProgrammeFixture.bindingJson ())
+    bindingNode.["repositories"] <- JsonSerializer.SerializeToNode(Set.toList binding.Repositories)
+    let selectedBinding = bindingNode.ToJsonString()
+    let change (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+        if request.Subject.EndsWith("board-v2-import-manifest.json", StringComparison.Ordinal) then
+            response |> Result.map (fun value ->
+                let root = Text.Json.Nodes.JsonNode.Parse value.Body
+                let repository = root.["data"].["repository"]
+                let enrolled = Text.Json.Nodes.JsonNode.Parse(repository.["object"].["text"].GetValue<string>())
+                let enrollmentBinding = enrolled.["binding"]
+                enrollmentBinding.["repositories"] <- JsonSerializer.SerializeToNode(Set.toList binding.Repositories)
+                repository.["object"].["text"] <- Text.Json.Nodes.JsonValue.Create(enrolled.ToJsonString())
+                repository.["current"].["text"] <- Text.Json.Nodes.JsonValue.Create(enrolled.ToJsonString())
+                { value with Body = root.ToJsonString() })
+        elif request.Subject = "FS-GG/.github open PR inventory" then Error(Errors.Unauthorized "repository A inventory unavailable")
+        elif request.Subject = "FS-GG/independent open PR inventory" then
+            Ok { Status = 200; ETag = None; NextLink = None; Headers = Map.empty
+                 Body = """{"data":{"repository":{"nameWithOwner":"FS-GG/independent","pullRequests":{"totalCount":0,"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}""" }
+        else response
+    let native = V2ProjectionSource.inspectFixed (ProgrammeFixture.transport change) binding None
+    let context = ProgrammeFixture.context native
+    let first = context.Slices.Head
+    let independent: CurrentSlice =
+        { first with
+            Id = "independent-repository"
+            Repository = "FS-GG/independent"
+            Paths = [ "src/independent.fs" ]
+            Operation = Implement
+            PullRequest = None
+            PullRequestId = None
+            PullRequestUpdatedAt = None
+            Head = None }
+    let input = { context with Slices = [ first; independent ] }
+    let _, report, _ = inspectProgrammeBindingInput selectedBinding (Some(ProgrammeFixture.integratorJson input)) change
+    Assert.Equal<string list>([ "unknown"; "ready" ], inputSelections report.Value |> Array.map (fun value -> value.GetProperty("decision").GetString()) |> Array.toList)
+    let globalGap (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+        if request.Subject = "complete V2 project memberships" then Error(Errors.Unauthorized "global membership unavailable") else change request response
+    let code, globalReport, _ = inspectProgrammeBindingInput selectedBinding (Some(ProgrammeFixture.integratorJson input)) globalGap
+    Assert.Equal(3, code)
+    Assert.True(inputSelections globalReport.Value |> Array.forall (fun value -> value.GetProperty("decision").GetString() = "unknown"))
+
+[<Fact>]
+let ``actual programme refresh caller updates only Observation then independently noops without integrator input`` () =
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-refresh-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory directory |> ignore
+    try
+        let bindingPath = Path.Combine(directory, "binding.json")
+        File.WriteAllText(bindingPath, ProgrammeFixture.bindingJson ())
+        let binding = ProgrammeFixture.binding ()
+        let mutable observation = "Unknown"
+        let mutable humanStatus = "In review"
+        let reads =
+            ProgrammeFixture.transport (fun request response ->
+                if request.Subject = "fresh V2 Observation dispatch identity" then humanStatus <- "Ready"
+                ProgrammeFixture.observation observation request response)
+        let mutable writes = 0
+        let guarded =
+            V2ObservationTransport.compose binding reads (fun request ->
+                writes <- writes + 1
+                match request.Body with
+                | Query(_, variables) ->
+                    Assert.Equal(Some(VId binding.Observation.Id), variables |> List.tryFind (fst >> (=) "fieldId") |> Option.map snd)
+                | _ -> failwith "typed Observation update required"
+                observation <- "Verified"
+                Ok { Status = 200; ETag = None; NextLink = None; Headers = Map.empty; Body = """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" })
+            |> Result.defaultWith (Errors.explain >> failwith)
+        for index in [ 1; 2 ] do
+            let output = Path.Combine(directory, $"refresh-{index}.json")
+            use input = unreadableInput ()
+            Assert.Equal(0, BoardV2Application.runWithTransportAndInput guarded input [ "refresh"; "--binding-file"; bindingPath; "--report-file"; output ])
+            Assert.Equal(0, input.Reads)
+            use document = JsonDocument.Parse(File.ReadAllText output)
+            Assert.Equal(1, document.RootElement.GetProperty("verified").GetInt32())
+            let item = (document.RootElement.GetProperty("items")).[0]
+            Assert.Equal((if index = 1 then 1 else 0), item.GetProperty("mutationAttempts").GetInt32())
+        Assert.Equal(1, writes)
+        Assert.Equal("Ready", humanStatus)
+        Assert.Equal("Verified", observation)
+        let oldReads = ProgrammeFixture.transport ProgrammeFixture.oldSchema
+        let oldGuard =
+            V2ObservationTransport.compose binding oldReads (fun _ -> failwith "old native schema must refuse before mutation")
+            |> Result.defaultWith (Errors.explain >> failwith)
+        let oldOutput = Path.Combine(directory, "old-schema.json")
+        Assert.Equal(3, BoardV2Application.runWithTransport oldGuard [ "refresh"; "--binding-file"; bindingPath; "--report-file"; oldOutput ])
+        Assert.Equal(1, writes)
+
+    finally Directory.Delete(directory, true)
+
+[<Fact>]
+let ``actual caller localizes unusable PR evidence to current action and uncertain file scope`` () =
+    let newContext = observedContext ProgrammeFixture.newAssignment
+    for suffix in [ " reviews"; " head checks" ] do
+        let disjoint (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+            if request.Subject.EndsWith(suffix, StringComparison.Ordinal) then Error(Errors.Unauthorized "unrelated PR review/check read unavailable")
+            else ProgrammeFixture.newAssignment request response
+        let _, report, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson newContext)) disjoint
+        Assert.Equal("ready", (inputSelections report.Value).[0].GetProperty("decision").GetString())
+    for suffix in [ " files"; " final head barrier" ] do
+        let unknownScope (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+            if request.Subject.EndsWith(suffix, StringComparison.Ordinal) then Error(Errors.Unauthorized "native file/head scope unavailable")
+            else ProgrammeFixture.newAssignment request response
+        let _, report, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson newContext)) unknownScope
+        Assert.Equal("unknown", (inputSelections report.Value).[0].GetProperty("decision").GetString())
+
+[<Fact>]
+let ``actual caller keeps source editing independent of activation acceptance and isolates stale slice joins`` () =
+    let closedDependency (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+        let response = ProgrammeFixture.newAssignment request response
+        if request.Path.EndsWith("/dependencies/blocked_by", StringComparison.Ordinal) then
+            response |> Result.map (fun value ->
+                { value with Body = """[{"html_url":"https://github.com/FS-GG/.github/issues/1","number":1,"node_id":"I_dependency","updated_at":"2026-10-17T12:00:00Z","state":"closed"}]""" })
+        else response
+    let context = observedContext closedDependency
+    let publication: Prerequisite =
+        { Action = Activation; Reference = "publication/owner-current-evidence"; Satisfied = Some false; SupplyingOwner = "publication-owner" }
+    let source = { context.Slices.Head with Prerequisites = [ publication ] }
+    let activation = { source with Id = "activation"; Action = Activation; Operation = ActivateWork }
+    let _, report, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson { context with Slices = [ source; activation ] })) closedDependency
+    Assert.Equal<string list>([ "ready"; "blocked" ], inputSelections report.Value |> Array.map (fun value -> value.GetProperty("decision").GetString()) |> Array.toList)
+    let existing = observedContext ProgrammeFixture.unchanged
+    let current = existing.Slices.Head
+    let independent =
+        { current with
+            Id = "independent-source"
+            Owner = "another-implementation-owner"
+            Operation = Implement
+            Paths = [ "src/independent.fs" ]
+            PullRequest = None
+            PullRequestId = None
+            PullRequestUpdatedAt = None
+            Head = None }
+    let stale = { current with Join = { current.Join with SourceRevision = "old action/plan observation" } }
+    let _, isolated, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson { existing with Slices = [ stale; independent ] })) ProgrammeFixture.unchanged
+    Assert.Equal<string list>([ "unknown"; "ready" ], inputSelections isolated.Value |> Array.map (fun value -> value.GetProperty("decision").GetString()) |> Array.toList)
+    let conflicting = { independent with Paths = [ "src/current.fs" ] }
+    let _, blocked, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson { existing with Slices = [ current; conflicting ] })) ProgrammeFixture.unchanged
+    Assert.Equal<string list>([ "continue-existing"; "blocked" ], inputSelections blocked.Value |> Array.map (fun value -> value.GetProperty("decision").GetString()) |> Array.toList)
+
+
+[<Fact>]
+let ``actual caller final intake barrier rereads unchanged author policy and permission`` () =
+    let context = observedContext ProgrammeFixture.unchanged
+    let mutations: (string * string * string) list =
+        [ ("repository policy", "COLLABORATORS_ONLY", "ALL");
+          ("permission for author", "write", "read") ]
+    for subject, original, changed in mutations do
+        let mutable determiningReads = 0
+        let mutate (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+            if request.Subject.Contains(subject, StringComparison.Ordinal) then
+                determiningReads <- determiningReads + 1
+                if determiningReads = 2 then
+                    response |> Result.map (fun value -> { value with Body = value.Body.Replace(original, changed) })
+                else response
+            else response
+        let code, report, transport = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson context)) mutate
+        Assert.Equal(0, code) // the independent source/planning observation remains available
+        Assert.Equal(2, determiningReads)
+        let root = report.Value
+        let item = (root.GetProperty("items")).[0]
+        Assert.Equal("Current", item.GetProperty("sourceCurrentness").GetString())
+        let intake = item.GetProperty("nativeIntake")
+        Assert.Equal(JsonValueKind.Null, intake.GetProperty("allowed").ValueKind)
+        Assert.Contains("changed or became unavailable", intake.GetProperty("gap").GetString())
+        Assert.Equal("unknown", (inputSelections root).[0].GetProperty("decision").GetString())
+        Assert.Empty transport.Mutations

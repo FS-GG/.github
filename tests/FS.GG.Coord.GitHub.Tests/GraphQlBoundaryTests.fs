@@ -420,3 +420,36 @@ let ``board intake never authorizes from corrupt persistent evidence when refres
     match BoardIntake.Gate(failed, cacheRoot = cache).Authorize("FS-GG", "demo", 1) with
     | Error(Transport detail) -> Assert.Contains("unavailable", detail)
     | other -> failwith $"corrupt cache must require a successful live refresh, got %A{other}"
+
+[<Fact>]
+let ``board intake no disk mode ignores populated cache and creates no new cache`` () =
+    let good =
+        Fake.Recorder(fun request ->
+            match request.Body with
+            | Query(document, _) when document.Contains "issueCreationPolicy" ->
+                response """{"data":{"repository":{"id":"R_repo","issueCreationPolicy":"COLLABORATORS_ONLY","hasIssuesEnabled":true,"mergeCommitAllowed":true,"squashMergeAllowed":true,"rebaseMergeAllowed":true}}}"""
+            | Query _ ->
+                response """{"data":{"repository":{"issue":{"id":"I_issue","updatedAt":"2026-10-17T12:00:00Z","author":{"id":"U_author","login":"maintainer"}}}}}"""
+            | _ -> response """{"permission":"write","user":{"node_id":"U_author"}}""")
+    let seeded = Path.Combine(Path.GetTempPath(), System.Guid.NewGuid().ToString("N"))
+    let absent = Path.Combine(Path.GetTempPath(), System.Guid.NewGuid().ToString("N"))
+    try
+        Assert.True(BoardIntake.Gate(good, cacheRoot = seeded).Authorize("FS-GG", "demo", 1) |> Result.isOk)
+        let cache = Path.Combine(seeded, "board-intake-v1")
+        let before = Directory.GetFiles(cache) |> Array.map (fun path -> path, File.ReadAllBytes path)
+        let failed = Fake.Recorder(fun _ -> Error(Transport "live policy unavailable"))
+        Assert.True(BoardIntake.Gate(failed, cacheRoot = seeded, persistCache = false).Authorize("FS-GG", "demo", 1) |> Result.isError)
+        Assert.Equal(1, failed.GraphQlCalls)
+        Assert.Equal(0, failed.RestCalls)
+        for path, bytes in before do
+            Assert.Equal<byte>(bytes, File.ReadAllBytes path)
+        let graphBefore, restBefore = good.GraphQlCalls, good.RestCalls
+        let gate = BoardIntake.Gate(good, cacheRoot = absent, persistCache = false)
+        Assert.True(gate.Authorize("FS-GG", "demo", 1) |> Result.isOk)
+        Assert.True(gate.Authorize("FS-GG", "demo", 1) |> Result.isOk)
+        Assert.Equal(3, good.GraphQlCalls - graphBefore) // one policy plus two fresh issue identities
+        Assert.Equal(1, good.RestCalls - restBefore) // per-invocation memory reuse remains bounded
+        Assert.False(Directory.Exists absent)
+    finally
+        if Directory.Exists seeded then Directory.Delete(seeded, true)
+        if Directory.Exists absent then Directory.Delete(absent, true)

@@ -194,3 +194,30 @@ let ``other product target field options or fresh native identity never reach di
         let guarded = V2ObservationTransport.compose productA reads (fun _ -> writes <- writes + 1; response "{}") |> Result.defaultWith (Errors.explain >> failwith)
         Assert.True(Board.setField guarded (productBoard productA) "item7" "Observation" (Board.Set "Verified") |> Result.isError)
         Assert.Equal(0, writes)
+
+[<Fact>]
+let ``programme successor guard refuses human fields unselected native identities and every nonVerified value`` () =
+    let selected = ProgrammeFixture.binding ()
+    let fields: Board.BoardMap =
+        { Number = selected.ProjectNumber; Id = selected.ProjectId; Owner = selected.Owner; Title = selected.ProjectTitle
+          Fields =
+            Map.ofList(
+                [ ("Status", { Id = selected.Status.Id; Type = Board.SingleSelect selected.Status.Options });
+                  ("Track", { Id = selected.Track.Id; Type = Board.SingleSelect selected.Track.Options });
+                  ("Roadmap", { Id = selected.RoadmapFieldId; Type = Board.Text });
+                  ("Observation", { Id = selected.Observation.Id; Type = Board.SingleSelect selected.Observation.Options }) ]) }
+    let reads = ProgrammeFixture.transport ProgrammeFixture.unchanged
+    let mutable writes = 0
+    let guarded = V2ObservationTransport.compose selected reads (fun _ -> writes <- writes + 1; response "{}") |> Result.defaultWith (Errors.explain >> failwith)
+    for field, value in [ ("Status", "Ready"); ("Track", "Active delivery"); ("Roadmap", "docs/other.md"); ("Observation", "Unknown"); ("Observation", "Stale") ] do
+        Assert.True(Board.setField guarded fields "PVTI_current" field (Board.Set value) |> Result.isError)
+    Assert.Equal(0, writes)
+    Assert.Equal(0, reads.GraphQlCalls)
+    let foreignReads =
+        ProgrammeFixture.transport (fun request result ->
+            if request.Subject = "fresh V2 Observation dispatch identity" then
+                result |> Result.map (fun value -> { value with Body = value.Body.Replace("I_outcome", "I_foreign") })
+            else result)
+    let foreign = V2ObservationTransport.compose selected foreignReads (fun _ -> writes <- writes + 1; response "{}") |> Result.defaultWith (Errors.explain >> failwith)
+    Assert.True(Board.setField foreign fields "PVTI_current" "Observation" (Board.Set "Verified") |> Result.isError)
+    Assert.Equal(0, writes)

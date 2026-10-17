@@ -23,7 +23,8 @@ module V2Projection =
     /// BindingVersion 2 retains historical organization pilot controls; version 3 selects one
     /// organization-owned product project and one owner-local repository with one-to-five issues.
     /// Version 4 is the source-only Project 3 successor, schema 2, with one-to-100 exact native issues
-    /// and In review. It never falls back to an older binding and cannot invoke a writer.
+    /// and In review. It never falls back to an older binding. Observation-only refresh requires
+    /// the exact successor native schema, selected issue identity and current source joins.
     /// The wire properties are unchanged. Version 3 never selects the organization/legacy target.
     type Binding =
         {
@@ -96,7 +97,9 @@ module V2Projection =
 
     /// Run one bounded projection pass. Every run first consumes the required authoritative source
     /// verifier, then freshly verifies the exact target and field schema.
-    /// The source snapshot is revalidated immediately before a mutation. A successful field update
+    /// The source snapshot is revalidated immediately before a mutation and, for v4, a Verified no-op.
+    /// Only Observation is written; Status/Track/Roadmap and action/resource selection are independent.
+    /// A successful field update
     /// requires independent readback. A retry after a lost mutation response repeats those reads;
     /// if the desired value landed, it emits
     /// no second mutation. Any failed or incomplete read remains an error and cannot license a write.

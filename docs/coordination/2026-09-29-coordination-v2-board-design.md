@@ -463,8 +463,15 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   genuine existing-work continuation, blocked handling and necessary ordinary real-use delivery with
   correct board reflection, then switch these consumers together. Reconcile affected model-routing
   declarations against the runtime’s supported capabilities and verify actual selected model/effort;
-  unavailable routes remain explicit, with no silent substitution. Retire manual v3 current-status
-  maintenance only after acceptance, preserving strategy, evidence, original owners/PRs and holds.
+  unavailable routes remain explicit, with no silent substitution. Retire organization V1 intake,
+  Class/severity, legacy phase and scheduling-ledger instructions in cross-repo-coordination and its
+  deep-detail and mailbox-and-board references at canonical skill/reference and Protocol.fs generator
+  sources, then reconcile mirrored/generated/package projections. Human Status remains planning input;
+  merged
+  PRs and claim/done transitions do not establish action-specific completion. Preserve separately
+  qualified product contracts. Retire manual v3 current-status maintenance only after acceptance,
+  preserving strategy, evidence,
+  original owners/PRs and holds.
 
 The accepted .1–.6 feature scope is follow-on planning work, not a new prerequisite for the already selected full V2
 acceptance profile. The host execution requirement has its own required qualification outcome;

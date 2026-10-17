@@ -97,8 +97,8 @@ let private observation value =
 let private mutationSuccess =
     ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
 
-let private scripted (responses: IoResult<Response> list) =
-    let queue = Queue<IoResult<Response>>(responses)
+let private scripted (responses: IoResult<Transport.Response> list) =
+    let queue = Queue<IoResult<Transport.Response>>(responses)
 
     Fake.Recorder(fun _ ->
         if queue.Count = 0 then failwith "the adapter exceeded its bounded fixture"
@@ -626,7 +626,7 @@ let ``inspection changed issue dependency and access denial remain zero effect``
 let ``fresh three selected issues inspect Current while closed omitted history stays outside the exact map`` () =
     let history = """,{"issue":"FS-GG/.github#3009","nodeId":"I_3009","observedUpdatedAt":"2026-10-04T13:04:38Z","observedState":"closed","decision":"omit-delivered","adjudication":"unknown","pilot":false,"remainingOutcome":null,"roadmap":"docs/github-substrate-v2-roadmap.md","dependencies":[]}"""
     let manifest = canonicalManifest.Substring(0, canonicalManifest.Length - 2) + history + "]}"
-    let memberResponse number (response: IoResult<Response>) =
+    let memberResponse number (response: IoResult<Transport.Response>) =
         response |> Result.map (fun value ->
             { value with Body = value.Body.Replace("I_native", (if number = 2963 then "I_native" else $"I_{number}")).Replace("2963", string number) })
     let reads number =
@@ -688,7 +688,7 @@ let ``identical inspection snapshots are identical and malformed binding reads n
 
 [<Fact>]
 let ``complete inspection verifies observed coverage without creating projection history`` () =
-    let forIssue number (response: IoResult<Response>) =
+    let forIssue number (response: IoResult<Transport.Response>) =
         response |> Result.map (fun value -> { value with Body = value.Body.Replace("2963", string number).Replace("I_native", if number = 2963 then "I_native" else $"I_{number}") })
     let rows = [2963; 2964; 2965] |> List.collect (fun number ->
         [native number "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "owning roadmap"; organization; target; forIssue number membership
@@ -737,7 +737,7 @@ let private productRequest (selected: Binding) =
     { Issue = { Owner = selected.Owner; Repository = (Set.minElement selected.Repositories).Split('/')[1]; Number = 7 }
       ExpectedNodeId = selected.SelectedIssues |> Map.keys |> Seq.exactlyOne }
 
-let private productResponse (selected: Binding) (response: IoResult<Response>) =
+let private productResponse (selected: Binding) (response: IoResult<Transport.Response>) =
     response |> Result.map (fun value ->
         let body =
             value.Body.Replace("FS-GG/.github", Set.minElement selected.Repositories).Replace("FS-GG", selected.Owner)
@@ -944,17 +944,17 @@ let ``receiver population blob drift before dispatch preserves the field`` () =
         Assert.Equal(0, writes)
         Assert.True(report.Items.Head.Gap.IsSome)
 
-let private programmeSnapshot (change: Transport.Request -> IoResult<Response> -> IoResult<Response>) : V2ProjectionSource.InspectionReport =
+let private programmeSnapshot (change: Transport.Request -> IoResult<Transport.Response> -> IoResult<Transport.Response>) : V2ProjectionSource.InspectionReport =
     let transport = ProgrammeFixture.transport change
     let report = V2ProjectionSource.inspectFixed transport (ProgrammeFixture.binding ()) None
     Assert.Empty transport.Mutations
     report
 
-let private selectionContext (report: V2ProjectionSource.InspectionReport) : V2ProjectionSource.SelectionContext =
-    { Slices = [ { Issue = ProgrammeFixture.issue; Owner = "worker"; Repository = "FS-GG/.github"; Paths = [ "src/new.fs" ]; Action = V2ProjectionSource.Source
-                   Prerequisites = []; PrerequisitesComplete = true; IntakeAuthorized = Some true } ]
-      ImplementationSlots = Some 1; ReviewSlots = Some 1; HostedCiSlots = Some 1; Reservations = Some []
-      ObservedAt = report.NativeIntegrator.ObservedAt; ValidUntil = report.NativeIntegrator.ObservedAt.AddMinutes 1.0; Evidence = "trusted current integrator observation" }
+let private selectionContext (report: V2ProjectionSource.InspectionReport) = ProgrammeFixture.context report
+
+let private originalReservation owner repository paths : V2ProjectionSource.Reservation =
+    { SliceId = "original-slice"; Attempt = "original-attempt"; Operation = V2ProjectionSource.Implement
+      Owner = owner; Repository = repository; Paths = paths; PullRequest = None; Head = None; CustodyReference = "original-custodian/hold" }
 
 [<Fact>]
 let ``programme production composition reads current source and complete native facts without enrollment edits`` () =
@@ -984,7 +984,7 @@ let ``programme production composition reads current source and complete native 
 
 [<Fact>]
 let ``ordinary closure dependency and plan revisions are fresh programme observations`` () =
-    let change (request: Transport.Request) (response: IoResult<Response>) =
+    let change (request: Transport.Request) (response: IoResult<Transport.Response>) =
         response |> Result.map (fun result ->
             if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then { result with Body = result.Body.Replace("\"state\":\"OPEN\"", "\"state\":\"CLOSED\"").Replace(ProgrammeFixture.revision, "2026-10-17T13:00:00Z") }
             elif request.Subject.EndsWith("programme.md", StringComparison.Ordinal) then { result with Body = result.Body.Replace(ProgrammeFixture.head, String.replicate 40 "f") }
@@ -1007,7 +1007,8 @@ let ``programme missing partial foreign and moved native facts never produce con
             Assert.Equal(DateTimeOffset.MinValue, report.NativeIntegrator.ObservedAt)
             let context = selectionContext report
             let missingContext = { context with ObservedAt = DateTimeOffset.MinValue; ValidUntil = DateTimeOffset.MinValue.AddMinutes(1.0) }
-            let absent = (V2ProjectionSource.selectActions report (Some missingContext) DateTimeOffset.MinValue).Head
+            let absentReport = { report with MembershipGap = None; Evidence = { report.Evidence with PopulationGap = None } }
+            let absent = (V2ProjectionSource.selectActions absentReport (Some missingContext) DateTimeOffset.MinValue).Head
             Assert.Equal("unknown", absent.Decision)
             Assert.Contains(absent.Reasons, fun value -> value.Contains("Native integrator snapshot expired"))
     let mutations: (string * string * string) list =
@@ -1023,14 +1024,14 @@ let ``programme missing partial foreign and moved native facts never produce con
 let ``programme selection uses actual slices nonenrolled work and action specific prerequisites`` () =
     let report = programmeSnapshot ProgrammeFixture.unchanged
     let current = report.NativeIntegrator.PullRequests.Head
-    let report = { report with NativeIntegrator = { report.NativeIntegrator with PullRequests = [ { current with Issues = [ "FS-GG/.github#999" ] } ] } }
+    let report = { report with Items = [ { report.Items.Head with Deliverables = [] } ]; NativeIntegrator = { report.NativeIntegrator with PullRequests = [ { current with Issues = [ "FS-GG/.github#999" ] } ] } }
     let context = selectionContext report
     let choose (context: V2ProjectionSource.SelectionContext) (report: V2ProjectionSource.InspectionReport) = (V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt).Head
     Assert.Equal("ready", (choose context report).Decision)
     let conflict = { context with Slices = [ { context.Slices.Head with Paths = [ "src/current.fs" ] } ] }
     Assert.Equal("blocked", (choose conflict report).Decision)
     Assert.Equal("unknown", (choose { context with Reservations = None } report).Decision)
-    Assert.Equal("blocked", (choose { context with ReviewSlots = Some 0 } report).Decision)
+    Assert.Equal("ready", (choose { context with ReviewSlots = Some 0 } report).Decision)
     Assert.Equal("unknown", (choose { context with Slices = [ { context.Slices.Head with PrerequisitesComplete = false } ] } report).Decision)
     let later: V2ProjectionSource.Prerequisite = { Action = V2ProjectionSource.Activation; Reference = "publication still required"; Satisfied = Some false; SupplyingOwner = "publisher" }
     let source = { context with Slices = [ { context.Slices.Head with Prerequisites = [ later ] } ] }
@@ -1039,20 +1040,21 @@ let ``programme selection uses actual slices nonenrolled work and action specifi
     Assert.Equal("blocked", (choose activate report).Decision)
     let duplicate = { context with Slices = context.Slices @ context.Slices }
     Assert.Equal("needs-decision", (choose duplicate report).Decision)
-    let reservation: V2ProjectionSource.Reservation = { Owner = "unknown-original"; Repository = "FS-GG/.github"; Paths = [ "src/new.fs" ] }
+    let reservation: V2ProjectionSource.Reservation = originalReservation "unknown-original" "FS-GG/.github" [ "src/new.fs" ]
     Assert.Equal("blocked", (choose { context with Reservations = Some [ reservation ] } report).Decision)
     Assert.Equal("unknown", (choose { context with ValidUntil = context.ObservedAt.AddSeconds(-1.0) } report).Decision)
     let ambiguous = { report with NativeIntegrator = { report.NativeIntegrator with PullRequests = [ { current with Issues = [ "FS-GG/.github#4634" ] }; { current with Id = "second"; Url = current.Url + "0"; Issues = [ "FS-GG/.github#4634" ] } ] } }
     Assert.Equal("needs-decision", (choose context ambiguous).Decision)
 
 [<Fact>]
-let ``programme successor refuses every writer before transport or verifier and preserves product schema`` () =
+let ``programme writer requires successor schema and preserves product schema`` () =
     let binding = ProgrammeFixture.binding ()
     let transport = scripted []
-    Assert.True(V2ObservationTransport.validateScope binding |> Result.isError)
-    let result = runOneShot (fun _ -> failwith "successor must not invoke verifier") transport binding { Issue = ProgrammeFixture.issue; ExpectedNodeId = "I_outcome" }
+    Assert.True(V2ObservationTransport.validateScope binding |> Result.isOk)
+    let invalid = { binding with SchemaVersion = 1 }
+    let result = runOneShot (fun _ -> failwith "invalid schema must not invoke verifier") transport invalid { Issue = ProgrammeFixture.issue; ExpectedNodeId = "I_outcome" }
     Assert.True(Result.isError result)
-    Assert.True((V2ProjectionSource.runFixed transport binding None).PopulationGap.IsSome)
+    Assert.True((V2ProjectionSource.runFixed transport invalid None).PopulationGap.IsSome)
     Assert.Equal(0, transport.GraphQlCalls)
     Assert.True(validateBinding { binding with SchemaVersion = 1 } |> Result.isError)
     Assert.True(validateBinding { binding with ProjectId = "PVT_foreign" } |> Result.isError)
@@ -1078,7 +1080,7 @@ let ``programme concurrent human planning membership and source edits invalidate
 
 [<Fact>]
 let ``actual six heading owner record preserves owner and refuses missing duplicate or malformed fields`` () =
-    let bodyChange (body: string) (request: Transport.Request) (response: IoResult<Response>) =
+    let bodyChange (body: string) (request: Transport.Request) (response: IoResult<Transport.Response>) =
         if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
             response |> Result.map (fun value -> { value with Body = value.Body.Replace(Text.Json.JsonSerializer.Serialize ProgrammeFixture.ownerBody, Text.Json.JsonSerializer.Serialize(body: string)) })
         else response
@@ -1095,10 +1097,12 @@ let ``actual six heading owner record preserves owner and refuses missing duplic
         Assert.True(report.Items.Head.Owner.IsNone)
         Assert.Equal("needs-decision", (V2ProjectionSource.selectActions report None report.NativeIntegrator.ObservedAt).Head.Decision)
 
-let private asNewAssignment (change: Transport.Request -> IoResult<Response> -> IoResult<Response>) : V2ProjectionSource.InspectionReport =
+let private asNewAssignment (change: Transport.Request -> IoResult<Transport.Response> -> IoResult<Transport.Response>) : V2ProjectionSource.InspectionReport =
     programmeSnapshot (fun request response ->
         let response = change request response
-        if request.Subject.EndsWith("closingIssuesReferences", StringComparison.Ordinal) then
+        if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
+            response |> Result.map (fun value -> { value with Body = value.Body.Replace("https://github.com/FS-GG/.github/pull/42", "None") })
+        elif request.Subject.EndsWith("closingIssuesReferences", StringComparison.Ordinal) then
             response |> Result.map (fun value -> { value with Body = value.Body.Replace("I_outcome", "I_other").Replace("\"number\":4634", "\"number\":999") })
         else response)
 
@@ -1131,14 +1135,14 @@ let ``malformed reservation and peer repository or token scopes cannot establish
     let choose (context: V2ProjectionSource.SelectionContext) = (V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt).Head
     Assert.Equal("ready", (choose context).Decision)
     for repository in [ "FS-GG/"; "/"; "/.github"; " FS-GG/.github"; "FS-GG/.github " ] do
-        let reservation: V2ProjectionSource.Reservation = { Owner = "original"; Repository = repository; Paths = [ "src/unrelated.fs" ] }
+        let reservation: V2ProjectionSource.Reservation = originalReservation "original" repository [ "src/unrelated.fs" ]
         Assert.Equal("unknown", (choose { context with Reservations = Some [ reservation ] }).Decision)
-        let peer = { context.Slices.Head with Issue = { ProgrammeFixture.issue with Number = 999 }; Repository = repository }
+        let peer = { context.Slices.Head with Id = "malformed-peer"; Issue = { ProgrammeFixture.issue with Number = 999 }; Repository = repository }
         Assert.Equal("unknown", (choose { context with Slices = context.Slices @ [ peer ] }).Decision)
     for path in [ "any"; "none"; "bad["; "src/a,b.fs"; "src/a`b.fs"; "src/white space.fs" ] do
-        let reservation: V2ProjectionSource.Reservation = { Owner = "original"; Repository = "FS-GG/.github"; Paths = [ path ] }
+        let reservation: V2ProjectionSource.Reservation = originalReservation "original" "FS-GG/.github" [ path ]
         Assert.Equal("unknown", (choose { context with Reservations = Some [ reservation ] }).Decision)
-        let peer = { context.Slices.Head with Issue = { ProgrammeFixture.issue with Number = 999 }; Paths = [ path ] }
+        let peer = { context.Slices.Head with Id = "malformed-peer"; Issue = { ProgrammeFixture.issue with Number = 999 }; Paths = [ path ] }
         Assert.Equal("unknown", (choose { context with Slices = context.Slices @ [ peer ] }).Decision)
 
 [<Fact>]
@@ -1153,7 +1157,7 @@ let ``known intake refusal blocks both new source and established continuation``
 [<Fact>]
 let ``literal native PR files never become chore sentinel or rewritten touch set tokens`` () =
     for path in [ "any"; "none"; "src/a,b.fs"; "src/a`b.fs"; "src/white space.fs" ] do
-        let change (request: Transport.Request) (response: IoResult<Response>) =
+        let change (request: Transport.Request) (response: IoResult<Transport.Response>) =
             if request.Subject.EndsWith(" files", StringComparison.Ordinal) then
                 response |> Result.map (fun value -> { value with Body = value.Body.Replace("src/current.fs", path) })
             else response
@@ -1181,9 +1185,102 @@ let ``native snapshot freshness starts before its first inventory read and canno
         programmeSnapshot (fun request response ->
             if request.Subject.EndsWith("open PR inventory", StringComparison.Ordinal) then
                 ok """{"data":{"repository":{"nameWithOwner":"FS-GG/.github","pullRequests":{"totalCount":0,"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}"""
+            elif request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
+                response |> Result.map (fun value -> { value with Body = value.Body.Replace("https://github.com/FS-GG/.github/pull/42", "None") })
             else response)
     Assert.Empty collectedEmpty.NativeIntegrator.PullRequests
     Assert.Empty collectedEmpty.NativeIntegrator.RepositoryGaps
     Assert.NotEqual(DateTimeOffset.MinValue, collectedEmpty.NativeIntegrator.ObservedAt)
     let available = V2ProjectionSource.selectActions collectedEmpty (Some(selectionContext collectedEmpty)) collectedEmpty.NativeIntegrator.ObservedAt
     Assert.Equal("ready", available.Head.Decision)
+
+[<Fact>]
+let ``programme Observation writer rejoins fresh source for writes and Verified noops independently of eligibility`` () =
+    let binding = ProgrammeFixture.binding ()
+    let mutable observation = "Unknown"
+    let reads = ProgrammeFixture.transport (fun request response -> ProgrammeFixture.observation observation request response)
+    let mutable writes = 0
+    let native (request: Transport.Request) =
+        writes <- writes + 1
+        match request.Body with
+        | Query(_, variables) ->
+            Assert.Equal(Some(VId binding.Observation.Id), variables |> List.tryFind (fst >> (=) "fieldId") |> Option.map snd)
+            Assert.Equal(Some(VString binding.Observation.Options["Verified"]), variables |> List.tryFind (fst >> (=) "optionId") |> Option.map snd)
+        | _ -> failwith "only typed Observation update may dispatch"
+        observation <- "Verified"
+        ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+    let guarded = V2ObservationTransport.compose binding reads native |> Result.defaultWith (Errors.explain >> failwith)
+    let first = V2ProjectionSource.runFixed guarded binding None
+    Assert.Equal(1, first.Verified)
+    Assert.Equal(1, writes)
+    Assert.Equal(1, first.Items.Head.MutationAttempts)
+    Assert.Equal(2, first.Items.Head.Projection.Value.SourceChecks)
+    Assert.True(reads.Logged "fresh V2 Observation dispatch identity")
+    let second = V2ProjectionSource.runFixed guarded binding (Some first)
+    Assert.Equal(1, second.Verified)
+    Assert.Equal(0, second.Items.Head.MutationAttempts)
+    Assert.Equal(2, second.Items.Head.Projection.Value.SourceChecks)
+    Assert.Equal(1, writes)
+    Assert.StartsWith("Unknown", second.Items.Head.NativeAcceptance)
+    Assert.False(reads.Logged "FS-GG/.github open PR inventory")
+    Assert.False(reads.Logged "FS-GG/.github repository policy")
+    Assert.True(guarded.RetryMutation "lost" |> Result.isError)
+
+[<Fact>]
+let ``programme writer refuses old native schema changed Verified noop source and denied readback without retry`` () =
+    let binding = ProgrammeFixture.binding ()
+    let mutable writes = 0
+    let oldReads = ProgrammeFixture.transport ProgrammeFixture.oldSchema
+    let old = V2ObservationTransport.compose binding oldReads (fun _ -> writes <- writes + 1; ok "{}") |> Result.defaultWith (Errors.explain >> failwith)
+    Assert.Equal(0, (V2ProjectionSource.runFixed old binding None).Verified)
+    Assert.Equal(0, writes)
+    let mutable sourceReads = 0
+    let changedReads =
+        ProgrammeFixture.transport (fun request response ->
+            let response = ProgrammeFixture.observation "Verified" request response
+            if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
+                sourceReads <- sourceReads + 1
+                if sourceReads >= 2 then response |> Result.map (fun value -> { value with Body = value.Body.Replace("Accepted outcome", "Changed outcome") }) else response
+            else response)
+    let changed = V2ObservationTransport.compose binding changedReads (fun _ -> writes <- writes + 1; ok "{}") |> Result.defaultWith (Errors.explain >> failwith)
+    let refused = V2ProjectionSource.runFixed changed binding None
+    Assert.Equal(0, refused.Verified)
+    Assert.Equal(0, refused.Items.Head.MutationAttempts)
+    Assert.Equal(0, writes)
+    let mutable observation = "Unknown"
+    let readbackReads =
+        ProgrammeFixture.transport (fun request response ->
+            if observation = "Verified" && request.Subject = "board item PVTI_current Observation" then Error(Transport "readback unavailable")
+            else ProgrammeFixture.observation observation request response)
+    let readback =
+        V2ObservationTransport.compose binding readbackReads (fun _ ->
+            writes <- writes + 1
+            observation <- "Verified"
+            ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""")
+        |> Result.defaultWith (Errors.explain >> failwith)
+    let unknown = V2ProjectionSource.runFixed readback binding None
+    Assert.Equal(0, unknown.Verified)
+    Assert.True(unknown.Items.Head.Gap.IsSome)
+    Assert.Equal(1, writes)
+    Assert.True(readback.RetryMutation "uncertain" |> Result.isError)
+    Assert.Equal(1, writes)
+
+[<Fact>]
+let ``programme lost Observation response is independently reconciled with no repeated dispatch`` () =
+    let binding = ProgrammeFixture.binding ()
+    let mutable observation = "Unknown"
+    let reads = ProgrammeFixture.transport (fun request response -> ProgrammeFixture.observation observation request response)
+    let mutable writes = 0
+    let guarded =
+        V2ObservationTransport.compose binding reads (fun _ ->
+            writes <- writes + 1
+            observation <- "Verified"
+            Error(Transport "native response lost; original effect unknown"))
+        |> Result.defaultWith (Errors.explain >> failwith)
+    let unknown = V2ProjectionSource.runFixed guarded binding None
+    Assert.Equal(0, unknown.Verified)
+    Assert.Equal(1, writes)
+    let recovered = V2ProjectionSource.runFixed guarded binding (Some unknown)
+    Assert.Equal(1, recovered.Verified)
+    Assert.Equal(0, recovered.Items.Head.MutationAttempts)
+    Assert.Equal(1, writes)

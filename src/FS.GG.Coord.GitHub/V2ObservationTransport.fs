@@ -27,8 +27,6 @@ module V2ObservationTransport =
     let validateScope (binding: Binding) =
         match validateBinding binding with
         | Error error -> Error error
-        | Ok() when binding.BindingVersion = 4 ->
-            Error(Malformed("programme Observation authority", "successor source window is inspection-only; no writer is admitted"))
         | Ok() when binding.BindingVersion = 2 && (binding.Owner <> "FS-GG" || binding.OrganizationId <> "O_kgDOEYAWYw" || binding.ProjectNumber <> 3 || binding.ProjectId <> project
                     || binding.Observation.Id <> field || Map.tryFind "Verified" binding.Observation.Options <> Some verified || (binding.SelectedIssues <> cohort && binding.SelectedIssues <> successorCohort)) ->
             Error(Malformed("V2 Observation authority", "selected root-local project/field/native cohort differs from the reviewed three-target pilot or four-target successor"))
@@ -50,7 +48,7 @@ module V2ObservationTransport =
                 | _ -> Error(Malformed("V2 Observation authority", "unknown variables, field, item, project or option"))
             | _ -> Error(Malformed("V2 Observation authority", "only the fixed Observation single-select update is admitted"))
 
-    let compose binding (reads: IGitHubTransport) (nativeOnce: Transport.Request -> IoResult<Response>) : IoResult<IGitHubTransport> =
+    let compose binding (reads: IGitHubTransport) (nativeOnce: Transport.Request -> IoResult<Transport.Response>) : IoResult<IGitHubTransport> =
         validateScope binding |> Result.map (fun () ->
             { new IGitHubTransport with
                 member _.Send request = reads.Send request
@@ -67,7 +65,7 @@ module V2ObservationTransport =
                             let repository = content.GetProperty("repository").GetProperty("nameWithOwner").GetString()
                             let number = content.GetProperty("number").GetInt32()
                             let issue = $"{repository}#{number}"
-                            if node.GetProperty("id").GetString() <> item || node.GetProperty("project").GetProperty("id").GetString() <> binding.ProjectId || (binding.BindingVersion = 3 && not (binding.Repositories.Contains repository)) || Map.tryFind nativeId binding.SelectedIssues <> Some issue then
+                            if node.GetProperty("id").GetString() <> item || node.GetProperty("project").GetProperty("id").GetString() <> binding.ProjectId || ((binding.BindingVersion = 3 || binding.BindingVersion = 4) && not (binding.Repositories.Contains repository)) || Map.tryFind nativeId binding.SelectedIssues <> Some issue then
                                 Error(Malformed("V2 Observation authority", "fresh item project/content is not an admitted native pilot issue"))
                             else Ok()) |> Result.bind (fun () -> nativeOnce request)) })
 

@@ -1,7 +1,8 @@
 namespace FS.GG.Coord.GitHub
 
 /// Stateless root-local authority for the reviewed Project 3 Observation-only exact three-issue pilot
-/// or its exact four-issue successor, plus explicitly selected version-3 receiver repository bindings.
+/// or its exact four-issue successor (historical controls), explicitly selected version-3 receiver
+/// bindings, and version-4 successor enrollment under its exact native schema/source composition.
 /// The selected binding, not their union, controls fresh dispatch. Product identities/options are
 /// supplied only by that receiver binding; no target discovery or organization fallback is available.
 /// The token has genuine Projects capability; this application's exact guard enforces its narrower scope.
@@ -17,6 +18,6 @@ module V2ObservationTransport =
     val validateScope: binding: Binding -> IoResult<unit>
     val authorize: binding: Binding -> intent: MutationIntent -> IoResult<Transport.Request>
     /// Rebuild the fixed request, freshly bind immutable item/content, dispatch once. No durable replay.
-    val compose: binding: Binding -> reads: IGitHubTransport -> nativeOnce: (Transport.Request -> IoResult<Response>) -> IoResult<IGitHubTransport>
+    val compose: binding: Binding -> reads: IGitHubTransport -> nativeOnce: (Transport.Request -> IoResult<Transport.Response>) -> IoResult<IGitHubTransport>
     /// Dedicated guarded live composition; never calls the legacy fence's raw provider port.
     val createLive: binding: Binding -> token: string -> IoResult<IGitHubTransport * System.IDisposable>

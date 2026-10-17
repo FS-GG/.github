@@ -55,7 +55,10 @@ module V2ProjectionSource =
     /// Version 2 retains the organization manifest. Version 3 reads the same import/v1 manifest path
     /// from its sole selected receiver repository, checks its pinned/current main blob and reads only
     /// that repository's canonical docs/native plan. Product metadata never comes from the organization
-    /// manifest. Previous reports are historical display evidence only and cannot make a write current.
+    /// manifest. Version 4 uses exact enrollment/v2 identities and current native closure/dependencies/
+    /// protected-main plan facts. It rechecks enrollment and source before writes and Verified no-ops.
+    /// Complete/current observation health is independent of runtime capacity/Ready and outcome acceptance.
+    /// Previous reports are historical display evidence only and cannot make a write current.
     val runFixed:
         transport: IGitHubTransport ->
         binding: Binding ->
@@ -64,9 +67,11 @@ module V2ProjectionSource =
 
     /// Read evidence and human intent remain distinct. No new verification timestamp or write is minted.
     /// Native head-bound observations; none of these facts establishes deployment acceptance.
+    /// ScopeCurrent requires complete associations/files and a final matching head barrier. Other
+    /// PR review/check gaps do not block proven-disjoint work; the selected PR needs full evidence.
     type PullRequestFacts =
-        { Id: string; Repository: string; Number: int; Url: string; Head: string; UpdatedAt: string
-          Author: string option; Issues: string list; Files: string list; ReviewDecision: string option
+        { Id: string; Repository: string; Number: int; Url: string; State: string; Head: string; UpdatedAt: string
+          Author: string option; Issues: string list; Files: string list; ScopeCurrent: bool; ReviewDecision: string option
           Reviews: string list; Checks: string list; Gaps: string list }
 
     /// ObservedAt is the conservative collection-start time, including failed collection attempts.
@@ -75,23 +80,46 @@ module V2ProjectionSource =
     type NativeIntegratorFacts =
         { PullRequests: PullRequestFacts list; RepositoryGaps: Map<string, string>; ObservedAt: DateTimeOffset }
 
-    /// Trusted caller inputs for one current slice, not a parent outcome reservation or authority.
+    /// Attributed caller observations for one bounded invocation. Supplier/evidence text and the
+    /// input digest are not authentication. Native issue/body/plan/PR joins are re-read independently.
+    /// Stable slice/attempt identity separates independent work under one enrolled outcome.
+    /// Operation defines consumed demand: implementation, review or hosted-CI uses one matching
+    /// remaining-after-active slot; existing-PR observation uses none. Activation stays owner-gated.
     type Action = Source | Activation
+    type Operation = ObserveExisting | Implement | ReviewWork | QualifyWork | ActivateWork
+    type AttributedObservation =
+        { Supplier: string; ObservedAt: DateTimeOffset; ValidUntil: DateTimeOffset; Evidence: string list }
+    type SliceJoin =
+        { NativeId: string; UpdatedAt: string; BodySha256: string; SourceRevision: string }
     type Prerequisite = { Action: Action; Reference: string; Satisfied: bool option; SupplyingOwner: string }
     type CurrentSlice =
-        { Issue: IssueRef; Owner: string; Repository: string; Paths: string list; Action: Action
+        { Id: string; Attempt: string; Operation: Operation; Issue: IssueRef
+          AccountableOwner: string; Owner: string; Repository: string; Paths: string list; Action: Action
+          Join: SliceJoin; Observation: AttributedObservation; PullRequest: string option; PullRequestId: string option
+          PullRequestUpdatedAt: string option; Head: string option
           Prerequisites: Prerequisite list; PrerequisitesComplete: bool; IntakeAuthorized: bool option }
-    type Reservation = { Owner: string; Repository: string; Paths: string list }
+    type Reservation =
+        { SliceId: string; Attempt: string; Operation: Operation; Owner: string; Repository: string; Paths: string list
+          PullRequest: string option; Head: string option; CustodyReference: string }
     type SelectionContext =
-        { Slices: CurrentSlice list; ImplementationSlots: int option; ReviewSlots: int option; HostedCiSlots: int option
-          Reservations: Reservation list option; ObservedAt: DateTimeOffset; ValidUntil: DateTimeOffset; Evidence: string }
+        { Invocation: string; ProjectId: string; SchemaVersion: int; RecipeRevision: string; ArtifactSha256: string
+          PopulationRevision: string; EnrollmentBlob: string; InputSha256: string
+          Slices: CurrentSlice list; ImplementationSlots: int option; ReviewSlots: int option; HostedCiSlots: int option
+          CapacityMeaning: string; CapacityObservation: AttributedObservation option
+          Reservations: Reservation list option; ReservationObservation: AttributedObservation option
+          ObservedAt: DateTimeOffset; ValidUntil: DateTimeOffset; Evidence: string }
     type Selection =
-        { Issue: IssueRef; Action: Action; Decision: string; Owner: string option; PullRequest: string option
+        { SliceId: string option; Attempt: string option; Operation: Operation option
+          Issue: IssueRef; Action: Action; Decision: string; Owner: string option; PullRequest: string option
           Head: string option; Reasons: string list; Evidence: string list }
+
+    type NativeIntakeObservation =
+        { Admission: BoardIntake.Admission option; Allowed: bool option; ObservedAt: DateTimeOffset; Gap: IoError option }
 
     type InspectionItem =
         { Evidence: ItemReport; ExpectedNodeId: string; SourceCurrentness: string
-          Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list; Owner: string option; SourceRevision: string option }
+          Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list; Owner: string option; SourceRevision: string option
+          Deliverables: string list; DeliverableGap: string option; Intake: NativeIntakeObservation }
 
     type InspectionReport =
         { Binding: Binding; Evidence: BatchReport; Items: InspectionItem list
@@ -113,5 +141,9 @@ module V2ProjectionSource =
     /// Deterministic display of selected human intent and known/unknown evidence. No scheduling decision.
     val planningCandidates: report: InspectionReport -> facts: IntegratorFacts -> PlanningCandidate list
 
-    /// Action-specific, read-only selection with a trusted current-slice/resource seam. Never dispatches.
+    /// Join attributed observations to exact native issue/body/plan/enrollment/PR facts and fold
+    /// explicit integrator order into per-slice selected/deferred results. Unselected alternatives
+    /// are not reservations. Repository gaps affect relevant slices; binding/membership gaps are global.
+    /// Expiry never releases original holds; self exemption requires exact slice/attempt/operation/PR/head.
+    /// Read-only existing-PR observation consumes no new slot. Never allocates, dispatches or accepts effects.
     val selectActions: report: InspectionReport -> context: SelectionContext option -> now: System.DateTimeOffset -> Selection list
