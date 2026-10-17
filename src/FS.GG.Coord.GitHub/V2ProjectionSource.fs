@@ -556,7 +556,7 @@ module V2ProjectionSource =
 
     let inspectFixed (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
         let reads = inspectionReads transport binding
-        let metadata items selected protectedInputs gap : BatchReport =
+        let metadata (items: ItemReport list) (selected: int option) (protectedInputs: (string * string * string) list) (gap: IoError option) : BatchReport =
             { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision
               ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256
               NativeDispatch = []; ProtectedInputs = protectedInputs; Selected = selected; Attempted = items |> List.length
@@ -574,7 +574,7 @@ module V2ProjectionSource =
             | Ok(selected, current, blob) ->
                 let membership = if binding.BindingVersion = 4 then readMemberships reads binding else Ok []
                 let members, membershipGap = match membership with Ok values -> values, None | Error error -> [], Some error
-                let items = selected |> List.map (fun row ->
+                let items: InspectionItem list = selected |> List.map (fun (row: Selected) ->
                     let mutable calls = 0
                     let counted =
                         { new IGitHubTransport with
@@ -611,7 +611,7 @@ module V2ProjectionSource =
                 let integration = if binding.BindingVersion = 4 && membershipGap.IsNone then nativeIntegrator reads binding else emptyNative
                 let items =
                     if binding.BindingVersion <> 4 then items
-                    else List.map2 (fun row item ->
+                    else List.map2 (fun (row: Selected) (item: InspectionItem) ->
                         let mutable additionalReads = 0
                         let counted =
                             { new IGitHubTransport with
@@ -620,7 +620,7 @@ module V2ProjectionSource =
                                 member _.RetryMutation _ = Error(Malformed("final inspection barrier", "replay is unavailable")) }
                         let barrier = collectSource counted binding row
                         let planning = readPlanning counted binding { Issue = row.Issue; ExpectedNodeId = row.NodeId }
-                        let evidence = { item.Evidence with Reads = item.Evidence.Reads + additionalReads }
+                        let evidence: ItemReport = { item.Evidence with Reads = item.Evidence.Reads + additionalReads }
                         match barrier.Verification, planning with
                         | Ok(Current revision), Ok intent when item.SourceRevision = Some revision && barrier.Owner = item.Owner && item.Planning = Some intent -> { item with Evidence = evidence }
                         | _ -> { item with SourceCurrentness = "Unknown"; Evidence = { evidence with Health = "Unknown"; Gap = Some(Malformed("final source/planning barrier", "issue/dependency/plan or human planning changed/became unavailable; refresh affected selection")) } }) selected items
@@ -628,7 +628,7 @@ module V2ProjectionSource =
                     if binding.BindingVersion <> 4 || membershipGap.IsSome then membershipGap
                     else
                         match readMemberships reads binding with
-                        | Ok final when List.sortBy _.ItemId final = List.sortBy _.ItemId members -> None
+                        | Ok final when List.sortBy (fun (value: Membership) -> value.ItemId) final = List.sortBy (fun (value: Membership) -> value.ItemId) members -> None
                         | Ok _ -> Some(Malformed("final membership barrier", "project membership changed; reconcile complete population before selection"))
                         | Error error -> Some error
                 { Binding = binding; Memberships = members; MembershipGap = membershipGap; NativeIntegrator = integration
@@ -636,7 +636,7 @@ module V2ProjectionSource =
 
     let planningCandidates (report: InspectionReport) (facts: IntegratorFacts) =
         if report.Evidence.Selected.IsNone || report.Evidence.PopulationGap.IsSome then []
-        else report.Items |> List.map (fun item ->
+        else report.Items |> List.map (fun (item: InspectionItem) ->
             { Issue = item.Evidence.Issue; HumanStatus = item.Planning |> Option.bind _.Status; Track = item.Planning |> Option.bind _.Track; Roadmap = item.Planning |> Option.bind _.Roadmap
               SourceCurrentness = item.SourceCurrentness; Observation = item.Planning |> Option.bind _.Observation; Integrator = facts
               UnmetOrUnknown =
@@ -652,10 +652,10 @@ module V2ProjectionSource =
 
     // A current read proposes an action only. The existing integrator retains dispatch authority.
     let selectActions (report: InspectionReport) (context: SelectionContext option) (now: DateTimeOffset) =
-        let fresh observed = observed <= now && now - observed <= TimeSpan.FromMinutes 5.0
-        let trusted = context |> Option.filter (fun value -> value.ObservedAt <= now && now <= value.ValidUntil && fresh value.ObservedAt && not (String.IsNullOrWhiteSpace value.Evidence))
-        let paths values = FS.GG.Coord.TouchSet.parse ("Paths: " + String.concat " " values)
-        let usable values =
+        let fresh (observed: DateTimeOffset) = observed <= now && now - observed <= TimeSpan.FromMinutes 5.0
+        let trusted = context |> Option.filter (fun (value: SelectionContext) -> value.ObservedAt <= now && now <= value.ValidUntil && fresh value.ObservedAt && not (String.IsNullOrWhiteSpace value.Evidence))
+        let paths (values: string list) = FS.GG.Coord.TouchSet.parse ("Paths: " + String.concat " " values)
+        let usable (values: string list) =
             // Native file names are literals: never let the Paths DSL rename, split or sentinelize them.
             match paths values with
             | FS.GG.Coord.Types.Declared tokens when not values.IsEmpty ->
@@ -667,26 +667,26 @@ module V2ProjectionSource =
             else
                 let parts = repository.Split('/')
                 parts.Length = 2 && (parts |> Array.forall (fun value -> not (String.IsNullOrWhiteSpace value) && value = value.Trim()))
-        let overlaps (leftRepo: string) leftPaths (rightRepo: string) rightPaths =
+        let overlaps (leftRepo: string) (leftPaths: string list) (rightRepo: string) (rightPaths: string list) =
             let left = leftRepo.Split('/')
             let right = rightRepo.Split('/')
             left.Length = 2 && right.Length = 2 &&
             not (FS.GG.Coord.TouchSet.scopedConflicts left[0] left[1] right[0] right[1] (paths leftPaths) (paths rightPaths) |> List.isEmpty)
-        report.Items |> List.map (fun item ->
+        report.Items |> List.map (fun (item: InspectionItem) ->
             let identity = $"{item.Evidence.Issue.Owner}/{item.Evidence.Issue.Repository}#{item.Evidence.Issue.Number}"
-            let slices = trusted |> Option.map (fun value -> value.Slices |> List.filter (fun slice -> slice.Issue = item.Evidence.Issue)) |> Option.defaultValue []
+            let slices: CurrentSlice list = trusted |> Option.map (fun value -> value.Slices |> List.filter (fun slice -> slice.Issue = item.Evidence.Issue)) |> Option.defaultValue []
             let slice = match slices with [ value ] -> Some value | _ -> None
             let action = slice |> Option.map _.Action |> Option.defaultValue Source
             let owner = slice |> Option.map _.Owner |> Option.orElse item.Owner
             let repository = slice |> Option.map _.Repository |> Option.defaultValue $"{item.Evidence.Issue.Owner}/{item.Evidence.Issue.Repository}"
-            let pulls = report.NativeIntegrator.PullRequests |> List.filter (fun pull -> List.contains identity pull.Issues)
+            let pulls: PullRequestFacts list = report.NativeIntegrator.PullRequests |> List.filter (fun pull -> List.contains identity pull.Issues)
             let pull = match pulls with [ value ] -> Some value | _ -> None
             let evidence =
                 [ yield identity
                   match item.Evidence.Native with Some native -> yield native.NodeId + "@" + native.UpdatedAt | _ -> ()
                   match pull with Some value -> yield value.Url + "@" + value.Head; yield! value.Reviews; yield! value.Checks | _ -> ()
                   match trusted with Some value -> yield value.Evidence | _ -> () ]
-            let result decision reasons =
+            let result (decision: string) (reasons: string list) : Selection =
                 { Issue = item.Evidence.Issue; Action = action; Decision = decision; Owner = owner
                   PullRequest = pull |> Option.map _.Url; Head = pull |> Option.map _.Head; Reasons = reasons; Evidence = evidence }
             let gaps =
@@ -694,8 +694,8 @@ module V2ProjectionSource =
                   if item.SourceCurrentness <> "Current" || item.Evidence.Gap.IsSome || item.PlanningGap.IsSome then "Current issue/dependency/plan/planning read is unavailable or changed"
                   if report.Binding.BindingVersion <> 4 then "Historical pilot/product inspection does not select programme actions"
                   if not (fresh report.NativeIntegrator.ObservedAt) then "Native integrator snapshot expired or is from the future; refresh before action" ]
-            let allPrerequisites = slice |> Option.map _.Prerequisites |> Option.defaultValue []
-            let prerequisites = allPrerequisites |> List.filter (fun value -> value.Action = action)
+            let allPrerequisites: Prerequisite list = slice |> Option.map _.Prerequisites |> Option.defaultValue []
+            let prerequisites: Prerequisite list = allPrerequisites |> List.filter (fun value -> value.Action = action)
             let unsatisfied = prerequisites |> List.filter (fun value -> value.Satisfied = Some false)
             let unknown = prerequisites |> List.filter (fun value -> value.Satisfied.IsNone)
             let nativeOpen = item.Evidence.DependencyObservations |> List.filter (fun value -> value.State <> "CLOSED")
@@ -729,15 +729,15 @@ module V2ProjectionSource =
             elif report.NativeIntegrator.RepositoryGaps.Count > 0 || (report.NativeIntegrator.PullRequests |> List.exists (fun value -> not value.Gaps.IsEmpty || not (canonicalScope value.Repository) || not (usable value.Files))) then
                 result "unknown" [ "Complete in-flight PR/association/file inventory is unavailable, including non-enrolled work" ]
             elif pull.IsSome && (slice.IsNone || not slice.Value.PrerequisitesComplete || slice.Value.IntakeAuthorized <> Some true) then
-                result "unknown" [ "Existing PR/head recovered; action-specific owning-plan prerequisite/intake coverage is unavailable from the integrator, so continuation eligibility is unknown"
-                                   "New-dispatch capacity is separate and does not require restarting this work" ]
+                result "unknown" [ yield "Existing PR/head recovered; action-specific owning-plan prerequisite/intake coverage is unavailable from the integrator, so continuation eligibility is unknown"
+                                   yield "New-dispatch capacity is separate and does not require restarting this work" ]
             elif pull.IsSome then
                 let current = pull.Value
                 if not current.Gaps.IsEmpty then result "unknown" current.Gaps
                 elif current.Files.IsEmpty || not (usable current.Files) then result "unknown" [ "Current PR file scope is missing or unusable" ]
-                else result "continue-existing" [ "Continue the established owner and exact native PR/head; do not start duplicate implementation"
-                                                 "Review/check observations are head-bound; required-check and delivery acceptance remain with the normal delivery route"
-                                                 "Unknown new-dispatch capacity/reservations do not restart existing work; refresh determining facts before the proposed action" ]
+                else result "continue-existing" [ yield "Continue the established owner and exact native PR/head; do not start duplicate implementation"
+                                                 yield "Review/check observations are head-bound; required-check and delivery acceptance remain with the normal delivery route"
+                                                 yield "Unknown new-dispatch capacity/reservations do not restart existing work; refresh determining facts before the proposed action" ]
             elif slice.IsNone then result "unknown" [ "Exact current implementation slice is unavailable; parent outcome scope is not a reservation" ]
             elif not slice.Value.PrerequisitesComplete then result "unknown" [ "Action-specific native and owning-plan prerequisite coverage is incomplete; supplying owner is the integrator" ]
             elif not (usable slice.Value.Paths) then result "unknown" [ "Exact current slice touch-set is missing or unusable" ]
@@ -758,8 +758,8 @@ module V2ProjectionSource =
                     | Some capacity when capacity.Reservations.IsSome && current.IntakeAuthorized = Some true ->
                         match capacity.ImplementationSlots, capacity.ReviewSlots, capacity.HostedCiSlots with
                         | Some implementation, Some review, Some ci when implementation > 0 && review > 0 && ci > 0 ->
-                            result "ready" [ "Current source slice is disjoint within attributed implementation/review/CI capacity and reservations"
-                                             "Later publication/installed/native acceptance is not a source-development prerequisite; selection grants no dispatch authority" ]
+                            result "ready" [ yield "Current source slice is disjoint within attributed implementation/review/CI capacity and reservations"
+                                             yield "Later publication/installed/native acceptance is not a source-development prerequisite; selection grants no dispatch authority" ]
                         | Some implementation, Some review, Some ci when implementation <= 0 || review <= 0 || ci <= 0 -> result "blocked" [ "Required implementation/review/hosted-CI capacity is exhausted" ]
                         | _ -> result "unknown" [ "Implementation, review or hosted-CI capacity is unavailable from its supplying owner" ]
                     | _ -> result "unknown" [ "Fresh attributed reservation/capacity/intake facts are unavailable from the integrator/runtime owners" ])

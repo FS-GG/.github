@@ -931,7 +931,7 @@ let ``receiver population blob drift before dispatch preserves the field`` () =
         Assert.Equal(0, writes)
         Assert.True(report.Items.Head.Gap.IsSome)
 
-let private programmeSnapshot change =
+let private programmeSnapshot (change: Transport.Request -> IoResult<Response> -> IoResult<Response>) : V2ProjectionSource.InspectionReport =
     let transport = ProgrammeFixture.transport change
     let report = V2ProjectionSource.inspectFixed transport (ProgrammeFixture.binding ()) None
     Assert.Empty transport.Mutations
@@ -971,7 +971,7 @@ let ``programme production composition reads current source and complete native 
 
 [<Fact>]
 let ``ordinary closure dependency and plan revisions are fresh programme observations`` () =
-    let change request response =
+    let change (request: Transport.Request) (response: IoResult<Response>) =
         response |> Result.map (fun result ->
             if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then { result with Body = result.Body.Replace("\"state\":\"OPEN\"", "\"state\":\"CLOSED\"").Replace(ProgrammeFixture.revision, "2026-10-17T13:00:00Z") }
             elif request.Subject.EndsWith("programme.md", StringComparison.Ordinal) then { result with Body = result.Body.Replace(ProgrammeFixture.head, String.replicate 40 "f") }
@@ -1003,7 +1003,7 @@ let ``programme selection uses actual slices nonenrolled work and action specifi
     let current = report.NativeIntegrator.PullRequests.Head
     let report = { report with NativeIntegrator = { report.NativeIntegrator with PullRequests = [ { current with Issues = [ "FS-GG/.github#999" ] } ] } }
     let context = selectionContext report
-    let choose context report = (V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt).Head
+    let choose (context: V2ProjectionSource.SelectionContext) (report: V2ProjectionSource.InspectionReport) = (V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt).Head
     Assert.Equal("ready", (choose context report).Decision)
     let conflict = { context with Slices = [ { context.Slices.Head with Paths = [ "src/current.fs" ] } ] }
     Assert.Equal("blocked", (choose conflict report).Decision)
@@ -1054,7 +1054,7 @@ let ``programme concurrent human planning membership and source edits invalidate
 
 [<Fact>]
 let ``actual six heading owner record preserves owner and refuses missing duplicate or malformed fields`` () =
-    let bodyChange body request response =
+    let bodyChange (body: string) (request: Transport.Request) (response: IoResult<Response>) =
         if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
             response |> Result.map (fun value -> { value with Body = value.Body.Replace(Text.Json.JsonSerializer.Serialize ProgrammeFixture.ownerBody, Text.Json.JsonSerializer.Serialize(body: string)) })
         else response
@@ -1069,7 +1069,7 @@ let ``actual six heading owner record preserves owner and refuses missing duplic
         Assert.True(report.Items.Head.Owner.IsNone)
         Assert.Equal("needs-decision", (V2ProjectionSource.selectActions report None report.NativeIntegrator.ObservedAt).Head.Decision)
 
-let private asNewAssignment change =
+let private asNewAssignment (change: Transport.Request -> IoResult<Response> -> IoResult<Response>) : V2ProjectionSource.InspectionReport =
     programmeSnapshot (fun request response ->
         let response = change request response
         if request.Subject.EndsWith("closingIssuesReferences", StringComparison.Ordinal) then
@@ -1084,7 +1084,7 @@ let ``actual open native dependency is classified per action without suppressing
         else response)
     Assert.Single report.Items.Head.Evidence.DependencyObservations |> ignore
     let context = selectionContext report
-    let choose context = (V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt).Head
+    let choose (context: V2ProjectionSource.SelectionContext) = (V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt).Head
     Assert.Equal("unknown", (choose context).Decision)
     for reference in [ "https://github.com/FS-GG/.github/issues/1"; "FS-GG/.github#1" ] do
         let prerequisite: V2ProjectionSource.Prerequisite = { Action = V2ProjectionSource.Activation; Reference = reference; Satisfied = Some false; SupplyingOwner = "publisher" }
@@ -1102,7 +1102,7 @@ let ``actual open native dependency is classified per action without suppressing
 let ``malformed reservation and peer repository or token scopes cannot establish disjointness`` () =
     let report = asNewAssignment ProgrammeFixture.unchanged
     let context = selectionContext report
-    let choose context = (V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt).Head
+    let choose (context: V2ProjectionSource.SelectionContext) = (V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt).Head
     Assert.Equal("ready", (choose context).Decision)
     for repository in [ "FS-GG/"; "/"; "/.github"; " FS-GG/.github"; "FS-GG/.github " ] do
         let reservation: V2ProjectionSource.Reservation = { Owner = "original"; Repository = repository; Paths = [ "src/unrelated.fs" ] }
@@ -1127,7 +1127,7 @@ let ``known intake refusal blocks both new source and established continuation``
 [<Fact>]
 let ``literal native PR files never become chore sentinel or rewritten touch set tokens`` () =
     for path in [ "any"; "none"; "src/a,b.fs"; "src/a`b.fs"; "src/white space.fs" ] do
-        let change request response =
+        let change (request: Transport.Request) (response: IoResult<Response>) =
             if request.Subject.EndsWith(" files", StringComparison.Ordinal) then
                 response |> Result.map (fun value -> { value with Body = value.Body.Replace("src/current.fs", path) })
             else response

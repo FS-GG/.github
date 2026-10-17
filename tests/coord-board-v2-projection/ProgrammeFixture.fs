@@ -38,7 +38,7 @@ module ProgrammeFixture =
 
     let private response body = Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }
     let private wire value = response (JsonSerializer.Serialize {| data = value |})
-    let private connection nodes = {| totalCount = List.length nodes; nodes = nodes; pageInfo = {| hasNextPage = false; endCursor = (None: string option) |} |}
+    let private connection (nodes: 'a list) = {| totalCount = List.length nodes; nodes = nodes; pageInfo = {| hasNextPage = false; endCursor = (None: string option) |} |}
     let private blob text = wire {| repository = {| nameWithOwner = "FS-GG/.github"; ref = {| target = {| oid = head |} |}; object = {| oid = head; text = text |}; current = {| oid = head; text = text |} |} |}
     let private enrollment () =
         let value = binding ()
@@ -51,7 +51,7 @@ module ProgrammeFixture =
     let ownerBody = "## Owner\n\nworker\n\n## Done when\n\nAccepted outcome\n\n## Current deliverable\n\nExisting PR\n\n## Next action\n\nCurrent source\n\n## Blocked on\n\nSee owning plan\n\n## Acceptance evidence\n\nNative links"
 
     let private content = {| id = "I_outcome"; number = 4634; repository = {| nameWithOwner = "FS-GG/.github" |} |}
-    let private prNode field value =
+    let private prNode (field: string) (value: 'a) =
         let fields = Map.ofList [ "id", box "PR_current"; "number", box 42; "state", box "OPEN"; "headRefOid", box head; "updatedAt", box revision; "repository", box {| nameWithOwner = "FS-GG/.github" |}; field, box value ]
         wire {| node = fields |}
 

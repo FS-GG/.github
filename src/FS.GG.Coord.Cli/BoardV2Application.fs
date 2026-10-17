@@ -67,7 +67,7 @@ module BoardV2Application =
                populationRevision = report.PopulationRevision; importRecipeRevision = report.ImportRecipeRevision
                importArtifactSha256 = report.ImportArtifactSha256; artifactSha256 = report.ArtifactSha256; protectedInputs = report.ProtectedInputs; nativeDispatch = report.NativeDispatch |> List.map (fun receipt -> {| httpStatus = receipt.HttpStatus; headers = receipt.Headers; responseSha256 = receipt.ResponseSha256; error = receipt.Error |}); readAccounting = "Logical source/project calls; dispatch identity reads are additional"; selected = report.Selected; attempted = report.Attempted; verified = report.Verified
                populationGap = report.PopulationGap |> Option.map Errors.explain; cleanup = report.Cleanup
-               items = report.Items |> List.map (fun item ->
+               items = report.Items |> List.map (fun (item: ItemReport) ->
                    {| issue = issueWire item.Issue; native = item.Native |> Option.map nativeWire
                       dependencyObservations = item.DependencyObservations |> List.map nativeWire
                       dependencyReadComplete = item.DependencyReadComplete; planObservation = item.PlanObservation |> Option.map nativeWire
@@ -76,7 +76,7 @@ module BoardV2Application =
                       projection = item.Projection |> Option.map projectionWire; gap = item.Gap |> Option.map Errors.explain
                       lastVerified = item.LastVerified |> Option.map projectionWire |}) |}
 
-    let encodeInspectionWithContext (report: InspectionReport) context now =
+    let encodeInspectionWithContext (report: InspectionReport) (context: SelectionContext option) (now: DateTimeOffset) =
         let complete = report.Binding.BindingVersion = 4 && report.Evidence.PopulationGap.IsNone && report.MembershipGap.IsNone && report.NativeIntegrator.RepositoryGaps.IsEmpty && (report.NativeIntegrator.PullRequests |> List.forall (fun pull -> pull.Gaps.IsEmpty))
         let facts: IntegratorFacts =
             { OpenPullRequests = if complete then Some(report.NativeIntegrator.PullRequests |> List.map _.Url) else None
@@ -95,7 +95,7 @@ module BoardV2Application =
                populationRevision = report.Binding.PopulationRevision; importRecipeRevision = report.Binding.ImportRecipeRevision; importArtifactSha256 = report.Binding.ImportArtifactSha256
                protectedInputs = report.Evidence.ProtectedInputs; selected = report.Evidence.Selected; attempted = report.Evidence.Attempted; verified = report.Evidence.Verified
                mutationAttempts = 0; populationGap = report.Evidence.PopulationGap |> Option.map Errors.explain; cleanup = report.Evidence.Cleanup
-               items = report.Items |> List.map (fun item ->
+               items = report.Items |> List.map (fun (item: InspectionItem) ->
                    {| issue = issueWire item.Evidence.Issue; expectedNodeId = item.ExpectedNodeId; native = item.Evidence.Native |> Option.map nativeWire
                       dependencyObservations = item.Evidence.DependencyObservations |> List.map nativeWire; dependencyReadComplete = item.Evidence.DependencyReadComplete
                       planObservation = item.Evidence.PlanObservation |> Option.map nativeWire; sourceCurrentness = item.SourceCurrentness
@@ -129,7 +129,7 @@ module BoardV2Application =
             for name in [ "membershipGap"; "memberships"; "nativeIntegrator"; "selectionCoverage"; "selection" ] do
                 let value = extension[name]
                 wire[name] <- if isNull value then null else value.DeepClone()
-            report.Items |> List.iteri (fun index item ->
+            report.Items |> List.iteri (fun index (item: InspectionItem) ->
                 wire["items"][index]["sourceRevision"] <- JsonSerializer.SerializeToNode item.SourceRevision
                 wire["items"][index]["accountableOwner"] <- JsonSerializer.SerializeToNode item.Owner)
             wire.ToJsonString()
