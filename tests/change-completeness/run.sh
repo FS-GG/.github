@@ -9,34 +9,236 @@ fail=0
 ok() { pass=$((pass + 1)); printf 'PASS  %s\n' "$1"; }
 bad() { fail=$((fail + 1)); printf 'FAIL  %s\n' "$1" >&2; }
 
-printf 'docs/readme.md\n' >"$WORK/docs.paths"
-printf '%s\n' \
-  'scripts/ci-gate-impact.py' \
-  'tests/ci-runtime-optimization/run.sh' \
-  'src/FS.GG.Coord.Core/Review.fs' >"$WORK/engine.paths"
+static_only=false
+case "${1:-}" in
+  "") ;;
+  --static-only) static_only=true ;;
+  *) echo "usage: $0 [--static-only]" >&2; exit 2 ;;
+esac
+[ "$#" -le 1 ] || { echo "unexpected arguments" >&2; exit 2; }
 
-GITHUB_OUT="$WORK/docs.out" "$ROOT/scripts/change-completeness" \
-  --paths-file "$WORK/docs.paths" --github-output "$WORK/docs.out" >"$WORK/docs.log" \
-  && ok 'unrelated changes take the bounded non-engine route' || bad 'unrelated route failed'
-grep -qx 'engine_changed=false' "$WORK/docs.out" && ok 'unrelated changes do not schedule expensive engine work' || bad 'unrelated impact was misclassified'
+# Exercise the actual gate in a metadata-only checkout with a closed fake dotnet.
+# These controls prove ordering/refusal/impact; they never claim compiler qualification.
+if python3 - "$ROOT" "$WORK" <<'PY_CALLER'
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
 
-for path in 'scripts/ci-gate-impact.py' 'tests/ci-runtime-optimization/run.sh'; do
-  printf '%s\n' "$path" >"$WORK/focused-ci.paths"
-  : >"$WORK/focused-ci.out"
-  GITHUB_OUT="$WORK/focused-ci.out" "$ROOT/scripts/change-completeness" \
-    --paths-file "$WORK/focused-ci.paths" --github-output "$WORK/focused-ci.out" >"$WORK/focused-ci.log" \
-    && ok "$path takes the bounded non-engine route" || bad "$path focused route failed"
-  grep -qx 'engine_changed=false' "$WORK/focused-ci.out" \
-    && ok "$path does not schedule the full engine job" \
-    || bad "$path was misclassified"
-done
+root, work = map(Path, sys.argv[1:])
+fixture = work / "caller"
+for name in ("scripts/change-completeness", "scripts/read-trx-count.py",
+             "scripts/check-ship-verdict-provenance.py", "scripts/lib/gate.py"):
+    target = fixture / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(root / name, target)
+for folder in ("src", "tests"):
+    for project in (root / folder).rglob("*.fsproj"):
+        target = fixture / project.relative_to(root)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(project, target)
+verdict = fixture / "readiness/fixture/ship-verdict.json"
+verdict.parent.mkdir(parents=True)
+verdict.write_text("{}")
+bin_dir = work / "fake-bin"
+bin_dir.mkdir()
+fake = bin_dir / "dotnet"
+fake.write_text(r'''#!/usr/bin/env python3
+import json
+import os
+from pathlib import Path
+import sys
+args = sys.argv[1:]
+with open(os.environ["MOCK_LOG"], "a") as log:
+    log.write(json.dumps(args) + "\n")
+mode = os.environ.get("MOCK_MODE", "good")
+if args == ["--version"]:
+    if mode == "missing-tool": sys.exit(127)
+    if mode == "malformed-sdk": print("not-an-sdk")
+    elif mode != "empty-sdk": print("10.0.401")
+    sys.exit(0)
+verb, project = args[:2]
+is_v2 = "/tests/coord-board-v2-" in project
+if mode == "restore-error" and verb == "restore": sys.exit(1)
+if mode == "build-error" and verb == "build" and ("Cli.Tests/" in project or "cli-join/" in project): sys.exit(1)
+if mode == "timeout" and verb == "build": sys.exit(124)
+if mode == "signal" and verb == "build": sys.exit(130)
+if verb == "test":
+    if "--results-directory" in args:
+        output = Path(args[args.index("--results-directory") + 1])
+        output.mkdir(parents=True, exist_ok=True)
+        logger = args[args.index("--logger") + 1]
+        filename = logger.split("LogFileName=", 1)[1]
+        if not (is_v2 and mode == "missing-trx"):
+            if is_v2 and mode == "malformed-trx": text = "<broken"
+            else:
+                passed = 0 if is_v2 and mode in ("zero-trx", "skipped-trx") else 1
+                failed = 1 if is_v2 and mode == "failed-trx" else 0
+                text = f'<TestRun><ResultSummary><Counters total="1" executed="{passed + failed}" passed="{passed}" failed="{failed}" error="0"/></ResultSummary></TestRun>'
+            (output / filename).write_text(text)
+    if is_v2 and mode == "test-error": sys.exit(1)
+sys.exit(0)
+''')
+fake.chmod(0o755)
+source = (root / "scripts/change-completeness").read_text()
+match = re.search(r"^COMPILE_PROJECTS=\(\n(.*?)^\)", source, re.M | re.S)
+assert match, "missing maintained compiler root inventory"
+projects = match.group(1).split()
+assert len(projects) == 12 and len(set(projects)) == 12
 
-GITHUB_OUT="$WORK/engine.out" "$ROOT/scripts/change-completeness" \
-  --paths-file "$WORK/engine.paths" --github-output "$WORK/engine.out" >/dev/null \
-  && ok 'mixed focused-CI and engine changes run the focused structural route' || bad 'mixed engine route failed'
-grep -qx 'engine_changed=true' "$WORK/engine.out" \
-  && ok 'an engine change cannot hide inside a focused CI selector change' \
-  || bad 'mixed engine impact was incorrectly skipped'
+# Compare maintained roots with the actual literal native workflow commands. Unknown
+# command operands are drift, not an empty inventory or a successful restore-only gate.
+def inventory(script, workflows):
+    match = re.search(r"^COMPILE_PROJECTS=\(\n(.*?)^\)", script, re.M | re.S)
+    assert match, "missing inventory"
+    declared = match.group(1).split()
+    assert declared and len(set(declared)) == len(declared)
+    assert all(re.fullmatch(r"(?:src|tests)/[A-Za-z0-9._/-]+\.fsproj", item) for item in declared)
+    observed = set()
+    for workflow in workflows:
+        for line in workflow.splitlines():
+            if line.lstrip().startswith("#"): continue
+            command = re.search(r"\bdotnet (?:restore|build|test)\s+([^\s]+)", line)
+            if command:
+                operand = command[1]
+                assert re.fullmatch(r"(?:src|tests)/[A-Za-z0-9._/-]+\.fsproj", operand), "nonliteral workflow root"
+                observed.add(operand)
+    assert observed and set(declared) == observed, "workflow/compiler inventory drift"
+    assert all((root / item).is_file() for item in declared), "missing compiler root"
+    engine = workflows[0].split("  engine:\n", 1)[1]
+    job_header = engine.split("    steps:", 1)[0]
+    assert "needs: change-completeness" in job_header
+    assert "if: github.event_name == 'workflow_dispatch' || needs.change-completeness.outputs.engine_changed == 'true'" in job_header
+    assert "always()" not in job_header
+    assert "continue-on-error:" not in workflows[0], "predecessor/engine must fail closed"
+    assert "timeout-minutes: 5" in workflows[0].split("  engine:\n", 1)[0]
+
+workflows = [(root / f".github/workflows/coord-{name}.yml").read_text() for name in ("engine", "github")]
+inventory(source, workflows)
+for removed in projects:
+    try: inventory(source.replace("  " + removed + "\n", ""), workflows)
+    except AssertionError: pass
+    else: raise AssertionError(f"missing-root mutation survived: {removed}")
+for mutation in (
+    workflows[0] + "\n          dotnet build tests/new/new.fsproj\n",
+    workflows[0] + "\n          dotnet build $PROJECT\n",
+    workflows[0].replace("needs: change-completeness", "needs: unrelated"),
+    workflows[0].replace("if: github.event_name == 'workflow_dispatch' || needs.change-completeness.outputs.engine_changed == 'true'", "if: always()"),
+    workflows[0].replace("  engine:\n", "  engine:\n    continue-on-error: true\n"),
+    workflows[0].replace("timeout-minutes: 5", "timeout-minutes: 15"),
+):
+    try: inventory(source, [mutation, workflows[1]])
+    except AssertionError: pass
+    else: raise AssertionError("workflow drift/bypass mutation survived")
+print("PASS  static compiler inventory and workflow drift/bypass mutations")
+
+count = 0
+def invoke(paths, mode="good", expected=0, engine=False, extra_env=None):
+    global count
+    count += 1
+    paths_file, output, log = [work / f"{count}.{suffix}" for suffix in ("paths", "out", "calls")]
+    paths_file.write_text("\n".join(paths) + "\n")
+    log.write_text("")
+    env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ["PATH"], MOCK_LOG=str(log), MOCK_MODE=mode)
+    env.update(extra_env or {})
+    result = subprocess.run(["bash", str(fixture / "scripts/change-completeness"), "--paths-file", str(paths_file), "--github-output", str(output)],
+                            env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+    assert (result.returncode == 0) == (expected == 0), (paths, mode, result.returncode, result.stdout)
+    assert ("change-completeness: PASS" in result.stdout) == (expected == 0)
+    if output.exists():
+        assert output.read_text() == f"engine_changed={str(engine).lower()}\n", result.stdout
+    calls = [json.loads(line) for line in log.read_text().splitlines()]
+    return calls, result.stdout
+
+def tests(calls): return [call for call in calls if call[0] == "test"]
+def v2_tests(calls): return [call for call in tests(calls) if "/tests/coord-board-v2-" in call[1]]
+
+def compiled(calls):
+    assert calls[0] == ["--version"]
+    restores = [call for call in calls if call[0] == "restore"]
+    builds = [call for call in calls if call[0] == "build"]
+    assert [Path(call[1]).relative_to(fixture).as_posix() for call in restores] == projects
+    assert [Path(call[1]).relative_to(fixture).as_posix() for call in builds] == projects
+    assert all("--locked-mode" in call for call in restores)
+    assert all("--no-restore" in call and call[-2:] == ["-c", "Release"] for call in builds)
+    verbs = [call[0] for call in calls]
+    assert max(i for i, v in enumerate(verbs) if v == "restore") < min(i for i, v in enumerate(verbs) if v == "build")
+    assert max(i for i, v in enumerate(verbs) if v == "build") < min(i for i, v in enumerate(verbs) if v == "test")
+    assert all("--no-build" in call and "--no-restore" in call and "Release" in call for call in tests(calls))
+    assert len(v2_tests(calls)) == 2
+    assert not any("FS.GG.Coord.GitHub.Tests/" in call[1] for call in tests(calls)), "broad GitHub tests remain independent"
+
+for path in ("docs/readme.md", "scripts/ci-gate-impact.py", "tests/ci-runtime-optimization/run.sh"):
+    calls, _ = invoke([path])
+    assert not calls, path
+for path, engine in (
+    ("tests/coord-board-v2-projection/V2ProjectionTests.fs", False),
+    ("tests/coord-board-v2-cli-join/BoardV2ApplicationTests.fs", False),
+    ("tests/coord-board-v2-projection/ProgrammeFixture.fs", False),
+    ("src/FS.GG.Coord.Core/Review.fs", True),
+    ("src/FS.GG.Telemetry.Contracts/Contracts.fs", True),
+    ("Directory.Build.props", True),
+    ("Directory.Packages.props", True),
+    ("global.json", True),
+    (".github/workflows/coord-github.yml", False),
+):
+    calls, _ = invoke([path], engine=engine)
+    compiled(calls)
+    assert len(tests(calls)) == (5 if engine else 2), path
+calls, _ = invoke(["scripts/ci-gate-impact.py", "src/FS.GG.Coord.Core/Review.fs"], engine=True)
+compiled(calls)
+for mode in ("restore-error", "build-error", "timeout", "signal", "missing-tool", "empty-sdk", "malformed-sdk"):
+    calls, diagnostic = invoke(["src/FS.GG.Coord.Core/Review.fs"], mode, expected=1, engine=True)
+    assert not tests(calls), mode
+    if mode == "restore-error": assert len([c for c in calls if c[0] == "restore"]) == 12 and not any(c[0] == "build" for c in calls)
+    if mode == "build-error":
+        assert len([c for c in calls if c[0] == "build"]) == 12
+        assert diagnostic.count("change-completeness: compile failed:") == 2, diagnostic
+    if mode in ("timeout", "signal"): assert len([c for c in calls if c[0] == "build"]) == 1
+# Reach the real elapsed-budget refusal without sleeping or invoking a compiler.
+budget_env = work / "elapsed-budget.sh"
+budget_env.write_text("SECONDS=240\n")
+calls, diagnostic = invoke(["src/FS.GG.Coord.Core/Review.fs"], expected=1, engine=True,
+                           extra_env={"BASH_ENV": str(budget_env)})
+assert not calls and "budget exhausted; coverage incomplete" in diagnostic
+# Remove the executable from a closed PATH; there is no fallback to a host SDK.
+missing_bin = work / "no-dotnet-bin"
+missing_bin.mkdir()
+for tool in ("bash", "dirname", "mktemp", "cp", "python3", "cat", "grep", "rm", "timeout"):
+    executable = shutil.which(tool)
+    assert executable, tool
+    (missing_bin / tool).symlink_to(executable)
+calls, diagnostic = invoke(["src/FS.GG.Coord.Core/Review.fs"], expected=1, engine=True,
+                           extra_env={"PATH": str(missing_bin)})
+assert not calls and "required compiler/timeout tool unavailable" in diagnostic
+for mode in ("test-error", "missing-trx", "malformed-trx", "zero-trx", "failed-trx", "skipped-trx"):
+    calls, _ = invoke(["tests/coord-board-v2-cli-join/BoardV2ApplicationTests.fs"], mode, expected=1)
+    assert len(v2_tests(calls)) == 2, "independent V2 suites must both be attempted"
+for path in ('"src/quoted.fs"', "../outside", ""):
+    calls, _ = invoke([path], expected=1)
+    assert not calls
+project = fixture / projects[1]
+project.rename(project.with_suffix(".missing"))
+calls, _ = invoke(["src/FS.GG.Coord.Core/Review.fs"], expected=1)
+assert not calls
+project.with_suffix(".missing").rename(project)
+project = fixture / "tests/coord-board-v2-cli-join/coord-board-v2-cli-join.fsproj"
+original = project.read_text()
+for malformed in ("<Project", original.replace("ProjectReference Include=", 'ProjectReference Include="$UNKNOWN/" Unused=')):
+    project.write_text(malformed)
+    calls, _ = invoke(["tests/coord-board-v2-cli-join/BoardV2ApplicationTests.fs"], expected=1)
+    assert not calls
+project.write_text(original)
+print(f"PASS  {count} isolated actual-gate fake-tool scenarios (native compiler/runtime NOT RUN)")
+PY_CALLER
+then
+  ok 'compiler barrier, impact, incomplete coverage, and independent test failure controls'
+else
+  bad 'compiler barrier caller controls failed'
+fi
 
 selector="$(grep -F 'if grep -Eq ' "$ROOT/scripts/change-completeness")"
 for required_pattern in \
@@ -61,14 +263,20 @@ grep -Fq 'read-trx-count.py" "$WORK/lifecycle-focus/lifecycle-focus.trx"' "$ROOT
   && ok 'focused lifecycle selection is guarded against zero-match success' \
   || bad 'focused lifecycle selection can pass vacuously with zero matches'
 
-dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj" \
-  -c Release --no-restore --filter FullyQualifiedName~DefinitelyNoLifecycleTestMatches \
-  --logger "trx;LogFileName=zero.trx" --results-directory "$WORK/zero" >/dev/null
-if python3 "$ROOT/scripts/read-trx-count.py" "$WORK/zero/zero.trx" \
-  --minimum 1 --label "change-completeness zero-match mutation" >/dev/null 2>&1; then
-  bad 'zero-match mutation passed the non-vacuity guard'
+if [ "$static_only" = false ]; then
+  # Keep the original native zero-match mutation in hosted qualification. Static-only
+  # runs above use the maintained TRX reader over fake results, not a native PASS claim.
+  dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj" \
+    -c Release --no-restore --filter FullyQualifiedName~DefinitelyNoLifecycleTestMatches \
+    --logger "trx;LogFileName=zero.trx" --results-directory "$WORK/zero" >/dev/null
+  if python3 "$ROOT/scripts/read-trx-count.py" "$WORK/zero/zero.trx" \
+    --minimum 1 --label "change-completeness zero-match mutation" >/dev/null 2>&1; then
+    bad 'zero-match mutation passed the non-vacuity guard'
+  else
+    ok 'zero-match mutation reds the non-vacuity guard'
+  fi
 else
-  ok 'zero-match mutation reds the non-vacuity guard'
+  printf 'SKIP  native Lifecycle zero-match mutation (--static-only); native compiler/runtime NOT RUN\n'
 fi
 
 # The production runner must name every active structural family. These are observable diagnostics, not prose:
