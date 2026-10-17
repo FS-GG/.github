@@ -75,7 +75,7 @@ jobs:
       - name: Prove successor admission and fake-provider recovery
         run: python3 tests/release-successor-execution/run.py
       - name: Prove inert original-tag authentication factory and inactive selection
-        run: python3 tests/release-successor-authentication/run.py
+        run: python3 tests/release-successor-authentication/run.py --current-source-suspension
       - name: Prove retained candidate identity and extraction
         run: python3 tests/release-successor-artifact/run.py
       - name: Exercise immutable GS2-08.7 bridge and GS2-08.8 receiver

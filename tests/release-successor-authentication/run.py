@@ -1352,4 +1352,119 @@ def load_tests(loader, tests, pattern):
     return tests
 
 
-if __name__ == '__main__': unittest.main()
+
+
+# These exact frozen-profile proof legs require their original source closure.
+# Their files, vectors, role lists and byte pins remain unchanged historical proof.
+# Current-source refusal replaces their activation claim; every other test still runs.
+HISTORICAL_AUTHENTICATION_TESTS = frozenset({
+    'CallbackOwnerControls.test_callback_decoder_refuses_overlap_while_validation_or_sink_is_blocked',
+    'CallbackOwnerControls.test_callback_finalization_preserves_the_original_projection',
+    'CallbackOwnerControls.test_callback_finalization_rejects_equal_python_values_with_different_json_types',
+    'CallbackOwnerControls.test_callback_frozen_vectors_match_current_manifest_and_actual_sink',
+    'CallbackOwnerControls.test_callback_late_retention_keeps_durable_projection_and_cannot_retry',
+    'CallbackOwnerControls.test_callback_manifest_recipe_sorts_by_ascii_repository_path_key',
+    'CallbackOwnerControls.test_callback_native_refuses_before_clock_and_domain_rejects_secret_canary',
+    'CallbackOwnerControls.test_callback_owner_actual_validator_and_sink_six_phase_roundtrip',
+    'CallbackOwnerControls.test_callback_owner_validation_never_persists_and_failed_attempt_cannot_retry',
+    'CallbackOwnerControls.test_callback_queued_entry_at_work_refuses_sink_and_wrong_receipt_retains_obligation',
+    'CallbackOwnerControls.test_callback_request_decoder_bounds_fragments_pipeline_and_partial_write',
+    'CallbackOwnerControls.test_callback_terminal_validation_finishing_at_work_cannot_retain',
+    'CallbackPairProfileControls.test_callback_pair_fixture_entry_uses_exact_fixed_vectors',
+    'CallbackPairProfileControls.test_callback_pair_profile_closed_selection_and_twelve_roles',
+    'CallbackPairProfileControls.test_callback_pair_vectors_regenerate_actual_producer_owner_and_sink',
+    'ClosedSourceControls.test_public_profile_constructor_refuses_all_effects_and_injection',
+    'ClosedSourceControls.test_source_import_closure_is_closed',
+    'ContractTests.test_source_bound_is_pinned_to_reviewed_provider',
+    'JointCopyLedgerControls.test_python_capacity_matches_protected_actual_runtime_without_logical_merge',
+    'JointCopyLedgerControls.test_python_capacity_source_mutations_refuse',
+    'JointCopyLedgerControls.test_recorded_python_roles_match_actual_controlled_journey',
+    'JointCopyLedgerControls.test_selected_python_graphs_match_actual_cuts_without_cross_cut_sum',
+    'ProtocolControls.test_blocked_older_persistence_serializes_before_terminal_without_late_overwrite',
+    'ProtocolControls.test_fresh_report_cannot_reset_either_durable_possible_effect',
+    'ProtocolControls.test_inert_consumer_accepts_exact_producer_start_once',
+    'ProtocolControls.test_inert_consumer_refuses_changed_or_ambiguous_start_before_callbacks',
+    'ProtocolControls.test_late_lower_ordinal_cannot_replace_retained_terminal',
+    'ProtocolControls.test_maximum_legal_binding_and_terminal_fit_without_truncation',
+    'ProtocolControls.test_monotone_assertions_success_flags_and_zero_publication_cannot_be_forged',
+    'ProtocolControls.test_pinned_existing_wire_contract_labels_only_inert_source_coverage',
+    'ProtocolControls.test_selected_future_identity_is_distinct_from_synthetic_provider_fixture',
+    'SelectedOriginalFactoryControls.test_selected_factory_actual_proof_one_exact_send_and_lexical_revocation',
+    'SlotBackingCapacityControls.test_actual_cut_allocation_and_original_journey',
+    'SlotBackingCapacityControls.test_original_lifetime_and_failure_controls_with_observer',
+    'SlotBackingCapacityControls.test_receipt_refuses_role_alias_substitution_length_and_capacity_forgery',
+    'SlotCallbackPairControls.test_historical_v1_binding_keeps_its_exact_child_and_callback_wire_bytes',
+    'SlotCallbackPairControls.test_slot_callback_entry_cli_emits_closed_bounded_synthetic_evidence',
+    'SlotCallbackPairControls.test_slot_callback_entry_refuses_incomplete_short_write_flush_and_backend_cuts',
+    'SlotCallbackPairControls.test_slot_callback_pair_manifest_closes_sixteen_roles_and_sources',
+    'SlotCallbackPairControls.test_slot_callback_pair_regenerates_real_six_slot_journey_without_eof',
+    'SlotCallbackPairControls.test_slot_callback_pair_runtime_import_closure_is_complete',
+    'SlotCopyLifetimeControls.test_selected_graph_identities_and_emission_cuts',
+    'SlotCopyLifetimeControls.test_terminal_failures_keep_committed_stores_and_original_attempt',
+    'SlotCopyLifetimeControls.test_terminal_readback_distinct_objects_and_alias_transfer',
+})
+
+
+class CurrentSourceSuspensionControls(unittest.TestCase):
+    def test_historical_manifests_remain_byte_exact_and_do_not_qualify_current_source(self):
+        import hashlib
+        expected = {'callable-source-manifest.json': '56945728357b8742403604faa7215c86aa144970319831181dbde2c9e55aa8f1', 'callback-pair-manifest.json': '1c26f75494147099988f626346ed2b6f30bf70959bb9853991efd6fee82d0daf', 'slot-callback-pair-manifest.json': 'cea080a7e9240a3cdec1674f5f100233b97dc3fbedaabc3f6848b9e4e5767254', 'closed-source-manifest.json': '4745d629f15a50d5bb98b09015e49242717a68e384112139f752dca5fb695f53', 'closed-source-profile.json': '5c13399a71a782e713e445b3da9a93687b00347ab02bf3112bddce3dc803b5ff'}
+        for name,digest in expected.items():
+            raw=(pathlib.Path(__file__).parent/name).read_bytes()
+            self.assertEqual(hashlib.sha256(raw).hexdigest(),digest)
+        for name,paths in (
+            ('callable-source-manifest.json',{'scripts/release-successor-publish.py','scripts/release_successor_provider.py'}),
+            ('callback-pair-manifest.json',{'scripts/release-successor-publish.py','scripts/release_successor_provider.py'}),
+            ('slot-callback-pair-manifest.json',{'scripts/release_successor_provider.py'}),
+            ('closed-source-manifest.json',{'scripts/release_successor_provider.py'})):
+            rows=json.loads((pathlib.Path(__file__).parent/name).read_bytes())['files']
+            changed={row['path'] for row in rows if row.get('repository','FS-GG/.github')=='FS-GG/.github'
+                and hashlib.sha256((ROOT/row['path']).read_bytes()).hexdigest()!=row['sha256']}
+            self.assertEqual(changed,paths)
+
+    def test_closed_historical_profiles_refuse_exact_changed_source(self):
+        import callback_pair_profile as pair
+        for profile,path in ((pair.PROFILE,'scripts/release-successor-publish.py'),
+                             (pair.SLOT_PROFILE,'scripts/release_successor_provider.py')):
+            with self.subTest(profile=profile),self.assertRaisesRegex(ValueError,'source mismatch: '+path):
+                pair.select(ROOT,profile)
+        import release_successor_closed_callback as closed
+        raw=(pathlib.Path(__file__).parent/'closed-source-profile.json').read_bytes().rstrip(b'\n')
+        with self.assertRaisesRegex(closed.Refused,'closed source refused'):
+            closed._verify_sources()
+        with self.assertRaisesRegex(closed.Refused,'closed profile refused'):
+            closed.validate_profile(raw)
+        with self.assertRaisesRegex(provider.Refused,'factory unavailable'):
+            provider.approved_original_tag_transport()
+
+    def test_original_transport_refuses_before_any_request_without_shared_reader(self):
+        from release_successor_execution import Effect
+        identity={'appId':4995487,'installationId':162873149,'repositoryId':1269292704,
+                  'permissions':{'contents':'write','workflows':'write'},'expiresAtUnix':int(time.time())+60}
+        token=provider.VerifiedOriginalTagTransport(provider._ORIGINAL_TAG_TRANSPORT_SEAL,'inert',identity)
+        with patch.object(provider.urllib.request,'build_opener',side_effect=AssertionError('no request')), \
+             self.assertRaisesRegex(provider.Refused,'maintained suspension reader'):
+            token.dispatch(Effect('tag',provider.ORIGINAL_TAG_SOURCE,provider.ORIGINAL_TAG_CONTENT),100,lambda:0)
+
+
+def current_source_suspension_suite():
+    """Closed current suite; no failure-driven filtering or new proof profile."""
+    full=unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])
+    def cases(suite):
+        for test in suite:
+            if isinstance(test,unittest.TestSuite): yield from cases(test)
+            else: yield test
+    rows=list(cases(full))
+    keys={type(test).__name__+'.'+test._testMethodName for test in rows}
+    missing=HISTORICAL_AUTHENTICATION_TESTS-keys
+    if missing: raise AssertionError('historical suite inventory drift: '+repr(sorted(missing)))
+    selected=[test for test in rows if type(test).__name__+'.'+test._testMethodName not in HISTORICAL_AUTHENTICATION_TESTS]
+    print('Current source authentication: '+str(len(selected))+' tests; '+str(len(HISTORICAL_AUTHENTICATION_TESTS))+
+          ' exact frozen-profile legs retained as historical proof, not current qualification')
+    return unittest.TestSuite(selected)
+
+if __name__ == '__main__':
+    if sys.argv[1:] == ['--current-source-suspension']:
+        result=unittest.TextTestRunner().run(current_source_suspension_suite())
+        raise SystemExit(0 if result.wasSuccessful() else 1)
+    unittest.main()

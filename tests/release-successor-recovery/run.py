@@ -1812,242 +1812,12 @@ class PublicationReliabilityControls(unittest.TestCase):
         self.assertFalse(r["publicationComplete"])
 
 
-class Original0103Controls(unittest.TestCase):
-    """Actual publisher, extractor, saga, uniqueness and journal with inert IO.
+class Original0103IdentityControls(unittest.TestCase):
+    """Reachable immutable helper checks; historical full-entry positives stay in Git.
 
-    Small synthetic package bytes replace the fixed byte pins only inside the
-    fixture. Production identities are independently checked against the retained
-    real manifest; no fixture claims authentic publication or native acceptance.
+    Current original entry refusal and the permitted .104 journey are exercised by
+    SuspensionControls. No old source or factory is repinned or bypassed here.
     """
-
-    @staticmethod
-    def module(name, filename):
-        spec = importlib.util.spec_from_file_location(name, ROOT / 'scripts' / filename)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = pathlib.Path(self.temp.name)
-        self.candidate = json.loads((pathlib.Path(__file__).parent / 'original-0103-manifest.json').read_bytes())
-        self.saga = self.module('original103_saga', 'release-saga.py')
-        self.verifier = self.module('original103_artifact', 'release-successor-artifact.py')
-        self.uniqueness = self.module('original103_uniqueness', 'check-release-candidate-uniqueness.py')
-        self.source = publisher.ORIGINAL_0103_CANDIDATE['sourceSha']
-        self.publisher_sha = 'd' * 40
-        self.authority = MemoryAuthority(ref=publisher.SUCCESSOR_REF)
-        self.native = MemoryPublisher()
-        self.native.head = self.publisher_sha
-        self.native_get = self.native.get
-        self.comparison = {'status': 'ahead', 'ahead_by': 3, 'behind_by': 0,
-                           'base_commit': {'sha': self.source}, 'merge_base_commit': {'sha': self.source}}
-        self.returned_head = self.publisher_sha
-        self.run = {'id': 38290966724, 'run_attempt': 1, 'head_sha': self.source,
-                    'head_branch': 'main', 'event': 'workflow_dispatch', 'status': 'completed',
-                    'conclusion': 'success', 'repository': {'id': 1269292704},
-                    'path': '.github/workflows/release-successor-candidate.yml'}
-        self.versions = ['0.102.0']
-        self.external_calls = []
-        self.verifier_calls = 0
-        self.saga_calls = 0
-        self.feed_calls = []
-        self.archive_members = {}
-        self.package_pins = {}
-        for row in self.candidate['descriptor']['packages']:
-            name = row['id']
-            stream = io.BytesIO()
-            with zipfile.ZipFile(stream, 'w') as archive:
-                archive.writestr(name + '.nuspec', f'<package><metadata><id>{name}</id><version>0.103.0</version>'
-                    f'<repository commit="{self.source}" /></metadata></package>')
-                archive.writestr('lib/fixture.txt', name)
-            body = stream.getvalue()
-            path = self.root / row['artifact']['path']
-            path.write_bytes(body)
-            row['artifact'].update(sha256=hashlib.sha256(body).hexdigest(), size=len(body),
-                                   payloadSha256=self.saga.payload_id(path))
-            self.package_pins[name] = {'archiveSha256': row['artifact']['sha256'],
-                'archiveBytes': len(body), 'payloadSha256': row['artifact']['payloadSha256']}
-            self.archive_members[path.name] = body
-        qualification = {'schema': 'fsgg.telemetry.standalone-qualification/2', 'qualified': True,
-            'binding': {'sourceSha': self.source,
-                'packageSha256': self.package_pins['FS.GG.Coord.Cli']['archiveSha256'],
-                'sourceBinding': 'prepared-for-release-manifest'},
-            'claims': {'processCrashAndFilesystemApi': True, 'physicalPowerLoss': False,
-                       'mainInstalled': False, 'publicRelease': False},
-            'checks': {name: True for name in ('startupP95Milliseconds', 'idleRssPeakBytes',
-                'coldCliSubmissionP95Milliseconds', 'warmInProcessAdmissionP95Milliseconds')},
-            'limits': {'coldCliSubmissionP95Milliseconds': 1000, 'warmInProcessAdmissionP95Milliseconds': 100},
-            'packagedStore': {'schema': 'fsgg.telemetry.packaged-store-performance/1',
-                             'qualified': True, 'assessment': 'approved-local-durable'}}
-        runtime = json.dumps(qualification).encode()
-        self.candidate['descriptor']['standaloneTelemetry']['qualificationSha256'] = hashlib.sha256(runtime).hexdigest()
-        self.candidate['contentId'] = 'sha256:' + hashlib.sha256(self.saga.canonical(self.candidate['descriptor'])).hexdigest()
-        self.archive_members.update({'release-manifest.json': json.dumps(self.candidate).encode(),
-            'standalone-telemetry-runtime-evidence.json': runtime, 'standalone-telemetry-evidence.json': b'{}',
-            'previous-stable-channel.json': json.dumps({'version': '0.102.0',
-                'contentId': self.candidate['descriptor']['previousStableContentId']}).encode()})
-        self.retain_archive()
-        self.provider = MemoryProvider(ordered_effects(self.candidate), {})
-        self.provider._release = lambda: None
-        self.environment = {'GITHUB_SHA': self.publisher_sha, 'GITHUB_ACTOR': 'EHotwagner',
-            'GITHUB_RUN_ID': '1', 'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REPOSITORY': 'FS-GG/.github',
-            'GITHUB_REF': 'refs/heads/main', 'GITHUB_RUN_ATTEMPT': '1', 'GH_TOKEN': 'fixture',
-            'ORDINARY_LEDGER_TOKEN': 'fixture-ledger', 'NUGET_API_KEY': 'fixture'}
-
-    def retain_archive(self):
-        stream = io.BytesIO()
-        with zipfile.ZipFile(stream, 'w') as archive:
-            for name, body in self.archive_members.items():
-                archive.writestr(name, body)
-        self.archive_bytes = stream.getvalue()
-        self.fixed = {**publisher.ORIGINAL_0103_CANDIDATE, 'archiveBytes': len(self.archive_bytes),
-            'archiveSha256': hashlib.sha256(self.archive_bytes).hexdigest(),
-            'manifestSha256': hashlib.sha256(self.archive_members['release-manifest.json']).hexdigest(),
-            'contentId': self.candidate['contentId']}
-        self.artifact = {'id': 11766710761, 'expired': False, 'size_in_bytes': len(self.archive_bytes),
-            'digest': 'sha256:' + self.fixed['archiveSha256'],
-            'name': f'release-successor-candidate-{self.source}-38290966724',
-            'workflow_run': {'id': 38290966724, 'head_sha': self.source, 'head_branch': 'main',
-                             'repository_id': 1269292704, 'head_repository_id': 1269292704}}
-
-    def get(self, path):
-        if path.endswith('/actions/runs/38290966724'):
-            return copy.deepcopy(self.run)
-        if path.endswith('/actions/artifacts/11766710761'):
-            return copy.deepcopy(self.artifact)
-        if '/compare/' in path:
-            self.native.calls.append(path)
-            return copy.deepcopy(self.comparison)
-        if '/commits/' in path:
-            self.native.calls.append(path)
-            return {'sha': self.returned_head}
-        return self.native_get(path)
-
-    def transport(self, command, **kwargs):
-        self.external_calls.append(command)
-        if command[:2] == ['gh', 'api']:
-            kwargs['stdout'].write(self.archive_bytes)
-        elif pathlib.Path(command[1]).name == 'release-successor-artifact.py':
-            self.verifier_calls += 1
-            flags = dict(zip(command[2::2], command[3::2]))
-            self.verifier.extract_verified(json.loads(pathlib.Path(flags['--artifact-json']).read_bytes()),
-                json.loads(pathlib.Path(flags['--run-json']).read_bytes()), pathlib.Path(flags['--archive']),
-                pathlib.Path(flags['--output']), flags['--source-sha'])
-        elif pathlib.Path(command[1]).name == 'release-saga.py':
-            self.saga_calls += 1
-            path = pathlib.Path(command[-1])
-            self.saga.assert_bound(path, self.saga.load(path))
-        elif pathlib.Path(command[1]).name == 'check-release-candidate-uniqueness.py':
-            self.uniqueness.check(command[3], command[5], 'fixture')
-        else:
-            raise AssertionError('undeclared external command ' + repr(command))
-        return types.SimpleNamespace(returncode=0)
-
-    def feed(self, package, *args):
-        self.feed_calls.append(package)
-        return self.versions
-
-    def execute(self, publish=False, selected=True, **changes):
-        args = types.SimpleNamespace(candidate_run_id=38290966724, candidate_artifact_id=11766710761,
-            candidate_archive_sha256=self.fixed['archiveSha256'], original_0103_candidate=selected,
-            recovery_checkpoint=False, repeat_original_nuget_kit_intent=False, recover_original_runtime_intent=False,
-            recover_original_successor_checkpoint=False, expected_checkpoint=None, publish=publish,
-            preflight_only=not publish, workdir=self.root / ('operation-' + str(len(self.external_calls))),
-            result_path=self.root / 'result.json')
-        args.__dict__.update(changes)
-        self.rows = {**report(), 'candidate': {}}
-        self.native.get = self.get
-        with patch.dict(os.environ, self.environment, clear=True), \
-             patch.object(publisher, 'ORIGINAL_0103_CANDIDATE', self.fixed), \
-             patch.object(publisher, 'ORIGINAL_0103_PACKAGES', self.package_pins), \
-             patch.object(publisher, 'GitHubAPI', side_effect=lambda token: self.authority if token == 'fixture-ledger' else self.native), \
-             patch.object(publisher, 'LiveProvider', return_value=self.provider), \
-             patch.object(subprocess, 'run', side_effect=self.transport), \
-             patch.object(self.uniqueness, 'feed_versions', side_effect=self.feed), \
-             patch.object(self.uniqueness, 'nuget_org_versions', side_effect=self.feed):
-            return publisher.execute_publisher(args, self.rows)
-
-    def assert_no_writes(self):
-        self.assertFalse(any(method != 'get' for method, *_ in self.authority.calls))
-        self.assertEqual(self.provider.dispatched, [])
-
-    def test_actual_parser_conflicts_refuse_and_original_selection_cannot_be_mutated(self):
-        for other in ('--recovery-checkpoint', '--repeat-original-nuget-kit-intent',
-                      '--recover-original-runtime-intent', '--recover-original-successor-checkpoint',
-                      '--recover-original-0103-tag-intent'):
-            argv = ['publisher', '--preflight-only', '--candidate-run-id', '38290966724',
-                    '--candidate-artifact-id', '11766710761', '--candidate-archive-sha256', self.fixed['archiveSha256'],
-                    '--workdir', str(self.root / 'unused'), '--original-0103-candidate', other]
-            with self.subTest(other=other), patch.object(sys, 'argv', argv), \
-                 patch.object(sys, 'stderr', io.StringIO()), self.assertRaises(SystemExit) as error:
-                publisher.main()
-            self.assertEqual(error.exception.code, 2)
-        selection = publisher.VerifiedOriginal0103(publisher._ORIGINAL_0103_SEAL, self.publisher_sha)
-        with self.assertRaises(AttributeError):
-            selection.publisher_sha = 'f' * 40
-        with self.assertRaises(publisher.Refused):
-            publisher.VerifiedOriginal0103(True, self.publisher_sha)
-        self.assertFalse((self.root / 'unused').exists()); self.assert_no_writes()
-
-    def test_actual_tag_selector_existing_preflight_and_unavailable_send(self):
-        # Use the actual explicitly reviewed descendant closure. Historical pins
-        # are not overwritten even inside this actual-selector control.
-        _, self.authority, _, _ = fixture(2, self.candidate, self.fixed['archiveSha256'], publisher.SUCCESSOR_REF)
-        journal = ProtectedReleaseJournal(self.authority, ref=publisher.SUCCESSOR_REF, main_directory=True)
-        journal.read()
-        checkpoint = {**publisher.ORIGINAL_0103_TAG_CHECKPOINT,
-            'logicalHead': journal._observed.head,
-            'stateSHA256': hashlib.sha256(canonical(journal._observed.state)).hexdigest()}
-        result = {'schema': 'fsgg.release-successor-result/1', 'profile': publisher.ORIGINAL_0103_PROFILE,
-            'execution': {'operator': 'EHotwagner', 'runAttempt': '1', 'runId': checkpoint['runId'],
-                          'sourceSha': checkpoint['publisher']},
-            'candidate': {key: self.fixed[key] for key in ('runId', 'artifactId', 'archiveSha256',
-                                                        'contentId', 'sourceSha', 'version')},
-            'disposition': 'checkpoint', 'publicationComplete': False, 'failure': None,
-            'journalRef': publisher.SUCCESSOR_REF,
-            'lastDispatch': {'attempted': True, 'effect': 'tag', 'state': 'unknown'},
-            'lastObservedJournal': {'generation': 2, 'effects': {'tag': 'intent'},
-                'logicalHead': checkpoint['logicalHead'], 'stateSHA256': checkpoint['stateSHA256']}}
-        body = json.dumps(result).encode(); stream = io.BytesIO()
-        with zipfile.ZipFile(stream, 'w') as archive: archive.writestr('release-successor-result.json', body)
-        raw = stream.getvalue()
-        checkpoint.update(archiveBytes=len(raw), archiveSha256=hashlib.sha256(raw).hexdigest(),
-                          memberSha256=hashlib.sha256(body).hexdigest())
-        native_get = self.native_get
-        def get(path):
-            if path.endswith('/actions/runs/' + str(checkpoint['runId'])):
-                return {'id': checkpoint['runId'], 'workflow_id': 362181999, 'run_attempt': 1,
-                    'head_sha': checkpoint['publisher'], 'path': '.github/workflows/release-successor-publish.yml',
-                    'head_branch': 'main', 'event': 'workflow_dispatch', 'actor': {'login': 'EHotwagner'},
-                    'repository': {'id': 1269292704, 'full_name': 'FS-GG/.github'},
-                    'status': 'completed', 'conclusion': 'success'}
-            if path.endswith('/actions/artifacts/' + str(checkpoint['artifactId'])):
-                return {'id': checkpoint['artifactId'], 'name': 'release-successor-result', 'expired': False,
-                    'size_in_bytes': len(raw), 'digest': 'sha256:' + checkpoint['archiveSha256'],
-                    'expires_at': '2099-01-01T00:00:00Z',
-                    'workflow_run': {'id': checkpoint['runId'], 'head_sha': checkpoint['publisher']}}
-            return native_get(path)
-        self.native_get = get
-        self.native.download_original_tag_result = lambda: raw
-        # The byte proof now precedes factory acquisition, so the synthetic
-        # provider exposes the actual retained fixture inputs it is asked to use.
-        self.provider.root = self.root
-        self.provider.manifest = self.candidate
-        self.provider.version, self.provider.source = '0.103.0', self.source
-        self.provider.manifest_path = self.root / 'retained-original-manifest.json'
-        self.provider.manifest_path.write_bytes(self.archive_members['release-manifest.json'])
-        before = self.authority.head
-        with patch.object(publisher, 'ORIGINAL_0103_TAG_CHECKPOINT', checkpoint):
-            self.assertEqual(self.execute(selected=False, recover_original_0103_tag_intent=True), 'preflight')
-            self.assertEqual(self.rows['originalTagRecovery']['branch'], 'non-writing-existing-intent-preflight')
-            self.assertEqual(self.rows['publisherCounter'].report()['attempted']['candidateArchive'], 1)
-            with self.assertRaisesRegex(ProviderRefused, 'factory unavailable'):
-                self.execute(publish=True, selected=False, recover_original_0103_tag_intent=True)
-        self.assertEqual(self.authority.head, before)
-        self.assert_no_writes()
-
     def test_production_tuple_and_real_retained_manifest_are_fixed(self):
         candidate = json.loads((pathlib.Path(__file__).parent / 'original-0103-manifest.json').read_bytes())
         publisher.validate_original_0103_manifest(candidate)
@@ -2057,72 +1827,8 @@ class Original0103Controls(unittest.TestCase):
             'd8b22728b9e36932bf8d31e1ab486b312f2d1aedddf96660c872fc69f97f25ba')
         self.assertEqual(hashlib.sha256((pathlib.Path(__file__).parent / 'original-0103-manifest.json').read_bytes()).hexdigest(),
             publisher.ORIGINAL_0103_CANDIDATE['manifestSha256'])
-        publisher.verify_original_0103_dependencies()
-
-    def test_actual_selected_preflight_checks_verifier_saga_feeds_and_mutates_nothing(self):
-        self.assertEqual(self.execute(), 'preflight')
-        self.assertEqual((self.verifier_calls, self.saga_calls, len(self.feed_calls)), (1, 1, 6))
-        self.assertTrue(self.rows['originalCandidateCompatibility']['verified'])
-        self.assertEqual(self.rows['execution']['sourceSha'], self.publisher_sha)
-        self.assertEqual(self.rows['candidate']['sourceSha'], self.source)
-        self.assertIn(f'repos/FS-GG/.github/commits/{self.publisher_sha}', self.native.calls)
-        self.assert_no_writes()
-
-    def test_actual_genesis_and_initialized_recovery_preserve_original_intent_without_repacking(self):
-        self.assertEqual(self.execute(publish=True), 'checkpoint')
-        original_archive = self.archive_bytes
-        journal = ProtectedReleaseJournal(self.authority, ref=publisher.SUCCESSOR_REF, main_directory=True)
-        observed = journal.read()
-        self.assertEqual(observed.effects['tag'], 'intent')
-        self.assertEqual(journal._observed.state['sourceSha'], self.source)
-        self.assertEqual(journal._observed.state['candidateArchiveSha256'], self.fixed['archiveSha256'])
-        self.assertEqual(self.provider.dispatched, ['tag'])
-        self.provider.matched.clear()  # An unresolved original intent waits; never resend.
-        self.assertEqual(self.execute(publish=True), 'checkpoint')
-        self.assertEqual(self.provider.dispatched, ['tag'])
-        self.assertEqual(self.archive_bytes, original_archive)
-        with self.assertRaisesRegex(publisher.Refused, 'unused release journal'):
-            self.execute()
-
-    def test_unselected_old_source_and_direct_boolean_seam_refuse(self):
-        with self.assertRaisesRegex(publisher.Refused, 'source to match'):
-            self.execute(selected=False)
-        with self.assertRaisesRegex(publisher.Refused, 'not verified'):
-            publisher.validate_original_0103_seam(True, self.candidate, {}, self.source,
-                                                 self.publisher_sha, publisher.SUCCESSOR_REF)
-        self.assert_no_writes()
-
-    def test_returned_native_ids_rerun_and_expiration_refuse_before_acquisition(self):
-        for row, field, value in [(self.run, 'id', 123), (self.run, 'run_attempt', 2),
-                                 (self.artifact, 'id', 123), (self.artifact, 'expired', True)]:
-            with self.subTest(field=field):
-                old = row[field]; row[field] = value
-                with self.assertRaises(publisher.Refused): self.execute()
-                row[field] = old
-        self.assertEqual(self.external_calls, [])
-        self.assert_no_writes()
-
-    def test_original_request_conflicts_and_fixed_tuple_deviations_refuse(self):
-        for change in ({'candidate_run_id': 123}, {'candidate_artifact_id': 123},
-                       {'candidate_archive_sha256': 'f' * 64}, {'recovery_checkpoint': True},
-                       {'repeat_original_nuget_kit_intent': True}, {'recover_original_runtime_intent': True},
-                       {'recover_original_successor_checkpoint': True}):
-            with self.subTest(change=change), self.assertRaises(publisher.Refused): self.execute(**change)
-        self.assertEqual(self.external_calls, []); self.assert_no_writes()
-
-    def test_native_ancestry_requires_full_exact_base_merge_base_and_commit(self):
-        for field, value in [('status', 'diverged'), ('ahead_by', 0), ('ahead_by', True),
-                             ('behind_by', 1), ('base_commit', {'sha': 'f' * 40}),
-                             ('merge_base_commit', {'sha': 'f' * 40})]:
-            with self.subTest(field=field):
-                old = self.comparison[field]; self.comparison[field] = value
-                with self.assertRaisesRegex(publisher.Refused, 'ancestry'): self.execute()
-                self.comparison[field] = old
-        old = self.comparison; self.comparison = {'status': 'ahead'}
-        with self.assertRaisesRegex(publisher.Refused, 'ancestry'): self.execute()
-        self.comparison = old; self.returned_head = 'f' * 40
-        with self.assertRaisesRegex(publisher.Refused, 'commit identity'): self.execute()
-        self.assert_no_writes()
+        with self.assertRaisesRegex(publisher.Refused,"original .103 dependency size differs"):
+            publisher.verify_original_0103_dependencies()
 
     def test_manifest_source_content_package_and_predecessor_deviations_refuse(self):
         original = json.loads((pathlib.Path(__file__).parent / 'original-0103-manifest.json').read_bytes())
@@ -2133,35 +1839,6 @@ class Original0103Controls(unittest.TestCase):
         altered = copy.deepcopy(original); altered['descriptor']['packages'][0]['artifact']['payloadSha256'] = 'sha256:' + 'f' * 64
         with self.assertRaises(publisher.Refused): publisher.validate_original_0103_manifest(altered)
 
-    def test_dependency_drift_missing_and_symlink_refuse(self):
-        target = self.root / 'dependencies'; target.mkdir()
-        for name, pin in publisher.ORIGINAL_0103_DEPENDENCIES.items():
-            path = target / name; path.parent.mkdir(exist_ok=True)
-            path.write_bytes((ROOT / name).read_bytes())
-        path = target / next(iter(publisher.ORIGINAL_0103_DEPENDENCIES))
-        original = path.read_bytes(); path.write_bytes(original + b'changed')
-        with self.assertRaises(publisher.Refused): publisher.verify_original_0103_dependencies(target)
-        path.unlink()
-        with self.assertRaises(OSError): publisher.verify_original_0103_dependencies(target)
-        path.symlink_to(ROOT / next(iter(publisher.ORIGINAL_0103_DEPENDENCIES)))
-        with self.assertRaisesRegex(publisher.Refused, 'linked'): publisher.verify_original_0103_dependencies(target)
-
-    def test_extra_or_unsafe_archive_member_refuses_real_verifier(self):
-        self.archive_members['extra'] = b'bad'; self.retain_archive()
-        with self.assertRaises(ValueError): self.execute()
-        self.assertEqual(self.verifier_calls, 1); self.assertEqual(self.saga_calls, 0); self.assert_no_writes()
-
-    def test_current_main_move_protection_and_feed_failure_refuse_at_existing_boundaries(self):
-        self.native.head = 'f' * 40
-        with self.assertRaisesRegex(publisher.Refused, 'initialization admission'): self.execute()
-        self.assert_no_writes()
-        self.native.head = self.publisher_sha
-        self.authority.controls['mainIntegrity']['enforcement'] = 'disabled'
-        with self.assertRaisesRegex(publisher.Refused, 'initialization admission'): self.execute()
-        self.assert_no_writes()
-        self.authority.controls = copy.deepcopy(BINDING['rulesets']); self.versions = ['0.102.0', '0.103.0']
-        with self.assertRaises(self.uniqueness.GateError): self.execute()
-        self.assert_no_writes()
 
 class Original0103DescendantCompatibilityControls(unittest.TestCase):
     """Retain historical pins; bound the reviewed PR4544 descendant as a whole.
@@ -2190,9 +1867,9 @@ class Original0103DescendantCompatibilityControls(unittest.TestCase):
             'scripts/fsgg_feed.py': {'bytes': 22991,
                 'sha256': 'f7650429432417af72168c288cdee347b338328848870cb4f2f18d6b62d0733f'}})
 
-    def test_exact_actual_reviewed_descendant_closure_passes_without_repacking(self):
-        self.assertEqual(publisher.verify_original_0103_dependencies(self.root),
-                         publisher.ORIGINAL_0103_DESCENDANT_PROFILE)
+    def test_changed_current_source_does_not_refresh_reviewed_descendant_closure(self):
+        with self.assertRaisesRegex(publisher.Refused, "original .103 dependency size differs"):
+            publisher.verify_original_0103_dependencies(self.root)
         self.assertEqual(publisher.ORIGINAL_0103_CANDIDATE['sourceSha'],
                          '4d136d5450a7032d0b87c4b8a37f69f020144792')
         self.assertEqual(publisher.ORIGINAL_0103_TAG_CHECKPOINT['stateSHA256'],
@@ -2203,397 +1880,382 @@ class Original0103DescendantCompatibilityControls(unittest.TestCase):
             with self.assertRaisesRegex(publisher.Refused, 'original .103 dependency size differs'):
                 publisher.verify_original_0103_dependencies(self.root)
 
-    def test_complete_historical_closure_passes_but_either_unreviewed_hybrid_refuses(self):
-        historical = copy.deepcopy(publisher.ORIGINAL_0103_DEPENDENCIES)
-        # Two small historical fixture bodies replace only these bytes inside this
-        # offline control; production's entire original map is checked above.
-        for name in publisher.ORIGINAL_0103_DESCENDANT_DEPENDENCIES:
+    def synthetic_dependencies(self):
+        # Test the pure whole-set matching algorithm with visibly synthetic bytes.
+        # This never changes the immutable production maps or qualifies current .103.
+        historical, descendant = {}, {}
+        for name in publisher.ORIGINAL_0103_DEPENDENCIES:
             body = ('fixture-historical:' + name).encode()
-            historical[name] = {'bytes': len(body), 'sha256': hashlib.sha256(body).hexdigest()}
-            (self.root / name).write_bytes(body)
-        with patch.object(publisher, 'ORIGINAL_0103_DEPENDENCIES', historical):
-            self.assertEqual(publisher.verify_original_0103_dependencies(self.root),
-                             'utel-rel-21/frozen-source-compatibility/1')
-            for name in publisher.ORIGINAL_0103_DESCENDANT_DEPENDENCIES:
-                path = self.root / name; body = path.read_bytes(); path.write_bytes((ROOT / name).read_bytes())
-                with self.subTest(name=name), self.assertRaisesRegex(publisher.Refused, 'mixes unreviewed'):
+            historical[name] = {'bytes':len(body),'sha256':hashlib.sha256(body).hexdigest()}
+            (self.root/name).write_bytes(body)
+        for name in publisher.ORIGINAL_0103_DESCENDANT_DEPENDENCIES:
+            body = ('fixture-descendant:' + name).encode()
+            descendant[name] = {'bytes':len(body),'sha256':hashlib.sha256(body).hexdigest()}
+        return historical,descendant
+
+    def test_complete_synthetic_historical_and_descendant_sets_pass_but_hybrids_refuse(self):
+        historical,descendant = self.synthetic_dependencies()
+        with patch.object(publisher,'ORIGINAL_0103_DEPENDENCIES',historical), \
+             patch.object(publisher,'ORIGINAL_0103_DESCENDANT_DEPENDENCIES',descendant):
+            self.assertEqual(publisher.verify_original_0103_dependencies(self.root),'utel-rel-21/frozen-source-compatibility/1')
+            for name in descendant:
+                path=self.root/name; old=path.read_bytes(); path.write_bytes(('fixture-descendant:'+name).encode())
+                with self.subTest(name=name),self.assertRaisesRegex(publisher.Refused,'mixes unreviewed'):
                     publisher.verify_original_0103_dependencies(self.root)
-                path.write_bytes(body)
+                path.write_bytes(old)
+            for name in descendant: (self.root/name).write_bytes(('fixture-descendant:'+name).encode())
+            self.assertEqual(publisher.verify_original_0103_dependencies(self.root),publisher.ORIGINAL_0103_DESCENDANT_PROFILE)
 
     def test_all_nine_arbitrary_future_same_size_and_size_drift_refuse(self):
-        for name in publisher.ORIGINAL_0103_DEPENDENCIES:
-            path = self.root / name; body = path.read_bytes()
-            for changed in (bytes([body[0] ^ 1]) + body[1:], body + b'\nfuture-drift'):
-                path.write_bytes(changed)
-                with self.subTest(name=name, size=len(changed)), self.assertRaises(publisher.Refused):
-                    publisher.verify_original_0103_dependencies(self.root)
-            path.write_bytes(body)
+        historical,descendant = self.synthetic_dependencies()
+        with patch.object(publisher,'ORIGINAL_0103_DEPENDENCIES',historical), \
+             patch.object(publisher,'ORIGINAL_0103_DESCENDANT_DEPENDENCIES',descendant):
+            for name in historical:
+                path=self.root/name; body=path.read_bytes()
+                for changed in (bytes([body[0]^1])+body[1:],body+b'future-drift'):
+                    path.write_bytes(changed)
+                    with self.subTest(name=name,size=len(changed)),self.assertRaises(publisher.Refused):
+                        publisher.verify_original_0103_dependencies(self.root)
+                path.write_bytes(body)
 
 
-class OriginalTagIntentControls(unittest.TestCase):
-    """Synthetic authenticated archives exercise the real journal/admission/transport rails.
+class SuspensionControls(unittest.TestCase):
+    """Actual maintained callers with in-memory Git and an authenticated source fixture.
 
-    Fixed operational archive pins are replaced only inside each inert fixture.
-    These controls establish no native credential capability or repeat admission.
+    Only the external accepted-source payload/hash is synthetic. Original journal bytes,
+    immutable identity pins, strict schema, protected writer and all caller code are real.
+    The runner's audit fence forbids every process/network effect.
     """
     def setUp(self):
-        import release_successor_provider as live
-        self.live = live
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.path = pathlib.Path(self.tmp.name) / 'attempt.json'
-        self.candidate = json.loads((pathlib.Path(__file__).parent / 'original-0103-manifest.json').read_bytes())
-        _, self.authority, self.intent, _ = fixture(2, self.candidate,
-            publisher.ORIGINAL_0103_CANDIDATE['archiveSha256'], publisher.SUCCESSOR_REF)
-        self.counter = publisher.CountedAuthorityAPI(self.authority,
-            ceiling=publisher.ORDINARY_AUTHORITY_CALL_CEILING, quota_floor=publisher.ORDINARY_AUTHORITY_QUOTA_FLOOR)
-        self.counter.admit_quota()
-        self.rows = report()
-        self.journal = publisher.ReportingJournal(ProtectedReleaseJournal(self.counter,
-            ref=publisher.SUCCESSOR_REF, main_directory=True), self.rows, detailed=True)
-        self.journal.read()
-        self.native = MemoryPublisher()
-        self.admission = publisher.ProtectedPublisherAdmission(SingleOperatorAdmission(
-            self.native, self.candidate, self.native.head, 1, 'EHotwagner', 'refs/heads/main'),
-            self.counter, publisher.SUCCESSOR_REF)
-        self.fixed = {**publisher.ORIGINAL_0103_TAG_CHECKPOINT,
-            'logicalHead': self.journal._observed.head,
-            'stateSHA256': hashlib.sha256(canonical(self.journal._observed.state)).hexdigest()}
-        result = {'schema': 'fsgg.release-successor-result/1', 'profile': publisher.ORIGINAL_0103_PROFILE,
-            'execution': {'operator': 'EHotwagner', 'runAttempt': '1', 'runId': self.fixed['runId'], 'sourceSha': self.fixed['publisher']},
-            'candidate': {key: publisher.ORIGINAL_0103_CANDIDATE[key] for key in
-                          ('runId', 'artifactId', 'archiveSha256', 'contentId', 'sourceSha', 'version')},
-            'disposition': 'checkpoint', 'publicationComplete': False, 'failure': None,
-            'journalRef': publisher.SUCCESSOR_REF, 'lastDispatch': {'attempted': True, 'effect': 'tag', 'state': 'unknown'},
-            'lastObservedJournal': {'generation': 2, 'effects': {'tag': 'intent'},
-                'logicalHead': self.fixed['logicalHead'], 'stateSHA256': self.fixed['stateSHA256']}}
-        body = json.dumps(result).encode()
-        stream = io.BytesIO()
-        with zipfile.ZipFile(stream, 'w') as z:
-            z.writestr('release-successor-result.json', body)
-        self.raw = stream.getvalue()
-        self.fixed.update(archiveBytes=len(self.raw), archiveSha256=hashlib.sha256(self.raw).hexdigest(),
-                          memberSha256=hashlib.sha256(body).hexdigest())
-        self.run = {'id': self.fixed['runId'], 'workflow_id': 362181999, 'run_attempt': 1,
-            'head_sha': self.fixed['publisher'], 'path': '.github/workflows/release-successor-publish.yml',
-            'head_branch': 'main', 'event': 'workflow_dispatch', 'actor': {'login': 'EHotwagner'},
-            'repository': {'id': 1269292704, 'full_name': 'FS-GG/.github'}, 'status': 'completed', 'conclusion': 'success'}
-        self.artifact = {'id': self.fixed['artifactId'], 'name': 'release-successor-result',
-            'size_in_bytes': len(self.raw), 'expired': False, 'expires_at': '2099-01-01T00:00:00Z',
-            'digest': 'sha256:' + self.fixed['archiveSha256'],
-            'workflow_run': {'id': self.fixed['runId'], 'head_sha': self.fixed['publisher']}}
-        self.tag = None
-        self.native_get = self.native.get
-        self.native.get = self.get
-        self.native.download_original_tag_result = lambda: self.raw
-        self.api = publisher.OriginalTagPublisherAPI(self.native, 100, clock=lambda: 0)
-        self.pin_patch = patch.object(publisher, 'ORIGINAL_0103_TAG_CHECKPOINT', self.fixed)
-        self.pin_patch.start(); self.addCleanup(self.pin_patch.stop)
-        self.candidate_proof = {key: publisher.ORIGINAL_0103_CANDIDATE[key]
-                                for key in ('contentId', 'archiveSha256', 'manifestSha256')}
-        self.posts = []
-        self.reply = {'ref': self.live.ORIGINAL_TAG_REF, 'object': {'type': 'commit',
-            'sha': self.live.ORIGINAL_TAG_SOURCE,
-            'url': 'https://api.github.com/repos/FS-GG/.github/git/commits/' + self.live.ORIGINAL_TAG_SOURCE}}
+        import release_successor_journal as journal_module
+        self.mod = journal_module
+        self.allowed = journal_module.ALLOWED_SUCCESSOR
+        self.original = journal_module.SUSPENDED_ORIGINAL
+        self.authority = MemoryAuthority(self.allowed['logicalRef'])
+        self.decision_source = b'inert accepted source fixture; no operation authority\n'
+        self.original_decision = copy.deepcopy(journal_module.SUSPENSION_DECISION)
+        self.pin = patch.dict(journal_module.SUSPENSION_DECISION,
+                             {'sha256': hashlib.sha256(self.decision_source).hexdigest()})
+        self.pin.start(); self.addCleanup(self.pin.stop)
+        decision = journal_module.SUSPENSION_DECISION
+        self.decision_path = f"repos/{decision['repository']}/contents/{decision['path']}?ref={decision['revision']}"
+        self.authority.override[self.decision_path] = {'encoding': 'base64', 'content': base64.b64encode(self.decision_source).decode()}
+        self.state = {'schema': 'fsgg.release-successor-journal/1', 'contentId': self.original['contentId'],
+                      'sourceSha': self.original['sourceSha'], 'version': '0.103.0',
+                      'candidateArchiveSha256': self.original['archiveSHA256'], 'operator': 'EHotwagner',
+                      'generation': 2, 'effects': {'tag': 'intent'}}
+        self.raw_state = canonical(self.state)
+        self.assertEqual(hashlib.sha256(self.raw_state).hexdigest(), self.original['stateSHA256'])
+        self.add_file('state/releases/utel-rel-21/release-state.json', self.raw_state)
+        self.add_file('state/releases/utel-rel-21/release-head.txt', (self.original['logicalHead'] + '\n').encode())
+        self.add_file('state/ordinary/sibling.json', b'original sibling bytes\n')
+        self.record = {'schema': journal_module.SUSPENSION_SCHEMA, 'disposition': 'suspended',
+                       'original': copy.deepcopy(self.original), 'allowedSuccessor': copy.deepcopy(self.allowed),
+                       'decision': copy.deepcopy(decision)}
+        self.raw = canonical(self.record)
+        self.authority.calls.clear()
 
-    def get(self, path):
-        if path.endswith('/actions/runs/' + str(self.fixed['runId'])): return copy.deepcopy(self.run)
-        if path.endswith('/actions/artifacts/' + str(self.fixed['artifactId'])): return copy.deepcopy(self.artifact)
-        if path.endswith('/git/ref/tags/coherent-set/v0.103.0'):
-            if isinstance(self.tag, BaseException): raise self.tag
-            if self.tag is None: raise NotFound(path)
-            return copy.deepcopy(self.tag)
-        return self.native_get(path)
+    def add_file(self, path, raw):
+        api = self.authority
+        parent = api.head
+        tree = api.objects['commits', parent]['tree']['sha']
+        blob = api.post(PREFIX + '/git/blobs', {'encoding': 'base64', 'content': base64.b64encode(raw).decode()})
+        tree = api.post(PREFIX + '/git/trees', {'base_tree': tree, 'tree': [api.entry(path, 'blob', blob['sha'])]})
+        commit = api.post(PREFIX + '/git/commits', {'tree': tree['sha'], 'parents': [parent], 'message': 'inert fixture'})
+        api.patch(PREFIX + '/git/refs/heads/main', {'sha': commit['sha'], 'force': False})
 
-    def transport(self):
-        return self.live.VerifiedOriginalTagTransport(self.live._ORIGINAL_TAG_TRANSPORT_SEAL, 'inert-token',
-            {'appId': 1, 'installationId': 2, 'repositoryId': 1269292704,
-             'permissions': {'contents': 'write', 'workflows': 'write'}, 'expiresAtUnix': 4102444800})
+    def install(self):
+        return publisher.install_release_suspension(self.authority, self.raw, self.authority.head)
 
-    def open(self, request, **kwargs):
-        self.posts.append(request)
-        if isinstance(self.reply, BaseException): raise self.reply
-        class Reply(io.BytesIO):
-            status = 201
-            headers = {}
-        return Reply(json.dumps(self.reply).encode())
+    def reader(self):
+        return self.mod.ReleaseSuspension(self.authority)
 
-    @contextmanager
-    def lease(self, transport=None):
-        self.lease_entries = getattr(self, 'lease_entries', 0) + 1
-        transport = transport or self.transport()
-        try:
-            yield transport
-        finally:
-            self.lease_exits = getattr(self, 'lease_exits', 0) + 1
-            transport._token = None
+    def writes(self):
+        return [row for row in self.authority.calls if row[0] in {'post', 'patch'}]
 
-    def recover(self, **changes):
-        verify = changes.pop('verify_candidate', lambda: copy.deepcopy(self.candidate_proof))
-        kwargs = dict(factory=self.lease, clock=lambda: 0)
-        kwargs.update(changes)
-        with patch.object(urllib.request, 'build_opener', return_value=types.SimpleNamespace(open=self.open)):
-            return publisher.run_original_tag_recovery(self.candidate, self.journal, self.admission, None,
-                self.counter, self.api, self.rows, 100, verify, self.path, **kwargs)
+    def test_installer_preserves_old_unknown_and_unrelated_tree_exactly(self):
+        before = self.authority.head
+        after = self.install()
+        self.assertNotEqual(before, after)
+        reader = self.reader()
+        self.assertEqual(reader.file(after, 'state/releases/utel-rel-21/release-state.json'), self.raw_state)
+        self.assertEqual(reader.file(after, 'state/releases/utel-rel-21/release-head.txt'), (self.original['logicalHead']+'\n').encode())
+        self.assertEqual(reader.file(after, 'state/ordinary/sibling.json'), b'original sibling bytes\n')
+        self.assertEqual(reader.read(), self.record)
+        self.authority.calls.clear()
+        with self.assertRaisesRegex(publisher.Refused, 'already exists'):
+            self.install()
+        self.assertEqual(self.writes(), [])
 
-    def test_changed_original_candidate_refuses_before_credential_lease(self):
-        with self.assertRaisesRegex(publisher.Refused, 'pre-credential candidate'):
-            self.recover(factory=forbidden_effect, verify_candidate=lambda: {})
-        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
+    def test_actual_install_cli_binds_owner_source_input_and_expected_main(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=pathlib.Path(directory)/'suspension.json';path.write_bytes(self.raw)
+            argv=['publisher','--install-release-suspension','--suspension-file',str(path),
+                  '--expected-authority-main',self.authority.head,'--publisher-source-sha','b'*40]
+            native=MemoryPublisher(); native_get=native.get
+            def get(path):
+                if path=='user': return {'login':'EHotwagner','type':'User'}
+                row=native_get(path)
+                if path.endswith('/git/ref/heads/main'): row['object']['type']='commit'
+                return row
+            native.get=get
+            def local(command,**kwargs):
+                self.assertIn(command,(['git','rev-parse','HEAD'],['git','diff','--quiet','HEAD']))
+                return types.SimpleNamespace(stdout='b'*40+'\n',returncode=0)
+            environment={'GH_TOKEN':'inert-owner','ORDINARY_LEDGER_TOKEN':'inert-writer'}
+            with patch.object(sys,'argv',argv),patch.dict(os.environ,environment,clear=True), \
+                 patch.object(publisher,'GitHubAPI',side_effect=lambda token:native if token=='inert-owner' else self.authority), \
+                 patch.object(publisher.subprocess,'run',side_effect=local):
+                self.assertEqual(publisher.main(),0)
+            self.assertEqual(self.reader().read(),self.record)
+            for mutation in ('owner','source','local','record','parent'):
+                api=copy.deepcopy(self.authority);api.calls.clear()
+                def changed(path):
+                    row=get(path)
+                    if path=='user' and mutation=='owner': row['login']='caller'
+                    if path.endswith('/git/ref/heads/main') and mutation=='source': row['object']['sha']='e'*40
+                    return row
+                native.get=changed
+                body=self.raw if mutation!='record' else canonical({**self.record,'disposition':'resumed'})
+                path.write_bytes(body)
+                with self.subTest(mutation=mutation),patch.object(sys,'argv',argv), \
+                     patch.dict(os.environ,environment,clear=True), \
+                     patch.object(publisher,'GitHubAPI',side_effect=lambda token:native if token=='inert-owner' else api), \
+                     patch.object(publisher.subprocess,'run',side_effect=lambda *a,**k:types.SimpleNamespace(stdout=('e' if mutation=='local' else 'b')*40+'\n',returncode=0)):
+                    self.assertEqual(publisher.main(),1)
+                self.assertEqual([row for row in api.calls if row[0] in {'post','patch'}],[])
+                native.get=get
 
-    def test_lexical_lease_closes_on_attempt_record_and_late_candidate_refusal(self):
-        for stage in ('attempt-record', 'candidate'):
-            with self.subTest(stage=stage):
-                self.path.unlink(missing_ok=True)
-                reads = []
-                def verify():
-                    reads.append(1)
-                    return self.candidate_proof if len(reads) == 1 else {}
-                if stage == 'attempt-record':
-                    with patch.object(publisher, 'write_kit_repeat_attempt', side_effect=OSError('disk')):
-                        with self.assertRaises(OSError): self.recover()
+    def test_wrong_parent_protection_state_and_decision_refuse_before_writer(self):
+        for mutation in ('parent', 'protection', 'state', 'decision'):
+            with self.subTest(mutation=mutation):
+                api = copy.deepcopy(self.authority)
+                expected = api.head
+                if mutation == 'parent': expected = 'e'*40
+                if mutation == 'protection': api.controls['mainWriter']['enforcement'] = 'disabled'
+                if mutation == 'state':
+                    reader = self.mod.ReleaseSuspension(api)
+                    rawpath = 'state/releases/utel-rel-21/release-state.json'
+                    # Mutate the exact source blob in this isolated in-memory fixture.
+                    tree = api.objects['commits', api.head]['tree']['sha']
+                    for segment in rawpath.split('/'):
+                        entry = next(row for row in api.objects['trees', tree]['tree'] if row['path'] == segment)
+                        tree = entry['sha']
+                    api.objects['blobs', tree]['content'] = base64.b64encode(self.raw_state+b' ').decode()
+                if mutation == 'decision': api.override[self.decision_path]['content'] = base64.b64encode(b'wrong decision').decode()
+                api.calls.clear()
+                with self.assertRaises((RuntimeError, ValueError)):
+                    publisher.install_release_suspension(api, self.raw, expected)
+                self.assertEqual([row for row in api.calls if row[0] in {'post','patch'}], [])
+
+    def test_install_main_cas_race_never_overwrites_sibling(self):
+        api = self.authority
+        original_post = api.post
+        sibling = None
+        def race(path, body):
+            nonlocal sibling
+            result = original_post(path, body)
+            if path.endswith('/git/commits'):
+                # An unrelated protected-main commit wins after our object is created.
+                sibling = api.commit(api.objects['commits', api.head]['tree']['sha'], [api.head], 'competing sibling')
+                api.head = sibling
+            return result
+        with patch.object(api, 'post', side_effect=race), self.assertRaisesRegex(publisher.Refused, 'moved before suspension CAS'):
+            self.install()
+        self.assertEqual(api.head, sibling)
+        self.assertFalse(any(row[0] == 'patch' for row in api.calls))
+
+    def test_strict_closed_bindings_duplicate_json_and_wrong_types_refuse(self):
+        mutations = [('schema','unsupported'), ('disposition','resumed'), ('extra', True)]
+        for field, value in mutations:
+            row = copy.deepcopy(self.record); row[field] = value
+            with self.subTest(field=field), self.assertRaises(self.mod.Refused):
+                self.mod.strict_suspension(canonical(row))
+        for section, field, value in [('original','generation',True), ('original','logicalHead','f'*40),
+                ('original','stateSHA256','0'*64), ('original','runId',38580684078),
+                ('allowedSuccessor','version','0.105.0'), ('allowedSuccessor','logicalRef',publisher.SUCCESSOR_REF),
+                ('allowedSuccessor','predecessor','0.103.0'), ('allowedSuccessor','profile','ordinary/1'),
+                ('decision','owner','caller'), ('decision','revision','f'*40), ('decision','url','https://example.invalid')]:
+            row = copy.deepcopy(self.record); row[section][field] = value
+            with self.subTest(section=section,field=field), self.assertRaises(self.mod.Refused):
+                self.mod.strict_suspension(canonical(row))
+        duplicate = self.raw.replace(b'"generation":2', b'"generation":2,"generation":2')
+        with self.assertRaisesRegex(self.mod.Refused, 'duplicate'):
+            self.mod.strict_suspension(duplicate)
+        for raw in (b'{', b'[]', b'null', b'"x"', self.raw+b'NaN', b'x'*16385):
+            with self.subTest(raw=raw[:10]), self.assertRaises(self.mod.Refused): self.mod.strict_suspension(raw)
+
+    def test_reader_missing_changed_deleted_record_and_main_race_refuse(self):
+        with self.assertRaisesRegex(self.mod.Refused, 'absent'): self.reader().read()
+        self.install(); reader = self.reader(); reader.read()
+        self.add_file(self.mod.SUSPENSION_PATH, self.raw + b' ')
+        with self.assertRaisesRegex(self.mod.Refused, 'not canonical'): reader.read()
+        with patch.object(reader,'file',return_value=None),self.assertRaisesRegex(self.mod.Refused,'absent'):
+            reader.read()
+        self.add_file(self.mod.SUSPENSION_PATH,self.raw)
+        reader = self.reader()
+        original_get = self.authority.get
+        reads = 0
+        def moving(path):
+            nonlocal reads
+            result = original_get(path)
+            if path == PREFIX + '/git/ref/heads/main':
+                reads += 1
+                if reads == 2: result['object']['sha'] = 'f'*40
+            return result
+        with patch.object(self.authority, 'get', side_effect=moving), self.assertRaisesRegex(self.mod.Refused, 'moved'):
+            reader.read()
+
+    def test_actual_precredential_parser_denies_original_and_conflicts_before_exchange(self):
+        self.install()
+        for flags in ([], ['--original-0103-candidate'], ['--recover-original-0103-tag-intent']):
+            with self.subTest(flags=flags), patch.object(sys, 'argv', ['publisher','--check-release-suspension',*flags]), \
+                 patch.dict(os.environ, {'GH_TOKEN':'inert-read-only'}, clear=True), \
+                 patch.object(publisher,'GitHubAPI', return_value=self.authority):
+                self.authority.calls.clear()
+                self.assertEqual(publisher.main(), 1)
+                self.assertEqual(self.writes(), [])
+        with patch.object(sys,'argv',['publisher','--check-release-suspension','--suspended-0103-successor']), \
+             patch.dict(os.environ,{'GH_TOKEN':'inert-read-only'},clear=True), \
+             patch.object(publisher,'GitHubAPI',return_value=self.authority):
+            self.assertEqual(publisher.main(),0)
+        for flag in ('original_0103_candidate','recover_original_0103_tag_intent','recovery_checkpoint',
+                     'repeat_original_nuget_kit_intent','recover_original_runtime_intent','recover_original_successor_checkpoint'):
+            with self.subTest(conflict=flag), self.assertRaises(publisher.Refused):
+                publisher.selected_release_binding(types.SimpleNamespace(suspended_0103_successor=True, **{flag:True}))
+
+    def test_real_successor_precredential_refuses_absent_malformed_and_wrong_binding(self):
+        args = types.SimpleNamespace(suspended_0103_successor=True)
+        with self.assertRaisesRegex(self.mod.Refused,'absent'):
+            publisher.precredential_release_check(args,self.authority)
+        for raw in (b'{', canonical({**self.record,'disposition':'resumed'}),
+                    canonical({**self.record,'allowedSuccessor':{**self.allowed,'version':'0.105.0'}})):
+            self.add_file(self.mod.SUSPENSION_PATH,raw)
+            self.authority.calls.clear()
+            with self.subTest(raw=raw[:20]),self.assertRaises(self.mod.Refused):
+                publisher.precredential_release_check(args,self.authority)
+            self.assertEqual(self.writes(),[])
+
+    def test_production_default_entry_refuses_before_candidate_workdir_or_credential_read(self):
+        self.install()
+        with tempfile.TemporaryDirectory() as directory:
+            args = types.SimpleNamespace(candidate_run_id=1,candidate_artifact_id=2,candidate_archive_sha256='a'*64,
+                publish=False,preflight_only=True,recovery_checkpoint=False,repeat_original_nuget_kit_intent=False,
+                recover_original_runtime_intent=False,workdir=pathlib.Path(directory)/'never-created')
+            env={'GITHUB_SHA':'b'*40,'GITHUB_ACTOR':'EHotwagner','GITHUB_RUN_ID':'1','GITHUB_EVENT_NAME':'workflow_dispatch',
+                 'GITHUB_REPOSITORY':'FS-GG/.github','GITHUB_REF':'refs/heads/main','GITHUB_RUN_ATTEMPT':'1','GH_TOKEN':'inert'}
+            with patch.dict(os.environ,env,clear=True),patch.object(publisher,'GitHubAPI',return_value=self.authority), \
+                 self.assertRaisesRegex(self.mod.Refused,'prospectively suspended'):
+                publisher.execute_publisher(args, {'candidate':{}})
+            self.assertFalse(args.workdir.exists())
+
+    def test_allowed_real_preparation_genesis_and_per_effect_fence_keep_original_unknown(self):
+        self.install()
+        candidate = manifest(); candidate['descriptor'].update(version='0.104.0',previousStableVersion='0.102.0')
+        candidate['contentId'] = 'sha256:' + hashlib.sha256(json.dumps(candidate['descriptor'],sort_keys=True,separators=(',',':')).encode()).hexdigest()
+        intent = {'contentId':candidate['contentId'],'sourceSha':'b'*40,'version':'0.104.0',
+                  'candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
+        native = MemoryPublisher()
+        journal = ProtectedReleaseJournal(self.authority, self.allowed['logicalRef'], main_directory=True)
+        admission = publisher.ProtectedPublisherAdmission(SingleOperatorAdmission(native,candidate,'b'*40,1,'EHotwagner','refs/heads/main'),
+                                                        self.authority,self.allowed['logicalRef'])
+        temporary = tempfile.TemporaryDirectory(); self.addCleanup(temporary.cleanup)
+        path = pathlib.Path(temporary.name)/'manifest.json'; path.write_bytes(canonical(candidate))
+        native.tag = None
+        native_get = native.get
+        def get(path):
+            if path.endswith('/git/ref/tags/coherent-set/v0.104.0') and native.tag:
+                return {'object':{'sha':native.tag}}
+            if path.endswith('/releases?per_page=100&page=1'): return []
+            return native_get(path)
+        native.get = get
+        native.posts = []
+        def post(path, body):
+            native.posts.append((path,body)); native.tag = body['sha']; return {'object':{'sha':native.tag}}
+        native.post = post
+        provider = LiveProvider(native,path,'inert','inert',suspension=self.reader(),logical_ref=self.allowed['logicalRef'])
+        uniqueness = []
+        self.assertFalse(publisher.prepare_release_journal(journal,self.authority,admission,provider,native,candidate,intent,
+                                                         'b'*40,'b'*40,False,lambda: uniqueness.append(True)))
+        self.assertEqual(uniqueness,[True]); self.assertEqual(journal.read().generation,1)
+        from release_successor_execution import advance
+        self.assertEqual(advance(candidate,journal,admission,provider),'waiting')
+        self.assertEqual(len(native.posts),1); self.assertEqual(journal.read().effects,{'tag':'intent'})
+        self.assertEqual(advance(candidate,journal,admission,provider),'verified')
+        self.assertEqual(journal.read().effects,{'tag':'verified'})
+        native.head = 'e'*40
+        self.assertFalse(admission.authorize(candidate['contentId'],'tag','dispatch',candidate['contentId']))
+        native.head = 'b'*40
+        native_get_run = native.get
+        def terminal(path):
+            row = native_get_run(path)
+            if path.endswith('/actions/runs/1'): row['status'] = 'completed'
+            return row
+        with patch.object(native,'get',side_effect=terminal):
+            self.assertFalse(admission.authorize(candidate['contentId'],'tag','dispatch',candidate['contentId']))
+        def rerun(path):
+            row = native_get_run(path)
+            if path.endswith('/actions/runs/1'): row['run_attempt'] = 2
+            return row
+        with patch.object(native,'get',side_effect=rerun):
+            self.assertFalse(admission.authorize(candidate['contentId'],'tag','dispatch',candidate['contentId']))
+        for action in ('intent','dispatch','settle'):
+            self.assertTrue(admission.authorize(candidate['contentId'],'tag',action,candidate['contentId']))
+        self.add_file(self.mod.SUSPENSION_PATH,self.raw+b' ')
+        self.authority.calls.clear()
+        for action in ('intent','dispatch','settle'):
+            self.assertFalse(admission.authorize(candidate['contentId'],'tag',action,candidate['contentId']))
+        with self.assertRaises(self.mod.Refused): journal.compare_and_swap(journal.read(),'tag','intent')
+        self.assertEqual(self.writes(),[])
+        self.assertEqual(self.reader().file(self.authority.head,'state/releases/utel-rel-21/release-state.json'),self.raw_state)
+
+    def test_direct_provider_original_and_missing_reader_cannot_dispatch(self):
+        self.install()
+        from release_successor_execution import Effect
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory)/'manifest.json'
+            for version, logical_ref in (('0.103.0', self.mod.SUSPENDED_REF), ('0.104.0',self.allowed['logicalRef'])):
+                row = manifest(); row['descriptor']['version'] = version; path.write_bytes(canonical(row))
+                native = MemoryPublisher()
+                provider = LiveProvider(native,path,'inert','inert')
+                with self.assertRaises(ProviderRefused): provider.dispatch(Effect('tag','b'*40,row['contentId']))
+                provider.suspension = self.reader(); provider.logical_ref = logical_ref
+                if version == '0.103.0':
+                    with self.assertRaises(self.mod.Refused): provider.dispatch(Effect('tag','b'*40,row['contentId']))
                 else:
-                    with self.assertRaisesRegex(publisher.Refused, 'candidate binding changed'):
-                        self.recover(verify_candidate=verify)
-                self.assertEqual(self.lease_entries, self.lease_exits)
-                self.assertEqual(self.posts, [])
+                    with patch.object(native,'post',return_value={},create=True) as post:
+                        self.assertEqual(provider.dispatch(Effect('tag','b'*40,row['contentId'])).state,'applied')
+                        post.assert_called_once()
+                    provider.suspension.read(); self.add_file(self.mod.SUSPENSION_PATH,self.raw+b' ')
+                    with patch.object(native,'post',create=True) as post, self.assertRaises(self.mod.Refused):
+                        provider.dispatch(Effect('tag','b'*40,row['contentId']))
+                    post.assert_not_called()
 
-    def test_real_selected_factory_request_proof_composes_with_original_recovery(self):
-        spec = importlib.util.spec_from_file_location('selected_factory_fixture',
-            ROOT / 'tests/release-successor-authentication/run.py')
-        auth = importlib.util.module_from_spec(spec); spec.loader.exec_module(auth)
-        bound = auth.binding(); bound['app'] = {'id': 4995487, 'installation': 162873149}
-        channel = auth.RetainedChannel(self.tmp.name, bound)
-        opener = auth.SelectedFactoryOpener(); retained = []
-        lease_report = self.rows['originalTagCredential'] = {}
-        checkpoint = {'generation': 2, 'logicalHead': self.fixed['logicalHead'],
-                      'stateSHA256': self.fixed['stateSHA256']}
-        # Only this synthetic fixture's journal hashes differ from the fixed native checkpoint.
-        with patch.object(self.live, 'ORIGINAL_TAG_FACTORY_CHECKPOINT', checkpoint):
-            factory = self.live.InertOriginalTagCredentialFactory(bound,
-                self.live.ORIGINAL_TAG_FACTORY_CANDIDATE, checkpoint,
-                phase_adapter=auth.adapter(channel), jwt_supplier=lambda: 'inert-jwt',
-                opener=opener, admit=lambda: True, retain=retained.append, report=lease_report)
-            before = self.authority.head
-            self.assertEqual(self.recover(factory=factory), 'checkpoint')
-        self.assertEqual(self.authority.head, before)
-        self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
-        self.assertEqual([r.method for r in opener.calls], ['GET','GET','GET','POST','GET','POST','DELETE'])
-        self.assertTrue(lease_report['qualified']); self.assertEqual(lease_report['cleanup'], 'revoked')
-        self.assertTrue(self.path.exists()); self.assertFalse(self.rows['publicationComplete'])
+    def test_original_journal_init_and_direct_recovery_are_denied(self):
+        self.install()
+        journal = ProtectedReleaseJournal(self.authority,self.mod.SUSPENDED_REF,main_directory=True)
+        self.authority.calls.clear()
+        intent = {key:self.state[key] for key in ('contentId','sourceSha','version','candidateArchiveSha256','operator')}
+        with self.assertRaises(self.mod.Refused): journal.initialize(intent)
+        with self.assertRaises(self.mod.Refused):
+            publisher.run_original_tag_recovery({},journal,None,None,self.authority,None,{},100,None,None,preflight=True)
+        for logical_ref in (self.mod.SUSPENDED_REF,self.allowed['logicalRef']):
+            legacy = ProtectedReleaseJournal(self.authority,logical_ref)
+            with self.assertRaisesRegex(self.mod.Refused,'protected-main'):
+                legacy.initialize({**intent,'version':'0.104.0' if logical_ref == self.allowed['logicalRef'] else '0.103.0'})
+        self.assertEqual(self.writes(),[])
 
-    def test_existing_intent_preflight_is_read_only_and_does_not_require_factory(self):
-        before = self.authority.head
-        self.assertEqual(self.recover(preflight=True, factory=forbidden_effect), 'preflight')
-        self.assertEqual(self.authority.head, before)
-        self.assertFalse(any(method != 'get' for method, *_ in self.authority.calls))
-        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
-        self.assertIsNone(self.rows['lastDispatch'])
-
-    def test_existing_preflight_authenticates_original_archive_through_actual_http_reader(self):
-        url = 'https://api.github.com/repos/FS-GG/.github/actions/artifacts/11902876694/zip'
-        build, requests, handlers = OriginalRuntimeRecoveryControls.runtime_request_fixture(self, {url: self.raw})
-        self.native.download_original_tag_result = GitHubAPI('inert-fixture-token').download_original_tag_result
-        before = self.authority.head
-        with patch('urllib.request.build_opener', side_effect=build):
-            result = publisher.run_original_tag_recovery(self.candidate, self.journal, self.admission, None,
-                self.counter, self.api, self.rows, 100, forbidden_effect, self.path,
-                preflight=True, factory=forbidden_effect, clock=lambda: 0)
-        self.assertEqual(result, 'preflight')
-        self.assertEqual(len(requests), 1)
-        self.assertIsNone(requests[0].get_header('Accept'))
-        self.assertEqual(self.rows['originalTagRecovery']['original']['archiveSha256'], self.fixed['archiveSha256'])
-        self.assertEqual(self.api.succeeded['originalResultArchive'], 1)
-        self.assertEqual(self.authority.head, before)
-        self.assertFalse(any(method != 'get' for method, *_ in self.authority.calls))
-        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
-        self.assertIsNone(self.rows['lastDispatch'])
-        redirected = handlers[0].redirect_request(requests[0], None, 302, 'Found', {},
-            'https://retained-artifact.invalid/owned.zip')
-        self.assertIsNone(redirected.get_header('Authorization'))
-        self.assertIsNone(redirected.get_header('Accept'))
-
-    def test_original_archive_http_refusal_stops_actual_preflight_without_fallback_or_effect(self):
-        requests = []
-        def fail(request, **kwargs):
-            requests.append(request)
-            raise urllib.error.HTTPError(request.full_url, 415, 'Unsupported Media Type', {}, None)
-        self.native.download_original_tag_result = GitHubAPI('inert-fixture-token').download_original_tag_result
-        before = self.authority.head
-        with patch('urllib.request.build_opener', return_value=types.SimpleNamespace(open=fail)), \
-             self.assertRaises(urllib.error.HTTPError) as failure:
-            publisher.run_original_tag_recovery(self.candidate, self.journal, self.admission, None,
-                self.counter, self.api, self.rows, 100, forbidden_effect, self.path,
-                preflight=True, factory=forbidden_effect, clock=lambda: 0)
-        self.assertEqual(failure.exception.code, 415)
-        self.assertEqual(len(requests), 1)
-        self.assertIsNone(requests[0].get_header('Accept'))
-        self.assertEqual(self.authority.head, before)
-        self.assertFalse(any(method != 'get' for method, *_ in self.authority.calls))
-        self.assertNotIn('originalTagRecovery', self.rows)
-        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
-        self.assertIsNone(self.rows['lastDispatch'])
-
-    def test_matched_lightweight_tag_settles_exactly_once_without_send_or_next_effect(self):
-        self.tag = self.reply
-        self.assertEqual(self.recover(factory=forbidden_effect), 'checkpoint')
-        self.assertEqual(self.journal.read().generation, 3)
-        self.assertEqual(self.journal.read().effects, {'tag': 'verified'})
-        self.assertEqual(sum(method == 'patch' for method, *_ in self.authority.calls), 1)
-        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
-        with self.assertRaises(publisher.Refused): self.recover()
-
-    def test_create_is_exact_one_post_with_durable_entry_and_no_settlement_even_201(self):
-        before = self.authority.head
-        self.assertEqual(self.recover(), 'checkpoint')
-        self.assertEqual(self.authority.head, before)
-        self.assertTrue(all(method == 'get' for method, *_ in self.authority.calls))
-        self.assertEqual(len(self.posts), 1)
-        request = self.posts[0]
-        self.assertEqual(request.full_url, 'https://api.github.com/repos/FS-GG/.github/git/refs')
-        self.assertEqual(request.get_method(), 'POST')
-        self.assertEqual(json.loads(request.data), {'ref': self.live.ORIGINAL_TAG_REF, 'sha': self.live.ORIGINAL_TAG_SOURCE})
-        attempt = json.loads(self.path.read_bytes())
-        self.assertFalse(attempt['historicalNonDispatchProved']); self.assertFalse(attempt['globalOnceClaim'])
-        self.assertEqual(attempt['journal']['physicalHead'], before)
-        self.assertEqual(self.rows['lastDispatch']['state'], 'applied')
-        with self.assertRaises(FileExistsError): self.recover()
-        self.assertEqual(len(self.posts), 1)
-
-    def test_unavailable_production_factory_refuses_before_entry_or_send(self):
-        with self.assertRaisesRegex(ProviderRefused, 'factory unavailable'):
-            self.recover(factory=self.live.approved_original_tag_transport)
-        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
-
-    def test_unsealed_wrong_permissions_expired_or_wrong_repo_transport_refuses(self):
-        identity = self.transport().identity()
-        with self.assertRaises(ProviderRefused): self.live.VerifiedOriginalTagTransport(True, 'fixture', identity)
-        for change in ({'repositoryId': 1}, {'expiresAtUnix': 1}, {'permissions': {'contents': 'write'}}, {'appId': True}):
-            with self.subTest(change=change), self.assertRaises(ProviderRefused):
-                self.live.VerifiedOriginalTagTransport(self.live._ORIGINAL_TAG_TRANSPORT_SEAL, 'fixture', {**identity, **change})
-        with self.assertRaises(publisher.Refused): self.recover(factory=lambda: types.SimpleNamespace())
-        self.assertEqual(self.posts, [])
-
-    def test_malformed_annotated_wrong_tag_and_unreadable_observation_refuse(self):
-        for tag in ({}, {'ref': 'wrong', 'object': self.reply['object']},
-                    {'ref': self.live.ORIGINAL_TAG_REF, 'object': {'type': 'tag', 'sha': self.live.ORIGINAL_TAG_SOURCE}},
-                    {'ref': self.live.ORIGINAL_TAG_REF, 'object': None}, RuntimeError('unreadable')):
-            self.tag = tag
-            with self.subTest(tag=tag), self.assertRaises((publisher.Refused, RuntimeError)): self.recover()
-        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
-
-    def test_original_native_artifact_member_tamper_refuses_without_send(self):
-        for row, field, value in ((self.run, 'run_attempt', 2), (self.run, 'conclusion', 'failure'),
-                                 (self.artifact, 'expired', True), (self.artifact, 'digest', 'sha256:' + 'f' * 64)):
-            old = row[field]; row[field] = value
-            with self.subTest(field=field), self.assertRaises(publisher.Refused): self.recover()
-            row[field] = old
-        self.raw += b'tamper'
-        with self.assertRaises(publisher.Refused): self.recover()
-        self.assertEqual(self.posts, []); self.assertFalse(self.path.exists())
-
-    def test_source_candidate_quota_and_clock_guards_refuse(self):
-        self.native.head = 'f' * 40
-        with self.assertRaises(publisher.Refused): self.recover()
-        self.native.head = 'b' * 40
-        self.candidate_proof['archiveSha256'] = 'f' * 64
-        with self.assertRaises(publisher.Refused): self.recover()
-        self.candidate_proof['archiveSha256'] = publisher.ORIGINAL_0103_CANDIDATE['archiveSha256']
-        self.authority.quota.update(remaining=1700, used=3300)
-        with self.assertRaises(publisher.AuthorityQuotaWaiting): self.recover()
-        with self.assertRaises(publisher.Refused): self.recover(clock=lambda: 101)
-        self.assertEqual(self.posts, []); self.assertFalse(self.path.exists())
-
-    def test_ambiguous_http_transport_or_malformed_reply_never_settles_or_retries(self):
-        for reply in ({}, None, urllib.error.URLError('fixture timeout'),
-                      urllib.error.HTTPError('https://api.github.com/repos/FS-GG/.github/git/refs', 422,
-                            'fixture', {}, io.BytesIO(b'{"message":"Reference already exists"}'))):
-            self.reply = reply
-            self.path.unlink(missing_ok=True)
-            before = self.authority.head
-            with self.subTest(reply=type(reply).__name__):
-                self.assertEqual(self.recover(), 'checkpoint')
-                self.assertEqual(self.rows['lastDispatch']['state'], 'unknown')
-                self.assertEqual(self.authority.head, before)
-        self.assertEqual(len(self.posts), 4)
-        self.assertTrue(all(method == 'get' for method, *_ in self.authority.calls))
-
-    def test_transport_consumed_on_exception_and_diagnostics_are_best_effort(self):
-        transport = self.transport()
-        self.reply = urllib.error.URLError('fixture timeout')
-        effect = ordered_effects(self.candidate)[0]
-        with patch.object(urllib.request, 'build_opener', return_value=types.SimpleNamespace(open=self.open)), \
-             patch.object(self.live, 'request_diagnostic', side_effect=RuntimeError('reporter')):
-            self.assertEqual(transport.dispatch(effect, 100, lambda: 0).state, 'unknown')
-            with self.assertRaises(ProviderRefused): transport.dispatch(effect, 100, lambda: 0)
-        self.assertEqual(len(self.posts), 1)
-        self.reply = {}
-        with patch.object(publisher, 'sanitized_dispatch_diagnostic', side_effect=RuntimeError('reporter')):
-            self.assertEqual(self.recover(), 'checkpoint')
-        self.assertEqual(self.rows['lastDispatch']['diagnostic'], {'diagnosticUnavailable': True})
-
-    def test_late_candidate_or_source_move_preserves_entry_and_refuses_send(self):
-        transport = self.transport()
-        calls = []
-        def identity():
-            calls.append(True)
-            if len(calls) == 2: self.native.head = 'f' * 40
-            return {'appId': 1, 'installationId': 2, 'repositoryId': 1269292704,
-                    'permissions': {'contents': 'write', 'workflows': 'write'}, 'expiresAtUnix': 4102444800}
-        transport.identity = identity
-        with self.assertRaisesRegex(publisher.Refused, 'final source'):
-            self.recover(factory=lambda: self.lease(transport))
-        self.assertTrue(self.path.exists()); self.assertEqual(self.posts, [])
-        self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
-
-    def test_ref_appearing_after_entry_refuses_without_overwriting(self):
-        transport = self.transport()
-        identity = transport.identity
-        calls = []
-        def read_identity():
-            calls.append(True)
-            if len(calls) == 2: self.tag = self.reply
-            return identity()
-        transport.identity = read_identity
-        with self.assertRaisesRegex(publisher.Refused, 'appeared'):
-            self.recover(factory=lambda: self.lease(transport))
-        self.assertTrue(self.path.exists()); self.assertEqual(self.posts, [])
-        self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
-
-    def test_attempt_entry_failure_and_redirect_are_not_retried(self):
-        with patch.object(publisher, 'write_kit_repeat_attempt', side_effect=OSError('disk')):
-            with self.assertRaises(OSError): self.recover()
-        self.assertEqual(self.posts, []); self.assertFalse(self.path.exists())
-        self.reply = ProviderRefused('original tag create transport refuses redirects')
-        self.assertEqual(self.recover(), 'checkpoint')
-        self.assertEqual(self.rows['lastDispatch']['state'], 'unknown')
-        self.assertEqual(len(self.posts), 1)
-        self.assertEqual(self.journal.read().effects, {'tag': 'intent'})
-
-    def test_actual_redirect_handler_rejects_before_following_authorized_request(self):
-        def build(handler):
-            instance = handler()
-            with self.assertRaises(ProviderRefused):
-                instance.redirect_request(None, None, 307, 'fixture', {}, 'https://other.invalid')
-            return types.SimpleNamespace(open=self.open)
-        transport = self.transport()
-        with patch.object(urllib.request, 'build_opener', side_effect=build):
-            self.assertEqual(transport.dispatch(ordered_effects(self.candidate)[0], 100, lambda: 0).state, 'applied')
-        self.assertEqual(len(self.posts), 1)
-        self.assertEqual(self.posts[0].get_header('Authorization'), 'Bearer inert-token')
-
-    def test_malformed_native_nested_objects_fail_closed(self):
-        for row, key in ((self.run, 'actor'), (self.run, 'repository'), (self.artifact, 'workflow_run')):
-            old = row[key]; row[key] = None
-            with self.subTest(key=key), self.assertRaises((publisher.Refused, AttributeError)): self.recover()
-            row[key] = old
-        self.assertFalse(self.path.exists()); self.assertEqual(self.posts, [])
-
-    def test_repository_namespace_and_publisher_budget_are_closed(self):
-        with self.assertRaises(publisher.Refused): self.api.get('repos/FS-GG/.github-evil')
-        self.api.attempted = {'get': 256}
-        with self.assertRaises(publisher.Refused): self.recover()
-        self.assertEqual(self.posts, [])
+    def test_precredential_workflow_order_and_candidate_binding(self):
+        workflow = (ROOT/'.github/workflows/release-successor-publish.yml').read_text()
+        fence = workflow.index('name: Read the installed release suspension')
+        for name in ('actions/setup-dotnet','actions/create-github-app-token','NuGet/login'):
+            self.assertLess(fence,workflow.index(name))
+        self.assertNotIn('disposition_json:',workflow)
+        candidate = (ROOT/'.github/workflows/release-successor-candidate.yml').read_text()
+        self.assertIn('test "$version" = 0.104.0',candidate)
+        self.assertNotIn('-p:Version=',candidate)
+        self.assertIn('name: release-successor-candidate-${{ github.sha }}-${{ github.run_id }}',candidate)
+        self.assertIn('Separate evidence: never add a member to the exact seven-member publisher archive.',candidate)
 
 
 if __name__ == "__main__":

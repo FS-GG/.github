@@ -24,10 +24,10 @@ PREDECESSOR = "b" * 40
 PACKAGES = ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers")
 
 
-def package(path: pathlib.Path, package_id: str) -> None:
+def package(path: pathlib.Path, package_id: str, version="0.91.3") -> None:
     nuspec = (
-        f'<package><metadata><id>{package_id}</id><version>0.91.3</version>'
-        f'<releaseNotes>0.91.3 fixture</releaseNotes><repository type="git" commit="{SOURCE}" />'
+        f'<package><metadata><id>{package_id}</id><version>{version}</version>'
+        f'<releaseNotes>{version} fixture</releaseNotes><repository type="git" commit="{SOURCE}" />'
         "</metadata></package>"
     )
     with zipfile.ZipFile(path, "w") as archive:
@@ -36,6 +36,9 @@ def package(path: pathlib.Path, package_id: str) -> None:
 
 
 class CandidateArtifactTests(unittest.TestCase):
+    VERSION = "0.91.3"
+    PREVIOUS = "0.91.2"
+    SELECTED = False
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="release-successor-artifact-test-")
         self.addCleanup(self.temporary.cleanup)
@@ -43,15 +46,15 @@ class CandidateArtifactTests(unittest.TestCase):
         self.candidate = self.root / "candidate"
         self.candidate.mkdir()
         for package_id in PACKAGES:
-            package(self.candidate / f"{package_id}.0.91.3.nupkg", package_id)
+            package(self.candidate / f"{package_id}.{self.VERSION}.nupkg", package_id, self.VERSION)
         predecessor = {
             "contentId": "sha256:" + "c" * 64,
-            "version": "0.91.2",
+            "version": self.PREVIOUS,
             "sourceSha": PREDECESSOR,
             "promotedAt": "2026-09-19T00:00:00Z",
         }
         (self.candidate / "previous-stable-channel.json").write_text(json.dumps(predecessor))
-        package_sha = hashlib.sha256((self.candidate / "FS.GG.Coord.Cli.0.91.3.nupkg").read_bytes()).hexdigest()
+        package_sha = hashlib.sha256((self.candidate / f"FS.GG.Coord.Cli.{self.VERSION}.nupkg").read_bytes()).hexdigest()
         qualification = {
             "schema": "fsgg.telemetry.standalone-qualification/2",
             "qualified": True,
@@ -70,7 +73,7 @@ class CandidateArtifactTests(unittest.TestCase):
         (assets / "index.html").write_text("<!doctype html>")
         subprocess.run([
             sys.executable, str(ROOT / "scripts" / "release-saga.py"), "prepare",
-            "--release-id", "github:0.91.3", "--version", "0.91.3", "--source-sha", SOURCE,
+            "--release-id", f"github:{self.VERSION}", "--version", self.VERSION, "--source-sha", SOURCE,
             "--source-tree", "d" * 40, "--policy-version", "release-successor/1",
             "--previous-channel", str(self.candidate / "previous-stable-channel.json"),
             "--artifact-dir", str(self.candidate),
@@ -99,7 +102,7 @@ class CandidateArtifactTests(unittest.TestCase):
                 archive.write(path, path.name)
 
     def verify(self):
-        return gate.extract_verified(self.artifact, self.run, self.archive, self.output, SOURCE)
+        return gate.extract_verified(self.artifact, self.run, self.archive, self.output, SOURCE, suspended_0103_successor=self.SELECTED)
 
     def test_exact_successful_run_and_archive_extract(self):
         result = self.verify()
@@ -156,6 +159,34 @@ class CandidateArtifactTests(unittest.TestCase):
         self.artifact["digest"] = "sha256:" + hashlib.sha256(self.archive.read_bytes()).hexdigest()
         with self.assertRaisesRegex(ValueError, "unsafe member count"):
             self.verify()
+        self.assertFalse(self.output.exists())
+
+
+class LiteralSuccessorArtifactTests(CandidateArtifactTests):
+    VERSION = "0.104.0"
+    PREVIOUS = "0.102.0"
+    SELECTED = True
+
+    def test_literal_selection_cannot_be_inferred_from_archive_or_wrong_pair(self):
+        with self.assertRaisesRegex(ValueError, "closed literal successor"):
+            gate.extract_verified(self.artifact,self.run,self.archive,self.output,SOURCE)
+        self.run["path"] = ".github/workflows/release-improvement-candidate.yml"
+        with self.assertRaisesRegex(ValueError, "exact-main"):
+            self.verify()
+        self.run["path"] = gate.WORKFLOW
+        self.artifact["name"] = f"release-improvement-candidate-{SOURCE}-123"
+        with self.assertRaisesRegex(ValueError, "artifact identity"):
+            self.verify()
+        self.assertFalse(self.output.exists())
+
+    def test_selected_literal_refuses_changed_version_or_predecessor(self):
+        path = self.candidate / "release-manifest.json"
+        original = path.read_bytes()
+        for field,value in (("version","0.105.0"),("previousStableVersion","0.103.0")):
+            row = json.loads(original); row["descriptor"][field] = value
+            path.write_text(json.dumps(row)); self.repack()
+            self.artifact["digest"] = "sha256:" + hashlib.sha256(self.archive.read_bytes()).hexdigest()
+            with self.subTest(field=field), self.assertRaises(ValueError): self.verify()
         self.assertFalse(self.output.exists())
 
 

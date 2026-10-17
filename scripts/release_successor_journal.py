@@ -14,6 +14,7 @@ fence legacy writers before adoption; this module does not activate a cutover.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 from urllib.parse import quote
@@ -67,6 +68,145 @@ class Observed:
     state: dict
 
 
+SUSPENSION_PATH = "state/release-dispositions/utel-rel-21.json"
+SUSPENSION_SCHEMA = "fsgg.release-successor-suspension/1"
+SUSPENDED_REF = "refs/heads/fsgg/v2/journal/release/utel-rel-21"
+ALLOWED_SUCCESSOR = {"version": "0.104.0", "predecessor": "0.102.0",
+                     "logicalRef": "refs/heads/fsgg/v2/journal/release/utel-rel-22",
+                     "profile": "utel-rel-22/suspended-0103-successor/1"}
+SUSPENDED_ORIGINAL = {
+    "logicalRef": SUSPENDED_REF, "logicalHead": "80bf2bace917316c79032542660a5c00519a828c",
+    "stateSHA256": "67018515b0e6b49f96986d7844729461099e950058d20d0a9fa0b8ba3f3864d4",
+    "generation": 2, "version": "0.103.0",
+    "contentId": "sha256:0615d0d776f06b824b98193233c749f0ae6983e811d900cc5a166ede5e7e5007",
+    "sourceSha": "4d136d5450a7032d0b87c4b8a37f69f020144792",
+    "archiveSHA256": "d8b22728b9e36932bf8d31e1ab486b312f2d1aedddf96660c872fc69f97f25ba",
+    "runId": 38580684077, "attempt": 1,
+    "publisherSha": "6c2747248b9d757316b93d7efe8aaf797a080549", "unresolvedEffect": "tag"}
+# Source-owned immutable accepted decision. Neither workflow input nor a caller URL
+# can substitute for this anchor. Its source-only acceptance grants no native effect.
+SUSPENSION_DECISION = {
+    "owner": "EHotwagner", "repository": "FS-GG/.github",
+    "path": "docs/roadmaps/utel-release-successor.md",
+    "revision": "93e2cb8344eace6a2bc3bdfb3e6ad328890d99bd",
+    "sha256": "edb1c14489a0300e78cbf1741a4ef331ad5149070638081a7a36eda35fe07a4e"}
+
+
+def strict_suspension(raw: bytes) -> dict:
+    def pairs(items):
+        value = {}
+        for key, item in items:
+            if key in value:
+                raise Refused("duplicate suspension JSON key")
+            value[key] = item
+        return value
+    if not isinstance(raw, bytes) or len(raw) > 16384:
+        raise Refused("suspension record exceeds its bound")
+    try:
+        value = json.loads(raw.decode("utf-8"), object_pairs_hook=pairs,
+                           parse_constant=lambda _: (_ for _ in ()).throw(Refused("invalid JSON constant")))
+    except (UnicodeError, ValueError) as error:
+        raise Refused("suspension JSON is malformed") from error
+    if raw != canonical(value):
+        raise Refused("suspension record is not canonical")
+    expected = {"schema": SUSPENSION_SCHEMA, "disposition": "suspended",
+                "original": SUSPENDED_ORIGINAL, "allowedSuccessor": ALLOWED_SUCCESSOR,
+                "decision": SUSPENSION_DECISION}
+    # Canonical comparison also distinguishes bool from int and rejects extra nested keys.
+    if (not SUSPENSION_DECISION or not isinstance(value, dict)
+            or canonical(value) != canonical(expected)):
+        raise Refused("suspension or accepted decision binding differs")
+    return value
+
+
+class ReleaseSuspension:
+    """One release-specific reader; live main is never cached across authorizations."""
+
+    def __init__(self, api):
+        self.api = api
+        self.objects = ProtectedReleaseJournal(api, SUSPENDED_REF, main_directory=True)
+        self.digest = None
+        self.decision_verified = False
+
+    def main(self):
+        value = self.api.get(f"repos/{REPOSITORY}/git/ref/heads/main")
+        obj = value.get("object", {}) if isinstance(value, dict) else {}
+        head = obj.get("sha")
+        if obj.get("type") != "commit" or not isinstance(head, str) or not re.fullmatch(r"[0-9a-f]{40}", head):
+            raise Refused("suspension Authority main identity differs")
+        return head
+
+    def file(self, physical, path):
+        commit = self.objects._main_commit(physical)
+        tree_oid = commit["tree"]["sha"]
+        segments = path.split("/")
+        for index, segment in enumerate(segments):
+            tree = self.objects._immutable_object("trees", tree_oid)
+            entries = tree["tree"]
+            if len(entries) > 1000 or len({entry["path"] for entry in entries}) != len(entries):
+                raise Refused("suspension tree is ambiguous or exceeds bound")
+            matches = [entry for entry in entries if entry["path"] == segment]
+            if not matches:
+                return None
+            entry = matches[0]
+            if index < len(segments) - 1:
+                if entry["type"] != "tree" or entry["mode"] != "040000":
+                    raise Refused("suspension parent is not a directory")
+                tree_oid = entry["sha"]
+            else:
+                if entry["type"] != "blob" or entry["mode"] != "100644":
+                    raise Refused("suspension entry is not a regular blob")
+                blob = self.objects._immutable_object("blobs", entry["sha"])
+                return base64.b64decode(blob["content"], validate=False)
+
+    def original(self, physical):
+        files = self.objects._main_files(self.objects._main_commit(physical))
+        if files is None:
+            raise Refused("suspended original journal is absent")
+        pointer, raw = files
+        if (pointer != (SUSPENDED_ORIGINAL["logicalHead"] + "\n").encode()
+                or raw is None or hashlib.sha256(raw).hexdigest() != SUSPENDED_ORIGINAL["stateSHA256"]):
+            raise Refused("suspended original journal binding changed")
+        # Exact state bytes remain Unknown; this reader never settles or rewrites them.
+
+    def verify_decision(self):
+        if not self.decision_verified:
+            pin = SUSPENSION_DECISION
+            source = self.api.get(f"repos/{pin['repository']}/contents/{pin['path']}?ref={pin['revision']}")
+            if (not isinstance(source, dict) or source.get("encoding") != "base64"
+                    or not isinstance(source.get("content"), str)
+                    or hashlib.sha256(base64.b64decode(source["content"], validate=False)).hexdigest() != pin["sha256"]):
+                raise Refused("immutable accepted suspension decision source differs")
+            self.decision_verified = True
+
+    def read(self):
+        physical = self.main()
+        raw = self.file(physical, SUSPENSION_PATH)
+        if raw is None:
+            raise Refused("required release-specific suspension is absent")
+        value = strict_suspension(raw)
+        self.verify_decision()
+        self.original(physical)
+        digest = hashlib.sha256(raw).hexdigest()
+        if self.digest is not None and self.digest != digest:
+            raise Refused("release-specific suspension changed during invocation")
+        if self.main() != physical:
+            raise Refused("Authority main moved during suspension read")
+        self.digest = digest
+        return value
+
+    def authorize(self, logical_ref, version=None):
+        if logical_ref not in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
+            if version in {"0.103.0", "0.104.0"}:
+                raise Refused("sensitive release has a different journal binding")
+            return
+        self.read()
+        if logical_ref == SUSPENDED_REF:
+            raise Refused("original .103 continuation is prospectively suspended; Unknown retained")
+        if version is not None and version != ALLOWED_SUCCESSOR["version"]:
+            raise Refused("allowed successor version differs")
+
+
 class ProtectedReleaseJournal:
     # One instance validates at most 128 logical generations. Physical history
     # shares trees/blobs; keep a finite cache without caching live authority.
@@ -91,10 +231,21 @@ class ProtectedReleaseJournal:
         repository = api.get(f"repos/{REPOSITORY}")
         if repository.get("id") != REPOSITORY_ID or repository.get("full_name") != REPOSITORY:
             raise Refused("authority repository identity differs")
+        self._suspension = None
         self._observed: Observed | None = None
         self._lineage_length = 0
         self._immutable_objects: dict[tuple[str, str], bytes] = {}
         self._immutable_bytes = 0
+
+    def _authorize_release(self, version=None):
+        if self.ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
+            if not self.main_directory:
+                raise Refused("sensitive release requires protected-main directory storage")
+            if self._suspension is None:
+                self._suspension = ReleaseSuspension(self.api)
+            self._suspension.authorize(self.ref, version)
+        elif version in {"0.103.0", "0.104.0"}:
+            raise Refused("sensitive journal version has a different logical identity")
 
     def _immutable_object(self, kind: str, oid: str) -> dict:
         if kind not in {"commits", "trees", "blobs"} or not isinstance(oid, str) or not re.fullmatch(r"[0-9a-f]{40}", oid):
@@ -336,6 +487,7 @@ class ProtectedReleaseJournal:
         return JournalState(current["generation"], current["contentId"], current["effects"])
 
     def initialize(self, intent: dict) -> JournalState:
+        self._authorize_release(intent.get("version"))
         required = {"contentId", "sourceSha", "version", "candidateArchiveSha256", "operator"}
         if set(intent) != required or not all(isinstance(value, str) and value for value in intent.values()):
             raise Refused("release intent is incomplete")
@@ -346,6 +498,7 @@ class ProtectedReleaseJournal:
                 physical = self.api.get(f"repos/{REPOSITORY}/git/ref/heads/main")["object"]["sha"]
                 if self._main_files(self._main_commit(physical)) is not None:
                     raise Refused("main journal directory already exists")
+                self._authorize_release(intent.get("version"))
                 physical_commit = self._overlay(physical, commit, root)
                 self.api.patch(f"repos/{REPOSITORY}/git/refs/heads/main", {"sha": physical_commit, "force": False})
             else:
@@ -359,6 +512,7 @@ class ProtectedReleaseJournal:
 
     def retain_legacy(self, intent: dict) -> JournalState:
         """Opt-in retention of the exact existing logical chain; no release effect is retried."""
+        self._authorize_release(intent.get("version"))
         if not self.main_directory:
             raise Refused("legacy retention requires explicit main-directory storage")
         legacy = ProtectedReleaseJournal(self.api, self.ref)
@@ -402,6 +556,7 @@ class ProtectedReleaseJournal:
         return commit["sha"]
 
     def compare_and_swap(self, expected: JournalState, effect: str, state: str) -> bool:
+        self._authorize_release()
         observed = self._observed
         if observed is None or (observed.state["generation"], observed.state["contentId"], observed.state["effects"]) != (
             expected.generation,
@@ -430,6 +585,7 @@ class ProtectedReleaseJournal:
                 raise Refused("main journal moved during CAS freshness read")
             physical = fresh
             self._physical_head = physical
+        self._authorize_release(observed.state.get("version"))
         commit = self._create_commit(next_state, [observed.head])
         physical_commit = commit
         if self.main_directory:
@@ -437,6 +593,7 @@ class ProtectedReleaseJournal:
             # Do not PATCH a stale overlay or retry after a new physical write.
             if self.api.get(path).get("object", {}).get("sha") != physical:
                 raise Refused("main journal moved before CAS PATCH")
+        self._authorize_release(observed.state.get("version"))
         try:
             self.api.patch(
                 f"repos/{REPOSITORY}/git/refs/{self.physical_ref.removeprefix('refs/')}",

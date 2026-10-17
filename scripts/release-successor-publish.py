@@ -21,7 +21,8 @@ import zipfile
 
 from release_successor_admission import SingleOperatorAdmission
 from release_successor_execution import Refused, advance, ordered_effects
-from release_successor_journal import ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical
+from release_successor_journal import (ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical,
+    ReleaseSuspension, ALLOWED_SUCCESSOR, SUSPENDED_REF, SUSPENSION_PATH, strict_suspension)
 from release_successor_provider import (GitHubAPI, LiveProvider, NotFound, sanitized_dispatch_diagnostic,
                                        VerifiedOriginalTagTransport, approved_original_tag_transport,
                                        AUTH_PROTOCOL, AUTH_PROFILE, decode_auth_frame, validate_auth_binding, validate_auth_payload)
@@ -37,6 +38,11 @@ ORIGINAL_SUCCESSOR_REF = "refs/heads/fsgg/v2/journal/release/utel-rel-20"
 
 def selected_release_binding(args):
     """New ordinary source cut; explicit historical profiles keep original bindings."""
+    if getattr(args, "suspended_0103_successor", False):
+        require(not any(getattr(args, flag, False) for flag in ("original_0103_candidate",
+            "recover_original_0103_tag_intent", "recover_original_successor_checkpoint", "recovery_checkpoint",
+            "repeat_original_nuget_kit_intent", "recover_original_runtime_intent")), "literal .104 profile conflicts")
+        return (ALLOWED_SUCCESSOR["version"], ALLOWED_SUCCESSOR["predecessor"], ALLOWED_SUCCESSOR["logicalRef"])
     if getattr(args, "recover_original_successor_checkpoint", False):
         return (ORIGINAL_SUCCESSOR_VERSION, ORIGINAL_SUCCESSOR_PREDECESSOR, ORIGINAL_SUCCESSOR_REF)
     historical = any(getattr(args, flag, False) for flag in
@@ -321,10 +327,13 @@ class ProtectedPublisherAdmission:
         self.publisher = publisher
         self.ledger_api = ledger_api
         self.logical_ref = logical_ref
+        self.suspension = ReleaseSuspension(ledger_api) if logical_ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]} else None
         self.protection, self.binding = authority_protection()
 
     def authorize(self, content_id, effect, action, request_digest):
         try:
+            if self.suspension is not None:
+                self.suspension.authorize(self.logical_ref)
             if not self.publisher.authorize(content_id, effect, action, request_digest):
                 return False
             self.protection(self.ledger_api, self.binding, [self.logical_ref])
@@ -405,6 +414,8 @@ def prepare_release_journal(journal, ledger_api, admission, provider, api, manif
                             candidate_source, publisher_sha, preflight_only, uniqueness, *,
                             recovery_checkpoint=False, original_0103_selection=None, original_tag_recovery=False):
     """Qualify the physical route before genesis or original-intent recovery."""
+    if journal.ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
+        ReleaseSuspension(ledger_api).authorize(journal.ref, manifest["descriptor"]["version"])
     if original_0103_selection is not None:
         require(not recovery_checkpoint, "original .103 selection conflicts with recovery checkpoint")
         validate_original_0103_seam(original_0103_selection, manifest, intent, candidate_source, publisher_sha, journal.ref)
@@ -729,6 +740,7 @@ def run_original_tag_recovery(manifest, journal, admission, provider, ledger_api
                               report, deadline, verify_candidate, attempt_path, *, preflight=False,
                               factory=approved_original_tag_transport, clock=time.monotonic):
     """One matched settlement OR one explicit original create, never a later effect."""
+    ReleaseSuspension(ledger_api).authorize(SUSPENDED_REF, "0.103.0")
     effect = validate_original_tag_state(manifest, journal)
     original = authenticate_original_tag_result(publisher_api)
     observed, physical = journal._observed, journal._physical_head
@@ -1550,6 +1562,8 @@ def execute_publisher(args, report):
     report["execution"] = {"sourceSha": publisher_sha, "runId": run_id,
                            "runAttempt": os.environ["GITHUB_RUN_ATTEMPT"], "operator": operator}
     report["lastSuccessfulStage"] = "publisher-context"
+    if selected_ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
+        precredential_release_check(args, GitHubAPI(os.environ["GH_TOKEN"]))
     require(not args.workdir.exists(), "candidate workdir already exists")
     args.workdir.mkdir(parents=True)
 
@@ -1587,7 +1601,8 @@ def execute_publisher(args, report):
     verifier = pathlib.Path(__file__).with_name("release-successor-artifact.py")
     subprocess.run(
         [sys.executable, str(verifier), "--artifact-json", str(artifact_json), "--run-json", str(run_json),
-         "--archive", str(archive), "--source-sha", candidate_source, "--output", str(candidate)],
+         "--archive", str(archive), "--source-sha", candidate_source, "--output", str(candidate)]
+        + (["--suspended-0103-successor"] if getattr(args, "suspended_0103_successor", False) else []),
         check=True,
     )
     manifest_path = candidate / "release-manifest.json"
@@ -1643,6 +1658,11 @@ def execute_publisher(args, report):
         # The one original forward clock already began before authentication.
         # Guard dependent genesis mutations as well as later advances.
         ledger_api.api = RuntimeDeadlineAuthority(ledger_api.api, forward_deadline, time.monotonic)
+    suspension = ReleaseSuspension(ledger_api) if selected_ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]} else None
+    if suspension is not None:
+        suspension.authorize(selected_ref, version)
+    provider.suspension = suspension
+    provider.logical_ref = selected_ref
     journal = ProtectedReleaseJournal(ledger_api, ref=selected_ref, main_directory=True)
     journal = ReportingJournal(journal, report, detailed=not historical_recovery)
     provider = ReportingProvider(provider, report)
@@ -1726,7 +1746,110 @@ def authentication_only_main():
     return 1
 
 
+def precredential_release_check(args, api):
+    version, _, logical_ref = selected_release_binding(args)
+    if logical_ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
+        protection, binding = authority_protection()
+        protection(api, binding, [logical_ref])
+        ReleaseSuspension(api).authorize(logical_ref, version)
+
+
+def suspension_check_main():
+    parser = argparse.ArgumentParser(description="Read installed release suspension before credential exchange")
+    parser.add_argument("--check-release-suspension", action="store_true", required=True)
+    profile = parser.add_mutually_exclusive_group()
+    for name in ("suspended-0103-successor", "original-0103-candidate", "recover-original-0103-tag-intent",
+                 "recovery-checkpoint", "repeat-original-nuget-kit-intent", "recover-original-runtime-intent",
+                 "recover-original-successor-checkpoint"):
+        profile.add_argument("--" + name, action="store_true")
+    args = parser.parse_args()
+    try:
+        precredential_release_check(args, GitHubAPI(os.environ["GH_TOKEN"]))
+    except (RuntimeError, ValueError, KeyError, OSError) as error:
+        print(f"release suspension refused before credential exchange: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+
+def suspension_install_main():
+    """Separately admitted owner invocation using already held credentials only."""
+    parser = argparse.ArgumentParser(description="Install the one source-pinned release suspension")
+    parser.add_argument("--install-release-suspension", action="store_true", required=True)
+    parser.add_argument("--suspension-file", type=pathlib.Path, required=True)
+    parser.add_argument("--expected-authority-main", required=True)
+    parser.add_argument("--publisher-source-sha", required=True)
+    args = parser.parse_args()
+    try:
+        require(bool(re.fullmatch(r"[0-9a-f]{40}", args.publisher_source_sha)), "installer source SHA differs")
+        path = args.suspension_file
+        require(path.is_file() and not path.is_symlink(), "suspension input must be a regular file")
+        with path.open("rb") as stream:
+            raw = stream.read(16385)
+        strict_suspension(raw)
+        # No credential acquisition occurs here. The operation owner must separately
+        # admit custody of the authenticated owner token and ordinary writer token.
+        owner_api = GitHubAPI(os.environ["GH_TOKEN"])
+        owner = owner_api.get("user")
+        require(isinstance(owner, dict) and owner.get("login") == "EHotwagner"
+                and owner.get("type") == "User", "suspension installer accountable owner differs")
+        repository = owner_api.get(f"repos/{REPOSITORY}")
+        require(repository.get("id") == 1269292704 and repository.get("full_name") == REPOSITORY,
+                "suspension installer source repository differs")
+        head = owner_api.get(f"repos/{REPOSITORY}/git/ref/heads/main")
+        require(head.get("object", {}).get("type") == "commit"
+                and head.get("object", {}).get("sha") == args.publisher_source_sha,
+                "suspension installer requires exact current protected source")
+        root = pathlib.Path(__file__).resolve().parents[1]
+        local = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True,
+                               capture_output=True, text=True, timeout=30).stdout.strip()
+        require(local == args.publisher_source_sha, "suspension installer checkout differs")
+        subprocess.run(["git", "diff", "--quiet", "HEAD"], cwd=root, check=True, capture_output=True, timeout=30)
+        writer = GitHubAPI(os.environ["ORDINARY_LEDGER_TOKEN"])
+        # Refresh the authenticated source beside the protected expected-parent write.
+        require(owner_api.get(f"repos/{REPOSITORY}/git/ref/heads/main") == head,
+                "suspension installer source moved before installation")
+        installed = install_release_suspension(writer, raw, args.expected_authority_main)
+        print(f"Release-specific suspension installed at Authority main {installed}; original Unknown retained.")
+        return 0
+    except (RuntimeError, ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
+        print(f"release suspension installation refused or uncertain; reconcile without retry: {error}", file=sys.stderr)
+        return 1
+
+def install_release_suspension(api, raw, expected_parent):
+    """Existing ordinary protected writer; source preparation grants no installation authority.
+
+    Create exactly one sibling object using an expected-parent, nonforced main update.
+    No old state, logical ancestry or unrelated tree entry is edited.
+    """
+    import base64
+    strict_suspension(raw)
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", expected_parent)), "suspension expected parent differs")
+    protection, binding = authority_protection()
+    protection(api, binding, [SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]])
+    reader = ReleaseSuspension(api)
+    require(reader.main() == expected_parent, "Authority main moved before suspension installation")
+    require(reader.file(expected_parent, SUSPENSION_PATH) is None, "suspension already exists; no replacement or resume")
+    reader.original(expected_parent)
+    reader.verify_decision()
+    parent = reader.objects._main_commit(expected_parent)
+    blob = api.post(f"repos/{JOURNAL_REPOSITORY}/git/blobs", {"content": base64.b64encode(raw).decode(), "encoding": "base64"})
+    tree = api.post(f"repos/{JOURNAL_REPOSITORY}/git/trees", {"base_tree": parent["tree"]["sha"], "tree": [
+        {"path": SUSPENSION_PATH, "mode": "100644", "type": "blob", "sha": blob["sha"]}]})
+    commit = api.post(f"repos/{JOURNAL_REPOSITORY}/git/commits", {"tree": tree["sha"], "parents": [expected_parent],
+        "message": "Prospective release-specific suspension; original Unknown retained"})
+    require(reader.main() == expected_parent, "Authority main moved before suspension CAS")
+    api.patch(f"repos/{JOURNAL_REPOSITORY}/git/refs/heads/main", {"sha": commit["sha"], "force": False})
+    require(reader.main() == commit["sha"], "suspension installation response uncertain; reconcile without retry")
+    reader.read()
+    return commit["sha"]
+
+
 def main() -> int:
+    if "--install-release-suspension" in sys.argv[1:]:
+        return suspension_install_main()
+    if "--check-release-suspension" in sys.argv[1:]:
+        return suspension_check_main()
     if any(flag in sys.argv[1:] for flag in ("--qualify-original-tag-authentication-only",
                                              "--refuse-original-tag-factory-inactive")):
         return authentication_only_main()
@@ -1737,6 +1860,8 @@ def main() -> int:
     parser.add_argument("--workdir", required=True, type=pathlib.Path)
     parser.add_argument("--result-path", type=pathlib.Path)
     profile = parser.add_mutually_exclusive_group()
+    profile.add_argument("--suspended-0103-successor", action="store_true",
+                         help="Select only literal .104/utel-rel-22 under the installed .103 suspension")
     profile.add_argument("--recover-original-0103-tag-intent", action="store_true",
                          help="Fixed original generation2 tag intent; one matched settlement or approved create, never a later effect")
     profile.add_argument("--original-0103-candidate", action="store_true",
@@ -1757,7 +1882,7 @@ def main() -> int:
     result_path = args.result_path or args.workdir.with_name(args.workdir.name + "-result.json")
     args.result_path = result_path
     report = {"schema": "fsgg.release-successor-result/1",
-              "profile": ORIGINAL_0103_TAG_PROFILE if args.recover_original_0103_tag_intent else ORIGINAL_0103_PROFILE if args.original_0103_candidate else SUCCESSOR_CHECKPOINT_PROFILE if args.recover_original_successor_checkpoint else RUNTIME_RECOVERY_PROFILE if args.recover_original_runtime_intent else KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
+              "profile": ALLOWED_SUCCESSOR["profile"] if args.suspended_0103_successor else ORIGINAL_0103_TAG_PROFILE if args.recover_original_0103_tag_intent else ORIGINAL_0103_PROFILE if args.original_0103_candidate else SUCCESSOR_CHECKPOINT_PROFILE if args.recover_original_successor_checkpoint else RUNTIME_RECOVERY_PROFILE if args.recover_original_runtime_intent else KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
               "candidate": {"runId": args.candidate_run_id, "artifactId": args.candidate_artifact_id,
                             "archiveSha256": args.candidate_archive_sha256},
               "execution": None, "originalPublisher": {"runId": ORIGINAL_0103_TAG_CHECKPOINT["runId"], "runAttempt": 1} if args.recover_original_0103_tag_intent else {"runId": 38133108945, "runAttempt": 1, "jobId": 114451349714} if args.recover_original_successor_checkpoint else {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214} if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or args.recover_original_runtime_intent else None,
