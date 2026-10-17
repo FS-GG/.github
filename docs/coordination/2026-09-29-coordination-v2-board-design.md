@@ -482,10 +482,21 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   option ID and its card values when adding In review: the API replaces the supplied option list.
   New native option/view IDs remain unresolved preparation slots, never invented consumer bindings.
   Apply uses freshly checked exact identities and a bounded one-shot authorizer/provider composition,
-  retaining the exact original request in existing private operation custody before sending. Lost or
+  retaining the exact original request before sending. The existing CLI only has post-run reporting:
+  implement a narrow exclusive private per-invocation evidence sink for original intent, requests and
+  outcomes before the first send; this is operation custody, not a global journal. Lost or
   ambiguous responses stop writes and enter original-identity readback only; no blind retries or
   rollback. A fully reconciled unchanged repeat emits no mutations. Actual readback resolves new IDs;
   then land the final stable enrollment/binding before positive installed v4 inspection/refresh/selection.
+
+  The concrete production approval supplier is the accountable owner's explicit invocation of this
+  reviewed bounded CLI for the exact prepared operation, separately selected at the live stage after
+  installed qualification. At the CLI boundary construct private typed invocation admission only
+  after exact prepared digest/source/principal/scope and fresh preconditions validate. Native principal
+  and project capability prove permission, not operation approval. Neither caller JSON, an
+  `authorized:true` flag, BoardIntake author eligibility nor a synthetic absent-supplier placeholder
+  supplies approval; no cryptographic authority service or V1 permit is introduced. Source controls
+  qualify this actual manual invocation route without granting a live operation here.
 
   Default migration writes no existing human Status/Track/Roadmap values. Native updates provide no
   expected-revision/CAS guarantee: fresh comparison detects observed drift, but a local lock cannot
