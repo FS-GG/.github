@@ -406,48 +406,93 @@ deadline, memory or replacement reducer in JavaScript.
   separately. No candidate browser change silently replaces the native
   owner's retained or currently admitted distribution.
 
-- [ ] **WASM-SHARED-01.5-S1 — SC2 adapter and compatibility qualification**
+- [ ] **WASM-SHARED-01.5-S1 — SC2 adapter and current guest conformance**
   — route: routine.
-  Depends on: Closed .5-P; protected SC2 baseline; .5-P2 below for request-limit
-  qualification. Adapter preparation and supported-profile checks remain ready.
-  Scope: new `src/SC2.Client.SharedWasm/` and
-  `tests/SC2.Client.SharedWasm.Tests/`, with isolated package configuration,
-  Fable adapter, mechanical facade and browser tests. Read existing
-  contracts and supervisor behavior; leave existing browser entry,
-  recording, native qualification and fixture-supervisor files to .5-S2.
+  Depends on: accepted current Game 0.4 publication and fresh both-feed installed
+  qualification [below](#current-terminal-process-04-publication-frontier--2026-10-17),
+  and the protected SC2 baseline. The selected 2026-10-17 window completes S1 and
+  S2 browser/source adoption together in existing
+  [SC2 PR #44](https://github.com/FS-GG/FS.GG.SC2.Client/pull/44); native S2 acceptance
+  remains separate. This explicitly replaces the earlier isolated-S1 prohibition
+  on changing production entrypoints, recording and qualification source.
+  Scope: `src/SC2.Client.SharedWasm/`, its tests, maintained
+  `sdk/rust/sc2c-guest` family and `scripts/build-guest.sh`, joined with the S2
+  callers and build closure below. Preserve stateful selection/target/tick,
+  tactical and production domain behavior. Use the existing SDK's current SC6G
+  configuration validation and exact ACK for live initialization; preserve the
+  separate current offline initialization route. Clear state on initialize,
+  reset and shutdown. Retire the duplicate test-only production guest rather
+  than promoting fixed-target fixtures into the product.
   Acceptance: cover the complete current `SC2GuestSupervisor` API through
-  installed package Workers. Preserve one controller, two advisors and
-  one aggregate candidate, bounded ordinary/realtime queues, snapshot
-  coalescing, configured input/output/deadline limits and transactional
-  replacement. A refused candidate leaves the active module usable;
-  unresolved replacement freezes delivery until the existing recovery
-  decision. Old generations and advisor output gain no command authority.
-  Returned ABI rejection codes, actual dispatch, queued refusal and
-  historical-only output retain distinct recording/disposition meanings.
-  Independently inventory and build each URL-loaded module and prove
-  strict admission. Test non-root Worker loading, faults and disposal.
-  Stop: qualified adapter prepared locally; existing production and
-  native-replay paths remain owned by the active qualification lane.
+  installed package Workers. Preserve one controller, two advisors and one
+  aggregate candidate across all routes, bounded ordinary/realtime queues,
+  snapshot coalescing, configured limits and transactional replacement. A refused
+  candidate leaves the active module usable; unresolved replacement freezes
+  delivery until the existing recovery decision. Old generations, candidates and
+  advisor output gain no command authority. Held snapshots, repeated reset and
+  shutdown retain their lifecycle guarantees.
+  Independently inventory, build and strictly admit all five active URL variants
+  (minimal, replacement, loop, trap and malformed), with matching SC6G ACK before
+  exercising their intended behavior. Use these actual product artifacts in
+  Worker and product tests. Prove useful stateful manual select/move/tick histories,
+  retained/reset selection, tactical ability and production capability/command
+  semantics; prove equivalent decoded offline pointer and keyboard actions.
+  Qualify independently built replacement commit/abort/frozen recovery and actual
+  admitted Process-stage malformed output, trap and executing timeout: zero partial
+  commands, responsive navigation/disarm and Worker retirement. Keep separately
+  named unsupported-byte and finite-work adversarial controls and immutable old
+  receipts. Inspect actual emitted instructions before selecting a strict-compatible
+  compiler correction; no guessed opcode cause, relaxed validator or legacy fallback.
+  Stop: report S1 conformance and S2 browser/source adoption against one coherent
+  committed tree. A test-only guest or negative admission receipt does not establish
+  product adoption, native replay or whole S2 acceptance.
 
 - [ ] **WASM-SHARED-01.5-S2 — SC2 production, recording and native join**
   — route: routine.
-  Depends on: .5-S1 and the SC2 native-replay owner's join.
-  Scope: `fixtures/guest-supervisor.js`, browser package/project/lock and
-  asset-build configuration, browser entry loading, and affected product
-  tests. The native-replay owner integrates changes needed in recording,
-  replay executors, qualification drivers and acceptance evidence.
-  Acceptance: the actual imported-controller/advisor, builtin live,
-  realtime and offline routes use the shared runtime. Existing tactical,
-  production, realtime, replacement, import and recording tests pass.
-  Recordings preserve exact module/configuration identity, invocation
-  order, output and actual ABI return status. Offline comparison remains
-  authority-free. Native joined qualification demonstrates the affected
-  product journey and post-write-loss behavior: one durable Unknown,
-  no automatic command replay, revoked authority and explicit fresh rearm.
-  Preserve the separate owning SC2C-01.6f completion contract.
-  Stop: missing strict compatibility or a lost recording fact blocks only
-  the affected migration. Source/browser evidence does not close native
-  replay, product publication or installed-platform qualification.
+  Depends on: the joined S1/S2 source window above; native acceptance also requires
+  the SC2 native-replay owner's separate join. Source development does not wait for
+  remote delivery of this scope amendment or acquire native operation authority.
+  Scope: actual browser/default/import/replacement/advisor/realtime/offline callers,
+  `fixtures/guest-supervisor.js`, browser package/project/locks, asset staging,
+  affected product tests, recording/replay executors and connected qualification
+  source. Install exactly one awaited shared runtime in the real browser bootstrap;
+  all callers use that composition, with F# product state and producer-owned queue
+  and terminal ordering preserved. Add no second queue or compatibility wrapper.
+  Register actual module bytes, current manifest/role/capabilities and canonical
+  configuration through the current selection path, then pass the opaque selection
+  token at load and replacement. Builtin declarations bind independently hashed
+  actual build bytes and validated configuration; missing context refuses. Validate
+  exact SC6G configuration ACK at every applicable entrypoint. The current-only
+  registration seam consumes canonical configuration bytes directly, without a
+  compatibility overload or reverse-built document.
+  Acceptance: actual builtin, imported controller/advisor, realtime, replacement
+  and offline entrypoints execute through installed package Workers. Offline trace
+  reexecution requires supplied actual module/configuration bytes and a current
+  manifest matched to recorded initialize/configuration identity and admission;
+  refuse missing context and grant zero live command authority from recording data.
+  Record exact module/configuration/instance identity, invocation order, actual ABI
+  output/status and delivery disposition. Distinguish pre-ABI refusal, returned
+  rejection, historical-only output and missing return; initialization records an
+  invocation only when the ABI was invoked. Sweep existing browser, Rust vector,
+  emitted/Worker, module-runtime, recording and offline assertions together.
+  The real dist must contain the complete authenticated published 0.4 Worker,
+  policy/library tree and fresh adapter outputs. Reconcile project/package/lock,
+  asset-build and exact production assembly/source/package custody predicates
+  together, including `retain-qualified-product.mjs` and
+  `eng/sc2c-artifact-provenance/Program.fs` when the shared adapter extends their
+  actual closure. Reuse existing complete Browser/dist and tracked-source custody;
+  keep `nativeGrant=false` and `compileAttestation=false`.
+  Native joined qualification separately demonstrates the affected product journey
+  and post-write-loss behavior: one durable Unknown, no automatic command replay,
+  revoked authority and explicit fresh rearm. Preserve SC2C-01.6f's completion
+  contract and the disjoint existing PR #43 native/container work.
+  Stop: missing strict compatibility or recording facts blocks the affected
+  migration; source/browser conformance never closes native replay, product
+  publication, installed-platform qualification, whole WASM or .7 removal.
+  Use earliest meaningful typecheck/guest structural/vector checks before final
+  coherent required CI. Retain the existing 20-minute hosted job, one Playwright
+  worker/retries zero and 90-second aggregate shared suite; qualify actual expanded
+  fit without inheriting historical test counts or widening these bounds here.
 
 - [x] **WASM-SHARED-01.6 — FourD optional reaction-policy example**
   — route: routine.
@@ -470,9 +515,10 @@ deadline, memory or replacement reducer in JavaScript.
 
 ### Concurrency and joins
 
-.5-B1, .5-S1 and .6 are independent immediately executable windows in
-separate worktrees. Their new adapter/example directories do not overlap
-the active native workers. The programme integrator confirms those exact
+.5-B1, the selected joint .5-S1/.5-S2 browser/source window and .6 can
+proceed in separate worktrees. SC2 PR #44 owns its coherent guest/caller/build/test
+composition; the existing PR #43 container touch-set and native execution remain
+separate. The earlier new-directory-only S1 separation no longer defines this window. The programme integrator confirms those exact
 touch-sets before dispatch and reserves shared build/package files for
 the relevant integration window.
 
@@ -832,14 +878,26 @@ the SDK archive SHA-256 is
 `85c9362bd4d15d784da88909ef84cd8170051d67495c4961c783045db228592f`.
 Registry source, published inventory and release tag now name 0.4.0.
 
-Fresh both-feed installed acceptance remains **open**. The original
-[installed run `39016307973/a1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39016307973)
-passed the org consumer/runtime step, then failed artifact upload because the
-copied NuGet HTTP-cache path contained a colon. No artifact was retained, and the
-public leg was cancelled before execution. The complete installed evidence is
-incomplete; an org step success cannot stand for accepted both-feed installation.
-The qualifier-source repair retains its own source/acceptance contract and does
-not imply another publication, release version or product pin.
+Fresh current 0.4 both-feed installed acceptance is **accepted** at qualifier
+`20c94478f774cd58d8e9c1aaef1b573449570309`:
+[installed `39023332496/a1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39023332496)
+and [protected-main qualification `39023124943/a1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39023124943)
+completed successfully. The accepted installed evidence supplies the producer
+prerequisite for the selected SC2 consumer window; it establishes no product pin,
+native authority or consumer acceptance. [Game PR #717](https://github.com/FS-GG/FS.GG.Game/pull/717) records that accepted
+frontier at merged `f139d183bb76b66bb2f0618a16ac343d0781cfd5`; its delivered
+[owning Atlas capture `game/current-wasm-custody-source-boundary`](https://github.com/FS-GG/FS.GG.Game/blob/f139d183bb76b66bb2f0618a16ac343d0781cfd5/docs/atlas/records/a38737476856236f33e0aef1b97e2b900677cf99f1dbcfd381c708ceeca8b7f3.json)
+retains the exact accepted P/Q source, package, both-feed evidence and original-failure
+boundaries.
+
+Preserve original [installed `39016307973/a1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39016307973):
+its org consumer/runtime step passed, artifact upload failed on a colon in a copied
+NuGet HTTP-cache path, no artifact was retained and public execution was cancelled.
+The subsequent qualifier-source repair and accepted fresh qualification do not
+relabel that original or imply another publication or release version. Original
+[installed `39020851715/a1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39020851715)
+also remains a failed evidence-projection qualification: general runtime passed,
+but the selected qualification was not reached.
 
 Original 0.3 H3/H4 transaction bytes, accepted scope and failed/unknown attempts
 retain their own identities. Prepublication custody and served-feed readbacks
