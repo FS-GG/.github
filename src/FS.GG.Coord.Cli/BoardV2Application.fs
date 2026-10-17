@@ -115,7 +115,7 @@ module BoardV2Application =
                        {| itemId = memberItem.ItemId; contentId = memberItem.ContentId; kind = memberItem.Kind
                           issue = memberItem.Issue |> Option.map issueWire; enrolled = memberItem.Enrolled
                           discrepancy = if memberItem.Enrolled then None else Some "Unexpected/unselected membership; no automatic enrollment" |})
-                   nativeIntegrator = {| observedAt = report.NativeIntegrator.ObservedAt; repositoryGaps = report.NativeIntegrator.RepositoryGaps
+                   nativeIntegrator = {| observedAt = (if report.NativeIntegrator.ObservedAt = DateTimeOffset.MinValue then None else Some report.NativeIntegrator.ObservedAt); repositoryGaps = report.NativeIntegrator.RepositoryGaps
                                          pullRequests = report.NativeIntegrator.PullRequests
                                          resourceGap = "Runtime/integrator owners have not supplied fresh implementation/review/hosted-CI capacity or original/uncertain reservations" |}
                    selectionCoverage = "Partial .8: native PR recovery is observed; action-specific plan/intake/slice/resource/reservation observations require the trusted integrator seam"

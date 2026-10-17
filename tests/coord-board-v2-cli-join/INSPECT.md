@@ -41,6 +41,11 @@ PR inventories, including non-enrolled work, native closing-issue associations, 
 files, reviews and checks. Connections drain within existing bounds; denied/partial
 reads and final issue/dependency/plan/planning/membership/head changes remain unknown.
 Unexpected cards stay visible and unenrolled. No human planning field is written.
+When native PR collection was never attempted (including failed global admission or
+product-only inspection), the typed API uses MinValue solely as an absent-observation
+sentinel; it never passes freshness, even at a MinValue evaluation time. The programme
+wire emits `nativeIntegrator.observedAt: null`. A real collection attempt retains its
+conservative start time and its read gaps; final barrier failures do not renew it.
 
 This is the first useful source portion of .7/.8, **not .8 completion**. The maintained
 `selectActions` and CLI `encodeInspectionWithContext` APIs accept trusted typed current

@@ -249,6 +249,15 @@ let ``actual programme CLI caller joins native PR facts and retains attributed s
         Assert.Equal(ProgrammeFixture.head, selected.GetProperty("head").GetString())
         Assert.False(selected.GetProperty("dispatchAuthority").GetBoolean())
         Assert.Contains("Partial .8", root.GetProperty("selectionCoverage").GetString())
+        Assert.Equal(JsonValueKind.String, root.GetProperty("nativeIntegrator").GetProperty("observedAt").ValueKind)
+        let missingPath = Path.Combine(directory, "uncollected.json")
+        let missingReads =
+            ProgrammeFixture.transport (fun request response ->
+                if request.Subject = "complete V2 project memberships" then Error(Errors.Unauthorized "membership unavailable") else response)
+        Assert.Equal(3, BoardV2Application.runWithTransport missingReads [ "inspect"; "--binding-file"; bindingPath; "--report-file"; missingPath ])
+        use missingDocument = JsonDocument.Parse(File.ReadAllText missingPath)
+        Assert.Equal(JsonValueKind.Null, missingDocument.RootElement.GetProperty("nativeIntegrator").GetProperty("observedAt").ValueKind)
+        Assert.Empty missingReads.Mutations
         let refreshPath = Path.Combine(directory, "refresh.json")
         Assert.Equal(3, BoardV2Application.runWithTransport transport [ "refresh"; "--binding-file"; bindingPath; "--report-file"; refreshPath ])
         Assert.Empty transport.Mutations

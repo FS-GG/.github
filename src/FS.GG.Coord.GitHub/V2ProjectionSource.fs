@@ -563,7 +563,7 @@ module V2ProjectionSource =
               Verified = items |> List.filter (fun item -> item.Health = "Verified") |> List.length; Items = items
               PopulationGap = gap; Cleanup = "Read-only inspection; no project lock, claims, mutation, durable effect or background work" }
         let emptyNative =
-            { PullRequests = []; ObservedAt = DateTimeOffset.UtcNow
+            { PullRequests = []; ObservedAt = DateTimeOffset.MinValue
               RepositoryGaps = if binding.BindingVersion = 4 then binding.Repositories |> Seq.map (fun repository -> repository, "Native integrator not collected because global enrollment/project/schema/membership admission is incomplete") |> Map.ofSeq else Map.empty }
         let failed error = { Binding = binding; Evidence = metadata [] None [] (Some error); Items = []; Memberships = []; MembershipGap = Some error; NativeIntegrator = emptyNative }
         match validateBinding binding |> Result.bind (fun () -> artifactCheck binding) with
@@ -652,7 +652,7 @@ module V2ProjectionSource =
 
     // A current read proposes an action only. The existing integrator retains dispatch authority.
     let selectActions (report: InspectionReport) (context: SelectionContext option) (now: DateTimeOffset) =
-        let fresh (observed: DateTimeOffset) = observed <= now && now - observed <= TimeSpan.FromMinutes 5.0
+        let fresh (observed: DateTimeOffset) = observed <> DateTimeOffset.MinValue && observed <= now && now - observed <= TimeSpan.FromMinutes 5.0
         let trusted = context |> Option.filter (fun (value: SelectionContext) -> value.ObservedAt <= now && now <= value.ValidUntil && fresh value.ObservedAt && not (String.IsNullOrWhiteSpace value.Evidence))
         let paths (values: string list) = FS.GG.Coord.TouchSet.parse ("Paths: " + String.concat " " values)
         let usable (values: string list) =

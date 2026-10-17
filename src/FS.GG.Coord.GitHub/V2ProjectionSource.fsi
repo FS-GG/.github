@@ -69,6 +69,9 @@ module V2ProjectionSource =
           Author: string option; Issues: string list; Files: string list; ReviewDecision: string option
           Reviews: string list; Checks: string list; Gaps: string list }
 
+    /// ObservedAt is the conservative collection-start time, including failed collection attempts.
+    /// MinValue means collection was never attempted; it is an absent-observation sentinel and is
+    /// never fresh, even when a caller supplies MinValue as its evaluation time. The v4 wire emits null.
     type NativeIntegratorFacts =
         { PullRequests: PullRequestFacts list; RepositoryGaps: Map<string, string>; ObservedAt: DateTimeOffset }
 

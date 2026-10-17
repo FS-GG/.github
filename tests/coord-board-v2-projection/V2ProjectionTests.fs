@@ -589,6 +589,7 @@ let ``inspection incomplete population is Unknown and yields no candidates`` () 
     let report = V2ProjectionSource.inspectFixed transport canonicalBinding None
     Assert.True(report.Evidence.Selected.IsNone)
     Assert.True(report.Evidence.PopulationGap.IsSome)
+    Assert.Equal(DateTimeOffset.MinValue, report.NativeIntegrator.ObservedAt)
     Assert.Empty report.Items
     let facts: V2ProjectionSource.IntegratorFacts = { OpenPullRequests = Some []; TouchSets = Some Map.empty; AvailableSlots = Some 1 }
     Assert.Empty(V2ProjectionSource.planningCandidates report facts)
@@ -676,10 +677,12 @@ let ``identical inspection snapshots are identical and malformed binding reads n
     let first = V2ProjectionSource.inspectFixed (snapshot ()) canonicalBinding None
     let second = V2ProjectionSource.inspectFixed (snapshot ()) canonicalBinding None
     Assert.Equal(first, second)
+    Assert.Equal(DateTimeOffset.MinValue, first.NativeIntegrator.ObservedAt)
     let noCalls = scripted []
     for candidate in [ { canonicalBinding with ProjectNumber = 1 }; { canonicalBinding with ArtifactSha256 = String.replicate 64 "0" } ] do
         let report = V2ProjectionSource.inspectFixed noCalls candidate None
         Assert.True(report.Evidence.PopulationGap.IsSome)
+        Assert.Equal(DateTimeOffset.MinValue, report.NativeIntegrator.ObservedAt)
         Assert.Empty report.Items
     Assert.Empty noCalls.Mutations
 
@@ -779,6 +782,16 @@ let ``two receiver products use their own protected population and planning targ
         Assert.Empty(transport.Mutations)
         Assert.Contains(Set.minElement selected.Repositories, report.ProtectedInputs.Head |> fun (path, _, _) -> path)
         Assert.True(transport.Logged (Set.minElement selected.Repositories + "#7 native observation"))
+        let inspectionReads =
+            scripted (
+                productBlob selected (productManifest selected)
+                :: (productSource selected @ [ Error(Http(403, "planning unavailable")) ]))
+        let inspection = V2ProjectionSource.inspectFixed inspectionReads selected None
+        Assert.Equal("Current", inspection.Items.Head.SourceCurrentness)
+        Assert.True(inspection.Items.Head.Evidence.Native.IsSome)
+        Assert.Equal(DateTimeOffset.MinValue, inspection.NativeIntegrator.ObservedAt)
+        Assert.Empty inspection.NativeIntegrator.PullRequests
+        Assert.Empty inspectionReads.Mutations
 
 [<Fact>]
 let ``receiver refresh guards its one write and duplicate retry independently reads`` () =
@@ -990,6 +1003,13 @@ let ``programme missing partial foreign and moved native facts never produce con
         let report = programmeSnapshot (fun request response -> if request.Subject.Contains subjectPart then Error(Http(403, "inert denied read")) else response)
         let selected = V2ProjectionSource.selectActions report (Some(selectionContext report)) report.NativeIntegrator.ObservedAt
         Assert.Equal("unknown", selected.Head.Decision)
+        if subjectPart = "complete V2 project memberships" then
+            Assert.Equal(DateTimeOffset.MinValue, report.NativeIntegrator.ObservedAt)
+            let context = selectionContext report
+            let missingContext = { context with ObservedAt = DateTimeOffset.MinValue; ValidUntil = DateTimeOffset.MinValue.AddMinutes(1.0) }
+            let absent = (V2ProjectionSource.selectActions report (Some missingContext) DateTimeOffset.MinValue).Head
+            Assert.Equal("unknown", absent.Decision)
+            Assert.Contains(absent.Reasons, fun value -> value.Contains("Native integrator snapshot expired"))
     let mutations: (string * string * string) list =
         [ (ProgrammeFixture.head, String.replicate 40 "f", "final head barrier");
           ("I_outcome", "I_foreign", "native observation");
@@ -1150,9 +1170,20 @@ let ``native snapshot freshness starts before its first inventory read and canno
         if request.Subject.EndsWith("open PR inventory", StringComparison.Ordinal) && firstInventoryRead.IsNone then firstInventoryRead <- Some DateTimeOffset.UtcNow
         response)
     Assert.True(firstInventoryRead.IsSome)
+    Assert.NotEqual(DateTimeOffset.MinValue, report.NativeIntegrator.ObservedAt)
     Assert.True(report.NativeIntegrator.ObservedAt <= firstInventoryRead.Value)
     let context = selectionContext report
     let expired = report.NativeIntegrator.ObservedAt.AddMinutes(5.0).AddTicks(1L)
     let result = (V2ProjectionSource.selectActions report (Some context) expired).Head
     Assert.Equal("unknown", result.Decision)
     Assert.Contains(result.Reasons, fun value -> value.Contains("Native integrator snapshot expired"))
+    let collectedEmpty =
+        programmeSnapshot (fun request response ->
+            if request.Subject.EndsWith("open PR inventory", StringComparison.Ordinal) then
+                ok """{"data":{"repository":{"nameWithOwner":"FS-GG/.github","pullRequests":{"totalCount":0,"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}"""
+            else response)
+    Assert.Empty collectedEmpty.NativeIntegrator.PullRequests
+    Assert.Empty collectedEmpty.NativeIntegrator.RepositoryGaps
+    Assert.NotEqual(DateTimeOffset.MinValue, collectedEmpty.NativeIntegrator.ObservedAt)
+    let available = V2ProjectionSource.selectActions collectedEmpty (Some(selectionContext collectedEmpty)) collectedEmpty.NativeIntegrator.ObservedAt
+    Assert.Equal("ready", available.Head.Decision)
