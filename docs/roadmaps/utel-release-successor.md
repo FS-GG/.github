@@ -1602,3 +1602,21 @@ repeated whole-prefix reads, drift during waiting, exhaustion/deadline at each b
 readback failure and historical-profile refusals. Independent source review, normal protected CI
 and an explicit fresh root-selected operation precede any new effect. This source decision grants
 no dispatch, installed update, Project3 mutation, registry promotion or consumer adoption.
+
+The consumed-marker refusal occurs at journal read and at the provider effect fence. The existing
+pre-issuer reader checks source/native/suspension prerequisites, not this journal marker. Another
+ordinary invocation can therefore mint its existing credentials before journal refusal; it cannot
+obtain a second claim or effect permission. Retain credential cleanup and describe its actual
+outcome separately. Do not claim pre-credential marker refusal or add automatic follow-on dispatch.
+
+For SOURCE qualification, select750 new Authority entries: the measured cold624-entry path plus126
+entries of headroom. Keep quota floor1800 and a single15-minute inner deadline captured at continuation
+entry before proof/candidate acquisition. The total visibility-probe ceiling is32, with five-second
+waits only for actual absence. The existing60-minute native hard job timeout remains; inner checks
+cannot interrupt an already blocking child and do not extend that outer limit. Original1500 remains
+exhausted; report original1500 plus actual new consumption, with a maximum2250 Authority entries across
+these two windows. The measured499 publisher entries and138 separate feed acquisitions remain visible
+and distinct; no new global request bound or provider ceiling is inferred. Qualify the full32-probe
+case and refusal/Unknown/claim-loss paths under750. Any deficit stops qualification for disposition,
+not silent enlargement. These are executable source-profile limits, not selection of an actual
+native invocation, native timing acceptance or publication completion.
