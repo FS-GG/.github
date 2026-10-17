@@ -1386,3 +1386,146 @@ proof does not establish current issuance, scope, expiry or effect authority.
 Publication needs all 16 durable effects and both-feed readback. SDD pin updates,
 materialization and installed receiver qualification follow normal owner routes;
 no candidate, package staging or version output establishes them.
+
+#### Selected source completion: prospective .103 suspension and one .104 successor
+
+The programme owner selects the following bounded source completion under the user's direction to
+proceed without unavailable old publication artifacts. This supersedes the draft's separate
+`release-improvement-candidate.yml` proposal: reuse the maintained
+`release-successor-candidate.yml`, its exact seven-member publisher archive and separate V2 evidence,
+with one closed literal 0.104.0 / `utel-rel-22` successor selection. Retain historical selections and
+their refusals; add no caller-supplied version, journal or artifact profile. No intermediate .103
+candidate qualification is needed for this new source composition. Actual version/journal absence,
+promoted predecessor and six feed coordinates remain fresh native gates, not facts allocated by a
+source literal. The existing updater still requires a genuinely promoted coherent channel.
+
+Use the existing protected Authority main and writer for one strict release-specific object at
+`state/release-dispositions/utel-rel-21.json`, outside the original two-file release directory.
+The closed `fsgg.release-successor-suspension/1` record binds `disposition=suspended`, the exact
+original journal/ref/head/state digest/generation, version/content/source/archive and run/attempt/
+publisher identity, its unresolved tag effect, one allowed successor, and the accountable decision.
+The existing sole publisher operator remains `EHotwagner`. The decision must match the immutable
+repository/path/revision/body digest of this accepted source decision; an arbitrary URL, workflow
+input or caller string cannot supply that authority. Install through the maintained protected writer
+with exact expected-parent non-forced CAS and preservation of unrelated tree entries. Creation is a
+separately admitted operation, not a side effect of reading or source delivery.
+
+One maintained strict reader governs current entry, journal initialization/continuation, original
+candidate/tag recovery, direct provider admission and each intent/dispatch/settle boundary. Read the
+disposition before credential acquisition and recheck fresh authority during execution/recovery.
+Missing, malformed, unsupported, changed or conflicting evidence refuses the new successor. An
+installed matching suspension refuses further original .103 continuation; no automatic resume branch
+is introduced. The successor must match the one literal allowed binding and the unchanged original
+state. Unrelated historical journals retain their separately selected semantics. Read access to the
+Authority repository before credential exchange is itself a capability to establish, never inferred
+from the source repository's Actions token or an inaccessible response.
+
+Prospective exclusion preserves every old Unknown. Original run
+[38580684077, attempt 1](https://github.com/FS-GG/.github/actions/runs/38580684077) is terminal;
+the existing first-attempt/in-progress/current-main and ordered per-effect admissions exclude new
+admitted effects from that completed original process, a rerun, or stale source. An already sent tag
+may still complete at its own coordinate, but cannot independently run later feed or promotion code.
+The durable suspension neither proves rollback/non-dispatch nor settles credentials, effects or any
+of the inherited 439 reservations. Do not recreate missing original artifacts, reset its journal,
+overwrite/delete a late tag, or relabel old effects as verified or absent.
+
+Old immutable source cannot retroactively consume the reader. Before native cutover, authenticate
+the original terminal job/attempt, current source and workflow entry points, competing-run/entry
+census, and actual credential custody. Do not admit a prohibited historical credential route. A known
+independent ungated writer or live credential holder requires fencing that existing route before
+acceptance; a marker is not universal bearer revocation. This is a bounded exclusion argument, not
+a new authority service or global pending-release ledger.
+
+Focused controls must traverse actual maintained entry/recovery/provider callers, prove refusal
+before exchanges and prohibited writes, and cover exact successor selection, malformed/duplicate
+records, crossed original/decision/successor bindings, changing authority between effects, immutable
+original state, CAS conflicts and unrelated-tree preservation. Preserve the existing sixteen-effect
+order, original-candidate dependency-pin refusals, independent failure/cleanup reporting and unchanged
+candidate resource bounds. Source-only qualification does not install the disposition, allocate a
+journal, mint credentials, publish/promote, replay an original effect or activate installed V2. Root
+retains separate native operation selection after reviewed source delivery and fresh exact inputs.
+
+**Selected installer composition.** The ordinary writer credential belongs to the existing
+`release-successor` environment and issuer; a standalone shell is not presumed to hold it. Complete
+the caller through one explicit install-only selection in the existing publisher workflow, with a
+mutually exclusive job. Reuse its environment and non-cancelling concurrency group. The install job
+has only contents/actions read permissions, no package or OIDC permission, no candidate download or
+build, and no NuGet or publication entry. Keep the ordinary publication precredential fence intact;
+installation never automatically continues into publication.
+
+Only the install boolean and exact expected Authority main are new dispatch inputs. Candidate
+coordinates become dispatch-optional so installation needs no invented archive identity; ordinary
+modes must still validate positive run/artifact IDs and the archive digest before either issuer.
+Installation requires empty candidate/checkpoint strings, publish=false and every other profile flag
+false. Mixed or unknown input fails visibly before issuance rather than silently skipping a job.
+
+Before App issuance, construct the fixed canonical suspension from source-owned constants, validate
+this exact immutable accepted decision, and bind the current source/clean checkout, native repository/
+workflow/run, first attempt, dispatch event and existing sole operator. Hosted attribution comes from
+native Actions evidence, not a claim that the workflow token's `/user` is the human operator. Read
+exact Authority identity/protection, expected parent, absent disposition and unchanged original state
+with the available reader; denied or incomplete evidence stops before mint. Preserve a bounded
+invocation-local, digest-bound prepared result with the exact record, mode and source/parent/run
+identities. This is custody for the selected operation, not another durable approval ledger.
+
+After that preflight only, use the existing pinned App issuer for Authority-only contents:write,
+verify the expected installation and exact one-repository scope, and invoke the maintained installer.
+Recheck native invocation/source/protection/original state and parent beside every blob/tree/commit
+POST and final non-forced PATCH. The clean-source guard includes relevant untracked import-root files;
+a nominal clean tracked tree must not permit unreviewed imported code. Existing standalone user-token
+admission stays strict and distinct from this hosted caller. No key or token is exported in evidence.
+
+The install-only result is explicitly not publicationComplete. Retain exact nonsecret intent before
+the ref update, each attempted request and returned object identity, first failure and independent
+reporting/cleanup outcome. A missing response, uncertain ref update or lost readback remains the
+original Unknown operation: stop writes and reconcile read-only, never rerun or silently renew with
+a new parent/source. Independent readback must verify the actual record, original journal and all
+unrelated entries. Token cleanup remains enabled and its actual outcome is a separate native gate.
+Qualify actual workflow mode/permission/ordering and CLI caller controls, including all mixed-input,
+source/run/actor/parent/record/scope races and the ordinary publication fence. Native reader/issuer
+capability, custody retention and installation still require a separately selected actual operation.
+
+
+**Selected bounded forward continuation.** The current literal .104 ordinary caller continues
+observation and advance within its original admitted invocation. Keep each advance's one-send
+maximum, durable original intent, independent readback and fresh intent/dispatch/settlement guards.
+After waiting, allow another advance only when a five-second wait fits the same original deadline
+and remaining iterations; do not sleep after verified progress or renew an exhausted invocation.
+Unknown dispatch never permits resend. Unknown/mismatched/unreadable evidence and admission failures
+retain their original checkpoint and first cause. Historical journal19/20 and special recovery
+selections keep their existing bounds and semantics.
+
+Retain the same manifest, journal, provider, admission and counted Authority instance throughout.
+The ordinary ceiling1500, quota floor1800, original45-minute deadline and maximum152 advances do
+not change. Reuse only authenticated immutable object bytes within this invocation, keyed and
+validated by exact repository, object kind and OID; never reuse mutable authorization conclusions.
+Fresh main/ref/source/native-run/protection/disposition/original-binding checks remain mandatory.
+The counter covers actual Authority API entries, not all provider/feed/issuer traffic.
+
+Qualification must traverse all sixteen effects once, their independent settlements and final
+readback with one warm counter, preserving old original state and sibling entries, exact API-count
+equality, no-resend controls and truthful exhaustion. The previous seventeen cold windows did not
+prove this: the first warm composition exhausted1500 at advance26 after thirteen sends, including
+uncertain CAS readback. Preserve that result while qualifying bounded immutable-read reuse. The
+nominal immediate-match path has sixteen five-second waits; this arithmetic is not measured native
+latency or whole-job fit. Source controls and subsequent native whole-job evidence must establish
+feasibility before admission; no cap increase, omitted guard or automatic new workflow follows.
+
+
+Compose duplicate freshness reads only inside two distinct existing journal CAS boundaries.
+Before object creation, read fresh typed main H, validate the expected selected logical state and
+all suspension/original/decision/successor predicates at H, then close with fresh main==H. After
+object creation, open a new fresh main H2 equal to the captured overlay parent, revalidate those
+predicates and close with fresh main==H2 immediately before the non-forced PATCH. No mutation or
+wait lies inside either joined read interval; no observation crosses object creation, another effect
+or a wait. Other admission/provider/protection guards retain their own fresh reads. Independent
+post-PATCH readback remains mandatory; these sandwiches do not claim provider atomicity or stronger
+CAS semantics. Expose no external snapshot permit or skip-authority switch.
+
+The complete real-provider inert fixture, including final original/sibling verification, now records
+1439 Authority entries (1175 GET,231 POST,33 PATCH), sixteen unique sends and settlements and final
+completion over33 advances/80 virtual waiting seconds. This replaces neither the retained1500
+exhaustion results nor native whole-job timing qualification. The nominal61-entry margin is not a
+promise that delayed visibility or additional native reads fit; exhaustion still stops the original
+operation at its truthful checkpoint. Preserve movement/refusal controls at all four opening/closing
+reads and after object creation, plus old original bytes and unrelated entries.

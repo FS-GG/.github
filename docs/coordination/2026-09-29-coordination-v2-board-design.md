@@ -258,7 +258,8 @@ six copied `Generated/Coordination` V1 admission files are not this inspection i
 are outside the selected source window. Reuse the canonical `TouchSet` parser/conflict rules without
 restoring V1 claims, Class/Phase ranking, lease machinery or a compatibility wrapper.
 
-Source currently declares coherent 0.103.0. The accessible developer global CLI is 0.102.0,
+The current prepared source declares coherent 0.104.0; published package inventory remains 0.102.0.
+The accessible developer global CLI is 0.102.0,
 repository source `6e9be17bacd288ece103b67ecd5842d37a9c8e50`; its 82 installed tool members matched
 the cached package without execution. That observation does not identify the active Project 3
 consumer or authenticate a current feed/channel. Root has selected the existing accessible developer
@@ -492,8 +493,11 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   privately reviewed binding, credential principal and invocation instead.
   **Selected candidate qualification composition.** Extend the existing source/byte candidate workflow
   with packaged-process V2 pre-migration controls against the same isolated installed candidate. Keep
-  its current .103 profile, six feed/predecessor freshness reads and tag gates intact; actual gate
-  failure remains a gap, not permission for another release profile. Preserve the strict seven-member
+  the one selected literal .104 successor through the existing route and the
+  [sole release plan](../roadmaps/utel-release-successor.md#selected-source-completion-prospective-103-suspension-and-one-104-successor).
+  Preserve six feed/predecessor freshness reads and initial release/tag absence gates; terminal
+  retention repeats main plus feed/predecessor checks only. Actual gate failure remains a gap,
+  not permission for another qualification-only profile. Preserve the strict seven-member
   publisher artifact and verifier; retain V2 process/package/loaded-assembly evidence separately under
   exact source/run/attempt custody. Source/byte qualification remains separately admitted and does not
   settle .103 Unknown, publish, promote or activate a release. The normal Home updater still requires
@@ -651,6 +655,17 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   failures, not skippable availability. Denied errors plus partial data remain unread, and unknown or
   unclassified gaps fail closed. Qualify the actual CLI/TextReader path for source continuation versus
   missing associations/files/head barriers and the unchanged normal delivery check boundary.
+
+  **Delivered source frontier.** [PR #4657](https://github.com/FS-GG/.github/pull/4657) delivered
+  exact reviewed `12026fc9f8b68e6448174bfe5628d906c25be508` as protected
+  `b7f655a31a51a63af6ccb14a49b75f8b002abe08` with identical tested/delivered tree.
+  [Focused qualification](https://github.com/FS-GG/.github/actions/runs/39062452130)
+  passed 943 GitHub,94 projection and51 actual CLI controls;
+  [compiler-first/full engine](https://github.com/FS-GG/.github/actions/runs/39062452196)
+  and [coherent validation](https://github.com/FS-GG/.github/actions/runs/39062463851) passed.
+  The full engine executed2743 tests across eight suites. Original compile-only failures remain
+  on the PR. This accepts source composition and its synthetic complete migration controls;
+  actual candidate execution, private installed/native positives, timing, UI and adoption remain open.
 
   Final stable enrollment uses the existing protected manifest route and the exact selected population
   and Roadmap strings. Final binding4/schema2 joins that protected population and the qualified package/

@@ -19,10 +19,12 @@ import sys
 import time
 import zipfile
 
-from release_successor_admission import SingleOperatorAdmission
+from release_successor_admission import SingleOperatorAdmission, publisher_context_authorized
 from release_successor_execution import Refused, advance, ordered_effects
-from release_successor_journal import ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical
-from release_successor_provider import (GitHubAPI, LiveProvider, NotFound, sanitized_dispatch_diagnostic,
+from release_successor_journal import (ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical,
+    ReleaseSuspension, ALLOWED_SUCCESSOR, SUSPENDED_REF, SUSPENSION_PATH, strict_suspension,
+    SUSPENSION_SCHEMA, SUSPENDED_ORIGINAL, SUSPENSION_DECISION)
+from release_successor_provider import (GitHubAPI, MetadataRequestBudget, INSTALL_METADATA_REQUEST_CEILING, LiveProvider, NotFound, sanitized_dispatch_diagnostic,
                                        VerifiedOriginalTagTransport, approved_original_tag_transport,
                                        AUTH_PROTOCOL, AUTH_PROFILE, decode_auth_frame, validate_auth_binding, validate_auth_payload)
 
@@ -37,6 +39,11 @@ ORIGINAL_SUCCESSOR_REF = "refs/heads/fsgg/v2/journal/release/utel-rel-20"
 
 def selected_release_binding(args):
     """New ordinary source cut; explicit historical profiles keep original bindings."""
+    if getattr(args, "suspended_0103_successor", False):
+        require(not any(getattr(args, flag, False) for flag in ("original_0103_candidate",
+            "recover_original_0103_tag_intent", "recover_original_successor_checkpoint", "recovery_checkpoint",
+            "repeat_original_nuget_kit_intent", "recover_original_runtime_intent")), "literal .104 profile conflicts")
+        return (ALLOWED_SUCCESSOR["version"], ALLOWED_SUCCESSOR["predecessor"], ALLOWED_SUCCESSOR["logicalRef"])
     if getattr(args, "recover_original_successor_checkpoint", False):
         return (ORIGINAL_SUCCESSOR_VERSION, ORIGINAL_SUCCESSOR_PREDECESSOR, ORIGINAL_SUCCESSOR_REF)
     historical = any(getattr(args, flag, False) for flag in
@@ -317,14 +324,19 @@ def authority_protection():
 class ProtectedPublisherAdmission:
     """Compose exact publisher admission with fresh main/retirement protections."""
 
-    def __init__(self, publisher, ledger_api, logical_ref):
+    def __init__(self, publisher, ledger_api, logical_ref, *, suspension=None):
         self.publisher = publisher
         self.ledger_api = ledger_api
         self.logical_ref = logical_ref
+        require(suspension is None or (isinstance(suspension, ReleaseSuspension) and suspension.api is ledger_api
+                and logical_ref == ALLOWED_SUCCESSOR["logicalRef"]), "shared publisher suspension reader binding differs")
+        self.suspension = suspension or (ReleaseSuspension(ledger_api) if logical_ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]} else None)
         self.protection, self.binding = authority_protection()
 
     def authorize(self, content_id, effect, action, request_digest):
         try:
+            if self.suspension is not None:
+                self.suspension.authorize(self.logical_ref)
             if not self.publisher.authorize(content_id, effect, action, request_digest):
                 return False
             self.protection(self.ledger_api, self.binding, [self.logical_ref])
@@ -405,6 +417,8 @@ def prepare_release_journal(journal, ledger_api, admission, provider, api, manif
                             candidate_source, publisher_sha, preflight_only, uniqueness, *,
                             recovery_checkpoint=False, original_0103_selection=None, original_tag_recovery=False):
     """Qualify the physical route before genesis or original-intent recovery."""
+    if journal.ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
+        ReleaseSuspension(ledger_api).authorize(journal.ref, manifest["descriptor"]["version"])
     if original_0103_selection is not None:
         require(not recovery_checkpoint, "original .103 selection conflicts with recovery checkpoint")
         validate_original_0103_seam(original_0103_selection, manifest, intent, candidate_source, publisher_sha, journal.ref)
@@ -729,6 +743,7 @@ def run_original_tag_recovery(manifest, journal, admission, provider, ledger_api
                               report, deadline, verify_candidate, attempt_path, *, preflight=False,
                               factory=approved_original_tag_transport, clock=time.monotonic):
     """One matched settlement OR one explicit original create, never a later effect."""
+    ReleaseSuspension(ledger_api).authorize(SUSPENDED_REF, "0.103.0")
     effect = validate_original_tag_state(manifest, journal)
     original = authenticate_original_tag_result(publisher_api)
     observed, physical = journal._observed, journal._physical_head
@@ -990,8 +1005,14 @@ def validate_successor_checkpoint(manifest, journal, expected):
 
 
 def run_forward(manifest, journal, admission, provider, report, deadline, *, maximum=RECOVERY_ADVANCES,
-                clock=time.monotonic):
-    """Bounded continuation stops on waiting; another admission observes indexing."""
+                clock=time.monotonic, sleep=time.sleep, continue_literal_successor=False):
+    """Bounded original observation; only the selected literal .104 waits in place."""
+    require(type(continue_literal_successor) is bool, "literal successor observation selection differs")
+    if continue_literal_successor:
+        require(journal.ref == ALLOWED_SUCCESSOR["logicalRef"]
+                and manifest["descriptor"].get("version") == ALLOWED_SUCCESSOR["version"]
+                and manifest["descriptor"].get("previousStableVersion") == ALLOWED_SUCCESSOR["predecessor"],
+                "literal successor observation binding differs")
     require(type(maximum) is int and 0 < maximum <= 152, "forward advance bound differs")
     require(clock() < deadline, "publication observation deadline expired; reconcile before another run")
     # Reuse the qualified admission and dependent Git mutation deadline fences.
@@ -1008,11 +1029,21 @@ def run_forward(manifest, journal, admission, provider, report, deadline, *, max
         report["lastSuccessfulStage"] = "advance"
         require(result in {"verified", "waiting", "complete"}, "unexpected forward advance result")
         require(clock() < deadline, "publication observation deadline expired; reconcile before another run")
+        if result in {"verified", "complete"}:
+            report.pop("pendingReason", None)
         if result == "complete":
             return "complete"
         if result == "waiting":
             report["pendingReason"] = "exact retained intent awaits independent provider observation"
-            return "checkpoint"
+            if not continue_literal_successor:
+                return "checkpoint"
+            if index + 1 >= maximum:
+                report["pendingReason"] = "original finite advance window exhausted; retained intent remains incomplete"
+                return "checkpoint"
+            if deadline - clock() <= 5:
+                report["pendingReason"] = "original observation deadline has no next five-second interval; retained intent remains incomplete"
+                return "checkpoint"
+            sleep(5)  # Existing recovery interval; no new intent or send occurs here.
     report["pendingReason"] = "admitted finite advance window exhausted"
     return "checkpoint"
 
@@ -1550,6 +1581,8 @@ def execute_publisher(args, report):
     report["execution"] = {"sourceSha": publisher_sha, "runId": run_id,
                            "runAttempt": os.environ["GITHUB_RUN_ATTEMPT"], "operator": operator}
     report["lastSuccessfulStage"] = "publisher-context"
+    if selected_ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
+        precredential_release_check(args, GitHubAPI(os.environ["GH_TOKEN"]))
     require(not args.workdir.exists(), "candidate workdir already exists")
     args.workdir.mkdir(parents=True)
 
@@ -1587,7 +1620,8 @@ def execute_publisher(args, report):
     verifier = pathlib.Path(__file__).with_name("release-successor-artifact.py")
     subprocess.run(
         [sys.executable, str(verifier), "--artifact-json", str(artifact_json), "--run-json", str(run_json),
-         "--archive", str(archive), "--source-sha", candidate_source, "--output", str(candidate)],
+         "--archive", str(archive), "--source-sha", candidate_source, "--output", str(candidate)]
+        + (["--suspended-0103-successor"] if getattr(args, "suspended_0103_successor", False) else []),
         check=True,
     )
     manifest_path = candidate / "release-manifest.json"
@@ -1643,10 +1677,15 @@ def execute_publisher(args, report):
         # The one original forward clock already began before authentication.
         # Guard dependent genesis mutations as well as later advances.
         ledger_api.api = RuntimeDeadlineAuthority(ledger_api.api, forward_deadline, time.monotonic)
-    journal = ProtectedReleaseJournal(ledger_api, ref=selected_ref, main_directory=True)
+    suspension = ReleaseSuspension(ledger_api) if selected_ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]} else None
+    if suspension is not None:
+        suspension.authorize(selected_ref, version)
+    provider.suspension = suspension
+    provider.logical_ref = selected_ref
+    journal = ProtectedReleaseJournal(ledger_api, ref=selected_ref, main_directory=True, suspension=suspension)
     journal = ReportingJournal(journal, report, detailed=not historical_recovery)
     provider = ReportingProvider(provider, report)
-    admission = ProtectedPublisherAdmission(publisher_admission, ledger_api, selected_ref)
+    admission = ProtectedPublisherAdmission(publisher_admission, ledger_api, selected_ref, suspension=suspension)
     if not historical_recovery:
         admission = RuntimeDeadlineAdmission(admission, forward_deadline, time.monotonic)
     def uniqueness():
@@ -1686,7 +1725,8 @@ def execute_publisher(args, report):
     if args.recovery_checkpoint:
         return run_recovery_checkpoint(manifest, journal, admission, provider, report, deadline)
     return run_forward(manifest, journal, admission, provider, report, forward_deadline,
-                       maximum=RECOVERY_ADVANCES if successor_checkpoint else len(ordered_effects(manifest)) * 2 + 120)
+                       maximum=RECOVERY_ADVANCES if successor_checkpoint else len(ordered_effects(manifest)) * 2 + 120,
+                       continue_literal_successor=bool(getattr(args, "suspended_0103_successor", False)))
 
 
 def diagnostic(report, message, phase):
@@ -1726,7 +1766,368 @@ def authentication_only_main():
     return 1
 
 
+def precredential_release_check(args, api):
+    version, _, logical_ref = selected_release_binding(args)
+    if logical_ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
+        protection, binding = authority_protection()
+        protection(api, binding, [logical_ref])
+        ReleaseSuspension(api).authorize(logical_ref, version)
+
+
+def suspension_check_main():
+    parser = argparse.ArgumentParser(description="Read installed release suspension before credential exchange")
+    parser.add_argument("--check-release-suspension", action="store_true", required=True)
+    profile = parser.add_mutually_exclusive_group()
+    for name in ("suspended-0103-successor", "original-0103-candidate", "recover-original-0103-tag-intent",
+                 "recovery-checkpoint", "repeat-original-nuget-kit-intent", "recover-original-runtime-intent",
+                 "recover-original-successor-checkpoint"):
+        profile.add_argument("--" + name, action="store_true")
+    args = parser.parse_args()
+    try:
+        precredential_release_check(args, GitHubAPI(os.environ["GH_TOKEN"]))
+    except (RuntimeError, ValueError, KeyError, OSError) as error:
+        print(f"release suspension refused before credential exchange: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+
+
+_INSTALL_FLAGS = ("publish", "qualify_original_tag_authentication_only", "suspended_0103_successor",
+    "original_0103_candidate", "recover_original_0103_tag_intent", "recovery_checkpoint",
+    "repeat_original_nuget_kit_intent", "recover_original_runtime_intent", "recover_original_successor_checkpoint")
+_INSTALL_COORDINATES = ("candidate_run_id", "candidate_artifact_id", "candidate_archive_sha256")
+_INSTALL_PROFILE = "utel-rel-21/install-suspension/1"
+# Two source-selected hosted processes (prepare, apply), each sharing one reader/
+# writer budget: at most512 metadata opens in composition, never one cross-process
+# counter or a JSON grant. Standalone uses one256 budget. The ordinary1500 counter,
+# HTTP60-second timeout and hosted15-minute whole-job deadline remain distinct.
+_INSTALL_METADATA_OPEN_LIMITS = {"perProcess": INSTALL_METADATA_REQUEST_CEILING,
+                                 "hostedProcesses": 2, "hostedComposed": 2 * INSTALL_METADATA_REQUEST_CEILING}
+
+
+def validate_workflow_inputs(value):
+    keys = set(_INSTALL_FLAGS) | set(_INSTALL_COORDINATES) | {"install_release_suspension", "expected_authority_main", "expected_checkpoint"}
+    require(type(value) is dict and set(value) == keys, "workflow input fields differ")
+    require(all(type(value[key]) is bool for key in (*_INSTALL_FLAGS, "install_release_suspension")), "workflow boolean inputs differ")
+    require(all(type(value[key]) is str for key in (*_INSTALL_COORDINATES, "expected_authority_main", "expected_checkpoint")), "workflow string inputs differ")
+    if value["install_release_suspension"]:
+        require(not any(value[key] for key in (*_INSTALL_FLAGS, *_INSTALL_COORDINATES, "expected_checkpoint")),
+                "install-only selection conflicts with publication inputs")
+        require(bool(re.fullmatch(r"[0-9a-f]{40}", value["expected_authority_main"])), "install-only expected Authority parent differs")
+        return "install-only"
+    require(value["expected_authority_main"] == "", "Authority parent requires install-only selection")
+    require(all(re.fullmatch(r"[1-9][0-9]{0,19}", value[key]) for key in _INSTALL_COORDINATES[:2])
+            and bool(re.fullmatch(r"[0-9a-f]{64}", value["candidate_archive_sha256"])), "publication candidate coordinates are required")
+    require(sum(value[key] for key in _INSTALL_FLAGS[1:]) <= 1, "publication selectors conflict")
+    require(bool(value["expected_checkpoint"]) == value["recover_original_successor_checkpoint"], "expected checkpoint selection differs")
+    if value["expected_checkpoint"]:
+        expected = json.loads(value["expected_checkpoint"])
+        require(type(expected) is dict and set(expected) == {"generation", "logicalHead", "stateSHA256"}
+                and type(expected["generation"]) is int and 1 <= expected["generation"] <= 33
+                and isinstance(expected["logicalHead"], str) and bool(re.fullmatch(r"[0-9a-f]{40}", expected["logicalHead"]))
+                and isinstance(expected["stateSHA256"], str) and bool(re.fullmatch(r"[0-9a-f]{64}", expected["stateSHA256"])),
+                "expected checkpoint input is malformed")
+    if value["qualify_original_tag_authentication_only"]:
+        require(not value["publish"], "inactive authentication selection cannot publish")
+    return "publication"
+
+
+def workflow_inputs():
+    raw = os.environ["FSGG_RELEASE_INPUTS"]
+    require(len(raw.encode()) <= 16384, "workflow inputs exceed bound")
+    def pairs(items):
+        value = {}
+        for key, item in items:
+            require(key not in value, "duplicate workflow input")
+            value[key] = item
+        return value
+    value = json.loads(raw, object_pairs_hook=pairs)
+    validate_workflow_inputs(value)
+    return value
+
+
+def require_clean_installer_source(source):
+    """Normal source cleanliness, including untracked siblings in the import root."""
+    root = pathlib.Path(__file__).resolve().parents[1]
+    local = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True, timeout=30).stdout.strip()
+    require(local == source, "suspension installer checkout differs")
+    subprocess.run(["git", "diff", "--quiet", "HEAD"], cwd=root, check=True, capture_output=True, timeout=30)
+    status = subprocess.run(["git", "status", "--porcelain=v1", "--untracked-files=all", "--", "scripts"],
+                            cwd=root, check=True, capture_output=True, text=True, timeout=30).stdout
+    require(len(status.encode()) <= 16384 and status == "", "suspension installer import-root source is not clean")
+
+
+def fixed_suspension_record():
+    raw = canonical({"schema": SUSPENSION_SCHEMA, "disposition": "suspended", "original": SUSPENDED_ORIGINAL,
+                     "allowedSuccessor": ALLOWED_SUCCESSOR, "decision": SUSPENSION_DECISION})
+    strict_suspension(raw)
+    return raw
+
+
+def suspension_install_preconditions(api, expected_parent):
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", expected_parent)), "suspension expected parent differs")
+    protection, binding = authority_protection()
+    protection(api, binding, [SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]])
+    reader = ReleaseSuspension(api)
+    require(reader.main() == expected_parent, "Authority main moved before suspension installation")
+    require(reader.file(expected_parent, SUSPENSION_PATH) is None, "suspension already exists; no replacement or resume")
+    reader.original(expected_parent)
+    reader.verify_decision()
+    require(reader.main() == expected_parent, "Authority main moved during suspension preparation")
+    return reader
+
+
+def hosted_install_context(api):
+    source = os.environ["GITHUB_SHA"]
+    run = os.environ["GITHUB_RUN_ID"]
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", source)) and bool(re.fullmatch(r"[1-9][0-9]{0,19}", run)), "hosted install source/run differs")
+    require(os.environ.get("GITHUB_REPOSITORY") == REPOSITORY and os.environ.get("GITHUB_REF") == "refs/heads/main"
+            and os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch" and os.environ.get("GITHUB_RUN_ATTEMPT") == "1"
+            and os.environ.get("GITHUB_ACTOR") == "EHotwagner" and os.environ.get("GITHUB_TRIGGERING_ACTOR") == "EHotwagner",
+            "hosted install invocation differs")
+    require(publisher_context_authorized(api, source, int(run), hosted_install=True), "hosted install native run/source admission denied")
+    require_clean_installer_source(source)
+    return {"sourceSha": source, "runId": int(run), "attempt": 1, "operator": "EHotwagner"}
+
+
+def install_paths():
+    root = pathlib.Path(os.environ["RUNNER_TEMP"])
+    require(root.is_dir() and not root.is_symlink(), "install invocation directory differs")
+    return root / "release-successor-suspension-prepared.json", root / "release-successor-result.json"
+
+
+def read_install_file(path):
+    require(path.is_file() and not path.is_symlink(), "install prepared/result input is not a regular file")
+    with path.open("rb") as stream:
+        raw = stream.read(16385)
+    require(len(raw) <= 16384, "install prepared/result input exceeds bound")
+    value = json.loads(raw)
+    require(type(value) is dict and raw == canonical(value), "install prepared/result input is not canonical")
+    return raw, value
+
+
+def retain_install_result(path, report):
+    body = canonical(report)
+    require(len(body) <= 16384, "install-only result exceeds bound")
+    temporary = path.with_name(path.name + ".install-updating")
+    with temporary.open("xb") as stream:
+        os.chmod(temporary, 0o600)
+        stream.write(body); stream.flush(); os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    require(path.read_bytes() == body, "install-only result readback differs")
+
+
+def hosted_suspension_main():
+    parser = argparse.ArgumentParser(description="Selected install-only preparation or protected write")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--prepare-hosted-release-suspension", action="store_true")
+    mode.add_argument("--install-hosted-release-suspension", action="store_true")
+    parser.add_argument("--prepared-sha256")
+    args = parser.parse_args()
+    report = {"schema": "fsgg.release-successor-result/1", "profile": _INSTALL_PROFILE, "publicationComplete": False,
+              "disposition": "failed-before-installation", "failure": None, "attemptedRequests": [],
+              "metadataOpenLimits": dict(_INSTALL_METADATA_OPEN_LIMITS),
+              "credentialCleanup": "existing App action post-step; outcome not independently observed",
+              "reportingOutcome": "pending"}
+    result_path = None
+    result_owned = False
+    metadata_budget = MetadataRequestBudget()
+    try:
+        prepared_path, result_path = install_paths()
+        inputs = workflow_inputs()
+        require(validate_workflow_inputs(inputs) == "install-only", "hosted install requires explicit install-only selection")
+        require(os.environ.get("ORDINARY_LEDGER_APP_ID") == "4882140", "ordinary writer App identity differs")
+        require(args.install_hosted_release_suspension == bool(args.prepared_sha256), "prepared digest requires exactly the install stage")
+        owner_api = GitHubAPI(os.environ["GH_TOKEN"], metadata_budget=metadata_budget)
+        context = hosted_install_context(owner_api)
+        raw = fixed_suspension_record()
+        prepared = {"schema": "fsgg.release-suspension-prepared/1", "execution": context,
+                    "expectedParent": inputs["expected_authority_main"], "record": json.loads(raw),
+                    "recordSHA256": hashlib.sha256(raw).hexdigest(), "inputSHA256": hashlib.sha256(canonical(inputs)).hexdigest()}
+        prepared_raw = canonical(prepared)
+        digest = hashlib.sha256(prepared_raw).hexdigest()
+        report.update(execution=context, expectedParent=prepared["expectedParent"], recordSHA256=prepared["recordSHA256"], preparedSHA256=digest)
+        if args.prepare_hosted_release_suspension:
+            require(not prepared_path.exists() and not result_path.exists(), "install preparation already exists; no renewed invocation")
+            suspension_install_preconditions(owner_api, prepared["expectedParent"])
+            with prepared_path.open("xb") as stream:
+                os.chmod(prepared_path, 0o600); stream.write(prepared_raw); stream.flush(); os.fsync(stream.fileno())
+            require(read_install_file(prepared_path)[0] == prepared_raw, "install preparation readback differs")
+            report["metadataAcquisition"] = metadata_budget.report()
+            report["disposition"] = "install-only-prepared"
+            report["reportingOutcome"] = "retained"
+            write_result(result_path, report)
+            result_owned = True
+            with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
+                stream.write(f"prepared_sha256={digest}\n")
+            return 0
+        observed_raw, observed = read_install_file(prepared_path)
+        require(bool(re.fullmatch(r"[0-9a-f]{64}", args.prepared_sha256)) and args.prepared_sha256 == digest
+                and observed_raw == prepared_raw and observed == prepared, "install prepared source/input/digest binding changed")
+        _, prior = read_install_file(result_path)
+        prepared_counts = prior.get("metadataAcquisition")
+        require(isinstance(prepared_counts, dict) and prepared_counts.get("ceiling") == INSTALL_METADATA_REQUEST_CEILING
+                and isinstance(prepared_counts.get("attempted"), dict)
+                and set(prepared_counts["attempted"]) == {"GET", "POST", "PATCH"}
+                and all(type(value) is int and 0 <= value <= INSTALL_METADATA_REQUEST_CEILING for value in prepared_counts["attempted"].values())
+                and sum(prepared_counts["attempted"].values()) <= INSTALL_METADATA_REQUEST_CEILING
+                and prepared_counts == {**metadata_budget.report(), "attempted": prepared_counts["attempted"]},
+                "install preparation acquisition counts differ")
+        require(prior == {**report, "disposition": "install-only-prepared", "reportingOutcome": "retained", "metadataAcquisition": prepared_counts},
+                "install original result changed or consumed; no retry")
+        result_owned = True
+        require(os.environ.get("ACTUAL_INSTALLATION_ID") == "160261608"
+                and os.environ.get("EXPECTED_INSTALLATION_ID") == "160261608", "ordinary writer installation identity differs")
+        writer = GitHubAPI(os.environ["ORDINARY_LEDGER_TOKEN"], metadata_budget=metadata_budget)
+        scope = writer.get("installation/repositories?per_page=100")
+        require(isinstance(scope, dict) and scope.get("total_count") == 1 and isinstance(scope.get("repositories"), list)
+                and [(row.get("id"), row.get("full_name")) for row in scope["repositories"]]
+                    == [(1351660651, JOURNAL_REPOSITORY)], "ordinary writer repository scope differs")
+        report["preparationMetadataAcquisition"] = prepared_counts
+        report["disposition"] = "install-only-in-progress"
+        def guard():
+            require(hosted_install_context(owner_api) == context, "hosted install execution changed")
+            require(canonical(workflow_inputs()) == canonical(inputs), "hosted install mode changed")
+            require(read_install_file(prepared_path)[0] == prepared_raw, "hosted install prepared input changed")
+            suspension_install_preconditions(owner_api, prepared["expectedParent"])
+        def retain():
+            report["metadataAcquisition"] = metadata_budget.report()
+            report["reportingOutcome"] = "retained"
+            retain_install_result(result_path, report)
+        retain()  # Consume this invocation before its first possible mutation.
+        installed = install_release_suspension(writer, raw, prepared["expectedParent"], guard=guard, report=report, retain=retain, read_api=owner_api)
+        report.update(disposition="install-only-complete", installedAuthorityMain=installed)
+        retain()
+        return 0
+    except (RuntimeError, ValueError, KeyError, TypeError, AttributeError, OSError, subprocess.SubprocessError) as error:
+        report["metadataAcquisition"] = metadata_budget.report()
+        report["failure"] = error_chain(error)
+        report["disposition"] = "install-only-failed-or-unknown" if report["attemptedRequests"] else "failed-before-installation"
+        if result_path is not None and (result_owned or not result_path.exists()):
+            try:
+                report["reportingOutcome"] = "retained"
+                retain_install_result(result_path, report)
+            except BaseException as reporting:
+                print(f"install-only result retention failed: {type(reporting).__name__}", file=sys.stderr)
+        print(f"release suspension install-only refused; preserve original operation: {type(error).__name__}: {error}", file=sys.stderr)
+        return 1
+
+
+def workflow_inputs_main():
+    try:
+        validate_workflow_inputs(workflow_inputs())
+        return 0
+    except (ValueError, RuntimeError, KeyError, TypeError) as error:
+        print(f"release workflow inputs refused before credentials: {error}", file=sys.stderr)
+        try:
+            _, result_path = install_paths()
+            if not result_path.exists():
+                write_result(result_path, {"schema": "fsgg.release-successor-result/1", "profile": "workflow-input-validation/1",
+                    "publicationComplete": False, "disposition": "failed-before-credentials", "credentialAcquisitionAttempted": False,
+                    "failure": error_chain(error)})
+        except (OSError, RuntimeError, ValueError, KeyError):
+            print("workflow input refusal result unavailable; original diagnostic retained", file=sys.stderr)
+        return 1
+
+def suspension_install_main():
+    """Separately admitted owner invocation using already held credentials only."""
+    parser = argparse.ArgumentParser(description="Install the one source-pinned release suspension")
+    parser.add_argument("--install-release-suspension", action="store_true", required=True)
+    parser.add_argument("--suspension-file", type=pathlib.Path, required=True)
+    parser.add_argument("--expected-authority-main", required=True)
+    parser.add_argument("--publisher-source-sha", required=True)
+    args = parser.parse_args()
+    metadata_budget = MetadataRequestBudget()
+    try:
+        require(bool(re.fullmatch(r"[0-9a-f]{40}", args.publisher_source_sha)), "installer source SHA differs")
+        path = args.suspension_file
+        require(path.is_file() and not path.is_symlink(), "suspension input must be a regular file")
+        with path.open("rb") as stream:
+            raw = stream.read(16385)
+        strict_suspension(raw)
+        # No credential acquisition occurs here. The operation owner must separately
+        # admit custody of the authenticated owner token and ordinary writer token.
+        owner_api = GitHubAPI(os.environ["GH_TOKEN"], metadata_budget=metadata_budget)
+        owner = owner_api.get("user")
+        require(isinstance(owner, dict) and owner.get("login") == "EHotwagner"
+                and owner.get("type") == "User", "suspension installer accountable owner differs")
+        repository = owner_api.get(f"repos/{REPOSITORY}")
+        require(repository.get("id") == 1269292704 and repository.get("full_name") == REPOSITORY,
+                "suspension installer source repository differs")
+        head = owner_api.get(f"repos/{REPOSITORY}/git/ref/heads/main")
+        require(head.get("object", {}).get("type") == "commit"
+                and head.get("object", {}).get("sha") == args.publisher_source_sha,
+                "suspension installer requires exact current protected source")
+        require_clean_installer_source(args.publisher_source_sha)
+        writer = GitHubAPI(os.environ["ORDINARY_LEDGER_TOKEN"], metadata_budget=metadata_budget)
+        # Refresh the authenticated source beside the protected expected-parent write.
+        require(owner_api.get(f"repos/{REPOSITORY}/git/ref/heads/main") == head,
+                "suspension installer source moved before installation")
+        def guard():
+            require(owner_api.get("user") == owner, "suspension installer accountable owner changed")
+            require(owner_api.get(f"repos/{REPOSITORY}/git/ref/heads/main") == head, "suspension installer source changed")
+            require_clean_installer_source(args.publisher_source_sha)
+            suspension_install_preconditions(owner_api, args.expected_authority_main)
+        installed = install_release_suspension(writer, raw, args.expected_authority_main, guard=guard, read_api=owner_api)
+        print(f"Release-specific suspension installed at Authority main {installed}; original Unknown retained.")
+        return 0
+    except (RuntimeError, ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
+        print(f"release suspension installation refused or uncertain; reconcile without retry: {error}", file=sys.stderr)
+        return 1
+
+def install_release_suspension(api, raw, expected_parent, *, guard=None, report=None, retain=None, read_api=None):
+    """Existing ordinary protected writer; source preparation grants no installation authority.
+
+    Create exactly one sibling object using an expected-parent, nonforced main update.
+    No old state, logical ancestry or unrelated tree entry is edited.
+    """
+    import base64
+    strict_suspension(raw)
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", expected_parent)), "suspension expected parent differs")
+    # Reuse the authenticated reader qualified before issuance; the scoped writer
+    # needs only Authority access, never a new cross-repository permission.
+    reader = suspension_install_preconditions(read_api or api, expected_parent)
+    def mutate(method, path, body):
+        if guard is not None:
+            guard()
+        if report is not None:
+            attempt = {"method": method, "path": path, "bodySHA256": hashlib.sha256(canonical(body)).hexdigest(), "outcome": "unknown"}
+            if method == "patch":
+                attempt["intendedRefUpdate"] = {"ref": "refs/heads/main", "expectedParent": expected_parent, **body}
+            report["attemptedRequests"].append(attempt)
+            retain()  # Retain original identity before every possible send.
+        response = getattr(api, method)(path, body)
+        require(isinstance(response, dict), "suspension writer response is malformed")
+        oid = response.get("sha") if method == "post" else response.get("object", {}).get("sha")
+        require(isinstance(oid, str) and bool(re.fullmatch(r"[0-9a-f]{40}", oid)), "suspension writer response identity differs")
+        if report is not None:
+            attempt.update(returnedSHA=oid, outcome="response-received")
+            retain()
+        return response
+    parent = reader.objects._main_commit(expected_parent)
+    blob = mutate("post", f"repos/{JOURNAL_REPOSITORY}/git/blobs", {"content": base64.b64encode(raw).decode(), "encoding": "base64"})
+    tree = mutate("post", f"repos/{JOURNAL_REPOSITORY}/git/trees", {"base_tree": parent["tree"]["sha"], "tree": [
+        {"path": SUSPENSION_PATH, "mode": "100644", "type": "blob", "sha": blob["sha"]}]})
+    commit = mutate("post", f"repos/{JOURNAL_REPOSITORY}/git/commits", {"tree": tree["sha"], "parents": [expected_parent],
+        "message": "Prospective release-specific suspension; original Unknown retained"})
+    require(reader.main() == expected_parent, "Authority main moved before suspension CAS")
+    mutate("patch", f"repos/{JOURNAL_REPOSITORY}/git/refs/heads/main", {"sha": commit["sha"], "force": False})
+    require(reader.main() == commit["sha"], "suspension installation response uncertain; reconcile without retry")
+    reader.read()
+    return commit["sha"]
+
+
 def main() -> int:
+    if "--check-workflow-inputs" in sys.argv[1:]:
+        require(sys.argv[1:] == ["--check-workflow-inputs"], "workflow input check arguments differ")
+        return workflow_inputs_main()
+    if any(flag in sys.argv[1:] for flag in ("--prepare-hosted-release-suspension", "--install-hosted-release-suspension")):
+        return hosted_suspension_main()
+    if "--install-release-suspension" in sys.argv[1:]:
+        return suspension_install_main()
+    if "--check-release-suspension" in sys.argv[1:]:
+        return suspension_check_main()
     if any(flag in sys.argv[1:] for flag in ("--qualify-original-tag-authentication-only",
                                              "--refuse-original-tag-factory-inactive")):
         return authentication_only_main()
@@ -1737,6 +2138,8 @@ def main() -> int:
     parser.add_argument("--workdir", required=True, type=pathlib.Path)
     parser.add_argument("--result-path", type=pathlib.Path)
     profile = parser.add_mutually_exclusive_group()
+    profile.add_argument("--suspended-0103-successor", action="store_true",
+                         help="Select only literal .104/utel-rel-22 under the installed .103 suspension")
     profile.add_argument("--recover-original-0103-tag-intent", action="store_true",
                          help="Fixed original generation2 tag intent; one matched settlement or approved create, never a later effect")
     profile.add_argument("--original-0103-candidate", action="store_true",
@@ -1757,7 +2160,7 @@ def main() -> int:
     result_path = args.result_path or args.workdir.with_name(args.workdir.name + "-result.json")
     args.result_path = result_path
     report = {"schema": "fsgg.release-successor-result/1",
-              "profile": ORIGINAL_0103_TAG_PROFILE if args.recover_original_0103_tag_intent else ORIGINAL_0103_PROFILE if args.original_0103_candidate else SUCCESSOR_CHECKPOINT_PROFILE if args.recover_original_successor_checkpoint else RUNTIME_RECOVERY_PROFILE if args.recover_original_runtime_intent else KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
+              "profile": ALLOWED_SUCCESSOR["profile"] if args.suspended_0103_successor else ORIGINAL_0103_TAG_PROFILE if args.recover_original_0103_tag_intent else ORIGINAL_0103_PROFILE if args.original_0103_candidate else SUCCESSOR_CHECKPOINT_PROFILE if args.recover_original_successor_checkpoint else RUNTIME_RECOVERY_PROFILE if args.recover_original_runtime_intent else KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
               "candidate": {"runId": args.candidate_run_id, "artifactId": args.candidate_artifact_id,
                             "archiveSha256": args.candidate_archive_sha256},
               "execution": None, "originalPublisher": {"runId": ORIGINAL_0103_TAG_CHECKPOINT["runId"], "runAttempt": 1} if args.recover_original_0103_tag_intent else {"runId": 38133108945, "runAttempt": 1, "jobId": 114451349714} if args.recover_original_successor_checkpoint else {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214} if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or args.recover_original_runtime_intent else None,

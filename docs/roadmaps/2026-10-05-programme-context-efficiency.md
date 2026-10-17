@@ -451,6 +451,17 @@ cold/warm measurements justify a change; mock controls prove invocation/refusal 
 bounded source correction adds no workflow coordinator, model or evidence ledger and never replaces
 required independent checks or complete final-candidate coherent qualification.
 
+The selected compiler implementation derives an invocation-local non-SDK MSBuild traversal from
+that same literal root inventory. Run one serial locked-restore phase with its existing default
+configuration, then a separate serial Release build phase with no implicit restore. Preserve
+all-root failure aggregation and missing-project/target refusal; reuse only the standard process's
+completed-target cache, with no parallel output writers or independent root roster. The original
+[240-second cutoff](https://github.com/FS-GG/.github/actions/runs/39065729185) compiled all roots
+but interrupted the final focused CLI suite, so coverage was incomplete and the full engine remained
+withheld. Keep the 240-second script and five-minute whole-job bounds, default cold fixture and
+non-vacuity checks. Inert command/XML controls do not prove SDK behavior, savings or whole-job fit;
+qualify those on the actual hosted candidate.
+
 Post outcome updates when a deliverable is ready, a blocker appears or clears, a
 decision is needed, or a promised delivery time changes. Publish one daily
 programme summary while active. External requests retain an owner, exact reply

@@ -184,6 +184,7 @@ def advance_effects(content_id: str, effects: tuple[Effect, ...], journal: Journ
             raise Refused(f"{effect.identity}: unrecognized dispatch outcome")
         if outcome.state == "refused":
             raise Refused(f"{effect.identity}: provider refused the write")
-        # Even a success response is not completion. A later invocation must read back.
+        # Even a success response is not completion. A later independently observed
+        # advance must read back; an admitted caller may wait within its original window.
         return "waiting"
     return "complete"

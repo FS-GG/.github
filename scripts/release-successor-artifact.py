@@ -86,7 +86,7 @@ def verify_members(archive: zipfile.ZipFile, version: str) -> list[str]:
 
 
 def extract_verified(
-    artifact: dict, run: dict, archive_path: pathlib.Path, output: pathlib.Path, source_sha: str
+    artifact: dict, run: dict, archive_path: pathlib.Path, output: pathlib.Path, source_sha: str, *, suspended_0103_successor=False
 ) -> dict:
     verify_metadata(artifact, run, archive_path, source_sha)
     require(not output.exists(), "candidate extraction target already exists")
@@ -102,6 +102,12 @@ def extract_verified(
         )
         manifest = json.loads(archive.read("release-manifest.json"))
         version = manifest["descriptor"]["version"]
+        require(type(suspended_0103_successor) is bool, "literal successor selection differs")
+        require((version == "0.104.0") == suspended_0103_successor,
+                "candidate version does not match the closed literal successor selection")
+        if suspended_0103_successor:
+            require(manifest["descriptor"].get("previousStableVersion") == "0.102.0",
+                    "literal .104 predecessor differs")
         names = verify_members(archive, version)
         require(manifest["descriptor"].get("sourceSha") == source_sha, "manifest source differs from run")
         require(manifest["descriptor"].get("policyVersion") == "release-successor/1", "wrong policy")
@@ -145,6 +151,7 @@ def main() -> int:
     parser.add_argument("--archive", type=pathlib.Path, required=True)
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--output", type=pathlib.Path, required=True)
+    parser.add_argument("--suspended-0103-successor", action="store_true")
     args = parser.parse_args()
     try:
         result = extract_verified(
@@ -153,6 +160,7 @@ def main() -> int:
             args.archive,
             args.output,
             args.source_sha,
+            suspended_0103_successor=args.suspended_0103_successor,
         )
     except (OSError, ValueError, KeyError, zipfile.BadZipFile, subprocess.CalledProcessError) as error:
         print(f"release candidate artifact refused: {error}", file=sys.stderr)

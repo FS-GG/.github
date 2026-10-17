@@ -233,13 +233,13 @@ class SuccessorRailBindingTests(unittest.TestCase):
 
     def test_candidate_binds_the_next_version_and_exact_predecessor(self) -> None:
         workflow = (ROOT / ".github/workflows/release-successor-candidate.yml").read_text()
-        self.assertIn('test "$version" = 0.103.0', workflow)
+        self.assertIn('test "$version" = 0.104.0', workflow)
         self.assertIn("gh release download coherent-set/v0.102.0", workflow)
         self.assertIn("--tag-source 6e9be17bacd288ece103b67ecd5842d37a9c8e50", workflow)
         self.assertEqual(workflow.count("--predecessor 0.102.0"), 2)
         self.assertIn("--release-tag coherent-set/v0.102.0", workflow)
         for namespace in ("coherent-set", "kit", "drivers", "coord-engine"):
-            self.assertIn(f"refs/tags/{namespace}/v0.103.0", workflow)
+            self.assertIn(f"refs/tags/{namespace}/v0.104.0", workflow)
         for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
             self.assertEqual(workflow.count(f"dotnet pack src/{project}/"), 1)
         self.assertIn("--policy-version release-successor/1", workflow)
