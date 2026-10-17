@@ -1068,3 +1068,85 @@ let ``actual six heading owner record preserves owner and refuses missing duplic
         let report = programmeSnapshot (bodyChange body)
         Assert.True(report.Items.Head.Owner.IsNone)
         Assert.Equal("needs-decision", (V2ProjectionSource.selectActions report None report.NativeIntegrator.ObservedAt).Head.Decision)
+
+let private asNewAssignment change =
+    programmeSnapshot (fun request response ->
+        let response = change request response
+        if request.Subject.EndsWith("closingIssuesReferences", StringComparison.Ordinal) then
+            response |> Result.map (fun value -> { value with Body = value.Body.Replace("I_outcome", "I_other").Replace("\"number\":4634", "\"number\":999") })
+        else response)
+
+[<Fact>]
+let ``actual open native dependency is classified per action without suppressing missing coverage`` () =
+    let report = asNewAssignment (fun request response ->
+        if request.Path.EndsWith("/dependencies/blocked_by", StringComparison.Ordinal) then
+            response |> Result.map (fun value -> { value with Body = """[{"html_url":"https://github.com/FS-GG/.github/issues/1","number":1,"node_id":"I_dependency","updated_at":"2026-10-17T12:00:00Z","state":"open"}]""" })
+        else response)
+    Assert.Single report.Items.Head.Evidence.DependencyObservations |> ignore
+    let context = selectionContext report
+    let choose context = (V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt).Head
+    Assert.Equal("unknown", (choose context).Decision)
+    for reference in [ "https://github.com/FS-GG/.github/issues/1"; "FS-GG/.github#1" ] do
+        let prerequisite: V2ProjectionSource.Prerequisite = { Action = V2ProjectionSource.Activation; Reference = reference; Satisfied = Some false; SupplyingOwner = "publisher" }
+        let classified = { context with Slices = [ { context.Slices.Head with Prerequisites = [ prerequisite ] } ] }
+        Assert.Equal("ready", (choose classified).Decision)
+        let activation = { classified with Slices = [ { classified.Slices.Head with Action = V2ProjectionSource.Activation } ] }
+        Assert.Equal("blocked", (choose activation).Decision)
+        let source = { classified with Slices = [ { classified.Slices.Head with Prerequisites = [ { prerequisite with Action = V2ProjectionSource.Source } ] } ] }
+        Assert.Equal("blocked", (choose source).Decision)
+        let mismatched = { classified with Slices = [ { classified.Slices.Head with Prerequisites = [ { prerequisite with Reference = reference + "0" } ] } ] }
+        Assert.Equal("unknown", (choose mismatched).Decision)
+        Assert.Equal("unknown", (choose { classified with Slices = [ { classified.Slices.Head with PrerequisitesComplete = false } ] }).Decision)
+
+[<Fact>]
+let ``malformed reservation and peer repository or token scopes cannot establish disjointness`` () =
+    let report = asNewAssignment ProgrammeFixture.unchanged
+    let context = selectionContext report
+    let choose context = (V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt).Head
+    Assert.Equal("ready", (choose context).Decision)
+    for repository in [ "FS-GG/"; "/"; "/.github"; " FS-GG/.github"; "FS-GG/.github " ] do
+        let reservation: V2ProjectionSource.Reservation = { Owner = "original"; Repository = repository; Paths = [ "src/unrelated.fs" ] }
+        Assert.Equal("unknown", (choose { context with Reservations = Some [ reservation ] }).Decision)
+        let peer = { context.Slices.Head with Issue = { ProgrammeFixture.issue with Number = 999 }; Repository = repository }
+        Assert.Equal("unknown", (choose { context with Slices = context.Slices @ [ peer ] }).Decision)
+    for path in [ "any"; "none"; "bad["; "src/a,b.fs"; "src/a`b.fs"; "src/white space.fs" ] do
+        let reservation: V2ProjectionSource.Reservation = { Owner = "original"; Repository = "FS-GG/.github"; Paths = [ path ] }
+        Assert.Equal("unknown", (choose { context with Reservations = Some [ reservation ] }).Decision)
+        let peer = { context.Slices.Head with Issue = { ProgrammeFixture.issue with Number = 999 }; Paths = [ path ] }
+        Assert.Equal("unknown", (choose { context with Slices = context.Slices @ [ peer ] }).Decision)
+
+[<Fact>]
+let ``known intake refusal blocks both new source and established continuation`` () =
+    for report in [ programmeSnapshot ProgrammeFixture.unchanged; asNewAssignment ProgrammeFixture.unchanged ] do
+        let context = selectionContext report
+        let refuse = { context with Slices = [ { context.Slices.Head with IntakeAuthorized = Some false } ] }
+        Assert.Equal("blocked", (V2ProjectionSource.selectActions report (Some refuse) report.NativeIntegrator.ObservedAt).Head.Decision)
+        let unknown = { context with Slices = [ { context.Slices.Head with IntakeAuthorized = None } ] }
+        Assert.Equal("unknown", (V2ProjectionSource.selectActions report (Some unknown) report.NativeIntegrator.ObservedAt).Head.Decision)
+
+[<Fact>]
+let ``literal native PR files never become chore sentinel or rewritten touch set tokens`` () =
+    for path in [ "any"; "none"; "src/a,b.fs"; "src/a`b.fs"; "src/white space.fs" ] do
+        let change request response =
+            if request.Subject.EndsWith(" files", StringComparison.Ordinal) then
+                response |> Result.map (fun value -> { value with Body = value.Body.Replace("src/current.fs", path) })
+            else response
+        for report in [ programmeSnapshot change; asNewAssignment change ] do
+            Assert.Equal<string list>([ path ], report.NativeIntegrator.PullRequests.Head.Files)
+            let context = selectionContext report
+            let context = { context with Slices = [ { context.Slices.Head with Paths = [ "any/**" ] } ] }
+            Assert.Equal("unknown", (V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt).Head.Decision)
+
+[<Fact>]
+let ``native snapshot freshness starts before its first inventory read and cannot renew at completion`` () =
+    let mutable firstInventoryRead = None
+    let report = programmeSnapshot (fun request response ->
+        if request.Subject.EndsWith("open PR inventory", StringComparison.Ordinal) && firstInventoryRead.IsNone then firstInventoryRead <- Some DateTimeOffset.UtcNow
+        response)
+    Assert.True(firstInventoryRead.IsSome)
+    Assert.True(report.NativeIntegrator.ObservedAt <= firstInventoryRead.Value)
+    let context = selectionContext report
+    let expired = report.NativeIntegrator.ObservedAt.AddMinutes(5.0).AddTicks(1L)
+    let result = (V2ProjectionSource.selectActions report (Some context) expired).Head
+    Assert.Equal("unknown", result.Decision)
+    Assert.Contains(result.Reasons, fun value -> value.Contains("Native integrator snapshot expired"))

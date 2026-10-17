@@ -453,6 +453,8 @@ module V2ProjectionSource =
                 Ok(inspectionReads transport binding, transport :> IDisposable))
 
     let private nativeIntegrator (transport: IGitHubTransport) (binding: Binding) =
+        // Charge freshness from the earliest determining inventory read, never collection completion.
+        let observedAt = DateTimeOffset.UtcNow
         let mutable repositoryGaps = Map.empty
         let mutable all = []
         let sha (value: string) = not (String.IsNullOrWhiteSpace value) && value.Length = 40 && value |> Seq.forall Uri.IsHexDigit
@@ -550,7 +552,7 @@ module V2ProjectionSource =
                         else Error(Malformed(pull.Url, "PR/head/revision changed; recompute affected selection")))
                     match barrier with Error error -> gaps <- gaps @ [ Errors.explain error ] | _ -> ()
                     all <- all @ [ { pull with Issues = issues |> List.map snd; Files = files; Reviews = reviews |> List.map snd; Checks = checks; Gaps = gaps } ]
-        { PullRequests = all; RepositoryGaps = repositoryGaps; ObservedAt = DateTimeOffset.UtcNow }
+        { PullRequests = all; RepositoryGaps = repositoryGaps; ObservedAt = observedAt }
 
     let inspectFixed (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
         let reads = inspectionReads transport binding
@@ -653,7 +655,18 @@ module V2ProjectionSource =
         let fresh observed = observed <= now && now - observed <= TimeSpan.FromMinutes 5.0
         let trusted = context |> Option.filter (fun value -> value.ObservedAt <= now && now <= value.ValidUntil && fresh value.ObservedAt && not (String.IsNullOrWhiteSpace value.Evidence))
         let paths values = FS.GG.Coord.TouchSet.parse ("Paths: " + String.concat " " values)
-        let usable values = not (List.isEmpty values) && FS.GG.Coord.TouchSet.usability (paths values) = FS.GG.Coord.TouchSet.Usable
+        let usable values =
+            // Native file names are literals: never let the Paths DSL rename, split or sentinelize them.
+            match paths values with
+            | FS.GG.Coord.Types.Declared tokens when not values.IsEmpty ->
+                let roundTrip = tokens |> List.choose (function FS.GG.Coord.Types.Matchable value -> Some value | _ -> None)
+                roundTrip = values && FS.GG.Coord.TouchSet.usability (paths values) = FS.GG.Coord.TouchSet.Usable
+            | _ -> false
+        let canonicalScope (repository: string) =
+            if String.IsNullOrWhiteSpace repository then false
+            else
+                let parts = repository.Split('/')
+                parts.Length = 2 && (parts |> Array.forall (fun value -> not (String.IsNullOrWhiteSpace value) && value = value.Trim()))
         let overlaps (leftRepo: string) leftPaths (rightRepo: string) rightPaths =
             let left = leftRepo.Split('/')
             let right = rightRepo.Split('/')
@@ -681,13 +694,21 @@ module V2ProjectionSource =
                   if item.SourceCurrentness <> "Current" || item.Evidence.Gap.IsSome || item.PlanningGap.IsSome then "Current issue/dependency/plan/planning read is unavailable or changed"
                   if report.Binding.BindingVersion <> 4 then "Historical pilot/product inspection does not select programme actions"
                   if not (fresh report.NativeIntegrator.ObservedAt) then "Native integrator snapshot expired or is from the future; refresh before action" ]
-            let prerequisites = slice |> Option.map _.Prerequisites |> Option.defaultValue [] |> List.filter (fun value -> value.Action = action)
+            let allPrerequisites = slice |> Option.map _.Prerequisites |> Option.defaultValue []
+            let prerequisites = allPrerequisites |> List.filter (fun value -> value.Action = action)
             let unsatisfied = prerequisites |> List.filter (fun value -> value.Satisfied = Some false)
             let unknown = prerequisites |> List.filter (fun value -> value.Satisfied.IsNone)
             let nativeOpen = item.Evidence.DependencyObservations |> List.filter (fun value -> value.State <> "CLOSED")
+            let unclassifiedNative = nativeOpen |> List.filter (fun edge ->
+                let identity = $"{edge.Issue.Owner}/{edge.Issue.Repository}#{edge.Issue.Number}"
+                let matching = allPrerequisites |> List.filter (fun value -> value.Reference = edge.Url || value.Reference = identity)
+                matching.IsEmpty || not (slice |> Option.exists _.PrerequisitesComplete)
+                || (matching |> List.exists (fun value -> value.Action = action && value.Satisfied = Some true)))
             if not gaps.IsEmpty then result "unknown" gaps
             elif slices.Length > 1 || pulls.Length > 1 || (owner |> Option.forall String.IsNullOrWhiteSpace) || (item.Owner |> Option.forall String.IsNullOrWhiteSpace) then
                 result "needs-decision" [ "Current slice/owner or linked PR is missing or ambiguous; withhold duplicate assignment" ]
+            elif slice |> Option.exists (fun value -> not (canonicalScope value.Repository)) then
+                result "unknown" [ "Current slice repository scope is malformed; no disjointness conclusion is possible" ]
             elif slice |> Option.exists (fun value -> not (report.Binding.Repositories.Contains value.Repository) || value.Owner <> (item.Owner |> Option.defaultValue value.Owner)) then
                 result "needs-decision" [ "Current slice repository/owner conflicts with enrollment or owning issue" ]
             elif item.Discrepancies |> List.contains "Human Roadmap differs from the admitted owning plan" then
@@ -696,13 +717,16 @@ module V2ProjectionSource =
                 result "needs-decision" [ "Native issue is closed; reconcile remaining outcome and acceptance rather than assigning work" ]
             elif item.Planning |> Option.exists (fun value -> value.Status = Some "Done") then
                 result "needs-decision" [ "Human Done requires outcome acceptance reconciliation; source PRs cannot close the whole outcome" ]
-            elif not unsatisfied.IsEmpty || not nativeOpen.IsEmpty then
-                result "blocked" ([ yield! unsatisfied |> List.map (fun value -> value.Reference + " supplied by " + value.SupplyingOwner)
-                                    yield! nativeOpen |> List.map (fun value -> value.Url + " remains open") ])
+            elif slice |> Option.exists (fun value -> value.IntakeAuthorized = Some false) then
+                result "blocked" [ "The current integrator intake decision refuses this action" ]
+            elif not unsatisfied.IsEmpty then
+                result "blocked" (unsatisfied |> List.map (fun value -> value.Reference + " supplied by " + value.SupplyingOwner))
+            elif not unclassifiedNative.IsEmpty then
+                result "unknown" (unclassifiedNative |> List.map (fun value -> value.Url + " remains open without complete consistent action-specific classification from the integrator"))
             elif not unknown.IsEmpty then result "unknown" (unknown |> List.map (fun value -> value.Reference + " unknown; supplying owner " + value.SupplyingOwner))
             elif action = Activation then
                 result "unknown" [ "Activation requires action-specific publication/installed/native acceptance and intake evidence from its owning reader; native PR checks do not supply it" ]
-            elif report.NativeIntegrator.RepositoryGaps.Count > 0 || (report.NativeIntegrator.PullRequests |> List.exists (fun value -> not value.Gaps.IsEmpty)) then
+            elif report.NativeIntegrator.RepositoryGaps.Count > 0 || (report.NativeIntegrator.PullRequests |> List.exists (fun value -> not value.Gaps.IsEmpty || not (canonicalScope value.Repository) || not (usable value.Files))) then
                 result "unknown" [ "Complete in-flight PR/association/file inventory is unavailable, including non-enrolled work" ]
             elif pull.IsSome && (slice.IsNone || not slice.Value.PrerequisitesComplete || slice.Value.IntakeAuthorized <> Some true) then
                 result "unknown" [ "Existing PR/head recovered; action-specific owning-plan prerequisite/intake coverage is unavailable from the integrator, so continuation eligibility is unknown"
@@ -719,15 +743,16 @@ module V2ProjectionSource =
             elif not (usable slice.Value.Paths) then result "unknown" [ "Exact current slice touch-set is missing or unusable" ]
             else
                 let current = slice.Value
+                let invalidReservations = trusted |> Option.bind _.Reservations |> Option.exists (List.exists (fun value -> not (usable value.Paths) || not (canonicalScope value.Repository) || String.IsNullOrWhiteSpace value.Owner))
+                let invalidPeers = trusted |> Option.exists (fun value -> value.Slices |> List.exists (fun other -> not (canonicalScope other.Repository) || not (usable other.Paths) || String.IsNullOrWhiteSpace other.Owner))
                 let conflicts = report.NativeIntegrator.PullRequests |> List.filter (fun value -> overlaps current.Repository current.Paths value.Repository value.Files)
                 let peerConflicts = trusted |> Option.map (fun value -> value.Slices |> List.filter (fun other -> other.Issue <> current.Issue && overlaps current.Repository current.Paths other.Repository other.Paths)) |> Option.defaultValue []
                 let reservationConflicts = trusted |> Option.bind _.Reservations |> Option.defaultValue [] |> List.filter (fun value -> overlaps current.Repository current.Paths value.Repository value.Paths)
-                let invalidReservations = trusted |> Option.bind _.Reservations |> Option.exists (List.exists (fun value -> not (usable value.Paths) || value.Repository.Split('/').Length <> 2))
-                if not conflicts.IsEmpty || not reservationConflicts.IsEmpty || not peerConflicts.IsEmpty then
+                if invalidReservations || invalidPeers then result "unknown" [ "Reservation or peer-slice scope is unreadable; existing uncertain reservations remain held" ]
+                elif not conflicts.IsEmpty || not reservationConflicts.IsEmpty || not peerConflicts.IsEmpty then
                     result "blocked" ([ yield! conflicts |> List.map (fun value -> "Conflicts with in-flight " + value.Url)
                                         yield! reservationConflicts |> List.map (fun value -> "Conflicts with reservation held by " + value.Owner)
                                         yield! peerConflicts |> List.map (fun value -> "Conflicts with proposed slice owned by " + value.Owner) ])
-                elif invalidReservations then result "unknown" [ "Reservation scope is unreadable; existing uncertain reservations remain held" ]
                 else
                     match trusted with
                     | Some capacity when capacity.Reservations.IsSome && current.IntakeAuthorized = Some true ->
