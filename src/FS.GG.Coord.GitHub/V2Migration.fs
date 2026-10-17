@@ -9,14 +9,14 @@ module V2Migration =
         { Id: string; Repository: string; Number: int; Slice: string }
 
     type DesiredView =
-        { Id: string option; Name: string; Layout: string; Filter: string
+        { Id: string option; Name: string; Layout: string; Filter: string;
           VisibleFieldIds: string list }
 
     type Scope =
-        { SourceRevision: string; ArtifactSha256: string; CliArtifactSha256: string; PrincipalId: string
-          PrincipalLogin: string; SelectedIssues: SelectedIssue list
-          StatusFieldId: string; RoadmapFieldId: string; TrackFieldId: string
-          ObservationFieldId: string; InReviewColor: string; InReviewDescription: string
+        { SourceRevision: string; ArtifactSha256: string; CliArtifactSha256: string; PrincipalId: string;
+          PrincipalLogin: string; SelectedIssues: SelectedIssue list;
+          StatusFieldId: string; RoadmapFieldId: string; TrackFieldId: string;
+          ObservationFieldId: string; InReviewColor: string; InReviewDescription: string;
           Views: DesiredView list }
 
     type SelectOption =
@@ -29,20 +29,20 @@ module V2Migration =
         { Id: string; FieldId: string; Kind: string; Value: string }
 
     type Item =
-        { Id: string; ContentId: string; ContentKind: string; Repository: string option
+        { Id: string; ContentId: string; ContentKind: string; Repository: string option;
           Number: int option; UpdatedAt: string; Archived: bool; Values: ItemValue list }
 
     type NativeIssue =
         { Id: string; Repository: string; Number: int; UpdatedAt: string; State: string }
 
     type View =
-        { Id: string; Name: string; Layout: string; Filter: string
+        { Id: string; Name: string; Layout: string; Filter: string;
           VisibleFieldIds: string list; UnsupportedConfiguration: string }
 
     type Snapshot =
-        { ObservedAt: DateTimeOffset; PrincipalId: string; PrincipalLogin: string
-          OrganizationId: string; ProjectId: string; ProjectTitle: string
-          ProjectNumber: int; Private: bool; CanUpdate: bool; UpdatedAt: string
+        { ObservedAt: DateTimeOffset; PrincipalId: string; PrincipalLogin: string;
+          OrganizationId: string; ProjectId: string; ProjectTitle: string;
+          ProjectNumber: int; Private: bool; CanUpdate: bool; UpdatedAt: string;
           Fields: Field list; Items: Item list; Views: View list; Issues: NativeIssue list }
 
     type Change =
@@ -52,7 +52,7 @@ module V2Migration =
         | UpdateView of viewId: string * DesiredView
 
     type Prepared =
-        { Scope: Scope; Snapshot: Snapshot; Changes: Change list; OwnerActions: string list
+        { Scope: Scope; Snapshot: Snapshot; Changes: Change list; OwnerActions: string list;
           Digest: string; PreparedPath: string option }
 
     open System.Collections.Generic
@@ -121,7 +121,7 @@ module V2Migration =
         with :? InvalidOperationException | :? KeyNotFoundException | :? ArgumentException | :? FormatException | :? JsonException ->
             invalid "native response is missing or malformed; no incomplete snapshot is accepted"
     let private query (document: string) (variables: (string * Var) list) : Transport.Request =
-        { Method = "POST"; Path = "graphql"; Query = []; Body = Query(document, variables)
+        { Method = "POST"; Path = "graphql"; Query = []; Body = Query(document, variables);
           Budget = GraphQl; IfNoneMatch = None; Subject = subject }
     let private cursor (after: string option) =
         match after with Some value -> [ "after", VString value ] | None -> []
@@ -146,7 +146,7 @@ module V2Migration =
 
     let private option (node: JsonElement) : IoResult<SelectOption> =
         decode (fun () ->
-            { Id = nonempty "id" node; Name = nonempty "name" node
+            { Id = nonempty "id" node; Name = nonempty "name" node;
               Color = nonempty "color" node; Description = propertyString "description" node })
     let private sequence (values: IoResult<'a> list) : IoResult<'a list> =
         List.foldBack (fun value rest ->
@@ -183,8 +183,8 @@ module V2Migration =
                 | "Issue" | "PullRequest" -> Some(nonempty "nameWithOwner" (content.GetProperty "repository")), Some(content.GetProperty("number").GetInt32())
                 | "DraftIssue" -> None, None
                 | _ -> invalidArg "content" "unsupported native content"
-            { Id = nonempty "id" node; ContentId = nonempty "id" content; ContentKind = kind
-              Repository = repository; Number = number; UpdatedAt = nonempty "updatedAt" node
+            { Id = nonempty "id" node; ContentId = nonempty "id" content; ContentKind = kind;
+              Repository = repository; Number = number; UpdatedAt = nonempty "updatedAt" node;
               Archived = node.GetProperty("isArchived").GetBoolean(); Values = [] })
     let private value (node: JsonElement) : IoResult<ItemValue> =
         decode (fun () ->
@@ -216,10 +216,10 @@ module V2Migration =
                 let owner = data.GetProperty "organization"
                 if nonempty "login" owner <> "FS-GG" then invalidArg "owner" "different native owner"
                 let project = owner.GetProperty "projectV2"
-                { ObservedAt = observedAt; PrincipalId = nonempty "id" principal; PrincipalLogin = nonempty "login" principal
-                  OrganizationId = nonempty "id" owner; ProjectId = nonempty "id" project
-                  ProjectTitle = nonempty "title" project; ProjectNumber = project.GetProperty("number").GetInt32()
-                  Private = not (project.GetProperty("public").GetBoolean()); CanUpdate = project.GetProperty("viewerCanUpdate").GetBoolean()
+                { ObservedAt = observedAt; PrincipalId = nonempty "id" principal; PrincipalLogin = nonempty "login" principal;
+                  OrganizationId = nonempty "id" owner; ProjectId = nonempty "id" project;
+                  ProjectTitle = nonempty "title" project; ProjectNumber = project.GetProperty("number").GetInt32();
+                  Private = not (project.GetProperty("public").GetBoolean()); CanUpdate = project.GetProperty("viewerCanUpdate").GetBoolean();
                   UpdatedAt = nonempty "updatedAt" project; Fields = []; Items = []; Views = []; Issues = [] }))
     let private nativeIssues (transport: IGitHubTransport) (selected: SelectedIssue list) : IoResult<NativeIssue list> =
         let indexed = selected |> List.mapi (fun index issue -> "issue" + string index, issue)
@@ -233,7 +233,7 @@ module V2Migration =
                 match decode (fun () ->
                     let issue = data.GetProperty name
                     if nonempty "__typename" issue <> "Issue" then invalidArg "issue" "selected native node is not an issue"
-                    { Id = nonempty "id" issue; Repository = nonempty "nameWithOwner" (issue.GetProperty "repository")
+                    { Id = nonempty "id" issue; Repository = nonempty "nameWithOwner" (issue.GetProperty "repository");
                       Number = issue.GetProperty("number").GetInt32(); UpdatedAt = nonempty "updatedAt" issue; State = nonempty "state" issue }) with
                 | Ok actual when actual.Id = expected.Id && actual.Repository = expected.Repository && actual.Number = expected.Number -> Ok actual
                 | Ok _ -> invalid "selected native issue identity differs"
@@ -243,8 +243,8 @@ module V2Migration =
         "query($id:ID!,$after:String){node(id:$id){... on ProjectV2{id views(first:50,after:$after){pageInfo{hasNextPage endCursor} nodes{id name layout filter configuration{visibleFields(first:50){pageInfo{hasNextPage endCursor} nodes{... on ProjectV2FieldCommon{id name dataType}}}} groupByFields(first:50){pageInfo{hasNextPage endCursor} nodes{... on ProjectV2FieldCommon{id name dataType}}} verticalGroupByFields(first:50){pageInfo{hasNextPage endCursor} nodes{... on ProjectV2FieldCommon{id name dataType}}} sortByFields(first:50){pageInfo{hasNextPage endCursor} nodes{direction field{... on ProjectV2FieldCommon{id name dataType}}}}}}}}}"
     let private viewNode (node: JsonElement) : IoResult<View> =
         decode (fun () ->
-            { Id = nonempty "id" node; Name = nonempty "name" node; Layout = nonempty "layout" node
-              Filter = (if node.GetProperty("filter").ValueKind = JsonValueKind.Null then "" else propertyString "filter" node)
+            { Id = nonempty "id" node; Name = nonempty "name" node; Layout = nonempty "layout" node;
+              Filter = (if node.GetProperty("filter").ValueKind = JsonValueKind.Null then "" else propertyString "filter" node);
               VisibleFieldIds = []; UnsupportedConfiguration = node.GetProperty("filter").GetRawText() })
     let private viewConfiguration (first: JsonElement option) (transport: IGitHubTransport) (viewId: string) (connection: string) : IoResult<string list> =
         let fieldSelection = "... on ProjectV2FieldCommon{id name dataType}"
@@ -295,7 +295,7 @@ module V2Migration =
                 groups |> List.map read |> sequence
                 |> Result.map (function
                     | [ visible; grouped; vertical; sorted ] ->
-                        { view with VisibleFieldIds = visible
+                        { view with VisibleFieldIds = visible;
                                     UnsupportedConfiguration = JsonSerializer.Serialize([ [ view.UnsupportedConfiguration ]; grouped; vertical; sorted ]) }
                     | _ -> invalidOp "fixed view configuration shape")) |> sequence)
 
@@ -451,7 +451,7 @@ module V2Migration =
                               "Readback IDs must be independently finalized into protected enrollment before v4 consumer activation.";
                               "Compare-before-write is not CAS; apply requires a bounded participating single-writer planning window." ]
                             @ (if snapshot.CanUpdate then [] else [ "Native principal lacks project update capability; this read-only preparation grants no effect permission." ])
-                        { Scope = scope; Snapshot = snapshot; Changes = all; OwnerActions = ownerActions; PreparedPath = None
+                        { Scope = scope; Snapshot = snapshot; Changes = all; OwnerActions = ownerActions; PreparedPath = None;
                           Digest = hash (scopeTokens scope @ snapshotTokens snapshot @ [ string all.Length ] @ (all |> List.collect changeTokens)) })
 
     let private jsonString (value: string) : JsonNode = JsonValue.Create value
@@ -497,7 +497,7 @@ module V2Migration =
             let variables = objectNode [ "input", input ]
             let body = objectNode [ id "query" document; "variables", variables ]
             Ok(
-                { Method = "POST"; Path = "graphql"; Query = []; Body = Json(body.ToJsonString())
+                { Method = "POST"; Path = "graphql"; Query = []; Body = Json(body.ToJsonString());
                   Budget = GraphQl; IfNoneMatch = None; Subject = subject })
     let private closed (names: string list) (node: JsonElement) =
         if node.ValueKind <> JsonValueKind.Object then invalidArg "json" "expected closed object"
@@ -514,21 +514,21 @@ module V2Migration =
         let issues: SelectedIssue list =
             array 100 (node.GetProperty "selectedIssues") |> List.map (fun (issue: JsonElement) ->
                 closed [ "id"; "repository"; "number"; "slice" ] issue
-                { Id = nonempty "id" issue; Repository = nonempty "repository" issue
+                { Id = nonempty "id" issue; Repository = nonempty "repository" issue;
                   Number = issue.GetProperty("number").GetInt32(); Slice = nonempty "slice" issue })
         let views: DesiredView list =
             array 10 (node.GetProperty "views") |> List.map (fun (view: JsonElement) ->
                 closed [ "id"; "name"; "layout"; "filter"; "visibleFieldIds" ] view
                 let id = view.GetProperty "id"
-                { Id = (if id.ValueKind = JsonValueKind.Null then None else Some(nonempty "id" view))
-                  Name = nonempty "name" view; Layout = nonempty "layout" view; Filter = propertyString "filter" view
+                { Id = (if id.ValueKind = JsonValueKind.Null then None else Some(nonempty "id" view));
+                  Name = nonempty "name" view; Layout = nonempty "layout" view; Filter = propertyString "filter" view;
                   VisibleFieldIds = (array 50 (view.GetProperty "visibleFieldIds") |> List.map (fun field -> field.GetString())) })
-        { SourceRevision = nonempty "sourceRevision" node; ArtifactSha256 = nonempty "artifactSha256" node
-          CliArtifactSha256 = nonempty "cliArtifactSha256" node
-          PrincipalId = nonempty "principalId" node; PrincipalLogin = nonempty "principalLogin" node
-          SelectedIssues = issues; StatusFieldId = nonempty "statusFieldId" node
-          RoadmapFieldId = nonempty "roadmapFieldId" node; TrackFieldId = nonempty "trackFieldId" node
-          ObservationFieldId = nonempty "observationFieldId" node; InReviewColor = nonempty "inReviewColor" node
+        { SourceRevision = nonempty "sourceRevision" node; ArtifactSha256 = nonempty "artifactSha256" node;
+          CliArtifactSha256 = nonempty "cliArtifactSha256" node;
+          PrincipalId = nonempty "principalId" node; PrincipalLogin = nonempty "principalLogin" node;
+          SelectedIssues = issues; StatusFieldId = nonempty "statusFieldId" node;
+          RoadmapFieldId = nonempty "roadmapFieldId" node; TrackFieldId = nonempty "trackFieldId" node;
+          ObservationFieldId = nonempty "observationFieldId" node; InReviewColor = nonempty "inReviewColor" node;
           InReviewDescription = propertyString "inReviewDescription" node; Views = views }
     let parseScope (json: string) : IoResult<Scope> =
         if Encoding.UTF8.GetByteCount json > 262144 then invalid "scope input exceeds 256 KiB"

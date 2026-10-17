@@ -71,7 +71,7 @@ module V2MigrationTests =
     [<Fact>]
     let ``independent readback refuses human planning drift after one exact schema effect`` () =
         let item : Item =
-            { Id = "existing-card"; ContentId = "unselected-historical-issue"; ContentKind = "Issue"
+            { Id = "existing-card"; ContentId = "unselected-historical-issue"; ContentKind = "Issue";
               Repository = Some "FS-GG/.github"; Number = Some 99; UpdatedAt = "original-update"; Archived = false; Values = [] }
         let original = { snapshot with Items = [ item ] }
         let native = Native original
@@ -85,7 +85,7 @@ module V2MigrationTests =
     [<Fact>]
     let ``new view filter is an exact ID dependent stage only after unambiguous native create`` () =
         let desired : DesiredView =
-            { Id = None; Name = "synthetic blocked view"; Layout = "TABLE_LAYOUT"; Filter = "status:Blocked"
+            { Id = None; Name = "synthetic blocked view"; Layout = "TABLE_LAYOUT"; Filter = "status:Blocked";
               VisibleFieldIds = [ scope.StatusFieldId; scope.RoadmapFieldId ] }
         let scope = { scope with Views = [ desired ] }
         let native = Native snapshot

@@ -512,17 +512,28 @@ module BoardV2Application =
                                 let directory = preparedPath + ".invocation"
                                 privatePath directory
                                 // Exclusive marker, never removed. Reopening this identity is readback-only.
-                                privateJson (preparedPath + ".invocation-reserved") (JsonSerializer.Serialize({| preparedSha256 = expectedHash; accountableOwner = owner; selectionReference = selection |}))
+                                let reservationMetadata =
+                                    {| preparedSha256 = expectedHash;
+                                       accountableOwner = owner;
+                                       selectionReference = selection |}
+                                privateJson (preparedPath + ".invocation-reserved") (JsonSerializer.Serialize(reservationMetadata))
                                 ownsInvocation <- true
                                 if Directory.Exists directory || File.Exists directory then invalidArg "evidence" "retained invocation permits readback only"
                                 Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
                                 syncDirectory directory
                                 syncDirectory (Path.GetDirectoryName directory)
                                 privateWrite (Path.Combine(directory, "prepared.json")) raw
-                                privateJson (Path.Combine(directory, "invocation.json"))
-                                    (JsonSerializer.Serialize({| accountableOwner = owner; selectionReference = selection; preparedSha256 = expectedHash
-                                                               sourceRevision = scope.SourceRevision; artifactSha256 = scope.ArtifactSha256; cliArtifactSha256 = scope.CliArtifactSha256
-                                                               planningWindowUntil = windowUntil; requestCeiling = 500; secondsCeiling = 270 |}))
+                                let invocationMetadata =
+                                    {| accountableOwner = owner;
+                                       selectionReference = selection;
+                                       preparedSha256 = expectedHash;
+                                       sourceRevision = scope.SourceRevision;
+                                       artifactSha256 = scope.ArtifactSha256;
+                                       cliArtifactSha256 = scope.CliArtifactSha256;
+                                       planningWindowUntil = windowUntil;
+                                       requestCeiling = 500;
+                                       secondsCeiling = 270 |}
+                                privateJson (Path.Combine(directory, "invocation.json")) (JsonSerializer.Serialize(invocationMetadata))
                                 migrationStable connection scope |> Result.mapError migrationErrorClass
                                 |> Result.bind (fun fresh ->
                                     if fresh.Digest <> digest then Error "fresh-preconditions-differ-from-selected-preparation"
@@ -551,11 +562,16 @@ module BoardV2Application =
                                                                 privateJson (prefix + "-precondition.json") (V2Migration.encodePrepared current)
                                                                 if clock.GetUtcNow() >= admission.WindowUntil then invalidOp "planning window expired before send"
                                                                 privateJson (prefix + "-intent.json") exact
-                                                                privateJson (prefix + "-intent-metadata.json")
-                                                                    (JsonSerializer.Serialize({| method = request.Method; path = request.Path; budget = "GraphQl"
-                                                                                               requestSha256 = migrationDigest (Transport.canonicalMutationBytes request)
-                                                                                               bodySha256 = migrationDigest (utf8.GetBytes exact); bodyBytes = utf8.GetByteCount exact
-                                                                                               originalPreparedSha256 = expectedHash; sequence = sequence |}))
+                                                                let intentMetadata =
+                                                                    {| method = request.Method;
+                                                                       path = request.Path;
+                                                                       budget = "GraphQl";
+                                                                       requestSha256 = migrationDigest (Transport.canonicalMutationBytes request);
+                                                                       bodySha256 = migrationDigest (utf8.GetBytes exact);
+                                                                       bodyBytes = utf8.GetByteCount exact;
+                                                                       originalPreparedSha256 = expectedHash;
+                                                                       sequence = sequence |}
+                                                                privateJson (prefix + "-intent-metadata.json") (JsonSerializer.Serialize(intentMetadata))
                                                                 // Once this durable intent exists, every later exception remains uncertain.
                                                                 if clock.GetUtcNow() >= admission.WindowUntil then invalidOp "planning window expired after custody before dispatch"
                                                                 let outcome = connection.Dispatch(current, change, admission.WindowUntil)
@@ -563,12 +579,18 @@ module BoardV2Application =
                                                                     match outcome with
                                                                     | Ok response ->
                                                                         privateJson (prefix + "-response.json") response.Body
-                                                                        privateJson (prefix + "-receipt.json")
-                                                                            (JsonSerializer.Serialize({| httpStatus = response.Status; responseSha256 = migrationDigest (utf8.GetBytes response.Body)
-                                                                                                       responseBytes = utf8.GetByteCount response.Body |}))
+                                                                        let receiptMetadata =
+                                                                            {| httpStatus = response.Status;
+                                                                               responseSha256 = migrationDigest (utf8.GetBytes response.Body);
+                                                                               responseBytes = utf8.GetByteCount response.Body |}
+                                                                        privateJson (prefix + "-receipt.json") (JsonSerializer.Serialize(receiptMetadata))
                                                                         migrationResponse change request response
                                                                     | Error error ->
-                                                                        privateJson (prefix + "-error.json") (JsonSerializer.Serialize({| state = "Unknown"; errorClass = migrationErrorClass error; reason = migrationFailureReason error |}))
+                                                                        let errorMetadata =
+                                                                            {| state = "Unknown";
+                                                                               errorClass = migrationErrorClass error;
+                                                                               reason = migrationFailureReason error |}
+                                                                        privateJson (prefix + "-error.json") (JsonSerializer.Serialize(errorMetadata))
                                                                         Error error
                                                                 let readback = V2Migration.collect connection.Reads current.Scope
                                                                 match readback with
@@ -624,9 +646,12 @@ module BoardV2Application =
                 if ownsInvocation && Directory.Exists directory then
                     try
                         let possibleSend = Directory.EnumerateFiles(directory, "*-intent.json") |> Seq.isEmpty |> not
-                        privateJson (Path.Combine(directory, "terminal.json"))
-                            (JsonSerializer.Serialize({| state = (if possibleSend then "Unknown" else "RefusedBeforeSend")
-                                                       automaticRetry = false; originalEvidenceRetained = true; failureCode = failureCode |}))
+                        let terminalMetadata =
+                            {| state = (if possibleSend then "Unknown" else "RefusedBeforeSend");
+                               automaticRetry = false;
+                               originalEvidenceRetained = true;
+                               failureCode = failureCode |}
+                        privateJson (Path.Combine(directory, "terminal.json")) (JsonSerializer.Serialize(terminalMetadata))
                     with _ -> () // Existing durable original intent remains the recovery anchor.
             | _ -> ()
             fail()

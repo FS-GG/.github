@@ -11,14 +11,14 @@ module V2Migration =
         { Id: string; Repository: string; Number: int; Slice: string }
 
     type DesiredView =
-        { Id: string option; Name: string; Layout: string; Filter: string
+        { Id: string option; Name: string; Layout: string; Filter: string;
           VisibleFieldIds: string list }
 
     type Scope =
-        { SourceRevision: string; ArtifactSha256: string; CliArtifactSha256: string; PrincipalId: string
-          PrincipalLogin: string; SelectedIssues: SelectedIssue list
-          StatusFieldId: string; RoadmapFieldId: string; TrackFieldId: string
-          ObservationFieldId: string; InReviewColor: string; InReviewDescription: string
+        { SourceRevision: string; ArtifactSha256: string; CliArtifactSha256: string; PrincipalId: string;
+          PrincipalLogin: string; SelectedIssues: SelectedIssue list;
+          StatusFieldId: string; RoadmapFieldId: string; TrackFieldId: string;
+          ObservationFieldId: string; InReviewColor: string; InReviewDescription: string;
           Views: DesiredView list }
 
     type SelectOption =
@@ -33,20 +33,20 @@ module V2Migration =
         { Id: string; FieldId: string; Kind: string; Value: string }
 
     type Item =
-        { Id: string; ContentId: string; ContentKind: string; Repository: string option
+        { Id: string; ContentId: string; ContentKind: string; Repository: string option;
           Number: int option; UpdatedAt: string; Archived: bool; Values: ItemValue list }
 
     type NativeIssue =
         { Id: string; Repository: string; Number: int; UpdatedAt: string; State: string }
 
     type View =
-        { Id: string; Name: string; Layout: string; Filter: string
+        { Id: string; Name: string; Layout: string; Filter: string;
           VisibleFieldIds: string list; UnsupportedConfiguration: string }
 
     type Snapshot =
-        { ObservedAt: DateTimeOffset; PrincipalId: string; PrincipalLogin: string
-          OrganizationId: string; ProjectId: string; ProjectTitle: string
-          ProjectNumber: int; Private: bool; CanUpdate: bool; UpdatedAt: string
+        { ObservedAt: DateTimeOffset; PrincipalId: string; PrincipalLogin: string;
+          OrganizationId: string; ProjectId: string; ProjectTitle: string;
+          ProjectNumber: int; Private: bool; CanUpdate: bool; UpdatedAt: string;
           Fields: Field list; Items: Item list; Views: View list; Issues: NativeIssue list }
 
     type Change =
@@ -56,7 +56,7 @@ module V2Migration =
         | UpdateView of viewId: string * DesiredView
 
     type Prepared =
-        { Scope: Scope; Snapshot: Snapshot; Changes: Change list; OwnerActions: string list
+        { Scope: Scope; Snapshot: Snapshot; Changes: Change list; OwnerActions: string list;
           Digest: string; PreparedPath: string option }
 
     /// Validate planning input; it is scope data, never operation admission.

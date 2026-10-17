@@ -20,8 +20,8 @@ module BoardV2MigrationTests =
         let sha (assembly: Assembly) = File.ReadAllBytes assembly.Location |> digest
         let attribute = adapter.GetCustomAttributes(typeof<AssemblyInformationalVersionAttribute>, false).[0] :?> AssemblyInformationalVersionAttribute
         { scope with
-            SourceRevision = (attribute.InformationalVersion.Split('+') |> Array.last)
-            ArtifactSha256 = sha adapter
+            SourceRevision = (attribute.InformationalVersion.Split('+') |> Array.last);
+            ArtifactSha256 = sha adapter;
             CliArtifactSha256 = sha cli }
     type private Fixture() =
         let directory = Path.Combine(Path.GetTempPath(), "fsgg-migration-test-" + Guid.NewGuid().ToString("N"))
@@ -62,7 +62,7 @@ module BoardV2MigrationTests =
     let ``actual CLI performs exact typed stages including dependent view filter and unchanged repeat writes nothing`` () =
         use fixture = new Fixture()
         let desired : DesiredView =
-            { Id = None; Name = "synthetic blocked view"; Layout = "TABLE_LAYOUT"; Filter = "status:Blocked"
+            { Id = None; Name = "synthetic blocked view"; Layout = "TABLE_LAYOUT"; Filter = "status:Blocked";
               VisibleFieldIds = [ scope.StatusFieldId; scope.RoadmapFieldId ] }
         fixture.Scope <- { fixture.Scope with Views = [ desired ] }
         let code, path = fixture.Prepare "selected"
@@ -178,7 +178,7 @@ module BoardV2MigrationTests =
         let issues: NativeIssue list =
             selected
             |> List.map (fun (issue: SelectedIssue) ->
-                { Id = issue.Id; Repository = issue.Repository; Number = issue.Number
+                { Id = issue.Id; Repository = issue.Repository; Number = issue.Number;
                   UpdatedAt = "2026-10-17T12:00:00Z"; State = "OPEN" })
         fixture.Native.Snapshot <- { fixture.Native.Snapshot with Issues = issues }
         // Scope-only fixture construction must use the genuine selected identity snapshot too.
@@ -204,7 +204,7 @@ module BoardV2MigrationTests =
     let ``actual CLI incomplete nested inventory and malformed mutation payload never become empty success`` () =
         use fixture = new Fixture()
         let card : Item =
-            { Id = "synthetic-existing-unselected-card"; ContentId = "synthetic-unselected-issue"; ContentKind = "Issue"
+            { Id = "synthetic-existing-unselected-card"; ContentId = "synthetic-unselected-issue"; ContentKind = "Issue";
               Repository = Some "FS-GG/.github"; Number = Some 99; UpdatedAt = "2026-10-17T12:00:00Z"; Archived = false; Values = [] }
         fixture.Native.Snapshot <- { fixture.Native.Snapshot with Items = [ card ] }
         fixture.Native.Transform <- fun (request: Transport.Request) (response: Transport.Response) ->
@@ -269,7 +269,7 @@ module BoardV2MigrationTests =
         let issues: NativeIssue list =
             selected
             |> List.map (fun (issue: SelectedIssue) ->
-                { Id = issue.Id; Repository = issue.Repository; Number = issue.Number
+                { Id = issue.Id; Repository = issue.Repository; Number = issue.Number;
                   UpdatedAt = "2026-10-17T12:00:00Z"; State = "OPEN" })
         fixture.Native.Snapshot <- { fixture.Native.Snapshot with Issues = issues }
         let planned = V2Migration.prepare fixture.Scope fixture.Native.Snapshot |> get
@@ -302,7 +302,7 @@ module BoardV2MigrationTests =
     let ``actual dependent view filter refuses an intervening owner edit after create readback`` () =
         use fixture = new Fixture()
         let desired : DesiredView =
-            { Id = None; Name = "synthetic owner view"; Layout = "TABLE_LAYOUT"; Filter = "status:Blocked"
+            { Id = None; Name = "synthetic owner view"; Layout = "TABLE_LAYOUT"; Filter = "status:Blocked";
               VisibleFieldIds = [ scope.StatusFieldId; scope.RoadmapFieldId ] }
         fixture.Scope <- { fixture.Scope with Views = [ desired ] }
         let code, path = fixture.Prepare "dependent-owner-drift"
@@ -409,7 +409,7 @@ module BoardV2MigrationTests =
     let ``actual CLI duplicate explicit native view IDs refuse before reads and preserve existing view`` () =
         use fixture = new Fixture()
         let existing : View =
-            { Id = "synthetic-existing-view"; Name = "original owner view"; Layout = "TABLE_LAYOUT"; Filter = "owner-filter"
+            { Id = "synthetic-existing-view"; Name = "original owner view"; Layout = "TABLE_LAYOUT"; Filter = "owner-filter";
               VisibleFieldIds = [ scope.StatusFieldId ]; UnsupportedConfiguration = "[]" }
         fixture.Native.Snapshot <- { fixture.Native.Snapshot with Views = [ existing ] }
         let scopeFile = Path.Combine(fixture.Directory, "duplicate-view-id-scope.json")
@@ -419,7 +419,13 @@ module BoardV2MigrationTests =
         let scopeNode = root.["scope"]
         let views = scopeNode.["views"].AsArray()
         let item (name: string) =
-            System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize({| id = "synthetic-existing-view"; name = name; layout = "TABLE_LAYOUT"; filter = ""; visibleFieldIds = [ scope.StatusFieldId ] |}))
+            let desired =
+                {| id = "synthetic-existing-view";
+                   name = name;
+                   layout = "TABLE_LAYOUT";
+                   filter = "";
+                   visibleFieldIds = [ scope.StatusFieldId ] |}
+            System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(desired))
         views.Add(item "synthetic one")
         views.Add(item "synthetic two")
         File.WriteAllText(scopeFile, scopeNode.ToJsonString())
@@ -455,8 +461,17 @@ module BoardV2MigrationTests =
                     let grouped = target.[connectionName]
                     let values = grouped.["nodes"].AsArray()
                     let inserted =
-                        if connectionName = "sortByFields" then JsonSerializer.Serialize({| direction = "ASC"; field = {| id = scope.StatusFieldId |} |})
-                        else JsonSerializer.Serialize({| id = scope.StatusFieldId |})
+                        if connectionName = "sortByFields" then
+                            let selectedField =
+                                {| id = scope.StatusFieldId |}
+                            let sort =
+                                {| direction = "ASC";
+                                   field = selectedField |}
+                            JsonSerializer.Serialize(sort)
+                        else
+                            let selectedField =
+                                {| id = scope.StatusFieldId |}
+                            JsonSerializer.Serialize(selectedField)
                     values.Add(System.Text.Json.Nodes.JsonNode.Parse inserted)
                     grouped.["totalCount"] <- System.Text.Json.Nodes.JsonValue.Create 1
                     Ok ({ response with Body = root.ToJsonString() })

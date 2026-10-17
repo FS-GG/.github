@@ -23,28 +23,28 @@ module MigrationFixture =
                      "pageInfo", objectNode [ "hasNextPage", value false; "endCursor", null ] ]
     let private response (data: JsonNode) : IoResult<Transport.Response> =
         Ok(
-            { Status = 200; Body = (objectNode [ "data", data ]).ToJsonString()
+            { Status = 200; Body = (objectNode [ "data", data ]).ToJsonString();
               Headers = Map.empty; ETag = None; NextLink = None })
     let private options: SelectOption list =
         [ "Backlog"; "Ready"; "In progress"; "Blocked"; "Done" ] |> List.mapi (fun index name ->
             { Id = "synthetic-option-" + string index; Name = name; Color = "GRAY"; Description = "synthetic retained option" })
     let scope : Scope =
-        { SourceRevision = String.replicate 40 "a"; ArtifactSha256 = String.replicate 64 "b"; CliArtifactSha256 = String.replicate 64 "c"
-          PrincipalId = "synthetic-principal"; PrincipalLogin = "synthetic-operator"
-          SelectedIssues = [ { Id = "synthetic-issue"; Repository = "FS-GG/.github"; Number = 42; Slice = "synthetic-parent" } ]
-          StatusFieldId = "synthetic-status"; RoadmapFieldId = "synthetic-roadmap"; TrackFieldId = "synthetic-track"
-          ObservationFieldId = "synthetic-observation"; InReviewColor = "BLUE"; InReviewDescription = "synthetic review"
+        { SourceRevision = String.replicate 40 "a"; ArtifactSha256 = String.replicate 64 "b"; CliArtifactSha256 = String.replicate 64 "c";
+          PrincipalId = "synthetic-principal"; PrincipalLogin = "synthetic-operator";
+          SelectedIssues = [ { Id = "synthetic-issue"; Repository = "FS-GG/.github"; Number = 42; Slice = "synthetic-parent" } ];
+          StatusFieldId = "synthetic-status"; RoadmapFieldId = "synthetic-roadmap"; TrackFieldId = "synthetic-track";
+          ObservationFieldId = "synthetic-observation"; InReviewColor = "BLUE"; InReviewDescription = "synthetic review";
           Views = [] }
     let snapshot : Snapshot =
-        { ObservedAt = DateTimeOffset.UtcNow; PrincipalId = scope.PrincipalId; PrincipalLogin = scope.PrincipalLogin
-          OrganizationId = "O_kgDOEYAWYw"; ProjectId = "PVT_kwDOEYAWY84Bldpa"; ProjectTitle = "Coordination V2"
-          ProjectNumber = 3; Private = true; CanUpdate = true; UpdatedAt = "2026-10-17T12:00:00Z"
+        { ObservedAt = DateTimeOffset.UtcNow; PrincipalId = scope.PrincipalId; PrincipalLogin = scope.PrincipalLogin;
+          OrganizationId = "O_kgDOEYAWYw"; ProjectId = "PVT_kwDOEYAWY84Bldpa"; ProjectTitle = "Coordination V2";
+          ProjectNumber = 3; Private = true; CanUpdate = true; UpdatedAt = "2026-10-17T12:00:00Z";
           Fields =
             [ { Id = scope.StatusFieldId; Name = "Status"; DataType = "SINGLE_SELECT"; Options = options };
               { Id = scope.RoadmapFieldId; Name = "Roadmap"; DataType = "TEXT"; Options = [] };
               { Id = scope.TrackFieldId; Name = "Track"; DataType = "SINGLE_SELECT"; Options = [] };
-              { Id = scope.ObservationFieldId; Name = "Observation"; DataType = "SINGLE_SELECT"; Options = [] } ]
-          Items = []; Views = []
+              { Id = scope.ObservationFieldId; Name = "Observation"; DataType = "SINGLE_SELECT"; Options = [] } ];
+          Items = []; Views = [];
           Issues = [ { Id = "synthetic-issue"; Repository = "FS-GG/.github"; Number = 42; UpdatedAt = "2026-10-17T12:00:00Z"; State = "OPEN" } ] }
 
     type Native(initial: Snapshot) =
@@ -134,7 +134,7 @@ module MigrationFixture =
                         let options: SelectOption list =
                             input.GetProperty("singleSelectOptions").EnumerateArray() |> Seq.map (fun option ->
                                 let mutable id = Unchecked.defaultof<JsonElement>
-                                { Id = (if option.TryGetProperty("id", &id) then id.GetString() else "synthetic-new-option")
+                                { Id = (if option.TryGetProperty("id", &id) then id.GetString() else "synthetic-new-option");
                                   Name = option.GetProperty("name").GetString(); Color = option.GetProperty("color").GetString(); Description = option.GetProperty("description").GetString() }) |> Seq.toList
                         let fields: Field list =
                             snapshot.Fields
@@ -145,7 +145,7 @@ module MigrationFixture =
                     elif query.Contains "addProjectV2ItemById(" then
                         let issue = snapshot.Issues |> List.find (fun (issue: NativeIssue) -> issue.Id = text "contentId")
                         let item: Item =
-                            { Id = "synthetic-item-" + issue.Id; ContentId = issue.Id; ContentKind = "Issue"; Repository = Some issue.Repository
+                            { Id = "synthetic-item-" + issue.Id; ContentId = issue.Id; ContentKind = "Issue"; Repository = Some issue.Repository;
                               Number = Some issue.Number; UpdatedAt = issue.UpdatedAt; Archived = false; Values = [] }
                         snapshot <- { snapshot with Items = snapshot.Items @ [ item ] }
                         "addProjectV2ItemById"
@@ -153,7 +153,7 @@ module MigrationFixture =
                         let visible = input.GetProperty("configuration").GetProperty("visibleFieldIds").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
                         let create = query.Contains "createProjectV2View("
                         let view: View =
-                            { Id = (if create then "synthetic-new-view" else text "viewId"); Name = text "name"; Layout = text "layout"
+                            { Id = (if create then "synthetic-new-view" else text "viewId"); Name = text "name"; Layout = text "layout";
                               Filter = (if create then "" else text "filter"); VisibleFieldIds = visible; UnsupportedConfiguration = "[[],[],[]]" }
                         let views: View list =
                             if create then snapshot.Views @ [ view ]
