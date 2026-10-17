@@ -14,7 +14,7 @@ module BoardV2MigrationTests =
 
     let private get = function Ok value -> value | Error error -> failwith (Errors.explain error)
     let private digest (bytes: byte array) = SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
-    let private actualScope () =
+    let private actualScope () : Scope =
         let adapter = typeof<Scope>.Assembly
         let cli = typeof<FS.GG.Coord.Cli.LintApplication.Summary>.Assembly
         let sha (assembly: Assembly) = File.ReadAllBytes assembly.Location |> digest
@@ -79,7 +79,7 @@ module BoardV2MigrationTests =
             Assert.True(File.Exists(prefix + "-response.json"))
             Assert.True(File.Exists(prefix + "-native-readback.json"))
         let before = fixture.Native.Mutations.Length
-        let retained = Directory.GetFiles(directory) |> Array.map (fun path -> Path.GetFileName path, File.ReadAllBytes path) |> Map.ofArray
+        let retained = Directory.GetFiles(directory) |> Array.map (fun (path: string) -> Path.GetFileName path, File.ReadAllBytes path) |> Map.ofArray
         Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
         Assert.Equal(before, fixture.Native.Mutations.Length)
         let afterRefusal = Directory.GetFiles(directory) |> Array.map (fun (path: string) -> Path.GetFileName path) |> Set.ofArray
@@ -175,7 +175,7 @@ module BoardV2MigrationTests =
             [ 1 .. 17 ] |> List.map (fun index ->
                 { Id = "synthetic-selected-" + string index; Repository = "FS-GG/.github"; Number = 100 + index; Slice = "synthetic-parent-" + string index })
         fixture.Scope <- { fixture.Scope with SelectedIssues = selected }
-        let issues =
+        let issues: NativeIssue list =
             selected
             |> List.map (fun (issue: SelectedIssue) ->
                 { Id = issue.Id; Repository = issue.Repository; Number = issue.Number
@@ -266,7 +266,7 @@ module BoardV2MigrationTests =
             [ 1 .. 100 ] |> List.map (fun index ->
                 { Id = "synthetic-bounded-" + string index; Repository = "FS-GG/.github"; Number = 200 + index; Slice = "synthetic-slice-" + string index })
         fixture.Scope <- { fixture.Scope with SelectedIssues = selected }
-        let issues =
+        let issues: NativeIssue list =
             selected
             |> List.map (fun (issue: SelectedIssue) ->
                 { Id = issue.Id; Repository = issue.Repository; Number = issue.Number

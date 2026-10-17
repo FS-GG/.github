@@ -59,7 +59,7 @@ module V2MigrationTests =
         let readOnly = prepare scope ({ snapshot with CanUpdate = false }) |> get
         Assert.True(Result.isError (request readOnly readOnly.Changes.Head))
         let native = Native snapshot
-        native.BeforeRead <- fun request ->
+        native.BeforeRead <- fun (request: Transport.Request) ->
             match request.Body with
             | Transport.Query(document, _) when document.Contains "items(first:" ->
                 native.Snapshot <- { native.Snapshot with ProjectId = "changed-native-target" }

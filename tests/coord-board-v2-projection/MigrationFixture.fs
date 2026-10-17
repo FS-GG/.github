@@ -25,7 +25,7 @@ module MigrationFixture =
         Ok(
             { Status = 200; Body = (objectNode [ "data", data ]).ToJsonString()
               Headers = Map.empty; ETag = None; NextLink = None })
-    let private options =
+    let private options: SelectOption list =
         [ "Backlog"; "Ready"; "In progress"; "Blocked"; "Done" ] |> List.mapi (fun index name ->
             { Id = "synthetic-option-" + string index; Name = name; Color = "GRAY"; Description = "synthetic retained option" })
     let scope : Scope =
@@ -56,8 +56,8 @@ module MigrationFixture =
         let mutable beforeDispatch: Transport.Request -> unit = ignore
         let mutable transformDispatch: Transport.Request -> Transport.Response -> IoResult<Transport.Response> = fun _ response -> Ok response
         let mutable transform: Transport.Request -> Transport.Response -> IoResult<Transport.Response> = fun _ response -> Ok response
-        let fieldNode (field: Field) =
-            let options =
+        let fieldNode (field: Field) : JsonNode =
+            let options: JsonNode list =
                 field.Options
                 |> List.map (fun (option: SelectOption) ->
                     objectNode [ "id", value option.Id; "name", value option.Name; "color", value option.Color; "description", value option.Description ])
@@ -76,7 +76,7 @@ module MigrationFixture =
             objectNode [ "id", value view.Id; "name", value view.Name; "layout", value view.Layout; "filter", value view.Filter;
                          "configuration", objectNode [ "visibleFields", page visible ]; "groupByFields", page [];
                          "verticalGroupByFields", page []; "sortByFields", page [] ]
-        let itemNode (item: Item) =
+        let itemNode (item: Item) : JsonNode =
             let content =
                 objectNode [ "id", value item.ContentId; "__typename", value item.ContentKind;
                              "number", value (item.Number |> Option.defaultValue 0);
@@ -131,12 +131,12 @@ module MigrationFixture =
                 let text (name: string) = input.GetProperty(name).GetString()
                 let name =
                     if query.Contains "updateProjectV2Field(" then
-                        let options =
+                        let options: SelectOption list =
                             input.GetProperty("singleSelectOptions").EnumerateArray() |> Seq.map (fun option ->
                                 let mutable id = Unchecked.defaultof<JsonElement>
                                 { Id = (if option.TryGetProperty("id", &id) then id.GetString() else "synthetic-new-option")
                                   Name = option.GetProperty("name").GetString(); Color = option.GetProperty("color").GetString(); Description = option.GetProperty("description").GetString() }) |> Seq.toList
-                        let fields =
+                        let fields: Field list =
                             snapshot.Fields
                             |> List.map (fun (field: Field) ->
                                 if field.Id = text "fieldId" then { field with Options = options } else field)
@@ -144,17 +144,18 @@ module MigrationFixture =
                         "updateProjectV2Field"
                     elif query.Contains "addProjectV2ItemById(" then
                         let issue = snapshot.Issues |> List.find (fun (issue: NativeIssue) -> issue.Id = text "contentId")
-                        let item = { Id = "synthetic-item-" + issue.Id; ContentId = issue.Id; ContentKind = "Issue"; Repository = Some issue.Repository
-                                     Number = Some issue.Number; UpdatedAt = issue.UpdatedAt; Archived = false; Values = [] }
+                        let item: Item =
+                            { Id = "synthetic-item-" + issue.Id; ContentId = issue.Id; ContentKind = "Issue"; Repository = Some issue.Repository
+                              Number = Some issue.Number; UpdatedAt = issue.UpdatedAt; Archived = false; Values = [] }
                         snapshot <- { snapshot with Items = snapshot.Items @ [ item ] }
                         "addProjectV2ItemById"
                     else
                         let visible = input.GetProperty("configuration").GetProperty("visibleFieldIds").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
                         let create = query.Contains "createProjectV2View("
-                        let view =
+                        let view: View =
                             { Id = (if create then "synthetic-new-view" else text "viewId"); Name = text "name"; Layout = text "layout"
                               Filter = (if create then "" else text "filter"); VisibleFieldIds = visible; UnsupportedConfiguration = "[[],[],[]]" }
-                        let views =
+                        let views: View list =
                             if create then snapshot.Views @ [ view ]
                             else
                                 snapshot.Views

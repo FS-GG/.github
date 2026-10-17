@@ -528,7 +528,7 @@ module BoardV2Application =
                                     if fresh.Digest <> digest then Error "fresh-preconditions-differ-from-selected-preparation"
                                     elif not fresh.Snapshot.CanUpdate then Error "native-project-update-capability-absent"
                                     else
-                                        let admission = { Prepared = { fresh with PreparedPath = Some boundPath }; Directory = directory; WindowUntil = windowUntil }
+                                        let admission: MigrationAdmission = { Prepared = { fresh with PreparedPath = Some boundPath }; Directory = directory; WindowUntil = windowUntil }
                                         let lockPath = Path.Combine(Path.GetTempPath(), "fsgg-v2-migration-PVT_kwDOEYAWY84Bldpa.lock")
                                         use lease = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
                                         let rec effects (sequence: int) (expected: V2Migration.Prepared) =

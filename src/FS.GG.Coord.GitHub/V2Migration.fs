@@ -126,7 +126,7 @@ module V2Migration =
     let private cursor (after: string option) =
         match after with Some value -> [ "after", VString value ] | None -> []
     let private rootNode (data: JsonElement) = data.GetProperty "node"
-    let private limits = { GraphQl.DrainLimits.MaxPages = 100; MaxItems = 5000 }
+    let private limits: GraphQl.DrainLimits = { MaxPages = 100; MaxItems = 5000 }
     let private drainCached (first: JsonElement option) (transport: IGitHubTransport) (id: string) (what: string) (document: string)
                       (key: 'a -> string) (node: JsonElement -> IoResult<'a>) : IoResult<'a list> =
         GraphQl.drain subject what limits (fun after ->
@@ -511,13 +511,13 @@ module V2Migration =
         closed [ "sourceRevision"; "artifactSha256"; "cliArtifactSha256"; "principalId"; "principalLogin";
                  "selectedIssues"; "statusFieldId"; "roadmapFieldId"; "trackFieldId"; "observationFieldId";
                  "inReviewColor"; "inReviewDescription"; "views" ] node
-        let issues =
-            array 100 (node.GetProperty "selectedIssues") |> List.map (fun issue ->
+        let issues: SelectedIssue list =
+            array 100 (node.GetProperty "selectedIssues") |> List.map (fun (issue: JsonElement) ->
                 closed [ "id"; "repository"; "number"; "slice" ] issue
                 { Id = nonempty "id" issue; Repository = nonempty "repository" issue
                   Number = issue.GetProperty("number").GetInt32(); Slice = nonempty "slice" issue })
-        let views =
-            array 10 (node.GetProperty "views") |> List.map (fun view ->
+        let views: DesiredView list =
+            array 10 (node.GetProperty "views") |> List.map (fun (view: JsonElement) ->
                 closed [ "id"; "name"; "layout"; "filter"; "visibleFieldIds" ] view
                 let id = view.GetProperty "id"
                 { Id = (if id.ValueKind = JsonValueKind.Null then None else Some(nonempty "id" view))
@@ -600,7 +600,7 @@ module V2Migration =
             | [], [ created ] when created.Layout = desired.Layout && created.Filter = ""
                                    && created.VisibleFieldIds = desired.VisibleFieldIds
                                    && not (before.Views |> List.exists (fun (view: View) -> view.Id = created.Id)) ->
-                let resolvedViews =
+                let resolvedViews: DesiredView list =
                     scope.Views
                     |> List.map (fun (view: DesiredView) ->
                         if view = desired then { view with Id = Some created.Id } else view)
