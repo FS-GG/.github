@@ -48,13 +48,15 @@ module ProgrammeFixture =
                binding = {| recipeRevision = value.ImportRecipeRevision; artifactSha256 = value.ImportArtifactSha256; repositories = [ "FS-GG/.github" ] |}
                items = [ {| issue = "FS-GG/.github#4634"; nodeId = "I_outcome"; roadmap = "docs/coordination/programme.md" |} ] |})
 
-    let ownerBody = "## Owner\n\nworker\n\n## Done when\n\nAccepted outcome\n\n## Current deliverable\n\nExisting PR\n\n## Next action\n\nCurrent source\n\n## Blocked on\n\nSee owning plan\n\n## Acceptance evidence\n\nNative links"
+    let ownerBody = "## Owner\n\nworker\n\n## Done when\n\nAccepted outcome\n\n## Current deliverable\n\nhttps://github.com/FS-GG/.github/pull/42\n\n## Next action\n\nCurrent source\n\n## Blocked on\n\nSee owning plan\n\n## Acceptance evidence\n\nNative links"
 
     let private content = {| id = "I_outcome"; number = 4634; repository = {| nameWithOwner = "FS-GG/.github" |} |}
-    let private prNode (field: string) (value: 'a) =
+    let private prNode (variables: (string * Var) list) (field: string) (value: 'a) =
+        let id = variables |> List.pick (function "id", VId value -> Some value | _ -> None)
+        let number = if id = "PR_second" then 43 else 42
         let fields =
             Map.ofList(
-                [ ("id", box "PR_current"); ("number", box 42); ("state", box "OPEN");
+                [ ("id", box id); ("number", box number); ("state", box "OPEN");
                   ("headRefOid", box head); ("updatedAt", box revision);
                   ("repository", box {| nameWithOwner = "FS-GG/.github" |}); (field, box value) ])
         wire ({| node = fields |})
@@ -65,6 +67,20 @@ module ProgrammeFixture =
                 match request.Body with
                 | Query(document, _) when document.Contains("currentExpression") ->
                     if request.Subject.EndsWith("board-v2-import-manifest.json", StringComparison.Ordinal) then blob (enrollment ()) else blob "Current owning plan; later deployment acceptance is separate"
+                | Query(document, _) when document.Contains("issueCreationPolicy") ->
+                    wire ({| repository = {| id = "R_repository"; issueCreationPolicy = "COLLABORATORS_ONLY"; hasIssuesEnabled = true; mergeCommitAllowed = true; squashMergeAllowed = true; rebaseMergeAllowed = false |} |})
+                | Query(document, _) when document.StartsWith("query IntakeIdentity(", StringComparison.Ordinal) ->
+                    wire ({| repository = {| issue = {| id = "I_outcome"; updatedAt = revision; author = {| id = "U_author"; login = "author" |} |} |} |})
+                | NoBody when request.Path.EndsWith("/collaborators/author/permission", StringComparison.Ordinal) ->
+                    response """{"permission":"write","user":{"node_id":"U_author"}}"""
+                | Query(document, variables) when document.Contains("pullRequest(number:") ->
+                    let number = variables |> List.pick (function "number", VNumber value -> Some(int value) | _ -> None)
+                    let native =
+                        {| id = if number = 42 then "PR_current" elif number = 43 then "PR_second" else "PR_historical"
+                           number = number; url = $"https://github.com/FS-GG/.github/pull/{number}"
+                           state = if number = 42 || number = 43 then "OPEN" else "MERGED"
+                           headRefOid = head; updatedAt = revision; repository = {| nameWithOwner = "FS-GG/.github" |} |}
+                    wire ({| repository = {| nameWithOwner = "FS-GG/.github"; pullRequest = native |} |})
                 | Query(document, _) when document.Contains("issue(number:") && document.Contains("updatedAt state") ->
                     wire ({| repository = {| nameWithOwner = "FS-GG/.github"; issue = {| id = "I_outcome"; number = 4634; updatedAt = revision; state = "OPEN"; url = "https://github.com/FS-GG/.github/issues/4634"; body = ownerBody; repository = {| nameWithOwner = "FS-GG/.github" |} |} |} |})
                 | NoBody when request.Path.EndsWith("/dependencies/blocked_by", StringComparison.Ordinal) -> response "[]"
@@ -76,6 +92,10 @@ module ProgrammeFixture =
                 | Query(document, _) when document.Contains("items(first: 50") ->
                     wire ({| node = {| id = project; items = connection [ {| id = "PVTI_current"; content = {| __typename = "Issue"; id = "I_outcome"; number = 4634; repository = {| nameWithOwner = "FS-GG/.github" |} |} |}; {| id = "PVTI_extra"; content = {| __typename = "Issue"; id = "I_extra"; number = 5000; repository = {| nameWithOwner = "FS-GG/.github" |} |} |} ] |} |})
                 | Query(document, _) when document.Contains("projectItems(first:") -> wire ({| repository = {| nameWithOwner = "FS-GG/.github"; issue = {| id = "I_outcome"; number = 4634; projectItems = connection [ {| id = "PVTI_current"; project = {| id = project |}; content = content |} ] |} |} |})
+                | Query(_, _) when request.Subject = "fresh V2 Observation dispatch identity" ->
+                    wire ({| node = {| id = "PVTI_current"; project = {| id = project |}; content = content |} |})
+                | Query(document, _) when document.Contains("fieldValueByName(name: \"Observation\")") && not (document.Contains("status: fieldValueByName")) ->
+                    wire ({| node = {| id = "PVTI_current"; project = {| id = project |}; content = content; fieldValueByName = {| name = "Unknown" |} |} |})
                 | Query(document, _) when document.Contains("status: fieldValueByName") ->
                     let select id name option = {| __typename = "ProjectV2ItemFieldSingleSelectValue"; name = name; optionId = option; field = {| id = id |} |}
                     wire (
@@ -85,12 +105,94 @@ module ProgrammeFixture =
                                roadmap = {| __typename = "ProjectV2ItemFieldTextValue"; text = "docs/coordination/programme.md"; field = {| id = "roadmap" |} |} |} |})
                 | Query(document, _) when document.Contains("pullRequests(first:") ->
                     wire ({| repository = {| nameWithOwner = "FS-GG/.github"; pullRequests = connection [ {| id = "PR_current"; number = 42; url = "https://github.com/FS-GG/.github/pull/42"; headRefOid = head; updatedAt = revision; author = {| login = "author" |}; reviewDecision = "APPROVED" |} ] |} |})
-                | Query(document, _) when document.Contains("closingIssuesReferences(") -> prNode "closingIssuesReferences" (connection [ content ])
-                | Query(document, _) when document.Contains("files(first:") -> prNode "files" (connection [ {| path = "src/current.fs" |} ])
-                | Query(document, _) when document.Contains("reviews(first:") -> prNode "reviews" (connection [ {| id = "review"; state = "APPROVED"; commit = {| oid = head |}; author = {| login = "reviewer" |} |} ])
+                | Query(document, variables) when document.Contains("closingIssuesReferences(") -> prNode variables "closingIssuesReferences" (connection [ content ])
+                | Query(document, variables) when document.Contains("files(first:") -> prNode variables "files" (connection [ {| path = "src/current.fs" |} ])
+                | Query(document, variables) when document.Contains("reviews(first:") -> prNode variables "reviews" (connection [ {| id = "review"; state = "APPROVED"; commit = {| oid = head |}; author = {| login = "reviewer" |} |} ])
                 | Query(document, _) when document.Contains("statusCheckRollup") -> wire ({| repository = {| nameWithOwner = "FS-GG/.github"; object = {| oid = head; statusCheckRollup = {| contexts = connection [ {| __typename = "CheckRun"; id = "check"; name = "source"; status = "COMPLETED"; conclusion = "SUCCESS" |} ] |} |} |} |})
-                | Query(_, _) when request.Subject.EndsWith("final head barrier", StringComparison.Ordinal) -> prNode "unused" "unused"
+                | Query(_, variables) when request.Subject.EndsWith("final head barrier", StringComparison.Ordinal) -> prNode variables "unused" "unused"
                 | _ -> failwith ("Unmatched inert native request: " + request.Subject)
             change request result)
 
     let unchanged _ response = response
+
+    let context (report: V2ProjectionSource.InspectionReport) : V2ProjectionSource.SelectionContext =
+        let item = report.Items.Head
+        let native: V2ProjectionSource.NativeObservation =
+            item.Evidence.Native
+            |> Option.defaultValue(
+                { Issue = issue; NodeId = "I_outcome"; UpdatedAt = revision; State = "OPEN"; Url = "https://github.com/FS-GG/.github/issues/4634"; BodySha256 = String.replicate 64 "0" })
+        let _, _, blob = report.Evidence.ProtectedInputs.Head
+        let observation: V2ProjectionSource.AttributedObservation =
+            { Supplier = "/root/programme"; ObservedAt = report.NativeIntegrator.ObservedAt
+              ValidUntil = report.NativeIntegrator.ObservedAt.AddMinutes 1.0; Evidence = [ "runtime/current-owner-observation" ] }
+        let pull =
+            report.NativeIntegrator.PullRequests |> List.tryFind (fun candidate ->
+                candidate.State = "OPEN" && ((candidate.Issues |> List.contains "FS-GG/.github#4634") || (item.Deliverables |> List.contains candidate.Url)))
+        { Invocation = "inert-invocation"; ProjectId = report.Binding.ProjectId; SchemaVersion = report.Binding.SchemaVersion
+          RecipeRevision = report.Binding.RecipeRevision; ArtifactSha256 = report.Binding.ArtifactSha256
+          PopulationRevision = report.Binding.PopulationRevision; EnrollmentBlob = blob; InputSha256 = String.replicate 64 "a"
+          Slices =
+            [ { Id = "source-slice"; Attempt = "owner-attempt"; Operation = if pull.IsSome then V2ProjectionSource.ObserveExisting else V2ProjectionSource.Implement
+                Issue = issue; AccountableOwner = "worker"; Owner = "worker"; Repository = "FS-GG/.github"; Paths = [ "src/new.fs" ]; Action = V2ProjectionSource.Source
+                Join = { NativeId = native.NodeId; UpdatedAt = native.UpdatedAt; BodySha256 = native.BodySha256; SourceRevision = item.SourceRevision |> Option.defaultValue "missing source revision" }
+                Observation = observation; PullRequest = pull |> Option.map _.Url; PullRequestId = pull |> Option.map _.Id
+                PullRequestUpdatedAt = pull |> Option.map _.UpdatedAt; Head = pull |> Option.map _.Head
+                Prerequisites = []; PrerequisitesComplete = true; IntakeAuthorized = Some true } ]
+          ImplementationSlots = Some 1; ReviewSlots = Some 1; HostedCiSlots = Some 1; CapacityMeaning = "remaining-after-active"
+          CapacityObservation = Some observation; Reservations = Some []; ReservationObservation = Some observation
+          ObservedAt = observation.ObservedAt; ValidUntil = observation.ValidUntil; Evidence = "inert actual parent caller observation" }
+
+    let integratorJson (context: V2ProjectionSource.SelectionContext) =
+        let action = function V2ProjectionSource.Source -> "source" | V2ProjectionSource.Activation -> "activation"
+        let operation = function
+            | V2ProjectionSource.ObserveExisting -> "observe-existing" | V2ProjectionSource.Implement -> "implement"
+            | V2ProjectionSource.ReviewWork -> "review" | V2ProjectionSource.QualifyWork -> "qualify" | V2ProjectionSource.ActivateWork -> "activate"
+        let observation (value: V2ProjectionSource.AttributedObservation) =
+            {| supplier = value.Supplier; observedAt = value.ObservedAt; validUntil = value.ValidUntil; evidence = value.Evidence |}
+        JsonSerializer.Serialize(
+            {| schema = "fsgg.coord.board-v2-integrator-observations/1"; invocation = context.Invocation; projectId = context.ProjectId; schemaVersion = context.SchemaVersion
+               recipeRevision = context.RecipeRevision; artifactSha256 = context.ArtifactSha256; populationRevision = context.PopulationRevision; enrollmentBlob = context.EnrollmentBlob
+               observedAt = context.ObservedAt; validUntil = context.ValidUntil; evidence = context.Evidence
+               slices = context.Slices |> List.map (fun slice ->
+                   {| id = slice.Id; attempt = slice.Attempt; operation = operation slice.Operation
+                      issue = {| owner = slice.Issue.Owner; repository = slice.Issue.Repository; number = slice.Issue.Number |}
+                      accountableOwner = slice.AccountableOwner; owner = slice.Owner; repository = slice.Repository; paths = slice.Paths; action = action slice.Action
+                      join = {| nativeId = slice.Join.NativeId; updatedAt = slice.Join.UpdatedAt; bodySha256 = slice.Join.BodySha256; sourceRevision = slice.Join.SourceRevision |}
+                      observation = observation slice.Observation; pullRequest = slice.PullRequest; pullRequestId = slice.PullRequestId
+                      pullRequestUpdatedAt = slice.PullRequestUpdatedAt; head = slice.Head
+                      prerequisites = slice.Prerequisites |> List.map (fun prerequisite -> {| action = action prerequisite.Action; reference = prerequisite.Reference; satisfied = prerequisite.Satisfied; supplyingOwner = prerequisite.SupplyingOwner |})
+                      prerequisitesComplete = slice.PrerequisitesComplete; intakeAuthorized = slice.IntakeAuthorized |})
+               capacity = context.CapacityObservation |> Option.map (fun observed ->
+                   {| meaning = context.CapacityMeaning; implementation = context.ImplementationSlots; review = context.ReviewSlots; hostedCi = context.HostedCiSlots; observation = observation observed |})
+               reservations = context.ReservationObservation |> Option.map (fun observed ->
+                   {| observation = observation observed
+                      items = context.Reservations |> Option.defaultValue [] |> List.map (fun reservation ->
+                          {| sliceId = reservation.SliceId; attempt = reservation.Attempt; operation = operation reservation.Operation; owner = reservation.Owner
+                             repository = reservation.Repository; paths = reservation.Paths; pullRequest = reservation.PullRequest; head = reservation.Head; custodyReference = reservation.CustodyReference |}) |}) |})
+
+    let newAssignment (request: Transport.Request) (result: Errors.IoResult<Response>) =
+        result |> Result.map (fun value ->
+            if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
+                { value with Body = value.Body.Replace("https://github.com/FS-GG/.github/pull/42", "None") }
+            elif request.Subject.EndsWith("closingIssuesReferences", StringComparison.Ordinal) then
+                { value with Body = value.Body.Replace("I_outcome", "I_other").Replace("\"number\":4634", "\"number\":999") }
+            else value)
+
+    let observation (current: string) (request: Transport.Request) (result: Errors.IoResult<Response>) =
+        if request.Subject = "board item PVTI_current Observation" then
+            result |> Result.map (fun value -> { value with Body = value.Body.Replace("\"Unknown\"", JsonSerializer.Serialize current) })
+        else result
+
+    let oldSchema (request: Transport.Request) (result: Errors.IoResult<Response>) =
+        match request.Body with
+        | Query(document, _) when document.Contains("projectV2(number:") ->
+            result |> Result.map (fun value ->
+                let root = Text.Json.Nodes.JsonNode.Parse value.Body
+                let project = root.["data"].["organization"].["projectV2"]
+                let nodes = project.["fields"].["nodes"].AsArray()
+                let status = nodes |> Seq.find (fun field -> field.["name"].GetValue<string>() = "Status")
+                let options = status.["options"].AsArray()
+                for index in options.Count - 1 .. -1 .. 0 do
+                    if options.[index].["name"].GetValue<string>() = "In review" then options.RemoveAt index
+                { value with Body = root.ToJsonString() })
+        | _ -> result

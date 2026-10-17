@@ -379,12 +379,11 @@ module V2Projection =
     let runOneShot (verifySource: SourceVerifier) (transport: IGitHubTransport) (binding: Binding) (request: Request) =
         match validateBinding binding with
         | Error error -> Error error
-        | Ok() when binding.BindingVersion = 4 -> invalid "programme projection" "successor source window is inspection-only; migration/writer qualification is separate"
         | Ok() when request.Issue.Number <= 0 || not (nonBlank request.Issue.Owner) || not (nonBlank request.Issue.Repository) || not (nonBlank request.ExpectedNodeId) ->
             invalid "the projection request" "the issue identity is incomplete"
         | Ok() when not (repositoryAllowed binding request.Issue) ->
             Error(Http(403, $"repository %s{request.Issue.Owner}/%s{request.Issue.Repository} is outside the reviewed V2 projection allowlist"))
-        | Ok() when binding.BindingVersion = 3 && Map.tryFind request.ExpectedNodeId binding.SelectedIssues <> Some $"{request.Issue.Owner}/{request.Issue.Repository}#{request.Issue.Number}" ->
+        | Ok() when (binding.BindingVersion = 3 || binding.BindingVersion = 4) && Map.tryFind request.ExpectedNodeId binding.SelectedIssues <> Some $"{request.Issue.Owner}/{request.Issue.Repository}#{request.Issue.Number}" ->
             invalid "the projection request" "the native issue is outside the selected receiver cohort"
         | Ok() ->
             match verifySource request.Issue with
@@ -419,19 +418,29 @@ module V2Projection =
                             match fieldValueByItemId transport binding request.Issue nativeId itemId with
                             | Error error -> Error error
                             | Ok(Some "Verified") ->
-                                Ok
-                                    {
-                                        ProjectId = binding.ProjectId
-                                        RecipeRevision = binding.RecipeRevision
-                                        Issue = request.Issue
-                                        ObservedRevision = revision
-                                        Observation = "Verified"
-                                        Outcome = AlreadyCurrent itemId
-                                        SourceChecks = 1
-                                        ProjectReads = 3 + pages
-                                        Mutations = 0
-                                        VerifiedAt = DateTimeOffset.UtcNow
-                                    }
+                                let current =
+                                    if binding.BindingVersion <> 4 then Ok()
+                                    else
+                                        match verifySource request.Issue with
+                                        | Ok(Current fresh) when fresh = revision -> Ok()
+                                        | Error error -> Error error
+                                        | Ok _ -> Error(Http(409, "source changed before Verified no-op; retaining current project value"))
+                                match current with
+                                | Error error -> Error error
+                                | Ok() ->
+                                    Ok
+                                        {
+                                            ProjectId = binding.ProjectId
+                                            RecipeRevision = binding.RecipeRevision
+                                            Issue = request.Issue
+                                            ObservedRevision = revision
+                                            Observation = "Verified"
+                                            Outcome = AlreadyCurrent itemId
+                                            SourceChecks = if binding.BindingVersion = 4 then 2 else 1
+                                            ProjectReads = 3 + pages
+                                            Mutations = 0
+                                            VerifiedAt = DateTimeOffset.UtcNow
+                                        }
                             | Ok(Some value) when not (binding.Observation.Options.ContainsKey value) ->
                                 Error(Malformed("the Observation value", $"unknown option '%s{value}'"))
                             | Ok _ ->

@@ -27,8 +27,9 @@ module BoardIntake =
             ExpiresAt: DateTimeOffset
         }
 
-    type Gate(transport: Transport.IGitHubTransport, ?ttl: TimeSpan, ?cacheRoot: string, ?clock: unit -> DateTimeOffset)
+    type Gate(transport: Transport.IGitHubTransport, ?ttl: TimeSpan, ?cacheRoot: string, ?clock: unit -> DateTimeOffset, ?persistCache: bool)
         =
+        let persistCache = defaultArg persistCache true
         let maximumTtl = TimeSpan.FromMinutes 2.
         let ttl = min (defaultArg ttl maximumTtl) maximumTtl
         let clock = defaultArg clock (fun () -> DateTimeOffset.UtcNow)
@@ -72,7 +73,7 @@ module BoardIntake =
 
         let read path now project =
             try
-                if not (File.Exists path) || FileInfo(path).Length > 16384L then
+                if not persistCache || not (File.Exists path) || FileInfo(path).Length > 16384L then
                     None
                 else if
                     not (OperatingSystem.IsWindows())
@@ -107,30 +108,32 @@ module BoardIntake =
                 ()
 
         let save path (value: Timed<_>) payload =
-            try
-                prepare ()
-                let temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
-                let checkedAt = JsonSerializer.Serialize(value.CheckedAt.ToString("O"))
-                let expiresAt = JsonSerializer.Serialize(value.ExpiresAt.ToString("O"))
+            if persistCache then
+                try
+                    prepare ()
+                    let temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
+                    let checkedAt = JsonSerializer.Serialize(value.CheckedAt.ToString("O"))
+                    let expiresAt = JsonSerializer.Serialize(value.ExpiresAt.ToString("O"))
 
-                let json =
-                    $"{{\"checkedAt\":%s{checkedAt},\"expiresAt\":%s{expiresAt},%s{payload}}}"
+                    let json =
+                        $"{{\"checkedAt\":%s{checkedAt},\"expiresAt\":%s{expiresAt},%s{payload}}}"
 
-                do
-                    use stream =
-                        new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+                    do
+                        use stream =
+                            new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None)
 
-                    let bytes = Encoding.UTF8.GetBytes json
-                    stream.Write(bytes, 0, bytes.Length)
-                    stream.Flush(true)
+                        let bytes = Encoding.UTF8.GetBytes json
+                        stream.Write(bytes, 0, bytes.Length)
+                        stream.Flush(true)
 
-                if not (OperatingSystem.IsWindows()) then
-                    File.SetUnixFileMode(temp, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+                    if not (OperatingSystem.IsWindows()) then
+                        File.SetUnixFileMode(temp, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
 
-                File.Move(temp, path, true)
-                evict ()
-            with _ ->
-                () // cache failure buys a live read next time; it never authorizes
+                    File.Move(temp, path, true)
+                    evict ()
+                with _ ->
+                    () // cache failure buys a live read next time; it never authorizes
+
 
         let validPolicy (value: OperationalGraphQl.RepositoryPolicy) =
             not (String.IsNullOrWhiteSpace value.RepositoryId)
