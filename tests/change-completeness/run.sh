@@ -75,7 +75,7 @@ if verb == "test":
         if not (is_v2 and mode == "missing-trx"):
             if is_v2 and mode == "malformed-trx": text = "<broken"
             else:
-                passed = 0 if is_v2 and mode in ("zero-trx", "skipped-trx") else 1
+                passed = 0 if (is_v2 and mode in ("zero-trx", "skipped-trx")) or mode == "native-zero-control" else 1
                 failed = 1 if is_v2 and mode == "failed-trx" else 0
                 text = f'<TestRun><ResultSummary><Counters total="1" executed="{passed + failed}" passed="{passed}" failed="{failed}" error="0"/></ResultSummary></TestRun>'
             (output / filename).write_text(text)
@@ -101,9 +101,17 @@ def inventory(script, workflows):
     for workflow in workflows:
         for line in workflow.splitlines():
             if line.lstrip().startswith("#"): continue
-            command = re.search(r"\bdotnet (?:restore|build|test)\s+([^\s]+)", line)
-            if command:
-                operand = command[1]
+            # Scan every command occurrence, including a second inline command. Command
+            # heads must be literal on this line; existing continued flags remain valid.
+            # Exclude path/setup-dotnet tokens rather than treating them as shell commands.
+            for command in re.finditer(r"(?<![\w./-])dotnet(?=\s|$)", line):
+                head = re.match(r"\s+([A-Za-z-]+)\s+([^\s]+)", line[command.end():])
+                assert head, "unsupported/dynamic/continued dotnet command head"
+                verb, operand = head.groups()
+                if verb == "tool":
+                    assert operand == "install", "unsupported dotnet tool verb"
+                    continue
+                assert verb in ("restore", "build", "test", "pack"), "unsupported dotnet verb"
                 assert re.fullmatch(r"(?:src|tests)/[A-Za-z0-9._/-]+\.fsproj", operand), "nonliteral workflow root"
                 observed.add(operand)
     assert observed and set(declared) == observed, "workflow/compiler inventory drift"
@@ -118,6 +126,11 @@ def inventory(script, workflows):
 
 workflows = [(root / f".github/workflows/coord-{name}.yml").read_text() for name in ("engine", "github")]
 inventory(source, workflows)
+# Existing literal roots may share a physical line; current multiline flag continuations
+# in the native workflows remain covered by the same inventory comparison.
+literal_command = "dotnet build " + projects[0] + " --no-restore -c Release"
+for separator in ("; ", " && "):
+    inventory(source, [workflows[0] + "\n          " + literal_command + separator + "dotnet test " + projects[1] + " --no-build\n", workflows[1]])
 for removed in projects:
     try: inventory(source.replace("  " + removed + "\n", ""), workflows)
     except AssertionError: pass
@@ -125,6 +138,12 @@ for removed in projects:
 for mutation in (
     workflows[0] + "\n          dotnet build tests/new/new.fsproj\n",
     workflows[0] + "\n          dotnet build $PROJECT\n",
+    workflows[0] + "\n          " + literal_command + "; dotnet build tests/new/new.fsproj\n",
+    workflows[0] + "\n          " + literal_command + "; dotnet build $PROJECT\n",
+    workflows[0] + "\n          " + literal_command + "; dotnet $VERB " + projects[0] + "\n",
+    workflows[0] + "\n          dotnet \\\n            build " + projects[0] + "\n",
+    workflows[0] + "\n          dotnet build \\\n            " + projects[0] + "\n",
+    workflows[0] + "\n          dotnet publish " + projects[0] + "\n",
     workflows[0].replace("needs: change-completeness", "needs: unrelated"),
     workflows[0].replace("if: github.event_name == 'workflow_dispatch' || needs.change-completeness.outputs.engine_changed == 'true'", "if: always()"),
     workflows[0].replace("  engine:\n", "  engine:\n    continue-on-error: true\n"),
@@ -136,7 +155,7 @@ for mutation in (
 print("PASS  static compiler inventory and workflow drift/bypass mutations")
 
 count = 0
-def invoke(paths, mode="good", expected=0, engine=False, extra_env=None):
+def invoke(paths, mode="good", expected=0, engine=False, extra_env=None, revisions=None):
     global count
     count += 1
     paths_file, output, log = [work / f"{count}.{suffix}" for suffix in ("paths", "out", "calls")]
@@ -144,7 +163,8 @@ def invoke(paths, mode="good", expected=0, engine=False, extra_env=None):
     log.write_text("")
     env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ["PATH"], MOCK_LOG=str(log), MOCK_MODE=mode)
     env.update(extra_env or {})
-    result = subprocess.run(["bash", str(fixture / "scripts/change-completeness"), "--paths-file", str(paths_file), "--github-output", str(output)],
+    subject = ["--base", revisions[0], "--head", revisions[1]] if revisions else ["--paths-file", str(paths_file)]
+    result = subprocess.run(["bash", str(fixture / "scripts/change-completeness"), *subject, "--github-output", str(output)],
                             env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
     assert (result.returncode == 0) == (expected == 0), (paths, mode, result.returncode, result.stdout)
     assert ("change-completeness: PASS" in result.stdout) == (expected == 0)
@@ -157,7 +177,7 @@ def tests(calls): return [call for call in calls if call[0] == "test"]
 def v2_tests(calls): return [call for call in tests(calls) if "/tests/coord-board-v2-" in call[1]]
 
 def compiled(calls):
-    assert calls[0] == ["--version"]
+    assert calls and calls[0] == ["--version"]
     restores = [call for call in calls if call[0] == "restore"]
     builds = [call for call in calls if call[0] == "build"]
     assert [Path(call[1]).relative_to(fixture).as_posix() for call in restores] == projects
@@ -232,6 +252,60 @@ for malformed in ("<Project", original.replace("ProjectReference Include=", 'Pro
     calls, _ = invoke(["tests/coord-board-v2-cli-join/BoardV2ApplicationTests.fs"], expected=1)
     assert not calls
 project.write_text(original)
+# Real Git rename discovery must preserve the old linked Compile item's impact even
+# when its new path is outside every V2 dependency folder. Only the compiler is fake.
+def git(*args):
+    result = subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "-c", "user.name=Preflight fixture",
+                             "-c", "user.email=preflight@example.invalid", "-C", str(fixture), *args],
+                            check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+    return result.stdout.strip()
+
+linked = "tests/coord-board-v2-projection/ProgrammeFixture.fs"
+renamed = "docs/renamed-programme-fixture.fs"
+(fixture / linked).write_text("// isolated rename fixture\n")
+git("init", "--quiet", "--initial-branch=fixture")
+git("add", ".")
+git("commit", "--quiet", "-m", "fixture base")
+base = git("rev-parse", "HEAD")
+(fixture / renamed).parent.mkdir(parents=True, exist_ok=True)
+git("mv", linked, renamed)
+git("commit", "--quiet", "-m", "move linked source outside V2 folders")
+head = git("rev-parse", "HEAD")
+assert git("diff", "--name-only", "--find-renames", base, head).splitlines() == [renamed]
+assert set(git("diff", "--name-only", "--no-renames", base, head).splitlines()) == {linked, renamed}
+calls, _ = invoke([], revisions=(base, head))
+compiled(calls)
+assert len(tests(calls)) == 2
+# Reintroducing rename detection must break that exact caller oracle.
+gate = fixture / "scripts/change-completeness"
+original_gate = gate.read_text()
+assert "--no-renames" in original_gate
+gate.write_text(original_gate.replace("--no-renames", "--find-renames"))
+mutant_calls, _ = invoke([], revisions=(base, head))
+try: compiled(mutant_calls)
+except AssertionError: pass
+else: raise AssertionError("rename-impact regression mutation survived")
+gate.write_text(original_gate)
+print("PASS  real Git linked-source rename caller and old-path-loss mutation")
+# Exercise the actual default native-control branch with the same closed fake tool.
+# Assert its own locked prerequisites, so cold docs-only callers need no earlier build.
+fixture_script = (root / "tests/change-completeness/run.sh").read_text()
+start = fixture_script.index('\nif [ "$static_only" = false ]; then')
+end = fixture_script.index("# The production runner", start)
+branch = fixture_script[start:end]
+zero_log = work / "default-zero.calls"
+zero_log.write_text("")
+env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ["PATH"], MOCK_LOG=str(zero_log), MOCK_MODE="native-zero-control")
+prelude = 'set -euo pipefail; ROOT="$1"; WORK="$2"; static_only=false; ok() { :; }; bad() { exit 1; };\n'
+zero = subprocess.run(["bash", "-c", prelude + branch, "fixture", str(fixture), str(work / "default-zero")],
+                      env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=10)
+assert zero.returncode == 0, zero.stdout
+zero_calls = [json.loads(line) for line in zero_log.read_text().splitlines()]
+assert len(zero_calls) == 2 and [call[0] for call in zero_calls] == ["restore", "test"]
+assert zero_calls[0][1] == zero_calls[1][1] == str(fixture / "tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj")
+assert "--locked-mode" in zero_calls[0] and "--no-restore" in zero_calls[1]
+assert "FullyQualifiedName~DefinitelyNoLifecycleTestMatches" in zero_calls[1]
+print("PASS  cold default zero-match branch prerequisite ordering (fake tool only)")
 print(f"PASS  {count} isolated actual-gate fake-tool scenarios (native compiler/runtime NOT RUN)")
 PY_CALLER
 then
@@ -266,7 +340,16 @@ grep -Fq 'read-trx-count.py" "$WORK/lifecycle-focus/lifecycle-focus.trx"' "$ROOT
 if [ "$static_only" = false ]; then
   # Keep the original native zero-match mutation in hosted qualification. Static-only
   # runs above use the maintained TRX reader over fake results, not a native PASS claim.
-  dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj" \
+  # This fixture may run alone on a cold docs-only checkout. Bound both commands
+  # by the same five-minute ceiling, including fixture elapsed time. In CI the
+  # existing outer five-minute JOB cap remains authoritative across all steps.
+  remaining=$((300 - SECONDS))
+  [ "$remaining" -gt 0 ] || { echo "change-completeness fixture: native prerequisite budget exhausted" >&2; exit 124; }
+  timeout --signal=TERM --kill-after=5s "${remaining}s" dotnet restore \
+    "$ROOT/tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj" --locked-mode >/dev/null
+  remaining=$((300 - SECONDS))
+  [ "$remaining" -gt 0 ] || { echo "change-completeness fixture: native zero-match budget exhausted" >&2; exit 124; }
+  timeout --signal=TERM --kill-after=5s "${remaining}s" dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj" \
     -c Release --no-restore --filter FullyQualifiedName~DefinitelyNoLifecycleTestMatches \
     --logger "trx;LogFileName=zero.trx" --results-directory "$WORK/zero" >/dev/null
   if python3 "$ROOT/scripts/read-trx-count.py" "$WORK/zero/zero.trx" \

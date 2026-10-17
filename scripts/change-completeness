@@ -31,7 +31,8 @@ else
     || { echo "change-completeness: base revision is unavailable: $BASE" >&2; exit 1; }
   git -C "$ROOT" cat-file -e "$HEAD^{commit}" 2>/dev/null \
     || { echo "change-completeness: head revision is unavailable: $HEAD" >&2; exit 1; }
-  git -C "$ROOT" diff --name-only --find-renames "$BASE" "$HEAD" >"$PATHS"
+  # Report both deletion and addition: rename detection would hide the old dependency path.
+  git -C "$ROOT" diff --name-only --no-renames "$BASE" "$HEAD" >"$PATHS"
 fi
 
 # This is the maintained compiler-root inventory. The fixture checks it against the literal
@@ -129,7 +130,8 @@ fi
 stage "SDD ship-verdict provenance"
 python3 "$ROOT/scripts/check-ship-verdict-provenance.py" --root "$ROOT"
 
-# Leave one minute of the unchanged five-minute job cap for its existing gate fixtures.
+# Bound this script to four minutes beneath the unchanged five-minute job cap.
+# Hosted qualification must establish the whole job, including fixtures, fits that cap.
 # A timeout or unknown process/tool state stops collection; no dependent tests use stale outputs.
 deadline=240
 run_dotnet() {
