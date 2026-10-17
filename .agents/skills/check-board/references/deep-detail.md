@@ -4,7 +4,10 @@
 ## Historical and separately scoped mechanics
 
 The reconcile/apply, claim, Class/Phase, auto-Status and done-stamp recipes below preserve historical
-V1 behavior and separately qualified consumers; they are not current organization authority. Use the
+V1 behavior and separately qualified consumers. Historical organization examples are data only;
+no historical organization live opt-in exists. Product live use must first satisfy the verified
+product target/repository gate in [check-board](../SKILL.md#separately-qualified-product-scope);
+archival commands do not select that scope. These are not current organization authority. Use the
 [organization inspection contract](organization-v2-inspection.md) for .9/.11 source preparation and
 accepted successor consumption. No organization V1 fallback exists, and these recipes cannot repair
 unknown v4 evidence. Human Status is planning; native merges do not prove whole-outcome acceptance.

@@ -86,6 +86,8 @@ mutations = (
     (contract, "Recheck determining issue/body/owner/action", "Reuse the saved issue/body/owner/action", "inspection contract lost"),
     (contract, "with no V1 fallback", "with a V1 fallback", "inspection contract lost"),
     ("drive-board/SKILL.md", "Continue an existing unambiguous owner and PR/head", "Assign another implementation", "driver contract lost"),
+    ("check-board/SKILL.md", "No historical organization live opt-in exists", "Historical organization live operations may opt in", "check-board scope contract lost"),
+    ("check-board/SKILL.md", "Before any product command, verify the actual product target/binding and configured product repository", "A repository filter alone chooses a board", "check-board scope contract lost"),
 )
 for relative, old, new, expected in mutations:
     originals = {}
@@ -102,6 +104,8 @@ for relative, content, expected in (
     ("drive-board/SKILL.md", "\n```sh\nscripts/fsgg-coord intake apply request.json\n```\n", "V1 operation prescribed"),
     ("drive-board/SKILL.md", "\n```sh\nscripts/fsgg-coord driver --events --cursor current.json --text\n```\n", "V1 operation prescribed"),
     ("drive-board/SKILL.md", "\n```sh\nscripts/fsgg-coord-report --scope current.json\n```\n", "V1 operation prescribed"),
+    ("check-board/SKILL.md", "\n## Historical organization live pass\n```sh\nscripts/fsgg-coord reconcile --apply\n```\n", "explicit qualified product repository"),
+    ("check-board/SKILL.md", "\n```sh\nscripts/fsgg-coord flush\n```\n", "cannot authorize queue-wide replay"),
     ("drive-board/references/host-loop.md", "\n<!-- BEGIN GENERATED: fsgg-protocol:wave-policy -->\n<!-- fsgg:wave-model:v1 waves=2 -->\n<!-- END GENERATED: fsgg-protocol:wave-policy -->\n", "retired generated wave authority"),
 ):
     originals = {}
@@ -112,7 +116,7 @@ for relative, content, expected in (
     assert any(expected in error for error in check()), check()
     for path, original in originals.items(): path.write_text(original)
 assert not check(), check()
-print("PASS prepared organization source contract and 13 negative controls; full Protocol/CLR NOT RUN")
+print("PASS prepared organization source contract and 17 negative controls; full Protocol/CLR NOT RUN")
 PY_ORG
 python3 "$ROOT/scripts/check-skill-quality.py" --root "$WORK/tree" --links-only
 skill_byte_state >"$WORK/skill-bytes.after"

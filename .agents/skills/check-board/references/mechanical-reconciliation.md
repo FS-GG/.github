@@ -6,7 +6,9 @@ For prepared .9/.11 organization consumers use only
 [organization inspection](organization-v2-inspection.md), after its actual adoption gates. Report human
 planning discrepancies and scoped read gaps; never use claim/done/merged facts to auto-write Status.
 The remaining reconcile/apply/receipt mechanics belong only to separately qualified product or legacy
-history. They grant no current organization writes, enrollment or V1 fallback. The canonical generator
+history. Historical organization examples are data only, never a live opt-in. Any live product
+reconcile/apply first requires [check-board's verified product target/repository gate](../SKILL.md#separately-qualified-product-scope).
+These recipes grant no current organization writes, enrollment or V1 fallback. The canonical generator
 retires organization V1 filing/reconcile/status/snapshot projections without changing Core/product facts.
 
 

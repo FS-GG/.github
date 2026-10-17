@@ -344,7 +344,13 @@ def validate_organization_consumer(root: Path, errors: list[str]) -> None:
         host = (base / "drive-board/references/host-loop.md").read_text(encoding="utf-8")
         triage = (base / "drive-board/references/backlog-triage.md").read_text(encoding="utf-8")
         cross = (base / "cross-repo-coordination/SKILL.md").read_text(encoding="utf-8")
+        check = (base / "check-board/SKILL.md").read_text(encoding="utf-8")
         obligations = (
+            ("check-board scope", check, (
+                "Historical organization examples are data only", "No historical organization live opt-in exists",
+                "Before any product command, verify the actual product target/binding and configured product repository",
+                "Refuse missing or organization-default target facts", "queue-wide replay has no repository filter",
+            )),
             ("inspection", contract, (
                 "This is .9/.11 consumer source preparation",
                 "none grants organization-v4 inspection, dispatch or field-write permission",
@@ -388,10 +394,21 @@ def validate_organization_consumer(root: Path, errors: list[str]) -> None:
         if "fsgg:wave-model:v1" in host or "<!-- BEGIN GENERATED: fsgg-protocol:wave-policy -->" in host:
             fail(errors, "organization successor: retired generated wave authority returned")
         current_text = "\n".join((drive, cross, host.partition("## Historical host mechanics")[0],
-                                  triage.partition("## Historical triage mechanics")[0], contract))
+                                  triage.partition("## Historical triage mechanics")[0], contract,
+                                  check.partition("## Separately qualified product scope")[0]))
         if (re.search(r"(?:scripts/)?fsgg-coord(?![\w-])\s+(?:intake|claim|take|batch|driver|reconcile|set-field|done|flush)(?:\s|$)", current_text)
                 or re.search(r"(?:scripts/)?fsgg-coord-report(?![\w-])(?:\s|$)", current_text)):
             fail(errors, "organization successor: V1 operation prescribed in current consumer guidance")
+        for _, segment in code_segments(check):
+            command = INVOCATION.search(segment)
+            if not command:
+                continue
+            tokens = shlex.split(command[1])
+            if tokens and tokens[0] in ("reconcile", "lint"):
+                if "--repo" not in tokens or tokens[tokens.index("--repo") + 1:tokens.index("--repo") + 2] != ["<configured-product-repo>"]:
+                    fail(errors, "organization successor: check-board recipe lacks explicit qualified product repository")
+            if tokens and tokens[0] == "flush":
+                fail(errors, "organization successor: check-board cannot authorize queue-wide replay")
 
 
 def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> None:
