@@ -170,53 +170,170 @@ def update_body(fresh: str, proposed: str, branch: str, head: str,
     return result
 
 
+# Metadata updates preserve native identity, openness/capability and exact prose. Mergeability,
+# rebaseability, synthetic merge commits, activity counts and cache timestamps belong to merge
+# qualification, not this action. Repository subresources are projected, never compared wholesale.
+_METADATA_FIELDS = {
+    "number": "id", "id": "id", "node_id": "text", "state": "state",
+    "merged": "bool", "draft": "bool", "locked": "bool", "maintainer_can_modify": "bool",
+    "author_association": "association", "html_url": "text", "title": "text", "body": "body",
+}
+for _prefix in ("user", "head.user", "base.user", "head.repo.owner", "base.repo.owner"):
+    _METADATA_FIELDS.update({_prefix + "." + key: kind for key, kind in
+                             (("id", "id"), ("node_id", "text"), ("login", "text"), ("type", "text"))})
+for _prefix in ("head", "base"):
+    _METADATA_FIELDS.update({_prefix + ".ref": "text", _prefix + ".sha": "sha",
+                             _prefix + ".repo.id": "id", _prefix + ".repo.node_id": "text",
+                             _prefix + ".repo.full_name": "repository"})
+_OPTIONAL_METADATA_FIELDS = {}
+for _prefix in ("head.repo", "base.repo"):
+    _OPTIONAL_METADATA_FIELDS.update({_prefix + "." + key: kind for key, kind in
+        (("private", "bool"), ("archived", "bool"), ("disabled", "bool"),
+         ("visibility", "visibility"), ("permissions", "permissions"))})
+_MISSING = object()
+_MALFORMED_PARENT = object()
+
+
+def metadata_field(value: Any, path: str) -> Any:
+    for name in path.split("."):
+        if not isinstance(value, dict):
+            return _MALFORMED_PARENT
+        if name not in value:
+            return _MISSING
+        value = value[name]
+    return value
+
+
+def metadata_fingerprint(value: Any) -> dict[str, Any]:
+    """Only fixed selected fields; malformed containers never expose or digest a native resource."""
+    if value is _MISSING:
+        return {"kind": "missing"}
+    if value is _MALFORMED_PARENT:
+        return {"kind": "malformed-parent"}
+    kind = {str: "string", bool: "boolean", int: "integer", float: "number",
+            list: "array", dict: "object", type(None): "null"}.get(type(value), "unknown")
+    permission_flags = (isinstance(value, dict) and set(value) <= {"admin", "maintain", "push", "triage", "pull"}
+                        and all(type(flag) is bool for flag in value.values()))
+    if isinstance(value, (dict, list)) and not permission_flags:
+        return {"kind": kind}
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return {"kind": kind, "sha256": hashlib.sha256(encoded).hexdigest(), "bytes": len(encoded)}
+
+
+def metadata_difference(field: str, expected: Any, observed: Any) -> dict[str, Any]:
+    return {"field": field, "expected": metadata_fingerprint(expected),
+            "observed": metadata_fingerprint(observed)}
+
+
+def metadata_projection(value: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    def valid(kind: str, item: Any) -> bool:
+        if kind == "bool":
+            return type(item) is bool
+        if kind == "id":
+            return type(item) is int and item > 0
+        if kind == "permissions":
+            return (isinstance(item, dict) and set(item) <= {"admin", "maintain", "push", "triage", "pull"}
+                    and all(type(flag) is bool for flag in item.values()))
+        if not isinstance(item, str):
+            return False
+        return {"body": lambda: True, "text": lambda: bool(item.strip()),
+                "sha": lambda: SHA_RE.fullmatch(item) is not None,
+                "repository": lambda: REPO_RE.fullmatch(item) is not None,
+                "state": lambda: item in {"open", "closed"},
+                "visibility": lambda: item in {"public", "private", "internal"},
+                "association": lambda: item in {"COLLABORATOR", "CONTRIBUTOR", "FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR", "MANNEQUIN", "MEMBER", "NONE", "OWNER"}}[kind]()
+    projection, problems = {}, []
+    for field, kind in {**_METADATA_FIELDS, **_OPTIONAL_METADATA_FIELDS}.items():
+        item = metadata_field(value, field)
+        if item is _MISSING and field in _OPTIONAL_METADATA_FIELDS:
+            projection[field] = item
+        elif item is _MISSING or item is _MALFORMED_PARENT or not valid(kind, item):
+            problems.append({"field": field, "status": "missing" if item is _MISSING else "malformed",
+                             "observed": metadata_fingerprint(item)})
+        else:
+            projection[field] = item
+    return projection, problems
+
+
 def update_pull(arguments: argparse.Namespace, proposed: str, identity: dict[str, Any]) -> dict[str, Any]:
     identity = {**identity, "number": arguments.update_pr, "headSha": arguments.head_sha}
     endpoint = f"/repos/{arguments.repo}/pulls/{arguments.update_pr}"
+    write_attempted = False
 
-    def read() -> dict[str, Any]:
-        value = run_gh(arguments.gh, ["--method", "GET", endpoint])
-        if not isinstance(value, dict) or not isinstance(value.get("body"), str):
-            raise ToolError("existing pull-request response was unreadable")
-        head = value.get("head")
-        base = value.get("base")
-        repo = head.get("repo") if isinstance(head, dict) else None
-        if (not isinstance(head, dict) or not isinstance(base, dict) or not isinstance(repo, dict)
-                or value.get("number") != arguments.update_pr or value.get("state") != "open"
-                or head.get("ref") != arguments.head
-                or head.get("sha") != arguments.head_sha
-                or str(repo.get("full_name", "")).lower() != arguments.repo.lower()
-                or base.get("ref") != arguments.base):
-            raise Refusal("update-candidate-mismatch", **identity)
-        return value
+    def refuse(reason: str, stage: str, status: str, differences=()) -> None:
+        raise Refusal(reason, **identity, stage=stage, writeAttempted=write_attempted,
+                      diagnostic={"status": status, "fields": list(differences)})
+
+    def read(stage: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        try:
+            value = run_gh(arguments.gh, ["--method", "GET", endpoint])
+        except ToolError:
+            refuse("update-read-unresolved", stage, "read-error")
+        guarded, problems = metadata_projection(value)
+        if problems:
+            refuse("update-candidate-mismatch", stage, "unreadable", problems)
+        expected = {"number": arguments.update_pr, "state": "open", "merged": False,
+                    "head.ref": arguments.head, "head.sha": arguments.head_sha,
+                    "head.repo.full_name": arguments.repo, "base.ref": arguments.base,
+                    "base.repo.full_name": arguments.repo,
+                    # Repository argument spelling is case-insensitive; native URL spelling is
+                    # canonical only after the native base repository passes the scope check below.
+                    "html_url": f"https://github.com/{guarded['base.repo.full_name']}/pull/{arguments.update_pr}"}
+        differences = [metadata_difference(field, item, guarded[field]) for field, item in expected.items()
+                       if (item.lower() != guarded[field].lower() if field.endswith("repo.full_name")
+                           else item != guarded[field])]
+        if differences:
+            refuse("update-candidate-mismatch", stage, "mismatch", differences)
+        return value, guarded
 
     with repository_lock(arguments.repo):
-        before = read()
-        body = update_body(before["body"], proposed, arguments.head, arguments.head_sha,
-                           arguments.previous_head_sha, arguments.campaign_id, arguments.dependency_chain_id)
-        if current_head_sha(arguments.gh, arguments.repo, arguments.head) != arguments.head_sha:
-            raise Refusal("head-moved", **identity)
-        # This route cannot atomically compare-and-swap a PR body. Re-read
-        # immediately before mutation and read back after; never retry an uncertain write.
-        if read() != before:
-            raise Refusal("update-conflict", **identity)
-        unchanged = before["body"] == body and before.get("title") == arguments.title
+        before, before_guard = read("initial-candidate")
+        try:
+            body = update_body(before["body"], proposed, arguments.head, arguments.head_sha,
+                               arguments.previous_head_sha, arguments.campaign_id, arguments.dependency_chain_id)
+        except ToolError:
+            refuse("update-metadata-conflict", "metadata-preparation", "policy-or-marker-conflict",
+                   [metadata_difference("body", before["body"], proposed)])
+        # Independently preserve the push-before-update guard, including unreadable branch facts.
+        encoded_head = urllib.parse.quote(arguments.head, safe="")
+        try:
+            branch = run_gh(arguments.gh, ["--method", "GET", f"/repos/{arguments.repo}/git/ref/heads/{encoded_head}"])
+        except ToolError:
+            refuse("head-read-unresolved", "branch-ref", "read-error")
+        observed_sha = metadata_field(branch, "object.sha")
+        if observed_sha is _MISSING or observed_sha is _MALFORMED_PARENT or not isinstance(observed_sha, str) or not SHA_RE.fullmatch(observed_sha):
+            refuse("head-moved", "branch-ref", "missing" if observed_sha is _MISSING else "malformed",
+                   [metadata_difference("branch.sha", arguments.head_sha, observed_sha)])
+        if observed_sha != arguments.head_sha:
+            refuse("head-moved", "branch-ref", "mismatch",
+                   [metadata_difference("branch.sha", arguments.head_sha, observed_sha)])
+        # No atomic compare-and-swap is available. Re-read immediately before the one possible PATCH.
+        _, deciding_guard = read("prewrite-comparison")
+        differences = [metadata_difference(field, before_guard[field], item)
+                       for field, item in deciding_guard.items() if item != before_guard[field]]
+        if differences:
+            refuse("update-conflict", "prewrite-comparison", "mismatch", differences)
+        unchanged = before["body"] == body and before["title"] == arguments.title
         if not arguments.inspect and not unchanged:
+            write_attempted = True
             try:
                 run_gh(arguments.gh, ["--method", "PATCH", endpoint, "--input", "-"],
                        stdin=json.dumps({"body": body, "title": arguments.title}, ensure_ascii=False))
-            except ToolError as error:
-                # A failed response does not establish whether GitHub applied it.
-                raise Refusal("update-write-unresolved", **identity) from error
+            except ToolError:
+                # A failed response does not establish whether GitHub applied it. Never retry.
+                refuse("update-write-unresolved", "metadata-patch", "write-error")
             try:
-                after = read()
-            except (ToolError, Refusal) as error:
-                raise Refusal("post-write-readback-unresolved", **identity) from error
-            if after["body"] != body or after.get("title") != arguments.title:
-                raise Refusal("update-readback-mismatch", **identity)
+                _, after_guard = read("postwrite-readback")
+            except Refusal as error:
+                raise Refusal("post-write-readback-unresolved", **error.details) from error
+            expected_guard = {**before_guard, "body": body, "title": arguments.title}
+            differences = [metadata_difference(field, expected_guard[field], item)
+                           for field, item in after_guard.items() if item != expected_guard[field]]
+            if differences:
+                refuse("update-readback-mismatch", "postwrite-readback", "mismatch", differences)
         return {"ok": True, "action": "admitted" if arguments.inspect else "unchanged" if unchanged else "updated",
                 **identity, "number": arguments.update_pr, "headSha": arguments.head_sha,
-                "url": before.get("html_url")}
+                "url": before["html_url"]}
 
 
 def run_gh(gh: str, arguments: list[str], stdin: str | None = None) -> Any:
