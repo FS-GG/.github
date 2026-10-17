@@ -107,18 +107,17 @@ published a `.nupkg` byte-identical to `0.46.0` that can never be un-tagged (`.g
 
 For the `github` coherent set (`FS.GG.Kit`, `FS.GG.Drivers`, and `FS.GG.Coord.Cli`), use the
 selected successor operating window in [utel-release-successor](../../../docs/roadmaps/utel-release-successor.md).
-The prepared source is **0.99.0** (schema14 efficiency and Responses); it is not published.
-The latest verified promoted coherent set remains **0.98.0**, from
-`3d4f7e9c6337fb020e269e632653de0faeef6d72` under protected journal `utel-rel-15` and publisher
-`37434982959`. The predecessor **0.97.1** from
-`99ea75286f5c3cea2a261fef4e5b45cd70378185`, consumed `utel-rel-13` and deferred unpublished
-**0.97.2**/`utel-rel-14` remain immutable. Native compact `/3` and schema 13 correction source
-are delivered. Installed schema migration, attribution repair and dashboard activation remain
-separate obligations. The selected successor uses the existing source-qualified 0.99.0 rail and
-`utel-rel-16`; each effect still requires fresh native admission. A consumed
-journal or completed publication does not authorize another candidate or replay. Historical
-`release-saga-start`, prepare, component publishers and promote workflows remain sealed
-under GS2-08.9; their recipes do not authorize current publication.
+Read the selected operating window and original operation records alongside the current
+registry, candidate workflow and publisher. Resolve the source version, promoted predecessor,
+source SHA and journal identity from those records; this skill does not maintain another
+current-release table. Verify live package, release and channel evidence before acting.
+
+Source delivery, candidate qualification, publication and installed adoption are separate
+outcomes. Each effect requires fresh native admission. Preserve original candidate archives,
+journal identities and unresolved reservations.
+A consumed journal or completed publication does not authorize another candidate or replay.
+Historical `release-saga-start`, prepare, component publishers and promote workflows remain
+sealed under GS2-08.9; their recipes do not authorize current publication.
 
 1. Qualify and merge the selected successor source. Dispatch `release-successor-candidate.yml`
    on current `main` once. Authenticate the successful first-attempt run and its original seven-file
@@ -128,7 +127,8 @@ under GS2-08.9; their recipes do not authorize current publication.
    the raw `candidate_archive_sha256`, and `publish=false`. Verify its genuine authority, collision,
    exact-byte and eligibility observations before selecting `publish=true` with those same inputs.
 3. Observe all 16 durable effects and both feeds before declaring publication complete. The
-   successor creates only `coherent-set/v0.99.0`; component tags would enter sealed historical routes.
+   successor creates only the selected `coherent-set/v<VERSION>` tag; component tags would enter
+   sealed historical routes.
    After journal initialization, forward recovery uses the original archive and the existing admission
    and journal rules. Unknown or conflicting effects remain incomplete; never reset the journal,
    repack, replace published bytes or blindly retry an unresolved write.
