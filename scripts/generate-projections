@@ -62,6 +62,10 @@ for argument in "$@"; do
     *) echo "::error::unknown argument: $argument (expected --check, --list, --contract-version, --registry-only)" >&2; exit 2 ;;
   esac
 done
+if [ -n "$CHECK" ] && [ -n "$LIST" ]; then
+  echo "::error::--check and --list cannot be combined" >&2
+  exit 2
+fi
 if [ -n "$CONTRACT_VERSION" ] && { [ -n "$REGISTRY_ONLY" ] || [ -n "$CHECK" ] || [ -n "$LIST" ]; }; then
   echo "::error::--contract-version cannot be combined with generation modes" >&2
   exit 2

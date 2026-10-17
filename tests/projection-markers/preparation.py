@@ -114,10 +114,16 @@ class Preparation(unittest.TestCase):
                 target.write_text(malformed)
             before = snapshot(self.root)
             output = self.run_mode(expected=1)
-            self.assertIn("registry-projections: STALE", output)
+            self.assertIn("registry-projections: FAILED", output)
             self.assertIn("skill-manifests: BLOCKED", output)
             self.assertIn("own-registry-rows:", output)
             self.assertEqual(before, snapshot(self.root))
+            manifest = self.root / "registry/driver-skill-manifest.json"
+            old = manifest.read_bytes()
+            written = self.run_mode("--write", expected=1)
+            self.assertIn("registry-projections: FAILED", written)
+            self.assertNotIn("registry-projections: prepared", written)
+            self.assertEqual(old, manifest.read_bytes())
             target.write_text(original)
 
     def test_missing_prerequisite_and_full_mode_guard(self):
@@ -126,6 +132,9 @@ class Preparation(unittest.TestCase):
                               env=environment, text=True, capture_output=True)
         self.assertEqual(full.returncode, 2)
         self.assertIn("no engine", full.stderr)
+        mixed = subprocess.run(["bash", str(self.root / "scripts/generate-projections"), "--check", "--list"],
+                               env=environment, text=True, capture_output=True)
+        self.assertEqual(mixed.returncode, 2)
         self.run_mode(env=environment)  # explicit preparation does not call CLR
         environment["PATH"] = str(self.root / "missing-tools")
         output = self.run_mode(expected=1, env=environment)
@@ -141,6 +150,28 @@ class Preparation(unittest.TestCase):
         output = self.run_mode("--write", expected=1)
         self.assertIn("own-registry-rows: UNAVAILABLE: ambiguous registry id", output)
         self.assertEqual(before, registry.read_bytes())
+
+    def test_manifest_source_paths_are_bounded_before_builders(self):
+        roster = self.root / "registry/repos.yml"
+        original = roster.read_text()
+        source = ".claude/skills/initialize-sdd-workspace"
+        with tempfile.TemporaryDirectory(prefix="outside-preparation.") as outside:
+            external = Path(outside)
+            (external / "SKILL.md").write_text("Outside tree must never become manifest input.\n")
+            link = self.root / ".claude/skills/outside-fixture"
+            link.symlink_to(external, target_is_directory=True)
+            for invalid in (str(external), "../" + external.name, ".", "registry", ".claude/skills/outside-fixture"):
+                roster.write_text(original.replace("source: " + source, "source: " + invalid))
+                manifests = [self.root / "registry" / name for name in
+                             ("driver-skill-manifest.json", "coordination-kit-skill-manifest.json")]
+                before = [p.read_bytes() for p in manifests]
+                result = self.run_mode("--write", expected=1)
+                self.assertIn("skill-manifests: UNAVAILABLE", result)
+                self.assertIn("own-registry-rows: UNAVAILABLE", result)
+                self.assertNotIn("skill-manifests: prepared", result)
+                self.assertEqual(before, [p.read_bytes() for p in manifests])
+            roster.write_text(original)
+            link.unlink()
 
     def test_symlink_archive_refuses_and_write_does_not_digest_stale_input(self):
         source = self.root / "docs/atlas/README.md"

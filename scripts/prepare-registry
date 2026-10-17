@@ -74,8 +74,27 @@ def projections(write):
     return result.returncode
 
 
+def manifest_sources(generator):
+    """Bound every maintained builder input before any skill bytes are read."""
+    local(generator["KIT_ROSTER"])
+    sources = [entry["supplied-by"] for entry in generator["DRIVERS"]]
+    sources += generator["kit_skill_sources"](str(ROOT))
+    for relative in sources:
+        path = local(relative)
+        if str(Path(relative).parent) not in generator["SKILL_ROOTS"]:
+            raise ValueError("manifest source outside managed skill roots: " + relative)
+        if not path.is_dir():
+            raise ValueError("missing skill source: " + relative)
+        if not local(relative + "/SKILL.md").is_file():
+            raise ValueError("missing regular SKILL.md: " + relative)
+        for child in path.rglob("*"):
+            if child.is_symlink() or not (child.is_file() or child.is_dir()):
+                raise ValueError("non-regular skill source: " + str(child.relative_to(ROOT)))
+
+
 def manifests(write):
     generator = runpy.run_path(str(local("scripts/generate-driver-manifest")))
+    manifest_sources(generator)
     changed = []
     for key, builder in (("MANIFEST_PATH", "build_manifest"),
                          ("KIT_MANIFEST_PATH", "build_kit_manifest")):
@@ -89,6 +108,7 @@ def manifests(write):
 
 
 def own_rows(write, generator):
+    manifest_sources(generator)
     checker = runpy.run_path(str(local("scripts/fsgg-skill-registry-check")))
     registry_path = local("registry/skills.yml")
     registry = checker["_load_registry"](str(registry_path))
@@ -161,6 +181,8 @@ def main():
             state = "BLOCKED by stale/invalid inputs" if dependent else "current"
             if changed:
                 state = ("prepared" if write else "STALE") + ": " + ", ".join(changed)
+                if family == "registry-projections" and code:
+                    state = "FAILED: see generator diagnostics"
                 if dependent:
                     state += "; dependent status BLOCKED"
             print(f"{family}: {state}")
