@@ -884,14 +884,17 @@ Fresh current 0.4 both-feed installed acceptance is **accepted** at qualifier
 and [protected-main qualification `39023124943/a1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39023124943)
 completed successfully. The accepted installed evidence supplies the producer
 prerequisite for the selected SC2 consumer window; it establishes no product pin,
-native authority or consumer acceptance. The Game documentation reconciliation
-remains [PR #717](https://github.com/FS-GG/FS.GG.Game/pull/717).
+native authority or consumer acceptance. [Game PR #717](https://github.com/FS-GG/FS.GG.Game/pull/717) records that accepted
+frontier at merged `f139d183bb76b66bb2f0618a16ac343d0781cfd5`.
 
 Preserve original [installed `39016307973/a1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39016307973):
 its org consumer/runtime step passed, artifact upload failed on a colon in a copied
 NuGet HTTP-cache path, no artifact was retained and public execution was cancelled.
 The subsequent qualifier-source repair and accepted fresh qualification do not
-relabel that original or imply another publication or release version.
+relabel that original or imply another publication or release version. Original
+[installed `39020851715/a1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39020851715)
+also remains a failed evidence-projection qualification: general runtime passed,
+but the selected qualification was not reached.
 
 Original 0.3 H3/H4 transaction bytes, accepted scope and failed/unknown attempts
 retain their own identities. Prepublication custody and served-feed readbacks
