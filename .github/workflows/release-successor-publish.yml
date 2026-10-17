@@ -6,17 +6,30 @@ name: release-successor-publish
 on:
   workflow_dispatch:
     inputs:
+      install_release_suspension:
+        description: Install only the fixed source-owned suspension; never publishes
+        required: true
+        default: false
+        type: boolean
+      expected_authority_main:
+        description: Exact reviewed Authority parent, only for install-only selection
+        required: false
+        default: ''
+        type: string
       candidate_run_id:
         description: Successful first-attempt candidate workflow run ID
-        required: true
+        required: false
+        default: ''
         type: string
       candidate_artifact_id:
         description: Exact retained Actions candidate artifact ID
-        required: true
+        required: false
+        default: ''
         type: string
       candidate_archive_sha256:
         description: SHA-256 of the raw Actions artifact archive
-        required: true
+        required: false
+        default: ''
         type: string
       publish:
         description: Publish only after exact source and effect admission; bounded recovery also requires true
@@ -89,7 +102,7 @@ concurrency:
 
 jobs:
   publish:
-    if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
+    if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.install_release_suspension != true
     runs-on: ubuntu-latest
     environment: release-successor
     timeout-minutes: 60
@@ -99,6 +112,10 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Validate the complete selected mode before any credential exchange
+        env:
+          FSGG_RELEASE_INPUTS: ${{ toJSON(inputs) }}
+        run: python3 scripts/release-successor-publish.py --check-workflow-inputs
       - name: Read the installed release suspension before any credential exchange
         if: inputs.qualify_original_tag_authentication_only != true
         env:
@@ -248,3 +265,53 @@ jobs:
           if test "$DISPOSITION" = checkpoint; then
             echo 'Bounded recovery checkpoint retained. Publication and receiver acceptance remain incomplete.' >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  install-suspension:
+    if: inputs.install_release_suspension == true
+    runs-on: ubuntu-latest
+    environment: release-successor
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    env:
+      FSGG_RELEASE_INPUTS: ${{ toJSON(inputs) }}
+      GH_TOKEN: ${{ github.token }}
+      ORDINARY_LEDGER_APP_ID: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate the complete install-only selection before issuer access
+        run: python3 scripts/release-successor-publish.py --check-workflow-inputs
+      - name: Prepare the fixed suspension and authenticate native owner and Authority state
+        id: prepared
+        run: python3 scripts/release-successor-publish.py --prepare-hosted-release-suspension
+      - name: Mint only the existing ordinary Authority writer
+        id: ledger
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          private-key: ${{ secrets.FSGG_ORDINARY_LEDGER_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.Authority
+          permission-contents: write
+      - name: Install only the prepared source-owned suspension
+        env:
+          ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}
+          ACTUAL_INSTALLATION_ID: ${{ steps.ledger.outputs.installation-id }}
+          EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
+          PREPARED_SHA256: ${{ steps.prepared.outputs.prepared_sha256 }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release-successor-publish.py --install-hosted-release-suspension \
+            --prepared-sha256 "$PREPARED_SHA256"
+      - name: Retain the explicit install-only result independently of success
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-successor-result
+          path: ${{ runner.temp }}/release-successor-result.json
+          if-no-files-found: error

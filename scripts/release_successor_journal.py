@@ -88,8 +88,8 @@ SUSPENDED_ORIGINAL = {
 SUSPENSION_DECISION = {
     "owner": "EHotwagner", "repository": "FS-GG/.github",
     "path": "docs/roadmaps/utel-release-successor.md",
-    "revision": "93e2cb8344eace6a2bc3bdfb3e6ad328890d99bd",
-    "sha256": "edb1c14489a0300e78cbf1741a4ef331ad5149070638081a7a36eda35fe07a4e"}
+    "revision": "84e1544675634cd4f35b5ed078aa49a23490b08c",
+    "sha256": "161d41f753697eb6e7c9e3d41520697f0014fa6ca6fe03916d4fd7af1229f785"}
 
 
 def strict_suspension(raw: bytes) -> dict:
@@ -179,8 +179,12 @@ class ReleaseSuspension:
                 raise Refused("immutable accepted suspension decision source differs")
             self.decision_verified = True
 
-    def read(self):
-        physical = self.main()
+    def _read_at(self, physical):
+        """Validate immutable bytes inside a maintained caller's local main sandwich.
+
+        This performs no live authorization by itself. The caller must open and
+        close a fresh main observation before accepting its invocation digest.
+        """
         raw = self.file(physical, SUSPENSION_PATH)
         if raw is None:
             raise Refused("required release-specific suspension is absent")
@@ -190,6 +194,11 @@ class ReleaseSuspension:
         digest = hashlib.sha256(raw).hexdigest()
         if self.digest is not None and self.digest != digest:
             raise Refused("release-specific suspension changed during invocation")
+        return value, digest
+
+    def read(self):
+        physical = self.main()
+        value, digest = self._read_at(physical)
         if self.main() != physical:
             raise Refused("Authority main moved during suspension read")
         self.digest = digest
@@ -214,7 +223,7 @@ class ProtectedReleaseJournal:
     _MAX_IMMUTABLE_BYTES = 16 * 1024 * 1024
     _MAX_IMMUTABLE_OBJECT_BYTES = 1024 * 1024
 
-    def __init__(self, api: GitAPI, ref: str = REF, *, main_directory: bool = False):
+    def __init__(self, api: GitAPI, ref: str = REF, *, main_directory: bool = False, suspension=None):
         if type(main_directory) is not bool:
             raise Refused("main-directory selection must be explicit boolean")
         if not ref.startswith("refs/heads/fsgg/v2/journal/release/"):
@@ -231,7 +240,11 @@ class ProtectedReleaseJournal:
         repository = api.get(f"repos/{REPOSITORY}")
         if repository.get("id") != REPOSITORY_ID or repository.get("full_name") != REPOSITORY:
             raise Refused("authority repository identity differs")
-        self._suspension = None
+        if suspension is not None and (not isinstance(suspension, ReleaseSuspension)
+                or suspension.api is not api or ref != ALLOWED_SUCCESSOR["logicalRef"] or not main_directory):
+            raise Refused("shared successor immutable reader has a different owner or binding")
+        self._suspension = suspension
+        self._immutable_reader = suspension.objects if suspension is not None else None
         self._observed: Observed | None = None
         self._lineage_length = 0
         self._immutable_objects: dict[tuple[str, str], bytes] = {}
@@ -248,6 +261,10 @@ class ProtectedReleaseJournal:
             raise Refused("sensitive journal version has a different logical identity")
 
     def _immutable_object(self, kind: str, oid: str) -> dict:
+        if self._immutable_reader is not None:
+            # Same invocation/API/repository; delegate only SHA-addressed validated
+            # bytes to the existing bounded cache. Never cache refs or admission.
+            return self._immutable_reader._immutable_object(kind, oid)
         if kind not in {"commits", "trees", "blobs"} or not isinstance(oid, str) or not re.fullmatch(r"[0-9a-f]{40}", oid):
             raise Refused("physical journal object identity is invalid")
         key = kind, oid
@@ -556,7 +573,11 @@ class ProtectedReleaseJournal:
         return commit["sha"]
 
     def compare_and_swap(self, expected: JournalState, effect: str, state: str) -> bool:
-        self._authorize_release()
+        # Only the current shared .104 caller joins overlapping observations at
+        # one local boundary. Historical and original-release routes stay intact.
+        joined = self.ref == ALLOWED_SUCCESSOR["logicalRef"] and self.main_directory and self._immutable_reader is not None
+        if not joined:
+            self._authorize_release()
         observed = self._observed
         if observed is None or (observed.state["generation"], observed.state["contentId"], observed.state["effects"]) != (
             expected.generation,
@@ -574,26 +595,43 @@ class ProtectedReleaseJournal:
             # Provider readback and admission may outlast unrelated main writes.
             # Refresh the physical base without changing the admitted logical state.
             path = f"repos/{REPOSITORY}/git/ref/heads/main"
-            fresh = self.api.get(path).get("object", {}).get("sha")
+            fresh = self._suspension.main() if joined else self.api.get(path).get("object", {}).get("sha")
             if not isinstance(fresh, str) or not re.fullmatch(r"[0-9a-f]{40}", fresh):
                 raise Refused("main journal CAS has no exact fresh physical head")
             logical = self._main_head(fresh)
             files = self._main_files(self._main_commit(fresh))
             if logical != observed.head or files != ((observed.head + "\n").encode("ascii"), canonical(observed.state)):
                 raise Refused("main journal selected binding changed before CAS")
-            if self.api.get(path).get("object", {}).get("sha") != fresh:
+            if joined:
+                if observed.state.get("version") != ALLOWED_SUCCESSOR["version"]:
+                    raise Refused("allowed successor version differs")
+                _, digest = self._suspension._read_at(fresh)
+            closing = self._suspension.main() if joined else self.api.get(path).get("object", {}).get("sha")
+            if closing != fresh:
                 raise Refused("main journal moved during CAS freshness read")
+            if joined:
+                self._suspension.digest = digest
             physical = fresh
             self._physical_head = physical
-        self._authorize_release(observed.state.get("version"))
+        if not joined:
+            self._authorize_release(observed.state.get("version"))
         commit = self._create_commit(next_state, [observed.head])
         physical_commit = commit
         if self.main_directory:
             physical_commit = self._overlay(physical, commit, next_state)
             # Do not PATCH a stale overlay or retry after a new physical write.
-            if self.api.get(path).get("object", {}).get("sha") != physical:
+            before_patch = self._suspension.main() if joined else self.api.get(path).get("object", {}).get("sha")
+            if before_patch != physical:
                 raise Refused("main journal moved before CAS PATCH")
-        self._authorize_release(observed.state.get("version"))
+            if joined:
+                # New post-create sandwich; no pre-create authorization survives
+                # the intervening POSTs. The same parent ties selected bytes.
+                _, digest = self._suspension._read_at(before_patch)
+                if self._suspension.main() != before_patch:
+                    raise Refused("main journal moved during final CAS suspension read")
+                self._suspension.digest = digest
+        if not joined:
+            self._authorize_release(observed.state.get("version"))
         try:
             self.api.patch(
                 f"repos/{REPOSITORY}/git/refs/{self.physical_ref.removeprefix('refs/')}",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pure offline checkpoint controls; no git subprocess, network or live provider.
+"""Pure offline checkpoint controls; no git subprocess, network or native provider effect.
 
 Synthetic Git object identifiers identify fixture data, not GitHub evidence.
 All setup writes are in memory and counted separately from each recovery slice.
@@ -8,7 +8,7 @@ are used without importing the existing subprocess-based journal test runner.
 """
 
 import base64
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout
 import copy
 import hashlib
 import io
@@ -16,6 +16,7 @@ import importlib.util
 import json
 import os
 import pathlib
+import re
 import socket
 import subprocess
 import sys
@@ -1919,7 +1920,105 @@ class Original0103DescendantCompatibilityControls(unittest.TestCase):
                 path.write_bytes(body)
 
 
-class SuspensionControls(unittest.TestCase):
+class Literal104ProviderFixture(MemoryPublisher):
+    """Real provider behavior; only external API/process transports are inert.
+
+    Package bytes are synthetic ZIPs, never an executable or a release candidate.
+    The real saga checks and receipts run in process beneath the audit fence.
+    """
+    def __init__(self, root, suspension):
+        super().__init__()
+        self.root=root; self.tag=None; self.release=None; self.assets={}; self.feeds=set()
+        spec=importlib.util.spec_from_file_location("literal104_saga_fixture",ROOT/'scripts/release-saga.py')
+        self.saga=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.saga)
+        for package in PACKAGES:
+            path=root/f'{package}.0.104.0.nupkg'
+            with zipfile.ZipFile(path,'w') as archive:
+                archive.writestr(package+'.nuspec',f'<package><metadata><id>{package}</id><version>0.104.0</version><repository type="git" commit="{self.head}" /></metadata></package>')
+                archive.writestr('lib/inert-fixture.txt',b'inert source fixture; not executable package output')
+        qualification={'schema':'fsgg.telemetry.standalone-qualification/2','qualified':True,
+            'binding':{'sourceSha':self.head,'packageSha256':self.saga.sha256(root/'FS.GG.Coord.Cli.0.104.0.nupkg'),'sourceBinding':'prepared-for-release-manifest'},
+            'checks':{key:True for key in ('startupP95Milliseconds','idleRssPeakBytes','coldCliSubmissionP95Milliseconds','warmInProcessAdmissionP95Milliseconds')},
+            'limits':{'coldCliSubmissionP95Milliseconds':1000,'warmInProcessAdmissionP95Milliseconds':100},
+            'packagedStore':{'schema':'fsgg.telemetry.packaged-store-performance/1','qualified':True,'assessment':'approved-local-durable'},
+            'claims':{'processCrashAndFilesystemApi':True,'physicalPowerLoss':False,'mainInstalled':False,'publicRelease':False}}
+        (root/'standalone-telemetry-runtime-evidence.json').write_bytes(canonical(qualification))
+        (root/'standalone-telemetry-evidence.json').write_bytes(b'{}\n')
+        (root/'previous-stable-channel.json').write_bytes(canonical({'version':'0.102.0','contentId':'sha256:'+'c'*64,'sourceSha':'d'*40,'promotedAt':'2026-10-01T00:00:00Z'}))
+        assets=root/'dashboard';assets.mkdir();(assets/'index.html').write_text('inert dashboard fixture')
+        self.path=root/'release-manifest.json'
+        args=self.saga.parser().parse_args(['prepare','--release-id','github:0.104.0','--version','0.104.0',
+            '--source-sha',self.head,'--source-tree','d'*40,'--policy-version','release-successor/1',
+            '--previous-channel',str(root/'previous-stable-channel.json'),'--artifact-dir',str(root),
+            *(arg for package in PACKAGES for arg in ('--expected-package',package)),
+            '--dashboard-assets',str(assets),'--standalone-qualification',str(root/'standalone-telemetry-runtime-evidence.json'),'--output',str(self.path)])
+        self.run_saga(args)
+        args=self.saga.parser().parse_args(['preflight','--manifest',str(self.path),'--feed','both']);self.run_saga(args)
+        self.candidate=json.loads(self.path.read_bytes())
+        self.provider=LiveProvider(self,self.path,'inert-github','inert-nuget',suspension=suspension,logical_ref='refs/heads/fsgg/v2/journal/release/utel-rel-22')
+        self.provider._download_package=self.download_package
+        self.provider.dispatched=[]
+        dispatch=self.provider.dispatch
+        def record(effect):
+            self.provider.dispatched.append(effect.identity)
+            return dispatch(effect)
+        self.provider.dispatch=record
+
+    def run_saga(self,args):
+        with redirect_stdout(io.StringIO()):args.run(args)
+
+    def get(self,path):
+        self.calls.append(path)
+        if '/git/ref/tags/' in path:
+            if self.tag is None:raise NotFound(path)
+            return {'object':{'sha':self.tag}}
+        if '/releases/tags/' in path:
+            if self.release is None:raise NotFound(path)
+            return copy.deepcopy(self.release)
+        if '/releases?' in path:return [] if self.release is None else [copy.deepcopy(self.release)]
+        if path.endswith('/releases/1/assets?per_page=100'):
+            return [{'id':ident,'name':name,'size':len(raw),'state':'uploaded','digest':'sha256:'+hashlib.sha256(raw).hexdigest()} for ident,(name,raw) in self.assets.items()]
+        return super().get(path)
+
+    def post(self,path,body):
+        if path.endswith('/git/refs'):
+            assert self.tag is None and body['ref']=='refs/tags/coherent-set/v0.104.0'
+            self.tag=body['sha'];return {'object':{'sha':self.tag}}
+        assert path.endswith('/releases') and self.release is None
+        self.release={**body,'id':1};return copy.deepcopy(self.release)
+
+    def patch(self,path,body):
+        assert path.endswith('/releases/1') and self.release['draft'] is True and body=={'draft':False,'make_latest':'true'}
+        self.release.update(body);return copy.deepcopy(self.release)
+
+    def upload_asset(self,release,name,path):
+        assert release==1 and all(value[0]!=name for value in self.assets.values())
+        ident=len(self.assets)+1;self.assets[ident]=(name,path.read_bytes());return {'id':ident}
+
+    def download_asset(self,ident):return self.assets[ident][1]
+
+    def download_package(self,feed,package):
+        if (feed,package) not in self.feeds:return None
+        source=self.root/f'{package}.0.104.0.nupkg'
+        target=self.provider.observed/f'{feed}-{package}.0.104.0.nupkg';target.write_bytes(source.read_bytes())
+        args=self.saga.parser().parse_args(['verify-external','--manifest',str(self.path),'--package',package,'--artifact',str(target)]);self.run_saga(args)
+        return target
+
+    def process(self,argv,**kwargs):
+        if argv[:3]==['dotnet','nuget','push']:
+            assert len(argv)==8 and argv[4]=='--source' and argv[6]=='--api-key'
+            path=pathlib.Path(argv[3]);package=path.name.removesuffix('.0.104.0.nupkg')
+            feed='github' if argv[5]=='https://nuget.pkg.github.com/FS-GG/index.json' else 'nuget'
+            assert argv[5] in {'https://nuget.pkg.github.com/FS-GG/index.json','https://api.nuget.org/v3/index.json'}
+            assert (feed,package) not in self.feeds and package in PACKAGES
+            self.feeds.add((feed,package))
+        else:
+            assert argv[:2]==[sys.executable,str(ROOT/'scripts/release-saga.py')] and argv[2]=='record-observed'
+            args=self.saga.parser().parse_args(argv[2:]);self.run_saga(args)
+        return types.SimpleNamespace(returncode=0)
+
+
+class SuspensionFixture(unittest.TestCase):
     """Actual maintained callers with in-memory Git and an authenticated source fixture.
 
     Only the external accepted-source payload/hash is synthetic. Original journal bytes,
@@ -1973,6 +2072,7 @@ class SuspensionControls(unittest.TestCase):
     def writes(self):
         return [row for row in self.authority.calls if row[0] in {'post', 'patch'}]
 
+class SuspensionControls(SuspensionFixture):
     def test_installer_preserves_old_unknown_and_unrelated_tree_exactly(self):
         before = self.authority.head
         after = self.install()
@@ -1995,13 +2095,14 @@ class SuspensionControls(unittest.TestCase):
             native=MemoryPublisher(); native_get=native.get
             def get(path):
                 if path=='user': return {'login':'EHotwagner','type':'User'}
+                if path.startswith(PREFIX) or path==self.decision_path:return self.authority.get(path)
                 row=native_get(path)
                 if path.endswith('/git/ref/heads/main'): row['object']['type']='commit'
                 return row
             native.get=get
             def local(command,**kwargs):
-                self.assertIn(command,(['git','rev-parse','HEAD'],['git','diff','--quiet','HEAD']))
-                return types.SimpleNamespace(stdout='b'*40+'\n',returncode=0)
+                self.assertIn(command,(['git','rev-parse','HEAD'],['git','diff','--quiet','HEAD'],['git','status','--porcelain=v1','--untracked-files=all','--','scripts']))
+                return types.SimpleNamespace(stdout='b'*40+'\n' if command[1]=='rev-parse' else '',returncode=0)
             environment={'GH_TOKEN':'inert-owner','ORDINARY_LEDGER_TOKEN':'inert-writer'}
             with patch.object(sys,'argv',argv),patch.dict(os.environ,environment,clear=True), \
                  patch.object(publisher,'GitHubAPI',side_effect=lambda token:native if token=='inert-owner' else self.authority), \
@@ -2021,7 +2122,7 @@ class SuspensionControls(unittest.TestCase):
                 with self.subTest(mutation=mutation),patch.object(sys,'argv',argv), \
                      patch.dict(os.environ,environment,clear=True), \
                      patch.object(publisher,'GitHubAPI',side_effect=lambda token:native if token=='inert-owner' else api), \
-                     patch.object(publisher.subprocess,'run',side_effect=lambda *a,**k:types.SimpleNamespace(stdout=('e' if mutation=='local' else 'b')*40+'\n',returncode=0)):
+                     patch.object(publisher.subprocess,'run',side_effect=lambda command,**k:types.SimpleNamespace(stdout=(('e' if mutation=='local' else 'b')*40+'\n') if command[1]=='rev-parse' else '',returncode=0)):
                     self.assertEqual(publisher.main(),1)
                 self.assertEqual([row for row in api.calls if row[0] in {'post','patch'}],[])
                 native.get=get
@@ -2209,6 +2310,73 @@ class SuspensionControls(unittest.TestCase):
         self.assertEqual(self.writes(),[])
         self.assertEqual(self.reader().file(self.authority.head,'state/releases/utel-rel-21/release-state.json'),self.raw_state)
 
+    def test_shared_immutable_reader_requires_same_api_repository_and_literal_route(self):
+        self.install();reader=self.reader();reader.read()
+        journal=ProtectedReleaseJournal(self.authority,self.allowed['logicalRef'],main_directory=True,suspension=reader)
+        before=len(self.authority.calls)
+        first=journal._immutable_object('commits',self.authority.head)
+        first['parents'].clear()
+        self.assertTrue(journal._immutable_object('commits',self.authority.head)['parents'])
+        self.assertEqual(len(self.authority.calls),before)
+        for api,ref,main in ((MemoryAuthority(),self.allowed['logicalRef'],True),
+                             (self.authority,self.mod.SUSPENDED_REF,True),
+                             (self.authority,self.allowed['logicalRef'],False)):
+            with self.subTest(ref=ref,main=main),self.assertRaisesRegex(self.mod.Refused,'different owner or binding'):
+                ProtectedReleaseJournal(api,ref,main_directory=main,suspension=reader)
+        for kind,oid in (('refs',self.authority.head),('commits','main'),('trees','x'*40)):
+            with self.subTest(kind=kind,oid=oid),self.assertRaisesRegex(self.mod.Refused,'identity is invalid'):
+                journal._immutable_object(kind,oid)
+
+    def test_full_literal_104_sixteen_effects_fit_unchanged_authority_budget(self):
+        self.install();self.authority.calls.clear()
+        temporary=tempfile.TemporaryDirectory();self.addCleanup(temporary.cleanup)
+        root=pathlib.Path(temporary.name)
+        counted=publisher.CountedAuthorityAPI(self.authority,ceiling=publisher.ORDINARY_AUTHORITY_CALL_CEILING,
+                                             quota_floor=publisher.ORDINARY_AUTHORITY_QUOTA_FLOOR)
+        shared=self.mod.ReleaseSuspension(counted)
+        native=Literal104ProviderFixture(root,shared);candidate=native.candidate;provider=native.provider
+        effects=ordered_effects(candidate);self.assertEqual(len(effects),16)
+        intent={'contentId':candidate['contentId'],'sourceSha':'b'*40,'version':'0.104.0','candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
+        rows=report()
+        counted.admit_quota()
+        shared.authorize(self.allowed['logicalRef'],'0.104.0')
+        journal=publisher.ReportingJournal(ProtectedReleaseJournal(counted,self.allowed['logicalRef'],main_directory=True,suspension=shared),rows,detailed=True)
+        admission=publisher.ProtectedPublisherAdmission(SingleOperatorAdmission(native,candidate,'b'*40,1,'EHotwagner','refs/heads/main'),counted,self.allowed['logicalRef'],suspension=shared)
+        publisher.prepare_release_journal(journal,counted,admission,provider,native,candidate,intent,'b'*40,'b'*40,False,lambda:None)
+        journal.capture(); ticks=[0];sleeps=[]
+        def sleep(seconds):sleeps.append(seconds);ticks[0]+=seconds
+        try:
+            with patch.object(publisher.subprocess,'run',side_effect=native.process):
+                result=publisher.run_forward(candidate,journal,admission,publisher.ReportingProvider(provider,rows),rows,2700,
+                    maximum=152,clock=lambda:ticks[0],sleep=sleep,continue_literal_successor=True)
+        except publisher.AuthorityQuotaWaiting:
+            from collections import Counter
+            categories=Counter()
+            for method,path in self.authority.calls:
+                label=('immutable-object' if '/git/' in path and any('/git/'+kind+'/' in path for kind in ('commits','trees','blobs'))
+                    else 'fresh-main-ref' if '/git/ref/' in path else 'pinned-path-history' if '/commits?' in path
+                    else 'fresh-protection' if '/rules' in path else 'pinned-decision-source' if '/contents/' in path
+                    else 'quota' if path=='rate_limit' else 'repository-identity' if path==PREFIX else 'write')
+                categories[method+':'+label]+=1
+            print(json.dumps({'literal104WholeInvocation':'budget-exhausted','authority':counted.report(),'requestCensus':dict(categories),
+                'lastObservedGeneration':journal._observed.state['generation'],'dispatchedEffects':provider.dispatched,
+                'virtualSleepSeconds':sum(sleeps),'iterations':rows['iterationsAttempted']},sort_keys=True))
+            raise
+        self.assertEqual(result,'complete')
+        self.assertEqual(provider.dispatched,[effect.identity for effect in effects])
+        self.assertEqual(journal.read().generation,33)
+        self.assertEqual(journal.journal._observed.state['effects'],{effect.identity:'verified' for effect in effects})
+        self.assertFalse(native.release['draft'])
+        self.assertIsNotNone(provider._final_manifest())
+        self.assertEqual(shared.file(self.authority.head,'state/releases/utel-rel-21/release-state.json'),self.raw_state)
+        self.assertEqual(shared.file(self.authority.head,'state/releases/utel-rel-21/release-head.txt'),(self.original['logicalHead']+'\n').encode())
+        self.assertEqual(shared.file(self.authority.head,'state/ordinary/sibling.json'),b'original sibling bytes\n')
+        self.assertEqual(sum(counted.attempted.values()),len(self.authority.calls))
+        self.assertLess(sum(counted.attempted.values()),1500)
+        self.assertEqual(sleeps,[5]*16)
+        print(json.dumps({'literal104FullEffects':16,'authorityRequests':counted.attempted,'ceiling':counted.ceiling,
+                          'virtualSleepSeconds':sum(sleeps),'iterations':rows['iterationsAttempted'],'disposition':result},sort_keys=True))
+
     def test_direct_provider_original_and_missing_reader_cannot_dispatch(self):
         self.install()
         from release_successor_execution import Effect
@@ -2256,6 +2424,347 @@ class SuspensionControls(unittest.TestCase):
         self.assertNotIn('-p:Version=',candidate)
         self.assertIn('name: release-successor-candidate-${{ github.sha }}-${{ github.run_id }}',candidate)
         self.assertIn('Separate evidence: never add a member to the exact seven-member publisher archive.',candidate)
+
+
+class LiteralForwardControls(SuspensionFixture):
+    """Real first-effect journal/admission controls for the selected bounded loop."""
+    def context(self):
+        if not hasattr(self,'_forward_base'):self._forward_base=copy.deepcopy(self.authority)
+        self.authority=copy.deepcopy(self._forward_base)
+        self.install();self.authority.calls.clear()
+        candidate=manifest();candidate['descriptor'].update(version='0.104.0',previousStableVersion='0.102.0')
+        candidate['contentId']='sha256:'+hashlib.sha256(json.dumps(candidate['descriptor'],sort_keys=True,separators=(',',':')).encode()).hexdigest()
+        counted=publisher.CountedAuthorityAPI(self.authority,ceiling=1500,quota_floor=1800);counted.admit_quota()
+        shared=self.mod.ReleaseSuspension(counted);rows=report();native=MemoryPublisher()
+        journal=publisher.ReportingJournal(ProtectedReleaseJournal(counted,self.allowed['logicalRef'],main_directory=True,suspension=shared),rows,detailed=True)
+        admission=publisher.ProtectedPublisherAdmission(SingleOperatorAdmission(native,candidate,'b'*40,1,'EHotwagner','refs/heads/main'),counted,self.allowed['logicalRef'],suspension=shared)
+        provider=MemoryProvider(ordered_effects(candidate),{});provider._release=lambda:None
+        intent={'contentId':candidate['contentId'],'sourceSha':'b'*40,'version':'0.104.0','candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
+        publisher.prepare_release_journal(journal,counted,admission,provider,native,candidate,intent,'b'*40,'b'*40,False,lambda:None)
+        journal.capture();ticks=[0];sleeps=[]
+        def sleep(seconds):sleeps.append(seconds);ticks[0]+=seconds
+        def run(**kwargs):
+            return publisher.run_forward(candidate,journal,admission,publisher.ReportingProvider(provider,rows),rows,
+                kwargs.pop('deadline',2700),maximum=kwargs.pop('maximum',3),clock=lambda:ticks[0],sleep=kwargs.pop('sleep',sleep),
+                continue_literal_successor=True,**kwargs)
+        return candidate,counted,shared,rows,native,journal,admission,provider,ticks,sleeps,run
+
+    def test_joined_cas_boundaries_refuse_drift_without_reusing_mutable_observation(self):
+        for edge in (1,2,3,4):
+            with self.subTest(edge=edge):
+                c,api,reader,rows,native,journal,admission,provider,ticks,sleeps,run=self.context()
+                expected=journal.read();before=dict(api.attempted);original=self.authority.get;seen=[0];triggered=[False]
+                def get(path):
+                    if path==PREFIX+'/git/ref/heads/main':
+                        seen[0]+=1
+                        if seen[0]==edge and not triggered[0]:
+                            triggered[0]=True
+                            if edge==1:self.add_file('state/releases/utel-rel-21/release-state.json',self.raw_state+b' ')
+                            else:self.add_file('state/ordinary/sibling.json',b'concurrent sibling change\n')
+                    return original(path)
+                with patch.object(self.authority,'get',side_effect=get),self.assertRaises(self.mod.Refused):
+                    journal.compare_and_swap(expected,'tag','intent')
+                self.assertTrue(triggered[0]);self.assertEqual(api.attempted['patch'],before['patch'])
+                self.assertEqual(api.attempted['post']-before['post'],0 if edge<=2 else 7)
+                self.assertEqual(provider.dispatched,[])
+
+    def test_joined_cas_changed_record_and_nonforced_conflict_preserve_original(self):
+        for mode in ('missing','malformed','wrong-version','conflict'):
+            with self.subTest(mode=mode):
+                c,api,reader,rows,native,journal,admission,provider,ticks,sleeps,run=self.context()
+                expected=journal.read();before=dict(api.attempted)
+                if mode=='conflict':self.authority.reject_patch=True
+                elif mode=='wrong-version':
+                    changed=copy.deepcopy(self.record);changed['allowedSuccessor']['version']='0.105.0'
+                    self.add_file(self.mod.SUSPENSION_PATH,canonical(changed))
+                elif mode=='malformed':self.add_file(self.mod.SUSPENSION_PATH,self.raw+b' ')
+                else:
+                    # A new physical tree deliberately lacks the required entry.
+                    path=self.mod.SUSPENSION_PATH
+                    parent=self.authority.head;tree=self.authority.objects['commits',parent]['tree']['sha']
+                    removed=self.authority.post(PREFIX+'/git/trees',{'base_tree':tree,'tree':[{'path':path,'sha':None}]})
+                    commit=self.authority.post(PREFIX+'/git/commits',{'tree':removed['sha'],'parents':[parent],'message':'inert missing record'})
+                    self.authority.patch(PREFIX+'/git/refs/heads/main',{'sha':commit['sha'],'force':False})
+                with self.assertRaises(self.mod.Refused):journal.compare_and_swap(expected,'tag','intent')
+                self.assertEqual(api.attempted['patch']-before['patch'],1 if mode=='conflict' else 0)
+                self.assertEqual(api.attempted['post']-before['post'],7 if mode=='conflict' else 0)
+                self.assertEqual(reader.file(self.authority.head,'state/releases/utel-rel-21/release-state.json'),self.raw_state)
+                self.assertEqual(provider.dispatched,[])
+
+    def test_joined_cas_allows_unrelated_write_before_opening_and_preserves_it(self):
+        c,api,reader,rows,native,journal,admission,provider,ticks,sleeps,run=self.context()
+        expected=journal.read();self.add_file('state/ordinary/sibling.json',b'new sibling before boundary\n')
+        self.assertTrue(journal.compare_and_swap(expected,'tag','intent'))
+        self.assertEqual(reader.file(self.authority.head,'state/ordinary/sibling.json'),b'new sibling before boundary\n')
+        self.assertEqual(reader.file(self.authority.head,'state/releases/utel-rel-21/release-state.json'),self.raw_state)
+
+    def test_delayed_visibility_and_unknown_send_never_resend_retained_intent(self):
+        for response in ('applied','unknown'):
+            with self.subTest(response=response):
+                c,api,reader,rows,native,journal,admission,provider,ticks,sleeps,run=self.context()
+                def dispatch(effect):provider.dispatched.append(effect.identity);return Dispatch(response)
+                provider.dispatch=dispatch
+                def sleep(seconds):
+                    sleeps.append(seconds);ticks[0]+=seconds
+                    if len(sleeps)==2:provider.matched.add('tag')
+                self.assertEqual(run(maximum=4,sleep=sleep),'checkpoint')
+                self.assertEqual(provider.dispatched,['tag','draft'])
+                self.assertEqual(journal._observed.state['effects'],{'tag':'verified','draft':'intent'})
+                self.assertEqual(sleeps,[5,5])
+
+    def test_permanent_absence_stops_at_original_iteration_bound_without_resend(self):
+        *_,provider,ticks,sleeps,run=self.context()
+        provider.dispatch=lambda effect:(provider.dispatched.append(effect.identity) or Dispatch('unknown'))
+        self.assertEqual(run(maximum=3),'checkpoint')
+        self.assertEqual(provider.dispatched,['tag']);self.assertEqual(sleeps,[5,5])
+
+    def test_no_sleep_without_next_iteration_or_full_interval(self):
+        for maximum,deadline in ((1,2700),(3,5)):
+            with self.subTest(maximum=maximum,deadline=deadline):
+                *_,provider,ticks,sleeps,run=self.context()
+                self.assertEqual(run(maximum=maximum,deadline=deadline),'checkpoint')
+                self.assertEqual(provider.dispatched,['tag']);self.assertEqual(sleeps,[])
+
+    def test_error_unknown_and_mismatch_stop_without_poll_or_later_send(self):
+        for state in ('unknown','mismatched','error'):
+            with self.subTest(state=state):
+                c,api,reader,rows,native,journal,admission,provider,ticks,sleeps,run=self.context()
+                original=provider.observe
+                def observe(effect):
+                    if provider.dispatched and effect.identity=='tag':
+                        if state=='error':raise RuntimeError('inert observation failed')
+                        return Observation(state)
+                    return original(effect)
+                provider.observe=observe
+                with self.assertRaises(RuntimeError):run()
+                self.assertEqual(provider.dispatched,['tag']);self.assertEqual(sleeps,[5])
+
+    def test_post_sleep_main_run_suspension_and_protection_drift_stop_before_settlement(self):
+        for mode in ('source','run','suspension','protection'):
+            with self.subTest(mode=mode):
+                c,api,reader,rows,native,journal,admission,provider,ticks,sleeps,run=self.context()
+                original=native.get
+                def sleep(seconds):
+                    ticks[0]+=seconds;sleeps.append(seconds)
+                    if mode=='source':native.head='e'*40
+                    elif mode=='run':
+                        def get(path):
+                            row=original(path)
+                            if '/actions/runs/' in path:row['status']='cancelled'
+                            return row
+                        native.get=get
+                    elif mode=='suspension':self.add_file(self.mod.SUSPENSION_PATH,self.raw+b' ')
+                    else:next(iter(self.authority.controls.values()))['enforcement']='disabled'
+                with self.assertRaises(RuntimeError):run(sleep=sleep)
+                self.assertEqual(provider.dispatched,['tag']);self.assertEqual(sleeps,[5])
+                self.assertEqual(journal._observed.state['effects'],{'tag':'intent'})
+
+    def test_deadline_expiration_during_wait_stops_before_another_advance(self):
+        *_,provider,ticks,sleeps,run=self.context()
+        def sleep(seconds):ticks[0]=11;sleeps.append(seconds)
+        with self.assertRaisesRegex(publisher.Refused,'deadline expired'):run(deadline=10,sleep=sleep)
+        self.assertEqual(provider.dispatched,['tag']);self.assertEqual(sleeps,[5])
+
+
+class HostedSuspensionInstallControls(SuspensionFixture):
+    """Actual two-stage CLI and four guarded Git edges; no issuer/process/network runs."""
+    def setUp(self):
+        super().setUp()
+        temporary=tempfile.TemporaryDirectory(); self.addCleanup(temporary.cleanup)
+        self.root=pathlib.Path(temporary.name)
+        self.inputs={
+            'install_release_suspension':True,'expected_authority_main':self.authority.head,
+            'candidate_run_id':'','candidate_artifact_id':'','candidate_archive_sha256':'',
+            'publish':False,'qualify_original_tag_authentication_only':False,'suspended_0103_successor':False,
+            'original_0103_candidate':False,'recover_original_0103_tag_intent':False,'recovery_checkpoint':False,
+            'repeat_original_nuget_kit_intent':False,'recover_original_runtime_intent':False,
+            'recover_original_successor_checkpoint':False,'expected_checkpoint':''}
+        self.environment={'RUNNER_TEMP':str(self.root),'GITHUB_OUTPUT':str(self.root/'outputs'),
+            'GH_TOKEN':'inert-reader','ORDINARY_LEDGER_TOKEN':'inert-writer','ORDINARY_LEDGER_APP_ID':'4882140',
+            'ACTUAL_INSTALLATION_ID':'160261608','EXPECTED_INSTALLATION_ID':'160261608',
+            'GITHUB_SHA':'b'*40,'GITHUB_RUN_ID':'1','GITHUB_RUN_ATTEMPT':'1','GITHUB_ACTOR':'EHotwagner',
+            'GITHUB_TRIGGERING_ACTOR':'EHotwagner','GITHUB_REPOSITORY':'FS-GG/.github',
+            'GITHUB_REF':'refs/heads/main','GITHUB_EVENT_NAME':'workflow_dispatch'}
+        self.native=MemoryPublisher()
+        self.run=self.native.get('repos/FS-GG/.github/actions/runs/1')
+        self.run.update(id=1,triggering_actor={'login':'EHotwagner'},repository={'id':1269292704,'full_name':'FS-GG/.github'})
+        original_get=self.native.get
+        def native_get(path):
+            if path.startswith(PREFIX) or path==self.decision_path:
+                return self.authority.get(path)
+            if path.endswith('/actions/runs/1'): return copy.deepcopy(self.run)
+            row=original_get(path)
+            if path.endswith('/git/ref/heads/main'): row['object']['type']='commit'
+            return row
+        self.native.get=native_get
+        self.authority.override['installation/repositories?per_page=100']={
+            'total_count':1,'repositories':[{'id':1351660651,'full_name':REPOSITORY}]}
+        self.status=''; self.tokens=[]
+        self.prepared_path=self.root/'release-successor-suspension-prepared.json'
+        self.result_path=self.root/'release-successor-result.json'
+
+    def invoke(self,flag,digest=None):
+        argv=['publisher',flag]+(['--prepared-sha256',digest] if digest is not None else [])
+        def api(token):
+            self.tokens.append(token)
+            return self.native if token=='inert-reader' else self.authority
+        def local(command,**kwargs):
+            self.assertIn(command,(['git','rev-parse','HEAD'],['git','diff','--quiet','HEAD'],
+                                  ['git','status','--porcelain=v1','--untracked-files=all','--','scripts']))
+            return types.SimpleNamespace(stdout='b'*40+'\n' if command[1]=='rev-parse' else self.status if command[1]=='status' else '',returncode=0)
+        with patch.object(sys,'argv',argv),patch.dict(os.environ,{**self.environment,'FSGG_RELEASE_INPUTS':json.dumps(self.inputs)},clear=True), \
+             patch.object(publisher,'GitHubAPI',side_effect=api),patch.object(publisher.subprocess,'run',side_effect=local), \
+             patch.object(sys,'stderr',io.StringIO()) as errors:
+            result=publisher.main()
+            self.last_error=errors.getvalue()
+            return result
+
+    def prepare(self):
+        self.assertEqual(self.invoke('--prepare-hosted-release-suspension'),0,self.last_error)
+        self.assertEqual(self.tokens,['inert-reader'])
+        return hashlib.sha256(self.prepared_path.read_bytes()).hexdigest()
+
+    def test_real_hosted_prepare_and_install_only_preserve_original_and_result_custody(self):
+        digest=self.prepare()
+        prepared=json.loads(self.prepared_path.read_bytes())
+        self.assertEqual(canonical(prepared['record']),self.raw)
+        self.assertEqual(prepared['execution'],{'sourceSha':'b'*40,'runId':1,'attempt':1,'operator':'EHotwagner'})
+        self.assertEqual(self.writes(),[])
+        self.assertEqual(self.invoke('--install-hosted-release-suspension',digest),0,self.last_error)
+        report=json.loads(self.result_path.read_bytes())
+        self.assertEqual(report['disposition'],'install-only-complete'); self.assertIs(report['publicationComplete'],False)
+        self.assertEqual([row['method'] for row in report['attemptedRequests']],['post','post','post','patch'])
+        self.assertTrue(all(re.fullmatch('[0-9a-f]{40}',row['returnedSHA']) for row in report['attemptedRequests']))
+        self.assertEqual(report['attemptedRequests'][-1]['intendedRefUpdate']['expectedParent'],prepared['expectedParent'])
+        self.assertEqual(self.reader().read(),self.record)
+        self.assertEqual(self.reader().file(self.authority.head,'state/releases/utel-rel-21/release-state.json'),self.raw_state)
+        self.assertEqual(self.reader().file(self.authority.head,'state/ordinary/sibling.json'),b'original sibling bytes\n')
+        retained=self.result_path.read_bytes(); writes=list(self.writes())
+        self.assertEqual(self.invoke('--install-hosted-release-suspension',digest),1)
+        self.assertEqual(self.result_path.read_bytes(),retained); self.assertEqual(self.writes(),writes)
+
+    def test_every_mixed_install_input_refuses_before_reader_or_writer_credential_access(self):
+        for key,value in list((key,True) for key in ('publish','qualify_original_tag_authentication_only','suspended_0103_successor',
+                'original_0103_candidate','recover_original_0103_tag_intent','recovery_checkpoint','repeat_original_nuget_kit_intent',
+                'recover_original_runtime_intent','recover_original_successor_checkpoint'))+[
+                ('candidate_run_id','1'),('candidate_artifact_id','2'),('candidate_archive_sha256','a'*64),('expected_checkpoint','{}'),
+                ('expected_authority_main',''),('expected_authority_main','e'*39),('unknown',False)]:
+            old=copy.deepcopy(self.inputs); self.inputs[key]=value
+            with self.subTest(key=key,value=value):
+                self.assertEqual(self.invoke('--prepare-hosted-release-suspension'),1)
+                self.assertEqual(self.tokens,[]); self.assertEqual(self.writes(),[])
+                self.assertFalse(self.prepared_path.exists())
+            self.inputs=old
+
+    def test_publication_coordinates_and_install_parent_are_checked_before_issuers(self):
+        value={**self.inputs,'install_release_suspension':False,'expected_authority_main':''}
+        for changes in ({},{'candidate_run_id':'0'},{'candidate_run_id':'1','candidate_artifact_id':'2','candidate_archive_sha256':'a'*63}):
+            with self.subTest(changes=changes),self.assertRaises(publisher.Refused): publisher.validate_workflow_inputs({**value,**changes})
+        good={**value,'candidate_run_id':'1','candidate_artifact_id':'2','candidate_archive_sha256':'a'*64}
+        self.assertEqual(publisher.validate_workflow_inputs(good),'publication')
+        with self.assertRaisesRegex(publisher.Refused,'requires install-only'):
+            publisher.validate_workflow_inputs({**good,'expected_authority_main':'e'*40})
+
+    def test_native_run_actor_source_attempt_and_reader_refusals_precede_issuer(self):
+        for field,value in [('id',2),('status','completed'),('run_attempt',2),('run_attempt',True),('head_sha','e'*40),
+                ('path','.github/workflows/other.yml'),('actor',{'login':'caller'}),('triggering_actor',{'login':'caller'}),
+                ('repository',{'id':1,'full_name':'FS-GG/.github'})]:
+            old=copy.deepcopy(self.run); self.run[field]=value
+            with self.subTest(field=field,value=value):
+                self.assertEqual(self.invoke('--prepare-hosted-release-suspension'),1)
+                self.assertNotIn('inert-writer',self.tokens); self.assertFalse(self.prepared_path.exists()); self.assertEqual(self.writes(),[])
+            self.run=old
+        self.authority.override[PREFIX]=NotFound('reader denied')
+        self.assertEqual(self.invoke('--prepare-hosted-release-suspension'),1)
+        self.assertFalse(self.prepared_path.exists()); self.assertNotIn('inert-writer',self.tokens)
+
+    def test_actual_cli_rejects_relevant_untracked_import_sibling_before_issuer(self):
+        scripts=self.root/'source'/'scripts';scripts.mkdir(parents=True)
+        sibling=scripts/'untracked_installer_sibling.py';sibling.write_text('# inert, never imported\n')
+        self.status='?? scripts/'+sibling.name+'\n'
+        with patch.object(publisher,'__file__',str(scripts/'release-successor-publish.py')):
+            self.assertEqual(self.invoke('--prepare-hosted-release-suspension'),1)
+        self.assertIn('import-root source is not clean',self.last_error)
+        self.assertFalse(self.prepared_path.exists()); self.assertNotIn('inert-writer',self.tokens); self.assertEqual(self.writes(),[])
+
+    def test_wrong_installation_or_repository_scope_refuses_before_writes(self):
+        digest=self.prepare()
+        for key in ('ACTUAL_INSTALLATION_ID','EXPECTED_INSTALLATION_ID'):
+            old=self.environment[key];self.environment[key]='1'
+            with self.subTest(key=key):
+                self.assertEqual(self.invoke('--install-hosted-release-suspension',digest),1)
+                self.assertEqual(self.writes(),[])
+            self.environment[key]=old
+            # No effect was sent; reset only this independent synthetic fixture result.
+            self.result_path.unlink(); self.prepared_path.unlink(); self.tokens=[];digest=self.prepare()
+        self.authority.override['installation/repositories?per_page=100']['total_count']=2
+        self.assertEqual(self.invoke('--install-hosted-release-suspension',digest),1)
+        self.assertEqual(self.writes(),[])
+
+    def test_prepared_record_digest_input_and_parent_drift_cannot_acquire_writer(self):
+        digest=self.prepare(); original=self.prepared_path.read_bytes()
+        for raw,selected in [(original+b' ',digest),(original,'0'*64),
+                (canonical({**json.loads(original),'recordSHA256':'0'*64}),digest)]:
+            self.prepared_path.write_bytes(raw)
+            with self.subTest(raw=raw[:20],digest=selected):
+                self.assertEqual(self.invoke('--install-hosted-release-suspension',selected),1)
+                self.assertNotIn('inert-writer',self.tokens); self.assertEqual(self.writes(),[])
+        self.prepared_path.write_bytes(original)
+        self.inputs['expected_authority_main']='e'*40
+        self.assertEqual(self.invoke('--install-hosted-release-suspension',digest),1)
+        self.assertNotIn('inert-writer',self.tokens); self.assertEqual(self.writes(),[])
+
+    def test_cancellation_at_each_post_stops_the_next_effect_with_original_identity(self):
+        for cutoff in (1,2,3):
+            # Each subcase is an independent original fixture, never a native retry.
+            case=HostedSuspensionInstallControls();case.setUp()
+            try:
+                digest=case.prepare(); original=case.authority.post; count=0
+                def post(path,body):
+                    nonlocal count
+                    response=original(path,body);count+=1
+                    if count==cutoff:case.run['status']='completed'
+                    return response
+                with patch.object(case.authority,'post',side_effect=post):
+                    self.assertEqual(case.invoke('--install-hosted-release-suspension',digest),1)
+                report=json.loads(case.result_path.read_bytes())
+                self.assertEqual(len(report['attemptedRequests']),cutoff)
+                self.assertFalse(any(row[0]=='patch' for row in case.writes()))
+                self.assertEqual(case.reader().file(case.authority.head,'state/releases/utel-rel-21/release-state.json'),case.raw_state)
+            finally:case.doCleanups()
+
+    def test_parent_race_and_uncertain_patch_preserve_original_and_never_retry(self):
+        digest=self.prepare(); original_patch=self.authority.patch
+        def uncertain(path,body):
+            original_patch(path,body)
+            raise RuntimeError('inert lost PATCH response')
+        with patch.object(self.authority,'patch',side_effect=uncertain):
+            self.assertEqual(self.invoke('--install-hosted-release-suspension',digest),1)
+        report=json.loads(self.result_path.read_bytes())
+        self.assertEqual(report['disposition'],'install-only-failed-or-unknown')
+        self.assertEqual(report['attemptedRequests'][-1]['outcome'],'unknown')
+        self.assertIn('intendedRefUpdate',report['attemptedRequests'][-1])
+        retained=self.result_path.read_bytes(); writes=list(self.writes())
+        self.assertEqual(self.invoke('--install-hosted-release-suspension',digest),1)
+        self.assertEqual(self.result_path.read_bytes(),retained);self.assertEqual(self.writes(),writes)
+
+    def test_actual_workflow_jobs_are_structurally_exclusive_and_install_has_no_publication_reachability(self):
+        workflow=(ROOT/'.github/workflows/release-successor-publish.yml').read_text()
+        publish,install=workflow.split('\n  install-suspension:\n')
+        self.assertIn('inputs.install_release_suspension != true',publish)
+        self.assertIn('if: inputs.install_release_suspension == true',install)
+        self.assertIn('permissions:\n      contents: read\n      actions: read',install)
+        self.assertLess(install.index('--check-workflow-inputs'),install.index('--prepare-hosted-release-suspension'))
+        self.assertLess(install.index('--prepare-hosted-release-suspension'),install.index('actions/create-github-app-token@'))
+        self.assertLess(install.index('actions/create-github-app-token@'),install.index('--install-hosted-release-suspension'))
+        self.assertLess(publish.index('--check-workflow-inputs'),publish.index('actions/create-github-app-token@'))
+        self.assertLess(publish.index('--check-workflow-inputs'),publish.index('NuGet/login@'))
+        for forbidden in ('NuGet/login','id-token:','packages:','setup-dotnet','candidate_run_id:','execute_publisher',
+                          '--publish','--preflight-only','--suspension-file','skip-token-revoke'):
+            with self.subTest(forbidden=forbidden):self.assertNotIn(forbidden,install)
+        self.assertIn('repositories: FS.GG.Coordination.Authority',install)
+        self.assertIn('permission-contents: write',install)
+        self.assertIn('cancel-in-progress: false',publish)
 
 
 if __name__ == "__main__":
