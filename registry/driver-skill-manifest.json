@@ -5,7 +5,7 @@
       "id": "atlas",
       "scope": "driver",
       "sha256": "c18e56fcc56abf80903e2fc6829cd94b44f42947724a26318ebcbf1ac5e1b35b",
-      "tree-sha256": "1214742246f203aacf521bef285b4d216d87ce95d58873054697f90d7b9ac3e8",
+      "tree-sha256": "b05a67ff766900ea8487171565c0330041f10bf5136de3152f4bc94983eddb67",
       "files": [
         {
           "path": "SKILL.md",
@@ -24,7 +24,7 @@
         },
         {
           "path": "assets/seed/catalog.json",
-          "sha256": "57c2fc601fce335aa36bebc3ca8cf5253fc1bc48241ad269137ff00014112d34",
+          "sha256": "4fb578e7d625c9f3ef7376c71026e3740d1ddc032bf084fe683ece6fd20e00f0",
           "executable": false
         },
         {
@@ -638,6 +638,11 @@
           "executable": false
         },
         {
+          "path": "assets/seed/records/9442788fa51227044803f1d3efdfc1c2b2da372871a85f0f7a6bb3596a5c003f.json",
+          "sha256": "9442788fa51227044803f1d3efdfc1c2b2da372871a85f0f7a6bb3596a5c003f",
+          "executable": false
+        },
+        {
           "path": "assets/seed/records/947a1cdd43831936480167169d30334f818bb5d882650a3547827c05204af111.json",
           "sha256": "947a1cdd43831936480167169d30334f818bb5d882650a3547827c05204af111",
           "executable": false
@@ -1100,6 +1105,11 @@
         {
           "path": "assets/seed/records/f0f90dee84db760cc1bb0f6e6983d4de0e3d5d9f4adf7b2b52f0d3dbe6d585a4.json",
           "sha256": "f0f90dee84db760cc1bb0f6e6983d4de0e3d5d9f4adf7b2b52f0d3dbe6d585a4",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/f1d4a6e98f41ab3f6cfd67cddeab9d0ed287b92cb3dbe575e3ce61925510a792.json",
+          "sha256": "f1d4a6e98f41ab3f6cfd67cddeab9d0ed287b92cb3dbe575e3ce61925510a792",
           "executable": false
         },
         {
