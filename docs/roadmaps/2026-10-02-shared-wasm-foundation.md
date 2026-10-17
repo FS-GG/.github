@@ -807,3 +807,44 @@ removed by its declared trap. Root acceptance `67e750272e63a6fdffe6ef2bec2e079ab
 retains these limits and the immutable failed attempts. Product .5-S1/.5-S2 and
 .5-B2 adoption, native acceptance, publication and .7 removal keep their existing
 separate gates. No workspace default changed.
+
+
+#### Current terminal Process 0.4 publication frontier — 2026-10-17
+
+[Game#713](https://github.com/FS-GG/FS.GG.Game/pull/713) delivers terminal Process
+retirement and the current-only coherent 0.4 release/installed route;
+[Game#714](https://github.com/FS-GG/FS.GG.Game/pull/714) repairs native checkout-log
+identity reading. The protected producer is
+`6732d2371d142d5ccc5d2d127f20e4f179800892`, tree
+`cc71e7cfe73449919376acf775940ff9e8bdab56`.
+[Full protected WASM qualification `39013804889/a1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39013804889)
+and exact original custody artifact `12094158629` are accepted. These originals
+remain bound to this protected producer; PR merge-ref packages cannot be relabeled
+as its release custody.
+
+[Original publisher `39015233527/a1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39015233527)
+completed org-first/public-second publication and exact payload/signature/release-asset
+readbacks. [Release `415663600`](https://github.com/FS-GG/FS.GG.Game/releases/tag/wasm/v0.4.0)
+was promoted at 08:01:19 UTC with `wasm/v0.4.0` naming that exact producer.
+The original manifest SHA-256 is
+`f8f47c2f5ae6fd8b5aef474dfc83b096aa0a6ad0265eb16dc4f0df7ade7f01b7`;
+the SDK archive SHA-256 is
+`85c9362bd4d15d784da88909ef84cd8170051d67495c4961c783045db228592f`.
+Registry source, published inventory and release tag now name 0.4.0.
+
+Fresh both-feed installed acceptance remains **open**. The original
+[installed run `39016307973/a1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39016307973)
+passed the org consumer/runtime step, then failed artifact upload because the
+copied NuGet HTTP-cache path contained a colon. No artifact was retained, and the
+public leg was cancelled before execution. The complete installed evidence is
+incomplete; an org step success cannot stand for accepted both-feed installation.
+The qualifier-source repair retains its own source/acceptance contract and does
+not imply another publication, release version or product pin.
+
+Original 0.3 H3/H4 transaction bytes, accepted scope and failed/unknown attempts
+retain their own identities. Prepublication custody and served-feed readbacks
+cannot replace fresh installed acceptance for the current package set.
+
+The existing SC2/BAR product adapter, production/native and .7 removal boundaries
+remain open under their owning plans. The registry has no declared WASM consumers;
+producer availability cannot establish a consumer pin, adoption or command authority.

@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-10-14"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-10-17"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   fsquint: { name: FsQuint, role: "Independent public Quint–F# decoding, replay and optional tooling" }
@@ -871,26 +871,26 @@ contracts:
         dotnet-only: "all modules explicitly excluded by compatibility-profile.v1.json"
         oracle: "tests/Game.Core.Fable.Tests/fixtures/v1/expected.bin — 442 bytes, SHA-256 9c0d7128f7b9558ef7e985618b1165199f83a0bb4af7533b175cc95b340c4a24"
   - id: wasm-shared-runtime
-    version: "0.2.0"   # Independent WASM release axis; Game#679 protected source 4afacb501b9371b4cc81494b7bf91b46c880a663.
-    package-version: "0.3.0"   # CURRENT PUBLISHED INVENTORY: native H3 recovery 37185764818 verified both feeds and promoted wasm/v0.3.0 from producer 16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c; release 402763234, manifest SHA-256 a10046daf5417304732605745608b084f14481212931cb69939d51f90233ed07. Selected contract/profile/defaults below remain 0.2.0; publication establishes no product adoption.
-    package-tag: "wasm/v0.2.0"
+    version: "0.4.0"   # Published current terminal Process source: Game#714, producer 6732d2371d142d5ccc5d2d127f20e4f179800892.
+    package-version: "0.4.0"   # Original publisher 39015233527/a1 completed org-first/public-second readbacks and promoted release 415663600. Fresh installed and product acceptance remain separate.
+    package-tag: "wasm/v0.4.0"
     owner: game
-    surface: "FS.GG.Wasm.Contracts and FS.GG.Wasm.Browser coherent package set; browser Worker lifecycle, portable Fable sources and fsgg-wasm-sdk-0.2.0.tar.gz author source archive"
-    consumers: []   # Availability establishes no product adoption; BAR/SC2/FourD remain separate milestones.
+    surface: "FS.GG.Wasm.Contracts and FS.GG.Wasm.Browser coherent package set; browser Worker lifecycle, terminal Process retirement, portable Fable sources and coupled author SDK archive"
+    consumers: []   # No consumer pin/adoption follows from producer availability; BAR/SC2/FourD remain separate milestones.
     profiles:
       shared-wasm:
-        identity: "wasm/v0.2.0"
-        packages: "FS.GG.Wasm.Contracts@0.2.0 / FS.GG.Wasm.Browser@0.2.0; exact same-version Browser-to-Contracts dependency"
-        sdk: "fsgg-wasm-sdk-0.2.0.tar.gz — coupled source archive under wasm/v0.2.0; SHA-256 ddd7b0ea76a1811ec3cdd45c373ac0ee556cf90eb9ae4cecad48dec1095475a3"
-        source: "4afacb501b9371b4cc81494b7bf91b46c880a663; tree 191d7c0ca82af8a4d610e88b35ce97df802d3463; Game#679"
-        manifest: "release-manifest.json SHA-256 dee8b02ad0e43e7d279492ed6378eb873f76edeb5a72c29e9c336409d5907853; native publisher 37037339434 verified both feeds and exact release assets"
-        api-baseline: "Published 0.1.1 remains the first baseline. Native SDK10.0.401 ApiCompat: Contracts compatible; Browser intentionally versioned pre-1.0 migration with four CP0002 constructor changes (WorkerCommand, RequestProjection, EffectProjection, HostProjection), no suppressions. Recompile and use connected Host with explicit compile/initialize readiness."
+        identity: "wasm/v0.4.0 — genuinely published coherent current set"
+        packages: "FS.GG.Wasm.Contracts@0.4.0 / FS.GG.Wasm.Browser@0.4.0; exact same-version Browser-to-Contracts dependency; genuinely published coherent pair"
+        sdk: "fsgg-wasm-sdk-0.4.0.tar.gz — coupled source archive under wasm/v0.4.0; SHA-256 85c9362bd4d15d784da88909ef84cd8170051d67495c4961c783045db228592f"
+        source: "6732d2371d142d5ccc5d2d127f20e4f179800892; tree cc71e7cfe73449919376acf775940ff9e8bdab56; Game#714"
+        manifest: "release-manifest.json SHA-256 f8f47c2f5ae6fd8b5aef474dfc83b096aa0a6ad0265eb16dc4f0df7ade7f01b7; original publisher 39015233527/a1 verified both feeds and all four release assets from protected custody 12094158629"
+        api-baseline: "Published 0.4 native API classification compares actual published 0.3.0 from producer 16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c: Contracts and Browser compatible, no suppressions. Original 0.3 transaction and earlier baseline/migration evidence stay immutable; no obsolete 0.2 caller compatibility obligation."
         toolchain: ".NET 10.0.401 / Fable 5.18.0 / Node 26 / Quint 0.32.0 / Rust 1.90.0 / WASI SDK 34.0"
         browser: "Pinned Playwright 1.63.0 Chromium profile"
         abi: "BAR ABI 1; strict imported SC2 ABI 0x00010000"
-        qualification: "Installed both-feed qualification CLOSED: read-only run 37047631080 passed org 25/25 and public 25/25 on immutable producer 4afacb501b9371b4cc81494b7bf91b46c880a663 and reviewed qualifier 7397d4b408b8e7b44393fee9f837278723934867; fresh locked HTTPS restores, .NET/Fable, Rust2/C4, pinned Chromium under /sub/app. Lock SHA-256 d6a4e7dde5754ac50c73f9887c4aedf2e1f845b967ecbd6b26f9eb150667439e. No product adoption."
-        installed-evidence: "Org artifact 11244369017 SHA-256 34647b3b6800339c48785ad7df0afdcf80145d094685bff83c07afbf553e748d; public artifact 11245594558 SHA-256 cad4eede1795feef465b4862a3793683cb3f9bed006b028bcdc78bf4814c3ad0. Native API success and downloaded artifact digests/readbacks verified 2026-10-02; original failed run 37039137022 remains historical."
-        qualifier: "7397d4b408b8e7b44393fee9f837278723934867; tree 4881135b718beaeb87eab1763d9f13e31410389f; Game#680. Exact audited consumer projection/assertion correction for canonical early/late expiry orderings; published runtime/model/SDK/package inputs remain unchanged."
+        qualification: "Protected full WASM 39013804889/a1 and original publication 39015233527/a1 passed on the exact producer. Fresh both-feed installed 0.4 acceptance remains OPEN; prepublication custody and served-archive readback do not replace it."
+        installed-evidence: "Current original 39016307973/a1: org consumer/runtime step passed but artifact courier failed with zero artifacts; public cancelled before execution, so installed evidence is incomplete. Original 0.3 H4/.5-P2 acceptance at 37191263989 remains bound to its original producer, not rebuilt 0.4 bytes."
+        qualifier: "Current 0.4 requires producer=executor=qualifier at the exact protected source, genuine immutable publication transaction/assets and fresh feed-only restores; no historical executor overlay."
         unqualified: "Additional browsers, npm/bundler permutations, OS support, WASI execution, deterministic fuel/replay, product adoption and native authority"
   - id: game-physics-box2d
     version: "0.17.0"
