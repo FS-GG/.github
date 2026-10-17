@@ -1029,12 +1029,29 @@ class GitHubAPI:
     def patch(self, path: str, body: dict) -> dict:
         return json.loads(self._request(f"https://api.github.com/{path}", "PATCH", json.dumps(body).encode()))
 
-    def upload_asset(self, release_id: int, name: str, path: pathlib.Path) -> dict:
+    def upload_asset(self, release_id: int, name: str, path: pathlib.Path, expected_sha256=None) -> dict:
         url = (
             f"https://uploads.github.com/repos/{REPOSITORY}/releases/{release_id}/assets?"
             + urllib.parse.urlencode({"name": name})
         )
-        return json.loads(self._request(url, "POST", path.read_bytes(), "application/octet-stream"))
+        if expected_sha256 is None:
+            raw = path.read_bytes()
+        else:
+            if (type(expected_sha256) is not str or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+                    or path.is_symlink() or not path.is_file()):
+                raise Refused("continuation upload bytes differ from fsynced presend receipt")
+            with path.open("rb") as stream:
+                raw = stream.read(1048577)
+            if not raw or len(raw) > 1048576 or hashlib.sha256(raw).hexdigest() != expected_sha256:
+                raise Refused("continuation upload bytes differ from fsynced presend receipt")
+        # The same bytes checked here become the HTTP body; no second path read.
+        return json.loads(self._request(url, "POST", raw, "application/octet-stream"))
+
+    def download_continuation_candidate(self):
+        return self._runtime_read("https://api.github.com/repos/FS-GG/.github/actions/artifacts/12115444808/zip", 33326837, None)
+
+    def download_continuation_result(self):
+        return self._runtime_read("https://api.github.com/repos/FS-GG/.github/actions/artifacts/12116094456/zip", 1525, None)
 
     def download_original_tag_result(self):
         # Actions archive redirects use the existing artifact-reader header set,
@@ -1171,13 +1188,31 @@ class LiveProvider:
         self._runtime_send_consumed = False
         self.last_dispatch_diagnostic = None
 
-    def _authorize_release(self):
+    def _authorize_release(self, effect=None):
         if self.version in {"0.103.0", "0.104.0"}:
             from release_successor_journal import ReleaseSuspension, SUSPENDED_REF, ALLOWED_SUCCESSOR
             expected = SUSPENDED_REF if self.version == "0.103.0" else ALLOWED_SUCCESSOR["logicalRef"]
             if not isinstance(self.suspension, ReleaseSuspension) or self.logical_ref != expected:
                 raise Refused("direct sensitive provider requires the maintained suspension reader")
             self.suspension.authorize(self.logical_ref, self.version)
+            if self.version == "0.104.0":
+                from release_successor_journal import ContinuationPermit, _claimed_state
+                physical = self.suspension.main()
+                raw = self.suspension.file(physical, "state/releases/utel-rel-22/release-state.json")
+                if self.suspension.main() != physical:
+                    raise Refused("Authority main moved during provider continuation fence")
+                state = json.loads(raw) if raw is not None else {}
+                permit = getattr(self, "_continuation_permit", None)
+                if "continuation" in state:
+                    if (not _claimed_state(state) or not isinstance(permit, ContinuationPermit) or effect is None
+                            or permit.active_effect != effect.identity
+                            or state["effects"].get(effect.identity) != "intent"
+                            or state["contentId"] != self.content_id or state["sourceSha"] != self.source
+                            or state["version"] != self.version
+                            or state["continuation"] != permit.record):
+                        raise Refused("claimed .104 journal requires its same-invocation consumed send permit")
+                elif permit is not None:
+                    raise Refused("owned continuation claim disappeared before provider send")
 
     def _release(self) -> dict | None:
         try:
@@ -1276,7 +1311,7 @@ class LiveProvider:
         return Observation("matched", self.content_id), witness
 
     def dispatch_runtime_recovery(self, effect: Effect, witness: dict) -> Dispatch:
-        self._authorize_release()
+        self._authorize_release(effect)
         if (self._runtime_send_consumed or witness is not self._runtime_witness
                 or effect.identity != "qualification-asset:runtime" or effect.request_digest != self.content_id
                 or effect.target_digest != self.content_id
@@ -1467,8 +1502,81 @@ class LiveProvider:
         output.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n")
         return output
 
+    def _prepare_channel_asset(self):
+        previous = json.loads((self.root / "previous-stable-channel.json").read_text())
+        if (
+            previous.get("version") != self.manifest["descriptor"].get("previousStableVersion")
+            or previous.get("contentId") != self.manifest["descriptor"].get("previousStableContentId")
+        ):
+            raise Refused("stable predecessor changed")
+        receipt = {
+            "contentId": self.content_id, "version": self.version, "sourceSha": self.source,
+            "promotedAt": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+        output = self.root / "stable-channel.json"
+        output.write_text(json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n")
+        return output
+
+    def prepare_continuation_asset(self, effect):
+        if effect.identity not in {"channel-asset", "manifest-asset"}:
+            raise Refused("continuation preparation has a different effect")
+        prepared = getattr(self, "_continuation_assets", None)
+        if prepared is None:
+            prepared = self._continuation_assets = {}
+        if effect.identity in prepared:
+            raise Refused("continuation payload was already prepared; no timestamp regeneration")
+        path = self._prepare_channel_asset() if effect.identity == "channel-asset" else self._prepare_manifest_asset()
+        raw = path.read_bytes()
+        if not raw or len(raw) > 1048576 or path.is_symlink():
+            raise Refused("continuation payload is not bounded regular source output")
+        prepared[effect.identity] = (path, raw)
+        return {"name": "stable-channel.json" if effect.identity == "channel-asset" else "release-manifest.json",
+                "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+
+    def _continuation_asset_path(self, effect):
+        prepared = getattr(self, "_continuation_assets", {}).get(effect.identity)
+        if prepared is None:
+            raise Refused("continuation requires prepared exact source-owned payload")
+        path, raw = prepared
+        if path.is_symlink() or not path.is_file() or path.read_bytes() != raw:
+            raise Refused("continuation prepared payload changed")
+        return path
+
+    def continuation_visibility(self, effect):
+        """Absence only: metadata presence never asserts a matched payload."""
+        self.continuation_release_witness()
+        release = self._release()
+        if effect.identity == "promote":
+            return "absent" if release.get("draft") is True else "potential"
+        name = {"channel-asset": "stable-channel.json", "manifest-asset": "release-manifest.json"}.get(effect.identity)
+        if name is None:
+            raise Refused("continuation visibility is outside remaining actions")
+        rows = self.api.get(f"repos/{REPOSITORY}/releases/416097241/assets?per_page=100")
+        return "potential" if any(row["name"] == name for row in rows) else "absent"
+
+    def continuation_release_witness(self):
+        release = self._release()
+        if (not isinstance(release, dict) or release.get("id") != 416097241 or release.get("tag_name") != self.tag
+                or release.get("target_commitish") != self.source or release.get("body") != self.marker
+                or type(release.get("draft")) is not bool or release.get("prerelease") is not False):
+            raise Refused("original .104 release identity differs")
+        rows = self.api.get(f"repos/{REPOSITORY}/releases/416097241/assets?per_page=100")
+        allowed = {*(f"{package}.{self.version}.nupkg" for package in PACKAGES),
+                   "standalone-telemetry-evidence.json", "standalone-telemetry-runtime-evidence.json",
+                   "stable-channel.json", "release-manifest.json"}
+        if (not isinstance(rows, list) or not 5 <= len(rows) <= 7
+                or any(not isinstance(row, dict) or type(row.get("id")) is not int or row["id"] <= 0
+                       or row.get("name") not in allowed or row.get("state") != "uploaded"
+                       or type(row.get("size")) is not int or row["size"] < 0 for row in rows)
+                or len({row["id"] for row in rows}) != len(rows) or len({row["name"] for row in rows}) != len(rows)
+                or not allowed - {"stable-channel.json", "release-manifest.json"} <= {row["name"] for row in rows}):
+            raise Refused("original .104 complete asset population differs")
+        return {"releaseId": release["id"], "draft": release["draft"],
+                "assetsSHA256": hashlib.sha256(json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+                "names": sorted(row["name"] for row in rows)}
+
     def dispatch(self, effect: Effect) -> Dispatch:
-        self._authorize_release()
+        self._authorize_release(effect)
         identity = effect.identity
         self.last_dispatch_diagnostic = None
         if isinstance(self.api, GitHubAPI):
@@ -1511,28 +1619,25 @@ class LiveProvider:
                     raise Refused("draft release is unavailable")
                 self.api.upload_asset(release["id"], name, self.root / name)
             elif identity == "channel-asset":
-                previous = json.loads((self.root / "previous-stable-channel.json").read_text())
-                if (
-                    previous.get("version") != self.manifest["descriptor"].get("previousStableVersion")
-                    or previous.get("contentId") != self.manifest["descriptor"].get("previousStableContentId")
-                ):
-                    raise Refused("stable predecessor changed")
-                receipt = {
-                    "contentId": self.content_id, "version": self.version, "sourceSha": self.source,
-                    "promotedAt": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
-                }
-                output = self.root / "stable-channel.json"
-                output.write_text(json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n")
+                output = self._continuation_asset_path(effect) if getattr(self, "_continuation_permit", None) is not None else self._prepare_channel_asset()
                 release = self._release()
                 if release is None or not release.get("draft"):
                     raise Refused("draft release is unavailable")
-                self.api.upload_asset(release["id"], output.name, output)
+                if getattr(self, "_continuation_permit", None) is not None:
+                    digest = hashlib.sha256(self._continuation_assets[effect.identity][1]).hexdigest()
+                    self.api.upload_asset(release["id"], output.name, output, digest)
+                else:
+                    self.api.upload_asset(release["id"], output.name, output)
             elif identity == "manifest-asset":
-                output = self._prepare_manifest_asset()
+                output = self._continuation_asset_path(effect) if getattr(self, "_continuation_permit", None) is not None else self._prepare_manifest_asset()
                 release = self._release()
                 if release is None or not release.get("draft"):
                     raise Refused("draft release is unavailable")
-                self.api.upload_asset(release["id"], "release-manifest.json", output)
+                if getattr(self, "_continuation_permit", None) is not None:
+                    digest = hashlib.sha256(self._continuation_assets[effect.identity][1]).hexdigest()
+                    self.api.upload_asset(release["id"], "release-manifest.json", output, digest)
+                else:
+                    self.api.upload_asset(release["id"], "release-manifest.json", output)
             elif identity == "promote":
                 release = self._release()
                 if release is None or not release.get("draft") or self._final_manifest() is None:
