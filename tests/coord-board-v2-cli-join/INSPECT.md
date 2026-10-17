@@ -144,3 +144,22 @@ cannot verify UI columns/cards/order or replace actual installed Project 3 accep
 The 27 focused migration controls are prepared for hosted qualification; no local CLR/native/browser
 execution or live effect was performed. The Observation-only authorizer, product binding3/schema1,
 V1 transport and historical offline constructor retain their separate scope.
+
+
+## Packaged pre-migration source qualification
+
+The existing `release-successor-candidate.yml` installs one source-bound candidate and runs
+`packaged_v2.py` against that same isolated tool. Nine controls cover local refusal diagnostics,
+product stdin exclusion, adapter mismatch and migration command syntax. The distinct credential-missing
+and adapter-mismatch refusals avoid counting generic failure as input-validation evidence. No credential
+is inherited; no actual private Project 3, migration-scope validation or active developer-install
+acceptance is claimed.
+
+A separate V2 artifact retains source/run/attempt, package and exact installed-member/shim hashes,
+case results, bounded exact output bytes, partial results, first failure and independent cleanup status.
+These identities support the stated local-refusal scope, not runtime attestation. Each acquisition is
+bounded at 20 seconds; the five-second cleanup deadline covers one owned-group signal while the root
+is unreaped, bounded reap and read-only absence checks. Unsupported/lost custody or unconfirmed cleanup
+refuses; escaped process trees are not qualified. The original candidate profile, predecessor/feed/tag
+gates, 45-minute workflow cap and exact seven-member publisher artifact remain unchanged. Candidate
+execution still needs separately selected admission, exact inputs and actual budget qualification.

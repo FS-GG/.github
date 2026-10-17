@@ -504,6 +504,17 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   refusal and controlled pre-migration evidence are not postmigration positive v4 acceptance. No new
   In review option ID or final binding is invented. After actual native migration/readback, final stable
   binding and positive installed inspect/refresh/selection remain required before consumer adoption.
+  **Prepared source implementation.** The retained candidate workflow now invokes nine isolated
+  packaged refusal controls and uploads separate V2 evidence. Package/nuspec source, installed
+  CLI/adapter members, invoked shim hashes and the distinct loaded-adapter refusal bind the stated
+  local-refusal scope; they are not runtime attestation or developer-install adoption. Each process
+  has a 20-second acquisition deadline and a separate five-second owned-group cleanup deadline.
+  Linux non-reaping observation pins root identity until one group signal; bounded reap/read-only
+  absence checks refuse unknown cleanup, with no escaped-process-tree claim. Bounded exact outputs,
+  partial identities/outcomes and original first failure survive separately from cleanup status.
+  Inert candidate/helper/artifact controls and independent source review passed; actual packaged
+  execution, private native positives, migration-scope validation and timing remain unqualified.
+  The original 45-minute workflow cap and seven-member publisher archive are unchanged.
 
 - [ ] **COORD-BOARD-V2-01.10 — Migrate and verify Project 3** — route: routine.
   Depends on complete bounded outcome mapping, .9 and admitted native mutation capability. Scope:
