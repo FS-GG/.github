@@ -205,6 +205,17 @@ module V2Migration =
             { Id = nonempty "id" node; ContentId = nonempty "id" content; ContentKind = kind;
               Repository = repository; Number = number; UpdatedAt = nonempty "updatedAt" node;
               Archived = node.GetProperty("isArchived").GetBoolean(); Values = [] })
+    // Match the maintained native-provider UTC timestamp rule in CiReads. Scalar native
+    // value identity is additional evidence; the drained connection key remains item+field.
+    let private planningScalarIdentity (nativeId: string) (updatedAt: string) =
+        if not (bounded 4096 nativeId && bounded 128 updatedAt) then false
+        else
+            match DateTimeOffset.TryParse(updatedAt, Globalization.CultureInfo.InvariantCulture, Globalization.DateTimeStyles.RoundtripKind) with
+            | true, parsed ->
+                parsed.Offset = TimeSpan.Zero
+                && System.Text.RegularExpressions.Regex.IsMatch(updatedAt, @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?(Z|\+00:00)$")
+            | _ -> false
+
     let private value (node: JsonElement) : IoResult<ItemValue> =
         decode (fun () ->
             let kind = nonempty "__typename" node
@@ -221,6 +232,9 @@ module V2Migration =
                 | "ProjectV2ItemFieldReviewerValue" | "ProjectV2ItemFieldUserValue"
                 | "ProjectV2ItemIssueFieldValue" -> []
                 | _ -> invalidArg "value" "unknown native field-value identity"
+            if kind = "ProjectV2ItemFieldTextValue" || kind = "ProjectV2ItemFieldSingleSelectValue" then
+                if not (planningScalarIdentity (nonempty "id" node) (nonempty "updatedAt" node)) then
+                    invalidArg "value" "native scalar planning identity/timestamp is unavailable or malformed"
             // System-field contents are not reconstructed or written. Their native field identity
             // is retained; complete selected planning values are retained above.
             let fieldId = nonempty "id" (node.GetProperty "field")
@@ -424,10 +438,11 @@ module V2Migration =
                 let text (name: string) =
                     use document = JsonDocument.Parse(fields.[name])
                     document.RootElement.GetString()
-                match expected with
-                | PlanningText value -> actual.Kind = "ProjectV2ItemFieldTextValue" && text "text" = value
-                | PlanningSelect value ->
-                    actual.Kind = "ProjectV2ItemFieldSingleSelectValue" && text "optionId" = value.Id && text "name" = value.Name
+                planningScalarIdentity (text "id") (text "updatedAt")
+                && (match expected with
+                    | PlanningText value -> actual.Kind = "ProjectV2ItemFieldTextValue" && text "text" = value
+                    | PlanningSelect value ->
+                        actual.Kind = "ProjectV2ItemFieldSingleSelectValue" && text "optionId" = value.Id && text "name" = value.Name)
         with _ -> false
 
     let private initialChanges (scope: Scope) (snapshot: Snapshot) (fields: Map<string, Field>) : IoResult<Change list> =

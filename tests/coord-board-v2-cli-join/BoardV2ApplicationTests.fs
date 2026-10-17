@@ -385,6 +385,9 @@ let ``actual CLI joins twenty enrolled issues to current native plan blobs acros
     let repositories =
         [ ".github"; "FS.GG.Coordination"; "FS.GG.Game"; "FS.GG.Governance"; "FS.GG.Rendering";
           "FS.GG.SC2.Client"; "FS.GG.SDD"; "FS.GG.Templates"; "FS.GG.Unity.Client" ]
+    let ownerRepositories =
+        [ ".github"; "FS.GG.Coordination"; "FS.GG.Game"; "FS.GG.SDD"; "FS.GG.Templates"; "FS.GG.Unity.Client" ]
+    let readOnlyRepositories = [ "FS.GG.Governance"; "FS.GG.Rendering"; "FS.GG.SC2.Client" ]
     let plans: (string * string) list =
         [ (".github", ".agents/skills/work-programme/references/observation.md");
           ("FS.GG.SDD", "docs/roadmaps/tsdd-knowledge-01.md");
@@ -392,8 +395,10 @@ let ``actual CLI joins twenty enrolled issues to current native plan blobs acros
           ("FS.GG.Unity.Client", "docs/roadmaps/unityc-01-reference-admission.md") ]
     let rows: (string * IssueRef * string) list =
         [ 1 .. 20 ] |> List.map (fun index ->
-            let repo, path = plans.[(index - 1) % plans.Length]
-            let issue: IssueRef = { Owner = "FS-GG"; Repository = ".github"; Number = 100 + index }
+            let issue: IssueRef = { Owner = "FS-GG"; Repository = ownerRepositories.[(index - 1) % ownerRepositories.Length]; Number = 100 + index }
+            let planRepository =
+                if List.contains issue.Repository [ "FS.GG.SDD"; "FS.GG.Templates"; "FS.GG.Unity.Client" ] then issue.Repository else ".github"
+            let repo, path = plans |> List.find (fun (repository, _) -> repository = planRepository)
             let reference = if repo = "FS.GG.Templates" then String.replicate 40 "a" else "main"
             "synthetic-enrolled-" + string index, issue, $"https://github.com/fs-gg/{repo}/blob/{reference}/{path}#selected-outcome")
     let scope = repositories |> List.map (fun repo -> "FS-GG/" + repo) |> Set.ofList
@@ -405,6 +410,15 @@ let ``actual CLI joins twenty enrolled issues to current native plan blobs acros
         let provenance = item.GetProperty("sourceRevision").GetString()
         Assert.Contains("plan=FS-GG/", provenance)
         Assert.Contains("#selected-outcome", provenance)
+    let actualOwners = rows |> List.map (fun (_, issue, _) -> issue.Repository) |> Set.ofList
+    Assert.Equal<Set<string>>(Set.ofList ownerRepositories, actualOwners)
+    for repository in readOnlyRepositories do
+        Assert.False(actualOwners.Contains repository)
+        Assert.Contains(transport, fun (request: Transport.Request) -> request.Subject = $"FS-GG/{repository} open PR inventory")
+    for repository in ownerRepositories do
+        let permissionPath = $"repos/FS-GG/{repository}/collaborators/author/permission"
+        let decidingReads = transport |> List.filter (fun (request: Transport.Request) -> request.Method = "GET" && request.Path = permissionPath)
+        Assert.True(decidingReads.Length >= 2, repository)
     let planReads = transport |> List.filter (fun (request: Transport.Request) -> request.Subject = "enrolled native owning plan")
     Assert.NotEmpty planReads
     Assert.True(transport.Length < 500)

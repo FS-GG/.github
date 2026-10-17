@@ -256,6 +256,22 @@ module V2MigrationTests =
             let candidate: Snapshot = { native with Items = [ { memberItem with Values = [ existing ] } ] }
             Assert.True(Result.isError (prepare scoped candidate))
             Assert.Equal(existing, candidate.Items.Head.Values.Head)
+        let roadmapChange = InitializePlanningValue(initial.IssueId, memberItem.Id, scope.RoadmapFieldId, PlanningText initial.Roadmap)
+        let withRoadmapValue (nativeId: string) (updatedAt: string) : Snapshot =
+            let value: ItemValue =
+                { Id = scope.RoadmapFieldId; FieldId = scope.RoadmapFieldId; Kind = "ProjectV2ItemFieldTextValue";
+                  Value = JsonSerializer.Serialize([ "id"; nativeId; "updatedAt"; updatedAt; "text"; JsonSerializer.Serialize(initial.Roadmap) ]) }
+            { populated with Items = [ { memberItem with Values = [ value ]; UpdatedAt = "2026-10-17T13:00:00Z" } ] }
+        let nativeId = "\"synthetic-roadmap-value\""
+        let nativeTime = "\"2026-10-17T13:00:00Z\""
+        validateTransition scoped populated (withRoadmapValue nativeId nativeTime) roadmapChange |> get |> ignore
+        let invalidIdentities: (string * string) list =
+            [ ("null", nativeTime); ("123", nativeTime); ("\" padded \"", nativeTime);
+              (nativeId, "null"); (nativeId, "123"); (nativeId, "\"17/10/2026 13:00:00\"") ]
+        for id, time in invalidIdentities do
+            let malformed = withRoadmapValue id time
+            Assert.True(Result.isError (prepare scoped malformed))
+            Assert.True(Result.isError (validateTransition scoped populated malformed roadmapChange))
         let omitted = prepare ({ scoped with InitialPlanning = [ { initial with Status = None } ] }) populated |> get
         Assert.Contains(omitted.OwnerActions, fun action -> action.Contains("intentionally unresolved"))
         Assert.Equal(2, omitted.Changes |> List.filter (function InitializePlanningValue _ -> true | _ -> false) |> List.length)

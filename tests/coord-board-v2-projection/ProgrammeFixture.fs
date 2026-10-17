@@ -151,6 +151,10 @@ module ProgrammeFixture =
                                                         url = $"https://github.com/{repository}/issues/{issue.Number}";
                                                         body = ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", "None");
                                                         repository = {| nameWithOwner = repository |} |} |} |})
+                | Query(document, variables) when document.Contains("issueCreationPolicy") ->
+                    let repository = variables |> List.pick (function "name", VString name -> Some name | _ -> None)
+                    wire ({| repository = {| id = "synthetic-repository-" + repository; issueCreationPolicy = "COLLABORATORS_ONLY";
+                                             hasIssuesEnabled = true; mergeCommitAllowed = true; squashMergeAllowed = true; rebaseMergeAllowed = false |} |})
                 | Query(document, variables) when document.StartsWith("query IntakeIdentity(", StringComparison.Ordinal) ->
                     let id, _, _ = current variables |> Option.get
                     wire ({| repository = {| issue = {| id = id; updatedAt = revision; author = {| id = "U_author"; login = "author" |} |} |} |})

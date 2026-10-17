@@ -40,8 +40,9 @@ module V2Migration =
     type Field =
         { Id: string; Name: string; DataType: string; Options: SelectOption list }
 
-    /// Full selected scalar planning payloads; untouched system values retain native kind/field identity.
-    /// Nested labels/users/repositories are not reconstructed or written by this scoped migration.
+    /// Full selected scalar planning payloads; native Text/SingleSelect IDs must be nonempty and
+    /// their timestamps must match the invariant UTC provider rule. The collection key remains field ID.
+    /// Untouched system values retain kind/field identity; nested labels/users/repositories are not written.
     type ItemValue =
         { Id: string; FieldId: string; Kind: string; Value: string }
 

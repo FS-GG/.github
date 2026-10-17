@@ -182,6 +182,123 @@ module BoardV2MigrationTests =
           Roadmap = "https://github.com/FS-GG/.github/blob/main/docs/coordination/synthetic.md";
           Status = Some { Id = native.Id; Name = native.Name } }
 
+    let private observedScalar (fieldId: string) (desired: PlanningValue) : ItemValue =
+        let kind, tokens =
+            match desired with
+            | PlanningText text -> "ProjectV2ItemFieldTextValue", [ "text"; JsonSerializer.Serialize(text) ]
+            | PlanningSelect selected ->
+                "ProjectV2ItemFieldSingleSelectValue", [ "optionId"; JsonSerializer.Serialize(selected.Id); "name"; JsonSerializer.Serialize(selected.Name) ]
+        { Id = fieldId; FieldId = fieldId; Kind = kind;
+          Value = JsonSerializer.Serialize([ "id"; JsonSerializer.Serialize("synthetic-native-scalar-" + fieldId);
+                                             "updatedAt"; JsonSerializer.Serialize("2026-10-17T13:00:00Z") ] @ tokens) }
+
+    [<Fact>]
+    let ``actual matching values after add membership skip equal writes without asserting their origin`` () =
+        use fixture = new Fixture()
+        fixture.Native.Snapshot <- planningSchema fixture.Native.Snapshot
+        let initial = declaration "synthetic-issue" "Blocked"
+        fixture.Scope <- { fixture.Scope with InitialPlanning = [ initial ] }
+        let code, path = fixture.Prepare "matching-native-defaults"
+        Assert.Equal(0, code)
+        let expected: ItemValue list =
+            [ observedScalar scope.TrackFieldId (PlanningSelect initial.Track);
+              observedScalar scope.RoadmapFieldId (PlanningText initial.Roadmap);
+              observedScalar scope.StatusFieldId (PlanningSelect initial.Status.Value) ]
+        let mutable supplied = false
+        fixture.Native.BeforeRead <- fun (_: Transport.Request) ->
+            if not supplied && fixture.Native.Mutations.Length = 2 then
+                supplied <- true
+                let item = fixture.Native.Snapshot.Items.Head
+                fixture.Native.Snapshot <- { fixture.Native.Snapshot with Items = [ { item with Values = expected; UpdatedAt = "2026-10-17T13:00:00Z" } ] }
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        Assert.True supplied
+        Assert.Equal(2, fixture.Native.Mutations.Length)
+        Assert.Equal<ItemValue>(expected, fixture.Native.Snapshot.Items.Head.Values)
+        let repeated, repeatedPath = fixture.Prepare "matching-observed-repeat"
+        Assert.Equal(0, repeated)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments repeatedPath))
+        Assert.Equal(2, fixture.Native.Mutations.Length)
+
+    [<Fact>]
+    let ``actual conflict appearing between stable preconditions and final send guard preserves native value`` () =
+        use fixture = new Fixture()
+        fixture.Native.Snapshot <- planningSchema fixture.Native.Snapshot
+        let baseline, baselinePath = fixture.Prepare "existing-membership"
+        Assert.Equal(0, baseline)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments baselinePath))
+        Assert.Equal(2, fixture.Native.Mutations.Length)
+        fixture.Scope <- { fixture.Scope with InitialPlanning = [ declaration "synthetic-issue" "Blocked" ] }
+        let code, path = fixture.Prepare "before-human-change"
+        Assert.Equal(0, code)
+        let option = snapshot.Fields.Head.Options |> List.find (fun (option: SelectOption) -> option.Name = "Done")
+        let conflict = observedScalar scope.StatusFieldId (PlanningSelect { Id = option.Id; Name = option.Name })
+        let mutable reads = 0
+        let mutable changed = false
+        fixture.Native.BeforeRead <- fun (request: Transport.Request) ->
+            match request.Body with
+            | Transport.Query(document, _) when document.Contains("viewer{id login}") ->
+                reads <- reads + 1
+                // Two complete stable observations precede the final fresh pre-send observation.
+                if reads = 5 then
+                    changed <- true
+                    let item = fixture.Native.Snapshot.Items.Head
+                    fixture.Native.Snapshot <- { fixture.Native.Snapshot with Items = [ { item with Values = [ conflict ]; UpdatedAt = "2026-10-17T13:00:00Z" } ] }
+            | _ -> ()
+        Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
+        Assert.True changed
+        Assert.Equal(2, fixture.Native.Mutations.Length)
+        Assert.Equal(conflict, fixture.Native.Snapshot.Items.Head.Values.Head)
+        Assert.False(File.Exists(path + ".invocation/001-intent.json"))
+
+    [<Fact>]
+    let ``actual scalar planning readback refuses absent null malformed and wrong-type native identity`` () =
+        let invalid: (string * string) list =
+            [ ("id", "null"); ("id", "missing"); ("id", "wrong-type"); ("id", "malformed");
+              ("updatedAt", "null"); ("updatedAt", "missing"); ("updatedAt", "wrong-type");
+              ("updatedAt", "malformed"); ("updatedAt", "culture-date") ]
+        for target, step in [ (scope.TrackFieldId, 3); (scope.RoadmapFieldId, 4) ] do
+            for property, shape in invalid do
+                use fixture = new Fixture()
+                fixture.Native.Snapshot <- planningSchema fixture.Native.Snapshot
+                fixture.Scope <- { fixture.Scope with InitialPlanning = [ declaration "synthetic-issue" "Blocked" ] }
+                let code, path = fixture.Prepare ("invalid-scalar-" + target + "-" + property + "-" + shape)
+                Assert.Equal(0, code)
+                let mutable corrupted = false
+                fixture.Native.Transform <- fun (request: Transport.Request) (response: Transport.Response) ->
+                    match request.Body with
+                    | Transport.Query(document, _) when document.Contains("items(first:") && fixture.Native.Mutations.Length = step ->
+                        let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+                        let data = root.["data"]
+                        let project = (data.["organization"]).["projectV2"]
+                        let items = (project.["items"]).["nodes"].AsArray()
+                        let item = items.[0]
+                        let values = (item.["fieldValues"]).["nodes"].AsArray()
+                        let selected = values |> Seq.find (fun (value: System.Text.Json.Nodes.JsonNode) -> (value.["field"]).["id"].GetValue<string>() = target)
+                        corrupted <- true
+                        if shape = "missing" then selected.AsObject().Remove property |> ignore
+                        else
+                            let invalidValue: System.Text.Json.Nodes.JsonNode =
+                                match shape with
+                                | "null" -> null
+                                | "wrong-type" -> System.Text.Json.Nodes.JsonValue.Create(123)
+                                | "culture-date" -> System.Text.Json.Nodes.JsonValue.Create("17/10/2026 13:00:00")
+                                | _ -> System.Text.Json.Nodes.JsonValue.Create(if property = "id" then " padded native ID " else "not-a-native-timestamp")
+                            selected.[property] <- invalidValue
+                        Ok ({ response with Body = root.ToJsonString() })
+                    | _ -> Ok response
+                Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
+                Assert.True(corrupted, property + ":" + shape)
+                Assert.Equal(step, fixture.Native.Mutations.Length)
+                let prefix = path + ".invocation/" + step.ToString("D3")
+                Assert.True(File.Exists(prefix + "-intent.json"))
+                Assert.True(File.Exists(prefix + "-response.json"))
+                use terminal = JsonDocument.Parse(File.ReadAllText(path + ".invocation/terminal.json"))
+                Assert.Equal("Unknown", terminal.RootElement.GetProperty("state").GetString())
+                Assert.Equal("Unknown-after-possible-send-readback-unavailable", terminal.RootElement.GetProperty("failureCode").GetString())
+                Assert.False(File.Exists(path + ".invocation/" + (step + 1).ToString("D3") + "-intent.json"))
+                Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
+                Assert.Equal(step, fixture.Native.Mutations.Length)
+
     [<Fact>]
     let ``actual CLI initializes only absent planning values after native membership and repeats without writes`` () =
         use fixture = new Fixture()
