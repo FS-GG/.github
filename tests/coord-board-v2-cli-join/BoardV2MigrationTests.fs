@@ -42,7 +42,7 @@ module BoardV2MigrationTests =
             let input = Path.Combine(directory, name + "-scope.json")
             let report = Path.Combine(directory, name + "-prepared.json")
             let planned = V2Migration.prepare scope native.Snapshot |> get
-            use document = JsonDocument.Parse(V2Migration.encodePrepared { planned with PreparedPath = Some report })
+            use document = JsonDocument.Parse(V2Migration.encodePrepared ({ planned with PreparedPath = Some report }))
             File.WriteAllText(input, document.RootElement.GetProperty("scope").GetRawText())
             let code = run [ "migration-prepare"; "--scope-file"; input; "--report-file"; report ]
             code, report
@@ -128,9 +128,11 @@ module BoardV2MigrationTests =
                     File.WriteAllText(path + ".invocation-reserved", "existing original invocation")
                     arguments
                 | _ ->
-                    let fields = fixture.Native.Snapshot.Fields |> List.map (fun (field: Field) ->
-                        if field.Id = scope.StatusFieldId then { field with Options = field.Options |> List.map (fun (option: SelectOption) -> { option with Description = "owner changed descriptor" }) }
-                        else field)
+                    let fields =
+                        fixture.Native.Snapshot.Fields
+                        |> List.map (fun (field: Field) ->
+                            if field.Id = scope.StatusFieldId then { field with Options = (field.Options |> List.map (fun (option: SelectOption) -> { option with Description = "owner changed descriptor" })) }
+                            else field)
                     fixture.Native.Snapshot <- { fixture.Native.Snapshot with Fields = fields }
                     arguments
             Assert.Equal(3, fixture.Run changed)
@@ -163,7 +165,7 @@ module BoardV2MigrationTests =
             | Some(Error _) -> ()
             | _ -> failwith "closed migration grammar should refuse"
         let planned = V2Migration.prepare scope snapshot |> get
-        let prepared = V2Migration.encodePrepared { planned with PreparedPath = Some(Path.GetFullPath "synthetic-prepared.json") }
+        let prepared = V2Migration.encodePrepared ({ planned with PreparedPath = Some(Path.GetFullPath "synthetic-prepared.json") })
         Assert.True(Result.isError (BoardV2Application.parseBinding prepared))
 
     [<Fact>]
@@ -173,22 +175,29 @@ module BoardV2MigrationTests =
             [ 1 .. 17 ] |> List.map (fun index ->
                 { Id = "synthetic-selected-" + string index; Repository = "FS-GG/.github"; Number = 100 + index; Slice = "synthetic-parent-" + string index })
         fixture.Scope <- { fixture.Scope with SelectedIssues = selected }
-        fixture.Native.Snapshot <-
-            { fixture.Native.Snapshot with Issues = selected |> List.map (fun (issue: SelectedIssue) ->
-                { Id = issue.Id; Repository = issue.Repository; Number = issue.Number; UpdatedAt = "2026-10-17T12:00:00Z"; State = "OPEN" }) }
+        let issues =
+            selected
+            |> List.map (fun (issue: SelectedIssue) ->
+                { Id = issue.Id; Repository = issue.Repository; Number = issue.Number
+                  UpdatedAt = "2026-10-17T12:00:00Z"; State = "OPEN" })
+        fixture.Native.Snapshot <- { fixture.Native.Snapshot with Issues = issues }
         // Scope-only fixture construction must use the genuine selected identity snapshot too.
         let planned = V2Migration.prepare fixture.Scope fixture.Native.Snapshot |> get
         let input = Path.Combine(fixture.Directory, "seventeen-scope.json")
         let path = Path.Combine(fixture.Directory, "seventeen-prepared.json")
-        use document = JsonDocument.Parse(V2Migration.encodePrepared { planned with PreparedPath = Some path })
+        use document = JsonDocument.Parse(V2Migration.encodePrepared ({ planned with PreparedPath = Some path }))
         File.WriteAllText(input, document.RootElement.GetProperty("scope").GetRawText())
         Assert.Equal(0, fixture.Run [ "migration-prepare"; "--scope-file"; input; "--report-file"; path ])
         Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
         Assert.Equal(18, fixture.Native.Mutations.Length)
         Assert.Equal(17, fixture.Native.Snapshot.Items.Length)
         Assert.True(fixture.Native.Requests.Length + fixture.Native.Mutations.Length < 500)
-        let expectedCollections = fixture.Native.Requests |> List.filter (fun (request: Transport.Request) ->
-            match request.Body with Transport.Query(document, _) -> document.Contains "viewer{id login}" | _ -> false) |> List.length |> fun count -> count / 2
+        let expectedCollections =
+            fixture.Native.Requests
+            |> List.filter (fun (request: Transport.Request) ->
+                match request.Body with Transport.Query(document, _) -> document.Contains "viewer{id login}" | _ -> false)
+            |> List.length
+            |> fun count -> count / 2
         Assert.Equal(expectedCollections * 6, fixture.Native.Requests.Length)
 
     [<Fact>]
@@ -210,7 +219,7 @@ module BoardV2MigrationTests =
                 let pageInfo = fields.["pageInfo"]
                 pageInfo.["hasNextPage"] <- System.Text.Json.Nodes.JsonValue.Create true
                 pageInfo.["endCursor"] <- System.Text.Json.Nodes.JsonValue.Create "synthetic-tail"
-                Ok { response with Body = root.ToJsonString() }
+                Ok ({ response with Body = root.ToJsonString() })
             | _ -> Ok response
         let code, _ = fixture.Prepare "incomplete"
         Assert.Equal(3, code)
@@ -219,7 +228,7 @@ module BoardV2MigrationTests =
         let ready, path = malformed.Prepare "null-payload"
         Assert.Equal(0, ready)
         malformed.Native.TransformDispatch <- fun (_: Transport.Request) (response: Transport.Response) ->
-            Ok { response with Body = "{\"data\":{\"updateProjectV2Field\":null}}" }
+            Ok ({ response with Body = "{\"data\":{\"updateProjectV2Field\":null}}" })
         Assert.Equal(3, malformed.Run(malformed.ApplyArguments path))
         Assert.Single malformed.Native.Mutations |> ignore
         Assert.True(File.Exists(Path.Combine(path + ".invocation", "001-response.json")))
@@ -244,7 +253,7 @@ module BoardV2MigrationTests =
                     let field = payload.["projectV2Field"]
                     field.["id"] <- System.Text.Json.Nodes.JsonValue.Create "wrong-native-result"
                     exactReply <- root.ToJsonString()
-                Ok { response with Body = exactReply }
+                Ok ({ response with Body = exactReply })
             Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
             Assert.Single fixture.Native.Mutations |> ignore
             Assert.Equal(exactReply, File.ReadAllText(Path.Combine(path + ".invocation", "001-response.json")))
@@ -257,13 +266,16 @@ module BoardV2MigrationTests =
             [ 1 .. 100 ] |> List.map (fun index ->
                 { Id = "synthetic-bounded-" + string index; Repository = "FS-GG/.github"; Number = 200 + index; Slice = "synthetic-slice-" + string index })
         fixture.Scope <- { fixture.Scope with SelectedIssues = selected }
-        fixture.Native.Snapshot <-
-            { fixture.Native.Snapshot with Issues = selected |> List.map (fun (issue: SelectedIssue) ->
-                { Id = issue.Id; Repository = issue.Repository; Number = issue.Number; UpdatedAt = "2026-10-17T12:00:00Z"; State = "OPEN" }) }
+        let issues =
+            selected
+            |> List.map (fun (issue: SelectedIssue) ->
+                { Id = issue.Id; Repository = issue.Repository; Number = issue.Number
+                  UpdatedAt = "2026-10-17T12:00:00Z"; State = "OPEN" })
+        fixture.Native.Snapshot <- { fixture.Native.Snapshot with Issues = issues }
         let planned = V2Migration.prepare fixture.Scope fixture.Native.Snapshot |> get
         let input = Path.Combine(fixture.Directory, "bounded-scope.json")
         let path = Path.Combine(fixture.Directory, "bounded-prepared.json")
-        use document = JsonDocument.Parse(V2Migration.encodePrepared { planned with PreparedPath = Some path })
+        use document = JsonDocument.Parse(V2Migration.encodePrepared ({ planned with PreparedPath = Some path }))
         File.WriteAllText(input, document.RootElement.GetProperty("scope").GetRawText())
         Assert.Equal(0, fixture.Run [ "migration-prepare"; "--scope-file"; input; "--report-file"; path ])
         let beforeReads = fixture.Native.Requests.Length
@@ -301,7 +313,7 @@ module BoardV2MigrationTests =
             | Transport.Query(document, _) when document.Contains "viewer{id login}" && fixture.Native.Mutations.Length = 3 ->
                 postCreateMetas <- postCreateMetas + 1
                 if postCreateMetas = 3 then
-                    fixture.Native.Snapshot <- { fixture.Native.Snapshot with Views = fixture.Native.Snapshot.Views |> List.map (fun (view: View) -> { view with Filter = "owner-selected-filter" }) }
+                    fixture.Native.Snapshot <- { fixture.Native.Snapshot with Views = (fixture.Native.Snapshot.Views |> List.map (fun (view: View) -> { view with Filter = "owner-selected-filter" })) }
             | _ -> ()
         Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
         Assert.Equal(3, fixture.Native.Mutations.Length)
@@ -403,7 +415,7 @@ module BoardV2MigrationTests =
         let scopeFile = Path.Combine(fixture.Directory, "duplicate-view-id-scope.json")
         let reportPath = Path.Combine(fixture.Directory, "duplicate-view-id-prepared.json")
         let prepared = V2Migration.prepare fixture.Scope snapshot |> get
-        let root = System.Text.Json.Nodes.JsonNode.Parse(V2Migration.encodePrepared { prepared with PreparedPath = Some reportPath })
+        let root = System.Text.Json.Nodes.JsonNode.Parse(V2Migration.encodePrepared ({ prepared with PreparedPath = Some reportPath }))
         let scopeNode = root.["scope"]
         let views = scopeNode.["views"].AsArray()
         let item (name: string) =
@@ -447,7 +459,7 @@ module BoardV2MigrationTests =
                         else JsonSerializer.Serialize({| id = scope.StatusFieldId |})
                     values.Add(System.Text.Json.Nodes.JsonNode.Parse inserted)
                     grouped.["totalCount"] <- System.Text.Json.Nodes.JsonValue.Create 1
-                    Ok { response with Body = root.ToJsonString() }
+                    Ok ({ response with Body = root.ToJsonString() })
                 | _ -> Ok response
             Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
             Assert.Equal(3, fixture.Native.Mutations.Length)
@@ -461,7 +473,7 @@ module BoardV2MigrationTests =
             reader.Native.Transform <- fun (_: Transport.Request) (response: Transport.Response) ->
                 let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
                 root.["errors"] <- System.Text.Json.Nodes.JsonNode.Parse malformed
-                Ok { response with Body = root.ToJsonString() }
+                Ok ({ response with Body = root.ToJsonString() })
             let readCode, readPath = reader.Prepare "malformed-read-errors"
             Assert.Equal(3, readCode)
             Assert.False(File.Exists readPath)
@@ -474,7 +486,7 @@ module BoardV2MigrationTests =
                 let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
                 root.["errors"] <- System.Text.Json.Nodes.JsonNode.Parse malformed
                 exactResponse <- root.ToJsonString()
-                Ok { response with Body = exactResponse }
+                Ok ({ response with Body = exactResponse })
             Assert.Equal(3, writer.Run(writer.ApplyArguments path))
             Assert.Single writer.Native.Mutations |> ignore
             Assert.Equal(exactResponse, File.ReadAllText(Path.Combine(path + ".invocation", "001-response.json")))

@@ -201,7 +201,7 @@ class PackagedControls(unittest.TestCase):
 
     def test_failed_evidence_retains_only_bounded_error_class(self):
         output = self.root / "failure.json"
-        arguments = ["packaged_v2.py", "--engine", str(self.engine), "--package", str(self.package), "--output", str(output),
+        arguments = ["packaged_v2.py", "--installed-cli", str(self.engine), "--package", str(self.package), "--output", str(output),
                      "--source-sha", SOURCE, "--run-id", "123", "--run-attempt", "1"]
         with patch.object(qualifier, "qualify", side_effect=ValueError("private raw diagnostic must not escape")), patch("sys.argv", arguments):
             self.assertEqual(qualifier.main(), 1)
@@ -271,7 +271,7 @@ class PackagedControls(unittest.TestCase):
     def test_evidence_write_failure_cannot_replace_first_cause_or_pass(self):
         from contextlib import redirect_stderr
         output = self.root / "failure.json"
-        arguments = ["packaged_v2.py", "--engine", str(self.engine), "--package", str(self.package), "--output", str(output),
+        arguments = ["packaged_v2.py", "--installed-cli", str(self.engine), "--package", str(self.package), "--output", str(output),
                      "--source-sha", SOURCE, "--run-id", "123", "--run-attempt", "1"]
         retained = {"passed": False, "firstFailure": {"case": "missing-binding", "reason": "original-first-cause"}}
         original = json.dumps(retained)

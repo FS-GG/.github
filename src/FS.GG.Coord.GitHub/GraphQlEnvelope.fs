@@ -13,6 +13,35 @@ module internal GraphQlEnvelope =
         | Applied
         | NoResult
 
+    type MigrationClearResult =
+        | ClearSuccess
+        | ClearErrors
+        | ClearMalformed
+
+    let classifyMigrationClear (body: string) =
+        try
+            if System.Text.Encoding.UTF8.GetByteCount body > 4 * 1024 * 1024 then
+                invalidArg "body" "bounded response required"
+            use document = JsonDocument.Parse(body, JsonDocumentOptions(MaxDepth = 32))
+            let rec distinct (node: JsonElement) =
+                match node.ValueKind with
+                | JsonValueKind.Object ->
+                    let properties = node.EnumerateObject() |> Seq.toList
+                    (properties |> List.map (fun property -> property.Name) |> Set.ofList |> Set.count) = properties.Length
+                    && (properties |> List.forall (fun property -> distinct property.Value))
+                | JsonValueKind.Array -> node.EnumerateArray() |> Seq.forall distinct
+                | _ -> true
+            let root = document.RootElement
+            if root.ValueKind <> JsonValueKind.Object || not (distinct root) then
+                invalidArg "body" "ambiguous envelope"
+            if root.GetProperty("data").ValueKind <> JsonValueKind.Object then
+                invalidArg "body" "complete data object required"
+            match root.TryGetProperty "errors" with
+            | false, _ -> ClearSuccess
+            | true, errors when errors.ValueKind = JsonValueKind.Array && errors.GetArrayLength() = 0 -> ClearSuccess
+            | _ -> ClearErrors
+        with _ -> ClearMalformed
+
     let tryMeter (body: string) =
         if String.IsNullOrWhiteSpace body then
             None

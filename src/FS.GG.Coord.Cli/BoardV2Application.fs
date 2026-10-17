@@ -495,7 +495,7 @@ module BoardV2Application =
                     migrationIdentity scope |> Result.bind (fun () ->
                         migrationStable connection scope |> Result.mapError migrationErrorClass))
                 |> Result.map (fun prepared ->
-                    privateJson reportPath (V2Migration.encodePrepared { prepared with PreparedPath = Some reportPath })
+                    privateJson reportPath (V2Migration.encodePrepared ({ prepared with PreparedPath = Some reportPath }))
                     0)
             | MigrationApply(preparedPath, expectedHash, owner, selection, windowUntil) ->
                 let raw = privateRead (4L * 1024L * 1024L) preparedPath

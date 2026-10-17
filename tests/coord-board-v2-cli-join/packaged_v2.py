@@ -299,14 +299,15 @@ def qualify(engine, package, source, run_id, attempt, runner=process):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
-    for flag in ("engine", "package", "output"):
+    parser.add_argument("--installed-cli", type=Path, required=True)
+    for flag in ("package", "output"):
         parser.add_argument("--" + flag, type=Path, required=True)
     for flag in ("source-sha", "run-id", "run-attempt"):
         parser.add_argument("--" + flag, required=True)
     args = parser.parse_args()
     require(not args.output.exists(), "new evidence path required")
     try:
-        result = qualify(args.engine.absolute(), args.package, args.source_sha, args.run_id, args.run_attempt)
+        result = qualify(args.installed_cli.absolute(), args.package, args.source_sha, args.run_id, args.run_attempt)
     except Exception as error:
         result = {"schema": SCHEMA, "passed": False, "failureClass": type(error).__name__,
                   "failureReason": str(error) if isinstance(error, QualificationFailure) else "qualification unavailable",

@@ -135,7 +135,7 @@ jobs:
       - name: Prove packaged V2 pre-migration refusal boundaries
         run: |
           python3 tests/coord-board-v2-cli-join/packaged_v2.py \
-            --engine "$RUNNER_TEMP/fsgg-coord-engine/fsgg-coord-engine" \
+            --installed-cli "$RUNNER_TEMP/fsgg-coord-engine/fsgg-coord-engine" \
             --package "$PWD/artifacts/packages/FS.GG.Coord.Cli.${{ steps.identity.outputs.version }}.nupkg" \
             --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
             --output "$RUNNER_TEMP/board-v2-packaged-qualification.json"

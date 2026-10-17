@@ -166,7 +166,7 @@ module V2Migration =
                 if not (unique (List.map (fun (value: SelectOption) -> value.Id) options))
                    || not (unique (List.map (fun (value: SelectOption) -> value.Name) options)) then
                     invalid "duplicate native option identities or names"
-                else Ok { Id = id; Name = name; DataType = dataType; Options = options })
+                else Ok ({ Id = id; Name = name; DataType = dataType; Options = options }))
 
     let private fieldsDocument =
         "query($id:ID!,$after:String){node(id:$id){... on ProjectV2{id fields(first:50,after:$after){totalCount pageInfo{hasNextPage endCursor} nodes{__typename ... on ProjectV2FieldCommon{id name dataType} ... on ProjectV2SingleSelectField{options{id name color description}}}}}}}"
@@ -296,7 +296,7 @@ module V2Migration =
                 |> Result.map (function
                     | [ visible; grouped; vertical; sorted ] ->
                         { view with VisibleFieldIds = visible
-                                    UnsupportedConfiguration = JsonSerializer.Serialize [ [ view.UnsupportedConfiguration ]; grouped; vertical; sorted ] }
+                                    UnsupportedConfiguration = JsonSerializer.Serialize([ [ view.UnsupportedConfiguration ]; grouped; vertical; sorted ]) }
                     | _ -> invalidOp "fixed view configuration shape")) |> sequence)
 
     let collect (transport: IGitHubTransport) (scope: Scope) : IoResult<Snapshot> =
@@ -329,7 +329,7 @@ module V2Migration =
                                     |> Result.bind (fun issues ->
                                         project transport observedAt |> Result.bind (fun final ->
                                             if final <> initial then invalid "project/principal changed during complete snapshot collection"
-                                            else Ok { initial with Fields = fields; Items = items; Views = views; Issues = issues })))))))
+                                            else Ok ({ initial with Fields = fields; Items = items; Views = views; Issues = issues }))))))))
 
     let private desiredTokens (view: DesiredView) =
         [ view.Id |> Option.defaultValue ""; view.Name; view.Layout; view.Filter;
@@ -496,8 +496,9 @@ module V2Migration =
             input.Add("clientMutationId", jsonString (hash (prepared.Digest :: changeTokens change)))
             let variables = objectNode [ "input", input ]
             let body = objectNode [ id "query" document; "variables", variables ]
-            Ok { Method = "POST"; Path = "graphql"; Query = []; Body = Json(body.ToJsonString())
-                 Budget = GraphQl; IfNoneMatch = None; Subject = subject }
+            Ok(
+                { Method = "POST"; Path = "graphql"; Query = []; Body = Json(body.ToJsonString())
+                  Budget = GraphQl; IfNoneMatch = None; Subject = subject })
     let private closed (names: string list) (node: JsonElement) =
         if node.ValueKind <> JsonValueKind.Object then invalidArg "json" "expected closed object"
         let actual = node.EnumerateObject() |> Seq.map (fun entry -> entry.Name) |> Seq.toList
@@ -521,7 +522,7 @@ module V2Migration =
                 let id = view.GetProperty "id"
                 { Id = (if id.ValueKind = JsonValueKind.Null then None else Some(nonempty "id" view))
                   Name = nonempty "name" view; Layout = nonempty "layout" view; Filter = propertyString "filter" view
-                  VisibleFieldIds = array 50 (view.GetProperty "visibleFieldIds") |> List.map (fun field -> field.GetString()) })
+                  VisibleFieldIds = (array 50 (view.GetProperty "visibleFieldIds") |> List.map (fun field -> field.GetString())) })
         { SourceRevision = nonempty "sourceRevision" node; ArtifactSha256 = nonempty "artifactSha256" node
           CliArtifactSha256 = nonempty "cliArtifactSha256" node
           PrincipalId = nonempty "principalId" node; PrincipalLogin = nonempty "principalLogin" node
@@ -599,8 +600,11 @@ module V2Migration =
             | [], [ created ] when created.Layout = desired.Layout && created.Filter = ""
                                    && created.VisibleFieldIds = desired.VisibleFieldIds
                                    && not (before.Views |> List.exists (fun (view: View) -> view.Id = created.Id)) ->
-                Ok { scope with Views = scope.Views |> List.map (fun (view: DesiredView) ->
-                        if view = desired then { view with Id = Some created.Id } else view) }
+                let resolvedViews =
+                    scope.Views
+                    |> List.map (fun (view: DesiredView) ->
+                        if view = desired then { view with Id = Some created.Id } else view)
+                Ok({ scope with Views = resolvedViews })
             | _ -> invalid "created view identity/configuration is ambiguous; original invocation is readback-only"
         | _ -> Ok scope
 
@@ -629,7 +633,7 @@ module V2Migration =
                                          && (retained |> List.forall (fun (option: SelectOption) -> option.Id <> added.Id))
                                          && field.Options = retained @ [ added ] ->
                             let fields = after.Fields |> List.map (fun (value: Field) -> if value.Id = fieldId then { value with Options = retained } else value)
-                            unchanged { after with Fields = fields }
+                            unchanged ({ after with Fields = fields })
                         | _ -> false
                     | _ -> false
                 | AddMembership issueId ->
@@ -638,19 +642,19 @@ module V2Migration =
                     | [ item ], Some issue when item.ContentKind = "Issue" && item.Repository = Some issue.Repository
                                                && item.Number = Some issue.Number && not item.Archived
                                                && (before.Items |> List.forall (fun (existing: Item) -> existing.Id <> item.Id && existing.ContentId <> issueId)) ->
-                        unchanged { after with Items = after.Items |> List.filter (fun (existing: Item) -> existing.Id <> item.Id) }
+                        unchanged ({ after with Items = (after.Items |> List.filter (fun (existing: Item) -> existing.Id <> item.Id)) })
                     | _ -> false
                 | CreateView desired ->
                     match after.Views |> List.filter (fun (view: View) -> view.Name = desired.Name) with
-                    | [ added ] when sameView { desired with Filter = "" } added && (before.Views |> List.forall (fun (view: View) -> view.Id <> added.Id)) ->
-                        unchanged { after with Views = after.Views |> List.filter (fun (view: View) -> view.Id <> added.Id) }
+                    | [ added ] when sameView ({ desired with Filter = "" }) added && (before.Views |> List.forall (fun (view: View) -> view.Id <> added.Id)) ->
+                        unchanged ({ after with Views = (after.Views |> List.filter (fun (view: View) -> view.Id <> added.Id)) })
                     | _ -> false
                 | UpdateView(viewId, desired) ->
                     match before.Views |> List.filter (fun (view: View) -> view.Id = viewId), after.Views |> List.filter (fun (view: View) -> view.Id = viewId) with
                     | [ original ], [ current ] when sameView desired current
                                                      && orthogonal original = orthogonal current
                                                      && Result.isOk (orthogonal original) ->
-                        unchanged { after with Views = after.Views |> List.map (fun (view: View) -> if view.Id = viewId then original else view) }
+                        unchanged ({ after with Views = (after.Views |> List.map (fun (view: View) -> if view.Id = viewId then original else view)) })
                     | _ -> false
             if reconciled then Ok()
             else invalid "readback differs beyond the one exact effect; preserve original intent and stop writes for reconciliation"

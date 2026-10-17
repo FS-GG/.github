@@ -45,7 +45,7 @@ module V2MigrationTests =
               AddInReview("other-field", status.Options, "BLUE", scope.InReviewDescription);
               AddMembership "unselected-native-issue" ]
         for change in mutations do Assert.True(Result.isError (request planned change))
-        Assert.True(Result.isError (request { planned with Digest = String.replicate 64 "f" } planned.Changes.Head))
+        Assert.True(Result.isError (request ({ planned with Digest = String.replicate 64 "f" }) planned.Changes.Head))
 
     [<Fact>]
     let ``wrong identity schema selected issue and incomplete native pages refuse before effects`` () =
@@ -56,7 +56,7 @@ module V2MigrationTests =
               { snapshot with Fields = snapshot.Fields.Tail };
               { snapshot with Issues = [] } ]
         for candidate in mutations do Assert.True(Result.isError (prepare scope candidate))
-        let readOnly = prepare scope { snapshot with CanUpdate = false } |> get
+        let readOnly = prepare scope ({ snapshot with CanUpdate = false }) |> get
         Assert.True(Result.isError (request readOnly readOnly.Changes.Head))
         let native = Native snapshot
         native.BeforeRead <- fun request ->
@@ -103,13 +103,13 @@ module V2MigrationTests =
         let final = collect connection.Reads resolved |> get
         validateTransition resolved after final update |> get
         Assert.Equal(desired.Filter, final.Views.Head.Filter)
-        Assert.True(Result.isError (resolveReadback scope snapshot { after with Views = after.Views @ after.Views } create))
+        Assert.True(Result.isError (resolveReadback scope snapshot ({ after with Views = after.Views @ after.Views }) create))
 
     [<Fact>]
     let ``prepared report stays separate from v4 binding and arbitrary authority fields refuse`` () =
         let prepared = prepare scope snapshot |> get
         let originalPath = System.IO.Path.GetFullPath "synthetic-original-prepared.json"
-        let report = encodePrepared { prepared with PreparedPath = Some originalPath }
+        let report = encodePrepared ({ prepared with PreparedPath = Some originalPath })
         let parsedScope, digest, _, boundPath = decodePrepared report |> get
         Assert.Equal(originalPath, boundPath)
         Assert.Equal(scope, parsedScope)

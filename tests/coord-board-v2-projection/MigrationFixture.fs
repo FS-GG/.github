@@ -22,8 +22,9 @@ module MigrationFixture =
         objectNode [ "totalCount", value nodes.Length; "nodes", arrayNode nodes;
                      "pageInfo", objectNode [ "hasNextPage", value false; "endCursor", null ] ]
     let private response (data: JsonNode) : IoResult<Transport.Response> =
-        Ok { Status = 200; Body = (objectNode [ "data", data ]).ToJsonString()
-             Headers = Map.empty; ETag = None; NextLink = None }
+        Ok(
+            { Status = 200; Body = (objectNode [ "data", data ]).ToJsonString()
+              Headers = Map.empty; ETag = None; NextLink = None })
     let private options =
         [ "Backlog"; "Ready"; "In progress"; "Blocked"; "Done" ] |> List.mapi (fun index name ->
             { Id = "synthetic-option-" + string index; Name = name; Color = "GRAY"; Description = "synthetic retained option" })
@@ -56,10 +57,13 @@ module MigrationFixture =
         let mutable transformDispatch: Transport.Request -> Transport.Response -> IoResult<Transport.Response> = fun _ response -> Ok response
         let mutable transform: Transport.Request -> Transport.Response -> IoResult<Transport.Response> = fun _ response -> Ok response
         let fieldNode (field: Field) =
+            let options =
+                field.Options
+                |> List.map (fun (option: SelectOption) ->
+                    objectNode [ "id", value option.Id; "name", value option.Name; "color", value option.Color; "description", value option.Description ])
             objectNode [ "id", value field.Id; "name", value field.Name; "dataType", value field.DataType;
                          "__typename", value (if field.DataType = "SINGLE_SELECT" then "ProjectV2SingleSelectField" else "ProjectV2Field");
-                         "options", arrayNode (field.Options |> List.map (fun (option: SelectOption) ->
-                            objectNode [ "id", value option.Id; "name", value option.Name; "color", value option.Color; "description", value option.Description ])) ]
+                         "options", arrayNode options ]
         let valueNode (item: ItemValue) : JsonNode =
             let node = JsonObject()
             node.Add("__typename", value item.Kind)
@@ -132,7 +136,11 @@ module MigrationFixture =
                                 let mutable id = Unchecked.defaultof<JsonElement>
                                 { Id = (if option.TryGetProperty("id", &id) then id.GetString() else "synthetic-new-option")
                                   Name = option.GetProperty("name").GetString(); Color = option.GetProperty("color").GetString(); Description = option.GetProperty("description").GetString() }) |> Seq.toList
-                        snapshot <- { snapshot with Fields = snapshot.Fields |> List.map (fun (field: Field) -> if field.Id = text "fieldId" then { field with Options = options } else field) }
+                        let fields =
+                            snapshot.Fields
+                            |> List.map (fun (field: Field) ->
+                                if field.Id = text "fieldId" then { field with Options = options } else field)
+                        snapshot <- { snapshot with Fields = fields }
                         "updateProjectV2Field"
                     elif query.Contains "addProjectV2ItemById(" then
                         let issue = snapshot.Issues |> List.find (fun (issue: NativeIssue) -> issue.Id = text "contentId")
@@ -143,9 +151,16 @@ module MigrationFixture =
                     else
                         let visible = input.GetProperty("configuration").GetProperty("visibleFieldIds").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
                         let create = query.Contains "createProjectV2View("
-                        let view = { Id = (if create then "synthetic-new-view" else text "viewId"); Name = text "name"; Layout = text "layout"
-                                     Filter = (if create then "" else text "filter"); VisibleFieldIds = visible; UnsupportedConfiguration = "[[],[],[]]" }
-                        snapshot <- { snapshot with Views = (if create then snapshot.Views @ [ view ] else snapshot.Views |> List.map (fun (existing: View) -> if existing.Id = view.Id then view else existing)) }
+                        let view =
+                            { Id = (if create then "synthetic-new-view" else text "viewId"); Name = text "name"; Layout = text "layout"
+                              Filter = (if create then "" else text "filter"); VisibleFieldIds = visible; UnsupportedConfiguration = "[[],[],[]]" }
+                        let views =
+                            if create then snapshot.Views @ [ view ]
+                            else
+                                snapshot.Views
+                                |> List.map (fun (existing: View) ->
+                                    if existing.Id = view.Id then view else existing)
+                        snapshot <- { snapshot with Views = views }
                         if create then "createProjectV2View" else "updateProjectV2View"
                 if failAfterEffect then Error(Transport "synthetic lost response")
                 else

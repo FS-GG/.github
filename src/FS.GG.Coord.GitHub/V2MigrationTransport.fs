@@ -20,25 +20,12 @@ module V2MigrationTransport =
 
     let private refused detail = Error(Malformed("Project 3 migration transport", detail))
     let validateClearEnvelope (body: string) : IoResult<unit> =
-        try
-            if Encoding.UTF8.GetByteCount body > 4 * 1024 * 1024 then invalidArg "body" "bounded response required"
-            use document = JsonDocument.Parse(body, JsonDocumentOptions(MaxDepth = 32))
-            let rec distinct (node: JsonElement) =
-                match node.ValueKind with
-                | JsonValueKind.Object ->
-                    let properties = node.EnumerateObject() |> Seq.toList
-                    (properties |> List.map (fun property -> property.Name) |> Set.ofList |> Set.count) = properties.Length
-                    && (properties |> List.forall (fun property -> distinct property.Value))
-                | JsonValueKind.Array -> node.EnumerateArray() |> Seq.forall distinct
-                | _ -> true
-            let root = document.RootElement
-            if root.ValueKind <> JsonValueKind.Object || not (distinct root) then invalidArg "body" "ambiguous envelope"
-            if root.GetProperty("data").ValueKind <> JsonValueKind.Object then invalidArg "body" "complete data object required"
-            match root.TryGetProperty "errors" with
-            | false, _ -> Ok()
-            | true, errors when errors.ValueKind = JsonValueKind.Array && errors.GetArrayLength() = 0 -> Ok()
-            | _ -> refused "native GraphQL response has errors or malformed errors; clear success unavailable"
-        with _ -> refused "native GraphQL response envelope is malformed; clear success unavailable"
+        match GraphQlEnvelope.classifyMigrationClear body with
+        | GraphQlEnvelope.ClearSuccess -> Ok()
+        | GraphQlEnvelope.ClearErrors ->
+            refused "native GraphQL response has errors or malformed errors; clear success unavailable"
+        | GraphQlEnvelope.ClearMalformed ->
+            refused "native GraphQL response envelope is malformed; clear success unavailable"
 
     let private composition (read: Transport.Request -> TimeSpan -> DateTimeOffset -> IoResult<Transport.Response>)
                             (once: Transport.Request -> TimeSpan -> DateTimeOffset -> IoResult<Transport.Response>)
@@ -137,7 +124,7 @@ module V2MigrationTransport =
                             else
                                 let utf8 = UTF8Encoding(false, true)
                                 let payload = utf8.GetString(captured.ToArray())
-                                Ok { Status = int response.StatusCode; Body = payload; Headers = Map.empty; ETag = None; NextLink = None }
+                                Ok ({ Status = int response.StatusCode; Body = payload; Headers = Map.empty; ETag = None; NextLink = None })
                         with
                         | :? OperationCanceledException -> refused "shared remaining deadline expired after possible send; Unknown; readback only"
                         | :? HttpRequestException | :? IOException | :? DecoderFallbackException ->

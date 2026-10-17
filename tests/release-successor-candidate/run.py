@@ -158,7 +158,7 @@ class CandidateUniquenessTests(unittest.TestCase):
 def packaged_v2_workflow_contract(workflow):
     required = (
         "python3 tests/coord-board-v2-cli-join/packaged_v2.py",
-        '--engine "$RUNNER_TEMP/fsgg-coord-engine/fsgg-coord-engine"',
+        '--installed-cli "$RUNNER_TEMP/fsgg-coord-engine/fsgg-coord-engine"',
         '--package "$PWD/artifacts/packages/FS.GG.Coord.Cli.${{ steps.identity.outputs.version }}.nupkg"',
         '--source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"',
         '--output "$RUNNER_TEMP/board-v2-packaged-qualification.json"',
@@ -187,7 +187,7 @@ class PackagedV2CompositionTests(unittest.TestCase):
             ("python3 tests/coord-board-v2-cli-join/packaged_v2.py", "true"),
             ('--source-sha "$GITHUB_SHA"', '--source-sha "unbound"'),
             ('--run-attempt "$GITHUB_RUN_ATTEMPT"', '--run-attempt "1"'),
-            ('--engine "$RUNNER_TEMP/fsgg-coord-engine/fsgg-coord-engine"', '--engine "source-build"'),
+            ('--installed-cli "$RUNNER_TEMP/fsgg-coord-engine/fsgg-coord-engine"', '--installed-cli "source-build"'),
             ('path: ${{ runner.temp }}/board-v2-packaged-qualification.json', 'path: artifacts/packages/'),
             ('path: artifacts/packages/', 'path: |'),
             ('if: ${{ always() }}', 'if: ${{ success() }}'),
