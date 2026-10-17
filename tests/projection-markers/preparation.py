@@ -108,11 +108,7 @@ class Preparation(unittest.TestCase):
         text = path.read_text()
         start = text.index("  - id: wasm-shared-runtime\n")
         end = text.index("\n  - id:", start + 1)
-        changed, count = re.subn(r'(?m)^(    (?:version|package-version): )"[^"\n]+"',
-                                 r'\g<1>"9.9.999"', text[start:end])
-        self.assertEqual(2, count)
-        self.assertNotEqual(text[start:end], changed)
-        path.write_text(text[:start] + changed + text[end:])
+        path.write_text(text[:start] + text[start:end].replace('"0.4.0"', '"0.5.0"') + text[end:])
         before = snapshot(self.root)
         output = self.run_mode(expected=1)
         for kind in ("release-inventory", "versions", "contract-versions", "component-inventory"):

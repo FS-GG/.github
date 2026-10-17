@@ -1632,3 +1632,13 @@ entries through its existing base-tree overlays. Original1500 consumption and500
 remain retained. The ordinary full-sixteen-effect fixture now observes1471 Authority entries under
 its unchanged1500 ceiling after adding the claimed-marker sender fence; historical1439 evidence is
 not repinned or represented as a new native fit result.
+
+Keep the continuation source delivery separate from the incidental Game0.5 registry/projection
+update. Game0.5 publication and its exact installed qualifier remain genuinely accepted in their
+owning repository. Retain that reviewed registry delta for the later registry reconciliation after
+actual .104 coherent promotion. The existing feed gate compares package-version with newest feed
+packages: genuine partial .104 feed effects already exceed the still-correct promoted .102 inventory,
+so its original failure must not be relabelled as complete publication or hidden behind an exception.
+The continuation helper changes none of that workflow's existing path subjects; this scope separation
+changes no checker, selector or required context. Every check required by the final diff must pass
+normally. No .104 inventory flip, promotion, updater or adoption is inferred.

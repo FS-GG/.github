@@ -871,26 +871,26 @@ contracts:
         dotnet-only: "all modules explicitly excluded by compatibility-profile.v1.json"
         oracle: "tests/Game.Core.Fable.Tests/fixtures/v1/expected.bin — 442 bytes, SHA-256 9c0d7128f7b9558ef7e985618b1165199f83a0bb4af7533b175cc95b340c4a24"
   - id: wasm-shared-runtime
-    version: "0.5.0"   # Closed generated-policy Worker source: Game#719, producer 80540027623d9b1a8aa7715d0591de48455403b7.
-    package-version: "0.5.0"   # Original publisher39073209865/a1 promoted release416092764; both-feed installed39076218708/a1 accepted separately. Product adoption remains separate.
-    package-tag: "wasm/v0.5.0"
+    version: "0.4.0"   # Published current terminal Process source: Game#714, producer 6732d2371d142d5ccc5d2d127f20e4f179800892.
+    package-version: "0.4.0"   # Original publisher 39015233527/a1 completed org-first/public-second readbacks and promoted release 415663600. Fresh installed and product acceptance remain separate.
+    package-tag: "wasm/v0.4.0"
     owner: game
-    surface: "FS.GG.Wasm.Contracts and FS.GG.Wasm.Browser coherent package set; closed generated-policy Worker, browser lifecycle, terminal Process retirement, portable Fable sources and coupled author SDK archive"
-    consumers: []   # Producer/installed qualification does not establish BAR/SC2/FourD product adoption.
+    surface: "FS.GG.Wasm.Contracts and FS.GG.Wasm.Browser coherent package set; browser Worker lifecycle, terminal Process retirement, portable Fable sources and coupled author SDK archive"
+    consumers: []   # No consumer pin/adoption follows from producer availability; BAR/SC2/FourD remain separate milestones.
     profiles:
       shared-wasm:
-        identity: "wasm/v0.5.0 — genuinely published coherent current set"
-        packages: "FS.GG.Wasm.Contracts@0.5.0 / FS.GG.Wasm.Browser@0.5.0; exact same-version Browser-to-Contracts dependency; genuinely published coherent pair"
-        sdk: "fsgg-wasm-sdk-0.5.0.tar.gz — coupled source archive under wasm/v0.5.0; SHA-256 1aaa536f13e2afe93cf5b8bd825461b6ac7232df90e9f246a73f9fabb9ed8390"
-        source: "80540027623d9b1a8aa7715d0591de48455403b7; tree fa2cd0160f9a7c5bb0a1ad85fd8f1eff68b867d3; Game#719"
-        manifest: "release-manifest.json SHA-256 4874c07d6c6b4f1cd920e2a1379de2e5778529f94d211b2c8d138ed8d719483c; original publisher39073209865/a1 verified both feeds and release416092764; promotion transaction c567d141277004186ec6f4b24df63defb103c2fc1b811d1f4c3bcd83588cacb7"
-        api-baseline: "Published0.5 native API classification compares actual published0.4 from producer6732d2371d142d5ccc5d2d127f20e4f179800892: Contracts and Browser compatible, no suppressions. Historical0.4 and0.3 originals remain immutable; no receipt transfers to a different producer or consumer."
+        identity: "wasm/v0.4.0 — genuinely published coherent current set"
+        packages: "FS.GG.Wasm.Contracts@0.4.0 / FS.GG.Wasm.Browser@0.4.0; exact same-version Browser-to-Contracts dependency; genuinely published coherent pair"
+        sdk: "fsgg-wasm-sdk-0.4.0.tar.gz — coupled source archive under wasm/v0.4.0; SHA-256 85c9362bd4d15d784da88909ef84cd8170051d67495c4961c783045db228592f"
+        source: "6732d2371d142d5ccc5d2d127f20e4f179800892; tree cc71e7cfe73449919376acf775940ff9e8bdab56; Game#714"
+        manifest: "release-manifest.json SHA-256 f8f47c2f5ae6fd8b5aef474dfc83b096aa0a6ad0265eb16dc4f0df7ade7f01b7; original publisher 39015233527/a1 verified both feeds and all four release assets from protected custody 12094158629"
+        api-baseline: "Published 0.4 native API classification compares actual published 0.3.0 from producer 16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c: Contracts and Browser compatible, no suppressions. Original 0.3 transaction and earlier baseline/migration evidence stay immutable; no obsolete 0.2 caller compatibility obligation."
         toolchain: ".NET 10.0.401 / Fable 5.18.0 / Node 26 / Quint 0.32.0 / Rust 1.90.0 / WASI SDK 34.0"
         browser: "Pinned Playwright 1.63.0 Chromium profile"
         abi: "BAR ABI 1; strict imported SC2 ABI 0x00010000"
-        qualification: "Original protected full WASM39071360197/a1 and publication39073209865/a1 accepted at immutable producer P=80540027623d9b1a8aa7715d0591de48455403b7. Fresh serial both-feed installed39076218708/a1 accepted at exact qualifier Q=c938e9158542e3a0572b62dd09c01ad01cbb344f; owning plan docs/roadmaps/wasm-shared-01.md retains separate P/Q identities."
-        installed-evidence: "Accepted39076218708/a1 independently joins org/public originals, manifest/feed/dependency roles, closed Worker and Core against original P. Direct cleanup exited0; descendant cleanup was not proved. This does not accept SC2/product timing or native authority. Preserve historical0.4 installed39023332496/a1 and its original failed39016307973/a1 and39020851715/a1 evidence; original0.3 H4/.5-P2 remains bound to its own producer."
-        qualifier: "Published package/SDK/manifest/tag and original publisher executor remain immutable P=80540027623d9b1a8aa7715d0591de48455403b7. Installed executor Q=c938e9158542e3a0572b62dd09c01ad01cbb344f separately qualifies the finite P-to-Q source closure. This exact accepted join admits no arbitrary qualifier, historical overlay, package rebuild, replay or transferred receipt."
+        qualification: "Original protected full WASM 39013804889/a1 and publication 39015233527/a1 remain accepted at immutable producer/executor P=6732d2371d142d5ccc5d2d127f20e4f179800892. Fresh serial both-feed installed 39023332496/a1 and protected-main 39023124943/a1 are accepted at exact qualifier Q=20c94478f774cd58d8e9c1aaef1b573449570309; Game#717 records the original P/Q evidence."
+        installed-evidence: "Accepted 39023332496/a1 retains independent successful org/public qualification, collection and artifact upload against original published P. Preserve failed 39016307973/a1 (org runtime success, lost upload, public unexecuted) and failed 39020851715/a1 (general runtime success, evidence-projection refusal, selected qualification unreached). Original 0.3 H4/.5-P2 acceptance at 37191263989 remains bound to its own producer."
+        qualifier: "Published package/SDK/manifest/tag and original publisher executor remain immutable P=6732d2371d142d5ccc5d2d127f20e4f179800892. Installed executor Q=20c94478f774cd58d8e9c1aaef1b573449570309 is separately exact-source qualified with the accepted finite 13-path P-to-Q source audit and original native/artifact binding; package/runtime/Worker/model/project/lock/tool/semantic-harness bytes outside that closure remain unchanged. This exact accepted P/Q join admits no arbitrary qualifier, historical overlay, package rebuild, replay or transferred original receipt."
         unqualified: "Additional browsers, npm/bundler permutations, OS support, WASI execution, deterministic fuel/replay, product adoption and native authority"
   - id: game-physics-box2d
     version: "0.17.0"
