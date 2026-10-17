@@ -199,23 +199,35 @@ def run_0104_continuation(manifest, journal, admission, provider, ledger_api, pu
                   cumulativeAuthorityCeiling=1500 + window["authorityEntries"])
     target = provider.provider if isinstance(provider, ReportingProvider) else provider
     last = [None]
-    def guard(effect, action, *, before_claim=False):
+    def guard(effect, action, *, before_claim=False, absent_payload=None):
         require(clock() < deadline, "continuation original finite deadline expired")
         candidate_check()
-        current = journal.read()
-        if last[0] is not None: require(journal._observed.state == last[0], "continuation checkpoint changed outside current action")
-        if before_claim:
-            checkpoint = continuation_policy.CONTINUATION_CHECKPOINT
-            require(journal._observed.head == checkpoint["logicalHead"] and hashlib.sha256(canonical(journal._observed.state)).hexdigest() == checkpoint["stateSHA256"],
-                    "original .104 checkpoint moved before claim")
-        else: require(journal._observed.state.get("continuation") == permit.record, "continuation ownership marker changed")
-        continuation_native_census(publisher_api, ledger_api, execution)
-        require(admission.authorize(manifest["contentId"], effect.identity, action, effect.request_digest), "continuation fresh action admission denied")
-        target.continuation_release_witness()
+        # The known state selects observations only; it carries no authorization.
+        # Fresh journal ownership is checked after all potentially slow reads.
+        expected_effects = continuation_policy.continuation_effects(28) if before_claim else last[0]["effects"]
         for item in effects:
-            if current.effects.get(item.identity) == "verified":
+            if expected_effects.get(item.identity) == "verified":
                 observed = provider.observe(item)
                 require(observed.state == "matched" and observed.observed_digest == item.target_digest, "continuation verified prefix drifted")
+        witness = target.continuation_release_witness()
+        if absent_payload is not None:
+            require((effect.identity == "promote" and witness["draft"] is True)
+                    or (effect.identity != "promote" and absent_payload["name"] not in witness["names"]),
+                    "continuation fresh presend absence changed")
+        current = journal.read()
+        if last[0] is not None:
+            require(journal._observed.state == last[0], "continuation checkpoint changed outside current action")
+        if before_claim:
+            checkpoint = continuation_policy.CONTINUATION_CHECKPOINT
+            require(journal._observed.head == checkpoint["logicalHead"]
+                    and hashlib.sha256(canonical(journal._observed.state)).hexdigest() == checkpoint["stateSHA256"],
+                    "original .104 checkpoint moved before claim")
+        else:
+            require(journal._observed.state.get("continuation") == permit.record, "continuation ownership marker changed")
+        # Native source/run/custody/protection checks follow receipt/prefix reads,
+        # rather than carrying their conclusion across those potentially slow I/O.
+        continuation_native_census(publisher_api, ledger_api, execution)
+        require(admission.authorize(manifest["contentId"], effect.identity, action, effect.request_digest), "continuation fresh action admission denied")
         require(clock() < deadline, "continuation deadline expired during full verification")
         return current
     guard(effects[13], "dispatch", before_claim=True)
@@ -242,7 +254,6 @@ def run_0104_continuation(manifest, journal, admission, provider, ledger_api, pu
                 last[0] = json.loads(canonical(journal._observed.state))
             else: require(effect.identity == "channel-asset" and state == "intent", "continuation cannot resend an existing intent")
             payload = target.prepare_continuation_asset(effect) if effect.identity != "promote" else {"releaseId": 416097241, "draft": False, "make_latest": "true"}
-            guard(effect, "dispatch")
             witness = target.continuation_release_witness()
             require((effect.identity == "promote" and witness["draft"] is True)
                     or (effect.identity != "promote" and payload["name"] not in witness["names"]), "continuation presend absence changed")
@@ -264,6 +275,7 @@ def run_0104_continuation(manifest, journal, admission, provider, ledger_api, pu
             report["continuationPresend"] = {"effect": effect.identity, "sha256": hashlib.sha256(raw).hexdigest(), "payload": payload}
             permit.consume(effect.identity)
             try:
+                guard(effect, "dispatch", absent_payload=payload)
                 if effect.identity != "promote": target._continuation_asset_path(effect)
                 outcome = provider.dispatch(effect)
             finally: permit.finish_dispatch()
@@ -1994,6 +2006,7 @@ def execute_publisher(args, report):
     if continuation:
         continuation_phase(report, "candidateAuthenticated", ledger_api, api)
         proof = authenticate_continuation_proof(api)
+        report["originalProofAuthenticated"] = True
         continuation_phase(report, "proofAuthenticated", ledger_api, api)
         candidate_pin = continuation_policy.CONTINUATION_CANDIDATE
         require(candidate_source == candidate_pin["sourceSha"] and manifest["contentId"] == candidate_pin["contentId"],
@@ -2507,6 +2520,7 @@ def main() -> int:
               "publicationComplete": False, "failure": None}
     if args.continue_original_0104_checkpoint:
         report["originalAuthorityEntries"] = continuation_policy.CONTINUATION_PROOF["originalAuthorityEntries"]
+        report["originalProofAuthenticated"] = False
         report["cumulativeAuthorityCeiling"] = None
     exit_code = 1
     try:

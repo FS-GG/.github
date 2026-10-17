@@ -200,7 +200,7 @@ class MemoryAuthority:
             raise RuntimeError("fixture CAS conflict")
         assert self.objects[("commits", body["sha"])]["parents"][0]["sha"] == self.head
         self.head = body["sha"]
-        return {"object": {"sha": self.head}}
+        return {"ref":"refs/heads/main","object":{"type":"commit","sha":self.head}}
 
 
 class MemoryPublisher:
@@ -3279,6 +3279,113 @@ class ContinuationCallerControls(SuspensionFixture):
         with self.assertRaisesRegex(publisher.Refused,'another publisher'):self.invoke_caller()
         self.assert_no_mutation()
 
+    def assert_current_run_refused(self, changed):
+        self.prepare_caller();original=self.native.get
+        def metadata(path):
+            value=original(path)
+            return {**value,**changed} if path.endswith('/actions/runs/1') else value
+        self.native.get=metadata
+        with self.assertRaisesRegex(publisher.Refused,'native current'):self.invoke_caller()
+        self.assert_no_mutation()
+
+    def test_current_attempt_boolean_or_rerun_is_not_the_claim_owner(self):
+        self.assert_current_run_refused({'run_attempt':True})
+
+    def test_current_native_rerun_is_not_the_claim_owner(self):
+        self.assert_current_run_refused({'run_attempt':2})
+
+    def test_current_native_source_must_match_executor(self):
+        self.assert_current_run_refused({'head_sha':'f'*40})
+
+    def test_current_native_run_id_must_match_executor(self):
+        self.assert_current_run_refused({'id':2})
+
+    def test_current_native_operator_must_match_owner(self):
+        self.assert_current_run_refused({'actor':{'login':'other'}})
+
+    def test_current_native_triggering_actor_must_match_owner(self):
+        self.assert_current_run_refused({'triggering_actor':{'login':'other'}})
+
+    def test_expired_original_result_artifact_refuses_before_claim(self):
+        self.prepare_caller();original=self.native.get
+        def metadata(path):
+            value=original(path)
+            return {**value,'expires_at':'2000-01-01T00:00:00Z'} if path.endswith('/actions/artifacts/'+str(self.mod.CONTINUATION_PROOF['artifactId'])) else value
+        self.native.get=metadata
+        with self.assertRaisesRegex(publisher.Refused,'proof expired'):self.invoke_caller()
+        self.assert_no_mutation()
+
+    def test_valid_visibility_then_partial_next_dataset_refuses_before_settlement(self):
+        self.prepare_caller();original=self.native.get;reads=[0]
+        def partial(path):
+            value=original(path)
+            if self.dispatches and path.endswith('/releases/416097241/assets?per_page=100'):
+                reads[0]+=1
+                if reads[0]>=2:return value[:-2]
+            return value
+        self.native.get=partial
+        with self.assertRaisesRegex(publisher.Refused,'prefix drifted|population|semantic readback'):self.invoke_caller()
+        self.assertEqual(len(self.before_visibility),1)
+        self.assertEqual(self.sleeps,[])
+        self.assertEqual(self.dispatches,['channel-asset'])
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),1)
+
+    def test_verified_prefix_drift_during_absence_refuses_before_settlement(self):
+        self.prepare_caller();self.delay_probes=1;original=self.native.get
+        def drift(path):
+            value=original(path)
+            if self.dispatches and path.endswith('/releases/416097241/assets?per_page=100'):
+                self.native.tag='f'*40
+            return value
+        self.native.get=drift
+        with self.assertRaisesRegex(publisher.Refused,'verified prefix drifted'):self.invoke_caller()
+        self.assertEqual(self.dispatches,['channel-asset'])
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),1)
+        self.assertTrue(all(before==after for before,after in self.before_visibility))
+
+    def assert_upload_unknown_stops(self, identity):
+        self.prepare_caller();original=self.native.upload_asset
+        def uncertain(release,name,*args):
+            result=original(release,name,*args)
+            selected='stable-channel.json' if identity=='channel-asset' else 'release-manifest.json'
+            if name==selected:raise urllib.error.URLError('inert applied response unknown')
+            return result
+        self.native.upload_asset=uncertain
+        with self.assertRaisesRegex(publisher.Refused,'send response unconfirmed'):self.invoke_caller()
+        self.assertEqual(self.rows['lastDispatch']['state'],'unknown')
+        self.assertEqual(self.rows['lastDispatch']['effect'],identity)
+        self.assertEqual(self.dispatches,['channel-asset'] if identity=='channel-asset' else ['channel-asset','manifest-asset'])
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),1 if identity=='channel-asset' else 3)
+        self.assertTrue(self.native.release['draft'])
+
+    def test_channel_applied_but_unknown_preserves_original_intent_without_retry(self):
+        self.assert_upload_unknown_stops('channel-asset')
+
+    def test_manifest_applied_but_unknown_preserves_intent_without_promotion(self):
+        self.assert_upload_unknown_stops('manifest-asset')
+
+    def test_promotion_applied_but_unknown_preserves_intent_without_final_settlement(self):
+        self.prepare_caller();original=self.native.patch
+        def uncertain(path,body):
+            result=original(path,body)
+            raise urllib.error.URLError('inert applied promotion response unknown')
+        self.native.patch=uncertain
+        with self.assertRaisesRegex(publisher.Refused,'send response unconfirmed'):self.invoke_caller()
+        self.assertEqual(self.rows['lastDispatch']['state'],'unknown')
+        self.assertEqual(self.rows['lastDispatch']['effect'],'promote')
+        self.assertEqual(self.dispatches,['channel-asset','manifest-asset','promote'])
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),5)
+        self.assertFalse(self.native.release['draft'])
+
+    def test_presend_receipt_failure_consumes_claim_without_entering_sender(self):
+        self.prepare_caller()
+        receipt=self.args.result_path.with_name(self.args.result_path.stem+'-continuation-channel-asset.json')
+        receipt.write_bytes(b'exclusive receipt already exists')
+        with self.assertRaises(FileExistsError):self.invoke_caller()
+        self.assertEqual(self.dispatches,[])
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),1)
+        self.assertEqual(len(self.native.assets),5)
+
     def test_channel_upload_lost_response_keeps_original_intent_without_later_effect(self):
         self.prepare_caller();original=self.native.upload_asset
         def uncertain(*args):original(*args);raise RuntimeError('inert upload response unknown')
@@ -3320,6 +3427,66 @@ class ContinuationCallerControls(SuspensionFixture):
             found=ProtectedReleaseJournal(self.authority,self.allowed['logicalRef'],main_directory=True,
                 suspension=self.reader(),continuation_owner=owner)
             with self.subTest(owner=owner),self.assertRaisesRegex(JournalRefused,'another invocation/profile'):found.read()
+        same=ProtectedReleaseJournal(self.authority,self.allowed['logicalRef'],main_directory=True,
+            suspension=self.reader(),continuation_owner={'runId':1,'attempt':1,'sourceSha':'b'*40,'operator':'EHotwagner'})
+        current=same.read()
+        with self.assertRaisesRegex(JournalRefused,'claim binding'):
+            same.claim_continuation(current,same._observed.state['continuation'])
+        self.assertEqual(self.dispatches,[])
+
+    def assert_claim_response_refused(self, kind):
+        self.prepare_caller();original=self.authority.patch
+        def malformed(path,body):
+            original(path,body)
+            value={'ref':'refs/heads/main','object':{'type':'commit','sha':body['sha']}}
+            if kind=='null':return None
+            if kind=='empty':return {}
+            if kind=='ref':value['ref']='refs/heads/other'
+            if kind=='type':value['object']['type']='tree'
+            if kind=='head':value['object']['sha']='f'*40
+            return value
+        self.authority.patch=malformed
+        with self.assertRaisesRegex(JournalRefused,'response uncertain'):self.invoke_caller()
+        self.assertEqual(self.dispatches,[])
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),1)
+        # Matching durable readback never repairs an unconfirmed PATCH response.
+        found=ProtectedReleaseJournal(self.authority,self.allowed['logicalRef'],main_directory=True,
+            suspension=self.reader(),continuation_owner={'runId':1,'attempt':1,'sourceSha':'b'*40,'operator':'EHotwagner'})
+        self.assertEqual(found.read().generation,29)
+        with self.assertRaisesRegex(JournalRefused,'claim binding'):
+            found.claim_continuation(found.read(),found._observed.state['continuation'])
+
+    def test_null_claim_patch_response_cannot_mint_permit(self):self.assert_claim_response_refused('null')
+    def test_empty_claim_patch_response_cannot_mint_permit(self):self.assert_claim_response_refused('empty')
+    def test_wrong_ref_claim_patch_response_cannot_mint_permit(self):self.assert_claim_response_refused('ref')
+    def test_wrong_type_claim_patch_response_cannot_mint_permit(self):self.assert_claim_response_refused('type')
+    def test_wrong_head_claim_patch_response_cannot_mint_permit(self):self.assert_claim_response_refused('head')
+
+    def assert_custody_drift_refused(self, kind):
+        self.prepare_caller();changed=[False];original_get=self.native.get;original_fsync=publisher.os.fsync
+        def fsync(fd):
+            original_fsync(fd);changed[0]=True
+        def get(path):
+            value=original_get(path)
+            if changed[0] and path.endswith('/actions/runs/1'):
+                if kind=='run':value['id']=2
+                if kind=='source':value['head_sha']='f'*40
+            return value
+        self.native.get=get
+        def retain(fd):
+            fsync(fd)
+            if kind=='protection':self.authority.controls['mainIntegrity']['enforcement']='disabled'
+        with patch.object(publisher.os,'fsync',side_effect=retain),self.assertRaises((publisher.Refused,JournalRefused,ValueError)):
+            self.invoke_caller()
+        self.assertTrue(changed[0]);self.assertEqual(self.dispatches,[])
+        self.assertEqual(len([row for row in self.authority.calls if row[0]=='patch']),1)
+        self.assertEqual(self.providers[0]._continuation_permit.spent,{'channel-asset'})
+        self.assertIsNone(self.providers[0]._continuation_permit.active_effect)
+        self.assertEqual(len(self.native.assets),5)
+
+    def test_run_drift_during_receipt_custody_refuses_before_sender(self):self.assert_custody_drift_refused('run')
+    def test_source_drift_during_receipt_custody_refuses_before_sender(self):self.assert_custody_drift_refused('source')
+    def test_protection_drift_during_receipt_custody_refuses_before_sender(self):self.assert_custody_drift_refused('protection')
 
     def test_claim_readback_failure_never_enters_provider(self):
         self.prepare_caller();original_get=self.authority.get;original_patch=self.authority.patch;sent=[False]

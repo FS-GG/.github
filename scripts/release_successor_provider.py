@@ -1543,16 +1543,14 @@ class LiveProvider:
         return path
 
     def continuation_visibility(self, effect):
-        """Absence only: metadata presence never asserts a matched payload."""
-        self.continuation_release_witness()
-        release = self._release()
+        """Absence only from one validated witness, never matched payload proof."""
+        witness = self.continuation_release_witness()
         if effect.identity == "promote":
-            return "absent" if release.get("draft") is True else "potential"
+            return "absent" if witness["draft"] is True else "potential"
         name = {"channel-asset": "stable-channel.json", "manifest-asset": "release-manifest.json"}.get(effect.identity)
         if name is None:
             raise Refused("continuation visibility is outside remaining actions")
-        rows = self.api.get(f"repos/{REPOSITORY}/releases/416097241/assets?per_page=100")
-        return "potential" if any(row["name"] == name for row in rows) else "absent"
+        return "potential" if name in witness["names"] else "absent"
 
     def continuation_release_witness(self):
         release = self._release()

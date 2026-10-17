@@ -696,11 +696,11 @@ class ProtectedReleaseJournal:
                 or observed.head != CONTINUATION_CHECKPOINT["logicalHead"] or expected.generation != 28
                 or not valid_continuation(record) or self.continuation_owner != record["execution"]):
             raise Refused("exact original .104 continuation claim binding differs")
-        if not self._compare_state(expected, {**observed.state, "generation": 29, "continuation": record}):
+        if not self._compare_state(expected, {**observed.state, "generation": 29, "continuation": record}, claim=True):
             raise Refused("continuation claim independent readback differs")
         return ContinuationPermit(_CONTINUATION_SEAL, record, self._observed.head)
 
-    def _compare_state(self, expected: JournalState, next_state: dict) -> bool:
+    def _compare_state(self, expected: JournalState, next_state: dict, *, claim=False) -> bool:
         # Only the current shared .104 caller joins overlapping observations at
         # one local boundary. Historical and original-release routes stay intact.
         joined = self.ref == ALLOWED_SUCCESSOR["logicalRef"] and self.main_directory and self._immutable_reader is not None
@@ -760,10 +760,15 @@ class ProtectedReleaseJournal:
         if not joined:
             self._authorize_release(observed.state.get("version"))
         try:
-            self.api.patch(
+            response = self.api.patch(
                 f"repos/{REPOSITORY}/git/refs/{self.physical_ref.removeprefix('refs/')}",
                 {"sha": physical_commit, "force": False},
             )
+            if claim and (type(response) is not dict or response.get("ref") != self.physical_ref
+                          or type(response.get("object")) is not dict
+                          or response["object"].get("type") != "commit"
+                          or response["object"].get("sha") != physical_commit):
+                raise Refused("continuation claim PATCH response unconfirmed")
         except Exception as error:
             raise Refused(f"journal CAS response uncertain; reread before further effects: {error}") from error
         self.read()

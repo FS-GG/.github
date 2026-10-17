@@ -670,6 +670,21 @@ class ProviderDiagnosticTests(unittest.TestCase):
         self.assertEqual(writes,[(1,"release-manifest.json",output,b"fixture")])
         self.assertEqual(payload['sha256'],hashlib.sha256(writes[0][3]).hexdigest())
 
+    def test_continuation_visibility_uses_one_validated_dataset_and_refuses_next_partial_read(self):
+        release={"id":416097241,"tag_name":self.provider.tag,"target_commitish":self.provider.source,
+                 "body":self.provider.marker,"draft":True,"prerelease":False}
+        names=[*(f"{package}.{self.provider.version}.nupkg" for package in PACKAGES),
+               "standalone-telemetry-evidence.json","standalone-telemetry-runtime-evidence.json"]
+        rows=[{"id":index,"name":name,"state":"uploaded","size":1} for index,name in enumerate(names,1)]
+        effect=Effect('channel-asset',self.provider.content_id,'request')
+        with patch.object(self.provider,'_release',return_value=release), \
+             patch.object(self.api,'get',side_effect=[rows,rows[:-1]]) as read:
+            self.assertEqual(self.provider.continuation_visibility(effect),'absent')
+            self.assertEqual(read.call_count,1)
+            with self.assertRaisesRegex(self.module.Refused,'population'):
+                self.provider.continuation_visibility(effect)
+            self.assertEqual(read.call_count,2)
+
     def test_continuation_visibility_never_matches_and_refuses_incomplete_or_duplicate_population(self):
         release={"id":416097241,"tag_name":self.provider.tag,"target_commitish":self.provider.source,
                  "body":self.provider.marker,"draft":True,"prerelease":False}
