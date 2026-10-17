@@ -104,6 +104,7 @@ def inventory(script, workflows):
             # Scan every command occurrence, including a second inline command. Command
             # heads must be literal on this line; existing continued flags remain valid.
             # Exclude path/setup-dotnet tokens rather than treating them as shell commands.
+            assert not re.search(r"""(?<![\w./-])(["'])dotnet\1(?=\s|$)""", line), "unsupported quoted bare dotnet command head"
             for command in re.finditer(r"(?<![\w./-])dotnet(?=\s|$)", line):
                 head = re.match(r"\s+([A-Za-z-]+)\s+([^\s]+)", line[command.end():])
                 assert head, "unsupported/dynamic/continued dotnet command head"
@@ -140,6 +141,8 @@ for mutation in (
     workflows[0] + "\n          dotnet build $PROJECT\n",
     workflows[0] + "\n          " + literal_command + "; dotnet build tests/new/new.fsproj\n",
     workflows[0] + "\n          " + literal_command + "; dotnet build $PROJECT\n",
+    workflows[0] + "\n          " + literal_command + '; "dotnet" build tests/new/new.fsproj\n',
+    workflows[0] + "\n          " + literal_command + "; 'dotnet' build tests/new/new.fsproj\n",
     workflows[0] + "\n          " + literal_command + "; dotnet $VERB " + projects[0] + "\n",
     workflows[0] + "\n          dotnet \\\n            build " + projects[0] + "\n",
     workflows[0] + "\n          dotnet build \\\n            " + projects[0] + "\n",
