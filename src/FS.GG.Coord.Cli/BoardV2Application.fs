@@ -124,14 +124,16 @@ module BoardV2Application =
                           owner = selected.Owner; pullRequest = selected.PullRequest; head = selected.Head; reasons = selected.Reasons; evidence = selected.Evidence
                           dispatchAuthority = false |}) |}
             let wire = JsonSerializer.SerializeToNode common
-            wire["schema"] <- JsonSerializer.SerializeToNode "fsgg.coord.board-v2-inspection/2"
+            wire.["schema"] <- JsonSerializer.SerializeToNode "fsgg.coord.board-v2-inspection/2"
             let extension = JsonSerializer.SerializeToNode successor
             for name in [ "membershipGap"; "memberships"; "nativeIntegrator"; "selectionCoverage"; "selection" ] do
-                let value = extension[name]
-                wire[name] <- if isNull value then null else value.DeepClone()
+                let value = extension.[name]
+                wire.[name] <- if isNull value then null else value.DeepClone()
+            let itemNodes = wire.["items"].AsArray()
             report.Items |> List.iteri (fun index (item: InspectionItem) ->
-                wire["items"][index]["sourceRevision"] <- JsonSerializer.SerializeToNode item.SourceRevision
-                wire["items"][index]["accountableOwner"] <- JsonSerializer.SerializeToNode item.Owner)
+                let itemNode = itemNodes.[index]
+                itemNode.["sourceRevision"] <- JsonSerializer.SerializeToNode item.SourceRevision
+                itemNode.["accountableOwner"] <- JsonSerializer.SerializeToNode item.Owner)
             wire.ToJsonString()
 
     let encodeInspection report = encodeInspectionWithContext report None DateTimeOffset.UtcNow

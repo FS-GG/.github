@@ -990,9 +990,11 @@ let ``programme missing partial foreign and moved native facts never produce con
         let report = programmeSnapshot (fun request response -> if request.Subject.Contains subjectPart then Error(Http(403, "inert denied read")) else response)
         let selected = V2ProjectionSource.selectActions report (Some(selectionContext report)) report.NativeIntegrator.ObservedAt
         Assert.Equal("unknown", selected.Head.Decision)
-    for oldValue, newValue, subject in [ ProgrammeFixture.head, String.replicate 40 "f", "final head barrier"
-                                       "I_outcome", "I_foreign", "native observation"
-                                       "FS-GG/.github", "Outside/Foreign", "open PR inventory" ] do
+    let mutations: (string * string * string) list =
+        [ (ProgrammeFixture.head, String.replicate 40 "f", "final head barrier");
+          ("I_outcome", "I_foreign", "native observation");
+          ("FS-GG/.github", "Outside/Foreign", "open PR inventory") ]
+    for oldValue, newValue, subject in mutations do
         let report = programmeSnapshot (fun request response ->
             response |> Result.map (fun value -> if request.Subject.Contains subject then { value with Body = value.Body.Replace(oldValue, newValue) } else value))
         Assert.Equal("unknown", (V2ProjectionSource.selectActions report (Some(selectionContext report)) report.NativeIntegrator.ObservedAt).Head.Decision)
@@ -1039,10 +1041,12 @@ let ``programme successor refuses every writer before transport or verifier and 
 
 [<Fact>]
 let ``programme concurrent human planning membership and source edits invalidate selection`` () =
-    for oldValue, newValue, subject in [ "In review", "Ready", "bound V2 planning fields"
-                                       "docs/coordination/programme.md", "docs/other-plan.md", "bound V2 planning fields"
-                                       "I_extra", "I_new_extra", "complete V2 project memberships"
-                                       ProgrammeFixture.revision, "2026-10-17T14:00:00Z", "native observation" ] do
+    let mutations: (string * string * string) list =
+        [ ("In review", "Ready", "bound V2 planning fields");
+          ("docs/coordination/programme.md", "docs/other-plan.md", "bound V2 planning fields");
+          ("I_extra", "I_new_extra", "complete V2 project memberships");
+          (ProgrammeFixture.revision, "2026-10-17T14:00:00Z", "native observation") ]
+    for oldValue, newValue, subject in mutations do
         let mutable matches = 0
         let report = programmeSnapshot (fun request response ->
             if request.Subject.Contains subject then
@@ -1061,9 +1065,9 @@ let ``actual six heading owner record preserves owner and refuses missing duplic
     let owner = "Programme owner /root/programme\nMaintainer supplies continuation"
     let report = programmeSnapshot (bodyChange (ProgrammeFixture.ownerBody.Replace("\nworker\n", "\n" + owner + "\n")))
     Assert.Equal(Some owner, report.Items.Head.Owner)
-    for body in [ ProgrammeFixture.ownerBody.Replace("## Owner", "## Missing owner")
-                  ProgrammeFixture.ownerBody + "\n\n## Owner\n\nsecond owner"
-                  ProgrammeFixture.ownerBody.Replace("## Owner", "##Owner")
+    for body in [ ProgrammeFixture.ownerBody.Replace("## Owner", "## Missing owner");
+                  ProgrammeFixture.ownerBody + "\n\n## Owner\n\nsecond owner";
+                  ProgrammeFixture.ownerBody.Replace("## Owner", "##Owner");
                   ProgrammeFixture.ownerBody.Replace("\nworker\n", "\n\n") ] do
         let report = programmeSnapshot (bodyChange body)
         Assert.True(report.Items.Head.Owner.IsNone)

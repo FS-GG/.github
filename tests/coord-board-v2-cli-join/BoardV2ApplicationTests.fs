@@ -237,13 +237,13 @@ let ``actual programme CLI caller joins native PR facts and retains attributed s
         Assert.Equal(2, root.GetProperty("memberships").GetArrayLength())
         for name in [ "membershipGap"; "memberships"; "nativeIntegrator"; "selectionCoverage"; "selection" ] do
             Assert.True(root.TryGetProperty(name) |> fst, name)
-        let item = root.GetProperty("items")[0]
+        let item = (root.GetProperty("items")).[0]
         Assert.True(item.TryGetProperty("sourceRevision") |> fst)
         Assert.True(item.TryGetProperty("accountableOwner") |> fst)
-        let candidate = root.GetProperty("candidates")[0]
+        let candidate = (root.GetProperty("candidates")).[0]
         Assert.Equal(1, candidate.GetProperty("openPullRequests").GetArrayLength())
         Assert.Equal(JsonValueKind.Object, candidate.GetProperty("touchSets").ValueKind)
-        let selected = root.GetProperty("selection")[0]
+        let selected = (root.GetProperty("selection")).[0]
         Assert.Equal("unknown", selected.GetProperty("decision").GetString())
         Assert.Equal("https://github.com/FS-GG/.github/pull/42", selected.GetProperty("pullRequest").GetString())
         Assert.Equal(ProgrammeFixture.head, selected.GetProperty("head").GetString())
@@ -290,11 +290,11 @@ let ``actual product CLI retains closed schema one top level and item property s
         let root = document.RootElement
         let names (value: JsonElement) = value.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
         let expectedTop = Set.ofList
-            [ "schema"; "bindingVersion"; "organizationId"; "owner"; "projectNumber"; "projectId"; "projectTitle"; "schemaVersion"; "ownerKind"; "repositories"
-              "status"; "roadmapFieldId"; "track"; "observation"; "selectedIssues"; "recipeRevision"; "artifactSha256"; "populationRevision"; "importRecipeRevision"
+            [ "schema"; "bindingVersion"; "organizationId"; "owner"; "projectNumber"; "projectId"; "projectTitle"; "schemaVersion"; "ownerKind"; "repositories";
+              "status"; "roadmapFieldId"; "track"; "observation"; "selectedIssues"; "recipeRevision"; "artifactSha256"; "populationRevision"; "importRecipeRevision";
               "importArtifactSha256"; "protectedInputs"; "selected"; "attempted"; "verified"; "mutationAttempts"; "populationGap"; "cleanup"; "items"; "candidates" ]
         let expectedItem = Set.ofList
-            [ "issue"; "expectedNodeId"; "native"; "dependencyObservations"; "dependencyReadComplete"; "planObservation"; "sourceCurrentness"; "planning"; "planningGap"
+            [ "issue"; "expectedNodeId"; "native"; "dependencyObservations"; "dependencyReadComplete"; "planObservation"; "sourceCurrentness"; "planning"; "planningGap";
               "discrepancies"; "health"; "delivery"; "publication"; "nativeAcceptance"; "reads"; "mutationAttempts"; "gap"; "lastVerified" ]
         Assert.Equal("fsgg.coord.board-v2-inspection/1", root.GetProperty("schema").GetString())
         Assert.Equal<Set<string>>(expectedTop, names root)
