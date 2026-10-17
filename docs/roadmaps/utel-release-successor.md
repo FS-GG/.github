@@ -1444,3 +1444,43 @@ order, original-candidate dependency-pin refusals, independent failure/cleanup r
 candidate resource bounds. Source-only qualification does not install the disposition, allocate a
 journal, mint credentials, publish/promote, replay an original effect or activate installed V2. Root
 retains separate native operation selection after reviewed source delivery and fresh exact inputs.
+
+**Selected installer composition.** The ordinary writer credential belongs to the existing
+`release-successor` environment and issuer; a standalone shell is not presumed to hold it. Complete
+the caller through one explicit install-only selection in the existing publisher workflow, with a
+mutually exclusive job. Reuse its environment and non-cancelling concurrency group. The install job
+has only contents/actions read permissions, no package or OIDC permission, no candidate download or
+build, and no NuGet or publication entry. Keep the ordinary publication precredential fence intact;
+installation never automatically continues into publication.
+
+Only the install boolean and exact expected Authority main are new dispatch inputs. Candidate
+coordinates become dispatch-optional so installation needs no invented archive identity; ordinary
+modes must still validate positive run/artifact IDs and the archive digest before either issuer.
+Installation requires empty candidate/checkpoint strings, publish=false and every other profile flag
+false. Mixed or unknown input fails visibly before issuance rather than silently skipping a job.
+
+Before App issuance, construct the fixed canonical suspension from source-owned constants, validate
+this exact immutable accepted decision, and bind the current source/clean checkout, native repository/
+workflow/run, first attempt, dispatch event and existing sole operator. Hosted attribution comes from
+native Actions evidence, not a claim that the workflow token's `/user` is the human operator. Read
+exact Authority identity/protection, expected parent, absent disposition and unchanged original state
+with the available reader; denied or incomplete evidence stops before mint. Preserve a bounded
+invocation-local, digest-bound prepared result with the exact record, mode and source/parent/run
+identities. This is custody for the selected operation, not another durable approval ledger.
+
+After that preflight only, use the existing pinned App issuer for Authority-only contents:write,
+verify the expected installation and exact one-repository scope, and invoke the maintained installer.
+Recheck native invocation/source/protection/original state and parent beside every blob/tree/commit
+POST and final non-forced PATCH. The clean-source guard includes relevant untracked import-root files;
+a nominal clean tracked tree must not permit unreviewed imported code. Existing standalone user-token
+admission stays strict and distinct from this hosted caller. No key or token is exported in evidence.
+
+The install-only result is explicitly not publicationComplete. Retain exact nonsecret intent before
+the ref update, each attempted request and returned object identity, first failure and independent
+reporting/cleanup outcome. A missing response, uncertain ref update or lost readback remains the
+original Unknown operation: stop writes and reconcile read-only, never rerun or silently renew with
+a new parent/source. Independent readback must verify the actual record, original journal and all
+unrelated entries. Token cleanup remains enabled and its actual outcome is a separate native gate.
+Qualify actual workflow mode/permission/ordering and CLI caller controls, including all mixed-input,
+source/run/actor/parent/record/scope races and the ordinary publication fence. Native reader/issuer
+capability, custody retention and installation still require a separately selected actual operation.
