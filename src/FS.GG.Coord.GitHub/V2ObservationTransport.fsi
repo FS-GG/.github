@@ -18,6 +18,6 @@ module V2ObservationTransport =
     val validateScope: binding: Binding -> IoResult<unit>
     val authorize: binding: Binding -> intent: MutationIntent -> IoResult<Transport.Request>
     /// Rebuild the fixed request, freshly bind immutable item/content, dispatch once. No durable replay.
-    val compose: binding: Binding -> reads: IGitHubTransport -> nativeOnce: (Transport.Request -> IoResult<Response>) -> IoResult<IGitHubTransport>
+    val compose: binding: Binding -> reads: IGitHubTransport -> nativeOnce: (Transport.Request -> IoResult<Transport.Response>) -> IoResult<IGitHubTransport>
     /// Dedicated guarded live composition; never calls the legacy fence's raw provider port.
     val createLive: binding: Binding -> token: string -> IoResult<IGitHubTransport * System.IDisposable>

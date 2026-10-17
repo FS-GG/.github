@@ -97,8 +97,8 @@ let private observation value =
 let private mutationSuccess =
     ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
 
-let private scripted (responses: IoResult<Response> list) =
-    let queue = Queue<IoResult<Response>>(responses)
+let private scripted (responses: IoResult<Transport.Response> list) =
+    let queue = Queue<IoResult<Transport.Response>>(responses)
 
     Fake.Recorder(fun _ ->
         if queue.Count = 0 then failwith "the adapter exceeded its bounded fixture"
@@ -626,7 +626,7 @@ let ``inspection changed issue dependency and access denial remain zero effect``
 let ``fresh three selected issues inspect Current while closed omitted history stays outside the exact map`` () =
     let history = """,{"issue":"FS-GG/.github#3009","nodeId":"I_3009","observedUpdatedAt":"2026-10-04T13:04:38Z","observedState":"closed","decision":"omit-delivered","adjudication":"unknown","pilot":false,"remainingOutcome":null,"roadmap":"docs/github-substrate-v2-roadmap.md","dependencies":[]}"""
     let manifest = canonicalManifest.Substring(0, canonicalManifest.Length - 2) + history + "]}"
-    let memberResponse number (response: IoResult<Response>) =
+    let memberResponse number (response: IoResult<Transport.Response>) =
         response |> Result.map (fun value ->
             { value with Body = value.Body.Replace("I_native", (if number = 2963 then "I_native" else $"I_{number}")).Replace("2963", string number) })
     let reads number =
@@ -688,7 +688,7 @@ let ``identical inspection snapshots are identical and malformed binding reads n
 
 [<Fact>]
 let ``complete inspection verifies observed coverage without creating projection history`` () =
-    let forIssue number (response: IoResult<Response>) =
+    let forIssue number (response: IoResult<Transport.Response>) =
         response |> Result.map (fun value -> { value with Body = value.Body.Replace("2963", string number).Replace("I_native", if number = 2963 then "I_native" else $"I_{number}") })
     let rows = [2963; 2964; 2965] |> List.collect (fun number ->
         [native number "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "owning roadmap"; organization; target; forIssue number membership
@@ -737,7 +737,7 @@ let private productRequest (selected: Binding) =
     { Issue = { Owner = selected.Owner; Repository = (Set.minElement selected.Repositories).Split('/')[1]; Number = 7 }
       ExpectedNodeId = selected.SelectedIssues |> Map.keys |> Seq.exactlyOne }
 
-let private productResponse (selected: Binding) (response: IoResult<Response>) =
+let private productResponse (selected: Binding) (response: IoResult<Transport.Response>) =
     response |> Result.map (fun value ->
         let body =
             value.Body.Replace("FS-GG/.github", Set.minElement selected.Repositories).Replace("FS-GG", selected.Owner)
@@ -944,7 +944,7 @@ let ``receiver population blob drift before dispatch preserves the field`` () =
         Assert.Equal(0, writes)
         Assert.True(report.Items.Head.Gap.IsSome)
 
-let private programmeSnapshot (change: Transport.Request -> IoResult<Response> -> IoResult<Response>) : V2ProjectionSource.InspectionReport =
+let private programmeSnapshot (change: Transport.Request -> IoResult<Transport.Response> -> IoResult<Transport.Response>) : V2ProjectionSource.InspectionReport =
     let transport = ProgrammeFixture.transport change
     let report = V2ProjectionSource.inspectFixed transport (ProgrammeFixture.binding ()) None
     Assert.Empty transport.Mutations
@@ -984,7 +984,7 @@ let ``programme production composition reads current source and complete native 
 
 [<Fact>]
 let ``ordinary closure dependency and plan revisions are fresh programme observations`` () =
-    let change (request: Transport.Request) (response: IoResult<Response>) =
+    let change (request: Transport.Request) (response: IoResult<Transport.Response>) =
         response |> Result.map (fun result ->
             if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then { result with Body = result.Body.Replace("\"state\":\"OPEN\"", "\"state\":\"CLOSED\"").Replace(ProgrammeFixture.revision, "2026-10-17T13:00:00Z") }
             elif request.Subject.EndsWith("programme.md", StringComparison.Ordinal) then { result with Body = result.Body.Replace(ProgrammeFixture.head, String.replicate 40 "f") }
@@ -1080,7 +1080,7 @@ let ``programme concurrent human planning membership and source edits invalidate
 
 [<Fact>]
 let ``actual six heading owner record preserves owner and refuses missing duplicate or malformed fields`` () =
-    let bodyChange (body: string) (request: Transport.Request) (response: IoResult<Response>) =
+    let bodyChange (body: string) (request: Transport.Request) (response: IoResult<Transport.Response>) =
         if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
             response |> Result.map (fun value -> { value with Body = value.Body.Replace(Text.Json.JsonSerializer.Serialize ProgrammeFixture.ownerBody, Text.Json.JsonSerializer.Serialize(body: string)) })
         else response
@@ -1097,7 +1097,7 @@ let ``actual six heading owner record preserves owner and refuses missing duplic
         Assert.True(report.Items.Head.Owner.IsNone)
         Assert.Equal("needs-decision", (V2ProjectionSource.selectActions report None report.NativeIntegrator.ObservedAt).Head.Decision)
 
-let private asNewAssignment (change: Transport.Request -> IoResult<Response> -> IoResult<Response>) : V2ProjectionSource.InspectionReport =
+let private asNewAssignment (change: Transport.Request -> IoResult<Transport.Response> -> IoResult<Transport.Response>) : V2ProjectionSource.InspectionReport =
     programmeSnapshot (fun request response ->
         let response = change request response
         if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
@@ -1157,7 +1157,7 @@ let ``known intake refusal blocks both new source and established continuation``
 [<Fact>]
 let ``literal native PR files never become chore sentinel or rewritten touch set tokens`` () =
     for path in [ "any"; "none"; "src/a,b.fs"; "src/a`b.fs"; "src/white space.fs" ] do
-        let change (request: Transport.Request) (response: IoResult<Response>) =
+        let change (request: Transport.Request) (response: IoResult<Transport.Response>) =
             if request.Subject.EndsWith(" files", StringComparison.Ordinal) then
                 response |> Result.map (fun value -> { value with Body = value.Body.Replace("src/current.fs", path) })
             else response

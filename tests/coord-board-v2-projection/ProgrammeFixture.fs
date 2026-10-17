@@ -61,7 +61,7 @@ module ProgrammeFixture =
                   ("repository", box {| nameWithOwner = "FS-GG/.github" |}); (field, box value) ])
         wire ({| node = fields |})
 
-    let transport (change: Transport.Request -> Errors.IoResult<Response> -> Errors.IoResult<Response>) =
+    let transport (change: Transport.Request -> Errors.IoResult<Transport.Response> -> Errors.IoResult<Transport.Response>) =
         Fake.Recorder(fun request ->
             let result =
                 match request.Body with
@@ -113,7 +113,7 @@ module ProgrammeFixture =
                 | _ -> failwith ("Unmatched inert native request: " + request.Subject)
             change request result)
 
-    let unchanged _ response = response
+    let unchanged (_: Transport.Request) (response: Errors.IoResult<Transport.Response>) = response
 
     let context (report: V2ProjectionSource.InspectionReport) : V2ProjectionSource.SelectionContext =
         let item = report.Items.Head
@@ -170,7 +170,7 @@ module ProgrammeFixture =
                           {| sliceId = reservation.SliceId; attempt = reservation.Attempt; operation = operation reservation.Operation; owner = reservation.Owner
                              repository = reservation.Repository; paths = reservation.Paths; pullRequest = reservation.PullRequest; head = reservation.Head; custodyReference = reservation.CustodyReference |}) |}) |})
 
-    let newAssignment (request: Transport.Request) (result: Errors.IoResult<Response>) =
+    let newAssignment (request: Transport.Request) (result: Errors.IoResult<Transport.Response>) =
         result |> Result.map (fun value ->
             if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
                 { value with Body = value.Body.Replace("https://github.com/FS-GG/.github/pull/42", "None") }
@@ -178,12 +178,12 @@ module ProgrammeFixture =
                 { value with Body = value.Body.Replace("I_outcome", "I_other").Replace("\"number\":4634", "\"number\":999") }
             else value)
 
-    let observation (current: string) (request: Transport.Request) (result: Errors.IoResult<Response>) =
+    let observation (current: string) (request: Transport.Request) (result: Errors.IoResult<Transport.Response>) =
         if request.Subject = "board item PVTI_current Observation" then
             result |> Result.map (fun value -> { value with Body = value.Body.Replace("\"Unknown\"", JsonSerializer.Serialize current) })
         else result
 
-    let oldSchema (request: Transport.Request) (result: Errors.IoResult<Response>) =
+    let oldSchema (request: Transport.Request) (result: Errors.IoResult<Transport.Response>) =
         match request.Body with
         | Query(document, _) when document.Contains("projectV2(number:") ->
             result |> Result.map (fun value ->

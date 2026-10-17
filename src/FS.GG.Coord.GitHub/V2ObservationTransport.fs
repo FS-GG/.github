@@ -48,7 +48,7 @@ module V2ObservationTransport =
                 | _ -> Error(Malformed("V2 Observation authority", "unknown variables, field, item, project or option"))
             | _ -> Error(Malformed("V2 Observation authority", "only the fixed Observation single-select update is admitted"))
 
-    let compose binding (reads: IGitHubTransport) (nativeOnce: Transport.Request -> IoResult<Response>) : IoResult<IGitHubTransport> =
+    let compose binding (reads: IGitHubTransport) (nativeOnce: Transport.Request -> IoResult<Transport.Response>) : IoResult<IGitHubTransport> =
         validateScope binding |> Result.map (fun () ->
             { new IGitHubTransport with
                 member _.Send request = reads.Send request
