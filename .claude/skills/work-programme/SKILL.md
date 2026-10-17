@@ -15,6 +15,33 @@ Start development only on requested advancement; inspection, maintenance and aud
 
 ## Conditional three-outcome pilot
 
+The historical pilot below and its ROUTINEV3 issue/native route remain bounded by their actual
+protected acceptance. They do not authenticate the successor organization binding or installed tool.
+
+## Prepared V2 programme consumer
+
+This .9/.11 source edition does not switch the live planning queue. Read the
+[organization inspection contract](../check-board/references/organization-v2-inspection.md) for the
+exact installed/migration/UI/real-use gates and the future authenticated final binding. Until those
+gates close, continue existing authorized issue/plan/native-PR work; no V1 fallback or duplicate
+implementation is introduced. Manual v3 current-status maintenance is retained until accepted cutover.
+
+After that cutover, programme, drivers, recovery and reporting use binding-v4/inspection2 together.
+The existing integrator supplies attributed ephemeral stdin action/prerequisite/intake/runtime facts
+for exact enrollment, native issue/body/plan revisions and independently identified current slices.
+Native PR/Current deliverable, owner, dependency and permission joins do not authenticate reported
+runtime facts. Use the ordered selected/deferred fold, not every eligible candidate as one batch.
+Counts are remaining capacity after active work; account each selected operation and retain every
+uncertain hold before admitting another. Recheck determining native/runtime facts beside execution.
+
+Planning Status, Roadmap and Track remain human-owned. Observation health never means eligibility or
+acceptance; merged PRs establish only their delivered scope. The six-field owning issue and native PR
+remain assignment/recovery records; no packet, return, reducer/current-view or dispatch-index artifact
+is mandatory for this scope. Optional helper contracts below keep their own semantics and grant no
+V2 authority. Routine review/CI/delivery and effect-specific admission remain independent.
+
+## Historical pilot and ROUTINEV3 route
+
 <!-- Retain this anchor for existing handoffs; scope is extended below. -->
 
 The selected [pilot](../../../docs/roadmaps/2026-10-05-programme-context-efficiency.md#selected-three-outcome-programme-pilot--2026-10-16)

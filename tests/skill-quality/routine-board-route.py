@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Semantic guard for the reduced routine route across every board driver."""
 
+import importlib.util
 from pathlib import Path
 import sys
 
@@ -29,7 +30,7 @@ for skill in skills:
     claude = (CLAUDE / skill / "SKILL.md").read_text(encoding="utf-8")
     require(agents == claude, f"{skill} differs between .agents and .claude")
 
-for driver in ("work-board", "drive-board"):
+for driver in ("work-board",):
     body = (AGENTS / driver / "SKILL.md").read_text(encoding="utf-8")
     folded = " ".join(body.lower().split())
     for phrase in (
@@ -57,7 +58,7 @@ for driver in ("work-board", "drive-board"):
     ):
         require(" ".join(omitted.split()) in " ".join(body.split()), f"{driver} no longer names omitted ceremony {omitted!r}")
 
-for variant in ("work-board-normal", "work-board-best", "drive-board-normal", "drive-board-best"):
+for variant in ("work-board-normal", "work-board-best"):
     body = (AGENTS / variant / "SKILL.md").read_text(encoding="utf-8")
     require("routine route unchanged" in body, f"{variant} does not inherit its base routine route")
     require("does not authorize a critic" in body, f"{variant} makes routine review ambiguous")
@@ -65,6 +66,21 @@ for variant in ("work-board-normal", "work-board-best", "drive-board-normal", "d
     require("ordinary three-round chain" not in body, f"{variant} can route routine work into strict repair ceremony")
     for phrase in ("ADR-0084", "selection/reuse", "coherent-pending", "late-dispute", "dependent-activation"):
         require(phrase in body, f"{variant} does not explicitly inherit {phrase!r}")
+
+# Organization consumers have a distinct prepared-v4 contract; historical product V1
+# loops above keep their original assertions and are not a fallback for this scope.
+spec = importlib.util.spec_from_file_location("skill_quality", ROOT / "scripts/check-skill-quality.py")
+quality = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(quality)
+errors = []
+quality.validate_organization_consumer(ROOT, errors)
+require(not errors, "; ".join(errors))
+for variant in ("drive-board-normal", "drive-board-best"):
+    body = " ".join((AGENTS / variant / "SKILL.md").read_text(encoding="utf-8").split())
+    for phrase in ("complete canonical", "prepare-only .9/.11 boundary", "routine owner, independent review, required CI",
+                   "ADR-0084 delivery", "explicitly to every", "unsupported route", "do not downgrade", "silently substitute"):
+        require(phrase in body, f"{variant} lost prepared routine inheritance {phrase!r}")
+    require("three-round review chain" not in body, f"{variant} reintroduces a mandatory V1 repair chain")
 
 for driver in ("work-board", "drive-board"):
     triage = (AGENTS / driver / "references" / "backlog-triage.md").read_text(encoding="utf-8")

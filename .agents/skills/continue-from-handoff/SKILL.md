@@ -26,6 +26,17 @@ and reconcile its owner rather than treating omission as cancellation.
 
 ## Recover the newest saved state
 
+For .9/.11 source preparation, retain the
+[organization consumer boundary](../check-board/references/organization-v2-inspection.md) in recovery
+and handoff. Source delivery does not activate v4 or retire manual v3 current-status maintenance.
+After accepted cutover, preserve final binding/enrollment, exact outcome/slice/attempt and owner,
+existing Current deliverable/native PR/head, issue/body/current-plan revisions, pending requests and
+all original/uncertain reservations. Fresh-read determining native/action/intake/runtime facts through
+the existing integrator before resuming an operation; a saved inspection or stdin digest supplies no
+authority or renewed freshness. Missing facts keep scoped Unknowns without duplicate implementation
+or V1 fallback. Hand off original unresolved effects; never settle or retry them from board status.
+
+
 Resolve the FS-GG `.github` repository from the current checkout or its existing
 remote/workspace configuration. `/docs/handoffs` means `docs/handoffs` inside
 that repository, not the operating system's `/docs` directory. Preserve dirty

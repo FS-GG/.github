@@ -1,5 +1,29 @@
 # Shared disposable-worker host loop
 
+## Prepared organization successor loop
+
+Follow the [organization contract](../../check-board/references/organization-v2-inspection.md).
+This .9/.11 source preparation grants no live consumer activation or dispatch. After accepted cutover,
+inspect the final v4 binding and attributed ephemeral integrator input; consume the complete membership
+reconciliation and ordered per-slice selected/deferred result. Recover current owner/PR/head before new
+assignment, verify action-specific plan/native prerequisites and intake, and account actual remaining
+implementation/review/hosted-CI capacity and existing reservations. Recheck determining facts beside
+execution and recompute the remaining proposals after each operation changes active state.
+
+One accountable owner carries source work, repair, independent source review, required CI and native
+delivery in its isolated worktree. Preserve original operations and uncertain holds. Use the existing
+integrator and admission; no waves, reserved critic chain, claim, Class/Phase rank, event ledger,
+unchanged heartbeat or batch/take route is introduced. Report meaningful changes and relevant deadlines
+from existing evidence. Missing global/scoped reads retain the contract's respective fences.
+
+## Historical host mechanics
+
+Everything below is retained historical V1 mechanics, not current organization instructions or an
+alternative to successor gaps. It grants no organization claim, dispatch, lease or effect authority.
+Product callers retain their separately qualified contracts and the independent work-board reference;
+preparing this source does not change them.
+
+
 Use the worker/subagent mechanism the current host exposes. If it can create an isolated worktree for a
 worker, request that isolation; otherwise create a fresh worktree from the fetched default branch
 before starting the worker. If the host has no worker mechanism, run the same one-item loop
@@ -29,14 +53,6 @@ lane snapshot is not its own authority. Preserve both board and execution timest
 reason to overwrite either fact. If a prior event used the wrong scope, append a typed correction that
 supersedes it and continue from the corrected effective totals.
 
-<!-- BEGIN GENERATED: fsgg-protocol:wave-policy -->
-*Generated operational fact: the parser and driver consume this policy; do not restate its numbers.*
-
-<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->
-
-**Two concurrent waves, a fixed 8-slot cap.** Each wave holds 3 implementer slots; 2 slots are reserved fleet-wide for independent critics. **Consolidation:** 3 or fewer active items consolidates before a fresh wave is started.
-
-<!-- END GENERATED: fsgg-protocol:wave-policy -->
 
 Critic reservation is **RESERVED, not advisory**; assigning it to an implementer is a contract
 violation, not an efficiency gain.

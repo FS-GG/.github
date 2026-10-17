@@ -1,5 +1,15 @@
 # Temporary adapter contract
 
+For the prepared .9/.11 programme successor, follow the
+[organization contract](../../check-board/references/organization-v2-inspection.md) and the parent
+[prepared consumer boundary](../SKILL.md#prepared-v2-programme-consumer). Source preparation does not
+activate it. After accepted cutover, recover exact outcome/slice/attempt, accountable owner, existing
+PR/head, native issue/body/current-plan joins and original reservations from their actual records.
+Use the existing integrator's one-invocation stdin/native composition and fresh execution-side recheck;
+this reference's helper artifacts remain optional diagnostics, never a second current-state ledger,
+capacity supplier or a prerequisite to routine work. Missing evidence is attributed Unknown.
+
+
 The [conditional pilot](../SKILL.md#conditional-three-outcome-pilot) makes these helper artifacts
 optional for the original outcomes and ROUTINEV3 source work after protected delivery of the
 applicable governing rule. Automatic evidence qualifies each additional fact separately; missing joins

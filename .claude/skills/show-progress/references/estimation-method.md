@@ -1,5 +1,14 @@
 # Estimation method — show-progress/2
 
+The .9/.11 programme consumer is prepared only under the
+[organization contract](../../check-board/references/organization-v2-inspection.md). After accepted
+cutover, use the same binding-v4/inspection2, six-field owning issue, current slice/native PR and
+acceptance evidence as execution/recovery, with actual observation times and coverage. Human Status
+and Verified are neither accepted completion nor resource capacity. Preserve partial milestones,
+uncertain effects and unselected/historical discrepancies. Until cutover retain the existing manual
+v3 current-status boundary; reporting does not activate or mutate the board.
+
+
 This is a lightweight reporting method, not a replacement for owning plans or an earned
 value management system. The percentages and forecasts describe explicitly named
 populations. A scope change, a new uncertainty or additional necessary work may reduce

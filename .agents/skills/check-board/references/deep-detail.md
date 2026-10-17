@@ -1,6 +1,16 @@
 
 # check-board (FS-GG)
 
+## Historical and separately scoped mechanics
+
+The reconcile/apply, claim, Class/Phase, auto-Status and done-stamp recipes below preserve historical
+V1 behavior and separately qualified consumers; they are not current organization authority. Use the
+[organization inspection contract](organization-v2-inspection.md) for .9/.11 source preparation and
+accepted successor consumption. No organization V1 fallback exists, and these recipes cannot repair
+unknown v4 evidence. Human Status is planning; native merges do not prove whole-outcome acceptance.
+Product contracts remain unchanged.
+
+
 The Coordination board is a **projection**. GitHub issues, their `state`, and the `fsgg:claim`
 markers are the **ground truth**; the board's `Status`, `Phase`, and `Blocked by` are a cached
 view of it that humans and `fsgg-coord next`/`take` read to decide what happens next. The board
