@@ -502,15 +502,20 @@ let ``actual caller recovers Current deliverable only PR and retains mixed deliv
             "Delivered initial plan: https://github.com/FS-GG/.github/pull/41\nCurrent implementation: https://github.com/FS-GG/.github/pull/42")
     let mixed (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) = relatedOnly request response |> currentDeliverableBody mixedBody request
     let mixedCase = currentDeliverableBody (ProgrammeFixture.ownerBody.Replace("FS-GG/.github/pull/42", "fs-gg/.GITHUB/pull/42"))
-    for change in [ ProgrammeFixture.unchanged; relatedOnly; mixed; mixedCase ] do
+    let variants =
+        [ ("closing and Current deliverable", ProgrammeFixture.unchanged);
+          ("Current deliverable only", relatedOnly);
+          ("historical merged plus current open", mixed);
+          ("mixed-case repository link", mixedCase) ]
+    for variant, change in variants do
         let context = observedContext change
         let _, report, transport = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson context)) change
         let selected = (inputSelections report.Value).[0]
         Assert.Equal("continue-existing", selected.GetProperty("decision").GetString())
         Assert.Equal("https://github.com/FS-GG/.github/pull/42", selected.GetProperty("pullRequest").GetString())
-        Assert.True(transport.Logged "https://github.com/FS-GG/.github/pull/42 Current deliverable native join")
-        Assert.True(transport.Logged "FS-GG/.github permission for author")
-        Assert.True(transport.RestCalls >= 3)
+        Assert.True(transport.Logged "https://github.com/FS-GG/.github/pull/42 Current deliverable native join", variant)
+        Assert.True(transport.Count "get FS-GG/.github collaborators/author/permission" = 2, variant + ": initial and final permission reads must use the canonical native GET path")
+        Assert.True(transport.RestCalls >= 4, variant + ": both dependency and permission snapshots must be read twice")
         let item = (report.Value.GetProperty("items")).[0]
         Assert.StartsWith("Unknown", item.GetProperty("nativeAcceptance").GetString())
         Assert.Equal("native-observed", item.GetProperty("nativeIntake").GetProperty("provenance").GetString())
