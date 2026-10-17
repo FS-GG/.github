@@ -842,14 +842,15 @@ else
 fi
 
 # A machine declaration outside its managed region is a second source even when its value happens to
-# agree. The semantic gate must reject that duplicate before a later value change splits the skills.
+# agree. The retained product semantic gate must reject that duplicate. Organization wave authority
+# is retired and is refused independently above, so this leg must reach the product duplicate check.
 seed
 for runtime in .claude .agents; do
   printf '\n<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->\n' \
-    >>"$WORK/tree/$runtime/skills/drive-board/references/host-loop.md"
+    >>"$WORK/tree/$runtime/skills/work-board/references/host-loop.md"
 done
 expect_rejection "hand-authored duplicate wave literals are rejected" \
-  "drive-board: hand-authored duplicate of generated wave policy"
+  "work-board: hand-authored duplicate of generated wave policy"
 
 # --- .github#2510: routed dispatch must resolve from THIS repo ---------------------------------
 #

@@ -369,7 +369,12 @@ connected source correction adds maintained raw Kit relocking after projection p
 manifest/own-row reconciliation, independent named retirement/product controls, and separate current
 organization reporting assertions. It preserves the product reporter utility and genuine-engine full
 qualification fence. Inert preparation is not package execution or hosted qualification; fresh
-required CI remains necessary before this consumer source can be delivered.
+required CI remains necessary before this consumer source can be delivered. The corrected cohort
+passed compiled skill conversion/contracts, package/registry/projection/reporting checks, then its
+semantic fixture failed one obsolete diagnostic oracle: organization wave literals correctly refused
+at the retired-authority guard. The retained duplicate-literal product test now targets product
+work-board; independent organization retirement controls remain. That failed cohort is retained,
+with fresh exact-head qualification still required.
 
 The first ready source window is .7/.8 after canonical owner resolution and bounded mapping. It can
 be developed without installed-store or UI access. Initial plan/roadmap delivery does not select a
