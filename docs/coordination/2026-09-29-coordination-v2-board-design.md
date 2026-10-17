@@ -461,7 +461,9 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   organization drivers/wrappers, recovery, show-progress and maintained mirrored/generated/package
   sources, plus superseded current guidance. Reconcile the six user changes before edits. Prove
   genuine existing-work continuation, blocked handling and necessary ordinary real-use delivery with
-  correct board reflection, then switch these consumers together. Retire manual v3 current-status
+  correct board reflection, then switch these consumers together. Reconcile affected model-routing
+  declarations against the runtime’s supported capabilities and verify actual selected model/effort;
+  unavailable routes remain explicit, with no silent substitution. Retire manual v3 current-status
   maintenance only after acceptance, preserving strategy, evidence, original owners/PRs and holds.
 
 The accepted .1–.6 feature scope is follow-on planning work, not a new prerequisite for the already selected full V2
