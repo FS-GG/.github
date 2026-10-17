@@ -34,7 +34,7 @@ module MigrationFixture =
           SelectedIssues = [ { Id = "synthetic-issue"; Repository = "FS-GG/.github"; Number = 42; Slice = "synthetic-parent" } ];
           StatusFieldId = "synthetic-status"; RoadmapFieldId = "synthetic-roadmap"; TrackFieldId = "synthetic-track";
           ObservationFieldId = "synthetic-observation"; InReviewColor = "BLUE"; InReviewDescription = "synthetic review";
-          Views = [] }
+          Views = []; InitialPlanning = [] }
     let snapshot : Snapshot =
         { ObservedAt = DateTimeOffset.UtcNow; PrincipalId = scope.PrincipalId; PrincipalLogin = scope.PrincipalLogin;
           OrganizationId = "O_kgDOEYAWYw"; ProjectId = "PVT_kwDOEYAWY84Bldpa"; ProjectTitle = "Coordination V2";
@@ -91,20 +91,28 @@ module MigrationFixture =
                 let id = variables |> List.tryPick (function "id", VId id -> Some id | _ -> None) |> Option.defaultValue snapshot.ProjectId
                 let parent connection values = response (objectNode [ "node", objectNode [ "id", value id; connection, page values ] ])
                 if document.Contains "viewer{id login}" then
-                    response (objectNode [ "viewer", objectNode [ "id", value snapshot.PrincipalId; "login", value snapshot.PrincipalLogin ];
-                                          "organization", objectNode [ "id", value snapshot.OrganizationId; "login", value "FS-GG";
-                                              "projectV2", objectNode [ "id", value snapshot.ProjectId; "number", value snapshot.ProjectNumber;
-                                                                        "title", value snapshot.ProjectTitle; "public", value (not snapshot.Private);
-                                                                        "viewerCanUpdate", value snapshot.CanUpdate; "updatedAt", value snapshot.UpdatedAt ] ] ])
-                elif document.StartsWith("query($issue0:", StringComparison.Ordinal) then
-                    let nodes =
-                        variables |> List.map (fun (name, variable) ->
-                            let id = match variable with VId id -> id | _ -> failwith "native issue ID expected"
-                            let issue = snapshot.Issues |> List.find (fun (issue: NativeIssue) -> issue.Id = id)
-                            name, objectNode [ "__typename", value "Issue"; "id", value issue.Id; "number", value issue.Number;
-                                               "updatedAt", value issue.UpdatedAt; "state", value issue.State;
-                                               "repository", objectNode [ "nameWithOwner", value issue.Repository ] ])
-                    response (objectNode nodes)
+                    let extra: (string * JsonNode) list =
+                        if document.Contains "fields(first:" then
+                            [ ("fields", page (snapshot.Fields |> List.map fieldNode));
+                              ("items", page (snapshot.Items |> List.map itemNode));
+                              ("views", page (snapshot.Views |> List.map viewNode)) ]
+                        else []
+                    let project: JsonNode =
+                        objectNode ([ "id", value snapshot.ProjectId; "number", value snapshot.ProjectNumber;
+                                      "title", value snapshot.ProjectTitle; "public", value (not snapshot.Private);
+                                      "viewerCanUpdate", value snapshot.CanUpdate; "updatedAt", value snapshot.UpdatedAt ] @ extra)
+                    let issues: (string * JsonNode) list =
+                        variables |> List.choose (fun (name, variable) ->
+                            if not (name.StartsWith("issue", StringComparison.Ordinal)) then None
+                            else
+                                let id = match variable with Transport.VId id -> id | _ -> failwith "native issue ID expected"
+                                let issue = snapshot.Issues |> List.find (fun (issue: NativeIssue) -> issue.Id = id)
+                                Some(name, objectNode [ "__typename", value "Issue"; "id", value issue.Id; "number", value issue.Number;
+                                                        "updatedAt", value issue.UpdatedAt; "state", value issue.State;
+                                                        "repository", objectNode [ "nameWithOwner", value issue.Repository ] ]))
+                    response (objectNode ([ "viewer", objectNode [ "id", value snapshot.PrincipalId; "login", value snapshot.PrincipalLogin ];
+                                            "organization", objectNode [ "id", value snapshot.OrganizationId; "login", value "FS-GG";
+                                                                        "projectV2", project ] ] @ issues))
                 elif document.Contains "fields(first:" then parent "fields" (snapshot.Fields |> List.map fieldNode)
                 elif document.Contains "items(first:" then parent "items" (snapshot.Items |> List.map itemNode)
                 elif document.Contains "fieldValues(first:" then
@@ -149,11 +157,35 @@ module MigrationFixture =
                               Number = Some issue.Number; UpdatedAt = issue.UpdatedAt; Archived = false; Values = [] }
                         snapshot <- { snapshot with Items = snapshot.Items @ [ item ] }
                         "addProjectV2ItemById"
+                    elif query.Contains "updateProjectV2ItemFieldValue(" then
+                        let itemId, fieldId = text "itemId", text "fieldId"
+                        let selected = input.GetProperty "value"
+                        let mutable textValue = Unchecked.defaultof<JsonElement>
+                        let kind, tokens =
+                            if selected.TryGetProperty("text", &textValue) then
+                                "ProjectV2ItemFieldTextValue", [ "text"; textValue.GetRawText() ]
+                            else
+                                let optionId = selected.GetProperty("singleSelectOptionId").GetString()
+                                let field = snapshot.Fields |> List.find (fun (field: Field) -> field.Id = fieldId)
+                                let option = field.Options |> List.find (fun (option: SelectOption) -> option.Id = optionId)
+                                "ProjectV2ItemFieldSingleSelectValue", [ "optionId"; JsonSerializer.Serialize(option.Id); "name"; JsonSerializer.Serialize(option.Name) ]
+                        let initialized: ItemValue =
+                            { Id = fieldId; FieldId = fieldId; Kind = kind;
+                              Value = JsonSerializer.Serialize([ "id"; JsonSerializer.Serialize("synthetic-value-" + itemId + "-" + fieldId);
+                                                               "updatedAt"; JsonSerializer.Serialize("2026-10-17T13:00:00Z") ] @ tokens) }
+                        let items: Item list =
+                            snapshot.Items |> List.map (fun (item: Item) ->
+                                if item.Id = itemId then
+                                    { item with UpdatedAt = "2026-10-17T13:00:00Z";
+                                                Values = (item.Values |> List.filter (fun (value: ItemValue) -> value.FieldId <> fieldId)) @ [ initialized ] }
+                                else item)
+                        snapshot <- { snapshot with Items = items }
+                        "updateProjectV2ItemFieldValue"
                     else
                         let visible = input.GetProperty("configuration").GetProperty("visibleFieldIds").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
                         let create = query.Contains "createProjectV2View("
                         let view: View =
-                            { Id = (if create then "synthetic-new-view" else text "viewId"); Name = text "name"; Layout = text "layout";
+                            { Id = (if create then "synthetic-new-view-" + string snapshot.Views.Length else text "viewId"); Name = text "name"; Layout = text "layout";
                               Filter = (if create then "" else text "filter"); VisibleFieldIds = visible; UnsupportedConfiguration = "[[],[],[]]" }
                         let views: View list =
                             if create then snapshot.Views @ [ view ]
@@ -169,7 +201,8 @@ module MigrationFixture =
                         match name with
                         | "updateProjectV2Field" -> "projectV2Field", text "fieldId"
                         | "addProjectV2ItemById" -> "item", "synthetic-item-" + text "contentId"
-                        | "createProjectV2View" -> "projectV2View", "synthetic-new-view"
+                        | "updateProjectV2ItemFieldValue" -> "projectV2Item", text "itemId"
+                        | "createProjectV2View" -> "projectV2View", (snapshot.Views |> List.last |> _.Id)
                         | _ -> "projectV2View", text "viewId"
                     response (objectNode [ name, objectNode [ "clientMutationId", value (text "clientMutationId"); payloadName, objectNode [ "id", value nativeId ] ] ])
             | _ -> Error(Malformed("synthetic migration", "unexpected effect"))

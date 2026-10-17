@@ -999,7 +999,7 @@ let ``ordinary closure dependency and plan revisions are fresh programme observa
 
 [<Fact>]
 let ``programme missing partial foreign and moved native facts never produce continuation or ready`` () =
-    for subjectPart in [ "open PR inventory"; "closingIssuesReferences"; "files"; "reviews"; "head checks"; "final head barrier"; "complete V2 project memberships" ] do
+    for subjectPart in [ "open PR inventory"; "closingIssuesReferences"; "files"; "final head barrier"; "complete V2 project memberships" ] do
         let report = programmeSnapshot (fun request response -> if request.Subject.Contains subjectPart then Error(Http(403, "inert denied read")) else response)
         let selected = V2ProjectionSource.selectActions report (Some(selectionContext report)) report.NativeIntegrator.ObservedAt
         Assert.Equal("unknown", selected.Head.Decision)
@@ -1284,3 +1284,17 @@ let ``programme lost Observation response is independently reconciled with no re
     Assert.Equal(1, recovered.Verified)
     Assert.Equal(0, recovered.Items.Head.MutationAttempts)
     Assert.Equal(1, writes)
+
+[<Fact>]
+let ``unclassified or inconsistent native gaps never become source permission`` () =
+    let report = programmeSnapshot ProgrammeFixture.unchanged
+    let context = selectionContext report
+    let original = report.NativeIntegrator.PullRequests.Head
+    let cases: V2ProjectionSource.PullRequestFacts list =
+        [ { original with Gaps = [ "unclassified evidence" ]; GapDetails = [] };
+          { original with Gaps = [ "unclassified evidence" ]; GapDetails = [ { Purpose = V2ProjectionSource.NativeReadPurpose.Unclassified; Detail = "unclassified evidence" } ] };
+          { original with Gaps = []; GapDetails = [ { Purpose = V2ProjectionSource.NativeReadPurpose.CheckAvailability; Detail = "hidden check evidence" } ] } ]
+    for pull in cases do
+        let current = { report with NativeIntegrator = { report.NativeIntegrator with PullRequests = [ pull ] } }
+        let selected = V2ProjectionSource.selectActions current (Some context) report.NativeIntegrator.ObservedAt
+        Assert.Equal<string>("unknown", selected.Head.Decision)

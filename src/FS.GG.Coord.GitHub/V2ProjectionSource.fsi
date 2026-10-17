@@ -56,7 +56,10 @@ module V2ProjectionSource =
     /// from its sole selected receiver repository, checks its pinned/current main blob and reads only
     /// that repository's canonical docs/native plan. Product metadata never comes from the organization
     /// manifest. Version 4 uses exact enrollment/v2 identities and current native closure/dependencies/
-    /// protected-main plan facts. It rechecks enrollment and source before writes and Verified no-ops.
+    /// plan facts. Exact protected enrollment may declare HTTPS GitHub blob URLs in the bound
+    /// repositories: docs paths or the maintained programme observation reference. Main resolves to
+    /// a fresh native commit/blob each observation; immutable 40-hex plan refs remain pinned.
+    /// It rechecks enrollment and source before writes and Verified no-ops.
     /// Complete/current observation health is independent of runtime capacity/Ready and outcome acceptance.
     /// Previous reports are historical display evidence only and cannot make a write current.
     val runFixed:
@@ -65,14 +68,26 @@ module V2ProjectionSource =
         previous: BatchReport option ->
             BatchReport
 
+    /// Purpose is set at the native read site, never inferred from diagnostic strings.
+    /// Missing, inconsistent or unclassified gap evidence cannot establish eligibility.
+    type NativeReadPurpose =
+        | Unclassified = 0
+        | ScopeEvidence = 1
+        | ReviewAvailability = 2
+        | CheckAvailability = 3
+
+    type NativeReadGap = { Purpose: NativeReadPurpose; Detail: string }
+
     /// Read evidence and human intent remain distinct. No new verification timestamp or write is minted.
     /// Native head-bound observations; none of these facts establishes deployment acceptance.
-    /// ScopeCurrent requires complete associations/files and a final matching head barrier. Other
-    /// PR review/check gaps do not block proven-disjoint work; the selected PR needs full evidence.
+    /// ScopeCurrent requires complete associations/files and a final matching head barrier.
+    /// Review/check availability stays visible and prevents aggregate completeness. Source observation
+    /// and implementation can retain eligibility with exact scope/head/association/files and all other
+    /// prerequisites; review, qualification and activation remain conservative. Unclassified gaps refuse.
     type PullRequestFacts =
         { Id: string; Repository: string; Number: int; Url: string; State: string; Head: string; UpdatedAt: string
           Author: string option; Issues: string list; Files: string list; ScopeCurrent: bool; ReviewDecision: string option
-          Reviews: string list; Checks: string list; Gaps: string list }
+          Reviews: string list; Checks: string list; Gaps: string list; GapDetails: NativeReadGap list }
 
     /// ObservedAt is the conservative collection-start time, including failed collection attempts.
     /// MinValue means collection was never attempted; it is an absent-observation sentinel and is
