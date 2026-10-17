@@ -31,8 +31,83 @@ else
     || { echo "change-completeness: base revision is unavailable: $BASE" >&2; exit 1; }
   git -C "$ROOT" cat-file -e "$HEAD^{commit}" 2>/dev/null \
     || { echo "change-completeness: head revision is unavailable: $HEAD" >&2; exit 1; }
-  git -C "$ROOT" diff --name-only --find-renames "$BASE" "$HEAD" >"$PATHS"
+  # Report both deletion and addition: rename detection would hide the old dependency path.
+  git -C "$ROOT" diff --name-only --no-renames "$BASE" "$HEAD" >"$PATHS"
 fi
+
+# This is the maintained compiler-root inventory. The fixture checks it against the literal
+# engine/edge workflow commands; restore alone never qualifies any of these roots.
+COMPILE_PROJECTS=(
+  src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj
+  tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+  tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+  tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj
+  tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj
+  tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+  tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj
+  tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj
+  tests/FS.GG.Telemetry.LocalDashboard.Tests/FS.GG.Telemetry.LocalDashboard.Tests.fsproj
+  tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj
+  tests/coord-board-v2-projection/coord-board-v2-projection.fsproj
+  tests/coord-board-v2-cli-join/coord-board-v2-cli-join.fsproj
+)
+
+# Read only project/reference metadata. Unknown changed paths or MSBuild expressions cannot
+# silently omit V2 qualification. No source-generated inventory or second persisted plan.
+python3 - "$ROOT" "$PATHS" "$WORK/v2-impact" "${COMPILE_PROJECTS[@]}" <<'PY_CLOSURE'
+import re
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+root, paths_file, output = map(Path, sys.argv[1:4])
+projects = sys.argv[4:]
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+try:
+    require(projects and len(projects) == len(set(projects)), "empty or duplicate compiler roots")
+    for project in projects:
+        require(re.fullmatch(r"(?:src|tests)/[A-Za-z0-9._/-]+\.fsproj", project), "nonliteral compiler root")
+        require((root / project).is_file(), f"missing compiler root: {project}")
+    v2_roots = [project for project in projects if project.startswith("tests/coord-board-v2-")]
+    require(len(v2_roots) == 2, "expected the two maintained V2 qualification roots")
+    pending = [root / project for project in v2_roots]
+    directories, linked_files, seen = set(), set(), set()
+    while pending:
+        project = pending.pop().resolve()
+        if project in seen:
+            continue
+        seen.add(project)
+        project.relative_to(root)
+        directories.add(project.parent.relative_to(root).as_posix() + "/")
+        for element in ET.parse(project).iter():
+            kind = element.tag.rsplit("}", 1)[-1]
+            if kind not in ("ProjectReference", "Compile"):
+                continue
+            include = element.get("Include")
+            require(include and not any(c in include for c in "$*?;"), "unsupported project/source reference")
+            target = (project.parent / include.replace("\\", "/")).resolve()
+            relative = target.relative_to(root).as_posix()
+            if kind == "ProjectReference":
+                pending.append(target)
+            else:
+                linked_files.add(relative)
+    changed = paths_file.read_text().splitlines()
+    for path in changed:
+        require(path and not path.startswith(("/", '"')) and "\\" not in path and ".." not in Path(path).parts, "unknown changed-path encoding")
+    global_names = {"Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "global.json", "NuGet.Config", "nuget.config"}
+    affected = any(path in linked_files or any(path.startswith(folder) for folder in directories)
+                   or Path(path).name in global_names
+                   or path in ("scripts/change-completeness", "scripts/read-trx-count.py", ".github/workflows/coord-github.yml", ".github/workflows/coord-engine.yml")
+                   or path.startswith("tests/change-completeness/") for path in changed)
+    output.write_text("true" if affected else "false")
+except (OSError, ValueError, ET.ParseError) as error:
+    print(f"change-completeness: incomplete compiler/V2 subject: {error}", file=sys.stderr)
+    sys.exit(1)
+PY_CLOSURE
+v2_changed="$(cat "$WORK/v2-impact")"
 
 engine_changed=false
 if grep -Eq '^(src/FS\.GG\.(Coord|Telemetry)\.|tests/FS\.GG\.(Coord|Telemetry)\.|tests/(m6-decision-cutover|delivery-leading-line|coord-engine-|review-critic-succession-wire|change-completeness|change-risk-compatibility)/|scripts/(fsgg-coord|fsgg-coord-guards\.sh|record-board-fixture\.py|read-trx-count\.py|change-completeness)|Directory\.(Build|Packages)|dist/dotnet/Directory\.Build\.props|global\.json|\.github/workflows/coord-engine\.yml)' "$PATHS"; then
@@ -55,31 +130,90 @@ fi
 stage "SDD ship-verdict provenance"
 python3 "$ROOT/scripts/check-ship-verdict-provenance.py" --root "$ROOT"
 
-if [ "$engine_changed" = true ]; then
-  stage "locked restore and affected-engine compile"
-  dotnet restore "$ROOT/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" --locked-mode
-  dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj" --locked-mode
-  dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj" --locked-mode
-  dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj" --locked-mode
-  dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj" --locked-mode
-  dotnet restore "$ROOT/tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj" --locked-mode
+# Bound this script to four minutes beneath the unchanged five-minute job cap.
+# Hosted qualification must establish the whole job, including fixtures, fits that cap.
+# A timeout or unknown process/tool state stops collection; no dependent tests use stale outputs.
+deadline=240
+run_dotnet() {
+  local remaining=$((deadline - SECONDS)) status
+  if [ "$remaining" -le 0 ]; then
+    echo "change-completeness: qualification budget exhausted; coverage incomplete" >&2
+    exit 124
+  fi
+  if timeout --signal=TERM --kill-after=5s "${remaining}s" dotnet "$@"; then return 0; else status=$?; fi
+  case "$status" in
+    124|125|126|127)
+      echo "change-completeness: tool/process/budget uncertainty ($status); coverage incomplete" >&2
+      exit "$status" ;;
+  esac
+  if [ "$status" -ge 128 ]; then
+    echo "change-completeness: terminated tool ($status); coverage incomplete" >&2
+    exit "$status"
+  fi
+  return "$status"
+}
 
+if [ "$engine_changed" = true ] || [ "$v2_changed" = true ]; then
+  stage "locked restore and complete maintained compiler barrier"
+  command -v dotnet >/dev/null && command -v timeout >/dev/null \
+    || { echo "change-completeness: required compiler/timeout tool unavailable" >&2; exit 1; }
+  sdk="$(run_dotnet --version)" || { echo "change-completeness: SDK prerequisite unavailable" >&2; exit 1; }
+  [[ "$sdk" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+.][A-Za-z0-9.-]+)?$ ]] \
+    || { echo "change-completeness: SDK response is malformed" >&2; exit 1; }
+  restore_failed=false
+  for project in "${COMPILE_PROJECTS[@]}"; do
+    if run_dotnet restore "$ROOT/$project" --locked-mode; then :; else
+      echo "change-completeness: locked restore failed: $project" >&2
+      restore_failed=true
+    fi
+  done
+  [ "$restore_failed" = false ] \
+    || { echo "change-completeness: restore prerequisites failed; builds and tests blocked" >&2; exit 1; }
+  compile_failed=false
+  for project in "${COMPILE_PROJECTS[@]}"; do
+    if run_dotnet build "$ROOT/$project" --no-restore -c Release; then :; else
+      echo "change-completeness: compile failed: $project" >&2
+      compile_failed=true
+    fi
+  done
+  [ "$compile_failed" = false ] \
+    || { echo "change-completeness: compiler barrier failed; all dependent tests blocked" >&2; exit 1; }
+fi
+
+qualification_failed=false
+if [ "$engine_changed" = true ]; then
   stage "command catalogue, parser, render, write-ness, contract, and help closure"
-  dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj" \
-    -c Release --no-restore --filter FullyQualifiedName~CommandSurfaceTests
+  if run_dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj" \
+    -c Release --no-build --no-restore --filter FullyQualifiedName~CommandSurfaceTests; then :; else qualification_failed=true; fi
 
   stage "handler ownership and production registration"
-  dotnet test "$ROOT/tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj" \
-    -c Release --no-restore --filter FullyQualifiedName~HandlerRegistrationTests
+  if run_dotnet test "$ROOT/tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj" \
+    -c Release --no-build --no-restore --filter FullyQualifiedName~HandlerRegistrationTests; then :; else qualification_failed=true; fi
 
   stage "delivery, review, declared-path, and focused production-route parity"
-  dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj" -c Release --no-restore \
+  if run_dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj" -c Release --no-build --no-restore \
     --filter 'FullyQualifiedName~DeliveryApplicationTests|FullyQualifiedName~ReviewApplicationTests|FullyQualifiedName~VerifyPaths' \
-    --logger "trx;LogFileName=lifecycle-focus.trx" --results-directory "$WORK/lifecycle-focus"
-  python3 "$ROOT/scripts/read-trx-count.py" "$WORK/lifecycle-focus/lifecycle-focus.trx" \
-    --minimum 1 --label "change-completeness (Lifecycle focused)"
+    --logger "trx;LogFileName=lifecycle-focus.trx" --results-directory "$WORK/lifecycle-focus"; then :; else qualification_failed=true; fi
+  if python3 "$ROOT/scripts/read-trx-count.py" "$WORK/lifecycle-focus/lifecycle-focus.trx" \
+    --minimum 1 --label "change-completeness (Lifecycle focused)"; then :; else qualification_failed=true; fi
 else
   stage "affected-engine checks omitted: no engine decision boundary changed"
 fi
+
+if [ "$v2_changed" = true ]; then
+  stage "affected V2 projection and actual CLI production callers"
+  for project in "${COMPILE_PROJECTS[@]}"; do
+    case "$project" in
+      tests/coord-board-v2-*)
+        suite="$(basename "$(dirname "$project")")"
+        if run_dotnet test "$ROOT/$project" -c Release --no-build --no-restore \
+          --logger "trx;LogFileName=v2.trx" --results-directory "$WORK/$suite"; then :; else qualification_failed=true; fi
+        if python3 "$ROOT/scripts/read-trx-count.py" "$WORK/$suite/v2.trx" \
+          --minimum 1 --label "change-completeness ($suite)"; then :; else qualification_failed=true; fi ;;
+    esac
+  done
+fi
+[ "$qualification_failed" = false ] \
+  || { echo "change-completeness: focused qualification failed; dependent engine blocked" >&2; exit 1; }
 
 echo "change-completeness: PASS"
