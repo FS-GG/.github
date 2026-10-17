@@ -741,7 +741,10 @@ module V2ProjectionSource =
                                 member _.RetryMutation _ = Error(Malformed("final inspection barrier", "replay is unavailable")) }
                         let barrier = collectSource counted binding row
                         let planning = readPlanning counted binding { Issue = row.Issue; ExpectedNodeId = row.NodeId }
-                        let finalIntake = nativeIntake intakeGate intakeObservedAt binding barrier.Native
+                        // The initial gate shares bounded facts within collection. The final barrier
+                        // must re-read policy and permission as well as identity, without disk cache.
+                        let finalGate = BoardIntake.Gate(counted, persistCache = false)
+                        let finalIntake = nativeIntake finalGate intakeObservedAt binding barrier.Native
                         let intake =
                             if finalIntake.Admission = item.Intake.Admission && finalIntake.Allowed = item.Intake.Allowed && finalIntake.Gap = item.Intake.Gap then item.Intake
                             else { item.Intake with Allowed = None; Gap = Some(Malformed("final native intake barrier", "repository policy/author/permission changed or became unavailable")) }

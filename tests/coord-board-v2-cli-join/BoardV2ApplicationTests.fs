@@ -697,3 +697,31 @@ let ``actual caller keeps source editing independent of activation acceptance an
     let conflicting = { independent with Paths = [ "src/current.fs" ] }
     let _, blocked, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson { existing with Slices = [ current; conflicting ] })) ProgrammeFixture.unchanged
     Assert.Equal<string list>([ "continue-existing"; "blocked" ], inputSelections blocked.Value |> Array.map (fun value -> value.GetProperty("decision").GetString()) |> Array.toList)
+
+
+[<Fact>]
+let ``actual caller final intake barrier rereads unchanged author policy and permission`` () =
+    let context = observedContext ProgrammeFixture.unchanged
+    let mutations: (string * string * string) list =
+        [ ("repository policy", "COLLABORATORS_ONLY", "ALL");
+          ("permission for author", "write", "read") ]
+    for subject, original, changed in mutations do
+        let mutable determiningReads = 0
+        let mutate (request: Request) (response: Errors.IoResult<Response>) =
+            if request.Subject.Contains(subject, StringComparison.Ordinal) then
+                determiningReads <- determiningReads + 1
+                if determiningReads = 2 then
+                    response |> Result.map (fun value -> { value with Body = value.Body.Replace(original, changed) })
+                else response
+            else response
+        let code, report, transport = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson context)) mutate
+        Assert.Equal(0, code) // the independent source/planning observation remains available
+        Assert.Equal(2, determiningReads)
+        let root = report.Value
+        let item = (root.GetProperty("items")).[0]
+        Assert.Equal("Current", item.GetProperty("sourceCurrentness").GetString())
+        let intake = item.GetProperty("nativeIntake")
+        Assert.Equal(JsonValueKind.Null, intake.GetProperty("allowed").ValueKind)
+        Assert.Contains("changed or became unavailable", intake.GetProperty("gap").GetString())
+        Assert.Equal("unknown", (inputSelections root).[0].GetProperty("decision").GetString())
+        Assert.Empty transport.Mutations
