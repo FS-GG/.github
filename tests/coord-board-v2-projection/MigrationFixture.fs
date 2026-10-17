@@ -105,7 +105,7 @@ module MigrationFixture =
                         variables |> List.choose (fun (name, variable) ->
                             if not (name.StartsWith("issue", StringComparison.Ordinal)) then None
                             else
-                                let id = match variable with VId id -> id | _ -> failwith "native issue ID expected"
+                                let id = match variable with Transport.VId id -> id | _ -> failwith "native issue ID expected"
                                 let issue = snapshot.Issues |> List.find (fun (issue: NativeIssue) -> issue.Id = id)
                                 Some(name, objectNode [ "__typename", value "Issue"; "id", value issue.Id; "number", value issue.Number;
                                                         "updatedAt", value issue.UpdatedAt; "state", value issue.State;

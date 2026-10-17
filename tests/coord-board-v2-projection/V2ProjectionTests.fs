@@ -1297,4 +1297,4 @@ let ``unclassified or inconsistent native gaps never become source permission`` 
     for pull in cases do
         let current = { report with NativeIntegrator = { report.NativeIntegrator with PullRequests = [ pull ] } }
         let selected = V2ProjectionSource.selectActions current (Some context) report.NativeIntegrator.ObservedAt
-        Assert.Equal("unknown", selected.Head.Decision)
+        Assert.Equal<string>("unknown", selected.Head.Decision)

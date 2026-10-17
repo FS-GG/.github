@@ -406,7 +406,7 @@ let ``actual CLI joins twenty enrolled issues to current native plan blobs acros
     Assert.Equal(0, code)
     Assert.Equal(20, report.GetProperty("items").GetArrayLength())
     for item in report.GetProperty("items").EnumerateArray() do
-        Assert.Equal("Current", item.GetProperty("sourceCurrentness").GetString())
+        Assert.Equal<string>("Current", item.GetProperty("sourceCurrentness").GetString())
         let provenance = item.GetProperty("sourceRevision").GetString()
         Assert.Contains("plan=FS-GG/", provenance)
         Assert.Contains("#selected-outcome", provenance)
@@ -414,7 +414,7 @@ let ``actual CLI joins twenty enrolled issues to current native plan blobs acros
     Assert.Equal<Set<string>>(Set.ofList ownerRepositories, actualOwners)
     for repository in readOnlyRepositories do
         Assert.False(actualOwners.Contains repository)
-        Assert.Contains(transport, fun (request: Transport.Request) -> request.Subject = $"FS-GG/{repository} open PR inventory")
+        Assert.Contains<Transport.Request>(transport, fun (request: Transport.Request) -> request.Subject = $"FS-GG/{repository} open PR inventory")
     for repository in ownerRepositories do
         let permissionPath = $"repos/FS-GG/{repository}/collaborators/author/permission"
         let decidingReads = transport |> List.filter (fun (request: Transport.Request) -> request.Method = "GET" && request.Path = permissionPath)
@@ -425,14 +425,14 @@ let ``actual CLI joins twenty enrolled issues to current native plan blobs acros
     for request in planReads do
         match request.Body with
         | Transport.Query(document, variables) when document.Contains("object(expression:") ->
-            let expression = variables |> List.pick (function "expression", VString value -> Some value | _ -> None)
+            let expression = variables |> List.pick (function "expression", Transport.VString value -> Some value | _ -> None)
             Assert.DoesNotContain("main:", expression)
-            let repo = variables |> List.pick (function "repo", VString value -> Some value | _ -> None)
+            let repo = variables |> List.pick (function "repo", Transport.VString value -> Some value | _ -> None)
             let commit = if repo = "FS.GG.Templates" then String.replicate 40 "a" else ProgrammeFixture.head
             Assert.StartsWith(commit + ":", expression)
         | Transport.Query(document, variables) when document.Contains("qualifiedName:") ->
-            let repo = variables |> List.pick (function "repo", VString value -> Some value | _ -> None)
-            Assert.NotEqual("FS.GG.Templates", repo)
+            let repo = variables |> List.pick (function "repo", Transport.VString value -> Some value | _ -> None)
+            Assert.NotEqual<string>("FS.GG.Templates", repo)
         | _ -> ()
 
 [<Fact>]
@@ -451,7 +451,7 @@ let ``actual CLI enrolled main plan content advances without enrollment republis
     Assert.Equal(0, after)
     let first = old.GetProperty("items").[0].GetProperty("sourceRevision").GetString()
     let second = current.GetProperty("items").[0].GetProperty("sourceRevision").GetString()
-    Assert.NotEqual(first, second)
+    Assert.NotEqual<string>(first, second)
     let mutable reads = 0
     let code, report, _ =
         inspectDeclaredPopulation rows repositories (fun (request: Transport.Request) result ->
@@ -461,7 +461,7 @@ let ``actual CLI enrolled main plan content advances without enrollment republis
                     { response with Body = response.Body.Replace(ProgrammeFixture.head, String.replicate 40 (if reads <= 2 then "1" else "2")) })
             else result)
     Assert.Equal(3, code)
-    Assert.Equal("Unknown", report.GetProperty("items").[0].GetProperty("sourceCurrentness").GetString())
+    Assert.Equal<string>("Unknown", report.GetProperty("items").[0].GetProperty("sourceCurrentness").GetString())
 
 [<Fact>]
 let ``actual CLI refuses undeclared origin repository path ref and unreadable plan identity without fallback`` () =
@@ -479,7 +479,7 @@ let ``actual CLI refuses undeclared origin repository path ref and unreadable pl
     for url in invalid do
         let code, report, _ = inspectDeclaredPopulation [ "I_outcome", ProgrammeFixture.issue, url ] repositories ProgrammeFixture.unchanged
         Assert.Equal(3, code)
-        Assert.Equal("Unknown", report.GetProperty("items").[0].GetProperty("sourceCurrentness").GetString())
+        Assert.Equal<string>("Unknown", report.GetProperty("items").[0].GetProperty("sourceCurrentness").GetString())
     for mutation in [ "repository"; "missing"; "denied"; "revision"; "empty-blob" ] do
         let code, _, _ =
             inspectDeclaredPopulation [ "I_outcome", ProgrammeFixture.issue, "https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/roadmap.md" ] repositories
@@ -650,7 +650,7 @@ let ``actual stdin caller keeps source eligibility with typed review check avail
             let _, report, transport = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson input)) change
             let selected = (inputSelections report.Value).[0]
             let expected = if operation = ObserveExisting then "continue-existing" elif operation = Implement then "ready" else "unknown"
-            Assert.Equal(expected, selected.GetProperty("decision").GetString())
+            Assert.Equal<string>(expected, selected.GetProperty("decision").GetString())
             Assert.False(selected.GetProperty("dispatchAuthority").GetBoolean())
             let native = report.Value.GetProperty("nativeIntegrator").GetProperty("pullRequests").[0]
             Assert.True(native.GetProperty("ScopeCurrent").GetBoolean())

@@ -68,8 +68,8 @@ module ProgrammeFixture =
                 match request.Body with
                 | Query(document, _) when document.Contains("currentExpression") ->
                     if request.Subject.EndsWith("board-v2-import-manifest.json", StringComparison.Ordinal) then blob (enrollment ()) else blob "Current owning plan; later deployment acceptance is separate"
-                | Query(document, variables) when request.Subject = "enrolled native owning plan" ->
-                    let repository = variables |> List.pick (function "repo", VString repo -> Some repo | _ -> None)
+                | Transport.Query(document, variables) when request.Subject = "enrolled native owning plan" ->
+                    let repository = variables |> List.pick (function "repo", Transport.VString repo -> Some repo | _ -> None)
                     if document.Contains("qualifiedName:") then
                         wire ({| repository = {| nameWithOwner = "FS-GG/" + repository; ref = {| target = {| oid = head |} |} |} |})
                     else
@@ -125,17 +125,17 @@ module ProgrammeFixture =
     let populationTransport (selected: Binding) (rows: (string * IssueRef * string) list)
                             (change: Transport.Request -> Errors.IoResult<Transport.Response> -> Errors.IoResult<Transport.Response>) =
         let current (variables: (string * Var) list) =
-            let repo = variables |> List.tryPick (function ("repo" | "name"), VString repo -> Some repo | _ -> None)
-            let number = variables |> List.tryPick (function "number", VNumber number -> Some(int number) | _ -> None)
+            let repo = variables |> List.tryPick (function ("repo" | "name"), Transport.VString repo -> Some repo | _ -> None)
+            let number = variables |> List.tryPick (function "number", Transport.VNumber number -> Some(int number) | _ -> None)
             match repo, number with
             | Some repo, Some number -> rows |> List.tryFind (fun (_, issue, _) -> issue.Repository = repo && issue.Number = number)
             | _ ->
-                let item = variables |> List.tryPick (function "itemId", VId id -> Some id | _ -> None)
+                let item = variables |> List.tryPick (function "itemId", Transport.VId id -> Some id | _ -> None)
                 rows |> List.tryFind (fun (id, _, _) -> item = Some("synthetic-member-" + id))
         transport (fun (request: Transport.Request) result ->
             let result =
                 match request.Body with
-                | Query(document, _) when document.Contains("currentExpression") && request.Subject.EndsWith("board-v2-import-manifest.json", StringComparison.Ordinal) ->
+                | Transport.Query(document, _) when document.Contains("currentExpression") && request.Subject.EndsWith("board-v2-import-manifest.json", StringComparison.Ordinal) ->
                     let enrollment =
                         {| schema = "fsgg.coordination-board-v2-enrollment/v2";
                            target = {| owner = selected.Owner; organizationId = selected.OrganizationId; projectId = project; projectNumber = 3; schemaVersion = 2 |};
@@ -143,7 +143,7 @@ module ProgrammeFixture =
                            items = (rows |> List.map (fun (id, issue, roadmap) ->
                                {| issue = $"{issue.Owner}/{issue.Repository}#{issue.Number}"; nodeId = id; roadmap = roadmap |})) |}
                     blob (JsonSerializer.Serialize(enrollment))
-                | Query(document, variables) when document.Contains("issue(number:") && document.Contains("updatedAt state") ->
+                | Transport.Query(document, variables) when document.Contains("issue(number:") && document.Contains("updatedAt state") ->
                     let id, issue, _ = current variables |> Option.get
                     let repository = issue.Owner + "/" + issue.Repository
                     wire ({| repository = {| nameWithOwner = repository;
@@ -151,29 +151,29 @@ module ProgrammeFixture =
                                                         url = $"https://github.com/{repository}/issues/{issue.Number}";
                                                         body = ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", "None");
                                                         repository = {| nameWithOwner = repository |} |} |} |})
-                | Query(document, variables) when document.Contains("issueCreationPolicy") ->
-                    let repository = variables |> List.pick (function "name", VString name -> Some name | _ -> None)
+                | Transport.Query(document, variables) when document.Contains("issueCreationPolicy") ->
+                    let repository = variables |> List.pick (function "name", Transport.VString name -> Some name | _ -> None)
                     wire ({| repository = {| id = "synthetic-repository-" + repository; issueCreationPolicy = "COLLABORATORS_ONLY";
                                              hasIssuesEnabled = true; mergeCommitAllowed = true; squashMergeAllowed = true; rebaseMergeAllowed = false |} |})
-                | Query(document, variables) when document.StartsWith("query IntakeIdentity(", StringComparison.Ordinal) ->
+                | Transport.Query(document, variables) when document.StartsWith("query IntakeIdentity(", StringComparison.Ordinal) ->
                     let id, _, _ = current variables |> Option.get
                     wire ({| repository = {| issue = {| id = id; updatedAt = revision; author = {| id = "U_author"; login = "author" |} |} |} |})
-                | Query(document, variables) when document.Contains("pullRequests(first:") ->
-                    let repository = variables |> List.pick (function "repo", VString repo -> Some repo | _ -> None)
+                | Transport.Query(document, variables) when document.Contains("pullRequests(first:") ->
+                    let repository = variables |> List.pick (function "repo", Transport.VString repo -> Some repo | _ -> None)
                     wire ({| repository = {| nameWithOwner = "FS-GG/" + repository; pullRequests = connection ([]: obj list) |} |})
-                | Query(document, _) when document.Contains("items(first: 50") ->
+                | Transport.Query(document, _) when document.Contains("items(first: 50") ->
                     let nodes = rows |> List.map (fun (id, issue, _) ->
                         {| id = "synthetic-member-" + id;
                            content = {| __typename = "Issue"; id = id; number = issue.Number; repository = {| nameWithOwner = issue.Owner + "/" + issue.Repository |} |} |})
                     wire ({| node = {| id = project; items = connection nodes |} |})
-                | Query(document, variables) when document.Contains("projectItems(first:") ->
+                | Transport.Query(document, variables) when document.Contains("projectItems(first:") ->
                     let id, issue, _ = current variables |> Option.get
                     let repository = issue.Owner + "/" + issue.Repository
                     let content = {| id = id; number = issue.Number; repository = {| nameWithOwner = repository |} |}
                     wire ({| repository = {| nameWithOwner = repository;
                                              issue = {| id = id; number = issue.Number;
                                                         projectItems = connection [ {| id = "synthetic-member-" + id; project = {| id = project |}; content = content |} ] |} |} |})
-                | Query(document, variables) when document.Contains("status: fieldValueByName") ->
+                | Transport.Query(document, variables) when document.Contains("status: fieldValueByName") ->
                     let id, issue, roadmap = current variables |> Option.get
                     let select fieldId name option =
                         {| __typename = "ProjectV2ItemFieldSingleSelectValue"; name = name; optionId = option; field = {| id = fieldId |} |}

@@ -97,7 +97,7 @@ module V2MigrationTests =
         let after = collect connection.Reads scope |> get
         validateTransition scope snapshot after create |> get
         let resolved = resolveReadback scope snapshot after create |> get
-        Assert.Equal(Some "synthetic-new-view-0", resolved.Views.Head.Id)
+        Assert.Equal<string option>(Some "synthetic-new-view-0", resolved.Views.Head.Id)
         let update = (prepare resolved after |> get).Changes |> List.find (function UpdateView _ -> true | _ -> false)
         let next = prepare resolved after |> get
         connection.Dispatch(next, update, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
@@ -229,7 +229,7 @@ module V2MigrationTests =
         let native: Snapshot = { snapshot with Fields = fields }
         let planned = prepare scoped native |> get
         let changed = prepare ({ scoped with InitialPlanning = [ { initial with Roadmap = initial.Roadmap + "#changed" } ] }) native |> get
-        Assert.NotEqual(planned.Digest, changed.Digest)
+        Assert.NotEqual<string>(planned.Digest, changed.Digest)
         for invalid in [ { scoped with InitialPlanning = [ initial; initial ] };
                          { scoped with InitialPlanning = [ { initial with IssueId = "unselected" } ] };
                          { scoped with InitialPlanning = [ { initial with Track = { selected with Id = "wrong-option" } } ] } ] do
@@ -255,7 +255,7 @@ module V2MigrationTests =
                   Value = JsonSerializer.Serialize([ "id"; "\"retained-native-value\""; "updatedAt"; "\"2026-10-17T12:00:00Z\"" ] @ tokens) }
             let candidate: Snapshot = { native with Items = [ { memberItem with Values = [ existing ] } ] }
             Assert.True(Result.isError (prepare scoped candidate))
-            Assert.Equal(existing, candidate.Items.Head.Values.Head)
+            Assert.Equal<ItemValue>(existing, candidate.Items.Head.Values.Head)
         let roadmapChange = InitializePlanningValue(initial.IssueId, memberItem.Id, scope.RoadmapFieldId, PlanningText initial.Roadmap)
         let withRoadmapValue (nativeId: string) (updatedAt: string) : Snapshot =
             let value: ItemValue =
@@ -273,11 +273,11 @@ module V2MigrationTests =
             Assert.True(Result.isError (prepare scoped malformed))
             Assert.True(Result.isError (validateTransition scoped populated malformed roadmapChange))
         let omitted = prepare ({ scoped with InitialPlanning = [ { initial with Status = None } ] }) populated |> get
-        Assert.Contains(omitted.OwnerActions, fun action -> action.Contains("intentionally unresolved"))
+        Assert.Contains<string>(omitted.OwnerActions, fun action -> action.Contains("intentionally unresolved"))
         Assert.Equal(2, omitted.Changes |> List.filter (function InitializePlanningValue _ -> true | _ -> false) |> List.length)
         let encoded = encodePrepared ({ current with PreparedPath = Some(System.IO.Path.GetFullPath "synthetic-initialization.json") })
         use document = JsonDocument.Parse encoded
         let scopeJson = document.RootElement.GetProperty("scope").GetRawText()
-        Assert.Equal(scoped, parseScope scopeJson |> get)
+        Assert.Equal<Scope>(scoped, parseScope scopeJson |> get)
         let unknown = scopeJson.Replace("\"initialPlanning\":", "\"authorized\":true,\"initialPlanning\":")
         Assert.True(Result.isError (parseScope unknown))

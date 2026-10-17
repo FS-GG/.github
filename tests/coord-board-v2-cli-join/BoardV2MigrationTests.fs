@@ -247,7 +247,7 @@ module BoardV2MigrationTests =
         Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
         Assert.True changed
         Assert.Equal(2, fixture.Native.Mutations.Length)
-        Assert.Equal(conflict, fixture.Native.Snapshot.Items.Head.Values.Head)
+        Assert.Equal<ItemValue>(conflict, fixture.Native.Snapshot.Items.Head.Values.Head)
         Assert.False(File.Exists(path + ".invocation/001-intent.json"))
 
     [<Fact>]
@@ -293,8 +293,8 @@ module BoardV2MigrationTests =
                 Assert.True(File.Exists(prefix + "-intent.json"))
                 Assert.True(File.Exists(prefix + "-response.json"))
                 use terminal = JsonDocument.Parse(File.ReadAllText(path + ".invocation/terminal.json"))
-                Assert.Equal("Unknown", terminal.RootElement.GetProperty("state").GetString())
-                Assert.Equal("Unknown-after-possible-send-readback-unavailable", terminal.RootElement.GetProperty("failureCode").GetString())
+                Assert.Equal<string>("Unknown", terminal.RootElement.GetProperty("state").GetString())
+                Assert.Equal<string>("Unknown-after-possible-send-readback-unavailable", terminal.RootElement.GetProperty("failureCode").GetString())
                 Assert.False(File.Exists(path + ".invocation/" + (step + 1).ToString("D3") + "-intent.json"))
                 Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
                 Assert.Equal(step, fixture.Native.Mutations.Length)
@@ -308,9 +308,9 @@ module BoardV2MigrationTests =
         Assert.Equal(0, code)
         Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
         Assert.Equal(5, fixture.Native.Mutations.Length)
-        let item = Assert.Single fixture.Native.Snapshot.Items
+        let item = Assert.Single<Item>(fixture.Native.Snapshot.Items)
         Assert.Equal(3, item.Values.Length)
-        Assert.DoesNotContain(item.Values, fun (value: ItemValue) -> value.FieldId = scope.ObservationFieldId)
+        Assert.DoesNotContain<ItemValue>(item.Values, fun (value: ItemValue) -> value.FieldId = scope.ObservationFieldId)
         for request in fixture.Native.Mutations |> List.skip 2 do
             match request.Body with
             | Transport.Json json ->
@@ -318,8 +318,8 @@ module BoardV2MigrationTests =
                 let root = document.RootElement
                 Assert.Contains("projectV2Item{id}", root.GetProperty("query").GetString())
                 let input = root.GetProperty("variables").GetProperty "input"
-                Assert.Equal(item.Id, input.GetProperty("itemId").GetString())
-                Assert.Single(input.GetProperty("value").EnumerateObject()) |> ignore
+                Assert.Equal<string>(item.Id, input.GetProperty("itemId").GetString())
+                Assert.Single<JsonProperty>(input.GetProperty("value").EnumerateObject()) |> ignore
             | _ -> failwith "exact typed planning request expected"
         let ready, repeated = fixture.Prepare "equal-planning-repeat"
         Assert.Equal(0, ready)
@@ -345,7 +345,7 @@ module BoardV2MigrationTests =
                     fixture.Native.Snapshot <- { fixture.Native.Snapshot with Items = [ { card with Values = [ value ] } ] }
         Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
         Assert.Equal(2, fixture.Native.Mutations.Length)
-        Assert.Equal("ProjectV2ItemFieldSingleSelectValue", fixture.Native.Snapshot.Items.Head.Values.Head.Kind)
+        Assert.Equal<string>("ProjectV2ItemFieldSingleSelectValue", fixture.Native.Snapshot.Items.Head.Values.Head.Kind)
         Assert.True(File.Exists(path + ".invocation/002-native-readback.json"))
         Assert.False(File.Exists(path + ".invocation/003-intent.json"))
 
@@ -404,7 +404,7 @@ module BoardV2MigrationTests =
         Assert.Equal(8, fixture.Native.Snapshot.Views.Length)
         Assert.Equal(16, fixture.Native.Snapshot.Fields.Length)
         Assert.True(fixture.Native.Requests.Length + fixture.Native.Mutations.Length < 500)
-        for retained in originalItems do Assert.Contains(retained, fixture.Native.Snapshot.Items)
+        for retained in originalItems do Assert.Contains<Item>(retained, fixture.Native.Snapshot.Items)
         Assert.Equal(62, fixture.Native.Snapshot.Items |> List.sumBy (fun (item: Item) -> item.Values.Length))
         let before = fixture.Native.Mutations.Length
         let repeatCode, repeatPath = fixture.Prepare "full-synthetic-repeat"
@@ -428,7 +428,7 @@ module BoardV2MigrationTests =
             fixture.Native.Transform <- fun (request: Transport.Request) (response: Transport.Response) ->
                 match request.Body with
                 | Transport.Query(document, variables) when document.Contains(name + "(first:") ->
-                    let continued = variables |> List.exists (function "after", VString _ -> true | _ -> false)
+                    let continued = variables |> List.exists (function "after", Transport.VString _ -> true | _ -> false)
                     if continued then continuations <- continuations + 1
                     let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
                     let data = root.["data"]
