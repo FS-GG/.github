@@ -7,6 +7,8 @@ not enrollment or native-success evidence. Scope validation and native success r
 from __future__ import annotations
 
 import argparse
+import base64
+from contextlib import ExitStack
 import hashlib
 import json
 import os
@@ -15,6 +17,7 @@ import re
 import signal
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 import zipfile
@@ -81,36 +84,116 @@ def binding(adapter_sha):
 
 
 def process(engine, arguments, home, capture):
-    # An open, unwritten stdin pipe detects accidental blocking reads. No test uses
-    # communicate(), which would close stdin and hide that regression.
+    # WNOWAIT observes exit without releasing the root PID that pins its group.
+    # Never call poll()/wait() before the single owned-group cleanup signal.
+    require(sys.platform == "linux", "owned-group qualification is Linux-only")
+    require(all(hasattr(os, name) for name in ("waitid", "WNOWAIT", "WEXITED", "WNOHANG", "P_PID")),
+            "non-reaping process observation unavailable")
     environment = {key: os.environ[key] for key in ("PATH", "DOTNET_ROOT", "DOTNET_ROOT_X64") if key in os.environ}
     environment.update(HOME=str(home), XDG_CONFIG_HOME=str(home), DOTNET_CLI_HOME=str(home),
                        DOTNET_CLI_TELEMETRY_OPTOUT="1", DOTNET_NOLOGO="1")
-    with (capture / "stdout").open("w+b") as stdout, (capture / "stderr").open("w+b") as stderr:
-        child = subprocess.Popen([str(engine), "board-v2", *arguments], stdin=subprocess.PIPE,
-                                 stdout=stdout, stderr=stderr, cwd=home, env=environment, start_new_session=True)
+    result = {"exitCode": None, "stdout": b"", "stderr": b"", "firstFailure": None,
+              "cleanup": {"status": "not-started", "failures": []}, "outputComplete": False, "observedBytes": {"stdout": 0, "stderr": 0}}
+    def close_capture(stream):
         try:
-            deadline = time.monotonic() + 20
-            while child.poll() is None:
+            stream.close()
+        except Exception:
+            result["cleanup"]["failures"].append("capture-close-unavailable")
+            result["cleanup"]["status"] = "Unknown"
+            if result["firstFailure"] is None:
+                result["firstFailure"] = "capture-close-unavailable"
+    with ExitStack() as files:
+        stdout = (capture / "stdout").open("w+b")
+        files.callback(close_capture, stdout)
+        stderr = (capture / "stderr").open("w+b")
+        files.callback(close_capture, stderr)
+        child = None
+        custody = True
+        deadline = time.monotonic() + 20
+        try:
+            # Stdin remains open and unwritten until cleanup; EOF would hide reads.
+            child = subprocess.Popen([str(engine), "board-v2", *arguments], stdin=subprocess.PIPE,
+                                     stdout=stdout, stderr=stderr, cwd=home, env=environment, start_new_session=True)
+            while True:
                 require(time.monotonic() < deadline, "packaged control deadline or stdin read")
-                require(os.fstat(stdout.fileno()).st_size <= MAX_OUTPUT and os.fstat(stderr.fileno()).st_size <= MAX_OUTPUT, "packaged output bound")
+                require(os.fstat(stdout.fileno()).st_size <= MAX_OUTPUT and os.fstat(stderr.fileno()).st_size <= MAX_OUTPUT,
+                        "packaged output bound")
+                observed = os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+                if observed is not None:
+                    break
                 time.sleep(0.02)
-            stdout.seek(0)
-            stderr.seek(0)
-            out, err = stdout.read(MAX_OUTPUT + 1), stderr.read(MAX_OUTPUT + 1)
-            require(len(out) <= MAX_OUTPUT and len(err) <= MAX_OUTPUT, "packaged output bound")
-            return child.returncode, out, err
+        except Exception as error:
+            if isinstance(error, ChildProcessError):
+                custody = False
+            result["firstFailure"] = str(error) if isinstance(error, QualificationFailure) else "process-acquisition-unavailable"
         finally:
-            if child.poll() is None:
-                os.killpg(child.pid, signal.SIGKILL)
-                child.wait(timeout=5)
-            child.stdin.close()
+            cleanup = result["cleanup"]
+            if child is None:
+                cleanup["status"] = "Unknown"
+                cleanup["failures"].append("spawn-custody-not-returned")
+            else:
+                cleanup_deadline = time.monotonic() + 5
+                if custody:
+                    try:
+                        # Root is still unreaped, including after its observed exit.
+                        os.killpg(child.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    except Exception:
+                        cleanup["failures"].append("owned-group-signal-unavailable")
+                else:
+                    cleanup["failures"].append("root-custody-lost-no-signal")
+                try:
+                    remaining = cleanup_deadline - time.monotonic()
+                    require(remaining > 0, "cleanup deadline")
+                    result["exitCode"] = child.wait(timeout=remaining)
+                except Exception:
+                    cleanup["failures"].append("root-reap-unconfirmed")
+                # Only read-only probes after reaping: never signal a reused PID.
+                absent = False
+                if custody and result["exitCode"] is not None:
+                    try:
+                        while time.monotonic() < cleanup_deadline:
+                            try:
+                                os.killpg(child.pid, 0)
+                            except ProcessLookupError:
+                                absent = True
+                                break
+                            time.sleep(0.02)
+                    except Exception:
+                        cleanup["failures"].append("group-readback-unavailable")
+                if not absent:
+                    cleanup["failures"].append("group-absence-unconfirmed")
+                try:
+                    child.stdin.close()
+                except Exception:
+                    cleanup["failures"].append("stdin-close-unavailable")
+                cleanup["status"] = "owned-group-absent" if absent and not cleanup["failures"] else "Unknown"
+            # Preserve original bounded bytes even after timeout/overflow/cleanup failure.
+            lengths = []
+            for name, stream in (("stdout", stdout), ("stderr", stderr)):
+                try:
+                    size = os.fstat(stream.fileno()).st_size
+                    stream.seek(0)
+                    result[name] = stream.read(MAX_OUTPUT)
+                    after_size = os.fstat(stream.fileno()).st_size
+                    result["observedBytes"][name] = max(size, after_size)
+                    lengths.append(size <= MAX_OUTPUT and after_size == size)
+                except Exception:
+                    lengths.append(False)
+                    if result["firstFailure"] is None:
+                        result["firstFailure"] = "output-acquisition-unavailable"
+            result["outputComplete"] = all(lengths) and cleanup["status"] in ("owned-group-absent", "not-started")
+            if not all(lengths) and result["firstFailure"] is None:
+                result["firstFailure"] = "bounded-output-incomplete"
+    return result
 
 
-def qualify(engine, package, source, run_id, attempt, runner=process):
+def _qualify(engine, package, source, run_id, attempt, runner, evidence):
     require(bool(re.fullmatch(r"[0-9a-f]{40}", source)), "exact source required")
     require(run_id.isdecimal() and int(run_id) > 0 and attempt == "1", "first-attempt hosted run required")
     package_sha = sha(package)
+    evidence["packageSha256"] = package_sha
     with zipfile.ZipFile(package) as archive:
         nuspecs = [name for name in archive.namelist() if name.endswith(".nuspec")]
         require(len(nuspecs) == 1, "unique package metadata required")
@@ -122,8 +205,9 @@ def qualify(engine, package, source, run_id, attempt, runner=process):
         require(ids == ["FS.GG.Coord.Cli"] and len(repositories) == 1 and repositories[0].get("commit") == source,
                 "package metadata does not bind selected source")
     identity = installed_identity(engine, package)
+    evidence.update(packageId="FS.GG.Coord.Cli", packageVersion=versions[0], installedIdentity=identity)
     before_install = tree(engine.parent)
-    rows = []
+    rows = evidence["outcomes"]
     with tempfile.TemporaryDirectory(prefix="packaged-v2-") as temporary:
         root = Path(temporary)
         home, capture = root / "home", root / "capture"
@@ -154,24 +238,63 @@ def qualify(engine, package, source, run_id, attempt, runner=process):
                 arguments = [command, "--binding-file", str(path), "--report-file", str(report)] + (["--integrator-stdin"] if stdin else [])
             before = tree(home)
             try:
-                actual, out, err = runner(engine, arguments, home, capture)
-            except Exception as error:
-                reason = str(error) if isinstance(error, QualificationFailure) else "process acquisition unavailable"
-                raise QualificationFailure(name + ": " + reason) from None
-            matched = actual == code and out == b"" and (diagnostic.encode() in err if diagnostic else err == b"")
-            unchanged = tree(home) == before
-            rows.append({"name": name, "exitCode": actual, "stdoutBytes": len(out), "stdoutSha256": hashlib.sha256(out).hexdigest(),
-                         "stderrBytes": len(err), "stderrSha256": hashlib.sha256(err).hexdigest(), "expectedRefusal": matched, "controlTreeUnchanged": unchanged})
+                outcome = runner(engine, arguments, home, capture)
+            except Exception:
+                outcome = {"exitCode": None, "stdout": b"", "stderr": b"", "firstFailure": "process-acquisition-unavailable",
+                           "cleanup": {"status": "Unknown", "failures": ["runner-did-not-return-custody"]}, "outputComplete": False, "observedBytes": {"stdout": 0, "stderr": 0}}
+            actual, out, err = outcome["exitCode"], outcome["stdout"], outcome["stderr"]
+            matched = outcome["outputComplete"] and actual == code and out == b"" and (diagnostic.encode() in err if diagnostic else err == b"")
+            row = {"name": name, "exitCode": actual, "expectedRefusal": matched, "controlTreeUnchanged": None,
+                   "firstFailure": outcome["firstFailure"], "cleanup": outcome["cleanup"], "outputComplete": outcome["outputComplete"]}
+            for stream, raw in (("stdout", out), ("stderr", err)):
+                row[stream + "ObservedBytes"] = outcome["observedBytes"][stream]
+                row[stream + "RetainedBytes"] = len(raw)
+                row[stream + "OmittedObservedBytes"] = max(0, outcome["observedBytes"][stream] - len(raw))
+                row[stream + "RetainedSha256"] = hashlib.sha256(raw).hexdigest()
+                row[stream + "RetainedBase64"] = base64.b64encode(raw).decode("ascii")
+            rows.append(row)
+            try:
+                unchanged = tree(home) == before
+                row["controlTreeUnchanged"] = unchanged
+            except Exception:
+                unchanged = False
+                row["firstFailure"] = row["firstFailure"] or "control-tree-readback-unavailable"
+            failure = row["firstFailure"]
+            if failure is None and outcome["cleanup"]["status"] != "owned-group-absent":
+                failure = "cleanup-unconfirmed"
+            if failure is None and not outcome["outputComplete"]:
+                failure = "bounded-output-incomplete"
+            if failure is None and not (matched and unchanged):
+                failure = "refusal-or-control-tree-differs"
+            if failure and evidence["firstFailure"] is None:
+                evidence["firstFailure"] = {"case": name, "reason": failure}
+            if row["firstFailure"] or outcome["cleanup"]["status"] != "owned-group-absent":
+                if evidence["firstFailure"] is None:
+                    evidence["firstFailure"] = {"case": name, "reason": "cleanup-unconfirmed"}
+                break
     require(sha(package) == package_sha, "candidate package changed during controls")
     require(tree(engine.parent) == before_install, "installed candidate changed during controls")
     require(installed_identity(engine, package) == identity, "candidate identities changed during controls")
-    return {"schema": SCHEMA, "sourceSha": source, "runId": run_id, "runAttempt": attempt,
-            "repository": "FS-GG/.github", "workflow": ".github/workflows/release-successor-candidate.yml",
-            "provenanceBasis": "workflow-supplied; authenticate retained Actions artifact separately",
-            "packageId": "FS.GG.Coord.Cli", "packageVersion": versions[0], "packageSha256": package_sha, "installedIdentity": identity, "outcomes": rows,
-            "passed": all(row["expectedRefusal"] and row["controlTreeUnchanged"] for row in rows), "scope": "isolated-packaged-process-local-refusals-only",
-            "migrationScopeValidationQualified": False, "nativePositiveQualified": False, "activeDeveloperInstallQualified": False,
-            "migrationEffectAdmission": False, "publisherAdmission": False}
+    evidence["passed"] = len(rows) == len(cases) and evidence["firstFailure"] is None
+    return evidence
+
+
+def qualify(engine, package, source, run_id, attempt, runner=process):
+    evidence = {"schema": SCHEMA, "sourceSha": source, "runId": run_id, "runAttempt": attempt,
+                "repository": "FS-GG/.github", "workflow": ".github/workflows/release-successor-candidate.yml",
+                "provenanceBasis": "workflow-supplied; authenticate retained Actions artifact separately",
+                "passed": False, "outcomes": [], "firstFailure": None,
+                "scope": "isolated-packaged-process-local-refusals-only; owned-process-group-cleanup",
+                "escapedProcessTreeQualified": False, "migrationScopeValidationQualified": False,
+                "nativePositiveQualified": False, "activeDeveloperInstallQualified": False,
+                "migrationEffectAdmission": False, "publisherAdmission": False}
+    try:
+        return _qualify(engine, package, source, run_id, attempt, runner, evidence)
+    except Exception as error:
+        evidence["failureClass"] = type(error).__name__
+        if evidence["firstFailure"] is None:
+            evidence["firstFailure"] = {"case": None, "reason": str(error) if isinstance(error, QualificationFailure) else "qualification-unavailable"}
+        return evidence
 
 
 def main():
@@ -188,9 +311,14 @@ def main():
         result = {"schema": SCHEMA, "passed": False, "failureClass": type(error).__name__,
                   "failureReason": str(error) if isinstance(error, QualificationFailure) else "qualification unavailable",
                   "sourceSha": args.source_sha, "runId": args.run_id, "runAttempt": args.run_attempt}
-    with args.output.open("x", encoding="utf-8") as stream:
-        json.dump(result, stream, sort_keys=True)
-        stream.write("\n")
+    try:
+        with args.output.open("x", encoding="utf-8") as stream:
+            json.dump(result, stream, sort_keys=True)
+            stream.write("\n")
+    except OSError:
+        # Reporting failure does not replace the original acquisition/cleanup cause.
+        print("packaged-v2: evidence-write-unavailable; qualification not accepted", file=sys.stderr)
+        return 1
     return 0 if result["passed"] else 1
 
 

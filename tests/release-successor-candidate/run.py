@@ -172,6 +172,9 @@ def packaged_v2_workflow_contract(workflow):
             raise ValueError("missing or duplicated fixed V2 candidate composition")
     if workflow.index(required[0]) < workflow.index("dotnet tool install FS.GG.Coord.Cli"):
         raise ValueError("packaged controls must follow actual isolated installation")
+    artifact = workflow.split("      - name: Retain packaged V2 refusal qualification separately\n", 1)[1].split("      - name:", 1)[0]
+    if "if: ${{ always() }}" not in artifact:
+        raise ValueError("failed qualification evidence must be retained independently")
     if 'path: |' in workflow:
         raise ValueError("publisher artifact must retain its exact package directory")
 
@@ -187,6 +190,7 @@ class PackagedV2CompositionTests(unittest.TestCase):
             ('--engine "$RUNNER_TEMP/fsgg-coord-engine/fsgg-coord-engine"', '--engine "source-build"'),
             ('path: ${{ runner.temp }}/board-v2-packaged-qualification.json', 'path: artifacts/packages/'),
             ('path: artifacts/packages/', 'path: |'),
+            ('if: ${{ always() }}', 'if: ${{ success() }}'),
         ):
             with self.subTest(original=original):
                 with self.assertRaises(ValueError):
@@ -198,7 +202,7 @@ class PackagedV2CompositionTests(unittest.TestCase):
         result = subprocess.run([sys.executable, "-B", str(ROOT / "tests/coord-board-v2-cli-join/test_packaged_v2.py")],
                                 capture_output=True, timeout=30, check=False)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
-        self.assertIn(b"Ran 8 tests", result.stderr)
+        self.assertIn(b"Ran 15 tests", result.stderr)
 
 
 class SuccessorRailBindingTests(unittest.TestCase):
