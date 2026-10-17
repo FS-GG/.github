@@ -610,7 +610,7 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
         self.assertEqual(0, completed.returncode)
         self.assertNotIn('fsgg:routine-development',json.loads(calls[-1]['stdin'])['body'])
 
-    def predecessor(self, *, change=None, source_error=None, ordinary=False, drift=False, uncertain=False, operation="source-change", churn=False):
+    def predecessor(self, *, change=None, source_error=None, ordinary=False, drift=False, uncertain=False, operation="source-change", churn=False, malformed=False, malformed_files=False):
         spec=importlib.util.spec_from_file_location("sc2_lane_fixture",TOOL)
         lane=importlib.util.module_from_spec(spec);spec.loader.exec_module(lane)
         repo='FS-GG/FS.GG.SC2.Client'
@@ -629,10 +629,12 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
                 if churn and list_reads==2:value[0].update(updated_at='later',mergeable=None)
                 return value
             if '/files?' in endpoint:
+                if malformed_files:return [[None]]
                 return [[dict(filename='src/product-'+endpoint.split('/pulls/')[1].split('/')[0]+'.fs')]]
             if '/git/ref/heads/' in endpoint:return dict(object=dict(sha=EXPECTED_SHA))
             if endpoint.endswith('/pulls'):
                 if uncertain:raise lane.ToolError('lost response')
+                if malformed:return dict(number=True)
                 return dict(number=45,html_url='https://github.com/'+repo+'/pull/45')
             return copy.deepcopy(native[int(endpoint.rsplit('/',1)[1])])
         api=mock.Mock();api.installation_read.side_effect=lambda endpoint:(dict(id=1390567199,private=True) if endpoint.endswith(repo) else dict(object=dict(sha='b'*40)))
@@ -663,7 +665,8 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
     def test_predecessor_does_not_change_normal_cap_or_admit_changed_reservations(self):
         changes=[lambda p,n:p.append(dict(number=46,body=managed_body('other','third'),head=dict(ref='routine/third',sha=EXPECTED_SHA))),
                  lambda p,n:p[0]['head'].update(sha='c'*40),lambda p,n:p[0].update(body='unknown reservation'),
-                 lambda p,n:n[43]['head']['repo'].update(id=1),lambda p,n:n[44].update(changed_files=2)]
+                 lambda p,n:n[43]['head']['repo'].update(id=1),lambda p,n:n[44].update(changed_files=2),
+                 lambda p,n:n[43]['base'].update(ref='other')]
         for options in [dict(ordinary=True),dict(operation='internal-docs'),*[dict(change=change) for change in changes],dict(source_error=RuntimeError('partial/noncanonical payload'))]:
             with self.subTest(options=options):
                 result,calls,_=self.predecessor(**options)
@@ -674,9 +677,13 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
         self.assertEqual(result['reason'],'sc2-predecessor-reservation-mismatch')
         self.assertFalse(any(call[0][1]=='POST' for call in calls))
         self.assertTrue(self.predecessor(churn=True)[0]['ok'])
-        result,calls,_=self.predecessor(uncertain=True)
-        self.assertEqual(result['reason'],'sc2-predecessor-create-unresolved');self.assertTrue(result['writeAttempted'])
-        self.assertEqual(sum(call[0][1]=='POST' for call in calls),1)
+        result,calls,_=self.predecessor(malformed_files=True,change=lambda p,n:n[43].update(changed_files=0))
+        self.assertEqual(result['reason'],'sc2-predecessor-preserved-files-incomplete')
+        self.assertFalse(any(call[0][1]=='POST' for call in calls))
+        for options in [dict(uncertain=True),dict(malformed=True)]:
+            result,calls,_=self.predecessor(**options)
+            self.assertEqual(result['reason'],'sc2-predecessor-create-unresolved');self.assertTrue(result['writeAttempted'])
+            self.assertEqual(sum(call[0][1]=='POST' for call in calls),1)
 
 
 if __name__ == "__main__":

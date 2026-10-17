@@ -297,13 +297,13 @@ class GhApi:
             entries[row["path"]] = row
         return entries
 
-    def installation_blob(self, repo: str, row: dict) -> bytes:
+    def installation_blob(self, repo: str, row: dict, *, max_bytes: int = 131072) -> bytes:
         if row.get("type") != "blob" or row.get("mode") not in ("100644", "100755"):
             raise RuntimeError("installation payload is not a regular canonical file")
         value = self.installation_read(f"repos/{repo}/git/blobs/{row['sha']}")
         if (not isinstance(value, dict) or value.get("sha") != row["sha"]
                 or value.get("encoding") != "base64" or type(value.get("size")) is not int
-                or not 0 < value["size"] <= 131072 or not isinstance(value.get("content"), str)):
+                or not 0 < value["size"] <= max_bytes or not isinstance(value.get("content"), str)):
             raise RuntimeError("installation blob identity/encoding is malformed")
         try:
             body = base64.b64decode(value["content"].replace("\n", ""), validate=True)
@@ -365,7 +365,9 @@ class GhApi:
                     or any(canonical[path].get(k) != current_owner[path].get(k) for k in ("sha", "mode", "type"))):
                 raise RuntimeError("selected producer payload is obsolete at protected main")
         helper = current_owner.get("tools/routine-delivery.py")
-        if helper is None or self.installation_blob(PRODUCER_REPOSITORY, helper) != pathlib.Path(__file__).read_bytes():
+        executing = pathlib.Path(__file__).read_bytes()
+        # Self-correspondence reads exactly this helper's size; other blobs keep their 128 KiB bound.
+        if helper is None or self.installation_blob(PRODUCER_REPOSITORY, helper, max_bytes=len(executing)) != executing:
             raise RuntimeError("running installation helper differs from current protected producer")
         old = self.installation_tree(repo, base)
         candidate = self.installation_tree(repo, head)
@@ -758,18 +760,25 @@ class GhApi:
 
         if repo == SC2_REPOSITORY:
             artifacts = self.installation_read(f"repos/{repo}/actions/runs/{run['id']}/artifacts?per_page=100")
-            expected_name = f"sc2-qualified-product-{head}-{run['id']}"
             if (not isinstance(artifacts, dict) or type(artifacts.get("total_count")) is not int
                     or not 1 <= artifacts["total_count"] <= 100 or not isinstance(artifacts.get("artifacts"), list)
                     or len(artifacts["artifacts"]) != artifacts["total_count"]
                     or any(not isinstance(row, dict) for row in artifacts["artifacts"])):
                 raise RuntimeError("SC2 artifact population incomplete")
-            selected = [row for row in artifacts["artifacts"] if row.get("name") == expected_name]
+            pattern = rf"sc2-qualified-product-([0-9a-f]{{40}})-{run['id']}"
+            selected = [row for row in artifacts["artifacts"] if re.fullmatch(pattern, str(row.get("name", "")))]
             if (len(selected) != 1 or selected[0].get("expired") is not False
                     or type(selected[0].get("size_in_bytes")) is not int or selected[0]["size_in_bytes"] <= 0
                     or (selected[0].get("workflow_run") or {}).get("id") != run["id"]
                     or (selected[0].get("workflow_run") or {}).get("head_sha") != head):
                 raise RuntimeError("SC2 artifact identity differs")
+            checkout = re.fullmatch(pattern, selected[0]["name"])[1]
+            commit = self.installation_read(f"repos/{repo}/git/commits/{checkout}")
+            if (not isinstance(commit, dict) or commit.get("sha") != checkout
+                    or not isinstance(commit.get("parents"), list)
+                    or [row.get("sha") if isinstance(row, dict) else None for row in commit["parents"]] != [base, head]
+                    or self.installation_tree(repo, checkout) != candidate):
+                raise RuntimeError("SC2 tested checkout parents/tree differ")
 
     def installation_bar_empty_policy(self, repo: str, head: str, roster: list[dict],
                                   metadata: dict, base: str, candidate: dict,

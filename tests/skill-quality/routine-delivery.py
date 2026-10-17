@@ -2164,8 +2164,12 @@ jobs:
                 'Retain the complete qualified product','Post Install the pinned Node runtime',
                 'Post Check out the complete product history','Complete job'],1)]
             responses[f"repos/{repo}/actions/runs/7/artifacts?per_page=100"]=dict(total_count=1,artifacts=[dict(
-                id=11,name=f'sc2-qualified-product-{head}-7',expired=False,size_in_bytes=100,
+                id=11,name=f'sc2-qualified-product-{"e"*40}-7',expired=False,size_in_bytes=100,
                 workflow_run=dict(id=7,head_sha=head))])
+            checkout='e'*40
+            native_commit=copy.deepcopy(responses[f"repos/{repo}/git/commits/{head}"])
+            native_commit.update(sha=checkout,parents=[dict(sha=fixture['base']),dict(sha=head)])
+            responses[f"repos/{repo}/git/commits/{checkout}"]=native_commit
         if repo == MODULE.BAR_REPOSITORY:
             job['steps'] = [dict(number=index,name=name,status='completed',conclusion='success') for index,name in enumerate((*MODULE.BAR_PREARM_TECHNICAL_STEPS,'Complete job'),1)]
         responses[f"repos/{repo}/actions/runs/7/attempts/1/jobs?per_page=100"] = dict(total_count=1,jobs=[copy.deepcopy(job)])
@@ -2281,7 +2285,10 @@ jobs:
                   lambda r,p,pr:r[checks]['check_runs'][0]['app'].update(id=1),
                   lambda r,p,pr:r[jobs]['jobs'][0].update(head_sha='f'*40),
                   lambda r,p,pr:r[f'repos/{repo}/actions/runs/7/artifacts?per_page=100']['artifacts'][0].update(expired=True),
-                  lambda r,p,pr:r[f'repos/{repo}/actions/runs/7/artifacts?per_page=100'].update(total_count=0,artifacts=[])]
+                  lambda r,p,pr:r[f'repos/{repo}/actions/runs/7/artifacts?per_page=100'].update(total_count=0,artifacts=[]),
+                  lambda r,p,pr:r[f'repos/{repo}/git/commits/'+('e'*40)]['parents'].reverse(),
+                  lambda r,p,pr:r[f'repos/{repo}/git/commits/'+('e'*40)].update(sha=head),
+                  lambda r,p,pr:r[f'repos/{repo}/actions/runs/7/artifacts?per_page=100']['artifacts'][0].update(name=f'sc2-qualified-product-{head}-7')]
         for change in variants:
             with self.subTest(change=change):
                 code,_,api,_=self.sc2_transport(apply=True,change=change)
@@ -2828,6 +2835,24 @@ jobs:
         endpoint=f"repos/FS-GG/.github/git/blobs/{row['sha']}"
         api=self.api();value=copy.deepcopy(self.fixture['responses'][endpoint]);value['content']=MODULE.base64.b64encode(b'wrong').decode();api.overrides[endpoint]=value
         self.assertEqual(self.invoke(api)[0],2)
+
+    def test_self_correspondence_is_exact_and_other_blob_bound_is_unchanged(self):
+        owner='FS-GG/.github'
+        owner_tree=self.fixture['responses'][f"repos/{owner}/git/commits/{self.fixture['owner_head']}"]['tree']['sha']
+        endpoint=f'repos/{owner}/git/trees/{owner_tree}?recursive=1'
+        for wrong_path in (True,False):
+            api=self.api();tree=copy.deepcopy(self.fixture['responses'][endpoint])
+            helper=next(row for row in tree['tree'] if row['path']=='tools/routine-delivery.py')
+            if wrong_path:helper['path']='tools/not-the-maintained-helper.py'
+            else:
+                body=b'other real Git blob bytes'
+                sha=hashlib.sha1(f'blob {len(body)}\0'.encode()+body).hexdigest();helper['sha']=sha
+                api.overrides[f'repos/{owner}/git/blobs/{sha}']=dict(sha=sha,encoding='base64',size=len(body),content=MODULE.base64.b64encode(body).decode())
+            api.overrides[endpoint]=tree
+            self.assertEqual((self.invoke(api,True)[0],api.attempts),(2,0))
+        api=self.api();row=dict(type='blob',mode='100644',sha='f'*40)
+        api.overrides[f'repos/{owner}/git/blobs/'+('f'*40)]=dict(sha='f'*40,encoding='base64',size=131073,content='YQ==')
+        with self.assertRaises(RuntimeError):api.installation_blob(owner,row)
 
     def test_required_and_coherent_checks_must_complete_and_exact_native_provenance(self):
         for field,value in (("bucket","pending"),("state","FAILURE"),("link","https://evil.invalid/check"),("completedAt","")):

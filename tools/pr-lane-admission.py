@@ -490,6 +490,7 @@ def sc2_predecessor(arguments: argparse.Namespace, pulls: list[dict[str, Any]]) 
                 or marker_from_body(native.get("body")) != (campaign, chain)
                 or metadata_field(native, "head.repo.id") != 1390567199
                 or metadata_field(native, "base.repo.id") != 1390567199
+                or metadata_field(native, "base.ref") != "main"
                 or type(native.get("changed_files")) is not int):
             raise Refusal("sc2-predecessor-preserved-pr-mismatch")
         pages = run_gh(arguments.gh, ["--method", "GET", "--paginate", "--slurp",
@@ -497,7 +498,9 @@ def sc2_predecessor(arguments: argparse.Namespace, pulls: list[dict[str, Any]]) 
         if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
             raise Refusal("sc2-predecessor-preserved-files-unreadable")
         files = [row for page in pages for row in page]
-        paths = [row.get("filename") for row in files if isinstance(row, dict)]
+        if len(files) != native["changed_files"] or any(not isinstance(row, dict) for row in files):
+            raise Refusal("sc2-predecessor-preserved-files-incomplete")
+        paths = [row.get("filename") for row in files]
         if len(paths) != native["changed_files"] or not all(isinstance(path, str) for path in paths) or len(set(paths)) != len(paths):
             raise Refusal("sc2-predecessor-preserved-files-incomplete")
         if set(paths) & set(module.PRODUCER_PATHS):
@@ -678,7 +681,9 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
             if bootstrap:
                 raise Refusal("sc2-predecessor-create-unresolved", **common, writeAttempted=True) from error
             raise
-        if not isinstance(created, dict) or not isinstance(created.get("number"), int):
+        if not isinstance(created, dict) or type(created.get("number")) is not int or created["number"] <= 0:
+            if bootstrap:
+                raise Refusal("sc2-predecessor-create-unresolved", **common, writeAttempted=True)
             raise ToolError("created pull-request response did not contain a number")
         return {
             "ok": True,

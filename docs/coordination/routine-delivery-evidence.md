@@ -131,7 +131,8 @@ entrypoint. It accepts only the native required-check reader's exact authenticat
 response, reported as `no-required-contexts-reported`; denial, malformed output and timeouts are not
 absence. Regardless of required-context population, the complete nonempty exact-head verify cohort,
 current attempt 1, Actions app 15368, run/job/check/suite joins, successful technical steps and qualified
-product artifact are mandatory. Any reported required contexts remain additional requirements.
+product artifact are mandatory. Its name binds the actual synthetic checkout, while native artifact
+metadata binds the candidate head; ordered base/head parents and the complete checkout tree must agree. Any reported required contexts remain additional requirements.
 This makes no assertion that organization rulesets are absent and does not require a paid protection
 feature or infer policy from a 403 response.
 
@@ -149,5 +150,7 @@ source fixtures do not establish private fetch, installed activation or product 
 
 Preflight uses existing static and actual-caller inert fixtures, with a 30-minute initial fixture-design
 cap; no additional scheduling model is selected. Existing hosted budgets remain unchanged. The fixture
-suite uses synthetic receiver blobs, not copied private verifier source. Private native qualification,
+suite uses synthetic receiver blobs, not copied private verifier source. Ordinary source blobs retain
+the 128 KiB limit. The protected helper self-correspondence read alone derives its bound from the exact
+executing helper length, still under the existing 1 MiB transport ceiling and protected byte equality. Private native qualification,
 local Checks-read availability and workflow-write capability remain independently observed gates.
