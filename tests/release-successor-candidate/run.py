@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
+import subprocess
 import sys
 import unittest
 from unittest.mock import patch
@@ -152,6 +153,52 @@ class CandidateUniquenessTests(unittest.TestCase):
                     gate.check(version, "0.91.2", token)
         self.github_read.assert_not_called()
         self.nuget_read.assert_not_called()
+
+
+def packaged_v2_workflow_contract(workflow):
+    required = (
+        "python3 tests/coord-board-v2-cli-join/packaged_v2.py",
+        '--engine "$RUNNER_TEMP/fsgg-coord-engine/fsgg-coord-engine"',
+        '--package "$PWD/artifacts/packages/FS.GG.Coord.Cli.${{ steps.identity.outputs.version }}.nupkg"',
+        '--source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"',
+        '--output "$RUNNER_TEMP/board-v2-packaged-qualification.json"',
+        'name: board-v2-packaged-qualification-${{ github.sha }}-${{ github.run_id }}',
+        'path: ${{ runner.temp }}/board-v2-packaged-qualification.json',
+        'name: release-successor-candidate-${{ github.sha }}-${{ github.run_id }}',
+        'path: artifacts/packages/',
+    )
+    for literal in required:
+        if workflow.count(literal) != 1:
+            raise ValueError("missing or duplicated fixed V2 candidate composition")
+    if workflow.index(required[0]) < workflow.index("dotnet tool install FS.GG.Coord.Cli"):
+        raise ValueError("packaged controls must follow actual isolated installation")
+    if 'path: |' in workflow:
+        raise ValueError("publisher artifact must retain its exact package directory")
+
+
+class PackagedV2CompositionTests(unittest.TestCase):
+    def test_actual_workflow_and_removed_identity_or_changed_custody_mutants(self):
+        workflow = (ROOT / ".github/workflows/release-successor-candidate.yml").read_text()
+        packaged_v2_workflow_contract(workflow)
+        for original, replacement in (
+            ("python3 tests/coord-board-v2-cli-join/packaged_v2.py", "true"),
+            ('--source-sha "$GITHUB_SHA"', '--source-sha "unbound"'),
+            ('--run-attempt "$GITHUB_RUN_ATTEMPT"', '--run-attempt "1"'),
+            ('--engine "$RUNNER_TEMP/fsgg-coord-engine/fsgg-coord-engine"', '--engine "source-build"'),
+            ('path: ${{ runner.temp }}/board-v2-packaged-qualification.json', 'path: artifacts/packages/'),
+            ('path: artifacts/packages/', 'path: |'),
+        ):
+            with self.subTest(original=original):
+                with self.assertRaises(ValueError):
+                    packaged_v2_workflow_contract(workflow.replace(original, replacement))
+
+    def test_packaged_qualifier_inert_failure_controls(self):
+        # This closed helper imports only stdlib and calls qualify with fake runners.
+        # It never starts dotnet, the installed candidate, a browser or a network.
+        result = subprocess.run([sys.executable, "-B", str(ROOT / "tests/coord-board-v2-cli-join/test_packaged_v2.py")],
+                                capture_output=True, timeout=30, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertIn(b"Ran 8 tests", result.stderr)
 
 
 class SuccessorRailBindingTests(unittest.TestCase):
