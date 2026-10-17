@@ -1484,3 +1484,29 @@ unrelated entries. Token cleanup remains enabled and its actual outcome is a sep
 Qualify actual workflow mode/permission/ordering and CLI caller controls, including all mixed-input,
 source/run/actor/parent/record/scope races and the ordinary publication fence. Native reader/issuer
 capability, custody retention and installation still require a separately selected actual operation.
+
+
+**Selected bounded forward continuation.** The current literal .104 ordinary caller continues
+observation and advance within its original admitted invocation. Keep each advance's one-send
+maximum, durable original intent, independent readback and fresh intent/dispatch/settlement guards.
+After waiting, allow another advance only when a five-second wait fits the same original deadline
+and remaining iterations; do not sleep after verified progress or renew an exhausted invocation.
+Unknown dispatch never permits resend. Unknown/mismatched/unreadable evidence and admission failures
+retain their original checkpoint and first cause. Historical journal19/20 and special recovery
+selections keep their existing bounds and semantics.
+
+Retain the same manifest, journal, provider, admission and counted Authority instance throughout.
+The ordinary ceiling1500, quota floor1800, original45-minute deadline and maximum152 advances do
+not change. Reuse only authenticated immutable object bytes within this invocation, keyed and
+validated by exact repository, object kind and OID; never reuse mutable authorization conclusions.
+Fresh main/ref/source/native-run/protection/disposition/original-binding checks remain mandatory.
+The counter covers actual Authority API entries, not all provider/feed/issuer traffic.
+
+Qualification must traverse all sixteen effects once, their independent settlements and final
+readback with one warm counter, preserving old original state and sibling entries, exact API-count
+equality, no-resend controls and truthful exhaustion. The previous seventeen cold windows did not
+prove this: the first warm composition exhausted1500 at advance26 after thirteen sends, including
+uncertain CAS readback. Preserve that result while qualifying bounded immutable-read reuse. The
+nominal immediate-match path has sixteen five-second waits; this arithmetic is not measured native
+latency or whole-job fit. Source controls and subsequent native whole-job evidence must establish
+feasibility before admission; no cap increase, omitted guard or automatic new workflow follows.
