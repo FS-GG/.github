@@ -1510,3 +1510,22 @@ uncertain CAS readback. Preserve that result while qualifying bounded immutable-
 nominal immediate-match path has sixteen five-second waits; this arithmetic is not measured native
 latency or whole-job fit. Source controls and subsequent native whole-job evidence must establish
 feasibility before admission; no cap increase, omitted guard or automatic new workflow follows.
+
+
+Compose duplicate freshness reads only inside two distinct existing journal CAS boundaries.
+Before object creation, read fresh typed main H, validate the expected selected logical state and
+all suspension/original/decision/successor predicates at H, then close with fresh main==H. After
+object creation, open a new fresh main H2 equal to the captured overlay parent, revalidate those
+predicates and close with fresh main==H2 immediately before the non-forced PATCH. No mutation or
+wait lies inside either joined read interval; no observation crosses object creation, another effect
+or a wait. Other admission/provider/protection guards retain their own fresh reads. Independent
+post-PATCH readback remains mandatory; these sandwiches do not claim provider atomicity or stronger
+CAS semantics. Expose no external snapshot permit or skip-authority switch.
+
+The complete real-provider inert fixture, including final original/sibling verification, now records
+1439 Authority entries (1175 GET,231 POST,33 PATCH), sixteen unique sends and settlements and final
+completion over33 advances/80 virtual waiting seconds. This replaces neither the retained1500
+exhaustion results nor native whole-job timing qualification. The nominal61-entry margin is not a
+promise that delayed visibility or additional native reads fit; exhaustion still stops the original
+operation at its truthful checkpoint. Preserve movement/refusal controls at all four opening/closing
+reads and after object creation, plus old original bytes and unrelated entries.
