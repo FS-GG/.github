@@ -255,6 +255,12 @@ class NativeApi(Protocol):
                               source: str, *, delivered: bool = False, coherent_workflow: str | None = None) -> None: ...
 
 
+SC2_REPOSITORY = "FS-GG/FS.GG.SC2.Client"
+SC2_REPOSITORY_ID = 1390567199
+SC2_VERIFY_ID = 368229845
+SC2_VERIFY_SHA256 = "561cc8b0ce4d0460518b5344dc2e553caee2083c5f23d8cbe5b402c8902ba06b"
+SC2_VERIFY_ENTRY_SHA256 = "5a7228d85f2ca4bcdbf4534fc45cd0c66ed3ed80077d5a15a4ad66bdbcbd176a"
+
 class GhApi:
     def installation_read(self, endpoint: str) -> Any:
         """Bounded existing transport; permission/transport errors never mean absence."""
@@ -308,44 +314,16 @@ class GhApi:
             raise RuntimeError("installation blob bytes differ from Git identity")
         return body
 
-    def installation_contract(self, repo: str, number: int, pr: dict, head: str,
-                              source: str, *, delivered: bool = False, coherent_workflow: str | None = None) -> None:
-        try:
-            self._installation_contract(repo, number, pr, head, source, delivered=delivered, coherent_workflow=coherent_workflow)
-        except (KeyError, TypeError, ValueError, AttributeError, IndexError) as error:
-            raise RuntimeError("installation native response shape is malformed") from error
-
-    def _installation_contract(self, repo: str, number: int, pr: dict, head: str,
-                               source: str, *, delivered: bool = False, coherent_workflow: str | None = None) -> None:
-        """Closed canonical payload with receiver-specific derived sixth-file edits."""
+    def installation_source(self, repo: str, head: str, base_ref: str, base: str,
+                            source: str, *, delivered: bool = False) -> dict:
+        """Authenticate the pre-PR source delta."""
+        if not all(isinstance(value, str) and SHA_RE.fullmatch(value) for value in (head, base, source)):
+            raise RuntimeError("source revision malformed")
         metadata = self.installation_read(f"repos/{repo}")
         if (not isinstance(metadata, dict) or metadata.get("full_name") != repo
                 or type(metadata.get("id")) is not int or metadata["id"] < 1
-                or not isinstance(metadata.get("default_branch"), str)):
-            raise RuntimeError("installation repository identity is unestablished")
-        base_ref, base = base_of(pr)
-        if (base_ref != metadata["default_branch"] or base is None
-                or head_of(pr) != head or pr.get("changed_files") not in (5, 6)
-                or pr.get("draft") is not False
-                or pr.get("number") != number or (pr.get("base") or {}).get("repo", {}).get("id") != metadata["id"]
-                or type((pr.get("base") or {}).get("repo", {}).get("id")) is not int
-                or type((pr.get("head") or {}).get("repo", {}).get("id")) is not int
-                or (pr.get("head") or {}).get("repo", {}).get("id") != metadata["id"]
-                or (pr.get("base") or {}).get("repo", {}).get("full_name") != repo
-                or (pr.get("head") or {}).get("repo", {}).get("full_name") != repo):
-            raise RuntimeError("installation PR/default/head/repository identity differs; forks refuse")
-        # Reuse the owning parser; a distinct installation route still requires source-change.
-        path = pathlib.Path(__file__).with_name("pr-lane-admission.py")
-        spec = importlib.util.spec_from_file_location("installation_lane_body", path)
-        module = importlib.util.module_from_spec(spec); assert spec and spec.loader
-        spec.loader.exec_module(module)
-        try:
-            valid = module.validate_routine_body(pr.get("body"), pr["head"]["ref"], head)
-            markers = module.routine_validator().marker_fields(module.routine_validator().ROUTINE_MARKER_RE, pr["body"])
-            if not valid or markers[0].get("operation") != "source-change":
-                raise RuntimeError("installation requires the exact source-change routine marker")
-        except (module.ToolError, ValueError, KeyError, IndexError) as error:
-            raise RuntimeError("installation routine marker is invalid") from error
+                or metadata.get("default_branch") != base_ref):
+            raise RuntimeError("source receiver/default differs")
         default = self.installation_read(f"repos/{repo}/git/ref/heads/{base_ref}")
         current = (default.get("object") or {}).get("sha") if isinstance(default, dict) else None
         if not delivered and current != base:
@@ -371,7 +349,7 @@ class GhApi:
             if (not isinstance(latest, dict) or latest.get("ref") != "refs/heads/main"
                     or (latest.get("object") or {}).get("type") != "commit"
                     or (latest.get("object") or {}).get("sha") != owner_head):
-                raise RuntimeError("installation protected producer moved during inspection")
+                raise RuntimeError("protected producer moved")
         current_owner = self.installation_tree(PRODUCER_REPOSITORY, owner_head)
         inventory_row = current_owner.get("src/FS.GG.Drivers/workspace-inventory.json")
         if inventory_row is None:
@@ -456,8 +434,70 @@ class GhApi:
             expected.add(BAR_PREARM)
         if repo == BAR_REPOSITORY and BAR_PREARM not in changed:
             raise RuntimeError("installation BAR requires the reviewed derived sixth prearm edit")
-        if changed != expected or pr.get("changed_files") != len(expected):
+        if changed != expected:
             raise RuntimeError("installation must add canonical five files with only a receiver-specific derived sixth edit")
+        for path in PRODUCER_PATHS:
+            if path not in canonical or path not in candidate or leaves(candidate)[path] != leaves(canonical).get(path):
+                raise RuntimeError("installation payload mode/content differs from protected producer")
+            self.installation_blob(PRODUCER_REPOSITORY, canonical[path])
+            self.installation_blob(repo, candidate[path])
+        workflows = self.installation_read(f"repos/{repo}/actions/workflows?per_page=100")
+        if (not isinstance(workflows, dict) or type(workflows.get("total_count")) is not int
+                or not 0 <= workflows["total_count"] <= 100 or not isinstance(workflows.get("workflows"), list)
+                or len(workflows["workflows"]) != workflows["total_count"]
+                or any(not isinstance(row, dict) for row in workflows["workflows"])):
+            raise RuntimeError("source workflow population incomplete")
+        if not delivered and any(row.get("path") == PRODUCER_PATHS[1] or row.get("name") == "routine-eligibility"
+                                 for row in workflows["workflows"]):
+            raise RuntimeError("native eligibility producer already exists")
+        protected_owner_still_current()
+        return dict(metadata=metadata, current=current, candidate=candidate, expected=expected,
+                    leaves=leaves, protected_owner_still_current=protected_owner_still_current)
+
+    def installation_contract(self, repo: str, number: int, pr: dict, head: str,
+                              source: str, *, delivered: bool = False, coherent_workflow: str | None = None) -> None:
+        try:
+            self._installation_contract(repo, number, pr, head, source, delivered=delivered, coherent_workflow=coherent_workflow)
+        except (KeyError, TypeError, ValueError, AttributeError, IndexError) as error:
+            raise RuntimeError("installation native response shape is malformed") from error
+
+    def _installation_contract(self, repo: str, number: int, pr: dict, head: str,
+                               source: str, *, delivered: bool = False, coherent_workflow: str | None = None) -> None:
+        """Closed canonical payload with receiver-specific derived sixth-file edits."""
+        metadata = self.installation_read(f"repos/{repo}")
+        if (not isinstance(metadata, dict) or metadata.get("full_name") != repo
+                or type(metadata.get("id")) is not int or metadata["id"] < 1
+                or not isinstance(metadata.get("default_branch"), str)):
+            raise RuntimeError("installation repository identity is unestablished")
+        base_ref, base = base_of(pr)
+        if (base_ref != metadata["default_branch"] or base is None
+                or head_of(pr) != head or pr.get("changed_files") not in (5, 6)
+                or pr.get("draft") is not False
+                or pr.get("number") != number or (pr.get("base") or {}).get("repo", {}).get("id") != metadata["id"]
+                or type((pr.get("base") or {}).get("repo", {}).get("id")) is not int
+                or type((pr.get("head") or {}).get("repo", {}).get("id")) is not int
+                or (pr.get("head") or {}).get("repo", {}).get("id") != metadata["id"]
+                or (pr.get("base") or {}).get("repo", {}).get("full_name") != repo
+                or (pr.get("head") or {}).get("repo", {}).get("full_name") != repo):
+            raise RuntimeError("installation PR/default/head/repository identity differs; forks refuse")
+        # Reuse the owning parser; a distinct installation route still requires source-change.
+        path = pathlib.Path(__file__).with_name("pr-lane-admission.py")
+        spec = importlib.util.spec_from_file_location("installation_lane_body", path)
+        module = importlib.util.module_from_spec(spec); assert spec and spec.loader
+        spec.loader.exec_module(module)
+        try:
+            valid = module.validate_routine_body(pr.get("body"), pr["head"]["ref"], head)
+            markers = module.routine_validator().marker_fields(module.routine_validator().ROUTINE_MARKER_RE, pr["body"])
+            if not valid or markers[0].get("operation") != "source-change":
+                raise RuntimeError("installation requires the exact source-change routine marker")
+        except (module.ToolError, ValueError, KeyError, IndexError) as error:
+            raise RuntimeError("installation routine marker is invalid") from error
+        facts = self.installation_source(repo, head, base_ref, base, source, delivered=delivered)
+        candidate, expected = facts["candidate"], facts["expected"]
+        current, leaves = facts["current"], facts["leaves"]
+        protected_owner_still_current = facts["protected_owner_still_current"]
+        if pr.get("changed_files") != len(expected):
+            raise RuntimeError("installation file count differs from canonical source delta")
         files = self.installation_read(f"repos/{repo}/pulls/{number}/files?per_page=100")
         if (not isinstance(files, list) or len(files) != len(expected)
                 or any(not isinstance(r, dict) or r.get("status") != ("modified" if r.get("filename") in (PRODUCER_REGISTRATION, TEMPLATES_ASSERTION_PIN, BAR_PREARM) else "added")
@@ -465,23 +505,18 @@ class GhApi:
                 or {r.get("filename") for r in files} != expected
                 or any(r.get("sha") != candidate[r["filename"]]["sha"] for r in files)):
             raise RuntimeError("installation file-list population/status/identity differs")
-        for path in PRODUCER_PATHS:
-            if path not in canonical or path not in candidate or leaves(candidate)[path] != leaves(canonical).get(path):
-                raise RuntimeError("installation payload mode/content differs from protected producer")
-            self.installation_blob(PRODUCER_REPOSITORY, canonical[path])
-            self.installation_blob(repo, candidate[path])
         if delivered:
             merge = merged_commit_of(pr)
             if not merge or not isinstance(current, str) or not SHA_RE.fullmatch(current):
                 raise RuntimeError("installation protected merge identity is unknown")
             merged_tree = leaves(self.installation_tree(repo, merge))
             protected_tree = leaves(self.installation_tree(repo, current))
-            if any(merged_tree.get(p) != b[p] or protected_tree.get(p) != b[p] for p in expected):
+            if any(merged_tree.get(p) != leaves(candidate)[p] or protected_tree.get(p) != leaves(candidate)[p] for p in expected):
                 raise RuntimeError("installation protected payload readback differs")
             ancestry = self.installation_read(f"repos/{repo}/compare/{merge}...{current}")
             if ((ancestry.get("merge_base_commit") or {}).get("sha") != merge
                     or ancestry.get("status") not in ("identical", "ahead")):
-                raise RuntimeError("installation protected payload/ancestry readback differs")
+                raise RuntimeError("protected payload/ancestry differs")
             protected_owner_still_current()
             return
         # Full native listings, not a workflow404 (which could hide denied metadata).
@@ -508,7 +543,7 @@ class GhApi:
         api = WatchGhApi(time.monotonic() + 31)
         command = ["gh", "pr", "checks", str(number), "--repo", repo,
                    "--required", "--json", WATCH_FIELDS]
-        if repo in ("FS-GG/FsQuint", BAR_REPOSITORY):
+        if repo in ("FS-GG/FsQuint", BAR_REPOSITORY, SC2_REPOSITORY):
             stderr = bytearray()
             code, raw = bounded_watch_query(command, time.monotonic() + 31, stderr_output=stderr)
             absent = (code == 1 and raw == b"" and bytes(stderr) ==
@@ -523,6 +558,12 @@ class GhApi:
         else:
             code, checks = api._watch_read(command, (0,))
             absent = False
+        if repo == SC2_REPOSITORY:
+            self.installation_sc2_verify(repo, head, roster, metadata=metadata, base=base,
+                                         candidate=candidate, coherent_workflow=coherent_workflow, branch=branch)
+            if absent:
+                self._installation_policy_fact = "no-required-contexts-reported"
+                return
         if absent:
             self.installation_empty_policy(repo, head, roster, metadata, base, candidate, coherent_workflow, branch)
             self._installation_policy_fact = "required-policy-observed-empty"
@@ -619,21 +660,45 @@ class GhApi:
                 or classic.get("documentation_url") != "https://docs.github.com/rest/branches/branch-protection#get-status-checks-protection"
                 or rules_status != 200 or rules != [] or sets_status != 200 or sets != []):
             raise RuntimeError("installation required policy is not authentically empty")
-        workflow = self.installation_read(f"repos/{repo}/actions/workflows/ci.yml")
-        if (not isinstance(workflow, dict) or type(workflow.get("id")) is not int or workflow.get("id") != 361154226
-                or workflow.get("path") != ".github/workflows/ci.yml" or workflow.get("state") != "active"):
-            raise RuntimeError("installation full native CI workflow differs")
+        self.installation_full_verify(repo, head, roster, metadata=metadata, base=base, candidate=candidate, branch=branch)
+
+    def installation_sc2_verify(self, repo: str, head: str, roster: list[dict], *, metadata: dict,
+                                base: str, candidate: dict, coherent_workflow: str | None, branch: str) -> None:
+        """Require full SC2 verify even without required contexts."""
+        if (repo != SC2_REPOSITORY or metadata.get("id") != SC2_REPOSITORY_ID
+                or metadata.get("private") is not True or metadata.get("default_branch") != "main"
+                or coherent_workflow != "verify.yml"):
+            raise RuntimeError("SC2 receiver/coherent identity differs")
+        old = self.installation_tree(repo, base)
+        entry = old.get("scripts/verify.sh")
+        if (entry is None or candidate.get("scripts/verify.sh") != entry
+                or hashlib.sha256(self.installation_blob(repo, entry)).hexdigest() != SC2_VERIFY_ENTRY_SHA256):
+            raise RuntimeError("SC2 verifier entrypoint differs")
+        self.installation_full_verify(repo, head, roster, metadata=metadata, base=base, candidate=candidate, branch=branch)
+
+    def installation_full_verify(self, repo: str, head: str, roster: list[dict], *, metadata: dict,
+                                 base: str, candidate: dict, branch: str) -> None:
+        if repo == SC2_REPOSITORY:
+            workflow_file, workflow_id, job_name, workflow_digest = "verify.yml", SC2_VERIFY_ID, "verify", SC2_VERIFY_SHA256
+        elif repo == "FS-GG/FsQuint":
+            workflow_file, workflow_id, job_name = "ci.yml", 361154226, "qualify"
+            workflow_digest = "e93a1f3569de84d541de0f52ed08c52848d35631b644e28b79dd187badc0a520"
+        else:
+            raise RuntimeError("installation full verify receiver differs")
+        workflow = self.installation_read(f"repos/{repo}/actions/workflows/{workflow_file}")
+        if (not isinstance(workflow, dict) or type(workflow.get("id")) is not int or workflow.get("id") != workflow_id
+                or workflow.get("path") != ".github/workflows/" + workflow_file or workflow.get("state") != "active"):
+            raise RuntimeError("full CI workflow differs")
         path = workflow["path"]
         baseline = self.installation_tree(repo, base).get(path)
         if baseline is None or candidate.get(path) != baseline:
-            raise RuntimeError("installation full CI source differs from protected base")
-        # Pin the reviewed unconditional qualify job running CiPreflight/check.sh and eng/check.sh.
-        if hashlib.sha256(self.installation_blob(repo, baseline)).hexdigest() != "e93a1f3569de84d541de0f52ed08c52848d35631b644e28b79dd187badc0a520":
-            raise RuntimeError("installation full CI source is not the reviewed technical cohort")
-        population = self.installation_read(f"repos/{repo}/actions/workflows/361154226/runs?head_sha={head}&per_page=100")
+            raise RuntimeError("full CI source differs from base")
+        if hashlib.sha256(self.installation_blob(repo, baseline)).hexdigest() != workflow_digest:
+            raise RuntimeError("full CI source is not the reviewed cohort")
+        population = self.installation_read(f"repos/{repo}/actions/workflows/{workflow_id}/runs?head_sha={head}&per_page=100")
         if (not isinstance(population, dict) or type(population.get("total_count")) is not int or population.get("total_count") != 1
                 or not isinstance(population.get("workflow_runs"), list) or len(population["workflow_runs"]) != 1):
-            raise RuntimeError("installation full CI exact-head run population is incomplete or ambiguous")
+            raise RuntimeError("full CI exact-head run population incomplete/ambiguous")
         run = population["workflow_runs"][0]
         if (not isinstance(run, dict) or type(run.get("id")) is not int or run["id"] < 1
                 or run.get("workflow_id") != workflow["id"] or run.get("path") != path
@@ -643,47 +708,68 @@ class GhApi:
                 or (run.get("repository") or {}).get("id") != metadata["id"]
                 or (run.get("repository") or {}).get("full_name") != repo
                 or type(run.get("check_suite_id")) is not int):
-            raise RuntimeError("installation full CI run identity/attempt/success differs")
+            raise RuntimeError("full CI run identity/attempt/success differs")
         detail = self.installation_read(f"repos/{repo}/actions/runs/{run['id']}")
         if any(detail.get(key) != run.get(key) for key in ("id", "workflow_id", "path", "head_sha", "event", "run_attempt", "status", "conclusion", "check_suite_id", "repository")):
             raise RuntimeError("installation full CI run readback differs")
         jobs = self.installation_read(f"repos/{repo}/actions/runs/{run['id']}/attempts/1/jobs?per_page=100")
         if (not isinstance(jobs, dict) or type(jobs.get("total_count")) is not int or jobs.get("total_count") != 1
                 or not isinstance(jobs.get("jobs"), list) or len(jobs["jobs"]) != 1
-                or not isinstance(jobs["jobs"][0], dict) or jobs["jobs"][0].get("name") != "qualify"):
-            raise RuntimeError("installation full CI job cohort is incomplete")
+                or not isinstance(jobs["jobs"][0], dict) or jobs["jobs"][0].get("name") != job_name):
+            raise RuntimeError("full CI job cohort incomplete")
         statuses = self.installation_read(f"repos/{repo}/commits/{head}/status?per_page=100")
         if (not isinstance(statuses, dict) or statuses.get("sha") != head
                 or type(statuses.get("total_count")) is not int or statuses.get("total_count") != 0 or statuses.get("statuses") != []):
-            raise RuntimeError("installation exact-head status provenance is unknown")
+            raise RuntimeError("full CI status provenance unknown")
         if not roster or len({r.get("id") for r in roster}) != len(roster):
-            raise RuntimeError("installation complete technical check cohort is missing or duplicated")
+            raise RuntimeError("full CI cohort missing/duplicated")
         cohort = jobs["jobs"][0]
-        # Every actual native check must belong to this complete reviewed CI run and job.
         if len(roster) != 1 or cohort.get("id") != roster[0].get("id"):
-            raise RuntimeError("installation native check/job population differs")
+            raise RuntimeError("full CI check/job population differs")
         check = roster[0]
         steps = cohort.get("steps")
-        if (not isinstance(steps, list) or not 6 <= len(steps) <= 32
+        expected_steps = (["Set up job", "Check out the complete product history", "Install the pinned .NET SDK",
+                           "Install the pinned Node runtime", "Install the pinned Rust toolchain", "Verify the product",
+                           "Retain the complete qualified product"] if repo == SC2_REPOSITORY else
+                          ["Set up job", "Run actions/checkout@v7", "Run actions/setup-dotnet@v6", "Provision pinned Quint",
+                           "Check independent CI preflight example", "Qualify core, tooling and external package consumer"])
+        if (not isinstance(steps, list) or not len(expected_steps) <= len(steps) <= 32
                 or any(not isinstance(step, dict) or step.get("status") != "completed"
                        or step.get("conclusion") != "success" for step in steps)
-                or [step.get("name") for step in steps[:6]] != ["Set up job", "Run actions/checkout@v7",
-                    "Run actions/setup-dotnet@v6", "Provision pinned Quint", "Check independent CI preflight example",
-                    "Qualify core, tooling and external package consumer"]):
-            raise RuntimeError("installation full CI technical steps are absent, skipped or failed")
+                or [step.get("name") for step in steps[:len(expected_steps)]] != expected_steps):
+            raise RuntimeError("full CI steps absent/skipped/failed")
+        if repo == SC2_REPOSITORY and any(step.get("name") not in
+                ["Post Check out the complete product history", "Post Install the pinned Node runtime",
+                 "Post Install the pinned .NET SDK", "Complete job"] for step in steps[len(expected_steps):]):
+            raise RuntimeError("installation SC2 technical suffix differs")
         link = f"https://github.com/{repo}/actions/runs/{run['id']}/job/{cohort.get('id')}"
         job = self.installation_read(f"repos/{repo}/actions/jobs/{cohort.get('id')}")
         if (job != cohort or type(job.get("id")) is not int or job["id"] < 1
                 or job.get("run_id") != run["id"] or type(job.get("run_attempt")) is not int or job.get("run_attempt") != 1
-                or job.get("head_sha") != head or job.get("name") != "qualify"
+                or job.get("head_sha") != head or job.get("name") != job_name
                 or job.get("status") != "completed" or job.get("conclusion") != "success"
                 or not job.get("completed_at")
                 or job.get("check_run_url") != f"https://api.github.com/repos/{repo}/check-runs/{job['id']}"
-                or check.get("head_sha") != head or check.get("name") != "qualify"
+                or check.get("head_sha") != head or check.get("name") != job_name
                 or check.get("details_url") != link or (check.get("app") or {}).get("id") != 15368
                 or (check.get("check_suite") or {}).get("id") != run["check_suite_id"]
                 or check.get("status") != "completed" or check.get("conclusion") != "success"):
-            raise RuntimeError("installation full CI check/app/job/run/attempt provenance differs")
+            raise RuntimeError("full CI check/app/job/run/attempt differs")
+
+        if repo == SC2_REPOSITORY:
+            artifacts = self.installation_read(f"repos/{repo}/actions/runs/{run['id']}/artifacts?per_page=100")
+            expected_name = f"sc2-qualified-product-{head}-{run['id']}"
+            if (not isinstance(artifacts, dict) or type(artifacts.get("total_count")) is not int
+                    or not 1 <= artifacts["total_count"] <= 100 or not isinstance(artifacts.get("artifacts"), list)
+                    or len(artifacts["artifacts"]) != artifacts["total_count"]
+                    or any(not isinstance(row, dict) for row in artifacts["artifacts"])):
+                raise RuntimeError("SC2 artifact population incomplete")
+            selected = [row for row in artifacts["artifacts"] if row.get("name") == expected_name]
+            if (len(selected) != 1 or selected[0].get("expired") is not False
+                    or type(selected[0].get("size_in_bytes")) is not int or selected[0]["size_in_bytes"] <= 0
+                    or (selected[0].get("workflow_run") or {}).get("id") != run["id"]
+                    or (selected[0].get("workflow_run") or {}).get("head_sha") != head):
+                raise RuntimeError("SC2 artifact identity differs")
 
     def installation_bar_empty_policy(self, repo: str, head: str, roster: list[dict],
                                   metadata: dict, base: str, candidate: dict,
@@ -1421,8 +1507,8 @@ def summarize(
                        observedAt=now.isoformat().replace("+00:00", "Z"),
                        routineEligibility=routine_state)
         if producer_source is not None:
-            if result.reason is None and getattr(api, "_installation_policy_fact", None) == "required-policy-observed-empty":
-                result = replace(result, reason="required-policy-observed-empty")
+            if result.reason is None and getattr(api, "_installation_policy_fact", None) in ("required-policy-observed-empty", "no-required-contexts-reported"):
+                result = replace(result, reason=api._installation_policy_fact)
             state = "ready" if result.outcome == "ready" else result.outcome
             if result.codeDelivery == "delivered":
                 try:

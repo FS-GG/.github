@@ -84,8 +84,10 @@ omitted populations never count as complete. The legacy Summary itself is preser
 
 Collection has one 60-second budget, including existing direct-child cleanup reserve. Each native
 response uses the existing 256 KiB limit. Bounds remain 100 changed files, 128 required checks,
-100 artifact records, one 64 KiB ZIP with one 4 KiB JSON entry, and 100 run PR links. No population
-pagination or log ingestion is added. Larger or incomplete evidence stays unavailable. Automatic
+100 artifact records, one 64 KiB ZIP with one 4 KiB JSON entry, and 100 run PR links. Changed-file metadata uses at most four 25-row pages within the same 100-file and 256 KiB per-response
+stdout bounds. `gh api --jq` projects filename, previous filename and status before the bounded reader;
+it does not bound the provider response or `gh` internal memory. Missing, denied, malformed, duplicate
+or incomplete pages, or changed head/base/count, leave the population unavailable. No log ingestion is added. Larger or incomplete evidence stays unavailable. Automatic
 selection adds one native job read, a final run identity read and a required-check reread within that same budget.
 
 Pipeline preflight uses focused Python fixtures and existing static checks: no job dependency,
@@ -106,3 +108,46 @@ collection selected the required projection run automatically, reported matching
 trees and all eight required checks passing, and returned `delivered` with no evidence issues.
 This qualifies the maintained repository helper and reader for the stated scope; fleet
 installation and every-job test-time filesystem coverage remain separate.
+
+
+## SC2 private-receiver first installation
+
+The [canonical first-install source predicate](../../tools/routine-delivery.py) can inspect a candidate
+before a PR or its checks exist. It requires the complete canonical five-file delta, unchanged remaining
+receiver tree, current protected producer bytes and no partial or native producer installation. Full
+PR identity, markers, file listing, native checks and qualification remain delivery requirements.
+
+The selected SC2 predecessor uses `pr-lane-admission.py --sc2-producer-predecessor-source <protected-sha>`
+on the existing `outcome-led-programme-20261016` campaign and `sc2-routine-producer-bootstrap-20261017`
+chain. It permits one third managed PR only for native private `FS-GG/FS.GG.SC2.Client` (repository ID 1390567199),
+preserving the bound PR43/44 branches, heads and admission identities. Complete native reservations,
+disjoint file populations, candidate ref and canonical source are rechecked before creation. Other
+repositories and ordinary creation retain cap 2; unresolved reservations, drift or partial installation
+refuse. A lost create response retains its original identity and is not permission to retry. Installing
+the producer disables this first-install exception through the existing absence predicate.
+
+The receiver-specific delivery contract selects its unchanged `verify.yml` (workflow ID 368229845) and verifier
+entrypoint. It accepts only the native required-check reader's exact authenticated no-required-contexts
+response, reported as `no-required-contexts-reported`; denial, malformed output and timeouts are not
+absence. Regardless of required-context population, the complete nonempty exact-head verify cohort,
+current attempt 1, Actions app 15368, run/job/check/suite joins, successful technical steps and qualified
+product artifact are mandatory. Any reported required contexts remain additional requirements.
+This makes no assertion that organization rulesets are absent and does not require a paid protection
+feature or infer policy from a 403 response.
+
+The default-branch eligibility workflow uses the receiver's automatic Actions token with contents-read
+permission only. The raw token is removed before child processes; only the fixed-origin fetch receives
+an ephemeral exact-host header, with redirects and credential helpers disabled. No candidate checkout
+or execution occurs; the validator and its dependencies still come exclusively from the verified event
+base. Local observer Checks-read and workflow-push permissions are separate capabilities.
+
+Shared source delivery precedes regenerating the five-file receiver patch. Its actual unchanged-base
+verify run, authenticated required-check observation and normal first-install merge/readback must then
+qualify the predecessor. A subsequent genuine private eligibility event and newly qualified current
+heads precede ordinary delivery of the original PRs. Earlier product runs retain their original heads;
+source fixtures do not establish private fetch, installed activation or product acceptance.
+
+Preflight uses existing static and actual-caller inert fixtures, with a 30-minute initial fixture-design
+cap; no additional scheduling model is selected. Existing hosted budgets remain unchanged. The fixture
+suite uses synthetic receiver blobs, not copied private verifier source. Private native qualification,
+local Checks-read availability and workflow-write capability remain independently observed gates.

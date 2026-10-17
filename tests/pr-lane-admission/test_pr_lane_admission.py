@@ -610,6 +610,74 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
         self.assertEqual(0, completed.returncode)
         self.assertNotIn('fsgg:routine-development',json.loads(calls[-1]['stdin'])['body'])
 
+    def predecessor(self, *, change=None, source_error=None, ordinary=False, drift=False, uncertain=False, operation="source-change", churn=False):
+        spec=importlib.util.spec_from_file_location("sc2_lane_fixture",TOOL)
+        lane=importlib.util.module_from_spec(spec);spec.loader.exec_module(lane)
+        repo='FS-GG/FS.GG.SC2.Client'
+        pulls=[dict(number=n,state='open',head=dict(ref=values[0],sha=values[1]),
+                    body=managed_body(values[2],values[3])) for n,values in lane.SC2_PRESERVED.items()]
+        native={p['number']:dict(copy.deepcopy(p),changed_files=1,base=dict(ref='main',repo=dict(id=1390567199))) for p in pulls}
+        for row in native.values():row['head']['repo']=dict(id=1390567199)
+        if change:change(pulls,native)
+        calls=[];list_reads=0
+        def read(gh,args,stdin=None):
+            nonlocal list_reads
+            calls.append((args,stdin));endpoint=args[-1] if args[-1]!='-' else args[-3]
+            if endpoint.endswith('pulls?state=open&per_page=100'):
+                list_reads+=1;value=copy.deepcopy(pulls)
+                if drift and list_reads==2:value[0]['head']['sha']='c'*40
+                if churn and list_reads==2:value[0].update(updated_at='later',mergeable=None)
+                return value
+            if '/files?' in endpoint:
+                return [[dict(filename='src/product-'+endpoint.split('/pulls/')[1].split('/')[0]+'.fs')]]
+            if '/git/ref/heads/' in endpoint:return dict(object=dict(sha=EXPECTED_SHA))
+            if endpoint.endswith('/pulls'):
+                if uncertain:raise lane.ToolError('lost response')
+                return dict(number=45,html_url='https://github.com/'+repo+'/pull/45')
+            return copy.deepcopy(native[int(endpoint.rsplit('/',1)[1])])
+        api=mock.Mock();api.installation_read.side_effect=lambda endpoint:(dict(id=1390567199,private=True) if endpoint.endswith(repo) else dict(object=dict(sha='b'*40)))
+        api.installation_source.side_effect=source_error
+        producer=argparse.Namespace(PRODUCER_PATHS=('.fsgg/routine-development.json','.github/workflows/routine-eligibility.yml',
+            'scripts/check-claim-generation.py','scripts/check-routine-eligibility-envelope.py','scripts/lib/gate.py'))
+        with tempfile.TemporaryDirectory() as directory:
+            body=pathlib.Path(directory,'body.md');body.write_text('Exact reviewed canonical producer installation.\n'+f'<!-- fsgg:routine-development/v1 head={EXPECTED_SHA} operation={operation} -->\n')
+            args=lane.parser().parse_args(['--repo',repo,'--campaign-id','outcome-led-programme-20261016',
+                '--dependency-chain-id',lane.SC2_PREDECESSOR_CHAIN,'--head','routine/sc2-producer-install',
+                '--head-sha',EXPECTED_SHA,'--base','main','--title','Install canonical producer','--body-file',str(body),
+                *([] if ordinary else ['--sc2-producer-predecessor-source','d'*40])])
+            with mock.patch.object(lane,'run_gh',side_effect=read),mock.patch.object(lane,'installation_api',return_value=(producer,api)):
+                try:result=lane.execute(args)
+                except lane.Refusal as error:result=dict(ok=False,reason=error.reason,**error.details)
+        return result,calls,api
+
+    def test_exact_sc2_predecessor_creates_once_after_two_source_and_roster_checks(self):
+        result,calls,api=self.predecessor()
+        self.assertEqual((result['action'],result['number'],result['openManagedPullRequestCount']),('created',45,2))
+        self.assertEqual(result['selectedException'],'sc2-exact-five-file-predecessor')
+        self.assertEqual(api.installation_source.call_count,2)
+        self.assertEqual(api.installation_source.call_args.args,('FS-GG/FS.GG.SC2.Client',EXPECTED_SHA,'main','b'*40,'d'*40))
+        writes=[call for call in calls if call[0][1]=='POST'];self.assertEqual(len(writes),1)
+        body=json.loads(writes[0][1])['body'];self.assertIn('preserved PR43/44',body)
+        self.assertFalse(any('/check-runs' in arg for call,_ in calls for arg in call))
+
+    def test_predecessor_does_not_change_normal_cap_or_admit_changed_reservations(self):
+        changes=[lambda p,n:p.append(dict(number=46,body=managed_body('other','third'),head=dict(ref='routine/third',sha=EXPECTED_SHA))),
+                 lambda p,n:p[0]['head'].update(sha='c'*40),lambda p,n:p[0].update(body='unknown reservation'),
+                 lambda p,n:n[43]['head']['repo'].update(id=1),lambda p,n:n[44].update(changed_files=2)]
+        for options in [dict(ordinary=True),dict(operation='internal-docs'),*[dict(change=change) for change in changes],dict(source_error=RuntimeError('partial/noncanonical payload'))]:
+            with self.subTest(options=options):
+                result,calls,_=self.predecessor(**options)
+                self.assertFalse(result['ok']);self.assertFalse(any(call[0][1]=='POST' for call in calls))
+
+    def test_predecessor_rechecks_before_create_and_fences_unknown_response(self):
+        result,calls,_=self.predecessor(drift=True)
+        self.assertEqual(result['reason'],'sc2-predecessor-reservation-mismatch')
+        self.assertFalse(any(call[0][1]=='POST' for call in calls))
+        self.assertTrue(self.predecessor(churn=True)[0]['ok'])
+        result,calls,_=self.predecessor(uncertain=True)
+        self.assertEqual(result['reason'],'sc2-predecessor-create-unresolved');self.assertTrue(result['writeAttempted'])
+        self.assertEqual(sum(call[0][1]=='POST' for call in calls),1)
+
 
 if __name__ == "__main__":
     unittest.main()
