@@ -589,6 +589,118 @@ class ProviderDiagnosticTests(unittest.TestCase):
         self.release = {"id": 1, "draft": True}
         self.writes = []
 
+    def test_claimed_provider_refuses_unowned_changed_or_settled_state_before_any_send(self):
+        import release_successor_journal as policy
+        window={'authorityEntries':500,'seconds':900,'visibilityProbes':32,'quotaFloor':1800}
+        execution={'runId':39080000000,'attempt':1,'sourceSha':'a'*40,'operator':'EHotwagner'}
+        with patch.object(policy,'CONTINUATION_WINDOW',window):
+            record=policy.continuation_record(execution)
+            candidate=policy.CONTINUATION_CANDIDATE
+            state={'schema':policy.SCHEMA,'contentId':candidate['contentId'],'sourceSha':candidate['sourceSha'],
+                   'version':'0.104.0','candidateArchiveSha256':candidate['archiveSha256'],
+                   'operator':'EHotwagner','generation':29,'effects':policy.continuation_effects(29),'continuation':record}
+            self.provider.version,self.provider.content_id,self.provider.source='0.104.0',state['contentId'],state['sourceSha']
+            self.provider.logical_ref=policy.ALLOWED_SUCCESSOR['logicalRef']
+            self.provider.suspension=policy.ReleaseSuspension(AuthorityAPI())
+            permit=policy.ContinuationPermit(policy._CONTINUATION_SEAL,record,'b'*40)
+            effect=Effect('channel-asset',self.provider.content_id,'request')
+            with patch.object(self.provider.suspension,'authorize'), \
+                 patch.object(self.provider.suspension,'main',return_value='c'*40), \
+                 patch.object(self.provider.suspension,'file',side_effect=lambda *args:policy.canonical(state)), \
+                 patch.object(self.api,'post',side_effect=AssertionError('unauthorized send')), \
+                 patch.object(self.api,'upload_asset',side_effect=AssertionError('unauthorized upload')):
+                # A durable marker never reconstructs a local first-send permit.
+                with self.assertRaisesRegex(self.module.Refused,'send permit'):self.provider.dispatch(effect)
+                self.provider._continuation_permit=permit
+                with self.assertRaisesRegex(self.module.Refused,'send permit'):self.provider.dispatch(effect)
+                permit.consume(effect.identity)
+                self.provider._authorize_release(effect)
+                for changed in ({**state,'effects':policy.continuation_effects(30),'generation':30},
+                                {**state,'extra':1},{**state,'contentId':'sha256:'+'f'*64},
+                                {**state,'continuation':{**record,'execution':{**execution,'runId':39080000001}}}):
+                    with self.subTest(changed=changed),patch.object(self.provider.suspension,'file',return_value=policy.canonical(changed)),self.assertRaises(self.module.Refused):
+                        self.provider.dispatch(effect)
+                with patch.object(self.provider.suspension,'main',side_effect=['c'*40,'d'*40]),self.assertRaisesRegex(self.module.Refused,'moved'):
+                    self.provider.dispatch(effect)
+                self.provider.content_id='sha256:'+'e'*64
+                with self.assertRaises(self.module.Refused):self.provider.dispatch(effect)
+
+    def test_continuation_channel_prepares_once_and_freezes_exact_upload_bytes(self):
+        effect=Effect("channel-asset",self.provider.content_id,"request")
+        payload=self.provider.prepare_continuation_asset(effect)
+        output=self.provider._continuation_asset_path(effect)
+        raw=output.read_bytes()
+        self.assertEqual(payload,{"name":"stable-channel.json","sha256":hashlib.sha256(raw).hexdigest(),"bytes":len(raw)})
+        with self.assertRaisesRegex(self.module.Refused,"already prepared"):
+            self.provider.prepare_continuation_asset(effect)
+        output.write_bytes(raw+b"changed")
+        with self.assertRaisesRegex(self.module.Refused,"changed"):
+            self.provider._continuation_asset_path(effect)
+        output.unlink();output.symlink_to(self.path)
+        with self.assertRaisesRegex(self.module.Refused,"changed"):
+            self.provider._continuation_asset_path(effect)
+
+    def test_continuation_transport_hashes_the_same_bytes_it_submits(self):
+        output=self.root/'stable-channel.json';output.write_bytes(b'prepared bytes')
+        digest=hashlib.sha256(output.read_bytes()).hexdigest()
+        requests=[]
+        with patch.object(self.api,'_request',side_effect=lambda *args:requests.append(args) or b'{}'):
+            self.api.upload_asset(416097241,'stable-channel.json',output,digest)
+            self.assertEqual(requests[0][2],b'prepared bytes')
+            output.write_bytes(b'changed after provider check')
+            with self.assertRaisesRegex(self.module.Refused,'presend receipt'):
+                self.api.upload_asset(416097241,'stable-channel.json',output,digest)
+            output.write_bytes(b'x'*1048577)
+            with self.assertRaisesRegex(self.module.Refused,'presend receipt'):
+                self.api.upload_asset(416097241,'stable-channel.json',output,digest)
+        self.assertEqual(len(requests),1)
+
+    def test_continuation_manifest_dispatch_uses_prepared_path_without_regeneration(self):
+        effect=Effect("manifest-asset",self.provider.content_id,"request")
+        output=self.root/"promoted-release-manifest.json"
+        with patch.object(self.provider,"_prepare_manifest_asset",return_value=output) as prepare:
+            payload=self.provider.prepare_continuation_asset(effect)
+        self.assertEqual(prepare.call_count,1)
+        self.provider._continuation_permit=object() # Historical version fixture exercises only byte custody.
+        writes=[]
+        with patch.object(self.provider,"_prepare_manifest_asset",side_effect=AssertionError("payload regenerated")), \
+             patch.object(self.provider,"_release",return_value=self.release), \
+             patch.object(self.api,"upload_asset",side_effect=lambda release,name,path,expected:writes.append((release,name,path,path.read_bytes()))):
+            self.assertEqual(self.provider.dispatch(effect).state,"applied")
+        self.assertEqual(writes,[(1,"release-manifest.json",output,b"fixture")])
+        self.assertEqual(payload['sha256'],hashlib.sha256(writes[0][3]).hexdigest())
+
+    def test_continuation_visibility_uses_one_validated_dataset_and_refuses_next_partial_read(self):
+        release={"id":416097241,"tag_name":self.provider.tag,"target_commitish":self.provider.source,
+                 "body":self.provider.marker,"draft":True,"prerelease":False}
+        names=[*(f"{package}.{self.provider.version}.nupkg" for package in PACKAGES),
+               "standalone-telemetry-evidence.json","standalone-telemetry-runtime-evidence.json"]
+        rows=[{"id":index,"name":name,"state":"uploaded","size":1} for index,name in enumerate(names,1)]
+        effect=Effect('channel-asset',self.provider.content_id,'request')
+        with patch.object(self.provider,'_release',return_value=release), \
+             patch.object(self.api,'get',side_effect=[rows,rows[:-1]]) as read:
+            self.assertEqual(self.provider.continuation_visibility(effect),'absent')
+            self.assertEqual(read.call_count,1)
+            with self.assertRaisesRegex(self.module.Refused,'population'):
+                self.provider.continuation_visibility(effect)
+            self.assertEqual(read.call_count,2)
+
+    def test_continuation_visibility_never_matches_and_refuses_incomplete_or_duplicate_population(self):
+        release={"id":416097241,"tag_name":self.provider.tag,"target_commitish":self.provider.source,
+                 "body":self.provider.marker,"draft":True,"prerelease":False}
+        names=[*(f"{package}.{self.provider.version}.nupkg" for package in PACKAGES),
+               "standalone-telemetry-evidence.json","standalone-telemetry-runtime-evidence.json"]
+        rows=[{"id":index,"name":name,"state":"uploaded","size":1} for index,name in enumerate(names,1)]
+        effect=Effect("channel-asset",self.provider.content_id,"request")
+        with patch.object(self.provider,"_release",return_value=release),patch.object(self.api,"get",return_value=rows):
+            self.assertEqual(self.provider.continuation_visibility(effect),"absent")
+            for bad in (rows[:-1],rows+[rows[0]],rows+[{"id":8,"name":"other","state":"uploaded","size":1}],
+                        [{**rows[0],"state":"new"},*rows[1:]]):
+                with self.subTest(bad=bad),patch.object(self.api,"get",return_value=bad),self.assertRaises(self.module.Refused):
+                    self.provider.continuation_visibility(effect)
+            rows.append({"id":6,"name":"stable-channel.json","state":"uploaded","size":1})
+            self.assertEqual(self.provider.continuation_visibility(effect),"potential")
+
     def http_error(self, request, code=403, body=None, headers=None):
         import urllib.error
         return urllib.error.HTTPError(request.full_url, code, "SECRET-free-form-error", headers or {

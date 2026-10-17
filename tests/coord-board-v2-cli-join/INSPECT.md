@@ -158,8 +158,12 @@ compilation/tests. No local CLR/native/browser execution or live effect was perf
 Observation-only authorizer, product binding3/schema1, V1 transport and historical offline constructor
 retain their separate scope.
 
-Actual successor inspection must independently prove private Project 3 and private-repository Checks
-read capabilities with the selected caller credential. An `X-Accepted-Github-Permissions: checks=read`
+Qualify the selected caller's actual Project 3 reads and the repository evidence needed by each
+action. Existing credentials can support project and public check reads while a private item's checks
+remain unavailable. That item-specific gap is not a global project/schema/migration-preparation gate;
+retain it visibly and apply the typed action prerequisites without waiving qualification or merge
+checks. Full private-caller acceptance still requires its own successful private reads.
+An `X-Accepted-Github-Permissions: checks=read`
 header describes the endpoint permission; it does not prove a token type can configure it. GitHub's
 [fine-grained PAT limitations](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#fine-grained-personal-access-tokens-limitations)
 exclude the Checks API. Browser OAuth that reads checks can still lack the project scope. The CLI

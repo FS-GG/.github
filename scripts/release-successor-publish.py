@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import release_successor_journal as continuation_policy
 import datetime
 import fcntl
 import hashlib
@@ -37,9 +39,282 @@ ORIGINAL_SUCCESSOR_PREDECESSOR = "0.101.0"
 ORIGINAL_SUCCESSOR_REF = "refs/heads/fsgg/v2/journal/release/utel-rel-20"
 
 
+CONTINUATION_PROFILE = "utel-rel-22/original-0104-checkpoint/1"
+
+
+def continuation_checkpoint(raw):
+    def pairs(items):
+        value = {}
+        for key, item in items:
+            require(key not in value, "duplicate continuation checkpoint field")
+            value[key] = item
+        return value
+    require(type(raw) is str and len(raw.encode()) <= 1024, "continuation checkpoint text exceeds bound")
+    value = json.loads(raw, object_pairs_hook=pairs)
+    require(type(value) is dict and value == continuation_policy.CONTINUATION_CHECKPOINT,
+            "original .104 continuation checkpoint differs")
+    return value
+
+
+def continuation_window():
+    window = continuation_policy.CONTINUATION_WINDOW
+    require(type(window) is dict and set(window) == {"authorityEntries", "seconds", "visibilityProbes", "quotaFloor"},
+            ".104 continuation finite allocation has not been selected")
+    require(all(type(value) is int and value > 0 for value in window.values()), "continuation window bounds differ")
+    return dict(window)
+
+
+class ContinuationPublisherAPI:
+    """New invocation's application entries, separate from original exhaustion."""
+    def __init__(self, api, deadline, window, clock=time.monotonic):
+        self.api, self.deadline, self.window, self.clock = api, deadline, window, clock
+        self.attempted, self.succeeded = {}, {}
+
+    def __getattr__(self, name):
+        require(name in {"get", "post", "patch", "download_asset", "upload_asset", "download_continuation_result", "download_continuation_candidate"},
+                "continuation publisher method is outside remainder")
+        def call(*args):
+            require(self.clock() < self.deadline, "continuation publisher original deadline exhausted")
+            self.attempted[name] = self.attempted.get(name, 0) + 1
+            value = getattr(self.api, name)(*args)
+            require(self.clock() < self.deadline, "continuation publisher deadline expired during acquisition")
+            self.succeeded[name] = self.succeeded.get(name, 0) + 1
+            return value
+        return call
+
+    def report(self):
+        return {"attempted": dict(self.attempted), "succeeded": dict(self.succeeded),
+                "scope": "new publisher entries under original deadline/existing transport limits; no new broad provider cap; feed subprocess/downloads and redirects are separate"}
+
+
+def continuation_phase(report, label, ledger_api, publisher_api=None):
+    # Bounded snapshots in the existing result, not a second authority ledger.
+    rows = report.setdefault("continuationPhases", [])
+    require(len(rows) < 16 and len(label) <= 64, "continuation diagnostic phase bound exceeded")
+    row = {"phase": label, "authorityEntries": sum(ledger_api.attempted.values()),
+           "authorityByMethod": dict(ledger_api.attempted)}
+    if isinstance(publisher_api, ContinuationPublisherAPI):
+        row["publisherEntries"] = sum(publisher_api.attempted.values())
+        row["publisherByMethod"] = dict(publisher_api.attempted)
+    rows.append(row)
+
+
+def _continuation_original_run(api):
+    fixed = continuation_policy.CONTINUATION_PROOF
+    run = api.get(f"repos/{REPOSITORY}/actions/runs/{fixed['runId']}")
+    require(type(run.get("id")) is int and run["id"] == fixed["runId"] and run.get("workflow_id") == 362181999
+            and type(run.get("run_attempt")) is int and run["run_attempt"] == 1
+            and run.get("head_sha") == fixed["sourceSha"] and run.get("status") == "completed" and run.get("conclusion") == "success"
+            and run.get("path") == ".github/workflows/release-successor-publish.yml" and run.get("head_branch") == "main"
+            and run.get("event") == "workflow_dispatch" and run.get("actor", {}).get("login") == "EHotwagner"
+            and run.get("repository", {}).get("id") == 1269292704 and run.get("repository", {}).get("full_name") == REPOSITORY,
+            "original .104 terminal native run differs")
+    return run
+
+
+def _continuation_source(api, path, revision, digest):
+    value = api.get(f"repos/{REPOSITORY}/contents/{path}?ref={revision}")
+    require(value.get("encoding") == "base64" and isinstance(value.get("content"), str)
+            and hashlib.sha256(base64.b64decode(value["content"], validate=False)).hexdigest() == digest,
+            "immutable continuation source/control-flow binding differs")
+
+
+_CONTINUATION_PROOF_SEAL = object()
+
+
+class VerifiedContinuationProof(dict):
+    def __init__(self, seal, value):
+        require(seal is _CONTINUATION_PROOF_SEAL, "continuation proof requires original authenticated evidence")
+        super().__init__(value)
+
+
+def authenticate_continuation_proof(api):
+    fixed = continuation_policy.CONTINUATION_PROOF
+    _continuation_original_run(api)
+    artifact = api.get(f"repos/{REPOSITORY}/actions/artifacts/{fixed['artifactId']}")
+    require(artifact.get("id") == fixed["artifactId"] and artifact.get("name") == "release-successor-result"
+            and artifact.get("expired") is False and artifact.get("size_in_bytes") == fixed["archiveBytes"]
+            and artifact.get("digest") == "sha256:" + fixed["archiveSha256"]
+            and artifact.get("workflow_run", {}).get("id") == fixed["runId"]
+            and artifact["workflow_run"].get("head_sha") == fixed["sourceSha"], "original .104 result artifact differs")
+    expiry = datetime.datetime.fromisoformat(artifact["expires_at"].replace("Z", "+00:00"))
+    require(expiry.tzinfo is not None and expiry > datetime.datetime.now(datetime.timezone.utc), "original .104 proof expired")
+    raw = api.download_continuation_result()
+    require(len(raw) == fixed["archiveBytes"] and hashlib.sha256(raw).hexdigest() == fixed["archiveSha256"], "original .104 proof ZIP differs")
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        entries = archive.infolist()
+        require(len(entries) == 1 and entries[0].filename == "release-successor-result.json"
+                and not entries[0].flag_bits & 1 and not entries[0].is_dir()
+                and stat.S_IFMT(entries[0].external_attr >> 16) in (0, stat.S_IFREG)
+                and entries[0].file_size == fixed["memberBytes"], "original .104 proof sole member differs")
+        body = archive.read(entries[0])
+    require(hashlib.sha256(body).hexdigest() == fixed["memberSha256"], "original .104 proof result differs")
+    value = json.loads(body)
+    checkpoint = continuation_policy.CONTINUATION_CHECKPOINT
+    last, authority = value.get("lastObservedJournal", {}), value.get("authorityRequests", {})
+    require(value.get("schema") == "fsgg.release-successor-result/1" and value.get("profile") == ALLOWED_SUCCESSOR["profile"]
+            and value.get("execution") == {"sourceSha": fixed["sourceSha"], "runId": fixed["runId"], "runAttempt": "1", "operator": "EHotwagner"}
+            and value.get("candidate") == {**continuation_policy.CONTINUATION_CANDIDATE, "version": "0.104.0"}
+            and value.get("journalRef") == ALLOWED_SUCCESSOR["logicalRef"]
+            and value.get("disposition") == "checkpoint" and value.get("publicationComplete") is False and value.get("failure") is None
+            and {key:last.get(key) for key in checkpoint} == checkpoint
+            and last.get("effects") == continuation_policy.continuation_effects(28)
+            and value.get("lastDispatch") == {"effect": "qualification-asset:runtime", "state": "applied", "attempted": True}
+            and authority.get("ceiling") == 1500 and authority.get("attemptedByMethod") == {"get": 1276, "post": 196, "patch": 28}
+            and authority.get("blockedBeforeSend") == {"method": "get", "path": f"repos/{JOURNAL_REPOSITORY}/rulesets/24802698"},
+            "original .104 NoSend control-flow result differs")
+    # Immutable producer/import closure binds the admitted point BEFORE ReportingProvider.
+    for path, digest in CONTINUATION_SOURCE_PINS.items():
+        _continuation_source(api, path, fixed["sourceSha"], digest)
+    decision = continuation_policy.CONTINUATION_DECISION
+    _continuation_source(api, decision["path"], decision["revision"], decision["sha256"])
+    return VerifiedContinuationProof(_CONTINUATION_PROOF_SEAL, {"originalProof": dict(fixed), "channelProviderEntryNotReached": True})
+
+
+def continuation_native_census(api, ledger_api, execution):
+    require(publisher_context_authorized(api, execution["sourceSha"], execution["runId"], hosted_install=True),
+            "continuation native current source/run/actor/attempt differs")
+    _continuation_original_run(api)
+    for status in ("in_progress", "queued"):
+        page = api.get(f"repos/{REPOSITORY}/actions/workflows/release-successor-publish.yml/runs?status={status}&per_page=100")
+        require(type(page) is dict and type(page.get("total_count")) is int and 0 <= page["total_count"] < 100
+                and isinstance(page.get("workflow_runs"), list) and len(page["workflow_runs"]) == page["total_count"],
+                "continuation competing native entry census incomplete")
+        require([row.get("id") for row in page["workflow_runs"]] == ([execution["runId"]] if status == "in_progress" else []),
+                "another publisher entry is active or queued")
+    scope = ledger_api.get("installation/repositories?per_page=100")
+    require(scope.get("total_count") == 1 and isinstance(scope.get("repositories"), list)
+            and [(row.get("id"), row.get("full_name")) for row in scope["repositories"]] == [(1351660651, JOURNAL_REPOSITORY)],
+            "continuation Authority writer repository custody differs")
+
+
+def run_0104_continuation(manifest, journal, admission, provider, ledger_api, publisher_api, report, deadline,
+                          execution, proof, candidate_check, receipt_path, *, clock=time.monotonic, sleep=time.sleep):
+    window, effects = continuation_window(), ordered_effects(manifest)
+    require(type(proof) is VerifiedContinuationProof and proof.get("channelProviderEntryNotReached") is True and proof.get("originalProof") == continuation_policy.CONTINUATION_PROOF,
+            "authenticated original .104 NoSend proof is required")
+    require(manifest["descriptor"].get("sourceSha") == continuation_policy.CONTINUATION_CANDIDATE["sourceSha"]
+            and manifest["contentId"] == continuation_policy.CONTINUATION_CANDIDATE["contentId"], "original continuation candidate differs")
+    report.update(originalAuthorityEntries=1500, continuationWindow=dict(window),
+                  cumulativeAuthorityCeiling=1500 + window["authorityEntries"])
+    target = provider.provider if isinstance(provider, ReportingProvider) else provider
+    last = [None]
+    def guard(effect, action, *, before_claim=False, absent_payload=None):
+        require(clock() < deadline, "continuation original finite deadline expired")
+        candidate_check()
+        # The known state selects observations only; it carries no authorization.
+        # Fresh journal ownership is checked after all potentially slow reads.
+        expected_effects = continuation_policy.continuation_effects(28) if before_claim else last[0]["effects"]
+        for item in effects:
+            if expected_effects.get(item.identity) == "verified":
+                observed = provider.observe(item)
+                require(observed.state == "matched" and observed.observed_digest == item.target_digest, "continuation verified prefix drifted")
+        witness = target.continuation_release_witness()
+        if absent_payload is not None:
+            require((effect.identity == "promote" and witness["draft"] is True)
+                    or (effect.identity != "promote" and absent_payload["name"] not in witness["names"]),
+                    "continuation fresh presend absence changed")
+        current = journal.read()
+        if last[0] is not None:
+            require(journal._observed.state == last[0], "continuation checkpoint changed outside current action")
+        if before_claim:
+            checkpoint = continuation_policy.CONTINUATION_CHECKPOINT
+            require(journal._observed.head == checkpoint["logicalHead"]
+                    and hashlib.sha256(canonical(journal._observed.state)).hexdigest() == checkpoint["stateSHA256"],
+                    "original .104 checkpoint moved before claim")
+        else:
+            require(journal._observed.state.get("continuation") == permit.record, "continuation ownership marker changed")
+        # Native source/run/custody/protection checks follow receipt/prefix reads,
+        # rather than carrying their conclusion across those potentially slow I/O.
+        continuation_native_census(publisher_api, ledger_api, execution)
+        require(admission.authorize(manifest["contentId"], effect.identity, action, effect.request_digest), "continuation fresh action admission denied")
+        require(clock() < deadline, "continuation deadline expired during full verification")
+        return current
+    guard(effects[13], "dispatch", before_claim=True)
+    continuation_phase(report, "claimPrerequisites", ledger_api, publisher_api)
+    record = continuation_policy.continuation_record(execution)
+    report["journalMutationMayHaveOccurred"] = True
+    permit = journal.claim_continuation(journal.read(), record)
+    if isinstance(journal, ReportingJournal): journal.capture()
+    last[0] = json.loads(canonical(journal._observed.state))
+    target._continuation_permit = permit
+    report["continuationClaim"] = {"logicalHead": permit.head, "execution": dict(execution)}
+    continuation_phase(report, "claimReadback", ledger_api, publisher_api)
+    probes = 0
+    for effect in effects[13:]:
+        current = guard(effect, "dispatch")
+        observed = provider.observe(effect)
+        require(observed.state in {"absent", "matched"} and (observed.state != "matched" or observed.observed_digest == effect.target_digest),
+                "continuation remainder observation mismatched or unknown")
+        state = current.effects.get(effect.identity)
+        if observed.state == "absent":
+            if state is None:
+                current = guard(effect, "intent")
+                require(journal.compare_and_swap(current, effect.identity, "intent"), "continuation intent CAS conflict")
+                last[0] = json.loads(canonical(journal._observed.state))
+            else: require(effect.identity == "channel-asset" and state == "intent", "continuation cannot resend an existing intent")
+            payload = target.prepare_continuation_asset(effect) if effect.identity != "promote" else {"releaseId": 416097241, "draft": False, "make_latest": "true"}
+            witness = target.continuation_release_witness()
+            require((effect.identity == "promote" and witness["draft"] is True)
+                    or (effect.identity != "promote" and payload["name"] not in witness["names"]), "continuation presend absence changed")
+            receipt = {"schema": "fsgg.release-successor-presend/1", "effect": effect.identity, "execution": execution,
+                       "originalProof": proof, "claimHead": permit.head, "payload": payload, "absence": witness,
+                       "request": {"method": "PATCH" if effect.identity == "promote" else "POST", "releaseId": 416097241}}
+            path = receipt_path.with_name(receipt_path.name + "-" + effect.identity + ".json")
+            raw = canonical(receipt);require(len(raw) <= 16384, "continuation presend receipt exceeds bound")
+            with path.open("xb") as stream:
+                stream.write(raw)
+                stream.flush()
+                os.fsync(stream.fileno())
+            directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+            require(path.read_bytes() == raw, "continuation presend receipt independent readback differs")
+            report["continuationPresend"] = {"effect": effect.identity, "sha256": hashlib.sha256(raw).hexdigest(), "payload": payload}
+            permit.consume(effect.identity)
+            try:
+                guard(effect, "dispatch", absent_payload=payload)
+                if effect.identity != "promote": target._continuation_asset_path(effect)
+                outcome = provider.dispatch(effect)
+            finally: permit.finish_dispatch()
+            require(outcome.state == "applied", "continuation send response unconfirmed; preserve original intent without retry")
+            continuation_phase(report, effect.identity + ":dispatch", ledger_api, publisher_api)
+            while True:
+                require(clock() < deadline and probes < window["visibilityProbes"], "continuation finite visibility window exhausted")
+                probes += 1;visible = target.continuation_visibility(effect)
+                require(visible in {"absent", "potential"}, "continuation visibility is unknown")
+                report["continuationVisibilityProbes"] = probes
+                if visible == "potential": break
+                if deadline - clock() <= 5 or probes >= window["visibilityProbes"]:
+                    raise Refused("continuation finite absence observation exhausted; original intent retained")
+                sleep(5)
+        else:
+            require(state == "intent", "preexisting continuation effect is outside retained intent")
+            # Matching readback settles without a send, and still retires this
+            # local permission so it cannot be used after that settlement.
+            permit.consume(effect.identity)
+            permit.finish_dispatch()
+        current = guard(effect, "settle");observed = provider.observe(effect)
+        require(observed.state == "matched" and observed.observed_digest == effect.target_digest, "continuation independent semantic readback failed")
+        require(journal.compare_and_swap(current, effect.identity, "verified"), "continuation settlement CAS conflict")
+        last[0] = json.loads(canonical(journal._observed.state))
+        continuation_phase(report, effect.identity + ":settled", ledger_api, publisher_api)
+    guard(effects[-1], "settle")
+    require(journal._observed.state["generation"] == 34 and journal._observed.state["effects"] == {item.identity:"verified" for item in effects},
+            "continuation final generation or full effect readback differs")
+    continuation_phase(report, "finalReadback", ledger_api, publisher_api)
+    report["cumulativeAuthorityEntries"] = 1500 + sum(ledger_api.attempted.values())
+    return "complete"
+
+
+CONTINUATION_SOURCE_PINS = {'scripts/authority-state-import.py': 'ccf87a351daa6e83fe313a09bde0854c88abae54146eb11e24c0903c014f5197', 'scripts/fsgg_feed.py': 'f7650429432417af72168c288cdee347b338328848870cb4f2f18d6b62d0733f', 'scripts/release-successor-publish.py': '41173b36b38787f3662623942cfc405fddafeede34b7211f795d728766082fe3', 'scripts/release_successor_admission.py': '17073aa84dcec104742bc507af5b8f82ba08e1e07ba24aa05149238f60a490f6', 'scripts/release_successor_execution.py': '0666ff5e3c3cf8064f274899184568942eeb8c7debe818e5d290f36fd4bd1677', 'scripts/release_successor_journal.py': 'bef65fbeac8a439a2cdad5d7c3f942a66b5fed11ced58f8e955d7e4ca5370242', 'scripts/release_successor_provider.py': '85fecfc4e47bf5158c73b3e573479ebf9dc76a619037caba8fdfc6f027c3d134'}
+
+
 def selected_release_binding(args):
     """New ordinary source cut; explicit historical profiles keep original bindings."""
-    if getattr(args, "suspended_0103_successor", False):
+    if getattr(args, "suspended_0103_successor", False) or getattr(args, "continue_original_0104_checkpoint", False):
         require(not any(getattr(args, flag, False) for flag in ("original_0103_candidate",
             "recover_original_0103_tag_intent", "recover_original_successor_checkpoint", "recovery_checkpoint",
             "repeat_original_nuget_kit_intent", "recover_original_runtime_intent")), "literal .104 profile conflicts")
@@ -1550,7 +1825,11 @@ def run_original_runtime_recovery(manifest, journal, admission, provider, ledger
 
 def execute_publisher(args, report):
     version, predecessor, selected_ref = selected_release_binding(args)
-    forward_deadline = time.monotonic() + 45 * 60
+    continuation = bool(getattr(args, "continue_original_0104_checkpoint", False))
+    window = continuation_window() if continuation else None
+    if continuation:
+        report["cumulativeAuthorityCeiling"] = continuation_policy.CONTINUATION_PROOF["originalAuthorityEntries"] + window["authorityEntries"]
+    forward_deadline = time.monotonic() + (window["seconds"] if continuation else 45 * 60)
     original_0103 = validate_original_0103_request(args)
     original_tag_recovery = bool(getattr(args, "recover_original_0103_tag_intent", False))
     runtime_recovery = getattr(args, "recover_original_runtime_intent", False)
@@ -1566,7 +1845,13 @@ def execute_publisher(args, report):
     successor_checkpoint = bool(getattr(args, "recover_original_successor_checkpoint", False))
     expected_checkpoint = getattr(args, "expected_checkpoint", None)
     require(not successor_checkpoint or args.publish, "original successor checkpoint requires publish")
-    require(successor_checkpoint == bool(expected_checkpoint), "expected checkpoint is required only for original successor recovery")
+    require((successor_checkpoint or continuation) == bool(expected_checkpoint), "expected checkpoint requires the selected exact recovery")
+    if continuation:
+        require(args.publish and not args.preflight_only, ".104 continuation requires explicit publish")
+        require(continuation_checkpoint(expected_checkpoint) == continuation_policy.CONTINUATION_CHECKPOINT
+                and (args.candidate_run_id, args.candidate_artifact_id, args.candidate_archive_sha256) ==
+                tuple(continuation_policy.CONTINUATION_CANDIDATE[key] for key in ("runId", "artifactId", "archiveSha256")),
+                "original .104 continuation checkpoint/candidate tuple differs")
     if successor_checkpoint:
         require((args.candidate_run_id, args.candidate_artifact_id, args.candidate_archive_sha256) ==
                 (SUCCESSOR_CHECKPOINT_CANDIDATE["runId"], SUCCESSOR_CHECKPOINT_CANDIDATE["artifactId"], SUCCESSOR_CHECKPOINT_CANDIDATE["archiveSha256"]),
@@ -1581,15 +1866,30 @@ def execute_publisher(args, report):
     report["execution"] = {"sourceSha": publisher_sha, "runId": run_id,
                            "runAttempt": os.environ["GITHUB_RUN_ATTEMPT"], "operator": operator}
     report["lastSuccessfulStage"] = "publisher-context"
-    if selected_ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
+    continuation_ledger = None
+    if continuation:
+        # This execute process counts startup, cold history and every later edge
+        # together. The hosted pre-mint reader is a separate process, not a reset
+        # or a silently shared counter. No credential acquisition happens here.
+        continuation_ledger = CountedAuthorityAPI(
+            RuntimeDeadlineAuthority(GitHubAPI(os.environ["ORDINARY_LEDGER_TOKEN"]), forward_deadline, time.monotonic),
+            ceiling=window["authorityEntries"], quota_floor=window["quotaFloor"])
+        report["authorityCounter"] = continuation_ledger
+        continuation_ledger.admit_quota()
+        precredential_release_check(args, continuation_ledger)
+        continuation_phase(report, "startup", continuation_ledger)
+    elif selected_ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
         precredential_release_check(args, GitHubAPI(os.environ["GH_TOKEN"]))
     require(not args.workdir.exists(), "candidate workdir already exists")
     args.workdir.mkdir(parents=True)
 
     github_token = os.environ["GH_TOKEN"]
     ledger_token = os.environ["ORDINARY_LEDGER_TOKEN"]
-    nuget_key = os.environ["NUGET_API_KEY"]
+    nuget_key = "" if continuation else os.environ["NUGET_API_KEY"]
     api = GitHubAPI(github_token)
+    if continuation:
+        api = ContinuationPublisherAPI(api, forward_deadline, window)
+        report["publisherCounter"] = api
     if original_tag_recovery:
         api = OriginalTagPublisherAPI(api, forward_deadline)
         report["publisherCounter"] = api
@@ -1612,16 +1912,22 @@ def execute_publisher(args, report):
     with archive.open("xb") as stream:
         if original_tag_recovery:
             api.claim("candidateArchive")
-        subprocess.run(
-            ["gh", "api", f"repos/{REPOSITORY}/actions/artifacts/{args.candidate_artifact_id}/zip"],
-            stdout=stream, check=True,
-        )
+        if continuation:
+            raw = api.download_continuation_candidate()
+            require(len(raw) == 33326837 and hashlib.sha256(raw).hexdigest() == continuation_policy.CONTINUATION_CANDIDATE["archiveSha256"],
+                    "original .104 candidate ZIP differs")
+            stream.write(raw)
+        else:
+            subprocess.run(
+                ["gh", "api", f"repos/{REPOSITORY}/actions/artifacts/{args.candidate_artifact_id}/zip"],
+                stdout=stream, check=True,
+            )
     candidate = args.workdir / "candidate"
     verifier = pathlib.Path(__file__).with_name("release-successor-artifact.py")
     subprocess.run(
         [sys.executable, str(verifier), "--artifact-json", str(artifact_json), "--run-json", str(run_json),
          "--archive", str(archive), "--source-sha", candidate_source, "--output", str(candidate)]
-        + (["--suspended-0103-successor"] if getattr(args, "suspended_0103_successor", False) else []),
+        + (["--suspended-0103-successor"] if getattr(args, "suspended_0103_successor", False) or continuation else []),
         check=True,
     )
     manifest_path = candidate / "release-manifest.json"
@@ -1657,10 +1963,10 @@ def execute_publisher(args, report):
         "candidateArchiveSha256": args.candidate_archive_sha256,
         "operator": operator,
     }
-    ledger_api = GitHubAPI(ledger_token)
+    ledger_api = continuation_ledger if continuation else GitHubAPI(ledger_token)
     historical_recovery = args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery
     # Ordinary budget is independently calibrated; it was not enforced by old runs.
-    if not historical_recovery:
+    if not historical_recovery and not continuation:
         ledger_api = CountedAuthorityAPI(ledger_api, ceiling=ORDINARY_AUTHORITY_CALL_CEILING,
                                          quota_floor=ORDINARY_AUTHORITY_QUOTA_FLOOR)
         report["authorityCounter"] = ledger_api
@@ -1673,7 +1979,7 @@ def execute_publisher(args, report):
         report["stage"] = "Authority-quota"
         ledger_api.admit_quota()
         report["lastSuccessfulStage"] = "Authority-quota"
-    if not historical_recovery:
+    if not historical_recovery and not continuation:
         # The one original forward clock already began before authentication.
         # Guard dependent genesis mutations as well as later advances.
         ledger_api.api = RuntimeDeadlineAuthority(ledger_api.api, forward_deadline, time.monotonic)
@@ -1682,7 +1988,9 @@ def execute_publisher(args, report):
         suspension.authorize(selected_ref, version)
     provider.suspension = suspension
     provider.logical_ref = selected_ref
-    journal = ProtectedReleaseJournal(ledger_api, ref=selected_ref, main_directory=True, suspension=suspension)
+    execution = {"runId": run_id, "attempt": 1, "sourceSha": publisher_sha, "operator": operator}
+    journal = ProtectedReleaseJournal(ledger_api, ref=selected_ref, main_directory=True, suspension=suspension,
+                                      continuation_owner=execution if continuation else None)
     journal = ReportingJournal(journal, report, detailed=not historical_recovery)
     provider = ReportingProvider(provider, report)
     admission = ProtectedPublisherAdmission(publisher_admission, ledger_api, selected_ref, suspension=suspension)
@@ -1695,6 +2003,32 @@ def execute_publisher(args, report):
             check=True, env={**os.environ, "GITHUB_TOKEN": github_token},
         )
     report["stage"] = "journal-preparation"
+    if continuation:
+        continuation_phase(report, "candidateAuthenticated", ledger_api, api)
+        proof = authenticate_continuation_proof(api)
+        report["originalProofAuthenticated"] = True
+        continuation_phase(report, "proofAuthenticated", ledger_api, api)
+        candidate_pin = continuation_policy.CONTINUATION_CANDIDATE
+        require(candidate_source == candidate_pin["sourceSha"] and manifest["contentId"] == candidate_pin["contentId"],
+                "original .104 candidate authentication differs")
+        comparison = api.get(f"repos/{REPOSITORY}/compare/{candidate_source}...{publisher_sha}")
+        require(comparison.get("status") == "ahead" and comparison.get("merge_base_commit", {}).get("sha") == candidate_source,
+                "continuation executor does not descend from immutable candidate source")
+        require_clean_installer_source(publisher_sha)
+        journal.read();journal.validate_intent(intent)
+        continuation_phase(report, "coldJournalRead", ledger_api, api)
+        expected_files = {}
+        with zipfile.ZipFile(archive) as original:
+            for entry in original.infolist():
+                if entry.filename != "release-manifest.json":expected_files[entry.filename] = hashlib.sha256(original.read(entry)).hexdigest()
+        def candidate_check():
+            require(hashlib.sha256(archive.read_bytes()).hexdigest() == candidate_pin["archiveSha256"], "original candidate archive changed")
+            current = json.loads(manifest_path.read_bytes())
+            require(current.get("descriptor") == manifest["descriptor"] and current.get("contentId") == manifest["contentId"], "original descriptor changed")
+            require(all(not (candidate/name).is_symlink() and hashlib.sha256((candidate/name).read_bytes()).hexdigest() == digest
+                        for name,digest in expected_files.items()), "original candidate members changed")
+        return run_0104_continuation(manifest, journal, admission, provider, ledger_api, api, report, forward_deadline,
+                    execution, proof, candidate_check, args.result_path.with_name(args.result_path.stem + "-continuation"))
     if prepare_release_journal(journal, ledger_api, admission, provider, api, manifest, intent,
                                candidate_source, publisher_sha, args.preflight_only, uniqueness,
                                recovery_checkpoint=args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery or successor_checkpoint,
@@ -1767,6 +2101,8 @@ def authentication_only_main():
 
 
 def precredential_release_check(args, api):
+    if getattr(args, "continue_original_0104_checkpoint", False):
+        continuation_window()
     version, _, logical_ref = selected_release_binding(args)
     if logical_ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
         protection, binding = authority_protection()
@@ -1778,7 +2114,7 @@ def suspension_check_main():
     parser = argparse.ArgumentParser(description="Read installed release suspension before credential exchange")
     parser.add_argument("--check-release-suspension", action="store_true", required=True)
     profile = parser.add_mutually_exclusive_group()
-    for name in ("suspended-0103-successor", "original-0103-candidate", "recover-original-0103-tag-intent",
+    for name in ("suspended-0103-successor", "continue-original-0104-checkpoint", "original-0103-candidate", "recover-original-0103-tag-intent",
                  "recovery-checkpoint", "repeat-original-nuget-kit-intent", "recover-original-runtime-intent",
                  "recover-original-successor-checkpoint"):
         profile.add_argument("--" + name, action="store_true")
@@ -1793,7 +2129,7 @@ def suspension_check_main():
 
 
 
-_INSTALL_FLAGS = ("publish", "qualify_original_tag_authentication_only", "suspended_0103_successor",
+_INSTALL_FLAGS = ("publish", "continue_original_0104_checkpoint", "qualify_original_tag_authentication_only", "suspended_0103_successor",
     "original_0103_candidate", "recover_original_0103_tag_intent", "recovery_checkpoint",
     "repeat_original_nuget_kit_intent", "recover_original_runtime_intent", "recover_original_successor_checkpoint")
 _INSTALL_COORDINATES = ("candidate_run_id", "candidate_artifact_id", "candidate_archive_sha256")
@@ -1820,7 +2156,13 @@ def validate_workflow_inputs(value):
     require(all(re.fullmatch(r"[1-9][0-9]{0,19}", value[key]) for key in _INSTALL_COORDINATES[:2])
             and bool(re.fullmatch(r"[0-9a-f]{64}", value["candidate_archive_sha256"])), "publication candidate coordinates are required")
     require(sum(value[key] for key in _INSTALL_FLAGS[1:]) <= 1, "publication selectors conflict")
-    require(bool(value["expected_checkpoint"]) == value["recover_original_successor_checkpoint"], "expected checkpoint selection differs")
+    continuation = value["continue_original_0104_checkpoint"]
+    require(bool(value["expected_checkpoint"]) == (value["recover_original_successor_checkpoint"] or continuation), "expected checkpoint selection differs")
+    if continuation:
+        continuation_window()
+        require(value["publish"] and continuation_checkpoint(value["expected_checkpoint"]) == continuation_policy.CONTINUATION_CHECKPOINT
+                and tuple(value[key] for key in _INSTALL_COORDINATES) == tuple(str(continuation_policy.CONTINUATION_CANDIDATE[key]) for key in ("runId", "artifactId", "archiveSha256")),
+                "original .104 continuation inputs differ")
     if value["expected_checkpoint"]:
         expected = json.loads(value["expected_checkpoint"])
         require(type(expected) is dict and set(expected) == {"generation", "logicalHead", "stateSHA256"}
@@ -1845,7 +2187,7 @@ def workflow_inputs():
     value = json.loads(raw, object_pairs_hook=pairs)
     # Native Actions may omit declared optional strings whose default is empty.
     # Restore only that wire omission; the closed semantic validator and digest
-    # still receive all fifteen fields with their original exact types/values.
+    # still receive all sixteen fields with their original exact types/values.
     if type(value) is dict:
         for key in (*_INSTALL_COORDINATES, "expected_checkpoint", "expected_authority_main"):
             value.setdefault(key, "")
@@ -2158,7 +2500,8 @@ def main() -> int:
                          help="Recover only the authenticated original generation26 runtime intent; one upload or matched settlement")
     profile.add_argument("--recover-original-successor-checkpoint", action="store_true",
                          help="Continue the exact original .102 journal20 candidate, at most four advances and stop on waiting")
-    parser.add_argument("--expected-checkpoint", help="Exact admitted generation/logicalHead/stateSHA256 JSON for original .102 continuation")
+    profile.add_argument("--continue-original-0104-checkpoint", action="store_true", help="One claimed original .104 remainder; no package push")
+    parser.add_argument("--expected-checkpoint", help="Exact admitted generation/logicalHead/stateSHA256 JSON for the selected exact continuation")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--preflight-only", action="store_true")
     mode.add_argument("--publish", action="store_true")
@@ -2166,15 +2509,19 @@ def main() -> int:
     result_path = args.result_path or args.workdir.with_name(args.workdir.name + "-result.json")
     args.result_path = result_path
     report = {"schema": "fsgg.release-successor-result/1",
-              "profile": ALLOWED_SUCCESSOR["profile"] if args.suspended_0103_successor else ORIGINAL_0103_TAG_PROFILE if args.recover_original_0103_tag_intent else ORIGINAL_0103_PROFILE if args.original_0103_candidate else SUCCESSOR_CHECKPOINT_PROFILE if args.recover_original_successor_checkpoint else RUNTIME_RECOVERY_PROFILE if args.recover_original_runtime_intent else KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
+              "profile": CONTINUATION_PROFILE if args.continue_original_0104_checkpoint else ALLOWED_SUCCESSOR["profile"] if args.suspended_0103_successor else ORIGINAL_0103_TAG_PROFILE if args.recover_original_0103_tag_intent else ORIGINAL_0103_PROFILE if args.original_0103_candidate else SUCCESSOR_CHECKPOINT_PROFILE if args.recover_original_successor_checkpoint else RUNTIME_RECOVERY_PROFILE if args.recover_original_runtime_intent else KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
               "candidate": {"runId": args.candidate_run_id, "artifactId": args.candidate_artifact_id,
                             "archiveSha256": args.candidate_archive_sha256},
-              "execution": None, "originalPublisher": {"runId": ORIGINAL_0103_TAG_CHECKPOINT["runId"], "runAttempt": 1} if args.recover_original_0103_tag_intent else {"runId": 38133108945, "runAttempt": 1, "jobId": 114451349714} if args.recover_original_successor_checkpoint else {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214} if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or args.recover_original_runtime_intent else None,
+              "execution": None, "originalPublisher": {"runId": continuation_policy.CONTINUATION_PROOF["runId"], "runAttempt": 1} if args.continue_original_0104_checkpoint else {"runId": ORIGINAL_0103_TAG_CHECKPOINT["runId"], "runAttempt": 1} if args.recover_original_0103_tag_intent else {"runId": 38133108945, "runAttempt": 1, "jobId": 114451349714} if args.recover_original_successor_checkpoint else {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214} if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or args.recover_original_runtime_intent else None,
               "journalRef": selected_release_binding(args)[2], "startingJournal": None, "lastObservedJournal": None,
               "iterationsAttempted": 0, "lastAdvanceResult": None, "lastDispatch": None,
               "journalMutationMayHaveOccurred": False, "stage": "preparation",
               "lastSuccessfulStage": None, "disposition": "failed-or-unknown",
               "publicationComplete": False, "failure": None}
+    if args.continue_original_0104_checkpoint:
+        report["originalAuthorityEntries"] = continuation_policy.CONTINUATION_PROOF["originalAuthorityEntries"]
+        report["originalProofAuthenticated"] = False
+        report["cumulativeAuthorityCeiling"] = None
     exit_code = 1
     try:
         require(not result_path.exists() and not result_path.is_symlink(), "publisher result path already exists")
@@ -2184,7 +2531,9 @@ def main() -> int:
         exit_code = 0
     except AuthorityQuotaWaiting as error:
         report["disposition"] = "checkpoint"
-        report["pendingReason"] = "Authority quota or finite request budget unavailable; fresh bounded observation required"
+        report["pendingReason"] = ("continuation finite request window unavailable; no permission renewal or automatic resume"
+                                   if args.continue_original_0104_checkpoint else
+                                   "Authority quota or finite request budget unavailable; fresh bounded observation required")
         report["quotaWaiting"] = error_chain(error)
         exit_code = 0
     except BaseException as error:
@@ -2192,6 +2541,9 @@ def main() -> int:
         diagnostic(report, f"release successor refused: {error}", "primary diagnostic")
     counter = report.pop("authorityCounter", None)
     report["authorityRequests"] = counter.report() if counter is not None else None
+    if args.continue_original_0104_checkpoint:
+        report["continuationAuthorityEntries"] = sum(counter.attempted.values()) if counter is not None else 0
+        report["cumulativeAuthorityEntries"] = report["originalAuthorityEntries"] + report["continuationAuthorityEntries"]
     publisher_counter = report.pop("publisherCounter", None)
     if publisher_counter is not None:
         report["publisherRequests"] = publisher_counter.report()

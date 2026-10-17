@@ -1529,3 +1529,116 @@ exhaustion results nor native whole-job timing qualification. The nominal61-entr
 promise that delayed visibility or additional native reads fit; exhaustion still stops the original
 operation at its truthful checkpoint. Preserve movement/refusal controls at all four opening/closing
 reads and after object creation, plus old original bytes and unrelated entries.
+
+### Selected one-use continuation of the original .104 checkpoint
+
+The first native .104 publisher invocation completed as an incomplete checkpoint after exhausting
+its unchanged1500-entry Authority ceiling. Thirteen effects are verified; the original channel
+intent remains, followed by manifest and promotion. Native job success is not publication success.
+The retained original source, result and call-edge ordering establish only that this channel sender
+was not entered. Absence of an asset, or a successful prior workflow, never supplies that proof.
+The accepted84e suspension decision, installed disposition, old .103 Unknown and all inherited
+reservations remain unchanged. Do not rebuild the candidate, allocate another release, reset the
+journal, or reinterpret the original exhausted budget as available capacity.
+
+Select a current-only continuation through the existing publisher, provider and SAME journal22.
+Before any claim, authenticate the original native workflow/run/attempt/operator/source, original
+artifact metadata and bounded ZIP/exact sole result member against source-owned identities. Bind
+the immutable accepted candidate and exact generation28/logical head/state digest/13-verified
+prefix/channel intent. Review prose or caller-supplied JSON is not native evidence. Freshly check
+current executor source/main/native invocation, original terminal state, competing entries,
+suspension, protected Authority policy, original .103 state, siblings and complete provider prefix.
+
+Use the existing guarded CAS to add exactly one closed immutable continuation record in a
+metadata-only generation28-to29 transition, leaving every effect unchanged. Bind original proof,
+candidate and checkpoint, this decision, authenticated current run/attempt1/operator/executor source,
+remaining action set and source-fixed finite bounds. Reject any existing claim, extra or malformed
+metadata, wrong tuple or different transition. Later transitions must preserve this record exactly;
+it cannot be removed, edited, transferred or renewed. Existing old readers must refuse the new
+metadata-only transition rather than gain a compatibility fallback. Other profiles and invocations
+must refuse a consumed continuation. Retain both fresh CAS sandwiches, nonforced parent-preserving
+PATCH and independent complete readback.
+
+Only a clear successful claim response AND independently matching readback produce a private
+same-invocation first-send capability. An uncertain response, lost readback or crash stops effects,
+even if a later reader finds the claim. The capability authorizes the first send of the ORIGINAL
+channel intent only and is consumed before delegation. A second local attempt, rerun or different
+invocation cannot recover it. Fresh admission must still establish exact candidate/request identity,
+release/tag/draft/asset population and absence witness, claim ownership, source/run, suspension and
+protection immediately beside dispatch. An independently matching channel may settle without send;
+mismatch or uncertainty refuses. Every uncertain dispatched outcome retains its original intent.
+
+Factor existing source-owned channel and promoted-manifest preparation before exclusive bounded
+pre-send custody. Freeze/hash those exact bytes, durably retain the request/claim/proof/native
+witness, and send that same prepared path. Do not accept arbitrary caller payloads or regenerate a
+timestamped payload after uncertainty. Restrict this branch to channel, manifest and promotion;
+no package push, tag, draft recreation, replacement asset or new version is reachable. Do not issue
+a new NuGet publication credential for this remainder. Existing ordinary modes retain their own
+credential and admission contracts. Use a closed continuation selection and the existing checkpoint
+input without changing the historical .102 recovery selection.
+
+While awaiting visibility, probe only the exact pending effect within the same fixed deadline and
+probe bound. Absent-only probes never verify an effect or carry mutation authority. Identity drift,
+duplicates, partial pages, malformed responses and read errors are not absence. Potential presence
+requires the complete semantic observer and fresh full prefix/journal/native guards before settlement
+or another action. Take immediate independent readback before sleeping; wait only on actual absence.
+Final completion requires full original sixteen-effect verification and original/sibling preservation.
+Expected generations are claim29, channel settlement30, manifest intent31/settlement32 and promotion
+intent33/settlement34: six CAS writes including claim, at most three remaining provider sends.
+
+The additional finite window is a separately selected remainder, not renewal of the exhausted
+original. Report original1500 plus actual continuation consumption cumulatively; Authority counts
+are distinct from provider/feed/issuer requests. Engineering targets500 Authority entries,15minutes
+and32 visibility probes are NOT admitted allowances. Before fixing executable bounds, census the
+cold actual caller including native proof/candidate acquisition, full28-state history, startup,
+claim, six CAS writes, exact payload preparation/three sends, final34/full16/original+sibling
+readback and reporting. Preserve counter equality and first-cause/cleanup separation. Report any
+required headroom rather than enlarging a limit silently. Actual native timing remains unqualified.
+
+Qualify authentic completion and already-matching zero-send, duplicate/racing claim, all identity
+and proof mutations, lost response/readback and crashes, second local/invocation attempts, immutable
+marker enforcement, partial/duplicate witnesses, applied-but-Unknown, delayed visibility without
+repeated whole-prefix reads, drift during waiting, exhaustion/deadline at each boundary, final
+readback failure and historical-profile refusals. Independent source review, normal protected CI
+and an explicit fresh root-selected operation precede any new effect. This source decision grants
+no dispatch, installed update, Project3 mutation, registry promotion or consumer adoption.
+
+The consumed-marker refusal occurs at journal read and at the provider effect fence. The existing
+pre-issuer reader checks source/native/suspension prerequisites, not this journal marker. Another
+ordinary invocation can therefore mint its existing credentials before journal refusal; it cannot
+obtain a second claim or effect permission. Retain credential cleanup and describe its actual
+outcome separately. Do not claim pre-credential marker refusal or add automatic follow-on dispatch.
+
+For SOURCE qualification, select750 new Authority entries: the measured cold624-entry path plus126
+entries of headroom. Keep quota floor1800 and a single15-minute inner deadline captured at continuation
+entry before proof/candidate acquisition. The total visibility-probe ceiling is32, with five-second
+waits only for actual absence. The existing60-minute native hard job timeout remains; inner checks
+cannot interrupt an already blocking child and do not extend that outer limit. Original1500 remains
+exhausted; report original1500 plus actual new consumption, with a maximum2250 Authority entries across
+these two windows. The measured499 publisher entries and138 separate feed acquisitions remain visible
+and distinct; no new global request bound or provider ceiling is inferred. Qualify the full32-probe
+case and refusal/Unknown/claim-loss paths under750. Any deficit stops qualification for disposition,
+not silent enlargement. These are executable source-profile limits, not selection of an actual
+native invocation, native timing acceptance or publication completion.
+
+The selected window was based on the initial cold actual-caller census of624 Authority entries,
+499 publisher entries and138 separate feed acquisitions. The repaired caller removes duplicated
+unvalidated visibility reads:624 Authority entries remain, with494 publisher entries and138 feed
+acquisitions. Full32-probe success leaves Authority consumption unchanged; the33rd-required-probe
+case refuses. These are inert external-port measurements of the actual caller, not native network
+latency, a global request ceiling or an operational grant. Independent fixture post-assertions of
+sibling preservation occur outside the measured production caller; the source preserves those
+entries through its existing base-tree overlays. Original1500 consumption and500-target exhaustion
+remain retained. The ordinary full-sixteen-effect fixture now observes1471 Authority entries under
+its unchanged1500 ceiling after adding the claimed-marker sender fence; historical1439 evidence is
+not repinned or represented as a new native fit result.
+
+Keep the continuation source delivery separate from the incidental Game0.5 registry/projection
+update. Game0.5 publication and its exact installed qualifier remain genuinely accepted in their
+owning repository. Retain that reviewed registry delta for the later registry reconciliation after
+actual .104 coherent promotion. The existing feed gate compares package-version with newest feed
+packages: genuine partial .104 feed effects already exceed the still-correct promoted .102 inventory,
+so its original failure must not be relabelled as complete publication or hidden behind an exception.
+The continuation helper changes none of that workflow's existing path subjects; this scope separation
+changes no checker, selector or required context. Every check required by the final diff must pass
+normally. No .104 inventory flip, promotion, updater or adoption is inferred.
