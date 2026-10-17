@@ -192,3 +192,23 @@ module V2MigrationTests =
         let prepared = prepare scope snapshot |> get
         Assert.True(Result.isError (connection.Dispatch(prepared, prepared.Changes.Head, DateTimeOffset.UtcNow.AddMinutes(-1.0))))
         Assert.Equal(0, calls)
+
+    [<Fact>]
+    let ``migration native read classifies errors before missing malformed or ambiguous data`` () =
+        let bodies: string list =
+            [ """{"errors":[{"message":"synthetic native error"}]}""";
+              """{"errors":[{"message":"synthetic native error"}],"data":null}""";
+              """{"errors":[{"message":"synthetic native error"}],"data":7}""";
+              """{"errors":[{"message":"synthetic native error"}],"data":{"node":{},"node":{}}}""";
+              """{"errors":null,"data":7}""";
+              """{"errors":{}}""" ]
+        for body in bodies do
+            let native = Native snapshot
+            native.Transform <- fun (_: Transport.Request) (response: Transport.Response) ->
+                Ok({ response with Body = body })
+            use connection = native.Connection()
+            match collect connection.Reads scope with
+            | Error error -> Assert.Contains("has errors or malformed errors", Errors.explain error)
+            | Ok _ -> failwith "native errors cannot be hidden by missing or malformed data"
+            Assert.Single native.Requests |> ignore
+            Assert.Empty native.Mutations

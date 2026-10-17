@@ -32,14 +32,17 @@ module internal GraphQlEnvelope =
                 | JsonValueKind.Array -> node.EnumerateArray() |> Seq.forall distinct
                 | _ -> true
             let root = document.RootElement
-            if root.ValueKind <> JsonValueKind.Object || not (distinct root) then
+            if root.ValueKind <> JsonValueKind.Object then
                 invalidArg "body" "ambiguous envelope"
-            if root.GetProperty("data").ValueKind <> JsonValueKind.Object then
-                invalidArg "body" "complete data object required"
             match root.TryGetProperty "errors" with
-            | false, _ -> ClearSuccess
-            | true, errors when errors.ValueKind = JsonValueKind.Array && errors.GetArrayLength() = 0 -> ClearSuccess
-            | _ -> ClearErrors
+            | true, errors when errors.ValueKind <> JsonValueKind.Array || errors.GetArrayLength() <> 0 ->
+                ClearErrors
+            | _ ->
+                if not (distinct root) then
+                    invalidArg "body" "ambiguous envelope"
+                if root.GetProperty("data").ValueKind <> JsonValueKind.Object then
+                    invalidArg "body" "complete data object required"
+                ClearSuccess
         with _ -> ClearMalformed
 
     let tryMeter (body: string) =
