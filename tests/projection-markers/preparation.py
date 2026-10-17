@@ -28,8 +28,15 @@ class Preparation(unittest.TestCase):
             shutil.copytree(ROOT / relative, self.root / relative)
         scripts = self.root / "scripts"
         scripts.mkdir()
-        for name in ("prepare-registry", "generate-projections", "generate-driver-manifest", "fsgg-skill-registry-check"):
+        for name in ("prepare-registry", "generate-projections", "generate-driver-manifest", "fsgg-skill-registry-check", "repos.sh"):
             shutil.copy2(ROOT / "scripts" / name, scripts / name)
+        kit = subprocess.check_output(["bash", str(ROOT / "scripts/repos.sh"), "kit", "--field", "source"], text=True)
+        for relative in kit.splitlines():
+            source = ROOT / relative
+            if source.is_file():
+                target = self.root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
         roster = subprocess.check_output(["bash", str(ROOT / "scripts/generate-projections"), "--list"], text=True)
         for line in roster.splitlines():
             relative = line.split("\t")[1]
@@ -46,6 +53,48 @@ class Preparation(unittest.TestCase):
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         self.assertIn("protocol/full qualification NOT RUN", result.stdout)
         return result.stdout + result.stderr
+
+    def test_raw_kit_lock_is_readonly_then_repaired_and_idempotent(self):
+        relative = ".claude/skills/check-board/SKILL.md"
+        source = self.root / relative
+        source.write_bytes(source.read_bytes() + b"\r\nRaw Kit lock fixture.\r\n")
+        before = snapshot(self.root)
+        output = self.run_mode(expected=1)
+        self.assertIn("kit-source-lock: STALE", output)
+        self.assertEqual(before, snapshot(self.root))
+        self.run_mode("--write")
+        expected = hashlib.sha256(source.read_bytes()).hexdigest()
+        self.assertIn(expected + "  " + relative.removesuffix("/SKILL.md"),
+                      (self.root / "registry/repos.lock").read_text())
+        repaired = snapshot(self.root)
+        self.run_mode("--write")
+        self.assertEqual(repaired, snapshot(self.root))
+
+    def test_kit_file_sources_refuse_outside_and_nonregular_before_writes(self):
+        roster = self.root / "registry/repos.yml"
+        original = roster.read_text()
+        for source in ("/etc/passwd", "../outside", "registry", "scripts/poison"):
+            with self.subTest(source=source):
+                poison = self.root / "scripts/poison"
+                if not poison.exists():
+                    poison.symlink_to(self.root / "registry/repos.yml")
+                roster.write_text(original.replace("source: scripts/fsgg-coord", "source: " + source, 1))
+                before = snapshot(self.root)
+                output = self.run_mode("--write", expected=1)
+                self.assertIn("kit-source-lock: UNAVAILABLE", output)
+                self.assertIn("skill-manifests: BLOCKED", output)
+                self.assertEqual(before, snapshot(self.root))
+        roster.write_text(original)
+
+    def test_failed_relock_never_claims_prepared_or_mutates_dependents(self):
+        script = self.root / "scripts/repos.sh"
+        script.write_text(script.read_text().replace('cmd_relock() {', 'cmd_relock() {\n  return 7'))
+        before = snapshot(self.root)
+        output = self.run_mode("--write", expected=1)
+        self.assertIn("kit-source-lock: UNAVAILABLE", output)
+        self.assertNotIn("kit-source-lock: prepared", output)
+        self.assertIn("skill-manifests: BLOCKED", output)
+        self.assertEqual(before, snapshot(self.root))
 
     def test_current_read_only_and_idempotent(self):
         before = snapshot(self.root)
@@ -121,10 +170,12 @@ class Preparation(unittest.TestCase):
             self.assertEqual(before, snapshot(self.root))
             manifest = self.root / "registry/driver-skill-manifest.json"
             old = manifest.read_bytes()
+            old_lock = (self.root / "registry/repos.lock").read_bytes()
             written = self.run_mode("--write", expected=1)
             self.assertIn("registry-projections: FAILED", written)
             self.assertNotIn("registry-projections: prepared", written)
             self.assertEqual(old, manifest.read_bytes())
+            self.assertEqual(old_lock, (self.root / "registry/repos.lock").read_bytes())
             target.write_text(original)
 
     def retired_targets(self):

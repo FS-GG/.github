@@ -361,6 +361,16 @@ records seventeen open whole-outcome owners and three unchanged historical Done 
 changing Project 3 membership or selecting final enrollment. Prepared consumer sources remain
 inactive until the coordinated cutover gates below are accepted.
 
+The first consumer preparation qualification at [PR4652](https://github.com/FS-GG/.github/pull/4652)
+failed its original package/registry, projection-inventory and reporter fixtures: two stale raw Kit
+source-lock rows, four obsolete projection census expectations and organization/product reporting
+assertions that still required retired organization V1 prose. Those failures are retained. The
+connected source correction adds maintained raw Kit relocking after projection preparation and before
+manifest/own-row reconciliation, independent named retirement/product controls, and separate current
+organization reporting assertions. It preserves the product reporter utility and genuine-engine full
+qualification fence. Inert preparation is not package execution or hosted qualification; fresh
+required CI remains necessary before this consumer source can be delivered.
+
 The first ready source window is .7/.8 after canonical owner resolution and bounded mapping. It can
 be developed without installed-store or UI access. Initial plan/roadmap delivery does not select a
 new runtime. Then qualify the actual coherent published/installed composition, apply admitted native

@@ -76,16 +76,27 @@ def human_decode(text):
 def raw_terminal_controls(text):
     return [character for character in text if character != "\n" and (ord(character) < 0x20 or 0x7f <= ord(character) <= 0x9f)]
 
-# The four routed variants inherit their canonical driver, rather than carrying a
-# sixth subtly different reporting recipe.  Assert both runtime roots so projection
-# drift cannot make the installed skill omit the reporter.
+# Product reporting retains its qualified utility contract. Organization reporting
+# consumes owning/native evidence and cannot require a second reporting workload.
+def organization_reporting(body):
+    return all(clause in body for clause in (
+        "owning issue/plan and native delivery evidence retain authority",
+        "This edition prepares .9/.11 consumers only",
+        "unchanged ticks require no comments, projection or reporting-only workload")) and "fsgg-coord-report" not in body
+
 for runtime in (".claude", ".agents"):
     for canonical, variants in (("drive-board", ("drive-board-normal", "drive-board-best")), ("work-board", ("work-board-normal", "work-board-best"))):
         body = (ROOT / runtime / "skills" / canonical / "SKILL.md").read_text()
-        assert "fsgg-coord-report" in body and "already-cached lane snapshot" in body
-        assert "typed lane-capacity facts" in body and "indeterminate receipt" in body and "derived cache" in body
         if canonical == "drive-board":
-            assert "Coordination project identity" in body and "append-only correction" in body
+            assert organization_reporting(body)
+            for clause in ("owning issue/plan and native delivery evidence retain authority",
+                           "This edition prepares .9/.11 consumers only",
+                           "unchanged ticks require no comments, projection or reporting-only workload"):
+                assert not organization_reporting(body.replace(clause, ""))
+            assert not organization_reporting(body + "\nEvery driver must run fsgg-coord-report.\n")
+        else:
+            assert "fsgg-coord-report" in body and "already-cached lane snapshot" in body
+            assert "typed lane-capacity facts" in body and "indeterminate receipt" in body and "derived cache" in body
         for variant in variants:
             inherited = (ROOT / runtime / "skills" / variant / "SKILL.md").read_text()
             assert f"[{canonical}]" in inherited
