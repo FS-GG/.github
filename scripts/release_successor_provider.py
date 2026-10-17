@@ -169,6 +169,11 @@ class VerifiedOriginalTagTransport:
         return json.loads(json.dumps(self._identity))
 
     def dispatch(self, effect, deadline, clock=time.monotonic):
+        from release_successor_journal import ReleaseSuspension, SUSPENDED_REF
+        reader = getattr(self, "suspension", None)
+        if not isinstance(reader, ReleaseSuspension):
+            raise Refused("original tag transport requires the maintained suspension reader")
+        reader.authorize(SUSPENDED_REF, "0.103.0")
         if (self._consumed or effect != Effect("tag", ORIGINAL_TAG_SOURCE, ORIGINAL_TAG_CONTENT)
                 or clock() >= deadline):
             raise Refused("original tag transport dispatch differs, expired, or already consumed")
@@ -1053,8 +1058,10 @@ class GitHubAPI:
 
 
 class LiveProvider:
-    def __init__(self, api: GitHubAPI, manifest_path: pathlib.Path, github_token: str, nuget_key: str):
+    def __init__(self, api: GitHubAPI, manifest_path: pathlib.Path, github_token: str, nuget_key: str, *, suspension=None, logical_ref=None):
         self.api = api
+        self.suspension = suspension
+        self.logical_ref = logical_ref
         self.manifest_path = manifest_path
         self.root = manifest_path.parent
         self.manifest = json.loads(manifest_path.read_text())
@@ -1070,6 +1077,14 @@ class LiveProvider:
         self._runtime_witness = None
         self._runtime_send_consumed = False
         self.last_dispatch_diagnostic = None
+
+    def _authorize_release(self):
+        if self.version in {"0.103.0", "0.104.0"}:
+            from release_successor_journal import ReleaseSuspension, SUSPENDED_REF, ALLOWED_SUCCESSOR
+            expected = SUSPENDED_REF if self.version == "0.103.0" else ALLOWED_SUCCESSOR["logicalRef"]
+            if not isinstance(self.suspension, ReleaseSuspension) or self.logical_ref != expected:
+                raise Refused("direct sensitive provider requires the maintained suspension reader")
+            self.suspension.authorize(self.logical_ref, self.version)
 
     def _release(self) -> dict | None:
         try:
@@ -1168,6 +1183,7 @@ class LiveProvider:
         return Observation("matched", self.content_id), witness
 
     def dispatch_runtime_recovery(self, effect: Effect, witness: dict) -> Dispatch:
+        self._authorize_release()
         if (self._runtime_send_consumed or witness is not self._runtime_witness
                 or effect.identity != "qualification-asset:runtime" or effect.request_digest != self.content_id
                 or effect.target_digest != self.content_id
@@ -1359,6 +1375,7 @@ class LiveProvider:
         return output
 
     def dispatch(self, effect: Effect) -> Dispatch:
+        self._authorize_release()
         identity = effect.identity
         self.last_dispatch_diagnostic = None
         if isinstance(self.api, GitHubAPI):

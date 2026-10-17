@@ -30,6 +30,12 @@ on:
         default: false
         type: boolean
 
+      suspended_0103_successor:
+        description: Literal .104/utel-rel-22 only, requiring the installed release-specific .103 suspension
+        required: true
+        default: false
+        type: boolean
+
       original_0103_candidate:
         description: Select only the accepted original .103 candidate on a compatible descendant publisher
         required: true
@@ -93,6 +99,28 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Read the installed release suspension before any credential exchange
+        if: inputs.qualify_original_tag_authentication_only != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUSPENDED_0103_SUCCESSOR: ${{ inputs.suspended_0103_successor }}
+          ORIGINAL_0103_CANDIDATE: ${{ inputs.original_0103_candidate }}
+          RECOVER_ORIGINAL_0103_TAG_INTENT: ${{ inputs.recover_original_0103_tag_intent }}
+          RECOVERY_CHECKPOINT: ${{ inputs.recovery_checkpoint }}
+          REPEAT_ORIGINAL_NUGET_KIT_INTENT: ${{ inputs.repeat_original_nuget_kit_intent }}
+          RECOVER_ORIGINAL_RUNTIME_INTENT: ${{ inputs.recover_original_runtime_intent }}
+          RECOVER_ORIGINAL_SUCCESSOR_CHECKPOINT: ${{ inputs.recover_original_successor_checkpoint }}
+        run: |
+          set -euo pipefail
+          profile=()
+          if test "$SUSPENDED_0103_SUCCESSOR" = true; then profile+=(--suspended-0103-successor); fi
+          if test "$ORIGINAL_0103_CANDIDATE" = true; then profile+=(--original-0103-candidate); fi
+          if test "$RECOVER_ORIGINAL_0103_TAG_INTENT" = true; then profile+=(--recover-original-0103-tag-intent); fi
+          if test "$RECOVERY_CHECKPOINT" = true; then profile+=(--recovery-checkpoint); fi
+          if test "$REPEAT_ORIGINAL_NUGET_KIT_INTENT" = true; then profile+=(--repeat-original-nuget-kit-intent); fi
+          if test "$RECOVER_ORIGINAL_RUNTIME_INTENT" = true; then profile+=(--recover-original-runtime-intent); fi
+          if test "$RECOVER_ORIGINAL_SUCCESSOR_CHECKPOINT" = true; then profile+=(--recover-original-successor-checkpoint); fi
+          python3 scripts/release-successor-publish.py --check-release-suspension "${profile[@]}"
       - uses: actions/setup-dotnet@v6
         if: inputs.qualify_original_tag_authentication_only != true
         with:
@@ -105,7 +133,7 @@ jobs:
           python3 tests/release-successor-journal/run.py
           python3 tests/release-successor-live/run.py
           python3 tests/release-successor-recovery/run.py
-          python3 tests/release-successor-authentication/run.py
+          python3 tests/release-successor-authentication/run.py --current-source-suspension
       - name: Select the inactive authentication-only route before credential acquisition
         if: inputs.qualify_original_tag_authentication_only == true
         run: |
@@ -153,6 +181,7 @@ jobs:
           CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
           CANDIDATE_ARCHIVE_SHA256: ${{ inputs.candidate_archive_sha256 }}
           PUBLISH: ${{ inputs.publish }}
+          SUSPENDED_0103_SUCCESSOR: ${{ inputs.suspended_0103_successor }}
           ORIGINAL_0103_CANDIDATE: ${{ inputs.original_0103_candidate }}
           RECOVER_ORIGINAL_0103_TAG_INTENT: ${{ inputs.recover_original_0103_tag_intent }}
           RECOVERY_CHECKPOINT: ${{ inputs.recovery_checkpoint }}
@@ -165,6 +194,9 @@ jobs:
           mode=--preflight-only
           if test "$PUBLISH" = true; then mode=--publish; fi
           profile=()
+          if test "$SUSPENDED_0103_SUCCESSOR" = true; then
+            profile+=(--suspended-0103-successor)
+          fi
           if test "$RECOVER_ORIGINAL_0103_TAG_INTENT" = true; then
             profile+=(--recover-original-0103-tag-intent)
           fi

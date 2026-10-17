@@ -279,13 +279,12 @@ class PublisherJournalTests(unittest.TestCase):
         self.journal = PreparedJournal(self.intent, ref=publisher.SUCCESSOR_REF)
         base = SingleOperatorAdmission(self.source, self.manifest, "b" * 40, 1, "EHotwagner", "refs/heads/main")
         self.admission = publisher.ProtectedPublisherAdmission(base, self.ledger, publisher.SUCCESSOR_REF)
-        self.assertFalse(self.prepare())
-        self.assertEqual(self.journal.initializations, 1)
-        self.assertEqual(self.journal.intent["version"], "0.103.0")
-        self.assertIn("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.103.0", self.source.reads)
-        self.assertNotIn("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.102.0", self.source.reads)
-        self.assertIn(f"repos/{AUTHORITY}/git/ref/{publisher.SUCCESSOR_REF.removeprefix('refs/')}", self.ledger.reads)
-        self.assertEqual(self.journal.state.content_id, self.manifest["contentId"])
+        # The original default binding is retained for explicit denial; it cannot
+        # initialize a new .103 journal after the prospective suspension cut.
+        with self.assertRaises(RuntimeError):
+            self.prepare()
+        self.assertEqual(self.journal.initializations, 0)
+        self.assertEqual(self.journal.writes, [])
         self.assertEqual(self.provider.calls, [])
 
     def test_consumed_selected_main_journal_with_absent_legacy_is_recovery_never_genesis(self):
@@ -575,18 +574,18 @@ class ProviderDiagnosticTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = pathlib.Path(self.temporary.name)
-        self.manifest = candidate_manifest("0.103.0")
-        self.manifest["descriptor"].update(previousStableVersion="0.102.0", previousStableContentId="sha256:" + "d" * 64)
+        self.manifest = candidate_manifest("0.91.3")
+        self.manifest["descriptor"].update(previousStableVersion="0.91.2", previousStableContentId="sha256:" + "d" * 64)
         self.path = self.root / "release-manifest.json"
         self.path.write_text(json.dumps(self.manifest))
         self.api = provider_module.GitHubAPI("SECRET-github-token")
         self.provider = provider_module.LiveProvider(self.api, self.path, "SECRET-github-token", "SECRET-nuget-key")
-        for name in [*(f"{package}.0.103.0.nupkg" for package in PACKAGES),
+        for name in [*(f"{package}.0.91.3.nupkg" for package in PACKAGES),
                      "standalone-telemetry-evidence.json", "standalone-telemetry-runtime-evidence.json",
                      "promoted-release-manifest.json"]:
             (self.root / name).write_text("fixture")
         (self.root / "previous-stable-channel.json").write_text(json.dumps({
-            "version": "0.102.0", "contentId": "sha256:" + "d" * 64}))
+            "version": "0.91.2", "contentId": "sha256:" + "d" * 64}))
         self.release = {"id": 1, "draft": True}
         self.writes = []
 
@@ -658,7 +657,7 @@ class ProviderDiagnosticTests(unittest.TestCase):
         error.read = lambda size: (_ for _ in ()).throw(OSError("SECRET-body-read"))
         with patch.object(self.module.urllib.request, "urlopen", side_effect=error):
             with self.assertRaises(self.module.Refused) as caught:
-                self.api.post("repos/FS-GG/.github/git/refs", {"ref": "refs/tags/coherent-set/v0.103.0"})
+                self.api.post("repos/FS-GG/.github/git/refs", {"ref": "refs/tags/coherent-set/v0.91.3"})
         self.assertIs(error, caught.exception.__cause__)
         self.assertTrue(caught.exception.diagnostic["bodyUnavailable"])
         self.assertNotIn("SECRET", json.dumps(caught.exception.diagnostic))
