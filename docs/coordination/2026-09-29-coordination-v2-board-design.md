@@ -261,8 +261,10 @@ restoring V1 claims, Class/Phase ranking, lease machinery or a compatibility wra
 Source currently declares coherent 0.103.0. The accessible developer global CLI is 0.102.0,
 repository source `6e9be17bacd288ece103b67ecd5842d37a9c8e50`; its 82 installed tool members matched
 the cached package without execution. That observation does not identify the active Project 3
-consumer or authenticate a current feed/channel. The inaccessible protected installed receiver remains
-an attributed runtime-owner gap and is not probed or substituted. Original .103 attempted-Unknown,
+consumer or authenticate a current feed/channel. The actual installed Project 3 caller and update
+owner remain a runtime-owner discovery gap. An inaccessible protected telemetry Store does not
+identify that caller and is not an established prerequisite for native-GitHub inspection; do not
+substitute developer installation or telemetry permissions for actual caller/update-route evidence. Original .103 attempted-Unknown,
 .104 held, all 439 reservations and unrelated Home/SC2 work remain untouched. New source must use the
 release owner's separately admitted fresh coherent candidate before publication/installed acceptance;
 it cannot replay, replace or repack an uncertain original.
@@ -481,8 +483,9 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   coherently, authenticate exact delivered package/tool/caller/consumer bytes and run actual installed
   pre-migration controlled/nonmutating inspection/selection controls with affected product nonregression.
   Positive actual successor-schema Project 3 controls follow .10 migration, before .11 adoption.
-  Attribute protected installed-receiver identity/access
-  gaps to the runtime owner; developer 0.102 is not presumed to be the active consumer.
+  Establish the actual installed caller and update owner with the runtime owner. A protected telemetry
+  Store is not an established native-inspection prerequisite; developer 0.102 is not presumed to be the
+  active consumer.
 - [ ] **COORD-BOARD-V2-01.10 — Migrate and verify Project 3** — route: routine.
   Depends on complete bounded outcome mapping, .9 and admitted native mutation capability. Scope:
   selected enrollment/issue identities, necessary durable owner records, In review and exact bindings,
@@ -505,9 +508,10 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   option ID and its card values when adding In review: the API replaces the supplied option list.
   New native option/view IDs remain unresolved preparation slots, never invented consumer bindings.
   Apply uses freshly checked exact identities and a bounded one-shot authorizer/provider composition,
-  retaining the exact original request before sending. The existing CLI only has post-run reporting:
-  implement a narrow exclusive private per-invocation evidence sink for original intent, requests and
-  outcomes before the first send; this is operation custody, not a global journal. Lost or
+  retaining the exact original request before sending. Earlier CLI post-run reporting did not establish
+  that custody. The new source adds a narrow exclusive private per-invocation evidence sink for
+  original intent, requests and outcomes before the first send; this is operation custody, not a
+  global journal. Lost or
   ambiguous responses stop writes and enter original-identity readback only; no blind retries or
   rollback. A fully reconciled unchanged repeat emits no mutations. Actual readback resolves new IDs;
   then land the final stable enrollment/binding before positive installed v4 inspection/refresh/selection.
@@ -520,6 +524,22 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   `authorized:true` flag, BoardIntake author eligibility nor a synthetic absent-supplier placeholder
   supplies approval; no cryptographic authority service or V1 permit is introduced. Source controls
   qualify this actual manual invocation route without granting a live operation here.
+
+  **Current source boundary.** The existing packaged route now contains `migration-prepare`,
+  `migration-apply` and `migration-readback`, with the exact invocation documented in the maintained
+  [caller contract](../../tests/coord-board-v2-cli-join/INSPECT.md#bounded-migration-source-contract).
+  Preparation is read-only and may report denied update capability; apply requires actual executing
+  CLI/adapter identities, native permission and separately selected owner invocation. Prepared bytes
+  bind the original private path; copying them cannot create another invocation. One shared
+  500-request/270-second budget covers reads and effects, with bounded fixed-origin HTTP acquisition,
+  no redirects/retries, strict clear-success envelopes, fresh determining facts before effects and
+  independently correlated native readback. File flush and Linux x64 directory-entry barriers precede
+  dispatch; unavailable barriers refuse. Expiry is rechecked after custody and at actual acquisition.
+  Orthogonal human view configuration remains unchanged. Twenty-seven focused controls are prepared,
+  and independent source review corrected seven connected custody/expiry/scope/readback/envelope/source
+  findings. They have not run locally; source review grants no compiler, runtime filesystem, installed,
+  native mutation or UI acceptance. Fresh hosted compilation, tests and coherent qualification remain
+  mandatory. No live migration is selected by this source implementation.
 
   Default migration writes no existing human Status/Track/Roadmap values. Native updates provide no
   expected-revision/CAS guarantee: fresh comparison detects observed drift, but a local lock cannot
