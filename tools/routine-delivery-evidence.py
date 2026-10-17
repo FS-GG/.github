@@ -45,7 +45,8 @@ def collect(summary: Any, run_id: int | None, *, api: Any, native: Any) -> dict:
                 or (summary.mergeCommit is not None and merged_commit_of(pr) != summary.mergeCommit)
                 or (summary.codeDelivery == "delivered" and not is_merged(pr))
                 or (before is not None and (pr.get("head", {}).get("ref") != before.get("head", {}).get("ref")
-                                           or is_merged(pr) != is_merged(before)))):
+                                           or is_merged(pr) != is_merged(before)
+                                           or pr.get("changed_files") != before.get("changed_files")))):
             raise ValueError("evidence differs")
         return pr
     before = attempt("pr-identity", snapshot)
@@ -64,14 +65,22 @@ def collect(summary: Any, run_id: int | None, *, api: Any, native: Any) -> dict:
         count = before.get("changed_files")
         if type(count) is not int or not 0 <= count <= 100:
             raise ValueError("evidence differs")
-        rows = read(f"pulls/{number}/files?per_page=100")
-        if not isinstance(rows, list) or len(rows) != count:
-            raise ValueError("evidence differs")
         output = []
-        for row in rows:
-            if not isinstance(row.get("filename"), str) or not isinstance(row.get("status"), str):
-                raise ValueError("evidence differs")
-            output.append({key: row.get(key) for key in ("filename", "previous_filename", "status")})
+        # Project before the existing bounded stdout reader. This is not a raw HTTP-body cap.
+        projection = '[.[] | {filename, previous_filename, status}]'
+        for page in range(1, max(1, (count + 24) // 25) + 1):
+            _, rows = api._watch_read(["gh", "api", "--jq", projection,
+                f"repos/{repo}/pulls/{number}/files?per_page=25&page={page}"], (0,))
+            if not isinstance(rows, list) or len(rows) != min(25, max(0, count - (page - 1) * 25)):
+                raise ValueError("changed-file page incomplete")
+            for row in rows:
+                if (not isinstance(row, dict) or not isinstance(row.get("filename"), str) or not row["filename"]
+                        or row.get("status") not in {"added", "removed", "modified", "renamed", "copied", "changed", "unchanged"}
+                        or (row.get("previous_filename") is not None and
+                            (not isinstance(row["previous_filename"], str) or not row["previous_filename"]))
+                        or (row["status"] == "renamed" and not row.get("previous_filename"))):
+                    raise ValueError("changed-file metadata malformed")
+                output.append({key: row.get(key) for key in ("filename", "previous_filename", "status")})
         if len({row["filename"] for row in output}) != count:
             raise ValueError("evidence differs")
         return output

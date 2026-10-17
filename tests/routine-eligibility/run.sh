@@ -27,7 +27,7 @@ require 'pull_request:' "$SELFTEST"
 require 'name: routine-eligibility-fixture' "$SELFTEST"
 require 'bash tests/routine-eligibility/run.sh' "$SELFTEST"
 
-for dangerous in 'actions/checkout' 'GITHUB_TOKEN' 'bash tests/' 'curl ' 'eval ' 'source '; do
+for dangerous in 'actions/checkout' 'bash tests/' 'curl ' 'eval ' 'source '; do
   if grep -qF "$dangerous" "$WORKFLOW"; then
     echo "trusted workflow contains forbidden executable pattern: $dangerous" >&2
     exit 1
@@ -135,3 +135,58 @@ bad=("${args[@]}"); bad[13]=feature/not-routine
 expect_failure head-ref 'head ref is not a routine branch' "${bad[@]}"
 
 echo "routine-eligibility: target/ref/SHA boundaries and base-loaded execution fail closed under the trusted-writer model"
+
+# Execute the actual workflow shell against an inert fixed-origin Git transport.
+ROOT="$ROOT" FIXTURE_REPO="$repo" FIXTURE_BASE="$base" FIXTURE_HEAD="$head" python3 - <<'PYFETCH'
+import base64, json, os, pathlib, shutil, subprocess, tempfile
+root=pathlib.Path(os.environ['ROOT'])
+workflow=(root/'.github/workflows/routine-eligibility.yml').read_text()
+shell='\n'.join(line[10:] for line in workflow.split('        run: |\n',1)[1].splitlines())+'\n'
+with tempfile.TemporaryDirectory() as temporary:
+    work=pathlib.Path(temporary); bindir=work/'bin';bindir.mkdir()
+    git=bindir/'git'
+    git.write_text("""#!/usr/bin/env python3
+import base64,json,os,pathlib,subprocess,sys
+args=sys.argv[1:];secret=os.environ.get('RECEIVER_FETCH_TOKEN','');header=os.environ.get('ROUTINE_FETCH_HEADER','')
+if 'fetch' in args:
+ assert args[:5]==['-c','credential.helper=','-c','http.followRedirects=false','--config-env=http.https://github.com/.extraheader=ROUTINE_FETCH_HEADER']
+ assert header=='AUTHORIZATION: basic '+base64.b64encode(b'x-access-token:synthetic-fetch-only-credential').decode()
+ assert not secret and all('synthetic-fetch-only-credential' not in arg and header not in arg for arg in args)
+ assert os.environ.get('GIT_TERMINAL_PROMPT')=='0'
+ assert args[-3:]==['origin','+refs/heads/main:refs/remotes/origin/routine-base','+refs/pull/7/head:refs/remotes/origin/routine-head']
+ if os.environ['MODE']=='fetch-fail':sys.exit(9)
+ target=args[args.index('-C')+1]
+ origin=subprocess.check_output([os.environ['REAL_GIT'],'-C',target,'remote','get-url','origin'],text=True).strip()
+ assert origin=='https://github.com/'+os.environ['REPOSITORY']+'.git'
+ base=os.environ['FIXTURE_BASE'];head=os.environ['FIXTURE_HEAD']
+ if os.environ['MODE']=='base-drift':base=head
+ if os.environ['MODE']=='head-drift':head=base
+ sys.exit(subprocess.call([os.environ['REAL_GIT'],'-C',target,'fetch','--quiet','--no-tags',os.environ['FIXTURE_REPO'],base+':refs/remotes/origin/routine-base',head+':refs/remotes/origin/routine-head']))
+if 'fetch' not in args:
+ assert not secret and not header, 'credential escaped fetch'
+if 'show' in args:
+ config=pathlib.Path(args[args.index('-C')+1],'.git/config').read_text()
+ assert 'AUTHORIZATION' not in config and 'extraheader' not in config
+if 'remote' in args and 'add' in args:assert args[-1]=='https://github.com/'+os.environ['REPOSITORY']+'.git'
+sys.exit(subprocess.call([os.environ['REAL_GIT'],*args]))
+""")
+    git.chmod(0o700)
+    synthetic='synthetic-fetch-only-credential'
+    for mode in ['good','public','missing-token','fetch-fail','base-drift','head-drift']:
+        target=work/mode;target.mkdir()
+        env=dict(os.environ,PATH=str(bindir)+os.pathsep+os.environ['PATH'],REAL_GIT=shutil.which('git'),
+                 GIT_TRACE2_EVENT=str(target/'forbidden-trace.json'),GIT_TRACE2_ENV_VARS='ROUTINE_FETCH_HEADER,RECEIVER_FETCH_TOKEN',
+                 RUNNER_TEMP=str(target),MODE=mode,RECEIVER_FETCH_TOKEN='' if mode=='missing-token' else synthetic,
+                 REPOSITORY='FS-GG/public-fixture' if mode=='public' else 'FS-GG/private-fixture',PR_NUMBER='7',BASE_REF='main',DEFAULT_BRANCH='main',
+                 BASE_SHA=os.environ['FIXTURE_BASE'],HEAD_SHA=os.environ['FIXTURE_HEAD'],HEAD_REF='routine/example',
+                 PR_BODY='$(touch hostile-body-must-not-run)')
+        result=subprocess.run(['bash','-c',shell],env=env,text=True,capture_output=True)
+        derived=base64.b64encode(('x-access-token:'+synthetic).encode()).decode()
+        visible='\n'.join(line for line in result.stdout.splitlines() if line!='::add-mask::'+derived)+result.stderr
+        assert synthetic not in visible and derived not in visible, 'credential leaked'
+        assert not (target/'forbidden-trace.json').exists(), 'Git trace escaped confinement'
+        assert 'CANDIDATE-' not in visible and not (root/'hostile-body-must-not-run').exists()
+        assert (result.returncode==0)==(mode in ('good','public')), (mode,result.returncode,visible)
+        assert ('BASE-TRUSTED' in visible)==(mode in ('good','public'))
+print('routine-eligibility: actual private-fetch shell confines credentials and refuses missing/fetch/drift cases')
+PYFETCH

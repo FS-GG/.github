@@ -145,7 +145,7 @@ class DeliveryEvidenceTests(unittest.TestCase):
             f"git/commits/{MERGE}": dict(sha=MERGE, tree=dict(sha=delivered_tree)),
             f"git/commits/{checkout}": dict(sha=checkout, tree=dict(sha=fact["tree"]),
                 parents=[dict(sha=summary.baseSha), dict(sha=HEAD)]),
-            "pulls/1/files?per_page=100": [dict(filename="tools/routine-delivery.py", status="modified")],
+            "pulls/1/files?per_page=25&page=1": [dict(filename="tools/routine-delivery.py", status="modified")],
             "actions/runs/7": native_run,
             "actions/runs/7/artifacts?per_page=100": dict(total_count=1, artifacts=[dict(
                 id=11, name="tested-checkout-7-1", expired=False, size_in_bytes=1024)]),
@@ -161,6 +161,36 @@ class DeliveryEvidenceTests(unittest.TestCase):
             return 0, selection_archive([("checkout.json", json.dumps(fact).encode())])
         api.query.side_effect = archive
         return summary, api, fact, responses
+
+    def test_changed_files_are_projected_before_bounded_read_and_complete_over_pages(self):
+        summary,api,_,responses=self.fixture()
+        api.get_pr.return_value['changed_files']=90
+        rows=[dict(filename=f'src/file-{i}.fs',status='renamed' if i==0 else 'modified',
+                   previous_filename='src/original.fs' if i==0 else None) for i in range(90)]
+        for page in range(1,5):responses[f'pulls/1/files?per_page=25&page={page}']=rows[(page-1)*25:page*25]
+        result=MODULE.delivery_evidence(summary,7,api=api,assembled=True)['deliveryEvidence']
+        self.assertEqual(result['changedFiles'],rows)
+        commands=[c.args[0] for c in api._watch_read.call_args_list if '/files?' in c.args[0][-1]]
+        self.assertEqual(len(commands),4)
+        self.assertTrue(all(c[2:4]==['--jq','[.[] | {filename, previous_filename, status}]'] for c in commands))
+        for defect in ('missing','duplicate','renamed','count-drift','denied'):
+            with self.subTest(defect=defect):
+                second=copy.deepcopy(responses);pr=copy.deepcopy(api.get_pr.return_value)
+                if defect=='missing':second['pulls/1/files?per_page=25&page=4'].pop()
+                if defect=='duplicate':second['pulls/1/files?per_page=25&page=2'][0]=second['pulls/1/files?per_page=25&page=1'][0]
+                if defect=='renamed':second['pulls/1/files?per_page=25&page=1'][0]['previous_filename']=None
+                def read(command,accepted):
+                    if command[1:3]==['pr','checks']:return 0,[]
+                    endpoint=command[-1].split('repos/FS-GG/.github/',1)[1]
+                    if defect=='denied' and endpoint.endswith('page=2'):raise RuntimeError('denied')
+                    return 0,second[endpoint]
+                api._watch_read.side_effect=read
+                if defect=='count-drift':
+                    final=copy.deepcopy(pr);final['changed_files']=89;api.get_pr.side_effect=[pr,final]
+                else:api.get_pr.side_effect=None;api.get_pr.return_value=pr
+                evidence=MODULE.delivery_evidence(summary,7,api=api,assembled=True)['deliveryEvidence']
+                self.assertIsNone(evidence['changedFiles'])
+                self.assertTrue(any('unavailable' in value for value in evidence['exceptions']))
 
     def automatic_fixture(self):
         summary, api, fact, responses = self.fixture(checkout="e" * 40)
@@ -2078,10 +2108,10 @@ jobs:
     def fsquint_transport(self, *, apply=False, change=None, drift=None, prior=None,
                            selector="ci.yml", merged=False, uncertain=False, required=None, fresh=None, receiver="FS-GG/FsQuint"):
         repo = receiver
-        repo_id = MODULE.BAR_REPOSITORY_ID if repo == MODULE.BAR_REPOSITORY else 1375501179
-        workflow_id = MODULE.BAR_PREARM_ID if repo == MODULE.BAR_REPOSITORY else 361154226
-        workflow_file = "prearm-source-controls.yml" if repo == MODULE.BAR_REPOSITORY else "ci.yml"
-        job_name = "prearm-source-controls" if repo == MODULE.BAR_REPOSITORY else "qualify"
+        repo_id = MODULE.SC2_REPOSITORY_ID if repo == MODULE.SC2_REPOSITORY else MODULE.BAR_REPOSITORY_ID if repo == MODULE.BAR_REPOSITORY else 1375501179
+        workflow_id = MODULE.SC2_VERIFY_ID if repo == MODULE.SC2_REPOSITORY else MODULE.BAR_PREARM_ID if repo == MODULE.BAR_REPOSITORY else 361154226
+        workflow_file = "verify.yml" if repo == MODULE.SC2_REPOSITORY else "prearm-source-controls.yml" if repo == MODULE.BAR_REPOSITORY else "ci.yml"
+        job_name = "verify" if repo == MODULE.SC2_REPOSITORY else "prearm-source-controls" if repo == MODULE.BAR_REPOSITORY else "qualify"
         alias = lambda value: json.loads(json.dumps(value).replace("FS-GG/FS.GG.Coordination", repo).replace("1346720714", str(repo_id)))
         fixture = alias(self.fixture)
         responses = fixture["responses"]
@@ -2105,7 +2135,7 @@ jobs:
         head = fixture["head"]
         responses[f"repos/{repo}/git/ref/heads/main"] = dict(ref="refs/heads/main",object=dict(type="commit",sha=fixture['base']))
         metadata = responses[f"repos/{repo}"]
-        metadata.update(private=False, permissions=dict(admin=True, push=True, pull=True))
+        metadata.update(private=repo == MODULE.SC2_REPOSITORY, permissions=dict(admin=True, push=True, pull=True))
         wf = dict(id=workflow_id, path=".github/workflows/"+workflow_file, state="active",name=workflow_file[:-4])
         responses[f"repos/{repo}/actions/workflows/{workflow_file}"] = wf
         responses[f"repos/{repo}/actions/workflows?per_page=100"] = dict(total_count=1, workflows=[wf])
@@ -2117,6 +2147,29 @@ jobs:
         job.update(name=job_name,completed_at="2026-10-13T00:00:00Z",steps=[dict(name=name,status="completed",conclusion="success") for name in
             ["Set up job", "Run actions/checkout@v7", "Run actions/setup-dotnet@v6", "Provision pinned Quint",
              "Check independent CI preflight example", "Qualify core, tooling and external package consumer"]])
+        if repo == MODULE.SC2_REPOSITORY:
+            # Synthetic native blobs exercise correspondence without exporting private verifier source.
+            retained = {'.github/workflows/verify.yml': b'synthetic reviewed workflow\n',
+                        'scripts/verify.sh': b'synthetic reviewed entrypoint\n'}
+            for path, body in retained.items():
+                sha=hashlib.sha1(f"blob {len(body)}\0".encode()+body).hexdigest()
+                row=dict(path=path,type="blob",mode="100644",sha=sha)
+                responses[f"repos/{repo}/git/blobs/{sha}"]=dict(sha=sha,encoding="base64",size=len(body),content=MODULE.base64.b64encode(body).decode())
+                for revision in (fixture['base'],head):
+                    tree=responses[f"repos/{repo}/git/commits/{revision}"]['tree']['sha']
+                    responses[f"repos/{repo}/git/trees/{tree}?recursive=1"]['tree'].append(copy.deepcopy(row))
+            job['steps']=[dict(number=index,name=name,status='completed',conclusion='success') for index,name in enumerate([
+                'Set up job','Check out the complete product history','Install the pinned .NET SDK',
+                'Install the pinned Node runtime','Install the pinned Rust toolchain','Verify the product',
+                'Retain the complete qualified product','Post Install the pinned Node runtime',
+                'Post Check out the complete product history','Complete job'],1)]
+            responses[f"repos/{repo}/actions/runs/7/artifacts?per_page=100"]=dict(total_count=1,artifacts=[dict(
+                id=11,name=f'sc2-qualified-product-{"e"*40}-7',expired=False,size_in_bytes=100,
+                workflow_run=dict(id=7,head_sha=head))])
+            checkout='e'*40
+            native_commit=copy.deepcopy(responses[f"repos/{repo}/git/commits/{head}"])
+            native_commit.update(sha=checkout,parents=[dict(sha=fixture['base']),dict(sha=head)])
+            responses[f"repos/{repo}/git/commits/{checkout}"]=native_commit
         if repo == MODULE.BAR_REPOSITORY:
             job['steps'] = [dict(number=index,name=name,status='completed',conclusion='success') for index,name in enumerate((*MODULE.BAR_PREARM_TECHNICAL_STEPS,'Complete job'),1)]
         responses[f"repos/{repo}/actions/runs/7/attempts/1/jobs?per_page=100"] = dict(total_count=1,jobs=[copy.deepcopy(job)])
@@ -2170,10 +2223,77 @@ jobs:
         api._run = native_write
         if merged: responses[f"repos/{repo}/git/ref/heads/main"] = dict(object=dict(sha=head))
         watcher=MODULE.WatchGhApi
-        with mock.patch.object(MODULE,'bounded_watch_query',side_effect=query), mock.patch.object(MODULE,'WatchGhApi',side_effect=lambda deadline:watcher(deadline,query=query)):
+        with mock.patch.multiple(MODULE,
+                SC2_VERIFY_SHA256=hashlib.sha256(retained['.github/workflows/verify.yml']).hexdigest() if repo == MODULE.SC2_REPOSITORY else MODULE.SC2_VERIFY_SHA256,
+                SC2_VERIFY_ENTRY_SHA256=hashlib.sha256(retained['scripts/verify.sh']).hexdigest() if repo == MODULE.SC2_REPOSITORY else MODULE.SC2_VERIFY_ENTRY_SHA256), \
+                mock.patch.object(MODULE,'bounded_watch_query',side_effect=query), \
+                mock.patch.object(MODULE,'WatchGhApi',side_effect=lambda deadline:watcher(deadline,query=query)):
             code,result = MODULE.summarize(api,repo=repo,pr_number=1,expected_head=head,merge_method="squash",
                 publication_required=False,apply=apply,coherent_workflow=selector,producer_source=fixture['source'],installation_prior=prior)
         return code,result,api,reads
+
+    def sc2_transport(self, **kwargs):
+        return self.fsquint_transport(receiver=MODULE.SC2_REPOSITORY,selector=kwargs.pop('selector','verify.yml'),**kwargs)
+
+    def test_source_phase_does_not_require_a_pr_or_candidate_checks(self):
+        api=self.api()
+        api.fixture=copy.deepcopy(api.fixture)
+        for endpoint in list(api.fixture['responses']):
+            if '/pulls/' in endpoint or '/check-runs' in endpoint or '/actions/runs/' in endpoint:
+                del api.fixture['responses'][endpoint]
+        facts=api.installation_source('FS-GG/FS.GG.Coordination',self.fixture['head'],'main',self.fixture['base'],self.fixture['source'])
+        self.assertEqual(facts['expected'],set(MODULE.PRODUCER_PATHS))
+        self.assertEqual(api.attempts,0)
+        for revision in [self.successor,self.fixture['base']]:
+            with self.assertRaises(RuntimeError):
+                api.installation_source('FS-GG/FS.GG.Coordination',revision,'main',self.fixture['base'],self.fixture['source'])
+
+    def test_sc2_native_no_required_contexts_still_requires_exact_full_verify(self):
+        for apply in (False,True):
+            code,result,api,reads=self.sc2_transport(apply=apply)
+            self.assertEqual((code,api.attempts),(0,int(apply)))
+            self.assertEqual(result.reason,'no-required-contexts-reported')
+            self.assertFalse(any('protection' in c[-1] or 'rules' in c[-1] for c in reads))
+            self.assertTrue(any('/actions/workflows/368229845/runs?' in c[-1] for c in reads))
+
+    def test_sc2_denied_or_ambiguous_required_read_is_not_empty(self):
+        for response in [(1,b'',b'Resource not accessible by personal access token'),(4,b'',b''),
+                         (0,b'[]'),(1,b'[]'),(1,b'',b''),(1,b'',b'no required checks reported on wrong branch\n')]:
+            with self.subTest(response=response):
+                code,_,api,_=self.sc2_transport(apply=True,required=response)
+                self.assertEqual((code,api.attempts),(2,0))
+
+    def test_sc2_required_contexts_remain_additional_requirements(self):
+        row=dict(name='verify',bucket='pass',state='SUCCESS',completedAt='2026-10-13T00:00:00Z',event='pull_request',
+                 workflow='verify',startedAt='2026-10-13T00:00:00Z',link=f'https://github.com/{MODULE.SC2_REPOSITORY}/actions/runs/7/job/8')
+        self.assertEqual(self.sc2_transport(required=(0,json.dumps([row]).encode()))[0],0)
+        row.update(bucket='fail',state='FAILURE')
+        code,_,api,_=self.sc2_transport(apply=True,required=(0,json.dumps([row]).encode()))
+        self.assertEqual((code,api.attempts),(2,0))
+
+    def test_sc2_full_verify_identity_population_steps_and_artifact_refusals(self):
+        repo=MODULE.SC2_REPOSITORY;head=self.fixture['head']
+        runs=f'repos/{repo}/actions/workflows/368229845/runs?head_sha={head}&per_page=100'
+        jobs=f'repos/{repo}/actions/runs/7/attempts/1/jobs?per_page=100'
+        checks=f'repos/{repo}/commits/{head}/check-runs?per_page=100'
+        variants=[lambda r,p,pr:r[f'repos/{repo}'].update(private=False),
+                  lambda r,p,pr:r[f'repos/{repo}'].update(id=1),
+                  lambda r,p,pr:r[runs]['workflow_runs'][0].update(head_sha='f'*40),
+                  lambda r,p,pr:r[runs]['workflow_runs'][0].update(run_attempt=2),
+                  lambda r,p,pr:r[runs].update(total_count=2),
+                  lambda r,p,pr:r[jobs]['jobs'][0]['steps'][5].update(conclusion='skipped'),
+                  lambda r,p,pr:r[checks]['check_runs'][0]['app'].update(id=1),
+                  lambda r,p,pr:r[jobs]['jobs'][0].update(head_sha='f'*40),
+                  lambda r,p,pr:r[f'repos/{repo}/actions/runs/7/artifacts?per_page=100']['artifacts'][0].update(expired=True),
+                  lambda r,p,pr:r[f'repos/{repo}/actions/runs/7/artifacts?per_page=100'].update(total_count=0,artifacts=[]),
+                  lambda r,p,pr:r[f'repos/{repo}/git/commits/'+('e'*40)]['parents'].reverse(),
+                  lambda r,p,pr:r[f'repos/{repo}/git/commits/'+('e'*40)].update(sha=head),
+                  lambda r,p,pr:r[f'repos/{repo}/actions/runs/7/artifacts?per_page=100']['artifacts'][0].update(name=f'sc2-qualified-product-{head}-7')]
+        for change in variants:
+            with self.subTest(change=change):
+                code,_,api,_=self.sc2_transport(apply=True,change=change)
+                self.assertEqual((code,api.attempts),(2,0))
+        code,_,api,_=self.sc2_transport(apply=True,selector='ci.yml');self.assertEqual((code,api.attempts),(2,0))
 
     def bar_transport(self, **kwargs):
         return self.fsquint_transport(receiver=MODULE.BAR_REPOSITORY,selector=kwargs.pop('selector','prearm-source-controls.yml'),**kwargs)
@@ -2715,6 +2835,24 @@ jobs:
         endpoint=f"repos/FS-GG/.github/git/blobs/{row['sha']}"
         api=self.api();value=copy.deepcopy(self.fixture['responses'][endpoint]);value['content']=MODULE.base64.b64encode(b'wrong').decode();api.overrides[endpoint]=value
         self.assertEqual(self.invoke(api)[0],2)
+
+    def test_self_correspondence_is_exact_and_other_blob_bound_is_unchanged(self):
+        owner='FS-GG/.github'
+        owner_tree=self.fixture['responses'][f"repos/{owner}/git/commits/{self.fixture['owner_head']}"]['tree']['sha']
+        endpoint=f'repos/{owner}/git/trees/{owner_tree}?recursive=1'
+        for wrong_path in (True,False):
+            api=self.api();tree=copy.deepcopy(self.fixture['responses'][endpoint])
+            helper=next(row for row in tree['tree'] if row['path']=='tools/routine-delivery.py')
+            if wrong_path:helper['path']='tools/not-the-maintained-helper.py'
+            else:
+                body=b'other real Git blob bytes'
+                sha=hashlib.sha1(f'blob {len(body)}\0'.encode()+body).hexdigest();helper['sha']=sha
+                api.overrides[f'repos/{owner}/git/blobs/{sha}']=dict(sha=sha,encoding='base64',size=len(body),content=MODULE.base64.b64encode(body).decode())
+            api.overrides[endpoint]=tree
+            self.assertEqual((self.invoke(api,True)[0],api.attempts),(2,0))
+        api=self.api();row=dict(type='blob',mode='100644',sha='f'*40)
+        api.overrides[f'repos/{owner}/git/blobs/'+('f'*40)]=dict(sha='f'*40,encoding='base64',size=131073,content='YQ==')
+        with self.assertRaises(RuntimeError):api.installation_blob(owner,row)
 
     def test_required_and_coherent_checks_must_complete_and_exact_native_provenance(self):
         for field,value in (("bucket","pending"),("state","FAILURE"),("link","https://evil.invalid/check"),("completedAt","")):
