@@ -4,11 +4,11 @@
     {
       "id": "check-board",
       "supplied-by": ".claude/skills/check-board",
-      "tree-sha256": "d2fcb9ddfd0ccb7552e37d04a554488ea01c68b47ca73702a6613257f6d8b55b",
+      "tree-sha256": "c1e2c145347d4c947c40271bf0126cee4b05c07013fa6bc20dc38d3b15bc60bd",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "c8a41c59aec3c9932e72d809fb490afa9a6978f25f2e8cdfb4ced20fd8c921b9",
+          "sha256": "0ea9c4788c3974d39bdf772bf3ffa5815615b806127fb7845982b02a8701aab4",
           "executable": false
         },
         {
@@ -18,22 +18,22 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "a9cb0df37ef8d3fc833fe48668160adc075f72a9ce6f79dc6d82afaa1713319f",
+          "sha256": "ead0d4c56a5f8e82e9437562ff1e3019fc6a706f40f56d95831bca1a3c7fa0e1",
           "executable": false
         },
         {
           "path": "references/judgement-findings.md",
-          "sha256": "4d1829883c233ea4a05da6475222a43ee4873f302e50b3695dc6ee566feea454",
+          "sha256": "a5f4ac3b61234904fe48a7a21d076a72fc5f54bdc3d32de416573c23f44928e4",
           "executable": false
         },
         {
           "path": "references/mechanical-reconciliation.md",
-          "sha256": "455f2b3d81e54baaa08bcad80eeaa615104ed29e699d7020efdfdc25369b77f5",
+          "sha256": "98a403509486c36e80b823fdc5f5991c4787cb81d3907a2489fddc56f3e515e4",
           "executable": false
         },
         {
           "path": "references/organization-v2-inspection.md",
-          "sha256": "3a41caaa1c2723b54ecce31486bd7ed6bee9e4c658d90ae8cb21efda98df2f95",
+          "sha256": "3997c4c1ab4263448b82a2cdd74d0c97334714b292d29dee1b2f0e5d68f65dea",
           "executable": false
         },
         {
@@ -46,11 +46,11 @@
     {
       "id": "cross-repo-coordination",
       "supplied-by": ".claude/skills/cross-repo-coordination",
-      "tree-sha256": "c31584ca5c33c82a156051ea565a398e257d6570d65b804b8dcc1a1d3be56742",
+      "tree-sha256": "8d2733b2b65c005d3136d1557c96f71025cd6a92e18e420dfc031804db0094cf",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "bc040e2ba93b490a31f868497e46eeb2c6a2eea6f27a3fc90bb21361887aefe0",
+          "sha256": "dbe7191249a1007be0f66c71845e42635ade344955b149c76e81591be32afa4b",
           "executable": false
         },
         {
@@ -70,12 +70,12 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "fc0dfc9f7e04a48cca4aaf166ab2f79c24c6c26c7973f40d394026736bafdb1e",
+          "sha256": "c5b2430d782a85117d7e82dc17a97187221f6e2d303fe784f068ab2924bfb0ed",
           "executable": false
         },
         {
           "path": "references/mailbox-and-board.md",
-          "sha256": "eb79ab9a44c353f481a1dc297743cedb38072ca19a1a7a576f27ae6bb53037a2",
+          "sha256": "07ab1dab958d8e5d38487a3cf4b5ae59ffabaa2251873cf8918475d5f69b5b01",
           "executable": false
         }
       ]
