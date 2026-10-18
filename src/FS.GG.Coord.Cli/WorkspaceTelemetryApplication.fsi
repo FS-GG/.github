@@ -3,6 +3,11 @@ namespace FS.GG.Coord.Cli
 module WorkspaceTelemetryApplication =
     type Binding
 
+    /// Inert transport injection for existing spool/receipt flow tests; production uses RemoteClient.
+    type RemoteOperations =
+        { Lookup: FS.GG.Coord.TelemetryReceipt.Scope -> string -> string -> System.Threading.CancellationToken -> System.Threading.Tasks.Task<FS.GG.Telemetry.RemoteClient.Result>
+          Submit: FS.GG.Coord.TelemetryReceipt.Scope -> byte array -> System.Threading.CancellationToken -> System.Threading.Tasks.Task<FS.GG.Telemetry.RemoteClient.Result> }
+
     type LocalDashboardBinding =
         {
             ConfigPath: string
@@ -16,6 +21,9 @@ module WorkspaceTelemetryApplication =
     /// Read a bounded private descriptor without following a final symlink or
     /// accepting a device/FIFO. Both descriptor and named identity must stay fixed.
     val readEfficiencyClaimTemplate: path: string -> Result<byte array, string list>
+
+    /// Reuse the same bounded no-follow descriptor reader for explicit passive selections.
+    val readPassiveSelection: path: string -> Result<byte array, string list>
 
     val resolveBinding: configArg: string option -> repositoryArg: string option -> Result<Binding, string list>
 
@@ -34,12 +42,31 @@ module WorkspaceTelemetryApplication =
     val tryPublish:
         configArg: string option -> repositoryArg: string option -> payload: byte array -> Result<string, string list>
 
+    /// Enqueue immutable remote spool bytes only; no receiver/credential operations.
+    val tryEnqueueBound:
+        configArg: string option -> repositoryArg: string option -> expectedProducer: string option ->
+        expectedBinding: string option -> payload: byte array -> Result<string, string list>
+
+    val passiveProducer:
+        configArg: string option -> repositoryArg: string option ->
+            Result<string * FS.GG.Coord.TelemetryReceipt.Scope * string, string list>
+
     val tryPublishExpected:
         configArg: string option ->
         repositoryArg: string option ->
         expectedProducer: string option ->
         payload: byte array ->
             Result<string, string list>
+
+    /// Same bounded eligible-head selection used by the actual drain, initially without its advisory cursor.
+    val selectReadyFilesForTesting: files: string array -> Result<string list, string list>
+
+    val tryDrainWithOperationsForTesting:
+        configArg: string option -> repositoryArg: string option -> operations: RemoteOperations -> Result<string, string list>
+
+    /// Inject cancellation into the unchanged 30-second drain budget, without waiting on wall time.
+    val tryDrainWithDeadlineForTesting:
+        configArg: string option -> repositoryArg: string option -> operations: RemoteOperations -> deadline: System.Threading.CancellationToken -> Result<string, string list>
 
     val tryDrain: configArg: string option -> repositoryArg: string option -> Result<string, string list>
 

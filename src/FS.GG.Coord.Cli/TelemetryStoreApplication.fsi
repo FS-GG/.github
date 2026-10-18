@@ -372,6 +372,10 @@ module TelemetryStoreApplication =
         outputPath: string ->
             Result<string, string list>
 
+    val passiveObservations:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment -> scope: TelemetryReceipt.Scope ->
+            Result<string, string list>
+
     val run: action: string -> args: string list -> int
     val runBudget: action: string -> args: string list -> int
     val runReview: action: string -> args: string list -> int

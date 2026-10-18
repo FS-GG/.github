@@ -1,8 +1,8 @@
 name: release-successor-publish
 
-# Single-operator publication for the one literal 0.104.0 successor, with a separate
-# install-only suspension route. Fixed journal19 recovery remains bound to the original
-# 0.101.0 candidate; the five GS2-08.9 sealed workflows retain their distinct selection.
+# Single-operator publication for the selected current coherent source, with separate
+# fixed historical recovery/install-only routes. Their original version/journal bindings
+# remain unchanged; current source preparation grants no publication effect.
 on:
   workflow_dispatch:
     inputs:

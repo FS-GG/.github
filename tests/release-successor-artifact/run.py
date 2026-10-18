@@ -192,18 +192,26 @@ class LiteralSuccessorArtifactTests(CandidateArtifactTests):
         self.assertFalse(self.output.exists())
 
 
-class Current105ArtifactTests(CandidateArtifactTests):
-    VERSION = "0.105.0"
-    PREVIOUS = "0.104.0"
+class CurrentReleaseArtifactTests(CandidateArtifactTests):
+    VERSION = gate.CURRENT_RELEASE["version"]
+    PREVIOUS = gate.CURRENT_RELEASE["predecessor"]
     PREVIOUS_SOURCE = gate.CURRENT_RELEASE['predecessorSource']
     PREVIOUS_CONTENT = gate.CURRENT_RELEASE['predecessorContentId']
 
-    def test_current_predecessor_source_is_checked_by_the_actual_artifact_reader(self):
-        path=self.candidate/'previous-stable-channel.json'
-        value=json.loads(path.read_bytes());value['sourceSha']='e'*40
-        path.write_text(json.dumps(value));self.repack()
-        self.artifact['digest']='sha256:'+hashlib.sha256(self.archive.read_bytes()).hexdigest()
-        with self.assertRaisesRegex(ValueError,'current candidate predecessor identity'):self.verify()
+    def test_current_predecessor_identity_is_checked_by_the_actual_artifact_reader(self):
+        path = self.candidate / 'previous-stable-channel.json'
+        original = path.read_bytes()
+        for field, value in (('sourceSha', 'e' * 40), ('version', '0.0.1'),
+                             ('contentId', 'sha256:' + 'e' * 64)):
+            with self.subTest(field=field):
+                predecessor = json.loads(original)
+                predecessor[field] = value
+                path.write_text(json.dumps(predecessor))
+                self.repack()
+                self.artifact['digest'] = 'sha256:' + hashlib.sha256(self.archive.read_bytes()).hexdigest()
+                with self.assertRaisesRegex(ValueError, 'current candidate predecessor identity'):
+                    self.verify()
+                self.assertFalse(self.output.exists())
 
 
 

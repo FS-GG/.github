@@ -2,7 +2,47 @@
 
 Owner: `FS-GG/.github` release and telemetry producer. Main/SystemAdmin owns installed-host adoption. This item is a separate, additive publication route; it does not reopen the accepted GS2-08.9 legacy routes or authorize `OpenV2`.
 
-## Selected current source: 0.105 after accepted 0.104 — 2026-10-18
+## Selected prospective source: 0.106 over accepted 0.105 — 2026-10-18
+
+Root selected coherent **0.106.0** source preparation for passive modern native observations through
+PR #4672 and its existing application/reader/store composition. The accepted predecessor is
+**0.105.0**, source `e54a59885580c894c8fbc67b0b27af3571ea9883`, content identity
+`sha256:52b3e36be8e985097934377478a0f7359f0f65efd9c37e0438b8ee4c10022f3f`, promoted in
+[release 416229635](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.105.0).
+The fresh prospective journal is `refs/heads/fsgg/v2/journal/release/utel-rel-24`; no journal is initialized
+by this selection. Published registry fields, canonical installed-tool pin, active 0.105 executable
+and accepted board binding remain unchanged.
+
+Advance the existing candidate and current publisher tuple together. The normal first-attempt,
+exact-main candidate retains its seven original archive members and separate V2 refusal evidence;
+source preparation grants no dispatch. Public NuGet and exact tag reads found no 0.106 at the
+preparation cutoff, but local authenticated org-feed reads were denied. The existing hosted
+`packages: read` six-coordinate guard must freshly establish complete uniqueness and the exact
+0.105 predecessor before qualification/retention, and again beside publication. Read-only journal
+collision preparation never replaces the entry-time native absence and ownership checks.
+
+After final exact-source qualification and separate candidate admission, authenticate the downloaded
+archive and use the candidate workflow's existing local-only package source/exclusive tool-path
+pattern for an isolated offline capture trial. Invoke the absolute candidate entry; never replace the
+active board selector or binding. Fresh capture-only association metadata is local setup, not receiver
+enrollment or readiness; receiver credentials are unnecessary for local capture/reporting. Actual
+local runtime, output custody, resource bounds and safe explicit native sources remain separately
+admitted. This is not published/installed fleet or receiver durability acceptance.
+
+The compatible receiver Host/store remains a separate adoption requirement: the shared store payload
+changed, but `FS.GG.Telemetry.Host` is independently versioned and is not a fourth coherent-set
+package. Keep its current published/source inventory unchanged in this preparation. Existing
+receivers may reject the new payload while exact pending bytes remain retained. The first useful
+isolated local capture does not wait for Home access, Host deployment or receiver enrollment.
+
+Publication remains the existing same-source candidate, no-effect preflight, separately selected
+publisher, all sixteen durable effects, both feeds and promotion/readback route. A new source or
+successful candidate cannot repack, replay, release or settle an earlier uncertain effect. Original
+0.103/0.104 journals, all 439 inherited holds and forty-six prior originals remain retained. Main
+stays fixed through the later admitted candidate/preflight/first publication window. No publication,
+installation, activation or original-operation retry is selected by this source update.
+
+## Historical 0.105 source selection after accepted 0.104 — 2026-10-18
 
 The selected source composition is **0.105.0**, with predecessor **0.104.0** and the
 closed journal reference `refs/heads/fsgg/v2/journal/release/utel-rel-23`. This joins the

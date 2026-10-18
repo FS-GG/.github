@@ -30,10 +30,10 @@ PATH = "release-state.json"
 SCHEMA = "fsgg.release-successor-journal/1"
 
 # One selected current source composition, independent of frozen original cuts.
-CURRENT_RELEASE = {"version": "0.105.0", "predecessor": "0.104.0",
-    "logicalRef": "refs/heads/fsgg/v2/journal/release/utel-rel-23",
-    "predecessorSource": "912eba8bbd707dabcbc5011d508c479109010b71",
-    "predecessorContentId": "sha256:86a776fe591b5b98bf189fdf2c47148b1b417551c44f091146a1d6ce1acfd987"}
+CURRENT_RELEASE = {"version": "0.106.0", "predecessor": "0.105.0",
+    "logicalRef": "refs/heads/fsgg/v2/journal/release/utel-rel-24",
+    "predecessorSource": "e54a59885580c894c8fbc67b0b27af3571ea9883",
+    "predecessorContentId": "sha256:52b3e36be8e985097934377478a0f7359f0f65efd9c37e0438b8ee4c10022f3f"}
 
 
 
@@ -650,7 +650,7 @@ class ProtectedReleaseJournal:
         observed = self._observed
         if (self.ref != CURRENT_RELEASE["logicalRef"] or not self.main_directory
                 or self._ordinary_binding_cache is None or self.api is not self._ordinary_api
-                or self.directory != "state/releases/utel-rel-23" or self.continuation_owner is not None
+                or self.directory != "state/releases/utel-rel-24" or self.continuation_owner is not None
                 or observed is None or expected != (observed.head, canonical(observed.state))
                 or version != CURRENT_RELEASE["version"] or observed.state.get("version") != version
                 or observed.state.get("contentId") != content_id or observed.state.get("sourceSha") != source

@@ -24,6 +24,27 @@ module internal SkillPrivateDurability =
     [<DllImport("libc", EntryPoint = "close", SetLastError = true)>]
     extern int private Close(int descriptor)
 
+    [<DllImport("libc", EntryPoint = "open", SetLastError = true)>]
+    extern int private OpenPrivate(string path, int flags, uint32 mode)
+
+    [<DllImport("libc", EntryPoint = "flock", SetLastError = true)>]
+    extern int private Flock(int descriptor, int operation)
+
+    let withLock (path: string) (action: unit -> 'a) : 'a =
+        if OperatingSystem.IsLinux() then
+            let descriptor = OpenPrivate(path, 0x2 ||| 0x40 ||| 0x800 ||| 0x20000 ||| 0x80000, 0x180u)
+            if descriptor < 0 then raise (IOException "private producer lock is unavailable")
+            try
+                if Flock(descriptor, 2 ||| 4) <> 0 then raise (IOException "private producer is busy")
+                use handle = new SafeFileHandle(nativeint descriptor, false)
+                use stream = new FileStream(handle, FileAccess.ReadWrite)
+                if not stream.CanSeek then raise (IOException "private producer lock is not a regular file")
+                action ()
+            finally Close descriptor |> ignore
+        else
+            use held = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+            action ()
+
     let syncDirectory path =
         if not (OperatingSystem.IsWindows()) then
             let descriptor = Open(path, 0)
@@ -67,6 +88,39 @@ module SkillTelemetryReaders =
             ParentAttemptId: string option
             ProducerStream: string
         }
+
+    type ObservedCounters =
+        { Input: int64 option
+          CachedInput: int64 option
+          CacheWriteInput: int64 option
+          Output: int64 option
+          Reasoning: int64 option
+          Total: int64 option }
+
+    type PassiveNativeRecord =
+        { ThreadId: Guid
+          TurnId: Guid
+          ResponseId: string
+          Usage: ObservedCounters
+          Provider: string option
+          Model: string option
+          Effort: string option
+          OccurredAt: string option
+          SourceDigest: string
+          Position: int64 }
+
+    type PassiveCursor =
+        { SourceInstance: string
+          Generation: string
+          Offset: int64
+          AnchorDigest: string
+          SkippingOversized: bool }
+
+    type PassiveScan =
+        { Records: PassiveNativeRecord list
+          Cursor: PassiveCursor
+          ScannedBytes: int
+          Diagnostics: string list }
 
     type NativeCounters =
         {
@@ -873,26 +927,53 @@ module SkillTelemetryReaders =
             else
                 None
 
-        let private counters value =
-            match
-                int64Field "input_tokens" value,
-                int64Field "cached_input_tokens" value,
-                int64Field "output_tokens" value,
-                int64Field "reasoning_output_tokens" value,
-                int64Field "total_tokens" value
+        let private observedCounters (value: JsonElement) : Result<ObservedCounters, ReaderError> =
+            try
+                if value.ValueKind <> JsonValueKind.Object then invalidOp "native usage counters are malformed"
+                let count (name: string) =
+                    match value.TryGetProperty name with
+                    | false, _ -> None
+                    | true, field when field.ValueKind = JsonValueKind.Null -> None
+                    | true, _ ->
+                        match int64Field name value with
+                        | Some number -> Some number
+                        | None -> invalidOp "native usage counters are malformed"
+                let input, cached, cacheWrite = count "input_tokens", count "cached_input_tokens", count "cache_write_input_tokens"
+                let output, reasoning, total = count "output_tokens", count "reasoning_output_tokens", count "total_tokens"
+                let subset part whole = match part, whole with Some p, Some w -> p <= w | _ -> true
+                if not (subset cached input && subset cacheWrite input && subset reasoning output)
+                   || (match input, output, total with Some i, Some o, Some t -> i > Int64.MaxValue - o || i + o <> t | _ -> false)
+                   || ([input; cached; cacheWrite; output; reasoning; total] |> List.forall Option.isNone) then
+                    invalidOp "native usage counters are malformed"
+                Ok { Input = input; CachedInput = cached; CacheWriteInput = cacheWrite; Output = output; Reasoning = reasoning; Total = total }
+            with :? InvalidOperationException -> failure "native usage counters are malformed"
+
+        let private counters (value: JsonElement) : Result<NativeCounters, ReaderError> =
+            observedCounters value
+            |> Result.bind (fun counts ->
+                match counts.Input, counts.CachedInput, counts.Output, counts.Reasoning, counts.Total with
+                | Some input, Some cached, Some output, Some reasoning, Some total ->
+                    Ok { Input = input; CachedInput = cached; Output = output; Reasoning = reasoning; Total = total }
+                | _ -> failure "native usage counters are malformed")
+
+        // Both complete accounting and passive capture use this decoder. It retains no raw text.
+        let private decodeUsageRecord (raw: byte array) =
+            try
+                // Retain the complete collector's strict UTF-8 and recursive duplicate-property refusal.
+                match Json.parse (Encoding.UTF8.GetBytes(decodedLine raw)) with
+                | Error _ -> failure "native usage record is malformed"
+                | Ok row ->
+                    if stringField "type" row <> Some "token_usage_record" then Ok None
+                    else
+                        let payload = row.GetProperty "payload"
+                        match guidField "thread_id" payload, guidField "turn_id" payload, stringField "response_id" payload with
+                        | Some thread, Some turn, Some response when thread <> Guid.Empty && turn <> Guid.Empty
+                                                                    && identityPattern.IsMatch response ->
+                            observedCounters (payload.GetProperty "usage")
+                            |> Result.map (fun usage -> Some(thread, turn, response, usage, payload.Clone(), row.Clone()))
+                        | _ -> failure "native usage record identity is malformed"
             with
-            | Some input, Some cached, Some output, Some reasoning, Some total when
-                cached <= input && reasoning <= output && input + output = total
-                ->
-                Ok
-                    {
-                        Input = input
-                        CachedInput = cached
-                        Output = output
-                        Reasoning = reasoning
-                        Total = total
-                    }
-            | _ -> failure "native usage counters are malformed"
+            | :? JsonException | :? InvalidOperationException | :? KeyNotFoundException | :? DecoderFallbackException -> failure "native usage record is malformed"
 
         type private AppServer(command: string, protectedHome: string option) =
             let start = ProcessStartInfo(command)
@@ -1120,6 +1201,34 @@ module SkillTelemetryReaders =
             | None -> Ok(rows |> Seq.toList, pageNumber)
 
         module private NativeFile =
+            [<StructLayout(LayoutKind.Sequential)>]
+            type Stat =
+                struct
+                    val mutable Device: uint64
+                    val mutable Inode: uint64
+                    val mutable Links: uint64
+                    val mutable Mode: uint32
+                    val mutable User: uint32
+                    val mutable Group: uint32
+                    val mutable Padding: int32
+                    val mutable Rdev: uint64
+                    val mutable Size: int64
+                    val mutable BlockSize: int64
+                    val mutable Blocks: int64
+                    val mutable AccessSeconds: int64
+                    val mutable AccessNanoseconds: int64
+                    val mutable ModifySeconds: int64
+                    val mutable ModifyNanoseconds: int64
+                    val mutable ChangeSeconds: int64
+                    val mutable ChangeNanoseconds: int64
+                    val mutable Reserved1: int64
+                    val mutable Reserved2: int64
+                    val mutable Reserved3: int64
+                end
+
+            [<DllImport("libc", SetLastError = true)>]
+            extern int fstat(int descriptor, Stat& value)
+
             [<Literal>]
             let ReadOnly = 0
 
@@ -1204,7 +1313,7 @@ module SkillTelemetryReaders =
                             NativeFile.OpenAt(
                                 current,
                                 components[components.Length - 1],
-                                NativeFile.ReadOnly ||| NativeFile.CloseOnExec ||| NativeFile.NoFollow
+                                NativeFile.ReadOnly ||| NativeFile.CloseOnExec ||| NativeFile.NoFollow ||| 0x800
                             )
 
                         if fileDescriptor < 0 then
@@ -1257,6 +1366,140 @@ module SkillTelemetryReaders =
             with _ ->
                 failure "native usage rollout is unavailable or outside the private host"
 
+        [<Literal>]
+        let PassiveMaximumFiles = 8
+        [<Literal>]
+        let PassiveMaximumScanBytes = 4 * 1024 * 1024
+        [<Literal>]
+        let PassiveMaximumObservations = 64
+
+        let passiveIdentity (thread: Guid) (turn: Guid) (response: string) =
+            "passive-" + sha256(Encoding.UTF8.GetBytes("codex-rollout/1\u001f" + thread.ToString("D") + "\u001f" + turn.ToString("D") + "\u001f" + response))
+
+        // Reads only selected files through the same no-follow opener as complete native accounting.
+        // The inode/device identity comes from the opened descriptor, never the pathname's metadata.
+        let scanPassive (codexHome: string) (path: string) (prior: PassiveCursor option) (maximumBytes: int) (maximumRecords: int) : Result<PassiveScan, ReaderError> =
+            if maximumBytes < 16384 || maximumBytes > PassiveMaximumScanBytes
+               || maximumRecords < 1 || maximumRecords > PassiveMaximumObservations then
+                failure "passive native scan bounds are invalid"
+            elif not (OperatingSystem.IsLinux() && RuntimeInformation.ProcessArchitecture = Architecture.X64) then
+                failure "passive source identity is unsupported on this platform"
+            else
+                match openRollout codexHome path with
+                | Error error -> Error error
+                | Ok opened ->
+                    use source = opened
+                    try
+                        let file = source :?> FileStream
+                        let mutable stat = Unchecked.defaultof<NativeFile.Stat>
+                        if NativeFile.fstat(file.SafeFileHandle.DangerousGetHandle().ToInt32(), &stat) <> 0
+                           || (stat.Mode &&& 0xF000u) <> 0x8000u then invalidOp "passive source is not a regular file"
+                        let instance = sha256(Encoding.UTF8.GetBytes($"codex-file/1:{stat.Device}:{stat.Inode}"))
+                        let mutable scanned = 0
+                        let anchor (offset: int64) =
+                            use retained = new MemoryStream()
+                            for start, length in [ 0L, min 4096L offset; max 0L (offset - 4096L), min 4096L offset ] do
+                                source.Position <- start
+                                let bytes = Array.zeroCreate<byte> (int length)
+                                source.ReadExactly(bytes, 0, bytes.Length)
+                                scanned <- scanned + bytes.Length
+                                retained.Write(bytes, 0, bytes.Length)
+                            sha256(retained.ToArray())
+                        let diagnostics = HashSet<string>(StringComparer.Ordinal)
+                        let continuous =
+                            match prior with
+                            | Some cursor when cursor.SourceInstance = instance && cursor.Offset >= 0L && cursor.Offset <= source.Length ->
+                                anchor cursor.Offset = cursor.AnchorDigest
+                            | _ -> false
+                        let generation, initialOffset, initialSkip =
+                            match prior with
+                            | Some cursor when continuous -> cursor.Generation, cursor.Offset, cursor.SkippingOversized
+                            | Some _ ->
+                                diagnostics.Add "source-continuity-gap" |> ignore
+                                Guid.NewGuid().ToString("N"), 0L, false
+                            | None ->
+                                diagnostics.Add "source-population-unknown" |> ignore
+                                Guid.NewGuid().ToString("N"), 0L, false
+                        source.Position <- initialOffset
+                        let records = ResizeArray<PassiveNativeRecord>()
+                        let identities = HashSet<string>(StringComparer.Ordinal)
+                        use line = new MemoryStream()
+                        let buffer = Array.zeroCreate<byte> 8192
+                        let mutable position, committed, lineStart = initialOffset, initialOffset, initialOffset
+                        let mutable skipping = initialSkip
+                        let mutable doneReading = false
+                        let mutable bytesSinceLine = 0
+                        // Reserve 8 KiB for the final continuity anchor within the global byte budget.
+                        while not doneReading && scanned < maximumBytes - 8192 && records.Count < maximumRecords do
+                            let count = source.Read(buffer, 0, min buffer.Length (maximumBytes - 8192 - scanned))
+                            scanned <- scanned + count
+                            if count = 0 then doneReading <- true
+                            else
+                                let mutable index = 0
+                                while index < count && records.Count < maximumRecords && not doneReading do
+                                    let value = buffer[index]
+                                    position <- position + 1L
+                                    bytesSinceLine <- bytesSinceLine + 1
+                                    if not skipping then
+                                        if line.Length >= int64 maximumLineBytes then
+                                            skipping <- true
+                                            line.SetLength 0L
+                                            diagnostics.Add "oversized-line-skipped" |> ignore
+                                        else line.WriteByte value
+                                    if value = byte '\n' then
+                                        if not skipping then
+                                            let bytes = line.ToArray()
+                                            match decodeUsageRecord bytes with
+                                            | Error _ -> diagnostics.Add "malformed-row-skipped" |> ignore
+                                            | Ok None -> ()
+                                            | Ok(Some(thread, turn, response, usage, payload, row)) ->
+                                                let profile (name: string) =
+                                                    stringField name payload
+                                                    |> Option.filter (fun text -> not (String.IsNullOrWhiteSpace text) && text.Length <= 200 && not (text |> Seq.exists Char.IsControl))
+                                                let occurred =
+                                                    stringField "timestamp" row
+                                                    |> Option.orElseWith (fun () -> stringField "timestamp" payload)
+                                                    |> Option.bind (fun text ->
+                                                        if not (Regex.IsMatch(text, "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$")) then None
+                                                        else
+                                                            match DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind) with
+                                                            | true, parsed -> Some(parsed.ToUniversalTime().ToString("O"))
+                                                            | _ -> None)
+                                                // Digest only the allowlisted source projection; never hash/export transcript bodies.
+                                                let normalized =
+                                                    JsonSerializer.SerializeToUtf8Bytes
+                                                        {| threadId = thread; turnId = turn; responseId = response
+                                                           input = usage.Input |> Option.toNullable; cachedInput = usage.CachedInput |> Option.toNullable
+                                                           cacheWriteInput = usage.CacheWriteInput |> Option.toNullable; output = usage.Output |> Option.toNullable
+                                                           reasoning = usage.Reasoning |> Option.toNullable; total = usage.Total |> Option.toNullable
+                                                           provider = profile "provider" |> Option.toObj; model = profile "model" |> Option.toObj
+                                                           effort = profile "effort" |> Option.toObj; occurredAt = occurred |> Option.toObj |}
+                                                if identities.Add(passiveIdentity thread turn response) then
+                                                    records.Add { ThreadId = thread; TurnId = turn; ResponseId = response; Usage = usage
+                                                                  Provider = profile "provider"; Model = profile "model"; Effort = profile "effort"
+                                                                  OccurredAt = occurred; SourceDigest = sha256 normalized; Position = lineStart }
+                                                else
+                                                    // Never collapse a correction before its prior revision has an intent.
+                                                    doneReading <- true
+                                                    diagnostics.Add "response-boundary-deferred" |> ignore
+                                        if not doneReading then
+                                            committed <- position
+                                            lineStart <- position
+                                        line.SetLength 0L
+                                        bytesSinceLine <- 0
+                                        skipping <- false
+                                    elif skipping then committed <- position
+                                    index <- index + 1
+                                if records.Count = maximumRecords then diagnostics.Add "observation-pass-budget" |> ignore
+                        if bytesSinceLine > 0 && not skipping then diagnostics.Add (if doneReading then "partial-tail-deferred" else "line-boundary-deferred") |> ignore
+                        if not doneReading && records.Count < maximumRecords then diagnostics.Add "scan-pass-budget" |> ignore
+                        let finalAnchor = anchor committed
+                        Ok { Records = records |> Seq.toList
+                             Cursor = { SourceInstance = instance; Generation = generation; Offset = committed; AnchorDigest = finalAnchor; SkippingOversized = skipping }
+                             ScannedBytes = scanned
+                             Diagnostics = diagnostics |> Seq.sort |> Seq.toList }
+                    with _ -> failure "passive native source read failed; cursor retained"
+
         type private UsageRecord =
             {
                 Response: string
@@ -1279,89 +1522,31 @@ module SkillTelemetryReaders =
                     while next.IsSome && failed.IsNone do
                         let bytes = next.Value
                         if bytes.Length > 0 && isNativeUsageRecordPrefix bytes then
-                            let line = decodedLine bytes
-                            match Json.parse (Encoding.UTF8.GetBytes line) with
-                            | Error _ ->
-                                failed <-
-                                    Some
-                                        {
-                                            Message = "native usage record is malformed"
-                                            Coverage = Unknown
-                                        }
-                            | Ok row ->
-                                let mutable payload = Unchecked.defaultof<JsonElement>
-
-                                if
-                                    stringField "type" row <> Some "token_usage_record"
-                                    || not (row.TryGetProperty("payload", &payload))
-                                    || payload.ValueKind <> JsonValueKind.Object
-                                then
-                                    failed <-
-                                        Some
-                                            {
-                                                Message = "native usage record is malformed"
-                                                Coverage = Unknown
-                                            }
+                            match decodeUsageRecord bytes with
+                            | Error error -> failed <- Some error
+                            | Ok None -> ()
+                            | Ok(Some(recordThread, turnId, response, _, payload, _)) ->
+                                if recordThread <> threadId || not (turnIds.Contains turnId) then
+                                    failed <- Some { Message = "native usage record belongs to another thread or turn"; Coverage = Unknown }
                                 else
-                                    match
-                                        guidField "thread_id" payload,
-                                        guidField "turn_id" payload,
-                                        stringField "response_id" payload
-                                    with
-                                    | Some recordThread, Some turnId, Some response when
-                                        recordThread = threadId
-                                        && turnIds.Contains turnId
-                                        && not (String.IsNullOrEmpty response)
-                                        ->
-                                        let mutable usage = Unchecked.defaultof<JsonElement>
-                                        let mutable turnTotal = Unchecked.defaultof<JsonElement>
-
-                                        if
-                                            payload.TryGetProperty("usage", &usage)
-                                            && payload.TryGetProperty("turn_token_usage", &turnTotal)
-                                        then
-                                            match counters usage, counters turnTotal with
-                                            | Ok usageValue, Ok totalValue ->
-                                                let collection =
-                                                    match records.TryGetValue turnId with
-                                                    | true, value -> value
-                                                    | _ ->
-                                                        let value = ResizeArray<UsageRecord>()
-                                                        records[turnId] <- value
-                                                        value
-
-                                                collection.Add
-                                                    {
-                                                        Response = response
-                                                        Usage = usageValue
-                                                        TurnTotal = totalValue
-                                                    }
-
-                                                evidence.Add bytes
-
-                                                if evidence |> Seq.sumBy _.Length > maximumEvidenceBytes then
-                                                    failed <-
-                                                        Some
-                                                            {
-                                                                Message = "native rollout evidence exceeds the bound"
-                                                                Coverage = Unknown
-                                                            }
-                                            | Error error, _
-                                            | _, Error error -> failed <- Some error
-                                        else
-                                            failed <-
-                                                Some
-                                                    {
-                                                        Message = "native usage record is malformed"
-                                                        Coverage = Unknown
-                                                    }
-                                    | _ ->
-                                        failed <-
-                                            Some
-                                                {
-                                                    Message = "native usage record belongs to another thread or turn"
-                                                    Coverage = Unknown
-                                                }
+                                    let mutable usage = Unchecked.defaultof<JsonElement>
+                                    let mutable turnTotal = Unchecked.defaultof<JsonElement>
+                                    if payload.TryGetProperty("usage", &usage) && payload.TryGetProperty("turn_token_usage", &turnTotal) then
+                                        match counters usage, counters turnTotal with
+                                        | Ok usageValue, Ok totalValue ->
+                                            let collection =
+                                                match records.TryGetValue turnId with
+                                                | true, value -> value
+                                                | _ ->
+                                                    let value = ResizeArray<UsageRecord>()
+                                                    records[turnId] <- value
+                                                    value
+                                            collection.Add { Response = response; Usage = usageValue; TurnTotal = totalValue }
+                                            evidence.Add bytes
+                                            if evidence |> Seq.sumBy _.Length > maximumEvidenceBytes then
+                                                failed <- Some { Message = "native rollout evidence exceeds the bound"; Coverage = Unknown }
+                                        | Error error, _ | _, Error error -> failed <- Some error
+                                    else failed <- Some { Message = "native usage record is malformed"; Coverage = Unknown }
 
                         if failed.IsNone then next <- lines.ReadLine(None, true)
 

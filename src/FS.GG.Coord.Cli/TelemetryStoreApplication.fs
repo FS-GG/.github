@@ -1636,6 +1636,7 @@ WHERE f.identity=$resource AND f.revision=$sourceRevision AND f.content_digest=$
                         [ "$item", box rosterItem ]
                 if assigned <> 0L then
                     invalidOp $"shared allocation for %s{rosterItem} must be persisted before assignment"
+        | TelemetryStore.PassiveProviderUsage _
         | TelemetryStore.RuntimeNativeInventory _
         | TelemetryStore.RuntimeExecNativeInventory _
         | TelemetryStore.RuntimeResponseNativeInventory _
@@ -3067,6 +3068,39 @@ ORDER BY f.identity LIMIT 413701;
                      AuthenticatedFacts = facts }
             with error -> Error [ error.Message ]
 
+    // Bounded, read-only partial observations from the existing current canonical ledger.
+    // These unassigned facts never enter item usage, budget or efficiency projections.
+    let passiveObservations (path: string) (assessment: TelemetryStore.DurabilityAssessment) (scope: TelemetryReceipt.Scope) =
+        match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
+        | Error errors -> Error errors
+        | Ok(connection, _) ->
+            use connection = connection
+            try
+                use transaction = connection.BeginTransaction()
+                if Int32.Parse(scalarText connection "PRAGMA user_version;") <> currentSchemaVersion then
+                    invalidOp "passive-receiver-capability-unavailable"
+                use command = connection.CreateCommand()
+                command.Transaction <- transaction
+                command.CommandText <- "SELECT f.canonical FROM current_ingest_facts f JOIN fact_admissions a ON a.identity=f.identity WHERE (SELECT value FROM store_metadata WHERE key='receiptWorkspace')=$workspace AND f.kind='provider-usage-observation/1' AND f.item_id IS NULL AND a.producer=$producer AND a.stream=$stream AND a.authority_role='generic' ORDER BY f.identity LIMIT 257;"
+                parameter command "$workspace" scope.Workspace
+                parameter command "$producer" scope.Producer
+                parameter command "$stream" scope.Stream
+                use reader = command.ExecuteReader()
+                let observations = JsonArray()
+                let mutable truncated = false
+                while reader.Read() do
+                    if observations.Count < 256 then observations.Add(JsonNode.Parse(reader.GetString 0))
+                    else truncated <- true
+                let result = JsonObject()
+                result["schema"] <- JsonValue.Create "fsgg.telemetry.passive-snapshot/1"
+                result["capture"] <- JsonValue.Create "receiver-applied"
+                result["attribution"] <- JsonValue.Create "unknown"
+                result["populationCoverage"] <- JsonValue.Create "partial"
+                result["truncated"] <- JsonValue.Create truncated
+                result["observations"] <- observations
+                Ok(result.ToJsonString() + "\n")
+            with _ -> Error [ "passive-observation-projection-unavailable" ]
+
     let private validateCiSuitePageOwner (connection: SqliteConnection) itemId producer stream (scope: TelemetryStore.CiSuiteProofScope) =
         use command = connection.CreateCommand()
         command.CommandText <- """
@@ -3493,6 +3527,8 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
                                           "learn-native-delivery-source/1"; "learn-installed-origin/1" ]
                                 if batch.Facts |> List.exists (fun fact -> not (allowed.Contains fact.Kind)) then
                                     invalidOp "invalid-request"
+                            | None when batch.Facts |> List.exists (fun fact -> fact.Kind = "provider-usage-observation/1") ->
+                                invalidOp "passive-observation-authenticated-owner-required"
                             | Some _ when batch.Facts |> List.exists (fun fact -> fact.Kind = "learn-installed-origin/1") ->
                                 invalidOp "invalid-request"
                             | None when batch.Facts |> List.exists (fun fact -> fact.Kind = "learn-installed-origin/1") ->
@@ -3596,6 +3632,18 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
                                        || admission.Principal.Scope.Stream <> seal.Scope.ProducerStream then
                                         invalidOp "ci-suite-seal-authenticated-stream-or-item-mismatch"
                                 | _ -> ()
+                                match state with
+                                | Some(oldKind, _, _) when oldKind = "provider-usage-observation/1" || fact.Kind = "provider-usage-observation/1" ->
+                                    if oldKind <> fact.Kind then invalidOp "passive-observation-kind-is-immutable"
+                                    let admission = factAdmission |> Option.defaultWith (fun () -> invalidOp "passive-observation-authenticated-owner-required")
+                                    use owner = connection.CreateCommand()
+                                    owner.CommandText <- "SELECT count(*) FROM fact_admissions WHERE identity=$identity AND producer=$producer AND stream=$stream AND authority_role='generic';"
+                                    parameter owner "$identity" fact.Identity
+                                    parameter owner "$producer" admission.Principal.Scope.Producer
+                                    parameter owner "$stream" admission.Principal.Scope.Stream
+                                    if Convert.ToInt64(owner.ExecuteScalar()) <> 1L then invalidOp "passive-observation-owner-mismatch"
+                                | _ -> ()
+
                                 match state with
                                 | Some(oldKind, _, _) when oldKind.StartsWith("efficiency-", StringComparison.Ordinal) ->
                                     if oldKind <> fact.Kind then invalidOp "efficiency-record-kind-is-immutable"
@@ -5528,6 +5576,9 @@ WHERE f.kind='learn-installed-origin/1' AND a.producer=$producer AND a.stream=$s
                                 || error.Contains("constraint", StringComparison.OrdinalIgnoreCase)
                                 || error = "invalid-request"
                                 // These exact receiver admission refusals are semantic, not storage faults.
+                                || error = "passive-observation-authenticated-owner-required"
+                                || error = "passive-observation-owner-mismatch"
+                                || error = "passive-observation-kind-is-immutable"
                                 || error = "responses-native-receipt-required"
                                 || error = "responses-current-installed-origin-required"
                                 || error = "activity usage attribution requires known source counters"

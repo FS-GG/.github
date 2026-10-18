@@ -107,6 +107,10 @@ module WorkspaceTelemetryApplication =
             Digest: string
         }
 
+    type RemoteOperations =
+        { Lookup: TelemetryReceipt.Scope -> string -> string -> CancellationToken -> System.Threading.Tasks.Task<RemoteClient.Result>
+          Submit: TelemetryReceipt.Scope -> byte array -> CancellationToken -> System.Threading.Tasks.Task<RemoteClient.Result> }
+
     type LocalDashboardBinding =
         {
             ConfigPath: string
@@ -197,7 +201,7 @@ module WorkspaceTelemetryApplication =
         else
             Ok()
 
-    let readEfficiencyClaimTemplate (path: string) =
+    let private readPrivateDescriptor (maximumBytes: int64) (path: string) =
         let unsafeFile () = Error [ "efficiency-claim-template-unsafe" ]
         if not (OperatingSystem.IsLinux()) then Error [ "efficiency-claim-template-platform-unavailable" ]
         elif String.IsNullOrWhiteSpace path || not (Path.IsPathFullyQualified path) then unsafeFile ()
@@ -214,7 +218,7 @@ module WorkspaceTelemetryApplication =
                         let mutable before = Unchecked.defaultof<Native.Stat>
                         let valid (value: Native.Stat) =
                             (value.Mode &&& 0xF000u)=0x8000u && (value.Mode &&& 0xFFFu)=0x180u
-                            && value.User=Native.geteuid() && value.Size>0L && value.Size<=16384L
+                            && value.User=Native.geteuid() && value.Size>0L && value.Size<=maximumBytes
                         if Native.fstat(descriptor,&before)<>0 || not (valid before) then unsafeFile ()
                         else
                             use stream = new FileStream(handle,FileAccess.Read)
@@ -237,6 +241,11 @@ module WorkspaceTelemetryApplication =
             | :? IOException -> unsafeFile ()
             | :? UnauthorizedAccessException -> unsafeFile ()
             | :? ArgumentException -> unsafeFile ()
+
+    let readEfficiencyClaimTemplate path = readPrivateDescriptor 16384L path
+
+    let readPassiveSelection (path: string) =
+        readPrivateDescriptor 32768L path |> Result.mapError (fun _ -> [ "passive-selection-unsafe" ])
 
     let private exactObject (node: JsonObject) names =
         node |> Seq.map _.Key |> Set.ofSeq = Set.ofList names
@@ -567,7 +576,7 @@ module WorkspaceTelemetryApplication =
             finally
                 Native.close descriptor |> ignore
 
-    let private atomicWrite directory name bytes =
+    let private atomicWriteWith (overwrite: bool) (directory: string) (name: string) (bytes: byte array) =
         let target = Path.Combine(directory, name)
         let temporary = Path.Combine(directory, "." + Guid.NewGuid().ToString("N") + ".tmp")
 
@@ -587,9 +596,11 @@ module WorkspaceTelemetryApplication =
         output.Write bytes
         output.Flush true
         output.Close()
-        File.Move(temporary, target, false)
+        File.Move(temporary, target, overwrite)
         flushDirectory directory
         target
+
+    let private atomicWrite directory name bytes = atomicWriteWith false directory name bytes
 
     let private credential (reference: string) (_: CancellationToken) =
         task {
@@ -602,7 +613,74 @@ module WorkspaceTelemetryApplication =
                 |> Option.filter (String.IsNullOrWhiteSpace >> not)
         }
 
-    let private remoteOne
+    let private passiveBatch (batch: TelemetryStore.Batch) =
+        batch.Facts |> List.exists (fun fact -> fact.Kind = "provider-usage-observation/1" || (fact.Kind = "source" && fact.Identity.StartsWith("passive-source-", StringComparison.Ordinal)))
+
+    // Only each passive correction chain's earliest pending head is eligible. Rotate the
+    // bounded eligible inventory with advisory metadata, never queued bytes or receipt state.
+    let private selectReadyFiles (after: string option) (files: string array) =
+        if files.Length > 128 then Error [ "spool-overload" ]
+        else
+            try
+                let parsed =
+                    files |> Array.map (fun file ->
+                        let info = FileInfo file
+                        if info.LinkTarget <> null || info.Length > int64 TelemetryReceipt.MaxEnvelopeBytes
+                           || (not (OperatingSystem.IsWindows()) && File.GetUnixFileMode(file) <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite)) then
+                            invalidOp "spool-invalid"
+                        let envelope = TelemetryReceipt.parse (File.ReadAllBytes file) |> Result.defaultWith (fun _ -> invalidOp "spool-invalid")
+                        let chain =
+                            if passiveBatch envelope.Batch then
+                                let cursor = Int64.Parse(envelope.Batch.Cursor, Globalization.CultureInfo.InvariantCulture)
+                                if cursor < 1L then invalidOp "passive-sequence-invalid"
+                                Some(envelope.Scope, envelope.Batch.SourceIdentity, envelope.Batch.Generation, cursor)
+                            else None
+                        file, chain)
+                let heads =
+                    parsed |> Array.choose (fun (file, chain) ->
+                        chain |> Option.map (fun (scope, source, generation, cursor) -> (scope, source, generation), (cursor, file)))
+                    |> Array.groupBy fst
+                    |> Array.map (fun (_, values) -> values |> Array.map snd |> Array.minBy fst |> snd)
+                    |> Set.ofArray
+                let eligible =
+                    parsed |> Array.choose (fun (file, chain) -> if chain.IsNone || heads.Contains file then Some file else None)
+                    |> Array.sortWith (fun left right -> StringComparer.Ordinal.Compare(Path.GetFileName left, Path.GetFileName right))
+                let later, earlier =
+                    eligible |> Array.partition (fun file -> after |> Option.forall (fun previous -> StringComparer.Ordinal.Compare(Path.GetFileName file, previous) > 0))
+                Ok(Array.append later earlier |> Array.truncate 16 |> Array.toList)
+            with _ -> Error [ "spool-invalid" ]
+
+    let selectReadyFilesForTesting files = selectReadyFiles None files
+
+    let private readDrainCursor (directory: string) =
+        // Invalid/missing advisory state resets visit order deterministically. It grants no authority.
+        match readPrivateDescriptor 256L (Path.Combine(directory, "drain-cursor")) with
+        | Ok bytes ->
+            let value = Encoding.UTF8.GetString bytes
+            if System.Text.RegularExpressions.Regex.IsMatch(value, @"\A[0-9a-f]{64}\.ready\z") then Some value else None
+        | Error _ -> None
+
+    let private passivePredecessor (directory: string) (current: TelemetryReceipt.Envelope) =
+        if not (passiveBatch current.Batch) then false
+        else
+            try
+                let cursor = Int64.Parse(current.Batch.Cursor, Globalization.CultureInfo.InvariantCulture)
+                let files = Directory.EnumerateFiles(directory, "*.ready") |> Seq.truncate 129 |> Seq.toArray
+                if files.Length > 128 then true
+                else
+                    files |> Array.exists (fun file ->
+                        let info = FileInfo file
+                        if info.LinkTarget <> null || info.Length > int64 TelemetryReceipt.MaxEnvelopeBytes then true
+                        else
+                            match TelemetryReceipt.parse (File.ReadAllBytes file) with
+                            | Error _ -> true
+                            | Ok prior ->
+                                prior.Scope = current.Scope && prior.Batch.SourceIdentity = current.Batch.SourceIdentity
+                                && prior.Batch.Generation = current.Batch.Generation
+                                && Int64.Parse(prior.Batch.Cursor, Globalization.CultureInfo.InvariantCulture) < cursor)
+            with _ -> true
+
+    let private remoteOneWith (operations: RemoteOperations option)
         (a: Association)
         (endpoint: Uri)
         (reference: string)
@@ -625,6 +703,8 @@ module WorkspaceTelemetryApplication =
         match TelemetryReceipt.parse bytes with
         | Error _ -> Error [ "spool-invalid" ]
         | Ok parsed when parsed.Scope <> (scope a) -> Error [ "spool-scope-conflict" ]
+        | Ok parsed when passivePredecessor (Path.GetDirectoryName file) parsed ->
+            Error [ "passive-prior-batch-pending" ]
         | Ok parsed ->
             let config: RemoteContract.ClientConfig =
                 {
@@ -632,20 +712,32 @@ module WorkspaceTelemetryApplication =
                     CredentialReference = reference
                 }
 
-            let resolve = credential
-
+            let selected =
+                operations |> Option.defaultWith (fun () ->
+                    { Lookup = RemoteClient.lookup config credential
+                      Submit = RemoteClient.submit config credential })
             let result =
-                (RemoteClient.lookup config resolve (scope a) parsed.BatchId parsed.Digest token)
-                    .GetAwaiter()
-                    .GetResult()
+                (selected.Lookup (scope a) parsed.BatchId parsed.Digest token).GetAwaiter().GetResult()
 
             let result =
                 match result with
+                | RemoteClient.Unacknowledged "receipt-unavailable" when token.IsCancellationRequested ->
+                    RemoteClient.Unacknowledged "network-unavailable"
                 | RemoteClient.Unacknowledged "receipt-unavailable" ->
-                    (RemoteClient.submit config resolve (scope a) bytes token).GetAwaiter().GetResult()
+                    (selected.Submit (scope a) bytes token).GetAwaiter().GetResult()
                 | other -> other
 
+            let result =
+                match result with
+                | RemoteClient.Acknowledged receipt when receipt.Scope <> parsed.Scope || receipt.BatchId <> parsed.BatchId || receipt.Digest <> parsed.Digest ->
+                    RemoteClient.Unacknowledged "receipt-unavailable"
+                | other -> other
+            let passive = passiveBatch parsed.Batch
             match result with
+            | RemoteClient.Acknowledged receipt when passive && (receipt.Status = "rejected" || receipt.Status = "expired") ->
+                Error [ "passive-receiver-capability-or-admission-refused:" + (receipt.Code |> Option.defaultValue "unknown") ]
+            | RemoteClient.Unacknowledged code when passive && (code = "unsupported-version" || code = "invalid-request") ->
+                Error [ "passive-receiver-capability-refused:" + code ]
             | RemoteClient.Acknowledged receipt when
                 receipt.Status = "durably-received"
                 || receipt.Status = "applied"
@@ -714,6 +806,8 @@ module WorkspaceTelemetryApplication =
                 ->
                 Error [ "terminal:" + code ]
             | _ -> Error [ "unacknowledged-lossy" ]
+
+    let private remoteOne a endpoint reference token file = remoteOneWith None a endpoint reference token file
 
     let private withLock config action =
         let lockPath = config + ".lock"
@@ -940,13 +1034,70 @@ module WorkspaceTelemetryApplication =
             with _ ->
                 Error [ "publication-advisory-failure" ]
 
+    // Capture-only persistence. This path never resolves credentials, probes health or calls remoteOne.
+    let tryEnqueueBound (configArg: string option) (repositoryArg: string option) (expectedProducer: string option) (expectedBinding: string option) (payload: byte array) =
+        let path = configPath configArg
+        try
+            withLock path (fun () ->
+                load (Some path)
+                |> Result.bind (fun config -> select repositoryArg config)
+                |> Result.bind (fun association ->
+                    if expectedProducer <> Some association.Producer || expectedBinding <> Some(associationDigest association) then
+                        Error [ "association-stale" ]
+                    else
+                        envelope association payload
+                        |> Result.bind (fun (bytes, parsed) ->
+                            match association.Destination with
+                            | Local _ -> Error [ "capture-only-remote-spool-required" ]
+                            | Remote(_, _, spool) ->
+                                ensurePrivateDirectory spool
+                                |> Result.bind (fun directory ->
+                                    let key = TelemetryReceipt.key association.Producer parsed.BatchId
+                                    let file = Path.Combine(directory, key + ".ready")
+                                    let outcomeFile = Path.Combine(directory, "outcomes", key + ".json")
+                                    let matchesOutcome () =
+                                        let info = FileInfo outcomeFile
+                                        if info.LinkTarget <> null || info.Length > 4096L then false
+                                        else
+                                            use doc = JsonDocument.Parse(File.ReadAllBytes outcomeFile)
+                                            doc.RootElement.GetProperty("digest").GetString() = parsed.Digest && doc.RootElement.GetProperty("status").GetString() = "applied"
+                                    if File.Exists outcomeFile then
+                                        if matchesOutcome () then Ok "already-settled" else Error [ "identity-conflict" ]
+                                    elif File.Exists file then
+                                        let info = FileInfo file
+                                        if info.LinkTarget <> null || info.Length > int64 TelemetryReceipt.MaxEnvelopeBytes
+                                           || (not (OperatingSystem.IsWindows()) && File.GetUnixFileMode(file) <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite)) then
+                                            Error [ "identity-conflict" ]
+                                        elif ReadOnlySpan<byte>(File.ReadAllBytes file).SequenceEqual(ReadOnlySpan<byte>(bytes)) then
+                                            Ok "locally-retained"
+                                        else Error [ "identity-conflict" ]
+                                    else
+                                        let files = Directory.EnumerateFiles(directory, "*.ready") |> Seq.truncate 129 |> Seq.map FileInfo |> Seq.toArray
+                                        if files.Length >= 128 || (files |> Array.sumBy _.Length) + int64 bytes.Length > 8L * 1024L * 1024L then
+                                            Error [ "spool-overload" ]
+                                        else
+                                            atomicWrite directory (key + ".ready") bytes |> ignore
+                                            if not (ReadOnlySpan<byte>(File.ReadAllBytes file).SequenceEqual(ReadOnlySpan<byte>(bytes))) then
+                                                Error [ "spool-readback-failed" ]
+                                            else Ok "locally-retained"))))
+        with _ -> Error [ "capture-advisory-failure" ]
+
+    // One serialized passive owner per existing private state root; another association must refuse.
+    let passiveProducer (configArg: string option) (repositoryArg: string option) =
+        load configArg
+        |> Result.bind (select repositoryArg)
+        |> Result.bind (fun association ->
+            match association.Destination with
+            | Local _ -> Error [ "capture-only-remote-spool-required" ]
+            | Remote(_, _, spool) -> Ok(spool, scope association, associationDigest association))
+
     let tryPublishExpected configArg repositoryArg expectedProducer payload =
         tryPublishBound configArg repositoryArg expectedProducer None payload
 
     let tryPublish configArg repositoryArg payload =
         tryPublishExpected configArg repositoryArg None payload
 
-    let private tryDrainBound configArg repositoryArg (expectedBinding: string option) =
+    let private tryDrainBoundWith (operations: RemoteOperations option) (externalDeadline: CancellationToken option) (configArg: string option) (repositoryArg: string option) (expectedBinding: string option) =
         let path = configPath configArg
 
         if not (File.Exists path) then
@@ -974,13 +1125,28 @@ module WorkspaceTelemetryApplication =
                                 match ensurePrivateDirectory spool with
                                 | Error errors -> Error errors
                                 | Ok directory ->
-                                    use deadline = new CancellationTokenSource(TimeSpan.FromSeconds 30.)
+                                    use deadline = CancellationTokenSource.CreateLinkedTokenSource([| externalDeadline |> Option.defaultValue CancellationToken.None |])
+                                    deadline.CancelAfter(TimeSpan.FromSeconds 30.)
 
-                                    let files =
-                                        Directory.EnumerateFiles(directory, "*.ready") |> Seq.truncate 16 |> Seq.toList
-
+                                    let inventory = Directory.EnumerateFiles(directory, "*.ready") |> Seq.truncate 129 |> Seq.toArray
+                                    let selection = selectReadyFiles (readDrainCursor directory) inventory
                                     let results =
-                                        files |> List.map (remoteOne association endpoint reference deadline.Token)
+                                        match selection with
+                                        | Error errors -> [ Error errors ]
+                                        | Ok files ->
+                                            let rec visit (remaining: string list) (completed: Result<RemoteContract.Receipt, string list> list) =
+                                                match remaining with
+                                                | [] -> List.rev completed
+                                                | _ when deadline.IsCancellationRequested -> List.rev (Error [ "drain-deadline-expired" ] :: completed)
+                                                | file :: tail ->
+                                                    // Advance only over this attempted head. A slow predecessor must not
+                                                    // skip the unattempted remainder when the shared deadline expires.
+                                                    atomicWriteWith true directory "drain-cursor" (Encoding.UTF8.GetBytes(Path.GetFileName file)) |> ignore
+                                                    let result =
+                                                        try remoteOneWith operations association endpoint reference deadline.Token file
+                                                        with :? OperationCanceledException -> Error [ "drain-deadline-expired" ]
+                                                    visit tail (result :: completed)
+                                            visit files []
 
                                     match
                                         results
@@ -1008,6 +1174,14 @@ module WorkspaceTelemetryApplication =
                                             $"{{\"schema\":\"fsgg.telemetry.workspace-drain/1\",\"processed\":{settled},\"awaitingApplication\":{awaiting}}}\n")
             with _ ->
                 Error [ "drain-advisory-failure" ]
+
+    let private tryDrainBound configArg repositoryArg expectedBinding = tryDrainBoundWith None None configArg repositoryArg expectedBinding
+
+    let tryDrainWithOperationsForTesting configArg repositoryArg operations =
+        tryDrainBoundWith (Some operations) None configArg repositoryArg None
+
+    let tryDrainWithDeadlineForTesting configArg repositoryArg operations deadline =
+        tryDrainBoundWith (Some operations) (Some deadline) configArg repositoryArg None
 
     let tryDrain configArg repositoryArg =
         tryDrainBound configArg repositoryArg None
@@ -1228,7 +1402,10 @@ module WorkspaceTelemetryApplication =
                             })
                     | Some(Remote(_, reference, spool) as selected) ->
                         let available =
-                            (credential reference CancellationToken.None).GetAwaiter().GetResult().IsSome
+                            // Local association/spool setup is useful before enrollment or credentials exist.
+                            // Explicit capture-only setup makes no authenticated receiver/readiness claim.
+                            List.contains "--capture-only" args
+                            || (credential reference CancellationToken.None).GetAwaiter().GetResult().IsSome
 
                         if not available then
                             Error [ "credential-unavailable" ]
@@ -1286,7 +1463,7 @@ module WorkspaceTelemetryApplication =
                                 Error [ "association-conflict" ]
                             else
                                 serialize path (existing @ [ association ]) retired
-                                Ok "activated"))
+                                Ok(if List.contains "--capture-only" args then "capture-configured;receiver-unverified" else "activated")))
                 | _ -> Error [ "invalid activation" ]
         with error ->
             Error [ error.Message ]
@@ -1575,6 +1752,7 @@ module WorkspaceTelemetryApplication =
     let run action args =
         let result =
             match action with
+            | ("activate-local" | "cutover") when List.contains "--capture-only" args -> Error [ "capture-only-remote-required" ]
             | "status" -> status args
             | "binding" -> bindingStatus args
             | "activate-local" -> activate "local" args

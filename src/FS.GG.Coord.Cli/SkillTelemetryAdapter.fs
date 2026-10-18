@@ -1078,6 +1078,250 @@ module SkillTelemetryAdapter =
             publish config state "population-only" "applied" events
         jsonObject [ "schema", node "fsgg.telemetry.original-binding-result/1"; "status", node "applied" ]
 
+    // The passive producer reuses the private atomic writer and intent-before-effect discipline.
+    // It has no dispatch, admission, requested model, programme item or authority-service dependency.
+    [<Literal>]
+    let private maximumPassiveIdentities = 256
+    let private passiveStateSchema = "fsgg.telemetry.passive-producer-state/1"
+
+    let private passiveStateDirectory (root: string) = Path.Combine(root, "orchestrator-passive")
+
+    let private savePassive (directory: string) (state: JsonObject) =
+        let bytes = utf8.GetBytes(state.ToJsonString compact)
+        if bytes.Length >= maximumStateBytes then fail "passive-state-overload; cursor retained"
+        writePrivateBytes directory "producer" bytes |> ignore
+
+    let private passiveState (directory: string) (owner: string) (sourceIdentity: string) =
+        let path = Path.Combine(directory, "producer.json")
+        if File.Exists path || FileInfo(path).LinkTarget <> null then
+            let state = readObject path "passive producer state is unavailable"
+            if requiredString "schema" state <> passiveStateSchema
+               || requiredString "owner" state <> owner
+               || requiredString "sourceIdentity" state <> sourceIdentity then
+                fail "passive producer stream already has a different serialized owner"
+            if state["sources"].AsObject().Count > NativeUsage.PassiveMaximumFiles
+               || state["responses"].AsObject().Count > maximumPassiveIdentities
+               || state["gaps"].AsArray().Count > 32 || requiredInt "sequence" state < 0 then
+                fail "passive producer state exceeds its finite profile"
+            state
+        else
+            jsonObject [ "schema", node passiveStateSchema; "owner", node owner
+                         "sourceIdentity", node sourceIdentity; "generation", node (Guid.NewGuid().ToString("N"))
+                         "sequence", node 0; "sources", JsonObject(); "responses", JsonObject()
+                         "gaps", JsonArray(); "pending", nullNode ]
+
+    let private passiveCursor (value: JsonNode) =
+        if isNull value then None
+        else
+            let value = value.AsObject()
+            Some { SourceInstance = requiredString "sourceInstance" value
+                   Generation = requiredString "generation" value
+                   Offset = value["offset"].GetValue<int64>()
+                   AnchorDigest = requiredString "anchorDigest" value
+                   SkippingOversized = boolValue "skippingOversized" value }
+
+    let private cursorNode (cursor: PassiveCursor) =
+        jsonObject [ "sourceInstance", node cursor.SourceInstance; "generation", node cursor.Generation
+                     "offset", node cursor.Offset; "anchorDigest", node cursor.AnchorDigest
+                     "skippingOversized", node cursor.SkippingOversized ]
+
+    let private passiveGap (state: JsonObject) (code: string) =
+        // One reserved bounded status slot; original distinct reasons survive subsequent passes.
+        let gaps = state["gaps"].AsArray()
+        if not (gaps |> Seq.exists (fun value -> value.GetValue<string>() = code)) && gaps.Count < 32 then
+            gaps.Add(node code)
+
+    let private passiveFact (capturedAt: string) (cursor: PassiveCursor) (record: PassiveNativeRecord) (revision: int64) =
+        let optional value = value |> Option.map node |> Option.defaultValue nullNode
+        let counts = record.Usage
+        jsonObject [ "kind", node "provider-usage-observation/1"
+                     "identity", node (NativeUsage.passiveIdentity record.ThreadId record.TurnId record.ResponseId)
+                     "itemId", nullNode; "revision", node revision
+                     "threadId", node (record.ThreadId.ToString("D")); "turnId", node (record.TurnId.ToString("D"))
+                     "responseId", node record.ResponseId
+                     "provider", optional record.Provider; "model", optional record.Model; "effort", optional record.Effort
+                     "input", optional counts.Input; "cachedInput", optional counts.CachedInput; "cacheWriteInput", optional counts.CacheWriteInput
+                     "output", optional counts.Output; "reasoning", optional counts.Reasoning; "total", optional counts.Total
+                     "sourceInstance", node cursor.SourceInstance; "sourceGeneration", node cursor.Generation
+                     "sourceDigest", node record.SourceDigest; "position", node record.Position
+                     "capturedAt", node capturedAt; "occurredAt", optional record.OccurredAt
+                     "provenance", node "codex-local-rollout/1"; "populationCoverage", node "partial"
+                     "inventoryCoverage", node "unknown"; "terminalCoverage", node "unknown"; "attributionCoverage", node "unknown" ]
+
+    let private passiveSnapshot (state: JsonObject) =
+        // Latest captured revisions, including when no receiver is reachable. Never item totals/cost.
+        let values = state["responses"].AsObject()
+        let observations = values |> Seq.map (fun pair -> pair.Value["fact"].DeepClone()) |> jsonArray
+        jsonObject [ "schema", node "fsgg.telemetry.passive-snapshot/1"
+                     "capture", node (if values.Count = 0 then "no-counters-retained" else "locally-retained"); "attribution", node "unknown"
+                     "delivery", node "unknown"; "populationCoverage", node "partial"
+                     "pendingIntent", node (not (isNull state["pending"]))
+                     "observations", observations; "gaps", state["gaps"].DeepClone()
+                     "firstEnqueueFailure", (if isNull state["firstEnqueueFailure"] then nullNode else state["firstEnqueueFailure"].DeepClone())
+                     "lastEnqueueFailure", (if isNull state["lastEnqueueFailure"] then nullNode else state["lastEnqueueFailure"].DeepClone()) ]
+
+    let private replayPassive (directory: string) (state: JsonObject) (enqueue: byte array -> Result<string, string list>) (hook: string -> unit) =
+        match state["pending"] with
+        | null -> true
+        | pending ->
+            let exact = Convert.FromBase64String(pending["batchBase64"].GetValue<string>())
+            if exact.Length > 65536 || sha256 exact <> pending["batchDigest"].GetValue<string>() then
+                fail "passive pending intent is invalid; retained"
+            hook "before-local-enqueue"
+            match enqueue exact with
+            | Error errors ->
+                let codes = errors |> List.truncate 4 |> List.map (fun code -> if code.Length <= 200 && not (code |> Seq.exists Char.IsControl) then code else "enqueue-failure")
+                if isNull state["firstEnqueueFailure"] then state["firstEnqueueFailure"] <- codes |> Seq.map node |> jsonArray
+                state["lastEnqueueFailure"] <- codes |> Seq.map node |> jsonArray
+                passiveGap state "enqueue-deferred-cursor-retained"
+                hook "before-status-write"
+                savePassive directory state
+                false
+            | Ok _ ->
+                hook "after-local-enqueue"
+                // Only local enqueue/readback authorizes cursor/index commit. Remote acceptance is independent.
+                state["sources"] <- pending["sourcesAfter"].DeepClone()
+                state["responses"] <- pending["responsesAfter"].DeepClone()
+                state["sequence"] <- pending["sequenceAfter"].DeepClone()
+                state["pending"] <- nullNode
+                state["lastEnqueueFailure"] <- nullNode
+                hook "before-cursor-write"
+                savePassive directory state
+                hook "after-cursor-write"
+                true
+
+    // One bounded pass over explicit sources. The production caller always supplies its selected association root.
+    // Same-owner state cloning/reinitialization/root migration requires original-state/fence reconciliation;
+    // undeclared clones cannot be detected offline and are outside this supported first profile.
+    let capturePassiveWithHook (root: string) (owner: string) (sourceIdentity: string) (codexHome: string) (paths: string list) (enqueue: byte array -> Result<string, string list>) (hook: string -> unit) =
+        try
+            if paths.IsEmpty || paths.Length > NativeUsage.PassiveMaximumFiles
+               || (paths |> List.exists (Path.IsPathFullyQualified >> not))
+               || (paths |> List.distinct |> List.length) <> paths.Length then
+                fail "passive capture requires one to eight distinct explicit absolute source files"
+            if not (Path.IsPathFullyQualified root) then fail "passive state root must be the selected absolute association root"
+            let mutable ancestor = DirectoryInfo(Path.GetDirectoryName root)
+            while not (isNull ancestor) do
+                if ancestor.LinkTarget <> null then fail "passive state root has a linked ancestor"
+                ancestor <- ancestor.Parent
+            if not (Directory.Exists root) then
+                Directory.CreateDirectory root |> ignore
+                if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(root, enum<UnixFileMode> 0o700)
+            if DirectoryInfo(root).LinkTarget <> null
+               || (not (OperatingSystem.IsWindows()) && (File.GetUnixFileMode root &&& enum<UnixFileMode> 0o077) <> enum<UnixFileMode> 0) then
+                fail "passive state root is unsafe"
+            let directory = passiveStateDirectory root
+            // Reuse the private writer's directory validation before acquiring the single producer lock.
+            if not (Directory.Exists directory) then
+                Directory.CreateDirectory directory |> ignore
+                if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(directory, enum<UnixFileMode> 0o700)
+            let info = DirectoryInfo directory
+            if info.LinkTarget <> null || (not (OperatingSystem.IsWindows()) && (File.GetUnixFileMode directory &&& enum<UnixFileMode> 0o077) <> enum<UnixFileMode> 0) then
+                fail "passive producer directory is unsafe"
+            let lockPath = Path.Combine(directory, "producer.lock")
+            if FileInfo(lockPath).LinkTarget <> null then fail "passive producer lock is unsafe"
+            SkillPrivateDurability.withLock lockPath (fun () ->
+                let state = passiveState directory owner sourceIdentity
+                if replayPassive directory state enqueue hook then
+                    let sources = state["sources"].DeepClone().AsObject()
+                    let responses = state["responses"].DeepClone().AsObject()
+                    let events = JsonArray()
+                    let capturedAt = timestamp ()
+                    let mutable budget = NativeUsage.PassiveMaximumScanBytes
+                    let mutable indexFull = false
+                    // Rotate the finite caller-selected list; no recursive history discovery or starvation.
+                    let sequence = requiredInt "sequence" state
+                    let selected = paths |> List.sort
+                    let shift = sequence % selected.Length
+                    let ordered = (selected |> List.skip shift) @ (selected |> List.take shift)
+                    for path in ordered do
+                        if budget >= 16384 && events.Count < 24 && not indexFull then
+                            let key = sha256(utf8.GetBytes(Path.GetFullPath path))
+                            if not (sources.ContainsKey key) && sources.Count >= NativeUsage.PassiveMaximumFiles then
+                                passiveGap state "source-index-full-capture-deferred"
+                            else
+                                match NativeUsage.scanPassive codexHome path (passiveCursor sources[key]) budget (24 - events.Count) with
+                                | Error _ -> passiveGap state "source-unavailable-cursor-retained"
+                                | Ok scan ->
+                                    budget <- budget - scan.ScannedBytes
+                                    scan.Diagnostics |> List.iter (passiveGap state)
+                                    // Reserve all new response identities before advancing any source cursor.
+                                    let fresh =
+                                        scan.Records
+                                        |> List.map (fun row -> NativeUsage.passiveIdentity row.ThreadId row.TurnId row.ResponseId)
+                                        |> List.distinct
+                                        |> List.filter (responses.ContainsKey >> not)
+                                    let crossesCorrection =
+                                        scan.Records |> List.exists (fun row ->
+                                            let identity = NativeUsage.passiveIdentity row.ThreadId row.TurnId row.ResponseId
+                                            (events |> Seq.exists (fun fact -> fact["identity"].GetValue<string>() = identity))
+                                            && (responses[identity]["digest"]).GetValue<string>() <> row.SourceDigest)
+                                    if responses.Count + fresh.Length > maximumPassiveIdentities then
+                                        indexFull <- true
+                                        passiveGap state "response-index-full-capture-deferred"
+                                    elif crossesCorrection then
+                                        passiveGap state "response-correction-boundary-deferred"
+                                    else
+                                        for record in scan.Records do
+                                            let identity = NativeUsage.passiveIdentity record.ThreadId record.TurnId record.ResponseId
+                                            let prior = responses[identity]
+                                            let unchanged = not (isNull prior) && prior["digest"].GetValue<string>() = record.SourceDigest
+                                            if not unchanged then
+                                                let revision = if isNull prior then 1L else prior["revision"].GetValue<int64>() + 1L
+                                                let fact = passiveFact capturedAt scan.Cursor record revision
+                                                responses[identity] <- jsonObject [ "digest", node record.SourceDigest; "revision", node revision; "fact", fact.DeepClone() ]
+                                                events.Add fact
+                                        let previousCursor = passiveCursor sources[key]
+                                        if previousCursor |> Option.forall (fun previous -> previous.Generation <> scan.Cursor.Generation) then
+                                            let sourceKey = digest "passive-source-" [ scan.Cursor.SourceInstance; scan.Cursor.Generation ]
+                                            events.Add(event "source" sourceKey None
+                                                [ "sourceIdentity", node scan.Cursor.SourceInstance; "generation", node scan.Cursor.Generation
+                                                  "cursor", node (string scan.Cursor.Offset) ])
+                                            if previousCursor.IsSome then
+                                                events.Add(event "diagnostic" (sourceKey + "-gap") None
+                                                    [ "code", node "passive-source-continuity-gap"; "severity", node "warning" ])
+                                        sources[key] <- cursorNode scan.Cursor
+                    if events.Count = 0 then
+                        // No unretained counters exist: persist complete line boundaries and bounded gaps directly.
+                        state["sources"] <- sources
+                        state["sequence"] <- node (sequence + 1)
+                        hook "before-status-write"
+                        savePassive directory state
+                    else
+                        let batchId = "passive-" + requiredString "generation" state + "-" + string (sequence + 1)
+                        let batch = jsonObject [ "schema", node batchSchema; "ingestId", node batchId
+                                                 "sourceIdentity", node sourceIdentity; "generation", state["generation"].DeepClone()
+                                                 "cursor", node (string (sequence + 1)); "eventCount", node events.Count; "events", events ]
+                        let bytes = utf8.GetBytes(batch.ToJsonString compact)
+                        if bytes.Length > 65536 then
+                            passiveGap state "batch-size-overload-cursor-retained"
+                            savePassive directory state
+                        else
+                            FS.GG.Coord.TelemetryStore.parseBatch bytes |> Result.defaultWith (fun _ -> fail "passive batch validation failed") |> ignore
+                            state["pending"] <- jsonObject [ "batchBase64", node (Convert.ToBase64String bytes); "batchDigest", node (sha256 bytes);
+                                                            "sourcesAfter", sources; "responsesAfter", responses; "sequenceAfter", node (sequence + 1) ]
+                            // Intent is written before enqueue. A crash at either subsequent write replays identical bytes.
+                            hook "before-intent-write"
+                            savePassive directory state
+                            hook "after-intent-write"
+                            replayPassive directory state enqueue hook |> ignore
+                success (passiveSnapshot state))
+        with
+        | AdapterError message -> result 1 "" $"fsgg passive telemetry: {message}\n"
+        | _ -> result 1 "" "fsgg passive telemetry: local capture outcome uncertain; inspect retained intent and state\n"
+
+    let capturePassive root owner sourceIdentity codexHome paths enqueue =
+        capturePassiveWithHook root owner sourceIdentity codexHome paths enqueue ignore
+
+    let reportPassive (root: string) (owner: string) (sourceIdentity: string) =
+        try
+            let directory = passiveStateDirectory root
+            let state = passiveState directory owner sourceIdentity
+            success (passiveSnapshot state)
+        with
+        | AdapterError message -> result 1 "" $"fsgg passive telemetry: {message}\n"
+        | _ -> result 1 "" "fsgg passive telemetry: local report unavailable\n"
+
     let private configured (config: HostConfig) command =
         match command with
         | Begin(feature, item, original, attempt, parentAttempt, parentToken, relation, producer, model, effort, lateAfter) -> beginDispatch config feature item original attempt parentAttempt parentToken relation producer model effort lateAfter

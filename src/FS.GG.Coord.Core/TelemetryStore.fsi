@@ -230,6 +230,27 @@ module TelemetryStore =
           ObservedFrom: string
           ObservedThrough: string }
 
+    /// A partial local response observation; never programme or terminal accounting.
+    type PassiveUsageObservation =
+        { ThreadId: string
+          TurnId: string
+          ResponseId: string
+          Provider: string option
+          Model: string option
+          Effort: string option
+          Input: int64 option
+          CachedInput: int64 option
+          CacheWriteInput: int64 option
+          Output: int64 option
+          Reasoning: int64 option
+          Total: int64 option
+          SourceInstance: string
+          SourceGeneration: string
+          SourceDigest: string
+          Position: int64
+          CapturedAt: string
+          OccurredAt: string option }
+
     type Payload =
         | CiSuitePage of CiSuitePageProof
         | CiSuiteSeal of CiSuiteSealProof
@@ -278,6 +299,7 @@ module TelemetryStore =
             turnSequence: int64 option *
             processId: int64 *
             phase: string
+        | PassiveProviderUsage of observation: PassiveUsageObservation
         | RuntimeProviderObservation of observation: ProviderObservation
         | RuntimeResponseUsage of usage: ResponseUsage
         | RuntimeTurnUsage of

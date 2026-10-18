@@ -142,5 +142,57 @@ else
   bad "coord-engine still has $duplicate_runs duplicate test executions"
 fi
 
+# Inspect actual literal steps, then prove the same check rejects late execution and lost evidence.
+if python3 - "$ROOT/.github/workflows/coord-engine.yml" <<'PY_EARLY'
+import pathlib, re, sys
+source = pathlib.Path(sys.argv[1]).read_text()
+def early(value):
+    parts = re.split(r"(?m)^      - name: ", value.split("  engine:\n",1)[1])
+    steps = [(part.split("\n",1)[0],part) for part in parts[1:]]
+    names = [name for name,_ in steps]
+    required = ["Build the engine", "Test — core telemetry contracts and source binding",
+                "Test — workspace telemetry routes before expensive qualification",
+                "Test — the wire contract, and the residue rule",
+                "Test the shared projection and real loopback browser"]
+    positions = [names.index(name) for name in required]
+    assert positions == sorted(positions), "test assertions must execute before expensive qualification"
+    by_name = dict(steps)
+    focus = by_name[required[2]]
+    full = by_name[required[3]]
+    assert 'FullyQualifiedName~WorkspaceTelemetryApplicationTests' in focus and 'timeout-minutes: 5' in focus
+    assert '--filter' not in full and 'FS.GG.Coord.Cli.Tests.fsproj' in full, "full CLI coverage must remain"
+    for step in (focus,full):
+        assert '--blame' in step and '--blame-hang' not in step and '--blame-crash' not in step
+    assert 'coord-engine/workspace/workspace.trx" --minimum 20' in value
+    evidence = by_name['Retain early executable test diagnostics']
+    assert 'if: ${{ always() }}' in evidence and 'coord-engine/' in evidence and 'retention-days: 7' in evidence
+    assert 'timeout-minutes: 40' in value and 'continue-on-error:' not in value
+    for name in ['Pack and qualify the standalone telemetry workspace',
+                 "Parity — the engine matches the corpus's certified batch answer",
+                 'Test — standalone telemetry HTTPS contracts and host boundaries',
+                 'Test — lifecycle handlers and typed completion dependency',
+                 'Test — BoardOps handlers and production registration agreement',
+                 "Test — the kernel's argument grammar, identity, and ref parsing"]:
+        assert name in names, "existing coherent coverage lost: " + name
+early(source)
+start = source.index('      - name: Test — workspace telemetry routes before expensive qualification')
+end = source.index('      - name: Non-vacuity — the focused workspace routes executed',start)
+focus_block = source[start:end]
+late = source[:start] + source[end:] + focus_block
+for bad in [late,source.replace('Test — workspace telemetry routes before expensive qualification','late workspace test'),
+            source.replace('--filter "FullyQualifiedName~WorkspaceTelemetryApplicationTests"','--filter "unrelated"'),
+            source.replace('--blame ',''),
+            source.replace('if: ${{ always() }}','if: success()'),
+            source.replace('Test — the wire contract, and the residue rule','missing full suite')]:
+    try: early(bad)
+    except (AssertionError,ValueError,KeyError): pass
+    else: raise AssertionError('late/missing executable coverage mutation survived')
+PY_EARLY
+then
+  ok 'actual engine runs focused and full assertions early and retains failure diagnostics'
+else
+  bad 'engine executable ordering/diagnostic preservation regressed'
+fi
+
 printf '\nci-runtime-optimization: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
