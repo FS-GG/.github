@@ -979,6 +979,15 @@ module ProgressRenderer =
                     | NotBeforeReset -> "🔵 Completed/Info — continuous-use, account-wide weekly percent slope projects no exhaustion before reset"
                     | AlreadyAtLimit -> "🔴 Failed/Unsafe — native weekly used percent reached 100%"
                 periodsText, totalText, meanText, rateText, estimateText
+        let boardSection =
+            if snapshot.BoardItems.IsEmpty then []
+            else
+                [ "## Outcomes and deliveries"
+                  ""
+                  "Native completion dates below describe scoped issue facts, not accepted parent outcomes. Child counts are not progress percentages."
+                  ""
+                  "| Issue | Work level | Human Status | Native state / reason / closure | Scope, missing fact and remaining acceptance |"
+                  "| --- | --- | --- | --- | --- |" ] @ boardRows @ [ "" ]
         [
             "# V2 progress update"
             ""
@@ -1002,15 +1011,7 @@ module ProgressRenderer =
             ""
             $"PRs: {progress.EvidenceCounts.Prs}; evidence links: {progress.EvidenceCounts.Evidence}."
             ""
-            if not snapshot.BoardItems.IsEmpty then
-                yield "## Outcomes and deliveries"
-                yield ""
-                yield "Native completion dates below describe scoped issue facts, not accepted parent outcomes. Child counts are not progress percentages."
-                yield ""
-                yield "| Issue | Work level | Human Status | Native state / reason / closure | Scope, missing fact and remaining acceptance |"
-                yield "| --- | --- | --- | --- | --- |"
-                yield! boardRows
-                yield ""
+            yield! boardSection
             "## Telemetry and capture"
             ""
             $"- Telemetry readiness: {statusText snapshot.Telemetry.Readiness}"
