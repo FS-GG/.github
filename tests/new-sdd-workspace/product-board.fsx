@@ -139,9 +139,13 @@ try
     let pin = version.InformationalVersion.Split('+').[0]
     coherentVersionMatches expectedCoherentVersion pin |> pass
     let tool = sprintf "{\"tools\":{\"fs.gg.coord.cli\":{\"version\":\"%s\",\"commands\":[\"fsgg-coord-engine\"]}}}" pin
+    let driverManifest = JsonNode.Parse(manifest drivers).AsObject()
+    let optionalOperator = JsonNode.Parse(manifest [ "operator-only" ]).["skills"].[0].DeepClone()
+    optionalOperator.["scope"] <- JsonValue.Create "operator"
+    driverManifest.["skills"].AsArray().Add optionalOperator
     let fetch = function
         | "registry/coordination-kit-skill-manifest.json" -> Ok(manifest kit)
-        | "registry/driver-skill-manifest.json" -> Ok(manifest drivers)
+        | "registry/driver-skill-manifest.json" -> Ok(driverManifest.ToJsonString())
         | "dist/dotnet/.config/dotnet-tools.json" -> Ok tool
         | "scripts/fsgg-coord" -> Ok "#!/bin/sh\nexit 0\n"
         | path when path.StartsWith ".claude/skills/" -> Ok content
@@ -443,6 +447,16 @@ try
     prepare (fun path -> fetch path |> Result.map (fun value -> if path.StartsWith ".claude/skills/" then value + "drift" else value)) |> refuse "consumer digest drift"
     ProductBoard.prepare root "acme/app" "main" binding fetch |> refuse "moving producer reference"
     ProductBoard.apply root plan |> pass
+    for mirror in [ ".agents/skills"; ".claude/skills" ] do
+        for driver in drivers do
+            let path = Path.Combine(root, mirror, driver, "SKILL.md")
+            if not (File.Exists path) || File.ReadAllText path <> content then
+                failwith ("complete delivered driver cohort omitted or changed " + mirror + "/" + driver)
+        if File.ReadAllText(Path.Combine(root, mirror, "work-board/references/workspace-scope.md")) <> content then
+            failwith "complete driver reference payload was omitted"
+        if Directory.Exists(Path.Combine(root, mirror, "operator-only")) then
+            failwith "optional operator was silently included in the driver cohort"
+    printfn "Complete product driver materialization passed: %d delivered skills in both mirrors, reference payload and optional-operator exclusion." drivers.Length
     if not ((prepare fetch |> pass).Changes.IsEmpty) then failwith "repeat must be a no-op"
     let retainedTools = Path.Combine(root, ".config/dotnet-tools.json")
     let retainedToolBytes = File.ReadAllBytes retainedTools
