@@ -18,6 +18,11 @@ on:
         description: SHA-256 of the raw Actions candidate artifact archive
         required: true
         type: string
+      continue_failed_original:
+        description: Admit only the fixed failed original Host 0.6 candidate through reviewed source repair
+        required: true
+        default: false
+        type: boolean
       publish:
         description: Publish only after passing exact-source preflight and authority setup
         required: true
@@ -85,12 +90,15 @@ jobs:
           CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
           CANDIDATE_ARCHIVE_SHA256: ${{ inputs.candidate_archive_sha256 }}
           PUBLISH: ${{ inputs.publish }}
+          CONTINUE_FAILED_ORIGINAL: ${{ inputs.continue_failed_original }}
         run: |
           set -euo pipefail
+          continuation=()
+          if test "$CONTINUE_FAILED_ORIGINAL" = true; then continuation=(--continue-failed-original); fi
           mode=--preflight-only
           if test "$PUBLISH" = true; then mode=--publish; fi
           python3 scripts/telemetry-host-successor-publish.py \
-            "$mode" \
+            "$mode" "${continuation[@]}" \
             --candidate-run-id "$CANDIDATE_RUN_ID" \
             --candidate-artifact-id "$CANDIDATE_ARTIFACT_ID" \
             --candidate-archive-sha256 "$CANDIDATE_ARCHIVE_SHA256" \

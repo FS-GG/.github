@@ -14,12 +14,37 @@ The installed-browser fixture keeps a strict one-receipt default for historical 
 Store14 producer-correction profile explicitly requires two applied receipts and zero rejected receipts,
 with both applied SQLite rows checked before and after backup/restore. The earlier one-receipt assertion
 failed on that current profile; passing the other package stages did not qualify the installed browser.
-The repaired source and pure controls still require actual hosted installed-package qualification.
+The genuine candidate subsequently passed hosted browser and installed-package qualification.
+The corrective publisher source still requires its own hosted checks and admitted native qualification.
 
-The fixed 0.6 release rails use Store14 and `utel-host-rel-12`. Bounded local compilation and
-actual HTTP/schema controls passed; full hosted, installed-package and candidate qualification
-remain pending. A clean unsupported-storage refusal is not positive passive acceptance.
-Published [Host 0.5.0](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.5.0),
+The fixed 0.6 release rails use Store14 and logical `utel-host-rel-12`. Source and
+installed-package qualification passed before authentic [candidate39135954294](https://github.com/FS-GG/.github/actions/runs/39135954294).
+The [first publisher39137010941](https://github.com/FS-GG/.github/actions/runs/39137010941)
+failed at journal-ref creation with HTTP422. Its precise provider response body and created
+immutable-object identities were not retained. Current native policy independently confirms that
+the legacy journal namespace forbids creation and update; that observation does not recover the
+original422 response. Earlier preflight established reads and effect absence, not writer-route compatibility.
+
+The corrective source uses the existing protected-main directory route at
+`state/releases/utel-host-rel-12`, retaining the same logical journal and candidate. The existing
+native Authority main-writer/integrity and retired-namespace predicate runs before genesis and
+each effect admission. Bounded tree classification distinguishes selected-directory absence from
+missing parent/object, malformed, inaccessible or changed-main state. Main overlays preserve unrelated directories.
+
+Default fresh-source equality remains unchanged. The explicit default-false `continue_failed_original`
+input admits only original failed run39137010941/attempt1, candidate39135954294 and artifact12140420062,
+with its fixed raw archive digest, content identity and package digest. Native original failure,
+ancestry and complete nontruncated source trees are checked. Only the finite reviewed publisher,
+control, owning-plan and Atlas carrier paths may differ; all other package inputs remain identical.
+Existing Atlas records cannot change or disappear. No new candidate, repack, reset, journal identity,
+policy bypass or publication follows from the source repair. Unknown original object reachability
+remains unknown. The preflight remains read-only; any later publication needs separate native selection.
+
+Pipeline preflight reuses the existing actual Host pure runner, now including the production caller,
+real disposable Git overlay, policy mutations and actual workflow flag shell. Static binding plus
+inert provider controls are proportionate for this input/route change; no custom model, new job,
+permission or timeout is added. Hosted required checks remain separate qualification obligations.
+Published [Host0.5.0](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.5.0),
 its original source and journal11, and every earlier release remain immutable. This source
 changes no coherent CLI/Kit/Drivers publication or active CLI selector.
 

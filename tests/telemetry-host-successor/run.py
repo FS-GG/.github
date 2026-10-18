@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import copy
+import os
 import hashlib
 import importlib.util
 import json
@@ -18,7 +20,7 @@ from unittest.mock import patch
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from release_successor_execution import Dispatch, JournalState, Observation, Refused, advance_effects
-from telemetry_host_successor_admission import HostAdmission
+from telemetry_host_successor_admission import HostAdmission, FAILED_ORIGINAL, ordinary_route, validate_failed_original
 from telemetry_host_successor_execution import effects
 from telemetry_host_successor_provider import HostProvider, NotFound
 
@@ -435,6 +437,289 @@ class HostReleaseTests(unittest.TestCase):
         self.assertFalse(admission.authorize(self.content_id, effect.identity, "dispatch", effect.request_digest))
         api.main = "d" * 40; api.actor = "someone-else"
         self.assertFalse(admission.authorize(self.content_id, effect.identity, "settle", effect.request_digest))
+
+
+# Public release metadata only; no package bytes, credentials or host/session configuration.
+RETAINED_MANIFEST = json.loads('{"archiveSha256":"ac77ba38f6d4974586d84d75f928fb0b5edbf4dcd747266ac5453f00d3676af6","createdAt":"2026-10-18T14:29:33.129575Z","dependencyLockSha256":"3984b5c8cb7946815cce4fd65e9ef41423e5ed87940ebd19f72e2f22f48ccd5a","framework":"net10.0","packageId":"FS.GG.Telemetry.Host","producerPayloadSha256":"sha256:b3552790f651ad697a7c24f6e35ae6554974a1dbc9dce116c8c685b1ac64fe98","runtimePrerequisites":["Microsoft.AspNetCore.App 10.0","Microsoft.NETCore.App 10.0"],"schema":"fsgg.telemetry.host-release/1","sourceSha":"54335971452d2dfadb04e7704774ae2e48718e54","supportedStoreSchemaMax":14,"supportedStoreSchemaMin":14,"tag":"telemetry-host/v0.6.0","target":"linux-x64","uiAssetTreeSha256":"fcc9c65ddfd67c6e3e7837242d36d3e510fca00e0746a1ecb6bf788426d49615","version":"0.6.0"}')
+
+
+class RepairAPI:
+    def __init__(self):
+        self.source = FAILED_ORIGINAL["sourceSha"]
+        self.head = "d" * 40
+        self.original = {"id": FAILED_ORIGINAL["runId"], "repository": {"id": 1269292704},
+            "path": ".github/workflows/release-telemetry-host-successor-publish.yml", "event": "workflow_dispatch",
+            "head_branch": "main", "head_sha": self.source, "run_attempt": 1,
+            "actor": {"login": "EHotwagner"}, "status": "completed", "conclusion": "failure"}
+        self.rows = [{"path": "src/FS.GG.Telemetry.Host/Program.fs", "mode": "100644", "type": "blob", "sha": "a" * 40},
+                     {"path": "scripts/telemetry-host-successor-publish.py", "mode": "100644", "type": "blob", "sha": "b" * 40}]
+        self.changed = copy.deepcopy(self.rows)
+        self.changed[1]["sha"] = "c" * 40
+        self.truncated = False
+        self.run_mutation = {}
+
+    def get(self, path):
+        if path.endswith("/.github"):
+            return {"id": 1269292704, "full_name": "FS-GG/.github"}
+        if path.endswith("/git/ref/heads/main"):
+            return {"object": {"sha": self.head}}
+        if path.endswith("/actions/runs/" + str(FAILED_ORIGINAL["runId"])):
+            return copy.deepcopy(self.original)
+        if "/actions/runs/" in path:
+            return {**copy.deepcopy(self.original), "id": 999, "head_sha": self.head,
+                    "status": "in_progress", "conclusion": None, **self.run_mutation}
+        if "/compare/" in path:
+            return {"status": "ahead", "ahead_by": 1, "behind_by": 0,
+                    "base_commit": {"sha": self.source}, "merge_base_commit": {"sha": self.source}}
+        if "/git/commits/" in path:
+            source = path.rsplit("/", 1)[1]
+            return {"sha": source, "tree": {"sha": "1" * 40 if source == self.source else "2" * 40}}
+        if "/git/trees/" in path:
+            tree = path.rsplit("/", 1)[1].split("?")[0]
+            return {"sha": tree, "truncated": self.truncated,
+                    "tree": copy.deepcopy(self.rows if tree == "1" * 40 else self.changed)}
+        raise AssertionError(path)
+
+
+class HostMainJournalRepairTests(unittest.TestCase):
+    def validate(self, api, **changes):
+        values = dict(manifest=RETAINED_MANIFEST, publisher_sha=api.head,
+                      candidate_run=FAILED_ORIGINAL["candidateRunId"], artifact_id=FAILED_ORIGINAL["artifactId"],
+                      archive_sha=FAILED_ORIGINAL["archiveSha256"])
+        values.update(changes)
+        return validate_failed_original(api, **values)
+
+    def test_actual_workflow_default_false_and_explicit_flag_shell(self):
+        import textwrap
+        source = (ROOT / ".github/workflows/release-telemetry-host-successor-publish.yml").read_text()
+        declared = source.split("      continue_failed_original:\n", 1)[1].split("      publish:", 1)[0]
+        self.assertIn("default: false", declared)
+        self.assertIn("type: boolean", declared)
+        self.assertIn("CONTINUE_FAILED_ORIGINAL: ${{ inputs.continue_failed_original }}", source)
+        script = textwrap.dedent(source.split("      - name: Preflight or publish exact retained Host candidate", 1)[1].split("        run: |\n", 1)[1])
+        self.assertEqual(subprocess.run(["bash", "-n"], input=script, text=True, capture_output=True).returncode, 0)
+        for selected in ("false", "true"):
+            environment = {**os.environ, "CONTINUE_FAILED_ORIGINAL": selected, "PUBLISH": "false",
+                           "CANDIDATE_RUN_ID": "1", "CANDIDATE_ARTIFACT_ID": "2", "CANDIDATE_ARCHIVE_SHA256": "digest",
+                           "RUNNER_TEMP": "/unused-fixture"}
+            result = subprocess.run(["bash", "-c", 'python3() { printf "%s\\n" "$@"; };\n' + script],
+                                    env=environment, capture_output=True, text=True, check=True)
+            args = result.stdout.splitlines()
+            self.assertEqual(args.count("--continue-failed-original"), 1 if selected == "true" else 0)
+            self.assertIn("--preflight-only", args)
+
+    def test_closed_original_tuple_and_complete_package_input_tree(self):
+        self.validate(RepairAPI())
+        for field, value in (("candidate_run", 7), ("artifact_id", 8), ("archive_sha", "e" * 64),
+                             ("manifest", {**RETAINED_MANIFEST, "archiveSha256": "e" * 64})):
+            with self.subTest(field=field), self.assertRaises(Refused):
+                self.validate(RepairAPI(), **{field: value})
+        for field, value in (("conclusion", "success"), ("status", "in_progress"), ("run_attempt", 2),
+                             ("head_sha", "e" * 40), ("actor", {"login": "other"})):
+            api = RepairAPI(); api.original[field] = value
+            with self.subTest(field=field), self.assertRaises(Refused):
+                self.validate(api)
+        for path in ("Directory.Build.props", "src/FS.GG.Telemetry.Host/Program.fs",
+                     "scripts/release_successor_journal.py", "scripts/release-successor-publish.py",
+                     "docs/atlas/records/" + "a" * 64 + ".json"):
+            api = RepairAPI()
+            api.changed.append({"path": path, "mode": "100644", "type": "blob", "sha": "e" * 40})
+            if path.startswith("docs/atlas/"):
+                api.rows.append({**api.changed[-1], "sha": "f" * 40})
+            with self.subTest(path=path), self.assertRaises(Refused):
+                self.validate(api)
+        api = RepairAPI(); api.truncated = True
+        with self.assertRaisesRegex(Refused, "incomplete"):
+            self.validate(api)
+
+    def test_native_protection_and_canonical_destination_are_real_shared_predicates(self):
+        # Reuse the existing provider fixture classes without executing that module's tests.
+        import ast
+        route = ordinary_route()
+        namespace = dict(copy=copy, NotFound=NotFound, AUTHORITY="FS-GG/FS.GG.Coordination.Authority",
+                         REF="refs/heads/fsgg/v2/journal/release/utel-host-rel-12",
+                         reviewed_binding=route.authority_protection()[1])
+        source = ast.parse((ROOT / "tests/release-successor-live/run.py").read_text())
+        cls = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == "AuthorityAPI")
+        exec(compile(ast.Module(body=[cls], type_ignores=[]), "existing-AuthorityAPI", "exec"), namespace)
+        Authority = namespace["AuthorityAPI"]
+        api = Authority()
+        logical = namespace["REF"]
+        self.assertEqual(route.classify_journal_destination(api, logical), (True, "a" * 40))
+        protection, binding = route.authority_protection()
+        protection(api, binding, [logical])
+        for control in ("mainWriter", "mainIntegrity", "legacyFence"):
+            bad = Authority(); bad.controls[control]["enforcement"] = "disabled"
+            with self.subTest(control=control), self.assertRaises(ValueError):
+                protection(bad, binding, [logical])
+        for mutate in (lambda a: setattr(a, "legacy", True), lambda a: setattr(a, "change_main_at", 2),
+                       lambda a: a.override.update({f"repos/{namespace['AUTHORITY']}/git/trees/" + a.root: NotFound("missing object")}),
+                       lambda a: a.override.update({f"repos/{namespace['AUTHORITY']}/git/trees/" + a.root: {"sha": a.root, "truncated": True, "tree": []}})):
+            bad = Authority(); mutate(bad)
+            with self.assertRaises((RuntimeError, ValueError)):
+                route.classify_journal_destination(bad, logical)
+        self.authority_fixture = Authority
+
+    def test_actual_publisher_genesis_and_eight_effects_preserve_other_authority_state(self):
+        self.test_native_protection_and_canonical_destination_are_real_shared_predicates()
+        import ast
+        import base64
+        from release_successor_journal import ProtectedReleaseJournal, REPOSITORY, Refused as JournalRefused
+        namespace = dict(os=os, pathlib=pathlib, subprocess=subprocess, tempfile=tempfile, base64=base64,
+                         REPOSITORY=REPOSITORY)
+        source = ast.parse((ROOT / "tests/release-successor-journal/run.py").read_text())
+        cls = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == "RealGit")
+        exec(compile(ast.Module(body=[cls], type_ignores=[]), "existing-RealGit", "exec"), namespace)
+        RealGit = namespace["RealGit"]
+        spec = importlib.util.spec_from_file_location("host_publisher_actual_main", ROOT / "scripts/telemetry-host-successor-publish.py")
+        publisher = importlib.util.module_from_spec(spec); spec.loader.exec_module(publisher)
+        original_run = subprocess.run
+        for interrupt in (False, True):
+            with self.subTest(interrupt=interrupt), tempfile.TemporaryDirectory() as temporary:
+                policy = self.authority_fixture()
+                class Authority(RealGit):
+                    def get(self, path):
+                        if "/rulesets/" in path or "/rules/branches/" in path:
+                            return policy.get(path)
+                        if path == f"repos/{REPOSITORY}/git/ref/{publisher.REF.removeprefix('refs/')}":
+                            raise NotFound(path)
+                        value = super().get(path)
+                        if path.endswith("/git/ref/heads/main"):
+                            value["object"]["type"] = "commit"
+                        return value
+                    def post(self, path, body):
+                        self.writes.append((path, copy.deepcopy(body)))
+                        self.assert_not_legacy(path)
+                        return super().post(path, body)
+                    def assert_not_legacy(self, path):
+                        if path.endswith("/git/refs"):
+                            raise AssertionError("legacy namespace write attempted")
+                    def patch(self, path, body):
+                        self.writes.append((path, copy.deepcopy(body)))
+                        assert path.endswith("/git/refs/heads/main")
+                        return super().patch(path, body)
+                authority = Authority(pathlib.Path(temporary) / "authority.git")
+                authority.writes = []
+                authority.sibling("state/releases/unrelated/retained.txt")
+                unrelated = authority.command("show", "main:state/releases/unrelated/retained.txt")
+                api = RepairAPI()
+                base_get = api.get
+                def get(path):
+                    if "/actions/artifacts/" in path:
+                        return {"id": FAILED_ORIGINAL["artifactId"], "digest": "sha256:" + FAILED_ORIGINAL["archiveSha256"]}
+                    if path.endswith("/actions/runs/" + str(FAILED_ORIGINAL["candidateRunId"])):
+                        return {"id": FAILED_ORIGINAL["candidateRunId"], "head_sha": api.source}
+                    return base_get(path)
+                api.get = get
+                dispatched = []
+                visible = set()
+                class Provider:
+                    def __init__(self, *args): pass
+                    def observe(self, effect):
+                        return Observation("matched", effect.target_digest) if effect.identity in visible else Observation("absent")
+                    def dispatch(self, effect):
+                        dispatched.append(effect.identity); visible.add(effect.identity)
+                        return Dispatch("applied")
+                original_advance = publisher.advance_effects
+                def advance(*args):
+                    if interrupt:
+                        policy.controls["mainWriter"]["enforcement"] = "disabled"
+                    return original_advance(*args)
+                work = pathlib.Path(temporary) / "candidate"
+                def run(command, **kwargs):
+                    if command[0] == "git":
+                        return original_run(command, **kwargs)
+                    if command[0] == "gh":
+                        kwargs["stdout"].write(b"original archive fixture")
+                    else:
+                        target = pathlib.Path(command[command.index("--output") + 1]); target.mkdir()
+                        (target / "manifest.json").write_text(json.dumps(RETAINED_MANIFEST))
+                    return SimpleNamespace(returncode=0)
+                argv = ["publisher", "--publish", "--continue-failed-original", "--candidate-run-id", str(FAILED_ORIGINAL["candidateRunId"]),
+                        "--candidate-artifact-id", str(FAILED_ORIGINAL["artifactId"]), "--candidate-archive-sha256", FAILED_ORIGINAL["archiveSha256"],
+                        "--workdir", str(work)]
+                env = {"GITHUB_SHA": api.head, "GITHUB_ACTOR": "EHotwagner", "GITHUB_RUN_ID": "999",
+                       "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REPOSITORY": "FS-GG/.github",
+                       "GITHUB_REF": "refs/heads/main", "GITHUB_RUN_ATTEMPT": "1", "GH_TOKEN": "fixture",
+                       "ORDINARY_LEDGER_TOKEN": "ledger", "NUGET_API_KEY": "fixture"}
+                with patch.dict(os.environ, env), patch.object(sys, "argv", argv), \
+                     patch.object(publisher, "GitHubAPI", side_effect=[api, authority]), \
+                     patch.object(publisher.subprocess, "run", side_effect=run), \
+                     patch.object(publisher.time, "sleep"), patch.object(publisher, "HostProvider", Provider), \
+                     patch.object(publisher, "advance_effects", side_effect=advance):
+                    self.assertEqual(publisher.main(), 1 if interrupt else 0)
+                journal = ProtectedReleaseJournal(authority, publisher.REF, main_directory=True)
+                state = journal.read()
+                self.assertEqual(state.generation, 1 if interrupt else 17)
+                self.assertEqual(dispatched, [] if interrupt else [effect.identity for effect in effects(RETAINED_MANIFEST)[1]])
+                self.assertEqual(authority.command("show", "main:state/releases/unrelated/retained.txt"), unrelated)
+                self.assertEqual(journal.validate_intent({"contentId": FAILED_ORIGINAL["contentId"], "sourceSha": api.source,
+                    "version": "0.6.0", "candidateArchiveSha256": FAILED_ORIGINAL["archiveSha256"], "operator": "EHotwagner"}), None)
+
+    def test_actual_publisher_preflight_and_effect_admission_refuse_policy_drift(self):
+        self.test_native_protection_and_canonical_destination_are_real_shared_predicates()
+        spec = importlib.util.spec_from_file_location("host_publisher_repair", ROOT / "scripts/telemetry-host-successor-publish.py")
+        publisher = importlib.util.module_from_spec(spec); spec.loader.exec_module(publisher)
+        route = ordinary_route()
+        for profile, policy_bad, same_source, expected in ((False, False, False, 1), (False, False, True, 0), (True, False, False, 0), (True, True, False, 1)):
+            api, authority = RepairAPI(), self.authority_fixture()
+            if same_source:
+                api.head = api.source
+            if policy_bad:
+                authority.controls["legacyFence"]["enforcement"] = "disabled"
+            writes = []
+            class Journal:
+                def __init__(self, api, ref, *, main_directory=False):
+                    self.main_directory = main_directory
+                    writes.append(("construct", main_directory))
+                def initialize(self, intent):
+                    writes.append(("initialize", intent))
+                def read(self):
+                    raise AssertionError("preflight must not read absent journal")
+            class Provider:
+                def __init__(self, *args): pass
+                def observe(self, effect): return Observation("absent")
+            original_get = api.get
+            def get(path):
+                if "/actions/artifacts/" in path:
+                    return {"id": FAILED_ORIGINAL["artifactId"], "digest": "sha256:" + FAILED_ORIGINAL["archiveSha256"]}
+                if path.endswith("/actions/runs/" + str(FAILED_ORIGINAL["candidateRunId"])):
+                    return {"id": FAILED_ORIGINAL["candidateRunId"], "head_sha": api.source}
+                return original_get(path)
+            api.get = get
+            with tempfile.TemporaryDirectory() as temporary:
+                work = pathlib.Path(temporary) / "candidate"
+                def subprocess_run(command, **kwargs):
+                    if command[0] == "gh":
+                        kwargs["stdout"].write(b"original archive fixture")
+                    else:
+                        target = pathlib.Path(command[command.index("--output") + 1]); target.mkdir()
+                        (target / "manifest.json").write_text(json.dumps(RETAINED_MANIFEST))
+                    return SimpleNamespace(returncode=0)
+                argv = [str(ROOT / "scripts/telemetry-host-successor-publish.py"), "--preflight-only",
+                        "--candidate-run-id", str(FAILED_ORIGINAL["candidateRunId"]),
+                        "--candidate-artifact-id", str(FAILED_ORIGINAL["artifactId"]),
+                        "--candidate-archive-sha256", FAILED_ORIGINAL["archiveSha256"], "--workdir", str(work)]
+                if profile: argv.append("--continue-failed-original")
+                env = {"GITHUB_SHA": api.head, "GITHUB_ACTOR": "EHotwagner", "GITHUB_RUN_ID": "999",
+                       "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REPOSITORY": "FS-GG/.github",
+                       "GITHUB_REF": "refs/heads/main", "GITHUB_RUN_ATTEMPT": "1", "GH_TOKEN": "fixture",
+                       "ORDINARY_LEDGER_TOKEN": "ledger", "NUGET_API_KEY": ""}
+                with patch.dict(os.environ, env), patch.object(sys, "argv", argv), \
+                     patch.object(publisher, "GitHubAPI", side_effect=[api, authority]), \
+                     patch.object(publisher.subprocess, "run", side_effect=subprocess_run), \
+                     patch.object(publisher, "ProtectedReleaseJournal", Journal), \
+                     patch.object(publisher, "HostProvider", Provider):
+                    self.assertEqual(publisher.main(), expected)
+                self.assertEqual(writes, [("construct", True)])
+            host = HostAdmission(api, RETAINED_MANIFEST, api.head, 999, "EHotwagner", "refs/heads/main")
+            guarded = route.ProtectedPublisherAdmission(host, authority, publisher.REF)
+            content, ordered = effects(RETAINED_MANIFEST)
+            if not policy_bad:
+                self.assertTrue(guarded.authorize(content, "journal", "intent", content))
+                authority.controls["mainIntegrity"]["enforcement"] = "disabled"
+            for action in ("intent", "dispatch", "settle"):
+                self.assertFalse(guarded.authorize(content, ordered[0].identity, action, ordered[0].request_digest))
 
 
 if __name__ == "__main__":
