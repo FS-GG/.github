@@ -40,6 +40,7 @@ def manifest():
 def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root: pathlib.Path = ROOT,
                           frozen_dependencies: pathlib.Path | None = None,
                           frozen_source: pathlib.Path | None = None,
+                          build_artifacts: pathlib.Path | None = None,
                           release_binding=CURRENT_017):
     """Join the actual current package to its freshly built creator/dependency output."""
     spec = importlib.util.spec_from_file_location("wizard_package_identity", source_root / "scripts/new-sdd-workspace-release.py")
@@ -88,7 +89,17 @@ def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root
                     raise ValueError("nonliteral ordinary Creator dependency project")
                 visit(path.parent / declared)
         visit(project)
-    output = project.parent / "bin/Release/net10.0"
+    if build_artifacts is not None:
+        if release_binding is not CURRENT_017 or not build_artifacts.is_absolute():
+            raise ValueError("isolated build artifacts require the current Creator and an absolute root")
+        if (build_artifacts.is_symlink() or not build_artifacts.is_dir()
+                or build_artifacts.resolve().is_relative_to(source_root.resolve())):
+            raise ValueError("Creator build artifacts must be outside the source checkout")
+        if len({path.stem for path in projects}) != len(projects):
+            raise ValueError("Creator project artifact names collide")
+        output = build_artifacts / "bin" / project.stem / "release"
+    else:
+        output = project.parent / "bin/Release/net10.0"
     required = {name + ".dll" for name in projects.values()}
     required.update({"new-sdd-workspace.deps.json", "new-sdd-workspace.runtimeconfig.json"})
     required.update(str(p.relative_to(output)) for p in output.rglob("*")
@@ -352,6 +363,28 @@ class WizardReleaseTests(unittest.TestCase):
                         archive.writestr('tools/net10.0/any/' + name, body)
             pack(members)
             self.assertEqual(board_package_closure(package, 'a' * 40, source_root=root)['projectCount'], 11)
+            with tempfile.TemporaryDirectory() as isolated:
+                artifacts = pathlib.Path(isolated)
+                isolated_output = artifacts / 'bin/NewSddWorkspace/release'
+                isolated_output.mkdir(parents=True)
+                for name, body in members.items():
+                    (isolated_output / name).write_bytes(body)
+                # A stale in-tree assembly must neither win selection nor rescue
+                # damaged explicitly selected isolated bytes.
+                stale = output / 'fsgg-coord-engine.dll'
+                stale.write_bytes(b'inert stale in-tree assembly')
+                result = board_package_closure(package, 'a' * 40, source_root=root, build_artifacts=artifacts)
+                self.assertEqual(result['projectCount'], 11)
+                self.assertEqual(result['builtFilesCompared'], len(members))
+                stale.write_bytes(members['fsgg-coord-engine.dll'])
+                (isolated_output / 'fsgg-coord-engine.dll').write_bytes(b'inert damaged isolated assembly')
+                with self.assertRaisesRegex(ValueError, 'differs from built source'):
+                    board_package_closure(package, 'a' * 40, source_root=root, build_artifacts=artifacts)
+                (isolated_output / 'fsgg-coord-engine.dll').unlink()
+                with self.assertRaisesRegex(ValueError, 'dependency missing'):
+                    board_package_closure(package, 'a' * 40, source_root=root, build_artifacts=artifacts)
+            with self.assertRaisesRegex(ValueError, 'outside the source checkout'):
+                board_package_closure(package, 'a' * 40, source_root=root, build_artifacts=root)
             with self.assertRaisesRegex(ValueError, '0.17 requires its normal 0.107 source graph'):
                 board_package_closure(package, 'a' * 40, source_root=root,
                                       frozen_dependencies=root, frozen_source=root)
@@ -1245,12 +1278,14 @@ if __name__ == "__main__":
         parser.add_argument("--board-package", type=pathlib.Path, required=True)
         parser.add_argument("--source-sha", required=True)
         parser.add_argument("--release-manifest", type=pathlib.Path)
+        parser.add_argument("--build-artifacts", type=pathlib.Path)
         parser.add_argument("--frozen-coord-dependencies", type=pathlib.Path)
         parser.add_argument("--frozen-coord-source", type=pathlib.Path)
         args = parser.parse_args()
         closure = board_package_closure(args.board_package, args.source_sha,
                                         frozen_dependencies=args.frozen_coord_dependencies,
-                                        frozen_source=args.frozen_coord_source)
+                                        frozen_source=args.frozen_coord_source,
+                                        build_artifacts=args.build_artifacts)
         if args.release_manifest:
             checker = runpy.run_path(str(ROOT / "scripts/new-sdd-workspace-release.py"))
             evidence = checker["verify_artifact"](args.release_manifest, args.board_package)

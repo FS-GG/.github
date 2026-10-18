@@ -49,7 +49,11 @@ binding3/schema1 behavior; new organization hierarchy grammar is not silently ap
 
 The ordinary existing Creator selftest runs the actual ProductBoard FSI materializer, checks the whole
 delivered driver cohort in both mirrors, then packs the tool and validates built-versus-packed dependency
-bytes and release-manifest correspondence. Source-only offline qualification exercises programme
+bytes and release-manifest correspondence. Creator017's normal dependency graph includes Coord.Cli,
+so the maintained fixture builds every project into a fresh external artifacts root, reads the exact
+Creator output for FSI/package qualification, and compares workspace engine artifacts plus the selected
+caller before/after build. Retained in-tree outputs cannot rescue a missing or changed isolated assembly.
+Source-only offline qualification exercises programme
 continuation, explicit product selection, blocked scope, old handoff and completed source with remaining
 parent obligations. Current-package publication, installed absolute-path discovery, native product
 creation and restart/adoption remain separate acceptance gates under the owning outcome.

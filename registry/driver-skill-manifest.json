@@ -1510,7 +1510,7 @@
       "id": "work-roadmap",
       "scope": "driver",
       "sha256": "100e44fa2082e933daaf6e55ec12a3b553414b172130f30fd9bb45e8e71347b3",
-      "tree-sha256": "80c7453fa5065c1aa46cfa59e88e574982677c533b04f9e411c9d74dd0d43a01",
+      "tree-sha256": "1456b47ecd43f903b9b62f5a63e913a439ba95c32812e753236507a2994ebc27",
       "files": [
         {
           "path": "SKILL.md",
@@ -1529,7 +1529,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "8ebce8de2de77b8eb75de68eafe4dc68fd202557df1b0e47aff182c4c3dafa82",
+          "sha256": "875fdbf51b42355fee1726f39b2aad3f9069be3cba5cf2297c9da9d8376e9a68",
           "executable": false
         },
         {
@@ -1604,12 +1604,12 @@
     {
       "id": "stop-with-handoff",
       "scope": "driver",
-      "sha256": "1b9e245f2434bb249bb0f41f44e44194547af6cff34abc3f3e3be80180f455bb",
-      "tree-sha256": "b32bf30409f1848804426ede59bd7e846f03c2921e0bfc8ad4deb417366989b0",
+      "sha256": "bdb28edee20aea7052de08e16afa66ebdd554707b8e3d5e4da22d50b91d84d38",
+      "tree-sha256": "92e03bb8a4c29a3fbedc76c7d3b7df6ea8e2f565b2d474d96f1b4437e79fec86",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "1b9e245f2434bb249bb0f41f44e44194547af6cff34abc3f3e3be80180f455bb",
+          "sha256": "bdb28edee20aea7052de08e16afa66ebdd554707b8e3d5e4da22d50b91d84d38",
           "executable": false
         },
         {
@@ -1734,12 +1734,12 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "89ac1148ec26346b7c05ae766e9306820d6cd1fd6144b2013e2c9399f44b339c",
-      "tree-sha256": "798eb0eec80d50c057255e98d6fb496d605c40f4c70486285e14056bfdf356cd",
+      "sha256": "eca5f3f3db361db593cf8883aa39d66726b64b9d95e0c0b5d64c72186294847a",
+      "tree-sha256": "a356abbb7adc3395a93f34ace1bbba258278029644c141f46e606b67c543f714",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "89ac1148ec26346b7c05ae766e9306820d6cd1fd6144b2013e2c9399f44b339c",
+          "sha256": "eca5f3f3db361db593cf8883aa39d66726b64b9d95e0c0b5d64c72186294847a",
           "executable": false
         },
         {

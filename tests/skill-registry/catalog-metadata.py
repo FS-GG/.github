@@ -121,30 +121,29 @@ print("catalog metadata boundaries: ok")
 
 
 def assert_live_status_contract(skill_name: str) -> None:
-    paths = [
-        REPO / root / skill_name / "SKILL.md"
-        for root in module.SKILL_ROOTS
-    ]
+    paths = [REPO / root / skill_name / "SKILL.md" for root in module.SKILL_ROOTS]
     bodies = [path.read_bytes() for path in paths]
     assert len(set(bodies)) == 1, f"{skill_name} must remain byte-identical across all skill roots"
-
     text = " ".join(bodies[0].decode().split())
-    required = [
-        "Report live item state immediately.",
-        # .github#2135: the host no longer composes the two-line update from memory — it forwards
-        # the engine's own material-transition/active-inventory projection.
-        "Do not detect transitions or reconstruct the active set from memory",
-        "driver --events --cursor <session-scoped-cursor-file> --text",
-        "Do not defer either line to a wave summary or final response.",
-        "Keep the driver turn alive while any item remains active",
-    ]
-    missing = [fragment for fragment in required if fragment not in text]
-    assert not missing, f"{skill_name} lost its live status reporting contract: {missing}"
+    required = (
+        "Update on deliverables, changed blockers, decisions or changed promised times, plus one daily active summary.",
+        "Use existing owning/native evidence",
+        "Failed/partial reads keep Unknown and the hold; silence releases nothing.",
+        "No fixed polling, unchanged-hold comments, reporting-only workers or CI-tick projections.",
+        "Project 3 or the selected product board supplies current planning",
+    )
+    def valid(candidate):
+        return all(fragment in candidate for fragment in required) and "driver --events --cursor" not in candidate
+    assert valid(text), f"{skill_name} lost its scoped owning/native reporting contract"
+    for fragment in required:
+        assert not valid(text.replace(fragment, "")), f"missing reporting clause accepted: {fragment}"
+    assert not valid(text + " Run driver --events --cursor current.json --text."), "V1 event authority returned"
 
 
-# The product host retains its qualified event-ledger contract. The organization
-# consumer retires that authority and is validated by its actual prepared-v4 predicate.
+# Organization and selected product use the same canonical reporting boundary.
+# The legacy read-only report utility remains optional, not a scheduler/required workload.
 assert_live_status_contract("work-board")
+
 quality_spec = importlib.util.spec_from_file_location("skill_quality", REPO / "scripts/check-skill-quality.py")
 quality = importlib.util.module_from_spec(quality_spec)
 quality_spec.loader.exec_module(quality)
@@ -152,7 +151,7 @@ org_errors = []
 quality.validate_organization_consumer(REPO, org_errors)
 assert not org_errors, org_errors
 
-print("product live status and prepared organization contracts: ok")
+print("canonical scoped reporting and organization contracts: ok")
 
 
 def mirrored_skill_files(skill_name: str, relative_path: str) -> list[pathlib.Path]:
@@ -209,6 +208,12 @@ def assert_performance_first_contract() -> None:
             for path in mirrored_skill_files(driver, "references/performance-first.md"):
                 assert path.read_bytes() == reference_bodies[0], "driver-local performance gate lost canonical obligations"
         text = " ".join(driver_bodies[0].decode().split())
+        if driver == "work-board":
+            assert "[work-roadmap](../work-roadmap/SKILL.md)" in text
+            assert "Interactive/game implementation loads the" in text
+            assert "[performance-first planning gate](../work-roadmap/references/performance-first.md) before implementation begins" in text
+            assert "does not select a product lane or restart profiling" in text
+            continue
         assert "During worker setup, interactive/game work must explicitly invoke" in text
         assert "`pnext-item` performance-first planning gate" in text
         assert "../pnext-item/" not in text

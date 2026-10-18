@@ -73,9 +73,9 @@ Write the smallest complete report containing:
   and the constraints needed to avoid unsafe or duplicate retries.
 - A short ordered restart plan and the remaining gates to actual completion.
 
-Apply [agent-handoff](../agent-handoff/SKILL.md) and
-[technical-writer](https://github.com/FS-GG/.github/blob/main/.agents/skills/technical-writer/SKILL.md) for evidence and writing quality.
-The optional technical-writer skill is not required for this route; if absent, apply concise evidence-grounded prose directly.
+Apply [agent-handoff](../agent-handoff/SKILL.md) for evidence and writing quality.
+If the optional `$technical-writer` skill is available, apply it; its absence does not block this route.
+Otherwise use concise evidence-grounded prose directly; no optional skill path is a package dependency.
 Keep credentials, raw telemetry, private payloads and unnecessary personal
 identifiers out of the committed report. Private evidence paths can identify
 where authorized successors should inspect it; do not copy their contents.

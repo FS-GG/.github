@@ -139,6 +139,11 @@ New major planning uses supported `gpt-6-astra` high; implementation uses `gpt-6
 worker model/effort explicitly. No dispatch is mandatory; unsupported routing refuses dispatch without
 silent substitution. Deliver whole applicable instructions to owners and reviewers.
 
+Execute an explicitly selected technical plan through [work-roadmap](../work-roadmap/SKILL.md),
+including its applicable qualification routes. Interactive/game implementation loads the
+[performance-first planning gate](../work-roadmap/references/performance-first.md) before implementation begins.
+This preserves the selected product contract; it does not select a product lane or restart profiling.
+
 ## Admit actual resources and effects
 
 Reconcile CPU/memory/storage, runtime slots, helper/build-server demand, hosted queues, source/output

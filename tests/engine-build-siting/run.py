@@ -51,6 +51,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -101,6 +102,11 @@ REDIRECT_FLAGS = (
 # exemption and IS ITS REASON: it is printed in the failure output, so a reader meeting this gate sees
 # why each exemption was granted rather than an opaque allowlist.
 DECLARED_SITES: dict[str, str | None] = {
+    # This documented renderer has no ProjectReference. main rechecks that fact,
+    # so a later engine reference cannot inherit this narrow declaration.
+    "scripts/v2-progress/README.md": (
+        "builds only the standalone Progress renderer; no project reference or engine tier-2a artifact"
+    ),
     # The one sanctioned way a gate harness gets an engine. Redirect enforced, not assumed.
     "scripts/build-gate-engine": None,
     # The permission differential builds its non-engine runner and project-reference graph through
@@ -147,9 +153,8 @@ DECLARED_SITES: dict[str, str | None] = {
         "builds only the standalone inactive-reader console with FSharp.Core; "
         "no project references or coordination-engine tier-2a output path"
     ),
-    "tests/new-sdd-workspace/run.sh": (
-        "builds scripts/NewSddWorkspace, not the engine; its output lands where tier 2a never probes"
-    ),
+    # Creator017's normal graph references Coord.Cli: enforce its actual redirect.
+    "tests/new-sdd-workspace/run.sh": None,
 }
 
 # ---------------------------------------------------------------------------------------------------
@@ -488,6 +493,16 @@ def selftest() -> list[str]:
     return problems
 
 
+def standalone_progress_project(xml: str) -> bool:
+    try:
+        project = ET.fromstring(xml)
+    except ET.ParseError:
+        return False
+    return project.tag.rsplit("}", 1)[-1] == "Project" and not any(
+        element.tag.rsplit("}", 1)[-1] == "ProjectReference" for element in project.iter()
+    )
+
+
 def main() -> int:
     corpus = selftest()
     if corpus:
@@ -496,6 +511,21 @@ def main() -> int:
         for p in corpus:
             print(f"  - {p}", file=sys.stderr)
         return 3
+
+    progress_project = REPO / "src/FS.GG.V2.Progress/FS.GG.V2.Progress.fsproj"
+    try:
+        progress_source = progress_project.read_text()
+    except OSError as error:
+        print(f"::error::engine-build-siting: standalone renderer source unavailable: {error}", file=sys.stderr)
+        return 1
+    if not standalone_progress_project(progress_source):
+        print("::error::engine-build-siting: declared standalone Progress renderer acquired a project reference", file=sys.stderr)
+        return 1
+    # Refuse both ordinary and namespaced references, and malformed/unrelated XML.
+    for xml in ('<Project><ItemGroup><ProjectReference Include="../FS.GG.Coord.Cli.fsproj" /></ItemGroup></Project>',
+                '<Project xmlns="urn:msbuild"><ProjectReference Include="engine" /></Project>',
+                '<Project', '<ItemGroup />'):
+        assert not standalone_progress_project(xml), "standalone renderer guard accepted a reference/invalid shape"
 
     # THE POPULATION IS WHAT GIT TRACKS, NOT WHAT THE FILESYSTEM HOLDS (.github#2653, round-0 follow-up).
     #
