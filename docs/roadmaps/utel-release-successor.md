@@ -1752,6 +1752,21 @@ must compare remote raw bytes with this invocation's frozen payload. Valid-shape
 changes cannot settle the owned send. Recovered historical intents without an owned payload retain
 their existing semantic scope; this change grants no new recovery or replay permission.
 
+The final unflagged default 0.105 MAIN calibration completes all sixteen effects at generation33
+with **1222 Authority entries** (958 GET,231 POST,33 PATCH),561 separate publisher entries and198
+feed acquisitions. The original ninety-two extra absent-observation shape remains1222 Authority
+entries with108 probes and460 virtual seconds; the135-probe complete case remains1222 with595
+virtual seconds. Concurrent synthetic unrelated history reaches1226 Authority entries, with four
+external-actor calls accounted separately. The1500 ceiling is unchanged; these finite synthetic
+history shapes do not establish arbitrary-store or native-latency headroom. The final seven suites
+include198 PASS and2 explicit private skips of200 recovery cases, not200 passed. The earlier
+owned frozen-byte readback defect and stale historical/default live-test failure remain retained.
+
+The joined 0.105 F# closure also compiled with zero warnings/errors and passed fourteen migration
+unit plus thirty-four actual-caller tests. The delayed full seventy-seven-effect fixture retains
+468 apply requests plus four preparation requests and77 virtual seconds. This is source integration
+qualification, not a packaged or installed 0.105 identity, measured HTTP latency or live migration.
+
 The initial 1498-entry fixture was a cap PASS rejected for its two-entry margin, not exhaustion.
 The later 1400-entry result exercised the historical .104-shaped caller and is not 0.105 evidence.
 Source qualification must exercise the actual unflagged default 0.105 caller and MAIN entry through
