@@ -150,13 +150,14 @@ class FrozenDependencyControls(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "published dependency source changed"):
             HELPER["source_projects"](ROOT, pin, historical)
         workflow = (ROOT / ".github/workflows/release-new-sdd-workspace-successor-candidate.yml").read_text()
-        guard = workflow.index("python3 scripts/creator-frozen-coord-dependencies.py verify-source")
-        self.assertLess(workflow.index("ref: " + pin["sourceSha"]), guard)
-        self.assertLess(guard, workflow.index("actions/setup-dotnet"))
-        self.assertLess(guard, workflow.index("Bind exact protected source and unused version"))
-        self.assertIn(pin["downloadUrl"], workflow)
-        self.assertIn('--producer-source "${FsggFrozenCoordSource:', workflow)
-        self.assertIn('--frozen-coord-source "${FsggFrozenCoordSource:', workflow)
+        # The exact historical pin/helper remain qualified above; the current 0.17
+        # candidate deliberately builds its normal 0.107 graph, never rebinds that pin.
+        self.assertIn('test "$version" = 0.17.0', workflow)
+        self.assertIn("bash tests/new-sdd-workspace/run.sh", workflow)
+        self.assertNotIn(pin["downloadUrl"], workflow)
+        self.assertNotIn("FsggFrozenCoordSource", workflow)
+        self.assertNotIn("FsggFrozenCoordDependencies", workflow)
+        self.assertNotIn("creator-frozen-coord-dependencies.py", workflow)
 
     def test_missing_wrong_and_linked_source_roots_refuse(self):
         for producer in (None, self.root, self.producer / "missing"):

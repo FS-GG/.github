@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish the exact Wizard 0.16.0 candidate through fresh admitted effects."""
+"""Publish the exact Wizard 0.17.0 candidate through fresh admitted effects."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from new_sdd_workspace_successor_execution import effects
 from new_sdd_workspace_successor_provider import WizardProvider, publisher_error
 
 REPOSITORY = "FS-GG/.github"
-REF = "refs/heads/fsgg/v2/journal/release/board-v2-product-creator-016"
+REF = "refs/heads/fsgg/v2/journal/release/board-v2-product-creator-017"
 
 
 def require(ok: bool, detail: str) -> None:
@@ -40,12 +40,12 @@ def publication_primitives():
 
 
 def publication_report(candidate_run, artifact, archive, mode):
-    return {"schema": "fsgg.creator016-publication-summary/1", "mode": mode,
+    return {"schema": "fsgg.creator017-publication-summary/1", "mode": mode,
             "candidateRunId": candidate_run, "candidateArtifactId": artifact,
             "candidateArchiveSha256": archive, "candidateSourceSha": None,
             "publisherSourceSha": None, "publisherRunId": None,
             "logicalJournalRef": REF, "physicalJournalRef": "refs/heads/main",
-            "physicalJournalDirectory": "state/releases/board-v2-product-creator-016",
+            "physicalJournalDirectory": "state/releases/board-v2-product-creator-017",
             "classifiedPhysicalHead": None, "fresh": None, "startingJournal": None,
             "lastObservedJournal": None, "journalMutationMayHaveOccurred": False,
             "lastDispatch": None, "iterationsAttempted": 0, "complete": False,
@@ -206,7 +206,7 @@ def main() -> int:
                                 args.candidate_archive_sha256,
                                 "preflight" if args.preflight_only else "publish")
     counted = None
-    summary = args.workdir.parent / "creator016-publication-summary.json"
+    summary = args.workdir.parent / "creator017-publication-summary.json"
     outcome = 1
     try:
         require(args.recovery_binding is None, "recovery binding outside selected mode")
@@ -261,7 +261,7 @@ def main() -> int:
         admission = primitives.ProtectedPublisherAdmission(
             WizardAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main"), counted, REF)
         provider = primitives.ReportingProvider(WizardProvider(api, manifest_path, github_token, nuget_key), report)
-        intent = {"contentId": content_id, "sourceSha": candidate_source, "version": "0.16.0",
+        intent = {"contentId": content_id, "sourceSha": candidate_source, "version": "0.17.0",
                   "candidateArchiveSha256": args.candidate_archive_sha256, "operator": operator}
         journal = primitives.ReportingJournal(ProtectedReleaseJournal(counted, REF, main_directory=True), report)
         report["stage"] = "preparation"

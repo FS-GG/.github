@@ -15,9 +15,11 @@ import sys
 import tempfile
 import zipfile
 
+from new_sdd_workspace_successor_execution import CURRENT_017, CURRENT_016
+
 REPOSITORY_ID = 1269292704
 WORKFLOW = ".github/workflows/release-new-sdd-workspace-successor-candidate.yml"
-VERSION = "0.16.0"
+VERSION = CURRENT_017.version
 PACKAGE = f"FS.GG.NewSddWorkspace.{VERSION}.nupkg"
 MEMBERS = {PACKAGE, "manifest.json", "package-evidence.json"}
 
@@ -27,7 +29,13 @@ def require(ok: bool, detail: str) -> None:
         raise ValueError(detail)
 
 
-def verify(artifact: dict, run: dict, archive_path: pathlib.Path, output: pathlib.Path, source_sha: str) -> dict:
+def verify(artifact: dict, run: dict, archive_path: pathlib.Path, output: pathlib.Path, source_sha: str,
+           *, release_binding=CURRENT_017) -> dict:
+    require(release_binding is CURRENT_017 or release_binding is CURRENT_016, "unknown Creator artifact binding")
+    # An explicit retained 0.16 reader is inert; the ordinary publisher always selects 0.17.
+    VERSION = release_binding.version
+    PACKAGE = f"FS.GG.NewSddWorkspace.{VERSION}.nupkg"
+    MEMBERS = {PACKAGE, "manifest.json", "package-evidence.json"}
     require(bool(re.fullmatch(r"[0-9a-f]{40}", source_sha)), "invalid source SHA")
     run_id = run.get("id")
     require(isinstance(run_id, int) and run_id > 0, "invalid run ID")
