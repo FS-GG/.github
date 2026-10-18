@@ -670,13 +670,14 @@ module ProgressRendererTests =
 
     [<Fact>]
     let ``inspection progress keeps scoped native delivery completion apart from open outcome promise`` () =
+        let baseline = baseSnapshot ()
         let json = """{"schema":"fsgg.coord.board-v2-inspection/3","items":[
           {"issue":{"owner":"FS-GG","repository":".github","number":41},"native":{"state":"OPEN"},"planning":{"status":"Blocked"},
-           "workItem":{"workLevel":"Outcome","hierarchy":{"parent":null,"children":[{"issue":{"owner":"FS-GG","repository":".github","number":42},"nodeId":"child"}],"complete":true,"gap":null,"observedAt":"2026-09-30T08:00:00Z"},
+           "workItem":{"workLevel":"Outcome","hierarchy":{"parent":null,"children":[{"issue":{"owner":"FS-GG","repository":".github","number":42},"nodeId":"child"}],"complete":true,"gap":null,"observedAt":"2026-09-24T08:00:00Z"},
              "closure":{"stateReason":null,"closedAt":null,"doneWhen":"Source and installed restart promise","blockedOn":"Installed restart witness from receiver owner","acceptanceEvidence":"Source PR accepted; installed pending","acceptance":"Unverified"}}},
           {"issue":{"owner":"FS-GG","repository":".github","number":42},"native":{"state":"CLOSED"},"planning":{"status":"Done"},
-           "workItem":{"workLevel":"Delivery","hierarchy":{"parent":{"issue":{"owner":"FS-GG","repository":".github","number":41},"nodeId":"parent"},"children":[],"complete":true,"gap":null,"observedAt":"2026-09-30T08:00:00Z"},
-             "closure":{"stateReason":"COMPLETED","closedAt":"2026-09-30T08:00:00Z","doneWhen":"Source routing closure","blockedOn":"None","acceptanceEvidence":"Reviewed exact source merged","acceptance":"Unverified"}}}]}"""
+           "workItem":{"workLevel":"Delivery","hierarchy":{"parent":{"issue":{"owner":"FS-GG","repository":".github","number":41},"nodeId":"parent"},"children":[],"complete":true,"gap":null,"observedAt":"2026-09-24T08:00:00Z"},
+             "closure":{"stateReason":"COMPLETED","closedAt":"2026-09-24T08:00:00Z","doneWhen":"Source routing closure","blockedOn":"None","acceptanceEvidence":"Reviewed exact source merged","acceptance":"Unverified"}}}]}"""
         let rows = ProgressRenderer.boardItemsFromInspection json |> Result.defaultWith failwith
         Assert.Equal(2, rows.Length)
         Assert.Equal("Outcome", rows.Head.WorkLevel)
@@ -692,6 +693,7 @@ module ProgressRendererTests =
 
     [<Fact>]
     let ``legacy and missing hierarchy report Unknown rather than hide selected work or certify acceptance`` () =
+        let baseline = baseSnapshot ()
         let json = """{"schema":"fsgg.coord.board-v2-inspection/2","items":[{"issue":{"owner":"FS-GG","repository":".github","number":42},"native":{"state":"CLOSED"},"planning":{"status":"Done"}}]}"""
         let rows = ProgressRenderer.boardItemsFromInspection json |> Result.defaultWith failwith
         Assert.Single rows |> ignore
