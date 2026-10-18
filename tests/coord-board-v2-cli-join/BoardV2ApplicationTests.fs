@@ -804,6 +804,42 @@ let ``actual caller refuses empty and oversized declarations without replacing t
         Assert.Equal("unknown", (inputSelections report.Value).[0].GetProperty("decision").GetString())
 
 [<Fact>]
+let ``actual caller reservation input preserves unknown versus explicit empty observations`` () =
+    let context = observedContext ProgrammeFixture.newAssignment
+    let cases: (Reservation list option * AttributedObservation option * JsonValueKind * string) list =
+        [ (None, context.ReservationObservation, JsonValueKind.Null, "unknown");
+          (Some [], None, JsonValueKind.Null, "unknown");
+          (None, None, JsonValueKind.Null, "unknown");
+          (Some [], context.ReservationObservation, JsonValueKind.Object, "ready") ]
+    for items, observation, expectedKind, expectedDecision in cases do
+        let input = { context with Reservations = items; ReservationObservation = observation }
+        let json = ProgrammeFixture.integratorJson input
+        use document = JsonDocument.Parse json
+        let encoded = document.RootElement.GetProperty("reservations")
+        Assert.Equal(expectedKind, encoded.ValueKind)
+        let decoded = BoardV2Application.parseIntegratorObservations (ProgrammeFixture.binding ()) json |> Result.defaultWith failwith
+        if expectedKind = JsonValueKind.Null then
+            Assert.True(decoded.Reservations.IsNone)
+            Assert.True(decoded.ReservationObservation.IsNone)
+        else
+            Assert.True(decoded.Reservations.IsSome)
+            Assert.Empty decoded.Reservations.Value
+            Assert.True(decoded.ReservationObservation.IsSome)
+            Assert.Equal(0, encoded.GetProperty("items").GetArrayLength())
+        let _, report, _ = inspectProgrammeInput (Some json) ProgrammeFixture.newAssignment
+        Assert.Equal(expectedDecision, (inputSelections report.Value).[0].GetProperty("decision").GetString())
+    let reconciliation: Prerequisite = { Action = Source; Reference = "current-deliverable"; Satisfied = None; SupplyingOwner = "programme-owner" }
+    let input = { context with Slices = [ { context.Slices.Head with Prerequisites = [ reconciliation ] } ] }
+    let json = ProgrammeFixture.integratorJson input
+    use document = JsonDocument.Parse json
+    let sliceNode = (document.RootElement.GetProperty("slices")).[0]
+    Assert.Equal(JsonValueKind.Null, (sliceNode.GetProperty("prerequisites")).[0].GetProperty("satisfied").ValueKind)
+    let decoded = BoardV2Application.parseIntegratorObservations (ProgrammeFixture.binding ()) json |> Result.defaultWith failwith
+    Assert.True(decoded.Slices.Head.Prerequisites.Head.Satisfied.IsNone)
+    Assert.True(decoded.Slices.Head.PullRequest.IsNone)
+    Assert.Equal(JsonValueKind.Null, sliceNode.GetProperty("pullRequest").ValueKind)
+
+[<Fact>]
 let ``actual caller binds current work reconciliation to action native body scope and original holds`` () =
     let declaration = "Retain original operation custody and investigate independent source"
     let body = ProgrammeFixture.ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", declaration)
@@ -859,6 +895,8 @@ let ``actual caller refuses ambiguous six field forms without inventing owner or
         [ ("duplicate inline owner", inlineBody + "\nOwner: forged");
           ("missing inline field", inlineBody.Replace("Blocked on:", "Missing:"));
           ("unknown inline label", inlineBody + "\nUnexpected field: extra");
+          ("unknown header with URL", inlineBody + "\nUnknown: https://github.com/FS-GG/.github/pull/42");
+          ("unknown header without spacing", inlineBody + "\nUnknown:https://github.com/FS-GG/.github/pull/42");
           ("mixed forms", ProgrammeFixture.ownerBody + "\nOwner: forged");
           ("duplicate heading", ProgrammeFixture.ownerBody + "\n## Owner\nforged");
           ("unknown heading", ProgrammeFixture.ownerBody + "\n## Unexpected field\nextra");
