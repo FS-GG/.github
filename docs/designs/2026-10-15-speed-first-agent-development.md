@@ -1,13 +1,13 @@
 # Speed-first agent development for Unified Roadmap v3
 
-Status: ordinary work-programme guidance, revised 2026-10-15. Owner: `.github` programme
+Status: ordinary work-board guidance, revised 2026-10-18. Owner: `.github` programme
 integrator; each affected repository keeps its own implementation and acceptance owner.
 Open-row navigation: [routing notes](../roadmaps/2026-10-15-speed-first-agent-development.md).
 This document selects no release, credential, migration, production effect or CI bypass.
 
 ## Decision and objective
 
-Use the existing [work-programme](../../.agents/skills/work-programme/SKILL.md) to finish
+Use the canonical [work-board](../../.agents/skills/work-board/SKILL.md) to finish
 accepted consumer outcomes with short owner-local feedback, narrow ready slices and
 parallel preparation only where dependencies and touch sets are disjoint. Run all current
 required exact-head PR checks and comprehensive protected parent, release and installed
@@ -18,7 +18,7 @@ new metric, reporting cadence or additional closure gate.
 
 This is a speed-first *ordinary practice*, not another execution service or permission to
 weaken a protected gate. It clarifies the [existing v3 simplifications](../roadmaps/2026-10-07-unified-development-roadmap-v3.md#11-selected-simplifications--2026-10-12).
-Work-programme already
+The canonical coordinator retains the ordinary guidance that
 allows same-owner local build/test repair without per-attempt parent approval and directs
 owners to compile early, review the affected path after repeated similar failures and use
 bounded check watchers. [ADR-0080](../adr/0080-scoped-child-qualification-comprehensive-milestone-closure.md)
@@ -59,8 +59,9 @@ gets a new bounded correction or conditional selection; it does not turn histori
 completion back into a general queue. This preserves the finite trial's exact conclusion:
 **process changes delivered; throughput benefit unproven**.
 
-For each open row, the owning plan remains authoritative. Select the next independently
-useful assertion from existing work: exact producer source, coherent publication,
+The selected V2 binding and enrolled delivery identities govern scheduling; roadmap rows are
+historical navigation. The owning plan retains the full acceptance promise. Select the next independently
+useful delivery assertion from existing work: exact producer source, coherent publication,
 installed receiver or native behavior. One owner carries ordinary preparation, focused
 tests and PR repair; the designated integrator handles a shared surface. Use existing
 owner packets and original-effect custody, without extra mandatory fields or forms.
