@@ -50,9 +50,9 @@ recorded; no separate remote-erasure or descendant-settlement proof is inferred.
 
 Registry publication/tag now name **0.104.0**. The earlier registry deferral below is historical:
 the accepted publication releases that hold and permits the deferred Game 0.5 inventory reconciliation.
-Game's immutable published producer and installed qualifier stay distinct from its newer unpublished
-0.6 source. Installed-host update, private-caller acceptance, Project3 migration/UI and consumer adoption
-remain separate. Original **.103 Unknown**, the 439 holds and every inherited reservation remain unresolved.
+Game's separately accepted 0.6 publication is now projected in the same source delivery; its last
+accepted installed qualifier remains the immutable 0.5 profile. Neither transfers to Coordination
+installed-host, private-caller, Project3 migration/UI or consumer acceptance. Original **.103 Unknown**, the 439 holds and every inherited reservation remain unresolved.
 
 ### Canonical tool pin correction after durable closure
 

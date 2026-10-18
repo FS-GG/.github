@@ -19,6 +19,10 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+### 2026-10-18 — `wasm-shared-runtime`: accepted 0.6 publication, separate last installed 0.5 (game; Game#723, #718)
+
+Record original publisher39085989107/attempt1 at producer8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e, release416167085/tagwasm/v0.6.0 and its exact manifest/SDK/promotion transaction. Both feeds and all four served assets were independently verified and accepted. Installed0.6 remains unqualified; the last accepted installed0.5 P8054/Qc938 and every prior immutable receipt remain separate. Consumers stay empty. This publication-only projection establishes no SC2/BAR/FourD adoption, product timing or native authority.
+
 - **2026-10-18** — Prepare `coord-engine` **0.105.0 source only** (owner github; [release plan](../docs/roadmaps/utel-release-successor.md)). The closed current binding is0.105/accepted predecessor0.104/journal23, with complete V2 migration visibility and bounded pending-only publisher observation plus fresh full transition guards. Predecessor source remains immutable candidate `912eba8bbd707dabcbc5011d508c479109010b71`, not its continuation controller. Published package-version/tag and the canonical installed-tool pin remain **0.104.0**; no105 publication, installation, migration replay or consumer acceptance is claimed. Original .103 Unknown, consumed .104 continuation and inherited reservations remain unchanged.
 
 
