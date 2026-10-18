@@ -13,7 +13,7 @@ import urllib.request
 
 from fsgg_feed import _StripAuthOnRedirect
 from release_successor_execution import Dispatch, Effect, Observation
-from release_successor_provider import GitHubAPI, LiveProvider, NotFound, Refused
+from release_successor_provider import GitHubAPI, LiveProvider, NotFound, Refused, sanitized_dispatch_diagnostic
 from telemetry_host_successor_execution import PACKAGE, VERSION, TAG, effects
 
 REPOSITORY = "FS-GG/.github"
@@ -36,6 +36,7 @@ class HostProvider(LiveProvider):
         self.observed.mkdir(exist_ok=True)
         self.package = self.root / f"{PACKAGE}.{VERSION}.nupkg"
         self.journal = self.root / "publication-journal.json"
+        self.last_dispatch_diagnostic = None
 
     def _download_package(self, feed: str, package: str = PACKAGE) -> pathlib.Path | None:
         if package != PACKAGE or feed not in {"github", "nuget"}:
@@ -126,6 +127,9 @@ class HostProvider(LiveProvider):
 
     def dispatch(self, effect: Effect) -> Dispatch:
         identity = effect.identity
+        self.last_dispatch_diagnostic = None
+        if isinstance(self.api, GitHubAPI):
+            self.api.last_request_diagnostic = None
         try:
             if identity == "tag":
                 self.api.post(f"repos/{REPOSITORY}/git/refs", {"ref": f"refs/tags/{TAG}", "sha": self.source})
@@ -160,6 +164,23 @@ class HostProvider(LiveProvider):
                                {"draft": False, "make_latest": "false"})
             else:
                 raise Refused(f"unknown Host release effect {identity}")
-        except (Refused, subprocess.CalledProcessError, OSError, urllib.error.URLError, ValueError):
+        except (Refused, subprocess.CalledProcessError, OSError, urllib.error.URLError, ValueError) as error:
+            # Keep the original Unknown outcome; report only the common closed projection.
+            category = ("provider-refused" if isinstance(error, Refused) else
+                        "process-failure" if isinstance(error, subprocess.CalledProcessError) else
+                        "transport-failure" if isinstance(error, urllib.error.URLError) else
+                        "os-failure" if isinstance(error, OSError) else "protocol-failure")
+            try:
+                row = {"category": category}
+                diagnostic = getattr(error, "diagnostic", None)
+                if diagnostic is None and isinstance(error, (urllib.error.URLError, ValueError)):
+                    diagnostic = getattr(self.api, "last_request_diagnostic", None)
+                if diagnostic is not None:
+                    row["request"] = diagnostic
+                if isinstance(error, subprocess.CalledProcessError):
+                    row["returnCode"] = error.returncode
+                self.last_dispatch_diagnostic = sanitized_dispatch_diagnostic(row)
+            except BaseException:
+                self.last_dispatch_diagnostic = {"category": category, "diagnosticUnavailable": True}
             return Dispatch("unknown")
         return Dispatch("applied")
