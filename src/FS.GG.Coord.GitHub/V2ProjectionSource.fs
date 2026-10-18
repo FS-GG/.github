@@ -859,7 +859,8 @@ module V2ProjectionSource =
             let reason = optionalText "stateReason" value
             let closed = optionalText "closedAt" value
             if (state <> "OPEN" && state <> "CLOSED") || (state = "OPEN" && closed.IsSome)
-               || (state = "CLOSED" && (closed.IsNone || not (closed |> Option.exists (fun date -> fst (DateTimeOffset.TryParse date)))))
+               || (state = "CLOSED" && (reason.IsNone || reason = Some "REOPENED" || closed.IsNone || not (closed |> Option.exists (fun date -> fst (DateTimeOffset.TryParse date)))))
+               || (state = "OPEN" && (reason |> Option.exists (fun value -> value <> "REOPENED")))
                || (reason |> Option.exists (fun value -> not (List.contains value ["COMPLETED"; "NOT_PLANNED"; "REOPENED"; "DUPLICATE"]))) then invalidArg "hierarchy" "invalid closure facts"
             reason, closed
         match native, planning, binding.WorkLevel with

@@ -1490,7 +1490,7 @@ let ``explicit delivery has independent capacity while outcome and unknown never
 
 [<Fact>]
 let ``hierarchy changed partial or cyclic reads cannot qualify delivery`` () =
-    for mode in ["denied"; "partial"; "cycle"; "moved"; "classification"; "null"; "identity"; "errors"] do
+    for mode in ["denied"; "partial"; "cycle"; "moved"; "classification"; "null"; "identity"; "errors"; "missing-closure"] do
         let mutable hierarchyReads = 0
         let mutable classificationReads = 0
         let change request response =
@@ -1499,7 +1499,13 @@ let ``hierarchy changed partial or cyclic reads cannot qualify delivery`` () =
                 if mode = "denied" then Error(Http(403, "inert denied"))
                 else response |> Result.map (fun (value: Transport.Response) ->
                     let body =
-                        if mode = "null" then value.Body.Replace("\"subIssues\":{", "\"subIssues\":null,\"unused\":{")
+                        if mode = "missing-closure" then
+                            let root = System.Text.Json.Nodes.JsonNode.Parse value.Body
+                            let child = root.["data"].["repository"].["issue"].["subIssues"].["nodes"].[0]
+                            child.["state"] <- System.Text.Json.Nodes.JsonValue.Create "CLOSED"
+                            child.["closedAt"] <- System.Text.Json.Nodes.JsonValue.Create "2026-10-17T12:00:00Z"
+                            root.ToJsonString()
+                        elif mode = "null" then value.Body.Replace("\"subIssues\":{", "\"subIssues\":null,\"unused\":{")
                         elif mode = "identity" then value.Body.Replace("\"id\":\"I_outcome\"", "\"id\":\"I_foreign\"")
                         elif mode = "errors" then "{\"data\":null,\"errors\":[{\"message\":\"inert partial native response\"}]}"
                         elif mode = "partial" then value.Body.Replace("\"totalCount\":1", "\"totalCount\":2")
