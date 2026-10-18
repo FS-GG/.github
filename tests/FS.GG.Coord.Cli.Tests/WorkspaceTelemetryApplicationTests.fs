@@ -526,7 +526,7 @@ module WorkspaceTelemetryApplicationTests =
             let mutable reject = true
             let enqueue (bytes: byte array) =
                 let state = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes statePath)
-                Assert.Equal(Convert.ToBase64String bytes, state["pending"]["batchBase64"].GetValue<string>())
+                Assert.Equal(Convert.ToBase64String bytes, (state["pending"]["batchBase64"]).GetValue<string>())
                 Assert.Empty(state["sources"].AsObject())
                 calls.Add(Array.copy bytes)
                 if reject then Error [ "spool-overload" ] else Ok "locally-retained"
@@ -849,7 +849,7 @@ module WorkspaceTelemetryApplicationTests =
             let home, path = passiveSource root "partial-counters"
             let row = System.Text.Json.Nodes.JsonNode.Parse(nativeRow "partial-response" 10L 0L)
             row["timestamp"] <- null
-            let usage = row["payload"]["usage"].AsObject()
+            let usage = (row["payload"]["usage"]).AsObject()
             for name in [ "input_tokens"; "cached_input_tokens"; "cache_write_input_tokens"; "reasoning_output_tokens"; "total_tokens" ] do
                 usage.Remove name |> ignore
             File.WriteAllText(path, String.replicate 100000 "{\"type\":\"event_msg\"}\n" + row.ToJsonString() + "\n")
@@ -870,3 +870,54 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Equal(Some 72L, record.Usage.Output)
             Assert.Equal(None, record.OccurredAt)
             Assert.Equal(None, record.Provider)
+
+    [<Fact>]
+    let ``passive every intent enqueue and cursor persistence cut preserves exact recovery`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            for cut in [ "before-intent-write"; "after-intent-write"; "before-local-enqueue"; "after-local-enqueue"; "before-cursor-write"; "after-cursor-write" ] do
+                let cleanup, root = temp ()
+                use cleanup = cleanup
+                let home, path = passiveSource root "cut"
+                File.WriteAllText(path, nativeRow "response-a" 10L 0L)
+                let enqueued = ResizeArray<byte array>()
+                let enqueue (bytes: byte array) = enqueued.Add(Array.copy bytes); Ok "locally-retained"
+                let hook stage = if stage = cut then raise (IOException "inert crash cut")
+                let interrupted = SkillTelemetryAdapter.capturePassiveWithHook root "owner" "observations" home [path] enqueue hook
+                Assert.Equal(1, interrupted.ExitCode)
+                let statePath = Path.Combine(root, "orchestrator-passive", "producer.json")
+                let intent =
+                    if not (File.Exists statePath) then None
+                    else
+                        let state = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes statePath)
+                        if isNull state["pending"] then None else Some(Convert.FromBase64String((state["pending"]["batchBase64"]).GetValue<string>()))
+                let priorCalls = enqueued.Count
+                let recovered = SkillTelemetryAdapter.capturePassive root "owner" "observations" home [path] enqueue |> parseCapture
+                Assert.Single(recovered["observations"].AsArray()) |> ignore
+                Assert.False(recovered["pendingIntent"].GetValue<bool>())
+                match intent with
+                | Some exact ->
+                    Assert.Equal(priorCalls + 1, enqueued.Count)
+                    Assert.Equal<byte>(exact, enqueued[enqueued.Count - 1])
+                    if priorCalls > 0 then Assert.Equal<byte>(exact, enqueued[0])
+                | None when cut = "after-cursor-write" -> Assert.Equal(priorCalls, enqueued.Count)
+                | None -> Assert.Equal(1, enqueued.Count)
+
+    [<Fact>]
+    let ``passive status-slot failure claims no durable gap and retains original intent cursor`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let home, path = passiveSource root "status-failure"
+            File.WriteAllText(path, nativeRow "response-a" 10L 0L)
+            let statePath = Path.Combine(root, "orchestrator-passive", "producer.json")
+            let mutable before = Array.empty<byte>
+            let enqueue _ = before <- File.ReadAllBytes statePath; Error [ "spool-overload" ]
+            let hook stage = if stage = "before-status-write" then raise (IOException "inert status slot failure")
+            let failure = SkillTelemetryAdapter.capturePassiveWithHook root "owner" "observations" home [path] enqueue hook
+            Assert.Equal(1, failure.ExitCode)
+            Assert.Equal<byte>(before, File.ReadAllBytes statePath)
+            let report = SkillTelemetryAdapter.reportPassive root "owner" "observations" |> parseCapture
+            Assert.True(report["pendingIntent"].GetValue<bool>())
+            Assert.DoesNotContain("enqueue-deferred-cursor-retained", report["gaps"].ToJsonString())
+            let recovered = SkillTelemetryAdapter.capturePassive root "owner" "observations" home [path] (fun _ -> Ok "locally-retained") |> parseCapture
+            Assert.Single(recovered["observations"].AsArray()) |> ignore

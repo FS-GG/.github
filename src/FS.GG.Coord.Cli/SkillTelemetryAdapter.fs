@@ -1160,35 +1160,40 @@ module SkillTelemetryAdapter =
                      "firstEnqueueFailure", (if isNull state["firstEnqueueFailure"] then nullNode else state["firstEnqueueFailure"].DeepClone())
                      "lastEnqueueFailure", (if isNull state["lastEnqueueFailure"] then nullNode else state["lastEnqueueFailure"].DeepClone()) ]
 
-    let private replayPassive directory (state: JsonObject) (enqueue: byte array -> Result<string, string list>) =
+    let private replayPassive directory (state: JsonObject) (enqueue: byte array -> Result<string, string list>) hook =
         match state["pending"] with
         | null -> true
         | pending ->
             let exact = Convert.FromBase64String(pending["batchBase64"].GetValue<string>())
             if exact.Length > 65536 || sha256 exact <> pending["batchDigest"].GetValue<string>() then
                 fail "passive pending intent is invalid; retained"
+            hook "before-local-enqueue"
             match enqueue exact with
             | Error errors ->
                 let codes = errors |> List.truncate 4 |> List.map (fun code -> if code.Length <= 200 && not (code |> Seq.exists Char.IsControl) then code else "enqueue-failure")
                 if isNull state["firstEnqueueFailure"] then state["firstEnqueueFailure"] <- codes |> Seq.map node |> jsonArray
                 state["lastEnqueueFailure"] <- codes |> Seq.map node |> jsonArray
                 passiveGap state "enqueue-deferred-cursor-retained"
+                hook "before-status-write"
                 savePassive directory state
                 false
             | Ok _ ->
+                hook "after-local-enqueue"
                 // Only local enqueue/readback authorizes cursor/index commit. Remote acceptance is independent.
                 state["sources"] <- pending["sourcesAfter"].DeepClone()
                 state["responses"] <- pending["responsesAfter"].DeepClone()
                 state["sequence"] <- pending["sequenceAfter"].DeepClone()
                 state["pending"] <- nullNode
                 state["lastEnqueueFailure"] <- nullNode
+                hook "before-cursor-write"
                 savePassive directory state
+                hook "after-cursor-write"
                 true
 
-    /// One bounded pass over explicit sources. The production caller always supplies its selected association root.
-    /// Same-owner state cloning/reinitialization/root migration requires original-state/fence reconciliation;
-    /// undeclared clones cannot be detected offline and are outside this supported first profile.
-    let capturePassive root owner sourceIdentity codexHome (paths: string list) enqueue =
+    // One bounded pass over explicit sources. The production caller always supplies its selected association root.
+    // Same-owner state cloning/reinitialization/root migration requires original-state/fence reconciliation;
+    // undeclared clones cannot be detected offline and are outside this supported first profile.
+    let capturePassiveWithHook root owner sourceIdentity codexHome (paths: string list) enqueue hook =
         try
             if paths.IsEmpty || paths.Length > NativeUsage.PassiveMaximumFiles
                || (paths |> List.exists (Path.IsPathFullyQualified >> not))
@@ -1217,7 +1222,7 @@ module SkillTelemetryAdapter =
             if FileInfo(lockPath).LinkTarget <> null then fail "passive producer lock is unsafe"
             SkillPrivateDurability.withLock lockPath (fun () ->
                 let state = passiveState directory owner sourceIdentity
-                if replayPassive directory state enqueue then
+                if replayPassive directory state enqueue hook then
                     let sources = state["sources"].DeepClone().AsObject()
                     let responses = state["responses"].DeepClone().AsObject()
                     let events = JsonArray()
@@ -1250,7 +1255,7 @@ module SkillTelemetryAdapter =
                                         scan.Records |> List.exists (fun row ->
                                             let identity = NativeUsage.passiveIdentity row.ThreadId row.TurnId row.ResponseId
                                             (events |> Seq.exists (fun fact -> fact["identity"].GetValue<string>() = identity))
-                                            && responses[identity]["digest"].GetValue<string>() <> row.SourceDigest)
+                                            && (responses[identity]["digest"]).GetValue<string>() <> row.SourceDigest)
                                     if responses.Count + fresh.Length > maximumPassiveIdentities then
                                         indexFull <- true
                                         passiveGap state "response-index-full-capture-deferred"
@@ -1280,6 +1285,7 @@ module SkillTelemetryAdapter =
                         // No unretained counters exist: persist complete line boundaries and bounded gaps directly.
                         state["sources"] <- sources
                         state["sequence"] <- node (sequence + 1)
+                        hook "before-status-write"
                         savePassive directory state
                     else
                         let batchId = "passive-" + requiredString "generation" state + "-" + string (sequence + 1)
@@ -1295,12 +1301,17 @@ module SkillTelemetryAdapter =
                             state["pending"] <- jsonObject [ "batchBase64", node (Convert.ToBase64String bytes); "batchDigest", node (sha256 bytes)
                                                             "sourcesAfter", sources; "responsesAfter", responses; "sequenceAfter", node (sequence + 1) ]
                             // Intent is written before enqueue. A crash at either subsequent write replays identical bytes.
+                            hook "before-intent-write"
                             savePassive directory state
-                            replayPassive directory state enqueue |> ignore
+                            hook "after-intent-write"
+                            replayPassive directory state enqueue hook |> ignore
                 success (passiveSnapshot state))
         with
         | AdapterError message -> result 1 "" $"fsgg passive telemetry: {message}\n"
         | _ -> result 1 "" "fsgg passive telemetry: local capture outcome uncertain; inspect retained intent and state\n"
+
+    let capturePassive root owner sourceIdentity codexHome paths enqueue =
+        capturePassiveWithHook root owner sourceIdentity codexHome paths enqueue ignore
 
     let reportPassive root owner sourceIdentity =
         try

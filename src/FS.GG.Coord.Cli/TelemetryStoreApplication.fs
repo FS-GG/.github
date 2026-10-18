@@ -3068,8 +3068,8 @@ ORDER BY f.identity LIMIT 413701;
                      AuthenticatedFacts = facts }
             with error -> Error [ error.Message ]
 
-    /// Bounded, read-only partial observations from the existing current canonical ledger.
-    /// These unassigned facts never enter item usage, budget or efficiency projections.
+    // Bounded, read-only partial observations from the existing current canonical ledger.
+    // These unassigned facts never enter item usage, budget or efficiency projections.
     let passiveObservations path assessment (scope: TelemetryReceipt.Scope) =
         match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
         | Error errors -> Error errors

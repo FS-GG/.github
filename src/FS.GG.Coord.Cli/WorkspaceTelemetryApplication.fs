@@ -986,7 +986,7 @@ module WorkspaceTelemetryApplication =
             with _ ->
                 Error [ "publication-advisory-failure" ]
 
-    /// Capture-only persistence. This path never resolves credentials, probes health or calls remoteOne.
+    // Capture-only persistence. This path never resolves credentials, probes health or calls remoteOne.
     let tryEnqueueBound configArg repositoryArg expectedProducer expectedBinding payload =
         let path = configPath configArg
         try
@@ -1034,7 +1034,7 @@ module WorkspaceTelemetryApplication =
                                             else Ok "locally-retained"))))
         with _ -> Error [ "capture-advisory-failure" ]
 
-    /// One serialized passive owner per existing private state root; another association must refuse.
+    // One serialized passive owner per existing private state root; another association must refuse.
     let passiveProducer configArg repositoryArg =
         load configArg
         |> Result.bind (select repositoryArg)

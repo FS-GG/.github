@@ -304,7 +304,7 @@ module TelemetryStore =
         |> Encoding.UTF8.GetBytes
         |> CanonicalJson.sha256
 
-    /// A partial local response observation; never programme or terminal accounting.
+    // A partial local response observation; never programme or terminal accounting.
     type PassiveUsageObservation =
         { ThreadId: string
           TurnId: string

@@ -30,6 +30,11 @@ module SkillTelemetryAdapter =
         root: string -> owner: string -> sourceIdentity: string -> codexHome: string -> paths: string list ->
         enqueue: (byte array -> Result<string, string list>) -> CommandResult
 
+    /// Deterministic persistence-cut injection following the existing receipt hook convention.
+    val capturePassiveWithHook:
+        root: string -> owner: string -> sourceIdentity: string -> codexHome: string -> paths: string list ->
+        enqueue: (byte array -> Result<string, string list>) -> hook: (string -> unit) -> CommandResult
+
     val reportPassive: root: string -> owner: string -> sourceIdentity: string -> CommandResult
 
     val run: SkillTelemetryReaders.HostConfig option -> TelemetryCommand -> CommandResult
