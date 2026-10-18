@@ -314,7 +314,7 @@ module V2MigrationTests =
             let after = collect connection.Reads selected |> get
             let operation, payload, kind =
                 match change with
-            | CreateWorkLevel -> failwith "legacy manual fixture unexpectedly selected successor field creation"
+                | CreateWorkLevel -> failwith "legacy manual fixture unexpectedly selected successor field creation"
                 | AddInReview _ -> "updateProjectV2Field", "projectV2Field", "status"
                 | AddMembership _ -> "addProjectV2ItemById", "item", "membership"
                 | InitializePlanningValue _ -> "updateProjectV2ItemFieldValue", "projectV2Item", "initialize"
