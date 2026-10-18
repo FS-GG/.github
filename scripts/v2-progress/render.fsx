@@ -133,7 +133,10 @@ let readSnapshot (root: JsonElement) : ProgressSnapshot =
       Checks = prop root "checks" |> items |> List.map readNamed
       Risks = prop root "risks" |> items |> List.map readNamed
       NextActions = strings root "nextActions"
-      CompletionHistory = completions }
+      CompletionHistory = completions
+      BoardItems = optional root "boardInspection" |> Option.map (fun value ->
+          ProgressRenderer.boardItemsFromInspection (value.GetRawText()) |> Result.defaultWith fail)
+          |> Option.defaultValue [] }
 
 if fsi.CommandLineArgs.Length <> 2 then
     eprintfn "usage: dotnet fsi scripts/v2-progress/render.fsx SNAPSHOT.json"

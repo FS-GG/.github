@@ -1,8 +1,38 @@
 # Telemetry host package and release boundary
 
-## Current source frontier — 2026-10-18
+## Accepted Host 0.7 publication — 2026-10-18
 
-Prospective independently versioned Host **0.7.0** uses the current Store14 implementation
+Original [candidate 39147197464](https://github.com/FS-GG/.github/actions/runs/39147197464) and
+[preflight 39148123795](https://github.com/FS-GG/.github/actions/runs/39148123795) qualified protected
+source `2e60210be1e04d52fe0735a56333b3e3aef42284`. Original
+[publisher 39148437514](https://github.com/FS-GG/.github/actions/runs/39148437514), attempt 1,
+completed journal 13 at generation 17 with all 8 effects verified. Root independently accepted original
+custody, native successful steps, exact release and feed correspondence. The promoted
+[`telemetry-host/v0.7.0` release](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.7.0)
+(ID 416586994) contains exactly the package, manifest and publication journal. It is nonlatest;
+coherent-set/v0.106.0 remains latest. No coherent 107 or Creator 017 publication follows.
+
+Candidate/release package SHA256 is `d59ecac7ef4d1cdc75cebdcb08624b73960309821def1cd83d2909dbda5de253`;
+public NuGet signed archive SHA256 is `c24af6af3e35f67dc0eca1f0f7c82657a8c82adf3c62ea11a986b1deb6bb4460`.
+Both actual hosted downloaded feeds share normalized producer payload
+`sha256:f8ec077387cfbcefbae89f74781ba7bbcfce1ebc2e97f7c7dd43d7bdcddeda1b`.
+Independent public NuGet and release downloads matched through the maintained reader; a separate
+org-feed observer remained 403, so authenticated hosted evidence supplies that feed's proof.
+Manifest content ID is `sha256:dcee8e039276d805d2190632e2adb783dcd17c7ee9ae3a8ba635790303d97c95`.
+Archive signing differences are retained, not asserted byte equality across feeds.
+
+Old 0.6 journal 12 remains generation 2/tag intent Unknown with original candidate and failed attempts
+unchanged; publication 0.7 neither settles nor resends it. The temporary main reservation for this
+completed original operation is released; all 439+46 historical holds remain. App post cleanup logged
+revocation; independent credential invalidity and feed-key expiry remain unproved. Accepted programme binding 4/schema 2/inspection 2 remains. A later Root read observed the global
+CLI selector targeting 0.106, but its pre-entry value and change timing are Unknown; a pointer is not
+whole runtime or instruction-discovery qualification. Home endpoint/trust, installation, enrollment,
+restart/restore and receiver activation
+remain separate acceptance. No local observation queues or Home state were changed by publication.
+
+## Delivered Host 0.7 source profile — 2026-10-18
+
+Independently versioned Host **0.7.0** uses the current Store14 implementation
 and unchanged authenticated passive-receipt ABI. It is a new source, package, candidate and
 release profile, with `telemetry-host/v0.7.0` and logical journal13 at
 `state/releases/utel-host-rel-13`. It requires a newly built genuine candidate on the exact
@@ -44,7 +74,7 @@ and continuation refusal, late old-tag irrelevance, policy drift and Unknown pol
 Secret and malformed-diagnostic controls exercise the actual provider and caller. Existing early HTTP,
 schema/native-output assertions and full package/installed-browser qualification remain required with
 unchanged job caps. Static/caller preflight reuses those controls; no workflow, permission, clock budget
-or custom model is added. Current0.7 compiled, candidate, publication and receiver adoption gates remain pending.
+or custom model is added. Host0.7 full hosted/package and original candidate/publication gates subsequently passed as recorded above; receiver adoption remains pending.
 
 ### Retained0.6 evidence
 
@@ -65,7 +95,7 @@ transport follows from0.7 preparation. App cleanup logged revocation; independen
 key revocation/expiry remain unproved. Original state, candidate and package bytes remain unchanged.
 
 Published [Host0.5.0](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.5.0) and all historical
-artifacts/journals remain immutable. Coherent published CLI0.106 and active installed0.105 remain separate.
+artifacts/journals remain immutable. Coherent published CLI0.106 is accepted; actual selected-caller/runtime and installed discovery proof remain separately scoped.
 No service installation, TLS/trust change, enrollment, native provider capture or Home durability follows
 from this source. Home owns final endpoint/reference, service custody and receiver adoption. Existing
 TLS/bearer capability does not establish readiness. Historical sections below retain their original scopes.

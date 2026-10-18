@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = Path(os.environ["FSGG_COORD_ENGINE_BIN"])
 RUNTIMES = (".claude", ".agents")
-DRIVERS = ("work-roadmap", "work-board", "padd-item", "atlas")
+DRIVERS = tuple(row["id"] for row in json.loads((ROOT / "registry/driver-skill-manifest.json").read_text())["skills"] if row.get("scope") == "driver")
 LINK = re.compile(r"\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)")
 
 

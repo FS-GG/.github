@@ -226,6 +226,27 @@ owner window; an equal existing value is a no-op and a different human/automatio
 operation. This is no provider if-absent/CAS guarantee. Each returned item ID and initialized field
 requires independent readback; Observation, assignee, owner and hierarchy remain outside this route.
 
+The outcome/delivery successor adds an optional closed `workLevel` scope object with
+`schema: "fs.gg.board-v2.work-level-migration/1"`, `fieldId` (null only for explicit creation), and
+`assignments`, a bounded list of `{issueId, name}` for exact selected native issues and only Outcome or
+Delivery. Omission preserves the original migration-prepare/1 and migration-readback/1 contracts;
+presence uses their version2 forms. This input is a selected plan, not binding5 adoption or permission.
+
+Creation is one typed effect for the exact Work level SINGLE_SELECT field and fixed two option
+descriptors. Its correlated response and complete native readback precede resolving that field ID and
+initializing explicitly selected absent values. An equal value is a no-op; conflicting, unreadable or
+ambiguous identities refuse. An existing same-name field is never silently adopted from a null preimage.
+A later bounded invocation must explicitly select the independently observed field identity. Lost or
+uncertain creation retains the original journal; readback never replays it or infers no effect.
+
+Successor view changes preserve existing IDs, layout, column order and unrelated grouping/sort settings.
+Only appending the explicitly selected Work level field to existing columns is permitted; All items
+remains unfiltered. Choose exact desired filters and existing view IDs from fresh native facts rather
+than inventing private identities or recreating views. This route does not create delivery issues,
+change native hierarchy, interpret acceptance, close issues/parents, release reservations or update an
+installed binding. The separate offline pair constructor supports binding5/schema3 with the unchanged
+authenticated enrollment wire; exact classifications and delivery enrollment remain explicitly selected.
+
 Bounded initial schema/items/views/issue pages share one fresh query. Complete first pages are reused
 only within that observation; continuations count against the same budget, and no determining pages
 are reused across effects. The connected caller controls cover the full 77-effect, 22-membership,

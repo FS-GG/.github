@@ -76,27 +76,28 @@ def human_decode(text):
 def raw_terminal_controls(text):
     return [character for character in text if character != "\n" and (ord(character) < 0x20 or 0x7f <= ord(character) <= 0x9f)]
 
-# Product reporting retains its qualified utility contract. Organization reporting
-# consumes owning/native evidence and cannot require a second reporting workload.
-def organization_reporting(body):
+# The legacy read-only utility remains tested below, but neither selected scope
+# requires a second reporting workload. Both enter the canonical coordinator.
+def canonical_reporting(body):
     return all(clause in body for clause in (
-        "owning issue/plan and native delivery evidence retain authority",
-        "This edition prepares .9/.11 consumers only",
-        "unchanged ticks require no comments, projection or reporting-only workload")) and "fsgg-coord-report" not in body
+        "Project 3 or the selected product board supplies current planning",
+        "owning issues/plans/native evidence",
+        "No fixed polling, unchanged-hold comments, reporting-only workers or CI-tick projections")) and "fsgg-coord-report" not in body
 
 for runtime in (".claude", ".agents"):
-    for canonical, variants in (("drive-board", ("drive-board-normal", "drive-board-best")), ("work-board", ("work-board-normal", "work-board-best"))):
-        body = (ROOT / runtime / "skills" / canonical / "SKILL.md").read_text()
-        if canonical == "drive-board":
-            assert organization_reporting(body)
-            for clause in ("owning issue/plan and native delivery evidence retain authority",
-                           "This edition prepares .9/.11 consumers only",
-                           "unchanged ticks require no comments, projection or reporting-only workload"):
-                assert not organization_reporting(body.replace(clause, ""))
-            assert not organization_reporting(body + "\nEvery driver must run fsgg-coord-report.\n")
-        else:
-            assert "fsgg-coord-report" in body and "already-cached lane snapshot" in body
-            assert "typed lane-capacity facts" in body and "indeterminate receipt" in body and "derived cache" in body
+    body = (ROOT / runtime / "skills/work-board/SKILL.md").read_text()
+    assert canonical_reporting(body)
+    for clause in ("Project 3 or the selected product board supplies current planning",
+                   "owning issues/plans/native evidence",
+                   "No fixed polling, unchanged-hold comments, reporting-only workers or CI-tick projections"):
+        assert not canonical_reporting(body.replace(clause, ""))
+    assert not canonical_reporting(body + "\nEvery driver must run fsgg-coord-report.\n")
+    organization = (ROOT / runtime / "skills/drive-board/SKILL.md").read_text()
+    assert "[$work-board](../work-board/SKILL.md)" in organization
+    assert "**organization** scope" in organization and "selects scope only" in organization
+    assert "fsgg-coord-report" not in organization
+    for canonical, variants in (("drive-board", ("drive-board-normal", "drive-board-best")),
+                                ("work-board", ("work-board-normal", "work-board-best"))):
         for variant in variants:
             inherited = (ROOT / runtime / "skills" / variant / "SKILL.md").read_text()
             assert f"[{canonical}]" in inherited

@@ -187,8 +187,8 @@ class Preparation(unittest.TestCase):
         block = re.search(r"^RETIRED_ORG_TARGETS=\(\n(.*?)^\)", source, re.M | re.S)
         self.assertIsNotNone(block)
         targets = re.findall(r'^  "([^"\n]+)"$', block[1], re.M)
-        self.assertEqual(len(targets), 12)
-        self.assertEqual(len(set(targets)), 12)
+        self.assertEqual(len(targets), 14)
+        self.assertEqual(len(set(targets)), 14)
         expected = {
             "wave-policy": "drive-board/references/host-loop.md",
             "filing-rules": "cross-repo-coordination/references/mailbox-and-board.md",
@@ -198,12 +198,14 @@ class Preparation(unittest.TestCase):
             "snapshot-shape": "check-board/references/mechanical-reconciliation.md",
         }
         self.assertEqual(set(targets), {f"{kind}:{root}/{relative}" for kind, relative in expected.items()
-                                       for root in (".agents/skills", ".claude/skills")})
+                                       for root in (".agents/skills", ".claude/skills")} |
+                         {f"wave-policy:{root}/work-board/references/host-loop.md"
+                          for root in (".agents/skills", ".claude/skills")})
         active = subprocess.check_output(["bash", str(self.root / "scripts/generate-projections"), "--list"], text=True)
         entries = [row.split("\t") for row in active.splitlines()]
-        self.assertEqual(len(entries), 27)
+        self.assertEqual(len(entries), 25)
         self.assertFalse(set(targets) & {kind + ":" + path for kind, path, _ in entries})
-        self.assertIn("wave-policy:.agents/skills/work-board/references/host-loop.md",
+        self.assertNotIn("wave-policy:.agents/skills/work-board/references/host-loop.md",
                       {kind + ":" + path for kind, path, _ in entries})
         workflow = (ROOT / ".github/workflows/projections.yml").read_text()
         self.assertEqual(int(re.search(r"^          expected=(\d+)$", workflow, re.M)[1]), len(entries))

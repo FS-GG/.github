@@ -22,12 +22,19 @@ module V2Migration =
         | PlanningText of string
         | PlanningSelect of PlanningOption
 
+    // Explicit selected classification only; no title, leaf, Status or Track inference.
+    type WorkLevelAssignment = { IssueId: string; Name: string }
+
+    // None FieldId permits one create only when no same-name field exists. Exact independently
+    // read-back field/option identities then bind subsequent absent-only initialization.
+    type WorkLevelPlan = { FieldId: string option; Assignments: WorkLevelAssignment list }
+
     type Scope =
         { SourceRevision: string; ArtifactSha256: string; CliArtifactSha256: string; PrincipalId: string;
           PrincipalLogin: string; SelectedIssues: SelectedIssue list;
           StatusFieldId: string; RoadmapFieldId: string; TrackFieldId: string;
           ObservationFieldId: string; InReviewColor: string; InReviewDescription: string;
-          Views: DesiredView list; InitialPlanning: InitialPlanning list }
+          Views: DesiredView list; InitialPlanning: InitialPlanning list; WorkLevel: WorkLevelPlan option }
 
     type SelectOption =
         { Id: string; Name: string; Color: string; Description: string }
@@ -56,6 +63,7 @@ module V2Migration =
           Fields: Field list; Items: Item list; Views: View list; Issues: NativeIssue list }
 
     type Change =
+        | CreateWorkLevel
         | AddInReview of fieldId: string * retained: SelectOption list * color: string * description: string
         | AddMembership of issueId: string
         | InitializePlanningValue of issueId: string * itemId: string * fieldId: string * value: PlanningValue
@@ -106,7 +114,8 @@ module V2Migration =
                 || isNull view.Filter || view.Filter.Length > 2048 || (view.Filter |> Seq.exists Char.IsControl)
                 || view.VisibleFieldIds.IsEmpty || view.VisibleFieldIds.Length > 50
                 || not (unique view.VisibleFieldIds) || (view.VisibleFieldIds |> List.exists (bounded 256 >> not))
-                || (view.Id |> Option.exists (bounded 256 >> not)))
+                || (view.Id |> Option.exists (bounded 256 >> not))
+                || (scope.WorkLevel.IsSome && view.Name.Equals("All items", StringComparison.OrdinalIgnoreCase) && view.Filter <> ""))
         let selectedIds = scope.SelectedIssues |> List.map (fun (issue: SelectedIssue) -> issue.Id) |> Set.ofList
         let optionValid (value: PlanningOption) = bounded 256 value.Id && bounded 100 value.Name
         let invalidPlanning =
@@ -115,6 +124,13 @@ module V2Migration =
             || (scope.InitialPlanning |> List.exists (fun (initial: InitialPlanning) ->
                 not (selectedIds.Contains initial.IssueId) || not (optionValid initial.Track)
                 || not (bounded 4096 initial.Roadmap) || (initial.Status |> Option.exists (optionValid >> not))))
+        let invalidWorkLevel =
+            scope.WorkLevel |> Option.exists (fun plan ->
+                (plan.FieldId |> Option.exists (fun id -> not (bounded 256 id) || List.contains id fieldIds))
+                || plan.Assignments.Length > 100
+                || not (unique (plan.Assignments |> List.map _.IssueId))
+                || (plan.Assignments |> List.exists (fun value ->
+                    not (selectedIds.Contains value.IssueId) || (value.Name <> "Outcome" && value.Name <> "Delivery"))))
         if not (hex 40 scope.SourceRevision && hex 64 scope.ArtifactSha256 && hex 64 scope.CliArtifactSha256)
            || not (bounded 256 scope.PrincipalId && bounded 100 scope.PrincipalLogin) then
             invalid "reviewed source/package or expected principal identity is incomplete"
@@ -127,6 +143,8 @@ module V2Migration =
             invalid "explicit distinct native issue/slice identities are required; membership never selects enrollment"
         elif not (colors.Contains scope.InReviewColor) || isNull scope.InReviewDescription || scope.InReviewDescription.Length > 1024 then
             invalid "bounded native In review option descriptor is required"
+        elif invalidWorkLevel then
+            invalid "Work level requires exact selected issues, Outcome/Delivery values and a distinct explicit field identity"
         elif invalidPlanning then
             invalid "planning initialization requires one exact selected issue declaration and bounded explicit values"
         elif scope.Views.Length > 10 || invalidViews || not (unique existingViewIds) || not (unique (scope.Views |> List.map (fun (view: DesiredView) -> view.Name))) then
@@ -410,6 +428,11 @@ module V2Migration =
         @ (scope.InitialPlanning |> List.collect (fun (initial: InitialPlanning) ->
             [ initial.IssueId; initial.Roadmap ] @ planningOptionTokens initial.Track
             @ (match initial.Status with None -> [ "status-omitted" ] | Some status -> "status-selected" :: planningOptionTokens status)))
+        @ (match scope.WorkLevel with
+           | None -> []
+           | Some plan ->
+               [ "work-level/1"; plan.FieldId |> Option.defaultValue ""; string plan.Assignments.Length ]
+               @ (plan.Assignments |> List.collect (fun value -> [ value.IssueId; value.Name ])))
     let private snapshotTokens (snapshot: Snapshot) =
         [ snapshot.PrincipalId; snapshot.PrincipalLogin; snapshot.OrganizationId; snapshot.ProjectId;
           snapshot.ProjectTitle; string snapshot.ProjectNumber; string snapshot.Private;
@@ -430,6 +453,7 @@ module V2Migration =
             [ issue.Id; issue.Repository; string issue.Number; issue.UpdatedAt; issue.State ]))
     let private changeTokens (change: Change) =
         match change with
+        | CreateWorkLevel -> [ "create-work-level/1" ]
         | AddInReview(id, retained, color, description) ->
             [ "status"; id; color; description; string retained.Length ] @ (retained |> List.collect optionTokens)
         | AddMembership id -> [ "membership"; id ]
@@ -487,6 +511,46 @@ module V2Migration =
             sequence values |> Result.map List.concat)
         |> sequence
         |> Result.map List.concat
+
+    let private workLevelOptions =
+        [ ("Outcome", "PURPLE", "Full owning outcome promise; not a schedulable delivery")
+          ("Delivery", "BLUE", "Independently meaningful six-field delivery; enrollment and action admission remain required") ]
+
+    let private workLevelField (scope: Scope) (snapshot: Snapshot) : IoResult<Field option> =
+        match scope.WorkLevel with
+        | None -> Ok None
+        | Some plan ->
+            let named = snapshot.Fields |> List.filter (fun field -> field.Name = "Work level")
+            match plan.FieldId, named with
+            | None, [] -> Ok None
+            | Some id, [ field ] when field.Id = id && field.DataType = "SINGLE_SELECT"
+                                      && field.Options.Length = 2
+                                      && unique (field.Options |> List.map _.Id)
+                                      && (field.Options |> List.forall (fun option ->
+                                          bounded 256 option.Id && List.contains (option.Name, option.Color, option.Description) workLevelOptions))
+                                      && (field.Options |> List.map _.Name |> Set.ofList) = Set.ofList [ "Outcome"; "Delivery" ] -> Ok(Some field)
+            | _ -> invalid "Work level native identity/type/options differ or same-name field already exists; preserve and reconcile explicitly"
+
+    let private workLevelChanges (scope: Scope) (snapshot: Snapshot) : IoResult<Change list> =
+        workLevelField scope snapshot |> Result.bind (fun field ->
+            match scope.WorkLevel, field with
+            | None, _ -> Ok []
+            | Some _, None -> Ok [ CreateWorkLevel ]
+            | Some plan, Some field ->
+                plan.Assignments |> List.map (fun assignment ->
+                    let selected = scope.SelectedIssues |> List.find (fun issue -> issue.Id = assignment.IssueId)
+                    let option = field.Options |> List.find (fun value -> value.Name = assignment.Name)
+                    let desired = PlanningSelect { Id = option.Id; Name = option.Name }
+                    match snapshot.Items |> List.filter (fun item -> item.ContentId = assignment.IssueId) with
+                    | [] -> Ok [] // Correlated membership readback precedes initialization.
+                    | [ item ] when item.ContentKind = "Issue" && not item.Archived
+                                    && item.Repository = Some selected.Repository && item.Number = Some selected.Number ->
+                        match item.Values |> List.filter (fun value -> value.FieldId = field.Id) with
+                        | [] -> Ok [ InitializePlanningValue(assignment.IssueId, item.Id, field.Id, desired) ]
+                        | [ existing ] when samePlanningValue desired existing -> Ok []
+                        | _ -> invalid "existing Work level conflicts or is unreadable; never overwrite intent"
+                    | _ -> invalid "Work level initialization membership is ambiguous, archived or mismatched")
+                |> sequence |> Result.map List.concat)
 
     let prepare (scope: Scope) (snapshot: Snapshot) : IoResult<Prepared> =
         match validateScope scope with
@@ -557,14 +621,27 @@ module V2Migration =
                                 | Some _, [] -> invalid "explicit existing view is absent"
                                 | None, [] -> Ok [ CreateView desired ]
                                 | _, [ current ] ->
-                                    if current.Name = desired.Name && current.Layout = desired.Layout
+                                    let preservedColumns =
+                                        desired.VisibleFieldIds = current.VisibleFieldIds
+                                        || (scope.WorkLevel |> Option.bind _.FieldId |> Option.exists (fun id ->
+                                            not (List.contains id current.VisibleFieldIds)
+                                            && desired.VisibleFieldIds = current.VisibleFieldIds @ [ id ]))
+                                    let repurposedPopulationView =
+                                        current.Name.Equals("All items", StringComparison.OrdinalIgnoreCase)
+                                        && (desired.Name <> current.Name || desired.Filter <> "")
+                                    if scope.WorkLevel.IsSome && (current.Layout <> desired.Layout || not preservedColumns
+                                       || repurposedPopulationView
+                                       || (desired.Name.Equals("All items", StringComparison.OrdinalIgnoreCase) && desired.Filter <> "")) then
+                                        invalid "successor view change must preserve layout/columns and unfiltered All items; only explicit Work level append is allowed"
+                                    elif current.Name = desired.Name && current.Layout = desired.Layout
                                        && current.Filter = desired.Filter && current.VisibleFieldIds = desired.VisibleFieldIds then Ok []
                                     elif desired.Id.IsNone then invalid "same-name existing view differs; select its exact native ID before updating"
                                     else Ok [ UpdateView(current.Id, desired) ]
                                 | _ -> invalid "view identity/name discovery is ambiguous")
                     sequence viewChanges |> Result.bind (fun changes ->
-                        initialChanges scope snapshot fields |> Result.map (fun initializations ->
-                            let all = statusChange @ membership @ initializations @ List.concat changes
+                        initialChanges scope snapshot fields |> Result.bind (fun initializations ->
+                          workLevelChanges scope snapshot |> Result.map (fun classifications ->
+                            let all = classifications @ statusChange @ membership @ initializations @ List.concat changes
                             let ownerActions =
                                 [ "Only explicitly declared absent Status, Track and Roadmap values may be initialized; existing values are never overwritten.";
                                   "Initialization assumes a cooperative owner-controlled no-edit window; no provider if-absent/CAS exists, and final read-to-send races cannot be prevented.";
@@ -574,8 +651,16 @@ module V2Migration =
                                 @ (if snapshot.CanUpdate then [] else [ "Native principal lacks project update capability; this read-only preparation grants no effect permission." ])
                                 @ (scope.InitialPlanning |> List.choose (fun (initial: InitialPlanning) ->
                                     if initial.Status.IsNone then Some("Initial Status is intentionally unresolved for " + initial.IssueId) else None))
+                            let ownerActions =
+                                if scope.WorkLevel.IsNone then ownerActions
+                                else
+                                    (ownerActions |> List.map (fun value ->
+                                        if value = "Readback IDs must be independently finalized into protected enrollment before v4 consumer activation." then
+                                            "Independently read-back Work level/option IDs and selected enrollment require binding5/schema3 acceptance; existing binding4 is unchanged."
+                                        else value))
+                                    @ [ "Only explicitly selected absent Work level values may be initialized; conflicts remain held and no outcome closure is inferred." ]
                             { Scope = scope; Snapshot = snapshot; Changes = all; OwnerActions = ownerActions; PreparedPath = None;
-                              Digest = hash (scopeTokens scope @ snapshotTokens snapshot @ [ string all.Length ] @ (all |> List.collect changeTokens)) }))
+                              Digest = hash (scopeTokens scope @ snapshotTokens snapshot @ [ string all.Length ] @ (all |> List.collect changeTokens)) })))
 
     let private jsonString (value: string) : JsonNode = JsonValue.Create value
     let private objectNode (values: (string * JsonNode) list) : JsonObject =
@@ -600,6 +685,12 @@ module V2Migration =
                 $"mutation($input:{name}!){{{operation}(input:$input){{clientMutationId {identity}}}}}"
             let document, input =
                 match change with
+                | CreateWorkLevel ->
+                    let options = workLevelOptions |> List.map (fun (name, color, description) ->
+                        objectNode [ id "name" name; id "color" color; id "description" description ] :> JsonNode)
+                    (selection "CreateProjectV2FieldInput" "createProjectV2Field" "projectV2Field{... on ProjectV2FieldCommon{id}}",
+                     objectNode [ id "projectId" prepared.Snapshot.ProjectId; id "dataType" "SINGLE_SELECT";
+                                  id "name" "Work level"; "singleSelectOptions", arrayNode options ])
                 | AddInReview(fieldId, retained, color, description) ->
                     let options =
                         (retained |> List.map (fun (option: SelectOption) ->
@@ -639,9 +730,11 @@ module V2Migration =
         if node.ValueKind <> JsonValueKind.Array || node.GetArrayLength() > limit then invalidArg "json" "bounded array required"
         node.EnumerateArray() |> Seq.toList
     let private parseScopeNode (node: JsonElement) : Scope =
-        closed [ "sourceRevision"; "artifactSha256"; "cliArtifactSha256"; "principalId"; "principalLogin";
+        let hasWorkLevel = node.TryGetProperty("workLevel") |> fst
+        [ "sourceRevision"; "artifactSha256"; "cliArtifactSha256"; "principalId"; "principalLogin";
                  "selectedIssues"; "statusFieldId"; "roadmapFieldId"; "trackFieldId"; "observationFieldId";
-                 "inReviewColor"; "inReviewDescription"; "views"; "initialPlanning" ] node
+                 "inReviewColor"; "inReviewDescription"; "views"; "initialPlanning" ]
+                @ (if hasWorkLevel then [ "workLevel" ] else []) |> fun names -> closed names node
         let issues: SelectedIssue list =
             array 100 (node.GetProperty "selectedIssues") |> List.map (fun (issue: JsonElement) ->
                 closed [ "id"; "repository"; "number"; "slice" ] issue
@@ -666,13 +759,24 @@ module V2Migration =
                   Track = planningOption (initial.GetProperty "track");
                   Roadmap = propertyString "roadmap" initial;
                   Status = (if status.ValueKind = JsonValueKind.Null then None else Some(planningOption status)) })
+        let workLevel =
+            if not hasWorkLevel then None
+            else
+                let value = node.GetProperty "workLevel"
+                closed [ "schema"; "fieldId"; "assignments" ] value
+                if propertyString "schema" value <> "fs.gg.board-v2.work-level-migration/1" then invalidArg "schema" "different Work level migration schema"
+                let field = value.GetProperty "fieldId"
+                Some { FieldId = (if field.ValueKind = JsonValueKind.Null then None else Some(nonempty "fieldId" value))
+                       Assignments = array 100 (value.GetProperty "assignments") |> List.map (fun assignment ->
+                           closed [ "issueId"; "name" ] assignment
+                           { IssueId = nonempty "issueId" assignment; Name = nonempty "name" assignment }) }
         { SourceRevision = nonempty "sourceRevision" node; ArtifactSha256 = nonempty "artifactSha256" node;
           CliArtifactSha256 = nonempty "cliArtifactSha256" node;
           PrincipalId = nonempty "principalId" node; PrincipalLogin = nonempty "principalLogin" node;
           SelectedIssues = issues; StatusFieldId = nonempty "statusFieldId" node;
           RoadmapFieldId = nonempty "roadmapFieldId" node; TrackFieldId = nonempty "trackFieldId" node;
           ObservationFieldId = nonempty "observationFieldId" node; InReviewColor = nonempty "inReviewColor" node;
-          InReviewDescription = propertyString "inReviewDescription" node; Views = views; InitialPlanning = initialPlanning }
+          InReviewDescription = propertyString "inReviewDescription" node; Views = views; InitialPlanning = initialPlanning; WorkLevel = workLevel }
     let parseScope (json: string) : IoResult<Scope> =
         if Encoding.UTF8.GetByteCount json > 262144 then invalid "scope input exceeds 256 KiB"
         else
@@ -700,14 +804,23 @@ module V2Migration =
                              "track", optionNode initial.Track;
                              "roadmap", jsonString initial.Roadmap;
                              "status", (initial.Status |> Option.map optionNode |> Option.defaultValue null) ] :> JsonNode)
-        objectNode [ "sourceRevision", jsonString scope.SourceRevision; "artifactSha256", jsonString scope.ArtifactSha256;
+        let result = objectNode [ "sourceRevision", jsonString scope.SourceRevision; "artifactSha256", jsonString scope.ArtifactSha256;
                      "cliArtifactSha256", jsonString scope.CliArtifactSha256;
                      "principalId", jsonString scope.PrincipalId; "principalLogin", jsonString scope.PrincipalLogin;
                      "selectedIssues", arrayNode issues; "statusFieldId", jsonString scope.StatusFieldId;
                      "roadmapFieldId", jsonString scope.RoadmapFieldId; "trackFieldId", jsonString scope.TrackFieldId;
                      "observationFieldId", jsonString scope.ObservationFieldId; "inReviewColor", jsonString scope.InReviewColor;
                      "inReviewDescription", jsonString scope.InReviewDescription;
-                     "views", arrayNode (scope.Views |> List.map desiredNode); "initialPlanning", arrayNode initialPlanning ] :> JsonNode
+                     "views", arrayNode (scope.Views |> List.map desiredNode); "initialPlanning", arrayNode initialPlanning ]
+        match scope.WorkLevel with
+        | None -> ()
+        | Some plan ->
+            let assignments = plan.Assignments |> List.map (fun assignment ->
+                objectNode [ "issueId", jsonString assignment.IssueId; "name", jsonString assignment.Name ] :> JsonNode)
+            result.Add("workLevel", objectNode [ "schema", jsonString "fs.gg.board-v2.work-level-migration/1";
+                       "fieldId", (plan.FieldId |> Option.map jsonString |> Option.defaultValue null);
+                       "assignments", arrayNode assignments ])
+        result :> JsonNode
     let encodePrepared (prepared: Prepared) : string =
         let preparedPath =
             match prepared.PreparedPath with
@@ -716,7 +829,7 @@ module V2Migration =
         // Exact stable token arrays retain every determining native value without union/option
         // serializer defaults. This is an operation report, never a normal v4 binding.
         let root =
-            objectNode [ "schema", jsonString "fs.gg.board-v2.migration-prepare/1";
+            objectNode [ "schema", jsonString (if prepared.Scope.WorkLevel.IsSome then "fs.gg.board-v2.migration-prepare/2" else "fs.gg.board-v2.migration-prepare/1");
                          "preparedPath", jsonString preparedPath;
                          "observedAt", jsonString (prepared.Snapshot.ObservedAt.ToString "O");
                          "scope", scopeNode prepared.Scope; "snapshot", stringsNode (snapshotTokens prepared.Snapshot);
@@ -732,11 +845,14 @@ module V2Migration =
                 use document = JsonDocument.Parse(json, JsonDocumentOptions(MaxDepth = 16))
                 let root = document.RootElement
                 closed [ "schema"; "preparedPath"; "observedAt"; "scope"; "snapshot"; "changes"; "ownerActions"; "digest" ] root
-                if propertyString "schema" root <> "fs.gg.board-v2.migration-prepare/1" then invalidArg "schema" "different prepared schema"
+                let schema = propertyString "schema" root
+                if schema <> "fs.gg.board-v2.migration-prepare/1" && schema <> "fs.gg.board-v2.migration-prepare/2" then invalidArg "schema" "different prepared schema"
                 let preparedPath = nonempty "preparedPath" root
                 if not (Path.IsPathFullyQualified preparedPath) || Path.GetFullPath preparedPath <> preparedPath then
                     invalidArg "preparedPath" "canonical original invocation path required"
                 let scope = parseScopeNode (root.GetProperty "scope")
+                if (schema = "fs.gg.board-v2.migration-prepare/2") <> scope.WorkLevel.IsSome then
+                    invalidArg "schema" "Work level scope and prepared version differ"
                 let digest = nonempty "digest" root
                 if not (hex 64 digest) then invalidArg "digest" "malformed prepared digest"
                 // Report payload remains retained verbatim; no JSON assertion supplies native facts.
@@ -746,6 +862,15 @@ module V2Migration =
                 validateScope scope |> Result.map (fun () -> scope, digest, observedAt, preparedPath))
     let resolveReadback (scope: Scope) (before: Snapshot) (after: Snapshot) (change: Change) : IoResult<Scope> =
         match change with
+        | CreateWorkLevel ->
+            match scope.WorkLevel with
+            | Some plan when plan.FieldId.IsNone && not (before.Fields |> List.exists (fun field -> field.Name = "Work level")) ->
+                match after.Fields |> List.filter (fun field -> field.Name = "Work level") with
+                | [ created ] when not (before.Fields |> List.exists (fun field -> field.Id = created.Id)) ->
+                    let resolved = { scope with WorkLevel = Some { plan with FieldId = Some created.Id } }
+                    workLevelField resolved after |> Result.map (fun _ -> resolved)
+                | _ -> invalid "created Work level field identity is ambiguous; original invocation remains readback-only"
+            | _ -> invalid "Work level creation was not explicitly selected from an absent preimage"
         | CreateView desired ->
             let prior = before.Views |> List.filter (fun (view: View) -> view.Name = desired.Name)
             let candidates = after.Views |> List.filter (fun (view: View) -> view.Name = desired.Name)
@@ -778,6 +903,10 @@ module V2Migration =
         | Ok _ ->
             let reconciled =
                 match change with
+                | CreateWorkLevel ->
+                    match after.Fields |> List.filter (fun field -> field.Name = "Work level") with
+                    | [ added ] -> unchanged { after with Fields = after.Fields |> List.filter (fun field -> field.Id <> added.Id) }
+                    | _ -> false
                 | AddInReview(fieldId, retained, color, description) ->
                     match after.Fields |> List.filter (fun (field: Field) -> field.Id = fieldId) with
                     | [ field ] ->
@@ -828,6 +957,7 @@ module V2Migration =
         let identityPossible =
             bounded 256 returnedId
             && (match change with
+                | CreateWorkLevel -> before.Fields |> List.forall (fun field -> field.Id <> returnedId)
                 | AddInReview(fieldId, _, _, _) -> returnedId = fieldId
                 | InitializePlanningValue(_, itemId, _, _) -> returnedId = itemId
                 | UpdateView(viewId, _) -> returnedId = viewId
@@ -835,6 +965,7 @@ module V2Migration =
                 | CreateView _ -> before.Views |> List.forall (fun (view: View) -> view.Id <> returnedId))
         let observedIdentity =
             match change with
+            | CreateWorkLevel -> after.Fields |> List.filter (fun field -> field.Name = "Work level") |> function [ field ] -> Some field.Id | _ -> None
             | AddInReview(fieldId, _, _, _) -> Some fieldId
             | InitializePlanningValue(_, itemId, _, _) -> Some itemId
             | UpdateView(viewId, _) -> Some viewId
@@ -884,7 +1015,7 @@ module V2Migration =
     let snapshotDigest (snapshot: Snapshot) = hash (snapshotTokens snapshot)
     let encodeReadback (scope: Scope) (snapshot: Snapshot) =
         let root =
-            objectNode [ "schema", jsonString "fs.gg.board-v2.migration-readback/1";
+            objectNode [ "schema", jsonString (if scope.WorkLevel.IsSome then "fs.gg.board-v2.migration-readback/2" else "fs.gg.board-v2.migration-readback/1");
                          "observedAt", jsonString (snapshot.ObservedAt.ToString "O");
                          "scope", scopeNode scope; "snapshot", stringsNode (snapshotTokens snapshot);
                          "snapshotDigest", jsonString (snapshotDigest snapshot);

@@ -1,4 +1,7 @@
 interface:
   display_name: "Work Programme"
-  short_description: "Coordinate FS-GG roadmap lanes with bounded context"
-  default_prompt: "Use $work-programme to resume the FS-GG Unified Roadmap through typed lane returns, compact delta views and bounded check watchers."
+  short_description: "Resolve historical handoffs to canonical work-board"
+  default_prompt: "Use $work-programme to resolve an old handoff to canonical work-board."
+
+policy:
+  allow_implicit_invocation: false

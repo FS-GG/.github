@@ -27,7 +27,7 @@ retain their original identities; their old roadmap links lead to the archive an
 
 ## 1. Scope and operating boundaries
 
-Use [work-programme](../../.agents/skills/work-programme/SKILL.md) for requested programme advancement
+Use [work-board](../../.agents/skills/work-board/SKILL.md) for requested programme advancement
 and [continue-from-handoff](../../.agents/skills/continue-from-handoff/SKILL.md) for requested recovery.
 Editing these documents or skills does not begin execution. Routine source delivery, effect-specific
 admission, native required checks and [ADR-0084](../adr/0084-semantic-reuse-never-cancels-coherent-validation.md)
@@ -43,7 +43,7 @@ receiver proof; navigation changes and package pins do not activate them.
 ## 1.1. Selected simplifications — 2026-10-12
 
 Use the following delivery choices with the owner-level development authority in
-[work-programme](../../.agents/skills/work-programme/SKILL.md). They reduce repeated work and
+[work-board](../../.agents/skills/work-board/SKILL.md). They reduce repeated work and
 unnecessary dependencies; they do not close rows, change package versions, admit live effects or
 waive the owning contract's technical assertions. Original attempts and unknown custody remain intact.
 
@@ -106,7 +106,7 @@ completed Board and Box2D/Portal P3 outcomes remain unchanged.
 
 The [speed-first design](../designs/2026-10-15-speed-first-agent-development.md) and
 [open-row routing notes](2026-10-15-speed-first-agent-development.md) inform the existing
-[work-programme](../../.agents/skills/work-programme/SKILL.md). This index has **19
+[work-board](../../.agents/skills/work-board/SKILL.md). This index has **19
 rows: three Done and sixteen open**. Keep `V3-IMPROVE-01`, `GAME-BOX2D-01 /
 GAME-PORTAL-01 P3` and `COORD-BOARD-V2-01` closed. The finite process trial's
 accepted conclusion remains **process changes delivered; throughput benefit
@@ -133,8 +133,8 @@ acceptance lane:
 |---|---|---|
 | [V2-DIAG-01.4](diagnostic-execution.md) | Observe attempts, useful findings and overhead from necessary qualification and installed use. A separate comparison window is needed only for a quantified benefit claim. | Coherent publication and selected installed ordinary/native receiver behavior; failed or unknown partial attempts never qualify. |
 | [V2-EFF-01.5/.6](process-efficiency-telemetry.md) | A net-value comparison is optional unless claiming economic benefit. Do not delay adoption merely to fill a benefit denominator. | Finite held-out public-claim calibration, privacy and factual controls, then real installed assessment/projection/browser use, correction and rollback. |
-| [Owner-local repair](../../.agents/skills/work-programme/SKILL.md) | Run the smallest relevant deterministic checks while editing; run comprehensive required coherent qualification on the final assembled candidate submitted for acceptance and again for each changed final head. | Exact-head PR/native gates, protected parent/release/installed boundaries, original effects and cleanup. |
-| [Routine review](../../.agents/skills/work-programme/SKILL.md) | Select a distinct reviewer from actual semantic, security or effect risk; ROUTINEV3 source work uses one independent source review under the extended pilot. | Any already selected strict or independent review and protected authority safeguard. |
+| [Owner-local repair](../../.agents/skills/work-board/SKILL.md) | Run the smallest relevant deterministic checks while editing; run comprehensive required coherent qualification on the final assembled candidate submitted for acceptance and again for each changed final head. | Exact-head PR/native gates, protected parent/release/installed boundaries, original effects and cleanup. |
+| [Routine review](../../.agents/skills/work-board/SKILL.md) | Select a distinct reviewer from actual semantic, security or effect risk; ROUTINEV3 source work uses one independent source review under the extended pilot. | Any already selected strict or independent review and protected authority safeguard. |
 | [ADR-0086 preflight](../adr/0086-proportionate-pipeline-preflight.md) | Use static or focused checks for simple paths; model ordering, retries, cancellation or shared state only when their interaction warrants it. | Fail closed on missing/unknown results; preflight never replaces ADR-0084 coherent validation. |
 
 V2-CTX-01.5/.6 likewise accepts the bounded integrated operation/restart and
@@ -202,6 +202,9 @@ and other original effects remain held under their existing admission gates.
 
 ## 1.5. Priority unblockers — 2026-10-16
 
+Retain the original acceptance and evidence below; the later selected focus in section1.6 governs
+new work. This historical ordering does not dispatch a deferred product lane.
+
 Advance these priorities through the existing open outcomes and owner plans; this section
 is their ordering and acceptance guidance, not another task ledger. The
 [ROUTINEV3 extension](2026-10-05-programme-context-efficiency.md#routinev3-source-extension--2026-10-16)
@@ -260,6 +263,38 @@ Original `.103` remains attempted-unknown and unreplayed; `.104` remains held. U
 refresh current facts at agreed deadlines and before dependent actions. No source-only
 milestone closes the provider journey or the physical-fit outcome.
 
+## 1.6. System capability focus — 2026-10-18
+
+The user selected usable system capabilities as the current development focus. Advance the existing
+owning outcomes and independently meaningful delivery issues through canonical work-board. This is
+strategic priority guidance, not another current-status table, scheduler, enrollment or closure ledger.
+The coordinator and normal/best drivers remain reusable for organization and explicitly selected
+product scope; this selection is not a permanent skill lane allowlist.
+
+| Selected capability | Owning scope and necessary shared suppliers |
+|---|---|
+| Canonical coordinator and driver | [Coordinator source4677 and full outcome4641](unified-programme-driver.md#canonical-board-coordinator-migration--2026-10-18), [context and installed adoption](2026-10-05-programme-context-efficiency.md), [V2 contract](../coordination/2026-09-29-coordination-v2-board-design.md). Retain programme/product journeys, recovery, exact selected instruction discovery and caller qualification. |
+| UTEL and useful reporting | [Telemetry correctness](utel-01-telemetry-correctness.md), [successor](utel-release-successor.md), [dashboard](utel-telemetry-dashboard.md), [Host release](../coordination/telemetry-host-release.md). Usable collection/reporting needs actual qualified producer, receiver and retained data, not source or publication alone. |
+| PROC, typed administration and diagnostics | [Shared supervision](2026-10-05-shared-process-supervision.md), [process contracts](2026-10-11-shared-process-contracts.md), [typed administration](2026-10-01-typed-administrative-fsharp-quint.md), [diagnostics](diagnostic-execution.md). Select the enforcing profile and actual consumer assertions; no new product feature is implied. |
+| Podman and the selected persistent receiver | [Provisioned profile/storage](2026-10-13-provisioned-podman-execution.md), [persistent receiver](learn-c2-persistent-receiver-v3.md). Retain actual allocation, storage, launcher, persistent execution, teardown/recovery and separately promised two-machine/unattended proof. |
+| LEARN | [Learning outcome](2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md), [causal receiver](learn-01-causal-receiver.md). Retain genuine turn/capture/restart, census/data coverage and the separately selected comparison; infrastructure alone is not learning acceptance. |
+| Necessary shared lifecycle and knowledge suppliers | SDD/Templates/Wizard/providers and Governance loaders supply the exact contract needed by a named selected system acceptance. [Creator source boundary](unified-programme-driver.md#independent-creator-source-closure), [language/provider plan](2026-09-29-language-independent-workspaces-and-agent-integration.md) and [Atlas](../../.agents/skills/atlas/SKILL.md) retain their own publication, installed receiver, compatibility and knowledge-delivery obligations. |
+
+Defer new SVG, Unity, SC2 and other product features unless a named system acceptance assertion
+requires that specific shared capability. An open product epic, parent Blocked state or unrelated
+unfinished child is not a global prerequisite for an independently qualified system delivery. State
+the exact supplied contract, affected assertion and supplying owner; share that dependency once rather
+than reopening the product's whole promise. Product scope, accepted milestones and all remaining
+technical, installed, native and participant obligations remain intact for later explicit selection.
+
+Bring already running operations to their safe observed terminal or authorized stop and retain their
+original evidence, uncertain effects and reservations. Deferral neither cancels operations blindly nor
+means cleanup, completion, release, retry or abandonment. All439 inherited and46 later original holds
+remain. Source4677/full parent4641 scope is unchanged; source, package publication, installed discovery,
+native migration/enrollment/views, receiver activation and restart/rollback remain separate acceptance.
+Report usable capabilities, the next executable delivery and its exact missing inputs/supplying owners.
+Only canonical work-board and current native/owning facts determine concrete action admission.
+
 ## 2. Open work and owning plans
 
 This catalogue preserves strategic outcome scope and owning-plan navigation. Root accepted the
@@ -281,7 +316,7 @@ Games and conditional work in section 6 retain separate selection and acceptance
 | Feature and accountable owner | Strategic outcome | Owning plan |
 |---|---|---|
 | **UTEL operational collection — `.github` telemetry/Coordination** | Reconcile historical installation/selector, usage and pending effects separately under their original identities. Qualify demonstrably isolated fresh telemetry dispatch and CI/delivery collection through established admission without blanket release of historical holds. Recover retained pending publications only through their supported original-identity route. | [Operational completeness](utel-operational-completeness.md), [local store](utel-local-telemetry-store.md), [correctness](utel-01-telemetry-correctness.md) |
-| **Routine activity, review and usage coverage — programme/telemetry owners** | Collect planning, implementation, review, validation, delivery, operations and repair spans; submit selected reviews for settled attempt populations under the bounded assessment policy; reconcile native usage with explicit unknowns; continue CI/delivery reconciliation. Every efficiency view exposes coverage, freshness, unresolved observations and its denominator. | [Observation guidance](../../.agents/skills/work-programme/references/observation.md), [efficiency measurement](process-efficiency-telemetry.md) |
+| **Routine activity, review and usage coverage — programme/telemetry owners** | Collect planning, implementation, review, validation, delivery, operations and repair spans; submit selected reviews for settled attempt populations under the bounded assessment policy; reconcile native usage with explicit unknowns; continue CI/delivery reconciliation. Every efficiency view exposes coverage, freshness, unresolved observations and its denominator. | [Observation guidance](../../.agents/skills/work-board/references/observation.md), [efficiency measurement](process-efficiency-telemetry.md) |
 | **V2-EFF-01.2–.6 — telemetry, dashboard and receiver owners** | **First release facts and coverage**, following the [telemetry delivery order](process-efficiency-telemetry.md#selected-telemetry-delivery-order--2026-10-16): visible missing usage, freshness, populations/denominators and unknown cost that never becomes zero. First operational acceptance is one telemetry collection provider → selected receiver/store → projection → browser on exact coherent versions, with a real item and separately admitted success, interruption/Unknown, recovery and correction cases; never replay an uncertain original. Defer calibrated explanations, model-assessment adoption and savings claims to their own later qualification. | [Efficiency delivery plan](process-efficiency-telemetry.md), [dashboard and process-health phases](utel-telemetry-dashboard.md#development-process-health-dashboard--proposed-2026-10-12) |
 | **V2-PROC-01.2–.8 — Coordination; SDD/FsQuint consumers** | Complete reconciled coherent publication, selected receiver adoption, remaining Linux containment and consolidation. | [Shared process supervision](2026-10-05-shared-process-supervision.md#original-publisher-failure-and-complete-policy-repair--2026-10-14) |
 | **V2-CTX-01.4–.6 — `.github` programme driver** | Prioritize the [outcome-led pilot](#14-selected-three-outcome-programme-pilot--2026-10-16) and [ROUTINEV3 priority unblockers](#15-priority-unblockers--2026-10-16): governing replacement and repository automatic CI result/reader are delivered in [#4608](https://github.com/FS-GG/.github/pull/4608) and [#4609](https://github.com/FS-GG/.github/pull/4609). Use the qualified route and deadline/session-start issue reconciliation; qualify further consumers only when selected. Measure the selected 80% coordination-effort claim during ordinary delivery without making measurement an activation gate. Retain one genuine admitted operation/restart check and qualified adoption/retirement; missing usage and coverage remain explicit. | [Context efficiency](2026-10-05-programme-context-efficiency.md#selected-three-outcome-programme-pilot--2026-10-16), [driver](unified-programme-driver.md) |
@@ -326,6 +361,9 @@ The [staged adoption plan](2026-10-01-staged-fable-game-adoption.md#remaining-ga
 owns the next implementation window and detailed conformance.
 
 ## 4. Parallel opportunities and integration joins
+
+These are technical separation opportunities, not a selected work queue. Apply the current system
+focus in section1.6 before proposing new work; deferred product examples below do not dispatch themselves.
 
 These are opportunities, subject to current ownership, resource and CI admission. They do not
 reserve workers or authorize operations. Resume existing partial work before creating replacements.

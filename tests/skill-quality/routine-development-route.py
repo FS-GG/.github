@@ -47,7 +47,7 @@ agent_skill = (ROOT / ".agents/skills/work-roadmap/SKILL.md").read_bytes()
 claude_skill = (ROOT / ".claude/skills/work-roadmap/SKILL.md").read_bytes()
 require(agent_skill == claude_skill, "Claude/Codex work-roadmap twins differ")
 skill = agent_skill.decode()
-for phrase in ("one accountable owner", "Do **not** create or require an issue", "exact base/head", "recorded explicit human",
+for phrase in ("work-board", "not a scheduling ledger", "single native PR", "independent",
                "ADR-0084", "content/semantic classifier first", "dependent acceptance or activation"):
     require(" ".join(phrase.split()) in " ".join(skill.split()), f"work-roadmap omitted {phrase!r}")
 
@@ -58,7 +58,7 @@ ROUTES = {
     },
     "work-roadmap": {
         "routine-producer-installation.md": ("Receiver has no routine producer", "--install-routine-producer", "readback-only"),
-        "runtime-observation.md": ("Driver entry", "## Record repository-owned dispatches by default", "usage-reconcile"),
+        "runtime-observation.md": ("Native dispatch", "## Record repository-owned dispatches by default", "usage-reconcile"),
         "heavyweight-roadmap.md": ("Recorded explicit human instruction", "## Lifecycle log", "## Status position line"),
         "execution-diagnostics.md": ("before diagnostic execution", "Preserve the first cause", "partial failures cannot"),
         "performance-first.md": ("Interactive/game implementation", "## PERF-PLAN", "## PERF-RELEASE"),

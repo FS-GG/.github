@@ -43,14 +43,25 @@ fi
 TMP_ROOT="$(mktemp -d)"
 SERVERS_TO_KILL=()
 cleanup() {
-  for pid in "${SERVERS_TO_KILL[@]:-}"; do kill "$pid" 2>/dev/null; done
-  rm -rf "$TMP_ROOT"
+  local status=$? pid
+  for pid in "${SERVERS_TO_KILL[@]}"; do kill "$pid" 2>/dev/null || :; done
+  for pid in "${SERVERS_TO_KILL[@]}"; do wait "$pid" 2>/dev/null || :; done
+  rm -rf "$TMP_ROOT" || { [ "$status" -ne 0 ] || status=1; }
+  return "$status"
 }
 trap cleanup EXIT
 
+# Recorded driver-event answers describe the historical planner. Its policy is
+# fixture input, not authority from current canonical coordinator instructions.
+# Keep exact recorded JSON comparisons and unmatched-request refusals unchanged.
+LEGACY_DRIVER_KIT="$TMP_ROOT/legacy-driver-kit"
+mkdir -p "$LEGACY_DRIVER_KIT/.agents/skills/work-board/references"
+printf '%s\n' '<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->' >"$LEGACY_DRIVER_KIT/.agents/skills/work-board/references/host-loop.md"
+
 start_server() {
-  # $1 = script, remaining args passed through. Prints the bound port on stdout, once ready.
-  local script="$1"; shift
+  # $1 = caller port variable, $2 = script; remain in the parent shell so
+  # cleanup retains every server PID rather than losing it in command substitution.
+  local port_variable="$1" script="$2"; shift 2
   local out; out="$(mktemp -p "$TMP_ROOT")"
   python3 "$script" "$@" >"$out" 2>>"$TMP_ROOT/server.err" &
   local pid=$!
@@ -61,7 +72,7 @@ start_server() {
     [ -n "$port" ] && break
     sleep 0.1
   done
-  echo "$port"
+  printf -v "$port_variable" '%s' "$port"
 }
 
 run_command() {
@@ -69,7 +80,7 @@ run_command() {
   case "$1" in
     reconcile)     "$ENGINE" reconcile --repo "$2" --json ;;
     ready)         "$ENGINE" ready     --repo "$2" --json ;;
-    driver-events) "$ENGINE" driver --events --repo "$2" --json ;;
+    driver-events) FSGG_KIT_ROOT="$LEGACY_DRIVER_KIT" "$ENGINE" driver --events --repo "$2" --json ;;
   esac
 }
 
@@ -106,7 +117,8 @@ PY
 
 # ---- leg 0: self-check — a DIRECT hermetic connection must equal the smoke fixture's expectation ----
 common_env
-PORT0="$(start_server "$REPO_ROOT/tests/coord-engine-e2e/stateful_server.py")"
+PORT0=""
+start_server PORT0 "$REPO_ROOT/tests/coord-engine-e2e/stateful_server.py"
 if [ -z "$PORT0" ]; then
   bad "self-check fixture server bound a port"
 else
@@ -170,7 +182,8 @@ else:
   fi
 
   common_env
-  PORT="$(start_server "$HERE/replay_server.py" "$transcript")"
+  PORT=""
+  start_server PORT "$HERE/replay_server.py" "$transcript"
   if [ -z "$PORT" ]; then
     bad "$name: replay server bound a port"
     continue

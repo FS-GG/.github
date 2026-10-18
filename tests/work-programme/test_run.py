@@ -133,14 +133,14 @@ class RunnerTests(unittest.TestCase):
         names = ['acceptance', 'context-delta', 'context-evidence', 'routine-decisions']
         self.assertEqual([suite['id'] for suite in selected], names + [name + '-claude' for name in names])
         prefix = ('#if CLAUDE_SKILLS\n'
-                  '#load "../../.claude/skills/work-programme/scripts/programme.fsx"\n'
-                  '#else\n#load "../../.agents/skills/work-programme/scripts/programme.fsx"\n#endif\n')
+                  '#load "../../.claude/skills/work-board/scripts/programme.fsx"\n'
+                  '#else\n#load "../../.agents/skills/work-board/scripts/programme.fsx"\n#endif\n')
         for index, suite in enumerate(selected):
             claude = index >= len(names)
             skill_root = '.claude' if claude else '.agents'
             other_root = '.agents' if claude else '.claude'
-            self.assertIn(skill_root + '/skills/work-programme/scripts/programme.fsx', suite['inputs'])
-            self.assertNotIn(other_root + '/skills/work-programme/scripts/programme.fsx', suite['inputs'])
+            self.assertIn(skill_root + '/skills/work-board/scripts/programme.fsx', suite['inputs'])
+            self.assertNotIn(other_root + '/skills/work-board/scripts/programme.fsx', suite['inputs'])
             self.assertEqual(suite['command'], ['dotnet', 'fsi'] +
                              (['--define:CLAUDE_SKILLS'] if claude else []) +
                              ['--exec', 'tests/work-programme/' + names[index % len(names)] + '.fsx'])
@@ -148,7 +148,7 @@ class RunnerTests(unittest.TestCase):
 
     def test_unknown_or_mismatched_fsi_receiver_blocks_before_launch(self):
         selected = next(suite for suite in runner.suites(self.root) if suite['id'] == 'acceptance-claude')
-        for name in selected['inputs'] + ['.agents/skills/work-programme/scripts/programme.fsx']:
+        for name in selected['inputs'] + ['.agents/skills/work-board/scripts/programme.fsx']:
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('synthetic pinned input')
@@ -158,7 +158,7 @@ class RunnerTests(unittest.TestCase):
             ({**selected, 'command': ['dotnet', 'fsi', '--define:CLAUDE_SKILLS', '--define:EXTRA', '--exec', script]},
              'unknown-launch-closure'),
             ({**selected, 'command': ['dotnet', 'fsi', '--exec', script]}, 'fsi-receiver-not-in-inputs'),
-            ({**selected, 'inputs': ['.agents/skills/work-programme/scripts/programme.fsx', script]},
+            ({**selected, 'inputs': ['.agents/skills/work-board/scripts/programme.fsx', script]},
              'fsi-receiver-not-in-inputs'),
             ({**selected, 'inputs': [script]}, 'fsi-receiver-not-in-inputs'),
         ]
@@ -179,7 +179,7 @@ class RunnerTests(unittest.TestCase):
                 path = self.root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text('synthetic pinned input')
-        (self.root / '.claude/skills/work-programme/scripts/programme.fsx').unlink()
+        (self.root / '.claude/skills/work-board/scripts/programme.fsx').unlink()
         with patch.object(runner.shutil, 'which', return_value='/controlled/dotnet'), \
                 patch.object(runner, 'run_child', return_value=dict(
                     exit=0, reason=None, cleanup='passed', output='agents receiver', outputBytes=15)) as child:
@@ -190,14 +190,14 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual([row['status'] for row in report['preflight']['suites']], ['ready', 'blocked'])
         self.assertEqual([row['status'] for row in report['suites']], ['passed', 'blocked'])
         self.assertIsNone(report['suites'][1]['exit'])
-        self.assertIn('.agents/skills/work-programme/scripts/programme.fsx', report['candidate'])
-        self.assertNotIn('.claude/skills/work-programme/scripts/programme.fsx', report['candidate'])
+        self.assertIn('.agents/skills/work-board/scripts/programme.fsx', report['candidate'])
+        self.assertNotIn('.claude/skills/work-board/scripts/programme.fsx', report['candidate'])
         self.assertEqual(report['firstCause'], 'acceptance-claude: shared-input-missing-or-changed')
 
     def test_routine_decisions_inventory_covers_actual_source_reads(self):
         selected = next(suite for suite in runner.suites(self.root) if suite['id'] == 'routine-decisions')
         self.assertEqual(set(selected['inputs']), {
-            '.agents/skills/work-programme/scripts/programme.fsx',
+            '.agents/skills/work-board/scripts/programme.fsx',
             'tests/work-programme/routine-decisions.fsx'})
         self.assertEqual(selected['command'], ['dotnet', 'fsi', '--exec',
                                               'tests/work-programme/routine-decisions.fsx'])

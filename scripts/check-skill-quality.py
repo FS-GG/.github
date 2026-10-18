@@ -20,7 +20,7 @@ ROOTS = (".claude/skills", ".agents/skills")
 # (.github#1574): two literals let two readers of the same contract disagree about whether they
 # are looking at a supported document, and one of them then declines to check anything.
 CONTRACT_SCHEMA = "fsgg.coord.commands/1"
-EXPLICIT_ONLY = {"cut-nuget-release", "drive-board", "p-add", "padd-item", "work-board", "work-roadmap"}
+EXPLICIT_ONLY = {"cut-nuget-release", "drive-board", "p-add", "padd-item", "work-roadmap", "work-programme"}
 LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 INVOCATION = re.compile(r"(?:scripts/)?fsgg-coord(?![\w-])\s+(.+)")
 INLINE = re.compile(r"`([^`]+)`")
@@ -365,25 +365,7 @@ def validate_organization_consumer(root: Path, errors: list[str]) -> None:
                 "Recheck determining issue/body/owner/action",
                 "beside actual owner execution", "with no V1 fallback",
             )),
-            ("driver", drive, (
-                "This edition prepares .9/.11 consumers only",
-                "the explicit ordered capacity-safe subset per slice",
-                "Continue an existing unambiguous owner and PR/head",
-                "no mandatory critic/confirmation chain", "Routine is default",
-                "recorded explicit human instruction", "not process selectors",
-                "valid exact-head reuse", "Pending and disputed validation remain visible",
-                "dependent acceptance or activation",
-                "A merged slice narrows remaining work and does not auto-set the outcome Done",
-            )),
-            ("host", host.partition("## Historical host mechanics")[0], (
-                "This .9/.11 source preparation grants no live consumer activation or dispatch",
-                "Recheck determining facts beside execution",
-                "actual remaining implementation/review/hosted-CI capacity and existing reservations",
-            )),
-            ("triage", triage.partition("## Historical triage mechanics")[0], (
-                "Source preparation does not activate it",
-                "A parent remains open when a delivered slice leaves acceptance",
-            )),
+            ("driver", drive, ("[$work-board](../work-board/SKILL.md)", "organization", "scope only")),
         )
         for name, text, required in obligations:
             normalized = " ".join(text.split())
@@ -511,118 +493,37 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
         if required not in padd_item:
             fail(errors, f"padd-item: workspace filing contract lost {required!r}")
 
-    work_root = root / ROOTS[0] / "work-board"
-    work = (work_root / "SKILL.md").read_text(encoding="utf-8")
-    work_host_loop = (work_root / "references/host-loop.md").read_text(encoding="utf-8")
-    work_triage = (work_root / "references/backlog-triage.md").read_text(encoding="utf-8")
-    if "backlog-triage" not in work:
-        fail(errors, "work-board: triggered body does not route through backlog triage")
-    work_order = ("four-part `check-board` result", "backlog-triage", "batch")
-    work_positions = [work_host_loop.find(term) for term in work_order]
-    if any(position < 0 for position in work_positions) or work_positions != sorted(work_positions):
-        fail(errors, "work-board: host loop must order check-board result, backlog triage, then batch")
-    for required in (
-        "without mutating the board",
-        "Promote to Ready",
-        "Retain in Backlog",
-        "Set Blocked",
-        "Await human judgement",
-        "Promotion changes eligibility, not assignment",
-        "touch-set-disjoint",
-        "simple-versus-complex SDD lifecycle branch",
-        "schema-v2 development-feedback report",
-        "follow-up filed by the preceding wave",
-        "An empty Ready batch is not completion",
-        "Do not spin",
-        "`--include-backlog`",
-    ):
-        if required not in work_triage:
-            fail(errors, f"work-board: backlog planning contract lost {required!r}")
+    validate_work_board_coordinator(root, errors)
 
-    # The machine half is a generated region. Do not carry a second numeric roster here: regeneration
-    # compares it to `facts --json`, and this gate rejects a stale region or a copied declaration outside
-    # it. The remaining required prose is qualitative operator judgement, not an executable literal.
-    wave_model_required = (
-        "RESERVED, not advisory",
-        "assigning it to an implementer",
-        "immediately start a second wave from a fresh",
-        "fleet-wide stop for BOTH waves",
-        "flush --dry-run` before resuming either",
-    )
-    for driver_name, contract_text in (("work-board", work_host_loop),):
-        for required in wave_model_required:
-            if required not in contract_text:
-                fail(errors, f"{driver_name}: host-loop lost two-wave contract statement {required!r}")
 
-    begin = "<!-- BEGIN GENERATED: fsgg-protocol:wave-policy -->"
-    end = "<!-- END GENERATED: fsgg-protocol:wave-policy -->"
-
-    def _wave_model_block(text: str) -> str:
-        start = text.find(begin)
-        finish = text.find(end, start)
-        if start < 0 or finish < 0:
-            return ""
-        return text[start : finish + len(end)]
-
-    work_wave_block = _wave_model_block(work_host_loop)
-    if not work_wave_block:
-        fail(errors, "work-board: could not locate the generated wave-model block")
-
-    for driver_name, contract_text in (("work-board", work_host_loop),):
-        machine = _wave_model_block(contract_text)
-        outside = contract_text.replace(machine, "")
-        if re.search(r"fsgg:wave-model:v1|waves=\d+|implementer-slots-per-wave=\d+|review-slots=\d+|consolidation-threshold=\d+", outside):
-            fail(errors, f"{driver_name}: hand-authored duplicate of generated wave policy")
-
-    projection = subprocess.run(
-        [str(root / "scripts/generate-projections"), "--check"], cwd=root, text=True, capture_output=True, check=False
-    )
-    if projection.returncode != 0:
-        fail(errors, "generated process contract is stale or cannot be rendered: " + projection.stderr.strip().split("\n", 1)[0])
-
-    variant_wave_terms = ("implementer slot", "review slot", "consolidat", "eight-slot", "EX_RATE")
-    for variant in ("drive-board-best", "drive-board-normal", "work-board-best", "work-board-normal"):
-        variant_body = (root / ROOTS[0] / variant / "SKILL.md").read_text(encoding="utf-8")
-        for term in variant_wave_terms:
-            if term.lower() in variant_body.lower():
-                fail(
-                    errors,
-                    f"{variant}: restates the two-wave contract ({term!r}) instead of inheriting it "
-                    "from the canonical driver",
-                )
-
-    feedback_contracts = {
-        "work-board": (
-            "item-<issue-number>-<slug>",
-            "validate-checkpoints feedback/checkpoints/<cycle-id>.jsonl",
-            "no cycle feedback artifacts is incomplete",
-        ),
-        "work-roadmap": (
-            "roadmap-<roadmap-slug>-m<milestone>-<slug>",
-            "validate-checkpoints feedback/checkpoints/<cycle-id>.jsonl",
-            "final roll-up",
-        ),
-    }
-    for driver, required in feedback_contracts.items():
-        driver_root = root / ROOTS[0] / driver
-        body = (driver_root / "SKILL.md").read_text(encoding="utf-8")
-        contract = (driver_root / "references/feedback-contract.md").read_text(encoding="utf-8")
-        if "feedback-contract" not in body:
-            fail(errors, f"{driver}: triggered body does not route through the feedback contract")
-        if "scripts/fsgg-coord telemetry feedback validate" not in contract:
-            fail(errors, f"{driver}: feedback completion contract does not call the compiled validator")
-        for statement in required:
-            if statement not in contract:
-                fail(errors, f"{driver}: feedback completion contract lost {statement!r}")
-        for statement in (
-            "fs-gg-feedback-report",
-            "schema-v2 report",
-            "--audit feedback/audits/<report-stem>.audit.json",
-            "unbound-audit",
-            "Do not create a fake defect or positive pattern",
-        ):
-            if statement not in contract:
-                fail(errors, f"{driver}: feedback completion contract lost {statement!r}")
+def validate_work_board_coordinator(root: Path, errors: list[str]) -> None:
+    """Source boundary checks complement independent realistic consumer journeys."""
+    for runtime in ROOTS:
+        base = root / runtime
+        work = (base / "work-board/SKILL.md").read_text(encoding="utf-8")
+        required = (
+            "Project 3", "binding4/schema2/inspection2", "qualified installed caller",
+            "productBoard", "binding3", "remaining-after-active capacity",
+            "439 inherited reservations", "46 later originals", "one independent source",
+            "tools/routine-delivery.py", "actual tested", "roadmap-telemetry",
+            "Source delivery, publication, installation", "No fixed polling",
+            "Preserve the complete Done when; a merged slice narrows the remainder without closing its parent",
+        )
+        normalized = " ".join(work.split())
+        for clause in required:
+            if clause not in normalized:
+                fail(errors, f"work-board coordinator: missing {clause!r}")
+        current = "\n".join((base / (name + "/SKILL.md")).read_text(encoding="utf-8") for name in
+                            ("work-board", "drive-board", "work-roadmap", "continue-from-handoff", "stop-with-handoff", "routine-decisions"))
+        if re.search(r"\$work-programme|\]\([^)]*work-programme/SKILL\.md", current):
+            fail(errors, "work-board coordinator: active caller returned to retired programme workflow")
+        for name in ("work-board", "drive-board"):
+            host = (base / name / "references/host-loop.md").read_text(encoding="utf-8")
+            if "fsgg:wave-model:v1" in host or "BEGIN GENERATED: fsgg-protocol:wave-policy" in host:
+                fail(errors, "organization successor: retired generated wave authority returned")
+        retired = (base / "work-programme/SKILL.md").read_text(encoding="utf-8")
+        if "[$work-board](../work-board/SKILL.md)" not in retired or "## Default workflow" in retired:
+            fail(errors, "work-board coordinator: retired entrypoint is an active or broken workflow")
 
 
 def validate_forward_corpus(root: Path, names: set[str], errors: list[str]) -> None:

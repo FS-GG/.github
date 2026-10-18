@@ -53,7 +53,13 @@ module SkillProgressiveDisclosureTests =
 
             Assert.True(lines < 500, $"{skill}/SKILL.md has {lines} lines; the hard limit is below 500")
             Assert.True(words < 5000, $"{skill}/SKILL.md has {words} words; the triggered-body target is below 5000")
-            Assert.Contains("references/", body)
+            if skill = "drive-board" then
+                // The finite organization wrapper loads the common coordinator rather than
+                // duplicating its routed instructions in a second triggered body.
+                Assert.Contains("[$work-board](../work-board/SKILL.md)", body)
+                Assert.Contains("scope only", body)
+            else
+                Assert.Contains("references/", body)
 
     [<Fact>]
     let ``all active roots carry the same routed skill directories`` () =
@@ -74,12 +80,18 @@ module SkillProgressiveDisclosureTests =
         Assert.Contains("mailbox-and-board", body "cross-repo-coordination")
         Assert.Contains("contract-changes", body "cross-repo-coordination")
         Assert.Contains("coherent-releases", body "cross-repo-coordination")
-        Assert.Contains("backlog-triage", body "work-board")
-        Assert.Contains("feedback-contract", body "work-board")
+        let coordinator = body "work-board"
+        for route in
+            [ "references/org-scope.md"
+              "references/workspace-scope.md"
+              "references/bootstrap.md"
+              "references/delivery-reliability.md"
+              "references/observation.md" ] do
+            Assert.Contains(route, coordinator)
+        Assert.Contains("../work-board/SKILL.md", body "drive-board")
+        Assert.DoesNotContain("$work-programme", coordinator)
         Assert.Contains("feedback-contract", body "work-roadmap")
 
-        for host in [ "drive-board"; "work-board" ] do
-            Assert.Contains("host-loop", body host)
         Assert.Contains("heavyweight-roadmap", body "work-roadmap")
         let heavyweightRoadmap =
             File.ReadAllText(Path.Combine(skillPath ".claude" "work-roadmap", "references", "heavyweight-roadmap.md"))
@@ -111,7 +123,10 @@ module SkillProgressiveDisclosureTests =
             Assert.DoesNotContain("fsgg-protocol:wave-policy", reference "drive-board" "host-loop.md")
             Assert.Contains("fsgg-protocol:take-exit-codes", reference "pnext-item" "command-contracts.md")
             Assert.Contains("BEGIN GENERATED: fsgg-protocol -->", reference "intra-repo-parallel-work" "protocol-facts.md")
-            Assert.Contains("fsgg-protocol:wave-policy", reference "work-board" "host-loop.md")
+            Assert.DoesNotContain("fsgg-protocol:wave-policy", reference "work-board" "host-loop.md")
+            for host in [ "drive-board"; "work-board" ] do
+                Assert.DoesNotContain("fsgg:wave-model:v1", reference host "host-loop.md")
+                Assert.Contains("Canonical work-board owns coordination", reference host "host-loop.md")
 
     [<Fact>]
     let ``moving detail into references does not break relative markdown links`` () =

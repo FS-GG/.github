@@ -1,7 +1,10 @@
 name: work-programme
+# Preserve the existing native check identity; execute the canonical coordinator controls.
 on:
   pull_request:
     paths:
+      - '.agents/skills/work-board/**'
+      - '.claude/skills/work-board/**'
       - '.agents/skills/work-programme/**'
       - '.claude/skills/work-programme/**'
       - '.agents/skills/routine-decisions/**'
@@ -11,6 +14,8 @@ on:
   push:
     branches: [main]
     paths:
+      - '.agents/skills/work-board/**'
+      - '.claude/skills/work-board/**'
       - '.agents/skills/work-programme/**'
       - '.claude/skills/work-programme/**'
       - '.agents/skills/routine-decisions/**'
@@ -28,7 +33,7 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Run the bounded work-programme entry
+      - name: Run canonical coordinator and historical-entry controls
         run: bash tests/work-programme/run.sh > "$RUNNER_TEMP/work-programme-result.json"
       - name: Display the result independently of the runner exit
         if: always()

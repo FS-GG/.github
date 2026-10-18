@@ -14,7 +14,7 @@ follow [$atlas](../atlas/SKILL.md) without restarting capture work after shutdow
 
 ## Stop execution before saving
 
-Cancel new roadmap dispatches, source edits, repair pushes, publications, and
+Stop new board selections and dispatches, source edits, repair pushes, publications, and
 operation admissions as soon as the stop request arrives. List active workers
 and interrupt them; tell each owner to preserve partial files and perform no
 new work. Collect available state without waking idle workers or dispatching
@@ -36,8 +36,9 @@ runtime supports it. A stop request does not mean the roadmap is complete.
 ## Save a restartable handoff
 
 For .9/.11 source preparation, retain the
-[organization consumer boundary](../check-board/references/organization-v2-inspection.md) in recovery
-and handoff. Source delivery does not activate v4 or retire manual v3 current-status maintenance.
+[organization consumer boundary](../work-board/references/organization-v2-inspection.md) in recovery
+and handoff. The organization Project 3 cutover is accepted; old pre-cutover directions are history. Source delivery
+still does not adopt a new executable/caller or change binding/selector. Do not restore manual status upkeep.
 After accepted cutover, preserve final binding/enrollment, exact outcome/slice/attempt and owner,
 existing Current deliverable/native PR/head, issue/body/current-plan revisions, pending requests and
 all original/uncertain reservations. Fresh-read determining native/action/intake/runtime facts through
@@ -57,23 +58,24 @@ Write the smallest complete report containing:
 
 - Stop timestamp, original programme objective, latest user priorities and
   authorization, paused/incomplete status, and canonical
-  [v3 roadmap](../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md),
-  [games roadmap](../../../docs/roadmaps/2026-10-07-games-development-roadmap.md) and skill links.
+  [v3 roadmap](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md),
+  [games roadmap](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-10-07-games-development-roadmap.md) and skill links.
   Preserve older v2 references as archive lineage, not current scheduling authority.
 - Verified progress with exact source revisions, PRs, native runs, publication
   and receiver results; distinguish source delivery from installed behavior.
 - Each lane's owner, working/waiting/stopped state, next concrete action, and
   the acceptance signal or dependency that unlocks it.
 - Branch/worktree locations, dirty or interrupted files, open PR/check state,
-  pending source packets and progress projections, and independent parallel
+  pending source and qualification, and independent parallel
   opportunities for the successor.
 - Failures, unresolved causes, actual attempt outcomes, operation consumption,
   cleanup status, immutable evidence access paths/digests, expired admission,
   and the constraints needed to avoid unsafe or duplicate retries.
 - A short ordered restart plan and the remaining gates to actual completion.
 
-Apply [agent-handoff](../agent-handoff/SKILL.md) and
-[technical-writer](../technical-writer/SKILL.md) for evidence and writing quality.
+Apply [agent-handoff](../agent-handoff/SKILL.md) for evidence and writing quality.
+If the optional `$technical-writer` skill is available, apply it; its absence does not block this route.
+Otherwise use concise evidence-grounded prose directly; no optional skill path is a package dependency.
 Keep credentials, raw telemetry, private payloads and unnecessary personal
 identifiers out of the committed report. Private evidence paths can identify
 where authorized successors should inspect it; do not copy their contents.
@@ -87,7 +89,7 @@ Preserve that work. Validate Markdown links and `git diff --check`; retain the
 normal native required checks and branch protection.
 
 For programme PR admission and delivery, use the existing
-[work-programme](../work-programme/SKILL.md) controls without restarting
+[work-board](../work-board/SKILL.md) controls without restarting
 its implementation loop. Use one handoff PR, existing campaign identity, exact
 head, and both normal PR markers. Read the live PR queue; do not bypass its cap
 or merge unrelated feature work merely to make room for the save. If admission,

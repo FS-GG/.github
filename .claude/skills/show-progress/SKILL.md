@@ -31,6 +31,23 @@ expand only when requested. Explain practical consequences in plain language.
 End with at most three priorities or decisions, ordered by likely effect on delivery.
 Use the [compact template](references/report-template.md) when saving a report.
 
+## Outcomes and delivery reporting
+
+Use canonical [work-board](../work-board/SKILL.md)'s selected scope and installed/binding boundary.
+For successor inspection/3, distinguish full outcomes from scoped delivery completions; retain accepted
+milestones, original remaining promises and exact missing facts/suppliers. Join parent requirements only
+from an actually available owning record, never from a parent identity or child count. Native completion
+reason/date and raw evidence remain separate from accepted outcome scope. Old reports without Work level/
+hierarchy retain visible Unknowns; do not silently filter them away, infer a leaf is a delivery, force
+new grammar onto product3, or change the executing caller. Do not maintain a duplicate status/closure ledger.
+
+Report against the user's current strategic focus without turning that focus into a permanent skill
+allowlist. Lead with usable capabilities and the next independently meaningful, executable delivery.
+For a blocked delivery, name the exact missing input, the assertion it affects and the supplying owner.
+A broad product epic or a blocked sibling is not itself a prerequisite: identify the specific shared
+capability required by the selected acceptance. Keep deferred scope and original operations visible
+without treating deferral or source completion as full outcome acceptance.
+
 ## Exercise judgment
 
 - Ground material claims in current owning plans, board state and existing results.

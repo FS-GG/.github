@@ -1,14 +1,14 @@
-# Workspace board scope
+# Selected product scope
 
-Limit scheduling, claims, worktrees, and reports to the current product workspace. Use the workspace's
-coordination configuration and repository instructions; do not silently fall back to the org board.
-Touch-sets are compared inside this repo. Cross-repo findings become requests through
-cross-repo-coordination rather than edits in another checkout.
+Use only the explicitly selected product workspace, its repository instructions, exact local tool pin,
+`.fsgg/board-v2-binding.json` and `productBoard` scaffold provenance. The currently qualified product
+contract uses binding3 for one repository and its selected bounded native cohort. Match binding digest,
+published adapter version/artifact digest, immutable project/field/cohort identities and canonical remote.
+Organization binding4 is not a product binding. Missing/inconsistent configuration or unavailable published
+tooling keeps the affected effect blocked; never fall back to org scope, title discovery, legacy scheduler,
+claims/status writes or sibling-source execution. No broad membership or human-field mutation follows.
 
-For a selected V2 product, read `.fsgg/board-v2-binding.json` and the `productBoard` provenance.
-Binding version 3 selects exactly one owner-local repository and one to five native issues.
-A view filter is not a repository write boundary. Use the canonical read-only `board-v2 inspect`
-route in work-board; an organization Binding version 2 never authorizes product execution.
-Keep Status/Track/Roadmap and human Blocked values untouched; only separately authorized
-Observation refresh is supported. Unreadable configuration or missing published tooling refuses
-the selected effect, while local-only source development remains supported.
+The canonical [work-board](../SKILL.md) owns recovery, source delivery and operation boundaries.
+Disjoint touch-sets are compared within the repository; cross-repository findings go through existing
+cross-repository requests, never unauthorized edits. Missing board facts do not block separately
+explicitly authorized independent local source work with demonstrated ownership/capacity/separation.

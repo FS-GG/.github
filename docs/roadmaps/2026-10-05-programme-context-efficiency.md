@@ -77,11 +77,11 @@ workers, a rerun of the acceptance suite or a token-cost experiment.
 
 | Surface | Existing behavior | Gap and consequence |
 |---|---|---|
-| [Skill](https://github.com/FS-GG/.github/blob/2859e8b2a8f0683b4947765a0ef23f863090bfa2/.agents/skills/work-programme/SKILL.md) | Parent owns scope, capacity and integration; owners retain investigation. New workers receive explicit routes and no inherited conversation; normal repairs reuse the owner. Returns target 150–300 words. | These are instructions to the model. The helper cannot establish that the parent actually avoids duplicate investigation, or that workers received all applicable obligations. |
-| [Frontier function](https://github.com/FS-GG/.github/blob/2859e8b2a8f0683b4947765a0ef23f863090bfa2/.agents/skills/work-programme/scripts/programme.fsx#L109) | Given explicit time and snapshot, sorts by priority and ID; checks freshness, dependency boundary, retained owners, PR limits, capacity and touch-set conflicts. Produces advisory actions. | Observations, priority and scalar capacity arrive from callers. It neither collects source facts nor performs admission, dispatch, review or effect settlement. CLI invocations obtain current time, so replay needs the same time input; identical files run later need not yield identical freshness decisions. |
-| [Packet builder](https://github.com/FS-GG/.github/blob/2859e8b2a8f0683b4947765a0ef23f863090bfa2/.agents/skills/work-programme/scripts/programme.fsx#L155) | Hash-pinned references, mandatory whole instructions, optional excerpts, explicit omissions, maximum 256 KiB. | Byte bounds do not measure tokens, relevance or subsequent retrieval. Completeness is relative to the caller's mandatory list; an omitted applicable instruction cannot be discovered from that list alone. |
-| [Artifact verifier](https://github.com/FS-GG/.github/blob/2859e8b2a8f0683b4947765a0ef23f863090bfa2/.agents/skills/work-programme/scripts/programme.fsx#L190) | Streams declared files, checks bytes/hashes and rejects linked paths. | Equality does not prove authenticity, complete evidence population, semantic acceptance, cleanup or current permission. Adding a generic success flag would erase essential distinctions. |
-| [Measurements and report](https://github.com/FS-GG/.github/blob/2859e8b2a8f0683b4947765a0ef23f863090bfa2/.agents/skills/work-programme/scripts/programme.fsx#L243) | Retains helper inputs/results and counts helper bytes, durations and failures. Reports native tokens as unknown and compactions as not observed. | This is not parent prompt accounting or whole-family cost. It excludes many reads, messages, model turns and worker histories. Fewer helper bytes cannot establish a cheaper programme. |
+| [Skill](https://github.com/FS-GG/.github/blob/2859e8b2a8f0683b4947765a0ef23f863090bfa2/.agents/skills/work-board/SKILL.md) | Parent owns scope, capacity and integration; owners retain investigation. New workers receive explicit routes and no inherited conversation; normal repairs reuse the owner. Returns target 150–300 words. | These are instructions to the model. The helper cannot establish that the parent actually avoids duplicate investigation, or that workers received all applicable obligations. |
+| [Frontier function](https://github.com/FS-GG/.github/blob/2859e8b2a8f0683b4947765a0ef23f863090bfa2/.agents/skills/work-board/scripts/programme.fsx#L109) | Given explicit time and snapshot, sorts by priority and ID; checks freshness, dependency boundary, retained owners, PR limits, capacity and touch-set conflicts. Produces advisory actions. | Observations, priority and scalar capacity arrive from callers. It neither collects source facts nor performs admission, dispatch, review or effect settlement. CLI invocations obtain current time, so replay needs the same time input; identical files run later need not yield identical freshness decisions. |
+| [Packet builder](https://github.com/FS-GG/.github/blob/2859e8b2a8f0683b4947765a0ef23f863090bfa2/.agents/skills/work-board/scripts/programme.fsx#L155) | Hash-pinned references, mandatory whole instructions, optional excerpts, explicit omissions, maximum 256 KiB. | Byte bounds do not measure tokens, relevance or subsequent retrieval. Completeness is relative to the caller's mandatory list; an omitted applicable instruction cannot be discovered from that list alone. |
+| [Artifact verifier](https://github.com/FS-GG/.github/blob/2859e8b2a8f0683b4947765a0ef23f863090bfa2/.agents/skills/work-board/scripts/programme.fsx#L190) | Streams declared files, checks bytes/hashes and rejects linked paths. | Equality does not prove authenticity, complete evidence population, semantic acceptance, cleanup or current permission. Adding a generic success flag would erase essential distinctions. |
+| [Measurements and report](https://github.com/FS-GG/.github/blob/2859e8b2a8f0683b4947765a0ef23f863090bfa2/.agents/skills/work-board/scripts/programme.fsx#L243) | Retains helper inputs/results and counts helper bytes, durations and failures. Reports native tokens as unknown and compactions as not observed. | This is not parent prompt accounting or whole-family cost. It excludes many reads, messages, model turns and worker histories. Fewer helper bytes cannot establish a cheaper programme. |
 | [Acceptance fixtures](https://github.com/FS-GG/.github/blob/2859e8b2a8f0683b4947765a0ef23f863090bfa2/tests/work-programme/acceptance.fsx) | Covers frontier refusals, packet completeness relative to declarations, drift, links, strict JSON and deterministic replay. | Does not demonstrate adapter observation correctness, worker-return semantics, interruption recovery or context savings in real use. |
 
 The driver plan records an entry-point reduction from 21,213 to 8,599 bytes, or 59.5%. That is a
@@ -99,7 +99,7 @@ Earlier work already owns important parts of the solution:
   identifies typed complete reads, explicit intent and revisioned inputs. Reuse its boundaries rather
   than parse prose into scheduling authority.
 - [LEARN-01](2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md) owns controlled
-  context comparisons and whole-issue economics. The existing [observation contract](../../.agents/skills/work-programme/references/observation.md)
+  context comparisons and whole-issue economics. The existing [observation contract](../../.agents/skills/work-board/references/observation.md)
   owns lineage, coverage and telemetry integration. This feature supplies a candidate treatment.
 - [V2-PROC-01](2026-10-05-shared-process-supervision.md) owns bounded command execution and containment.
   Shared process mechanics can reduce repeated supervisor investigation, but cannot by themselves
@@ -403,7 +403,7 @@ Classify each coherent change once, revisiting only a material scope change:
 
 For source review, independence means separation from implementation authorship. An authorized
 fresh subagent can supply that review where the platform permits it; a second human collaborator
-is not a universal requirement. Use the [governing review rule](../../.agents/skills/work-programme/SKILL.md#conditional-three-outcome-pilot)
+is not a universal requirement. Use the [governing review rule](../../.agents/skills/work-board/SKILL.md#qualify-the-actual-path-and-deliver-exact-source)
 for exact-source review and reuse of accepted author-run Home source tests. Required CI, credential
 separation and operational trust-boundary readback remain distinct obligations.
 
@@ -551,7 +551,7 @@ compactions, waits, return failures and whole-family economics remain unknown or
 population is an offline smoke comparison only, with economic conclusions inconclusive. The original
 .1 measurement exit is not claimed complete.
 
-The additive [.2 delta contract](../../.agents/skills/work-programme/references/adapter.md#additive-offline-delta-input)
+The additive [.2 delta contract](../../.agents/skills/work-board/references/adapter.md#additive-offline-delta-input)
 retains legacy commands and separate boundary statuses, owner/original-attempt/candidate joins,
 explicit evaluation time and policy/evaluator/scope identity, and complete active reservations.
 Conflicts reconcile, missing bases resynchronize, and acknowledgment cannot mint completion.
@@ -560,7 +560,7 @@ Its combined entry point passed31 legacy,35 delta and10 Python baseline controls
 runs retained exact inputs and reproduced the expected result. This establishes source/CLI behavior,
 not the original .1 whole-family measurement exit or operational adoption.
 
-The additive [.3 evidence-view/reuse contract](../../.agents/skills/work-programme/references/adapter.md#additive-bounded-evidence-view)
+The additive [.3 evidence-view/reuse contract](../../.agents/skills/work-board/references/adapter.md#additive-bounded-evidence-view)
 verifies a complete artifact's raw identity before bounded excerpts, preserves whole mandatory
 instructions, and returns typed refusals without truncation. The shared reader consumes at most the
 limit plus one overflow-detection byte during growth. Pure reuse advice requires the caller-declared
@@ -592,10 +592,10 @@ need an actual integrated window. No missing identity is reconstructed as fact.
 
 ### Bounded parent context path, 2026-10-07
 
-The dependency-free [context helper](../../.agents/skills/work-programme/scripts/context.py) projects
+The dependency-free [context helper](../../.agents/skills/work-board/scripts/context.py) projects
 pinned JSON fields/lines, proof-obligation review bundles and native session diagnostics when CLR helper
 execution is held. It also prepares fixed argument vectors for the existing guard without executing them
-or renewing windows. [Context guidance](../../.agents/skills/work-programme/references/context.md) defines
+or renewing windows. [Context guidance](../../.agents/skills/work-board/references/context.md) defines
 bounded parent exposure, original-identity owner rotation and compact restart navigation. Handoff recovery
 has one full reader; missing delegation retains a bounded parent fallback.
 

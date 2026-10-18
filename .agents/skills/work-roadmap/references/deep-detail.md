@@ -1,4 +1,10 @@
 
+
+These retained details apply only when an explicit human instruction selects the heavyweight route.
+That route requires the separately supplied `$fs-gg-sdd-lifecycle` skill and applicable SDD workspace;
+verify their actual availability before using it. They are not dependencies of ordinary coordinator
+source delivery. Missing heavyweight capability fences that selected branch, not independent work.
+
 # work-roadmap
 
 One command's worth of intent: **"take this roadmap and burn it down, milestone by milestone, and
@@ -10,7 +16,7 @@ roadmap has no unchecked milestone left, and then the parent writes the report a
 
 This skill is the **loop and its contract**. It inserts one bounded independent critique after the
 first green implementation/evidence loop. It does not re-teach the SDD lifecycle — that is
-[fs-gg-sdd-lifecycle](../../fs-gg-sdd-lifecycle/SKILL.md)'s, and each subagent runs it. It does not
+`$fs-gg-sdd-lifecycle`'s, and each subagent runs it. It does not
 re-teach PR-to-merge discipline — that is `pnext-item` §5–6's, and each
 subagent follows it. It owns the thing neither of those does: **the sequencing of many milestones
 across many disposable workers, driven off one markdown file.**
@@ -124,7 +130,7 @@ The parent hands each subagent essentially this, with `<MILESTONE>` and `<ROADMA
 >
 > 1. **Branch** from up-to-date `main`: `git fetch && git switch -c <slug-of-milestone> origin/main`.
 > 2. **Work the milestone to completion via the SDD lifecycle.** Follow
->    [fs-gg-sdd-lifecycle](../../fs-gg-sdd-lifecycle/SKILL.md) end to end — charter/specify → clarify →
+>    `$fs-gg-sdd-lifecycle` end to end — charter/specify → clarify →
 >    plan → tasks → implement → verify/validate → **fs-gg-sdd-ship**. The milestone's nested
 >    checkboxes are your task list; all of them are in scope. Do not stop at "specified" or
 >    "planned" — the milestone is done when it is shipped and green.
@@ -194,7 +200,7 @@ a detailed report and lands it:
 
 - **ADR-0053** — the org record that canonizes this loop, its cross-repo forces, and the roads not
   taken. This file is the protocol; that record is the *why*.
-- [fs-gg-sdd-lifecycle](../../fs-gg-sdd-lifecycle/SKILL.md) — the SDD workflow each subagent runs; the
+- `$fs-gg-sdd-lifecycle` — the SDD workflow each subagent runs; the
   authority on stage order, not this file.
 - `pnext-item` — the open-PR → review → merge-on-green loop each subagent
   reuses, and the "fix the cause, then take it" discipline for problems found mid-milestone.

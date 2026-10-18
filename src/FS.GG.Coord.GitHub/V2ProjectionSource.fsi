@@ -105,7 +105,7 @@ module V2ProjectionSource =
     type AttributedObservation =
         { Supplier: string; ObservedAt: DateTimeOffset; ValidUntil: DateTimeOffset; Evidence: string list }
     type SliceJoin =
-        { NativeId: string; UpdatedAt: string; BodySha256: string; SourceRevision: string }
+        { NativeId: string; UpdatedAt: string; BodySha256: string; SourceRevision: string; HierarchySha256: string option }
     /// Non-None declared work requires exactly one proposed-action reference "current-deliverable".
     /// True reconciles scoped nonduplication under the fresh exact body/plan join, never completion or authority.
     type Prerequisite = { Action: Action; Reference: string; Satisfied: bool option; SupplyingOwner: string }
@@ -135,10 +135,21 @@ module V2ProjectionSource =
 
     /// CurrentDeliverable retains bounded native field text (16KiB UTF-8); exact "None" declares absence.
     /// Deliverables contains only canonical selected-repository PR discovery hints, joined independently.
+    /// Native hierarchy observations never widen enrollment or establish acceptance.
+    type HierarchyIdentity = { Issue: IssueRef; NodeId: string }
+    type HierarchyChild =
+        { Issue: IssueRef; NodeId: string; State: string; StateReason: string option; ClosedAt: string option }
+    type WorkItemObservation =
+        { WorkLevel: string; WorkLevelOptionId: string option; Parent: HierarchyIdentity option
+          Children: HierarchyChild list; Complete: bool; Gap: string option; ObservedAt: DateTimeOffset
+          Sha256: string option; StateReason: string option; ClosedAt: string option
+          DoneWhen: string option; BlockedOn: string option; AcceptanceEvidence: string option; ClosureGaps: string list }
+
     type InspectionItem =
         { Evidence: ItemReport; ExpectedNodeId: string; SourceCurrentness: string
           Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list; Owner: string option; SourceRevision: string option
-          CurrentDeliverable: string option; Deliverables: string list; DeliverableGap: string option; Intake: NativeIntakeObservation }
+          CurrentDeliverable: string option; Deliverables: string list; DeliverableGap: string option; Intake: NativeIntakeObservation
+          WorkItem: WorkItemObservation option }
 
     type InspectionReport =
         { Binding: Binding; Evidence: BatchReport; Items: InspectionItem list

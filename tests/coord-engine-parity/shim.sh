@@ -172,7 +172,15 @@ fi
 # never restored the tool: tiers 2/4 need a git toplevel (there is none here), tier 1 is unset, and
 # tier 3 (a global tool on PATH) does not exist — so nothing resolves and the shim must SAY so.
 NONGIT="$(mktemp -d)"
-err="$(cd "$NONGIT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" --version 2>&1 >/dev/null)"; rc=$?
+# These negative fixtures must not discover the operator's real installed caller.
+# Supply only the shell/git/path helpers the resolver needs, never an engine or SDK.
+NO_ENGINE_PATH="$(mktemp -d)"
+for helper in bash git head cut dirname readlink realpath; do
+  helper_path="$(type -P "$helper")"
+  [ -n "$helper_path" ] || { echo "FAIL missing resolver fixture helper: $helper" >&2; exit 1; }
+  ln -s "$helper_path" "$NO_ENGINE_PATH/$helper"
+done
+err="$(cd "$NONGIT" && env -u FSGG_COORD_ENGINE_BIN PATH="$NO_ENGINE_PATH" "$SHIM" --version 2>&1 >/dev/null)"; rc=$?
 if [ "$rc" -ne 0 ] && printf '%s' "$err" | grep -qi 'no fsgg-coord engine found'; then
   ok "refusal: an unresolvable environment exits non-zero ($rc) with advice — never a silent green no-op (#266)"
 else
@@ -876,13 +884,13 @@ fi
 #    Same module-less shim, same tree with its engine removed: tier 2 misses and resolution proceeds
 #    exactly as it did before this change.
 find "$M86/src" -name 'fsgg-coord-engine*' -delete 2>/dev/null
-err="$(cd "$M86" && env -u FSGG_COORD_ENGINE_BIN "$NOMOD/fsgg-coord" release "$FIXREF" 2>&1 >/dev/null)"; rc=$?
+err="$(cd "$M86" && env -u FSGG_COORD_ENGINE_BIN PATH="$NO_ENGINE_PATH" "$NOMOD/fsgg-coord" release "$FIXREF" 2>&1 >/dev/null)"; rc=$?
 if printf '%s' "$err" | grep -qi 'no fsgg-coord engine found'; then
   ok "#1586: with NO source build, the missing guard module is never asked for — the receivers' shape resolves (or refuses) exactly as before"
 else
   bad "#1586: a source-less checkout must not be broken by the absent guard module" "rc=$rc err=$err"
 fi
-rm -rf "$NOMOD" "$M86"
+rm -rf "$NOMOD" "$M86" "$NO_ENGINE_PATH"
 
 # c. THE FOLLOW-UP LANDED, AND THIS LEG IS NOW THE OTHER WAY UP (#1615, 2026-07-28, ADR-0068).
 #

@@ -1,5 +1,24 @@
 # Registry changelog
 
+## 2026-10-18 — accepted independent Host0.7 publication
+
+Advance only the Host published version/tag to0.7 after original39148437514/a1 completed journal13
+generation17/all8 verified. Both feeds share the normalized candidate payload; signed archive bytes
+differ. Preserve old0.6 journal12/tag intent Unknown without resend. Coherent107/Creator017 remain
+source-only, accepted binding4 unchanged, and Home receiver adoption remains separate. Later selector106
+observation is not whole runtime/discovery qualification; its prior value and change timing are Unknown.
+
+
+## 2026-10-18 — canonical coordinator and independent Creator source (#4677)
+
+Advance only source declarations to coherent coordination0.107 and Creator0.17. Canonical work-board,
+explicit organization outcome/delivery source grammar and complete product driver packaging are
+source-qualified separately from publication, native migration/enrollment/views and installed discovery.
+Published coordination0.106, Creator0.16, accepted binding4 and original uncertain operations remain unchanged.
+Retained105 qualification is historical scope; later selector106 observation does not establish full
+runtime/discovery qualification or when that pointer changed.
+
+
 Reverse-chronological log of changes to [`dependencies.yml`](dependencies.yml), plus FS.GG.Kit
 republishes that change the fleet materialized by [`repos.yml`](repos.yml) without changing a
 dependency row — the FS-GG cross-repo contract & dependency registry. Its human projection is

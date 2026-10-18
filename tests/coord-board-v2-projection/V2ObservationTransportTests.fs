@@ -7,7 +7,7 @@ open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.GitHub.V2Projection
 
 let private binding =
-    { ProgrammeEnrollment = None; BindingVersion = 2; SchemaVersion = 1; ImportRecipeRevision = String.replicate 40 "e"; ImportArtifactSha256 = String.replicate 64 "f"
+    { WorkLevel = None; ProgrammeEnrollment = None; BindingVersion = 2; SchemaVersion = 1; ImportRecipeRevision = String.replicate 40 "e"; ImportArtifactSha256 = String.replicate 64 "f"
       RecipeRevision = String.replicate 40 "a"; PopulationRevision = String.replicate 40 "c"; ArtifactSha256 = String.replicate 64 "b"
       OrganizationId = "O_kgDOEYAWYw"; OwnerKind = Org; Owner = "FS-GG"; ProjectNumber = 3; ProjectTitle = "Coordination V2"; ProjectId = "PVT_kwDOEYAWY84Bldpa"
       Status = { Id = "status"; Options = Map.ofList [ "Backlog", "b"; "Ready", "r"; "In progress", "i"; "Blocked", "x"; "Done", "d" ] }

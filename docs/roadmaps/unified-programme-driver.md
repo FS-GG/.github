@@ -1,10 +1,87 @@
-# Temporary Unified Roadmap driver
+# Programme coordination and retained driver history
+
+
+## Canonical board coordinator migration — 2026-10-18
+
+The user selected existing `$work-board` as the canonical coordinator, replacing the active
+`$work-programme` workflow. The bounded source delivery is [.github#4677](https://github.com/FS-GG/.github/issues/4677)
+under [.github#4641](https://github.com/FS-GG/.github/issues/4641), whose full integrated
+restart/adoption/recovery Done when remains open. Organization current selection
+uses accepted Project 3 binding4/schema2/inspection2 and the authenticated qualified installed caller;
+products retain their selected V2 binding and provenance. Roadmaps retain strategic scope and actual
+technical acceptance/history without duplicate scheduling, current-status or closure upkeep.
+
+Required source closure includes both skill mirrors and UI/discovery metadata, recovery/routine callers,
+producer registries/manifests, executable package staging and actual product materialization. Canonical
+work-board is normally discoverable; other explicit-only entrypoints retain their policy. Old programme
+paths are compatibility redirects/diagnostic shims, never a second planner. The canonical organization
+inspection contract is derived into Drivers and checked against its Kit source digest for offline closure.
+External Roadmap field, roadmap-telemetry, persisted schemas/producer IDs and helper command basenames
+stay compatible. Qualified CLI 0.105 accepts the historical observation provenance path; the successor
+compiled grammar additionally accepts the new work-board path. Source/instruction loading changes no
+binding, enrollment or executing selector. Preserve all 439 inherited and 46 later original Unknown holds.
+
+Coherent 0.107 source preparation does not claim publication or installed adoption. Acceptance needs
+independent realistic programme-continuation/product-selection/blocked-lane/old-handoff journeys,
+required CI and exact reviewed/tested/delivered correspondence. The separate parent outcome additionally
+requires later publication, actual selected absolute-path/runtime-policy discovery (including project
+overrides) and qualified caller adoption where compiled support changes. Historical evidence below
+retains its original scope and times.
+
+The selected source scope also implements explicit outcome/delivery classification, bounded native
+hierarchy and scoped closure reporting through binding5/schema3/inspection3/integrator2. Accepted
+binding4/schema2/inspection2 and product3 keep their actual accepted scope until successor adoption.
+Retained105 qualification is historical scoped evidence; a later Root read observed the global selector
+targeting106, with pre-entry selector and change timing Unknown. That pointer alone does not establish
+whole runtime, instruction discovery or107 installed acceptance. The maintained
+migration writer adds one Work level field and absent-only explicit classifications, preserves existing
+view identities/orthogonal settings, and never repurposes Status/Track/Roadmap or automatically closes
+parents. Root selects exact native field/classification/view/enrollment effects in a separate admitted
+window; no schema mutation, membership expansion or caller activation is claimed by this plan update.
+
+### Independent Creator source closure
+
+Creator **0.17.0** packages the canonical product driver cohort from the normal coherent **0.107.0**
+eleven-project source graph. It has its own candidate, package and publisher with journal017;
+coherent107 publication does not publish Creator. Published Creator016 and its frozen099 dependency
+helper remain immutable, as do historical013 recovery identities. Product scope retains its selected
+binding3/schema1 behavior; new organization hierarchy grammar is not silently applied to products.
+
+The ordinary existing Creator selftest runs the actual ProductBoard FSI materializer, checks the whole
+delivered driver cohort in both mirrors, then packs the tool and validates built-versus-packed dependency
+bytes and release-manifest correspondence. Creator017's normal dependency graph includes Coord.Cli,
+so the maintained fixture builds every project into a fresh external artifacts root, reads the exact
+Creator output for FSI/package qualification, and compares workspace engine artifacts plus the selected
+caller before/after build. Both the ordinary selftest and current Creator candidate retain that root
+across their real FSI, pack and built-versus-packed checks; recursive mutation children own fresh roots.
+The maintained pure source-flow control checks all workflow callers before expensive qualification and
+rejects lost environment retention, stale FSI paths, repacking or a different validator root. This is a
+bounded static check for the existing linear producer/consumer chain, not a new workflow/model or
+measured cost saving. Retained in-tree outputs cannot rescue a missing or changed isolated assembly.
+Source-only offline qualification exercises programme
+continuation, explicit product selection, blocked scope, old handoff and completed source with remaining
+parent obligations. Current-package publication, installed absolute-path discovery, native product
+creation and restart/adoption remain separate acceptance gates under the owning outcome.
+
+### Current strategic priority
+
+The [selected system-capability focus](2026-10-07-unified-development-roadmap-v3.md#16-system-capability-focus--2026-10-18)
+governs new programme selections while preserving all original outcomes. Required shared suppliers
+are named by the specific system acceptance assertion they enable; a product epic is not a global
+readiness prerequisite. Canonical skills remain reusable for selected organization/product scope.
+This changes strategic priority, not source4677/full outcome4641 acceptance or operation authority.
+
+## Retained roadmap-driver history
+
+The following decisions, technical acceptance obligations and evidence retain their original scope.
+Canonical work-board and the selected V2 binding govern current coordination; historical scheduling,
+manual current-status and closure-projection mechanics below are not a second active planner.
 
 Current open scope: [Unified Roadmap v3](2026-10-07-unified-development-roadmap-v3.md) and the separate
 [games roadmap](2026-10-07-games-development-roadmap.md). Older v2 links in retained packets and
 handoffs are archive lineage; recover surviving IDs against these indexes before selecting work.
 
-The repository-owned [work-programme](../../.agents/skills/work-programme/SKILL.md) skill replaces
+The repository-owned [work-board](../../.agents/skills/work-board/SKILL.md) skill replaces
 `work-unified-roadmap` for this programme. It keeps the parent focused on lane frontiers, integration
 and decisions; implementation owners retain detailed source investigations and evidence. It is temporary,
 does not change generated-workspace defaults, and needs no package release or permanent Host rollout.
@@ -67,7 +144,7 @@ integration and measured savings remain pending. Existing default delivery behav
 ### User-selected coordination default, 2026-10-05
 
 The user selected the delivered V2-CTX-01 improvements as the `$work-programme` default.
-The [skill](../../.agents/skills/work-programme/SKILL.md) now routes applicable work through typed
+The [skill](../../.agents/skills/work-board/SKILL.md) now routes applicable work through typed
 returns, compact deltas, bounded evidence views, mechanical reuse advice and native-check watchers.
 This supersedes the earlier default deferral for these components. Full integration and economic
 measurement remain open; operation authority, original attempts and unknown reservations are preserved.

@@ -131,3 +131,47 @@ enrollment checks even on a Verified no-op and independent intended-field readba
 responses do not retry. Refresh never writes Status, Track, Roadmap, enrollment, schema or views and
 does not consume selection/capacity input. Old Project 3 schema refuses; this is no migration route.
 Use decision/deadline-driven updates and existing evidence, with no projection work per CI tick.
+
+## Outcome/delivery successor source contract — 2026-10-18
+
+This section defines the selected successor source, not a claim of live field creation or installed
+adoption. The accepted binding4/schema2/inspection2 route retains its original scope until explicit
+successor acceptance. Product binding3/schema1/inspection1 remains unchanged.
+
+The organization successor requires binding5/schema3 and one exact Work level SINGLE_SELECT field
+with Outcome and Delivery options. Bounded native type discovery was unavailable; no type absence or
+automatic type/title/leaf/Status/Track classification is inferred. There is no runtime fallback between
+classification sources. Existing private enrollment payload/v1 identity rows and public commitment/v3
+syntax remain compatible with schemaVersion3; a new selected identity set still needs the authenticated
+pair, protected salted commitment and currentness barrier. Never publish private identities or enrollment.
+
+Inspection `fsgg.coord.board-v2-inspection/3` adds per-item workItem classification, bounded native parent/
+direct-child identities, completeness/gap/observation time/digest and raw closure stateReason, closedAt,
+Done when, Blocked on and Acceptance evidence. Acceptance remains Unverified by inspection. Null,
+permission denial, partial pagination, truncation, identity contradiction and cycles are scoped gaps,
+never empty coverage. Visible unenrolled children remain unschedulable. Incomplete parent coverage fences
+rollup, without fencing an independently complete child's action join.
+
+Integrator `fsgg.coord.board-v2-integrator-observations/2` binds each selected slice to hierarchySha256
+alongside existing native body/source/attempt joins. Only exact enrolled Delivery nodes are candidates;
+Outcome or Unknown classification refuses fresh selection. Existing action/prerequisite/intake/current
+owner/PR/head/touch-set/reservation/remaining-capacity checks remain. A parent's/sibling's Blocked value
+is not automatically inherited; explicit relevant prerequisites remain binding. Existing original owner/
+PR/attempt continuation introduces no duplicate assignment, resource demand or reservation. Recheck
+classification and relationships determining the action beside execution. Old integrator/1 data is not
+a new-model action admission and cannot dispatch an outcome through a legacy fallback.
+
+The owner reconciles scoped acceptance through existing native issue/status/evidence and parent assertion
+updates. Native completed/not_planned and dates stay distinct; PR merge alone proves neither installed
+acceptance nor a whole parent promise. Read-only refresh writes none of these planning/closure fields.
+Do not use legacy Done.rollUpParents: all children closed does not satisfy undecomposed required scope.
+A partial close/status operation retains its original identity and independent readback; reconcile only
+the remaining authorized effect. Preserve whole original outcome acceptance anchors and deferred-but-required
+scope. There is no second acceptance ledger, automatic parent closure or retrospective Done-card backlog.
+
+Views separately expose deliveries, outcomes/accepted milestones/remaining assertions/suppliers,
+blocked missing facts/suppliers, completed scope/evidence/native dates and unfiltered All items. Preserve
+existing IDs and orthogonal settings; missing metadata must remain visible. Counts do not imply percentages.
+Instruction source, required CI, publication, actual selected absolute-path discovery, qualified executable,
+field/schema/enrollment/view migration and coordinated consumer acceptance are distinct evidence. Existing
+439 inherited and 46 later original Unknown holds are not released by any of them.

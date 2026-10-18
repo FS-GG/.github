@@ -141,8 +141,6 @@ TARGETS=(
   "release-columns:.agents/skills/pnext-item/references/merge-and-release.md"
   "driver-rules:.claude/skills/pnext-item/references/command-contracts.md"
   "driver-rules:.agents/skills/pnext-item/references/command-contracts.md"
-  "wave-policy:.claude/skills/work-board/references/host-loop.md"
-  "wave-policy:.agents/skills/work-board/references/host-loop.md"
   "review-policy:.claude/skills/pnext-item/references/independent-review.md"
   "review-policy:.agents/skills/pnext-item/references/independent-review.md"
   "lifecycle-policy:.claude/skills/pnext-item/references/independent-review.md"
@@ -163,6 +161,8 @@ TARGETS=(
 # product/legacy targets retain their original semantics. Absence is the intended result;
 # malformed/duplicate/partial old regions refuse instead of deleting surrounding prose.
 RETIRED_ORG_TARGETS=(
+  "wave-policy:.claude/skills/work-board/references/host-loop.md"
+  "wave-policy:.agents/skills/work-board/references/host-loop.md"
   "filing-rules:.claude/skills/cross-repo-coordination/references/mailbox-and-board.md"
   "filing-rules:.agents/skills/cross-repo-coordination/references/mailbox-and-board.md"
   "reconcile-rules:.claude/skills/check-board/references/mechanical-reconciliation.md"

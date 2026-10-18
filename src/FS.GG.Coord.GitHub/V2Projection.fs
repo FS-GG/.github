@@ -40,8 +40,11 @@ module V2Projection =
             RoadmapFieldId: string
             Track: SelectFieldBinding
             Observation: SelectFieldBinding
+            WorkLevel: SelectFieldBinding option
             Repositories: Set<string>
         }
+
+    let isProgrammeBinding (binding: Binding) = binding.BindingVersion = 4 || binding.BindingVersion = 5
 
     type IssueRef =
         {
@@ -202,7 +205,7 @@ module V2Projection =
     let programmeRows (binding: Binding) : IoResult<(string * string * string) list> =
         try
             match binding.ProgrammeEnrollment with
-            | Some value when binding.BindingVersion = 4 -> privateBytes value |> payloadRows binding
+            | Some value when isProgrammeBinding binding -> privateBytes value |> payloadRows binding
             | _ -> enrollmentFailure()
         with _ -> enrollmentFailure()
 
@@ -227,16 +230,16 @@ module V2Projection =
 
     let private validateBindingCore (binding: Binding) =
         let subject = "the Coordination V2 binding"
-        let allFieldIds = [ binding.Status.Id; binding.RoadmapFieldId; binding.Track.Id; binding.Observation.Id ]
+        let allFieldIds = [ binding.Status.Id; binding.RoadmapFieldId; binding.Track.Id; binding.Observation.Id ] @ (binding.WorkLevel |> Option.map (fun value -> [value.Id]) |> Option.defaultValue [])
 
-        if binding.BindingVersion <> 2 && binding.BindingVersion <> 3 && binding.BindingVersion <> 4 then
-            invalid subject "only historical organization v2, product v3 or programme v4 is supported"
+        if binding.BindingVersion <> 2 && binding.BindingVersion <> 3 && not (isProgrammeBinding binding) then
+            invalid subject "only historical organization v2, product v3 or explicit programme v4/v5 is supported"
         elif String.IsNullOrWhiteSpace binding.ImportRecipeRevision || binding.ImportRecipeRevision.Length <> 40 || binding.ImportRecipeRevision |> Seq.exists (Uri.IsHexDigit >> not)
              || String.IsNullOrWhiteSpace binding.ImportArtifactSha256 || binding.ImportArtifactSha256.Length <> 64 || binding.ImportArtifactSha256 |> Seq.exists (Uri.IsHexDigit >> not) then
             invalid subject "distinct reviewed import constructor provenance is incomplete"
-        elif binding.SelectedIssues.Count < (if binding.BindingVersion = 2 then 3 else 1) || binding.SelectedIssues.Count > (if binding.BindingVersion = 4 then 100 else 5) || binding.SelectedIssues |> Map.exists (fun node issue -> String.IsNullOrWhiteSpace node || String.IsNullOrWhiteSpace issue) then
+        elif binding.SelectedIssues.Count < (if binding.BindingVersion = 2 then 3 else 1) || binding.SelectedIssues.Count > (if isProgrammeBinding binding then 100 else 5) || binding.SelectedIssues |> Map.exists (fun node issue -> String.IsNullOrWhiteSpace node || String.IsNullOrWhiteSpace issue) then
             invalid subject "explicit selected native cohort is incomplete"
-        elif binding.SchemaVersion <> (if binding.BindingVersion = 4 then 2 else 1) then
+        elif binding.SchemaVersion <> (if binding.BindingVersion = 5 then 3 elif binding.BindingVersion = 4 then 2 else 1) then
             invalid subject "binding and schema versions disagree"
         elif not (nonBlank binding.RecipeRevision) || binding.RecipeRevision.Length <> 40 || binding.RecipeRevision |> Seq.exists (Uri.IsHexDigit >> not) then
             invalid subject "the reviewed recipe revision must be an immutable Git SHA"
@@ -254,11 +257,11 @@ module V2Projection =
             || (binding.BindingVersion = 3 && binding.ProjectId = "PVT_kwDOEYAWY84Bb08W")
         then
             invalid subject "the legacy Coordination Project 1 identity is not a V2 projection target"
-        elif (binding.BindingVersion = 2 || binding.BindingVersion = 4) && (binding.Owner <> "FS-GG" || binding.ProjectTitle <> "Coordination V2") then
+        elif (binding.BindingVersion = 2 || isProgrammeBinding binding) && (binding.Owner <> "FS-GG" || binding.ProjectTitle <> "Coordination V2") then
             invalid subject "this restricted organization pilot requires the FS-GG Coordination V2 target"
         elif binding.BindingVersion = 3 && (binding.ProjectId = "PVT_kwDOEYAWY84Bldpa" || (binding.Owner = "FS-GG" && binding.ProjectNumber = 3)) then
             invalid subject "a repository binding cannot select the organization Coordination V2 target"
-        elif binding.BindingVersion = 4 && (binding.ProjectNumber <> 3 || binding.ProjectId <> "PVT_kwDOEYAWY84Bldpa" || binding.OrganizationId <> "O_kgDOEYAWYw"
+        elif isProgrammeBinding binding && (binding.ProjectNumber <> 3 || binding.ProjectId <> "PVT_kwDOEYAWY84Bldpa" || binding.OrganizationId <> "O_kgDOEYAWYw"
                                            || (binding.Repositories |> Set.exists (fun repo -> not (repo.StartsWith("FS-GG/", StringComparison.Ordinal))))
                                            || (binding.SelectedIssues |> Map.exists (fun _ value ->
                                                let hash = value.LastIndexOf '#'
@@ -272,21 +275,30 @@ module V2Projection =
             invalid subject "a repository binding requires one owner-local repository and an exact bounded native cohort"
         elif not (nonBlank binding.RoadmapFieldId) then
             invalid subject "the Roadmap field id is missing"
+        elif (binding.BindingVersion = 5) <> binding.WorkLevel.IsSome then
+            invalid subject "Work level is required only for the explicit version 5 successor"
         elif List.distinct allFieldIds |> List.length <> allFieldIds.Length then
             invalid subject "field ids are duplicated"
         elif Set.isEmpty binding.Repositories || binding.Repositories |> Seq.exists (canonicalRepository >> not) then
             invalid subject "the repository allowlist is empty or non-canonical"
         else
-            match validateSelect "Status" (if binding.BindingVersion = 4 then expectedStatus.Add "In review" else expectedStatus) binding.Status with
+            match validateSelect "Status" (if isProgrammeBinding binding then expectedStatus.Add "In review" else expectedStatus) binding.Status with
             | Error error -> Error error
             | Ok() ->
                 match validateSelect "Track" expectedTrack binding.Track with
                 | Error error -> Error error
-                | Ok() -> validateSelect "Observation" expectedObservation binding.Observation
+                | Ok() ->
+                    validateSelect "Observation" expectedObservation binding.Observation |> Result.bind (fun () ->
+                        match binding.WorkLevel with
+                        | None -> Ok()
+                        | Some field ->
+                            validateSelect "Work level" (Set.ofList ["Outcome"; "Delivery"]) field |> Result.bind (fun () ->
+                                let existing = [binding.Status; binding.Track; binding.Observation] |> List.collect (fun value -> value.Options |> Map.values |> Seq.toList) |> Set.ofList
+                                if field.Options |> Map.values |> Seq.exists existing.Contains then invalid subject "Work level option ids overlap another field" else Ok()))
 
     let validateBinding (binding: Binding) =
         validateBindingCore binding |> Result.bind (fun () ->
-            if binding.BindingVersion = 4 then programmeRows binding |> Result.map ignore
+            if isProgrammeBinding binding then programmeRows binding |> Result.map ignore
             elif binding.ProgrammeEnrollment.IsSome then enrollmentFailure()
             else Ok())
 
@@ -303,7 +315,8 @@ module V2Projection =
             if version = 4 && number "schemaVersion" root <> 2 then Error "invalid binding: binding and schema versions disagree"
             else
                 let fields = [ "bindingVersion"; "importRecipeRevision"; "importArtifactSha256"; "selectedIssues"; "schemaVersion"; "recipeRevision"; "populationRevision"; "organizationId"; "artifactSha256"; "ownerKind"; "owner"; "projectNumber"; "projectTitle"; "projectId"; "status"; "roadmapFieldId"; "track"; "observation"; "repositories" ]
-                closed (if version = 4 && not allowDraft then fields @ [ "programmeEnrollment" ] else fields) root
+                let fields = if version = 5 then fields @ ["workLevel"] else fields
+                closed (if (version = 4 || version = 5) && not allowDraft then fields @ [ "programmeEnrollment" ] else fields) root
                 if text "ownerKind" root <> "organization" then invalidArg "ownerKind" "only organization is admitted"
                 let field (name: string) =
                     let value = root.GetProperty(name)
@@ -317,7 +330,7 @@ module V2Projection =
                 if selected.Length <> (selected |> Map.ofList |> Map.count) then invalidArg "selectedIssues" "duplicate native issue IDs"
                 let binding =
                     { ProgrammeEnrollment =
-                        (if version = 4 && not allowDraft then
+                        (if (version = 4 || version = 5) && not allowDraft then
                             let value = root.GetProperty "programmeEnrollment"
                             closed [ "nonceHex"; "payloadBase64" ] value
                             Some { NonceHex = text "nonceHex" value; PayloadBase64 = text "payloadBase64" value }
@@ -330,7 +343,7 @@ module V2Projection =
                       ArtifactSha256 = text "artifactSha256" root; OwnerKind = Org; Owner = text "owner" root
                       ProjectNumber = number "projectNumber" root; ProjectTitle = text "projectTitle" root; ProjectId = text "projectId" root
                       Status = field "status"; RoadmapFieldId = text "roadmapFieldId" root; Track = field "track"
-                      Observation = field "observation"; Repositories = Set.ofList repositories }
+                      Observation = field "observation"; WorkLevel = (if version = 5 then Some(field "workLevel") else None); Repositories = Set.ofList repositories }
                 // Version 3 uses this same closed wire shape for a selected receiver repository.
                 // Local-only workspaces select no board command; no implicit binding is constructed.
                 (if allowDraft then validateBindingCore binding else validateBinding binding) |> Result.map (fun () -> binding) |> Result.mapError Errors.explain
@@ -342,7 +355,7 @@ module V2Projection =
         try
             match decodeBindingCore true bindingTemplateJson with
             | Error _ -> enrollmentFailure()
-            | Ok binding when binding.BindingVersion <> 4 -> enrollmentFailure()
+            | Ok binding when not (isProgrammeBinding binding) -> enrollmentFailure()
             | Ok binding ->
                 payloadRows binding payload |> Result.bind (fun _ ->
                     let encoded = Convert.ToBase64String payload
@@ -384,7 +397,7 @@ module V2Projection =
             | Some { Id = id; Type = Text } when id = binding.RoadmapFieldId ->
                 match select "Track" binding.Track with
                 | Error error -> Error error
-                | Ok() -> select "Observation" binding.Observation
+                | Ok() -> select "Observation" binding.Observation |> Result.bind (fun () -> match binding.WorkLevel with Some field -> select "Work level" field | None -> Ok())
             | _ -> Error(Malformed("the Coordination V2 field 'Roadmap'", "field identity or type drifted from the reviewed binding"))
 
     let private graphRequest document variables subject : Transport.Request =
@@ -577,7 +590,7 @@ module V2Projection =
             invalid "the projection request" "the issue identity is incomplete"
         | Ok() when not (repositoryAllowed binding request.Issue) ->
             Error(Http(403, $"repository %s{request.Issue.Owner}/%s{request.Issue.Repository} is outside the reviewed V2 projection allowlist"))
-        | Ok() when (binding.BindingVersion = 3 || binding.BindingVersion = 4) && Map.tryFind request.ExpectedNodeId binding.SelectedIssues <> Some $"{request.Issue.Owner}/{request.Issue.Repository}#{request.Issue.Number}" ->
+        | Ok() when (binding.BindingVersion = 3 || isProgrammeBinding binding) && Map.tryFind request.ExpectedNodeId binding.SelectedIssues <> Some $"{request.Issue.Owner}/{request.Issue.Repository}#{request.Issue.Number}" ->
             invalid "the projection request" "the native issue is outside the selected receiver cohort"
         | Ok() ->
             match verifySource request.Issue with
@@ -613,7 +626,7 @@ module V2Projection =
                             | Error error -> Error error
                             | Ok(Some "Verified") ->
                                 let current =
-                                    if binding.BindingVersion <> 4 then Ok()
+                                    if not (isProgrammeBinding binding) then Ok()
                                     else
                                         match verifySource request.Issue with
                                         | Ok(Current fresh) when fresh = revision -> Ok()
@@ -630,7 +643,7 @@ module V2Projection =
                                             ObservedRevision = revision
                                             Observation = "Verified"
                                             Outcome = AlreadyCurrent itemId
-                                            SourceChecks = if binding.BindingVersion = 4 then 2 else 1
+                                            SourceChecks = if isProgrammeBinding binding then 2 else 1
                                             ProjectReads = 3 + pages
                                             Mutations = 0
                                             VerifiedAt = DateTimeOffset.UtcNow

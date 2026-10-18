@@ -29,7 +29,7 @@ module BoardV2Application =
     let parseIntegratorObservations (binding: Binding) (json: string) : Result<SelectionContext, string> =
         try
             let utf8 = System.Text.UTF8Encoding(false, true)
-            if binding.BindingVersion <> 4 || utf8.GetByteCount json > 262144 then
+            if not (isProgrammeBinding binding) || utf8.GetByteCount json > 262144 then
                 invalidArg "input" "organization-only bounded input"
             let options = JsonDocumentOptions(MaxDepth = 12)
             use document = JsonDocument.Parse(json, options)
@@ -75,7 +75,7 @@ module BoardV2Application =
                 closed [ "id"; "attempt"; "operation"; "issue"; "accountableOwner"; "owner"; "repository"; "paths"; "action"; "join"; "observation";
                          "pullRequest"; "pullRequestId"; "pullRequestUpdatedAt"; "head"; "prerequisites"; "prerequisitesComplete"; "intakeAuthorized" ] value
                 let joined = value.GetProperty "join"
-                closed [ "nativeId"; "updatedAt"; "bodySha256"; "sourceRevision" ] joined
+                closed ([ "nativeId"; "updatedAt"; "bodySha256"; "sourceRevision" ] @ (if binding.BindingVersion = 5 then ["hierarchySha256"] else [])) joined
                 let issue = parseIssue (value.GetProperty "issue")
                 let nativeId = boundedText "nativeId" 256 joined
                 if (binding.SelectedIssues |> Map.tryFind nativeId) <> Some $"{issue.Owner}/{issue.Repository}#{issue.Number}" then
@@ -86,10 +86,18 @@ module BoardV2Application =
                         { Action = action (text "action" prerequisite); Reference = boundedText "reference" 2048 prerequisite
                           Satisfied = optional (fun entry -> entry.GetBoolean()) (prerequisite.GetProperty "satisfied")
                           SupplyingOwner = boundedText "supplyingOwner" 512 prerequisite })
+                let hierarchySha256 =
+                    if binding.BindingVersion = 5 then
+                        let hash = boundedText "hierarchySha256" 64 joined
+                        if hash.Length <> 64 || hash |> Seq.exists (Char.IsAsciiHexDigitLower >> not) then
+                            invalidArg "join" "invalid hierarchy digest"
+                        Some hash
+                    else None
                 { Id = boundedText "id" 128 value; Attempt = boundedText "attempt" 128 value; Operation = operation (text "operation" value)
                   Issue = issue; AccountableOwner = boundedText "accountableOwner" 4096 value; Owner = boundedText "owner" 512 value
                   Repository = repository value; Paths = strings 128 1024 (value.GetProperty "paths"); Action = action (text "action" value)
-                  Join = { NativeId = nativeId; UpdatedAt = boundedText "updatedAt" 128 joined; BodySha256 = boundedText "bodySha256" 64 joined; SourceRevision = boundedText "sourceRevision" 16384 joined }
+                  Join = { NativeId = nativeId; UpdatedAt = boundedText "updatedAt" 128 joined; BodySha256 = boundedText "bodySha256" 64 joined; SourceRevision = boundedText "sourceRevision" 16384 joined
+                           HierarchySha256 = hierarchySha256 }
                   Observation = observation (value.GetProperty "observation"); PullRequest = optionalText (value.GetProperty "pullRequest")
                   PullRequestId = optionalText (value.GetProperty "pullRequestId"); PullRequestUpdatedAt = optionalText (value.GetProperty "pullRequestUpdatedAt"); Head = optionalText (value.GetProperty "head")
                   Prerequisites = prerequisites; PrerequisitesComplete = value.GetProperty("prerequisitesComplete").GetBoolean()
@@ -127,7 +135,7 @@ module BoardV2Application =
                   HostedCiSlots = capacity |> Option.bind (fun (_, _, _, count, _) -> count); CapacityObservation = capacity |> Option.map (fun (_, _, _, _, observed) -> observed)
                   Reservations = reservations |> Option.map fst; ReservationObservation = reservations |> Option.map snd
                   ObservedAt = timestamp "observedAt" root; ValidUntil = timestamp "validUntil" root; Evidence = boundedText "evidence" 2048 root }
-            if text "schema" root <> "fsgg.coord.board-v2-integrator-observations/1" || context.ProjectId <> binding.ProjectId
+            if text "schema" root <> (if binding.BindingVersion = 5 then "fsgg.coord.board-v2-integrator-observations/2" else "fsgg.coord.board-v2-integrator-observations/1") || context.ProjectId <> binding.ProjectId
                || context.SchemaVersion <> binding.SchemaVersion || context.RecipeRevision <> binding.RecipeRevision || context.ArtifactSha256 <> binding.ArtifactSha256
                || context.PopulationRevision <> binding.PopulationRevision
                || (binding.ProgrammeEnrollment |> Option.bind (fun value -> V2Projection.programmeCommitment value |> Result.toOption)) <> Some context.EnrollmentCommitment then invalidArg "input" "exact organization binding required"
@@ -158,7 +166,7 @@ module BoardV2Application =
                       lastVerified = item.LastVerified |> Option.map projectionWire |}) |}
 
     let encodeInspectionWithContext (report: InspectionReport) (context: SelectionContext option) (now: DateTimeOffset) =
-        let complete = report.Binding.BindingVersion = 4 && report.Evidence.PopulationGap.IsNone && report.MembershipGap.IsNone && report.NativeIntegrator.RepositoryGaps.IsEmpty && (report.NativeIntegrator.PullRequests |> List.forall (fun pull -> pull.Gaps.IsEmpty && pull.GapDetails.IsEmpty))
+        let complete = isProgrammeBinding report.Binding && report.Evidence.PopulationGap.IsNone && report.MembershipGap.IsNone && report.NativeIntegrator.RepositoryGaps.IsEmpty && (report.NativeIntegrator.PullRequests |> List.forall (fun pull -> pull.Gaps.IsEmpty && pull.GapDetails.IsEmpty))
         let facts: IntegratorFacts =
             { OpenPullRequests = if complete then Some(report.NativeIntegrator.PullRequests |> List.filter (fun pull -> pull.State = "OPEN") |> List.map _.Url) else None
               TouchSets = if complete then Some(report.NativeIntegrator.PullRequests |> List.filter (fun pull -> pull.State = "OPEN") |> List.map (fun pull -> pull.Url, pull.Files) |> Map.ofList) else None
@@ -193,7 +201,7 @@ module BoardV2Application =
                       sourceCurrentness = candidate.SourceCurrentness; observation = candidate.Observation; unmetOrUnknown = candidate.UnmetOrUnknown
                       openPullRequests = candidate.Integrator.OpenPullRequests; touchSets = candidate.Integrator.TouchSets; availableSlots = candidate.Integrator.AvailableSlots |}) |}
 
-        if report.Binding.BindingVersion <> 4 then JsonSerializer.Serialize(common)
+        if not (isProgrammeBinding report.Binding) then JsonSerializer.Serialize(common)
         else
             let successor =
                 {| enrollmentCommitmentSha256 = report.Evidence.ProtectedInputs |> List.tryPick (fun (path, _, digest) -> if path = "programme-enrollment/v3-commitment" then Some digest else None)
@@ -228,7 +236,7 @@ module BoardV2Application =
                               | ActivateWork -> None)
                           dispatchAuthority = false |}) |}
             let wire = JsonSerializer.SerializeToNode(common)
-            wire.["schema"] <- JsonSerializer.SerializeToNode("fsgg.coord.board-v2-inspection/2")
+            wire.["schema"] <- JsonSerializer.SerializeToNode(if report.Binding.BindingVersion = 5 then "fsgg.coord.board-v2-inspection/3" else "fsgg.coord.board-v2-inspection/2")
             let extension = JsonSerializer.SerializeToNode(successor)
             for name in [ "enrollmentCommitmentSha256"; "membershipGap"; "memberships"; "nativeIntegrator"; "integratorObservation"; "selectionCoverage"; "selection" ] do
                 let value = extension.[name]
@@ -236,6 +244,13 @@ module BoardV2Application =
             let itemNodes = wire.["items"].AsArray()
             report.Items |> List.iteri (fun index (item: InspectionItem) ->
                 let itemNode = itemNodes.[index]
+                if report.Binding.BindingVersion = 5 then
+                    itemNode.["workItem"] <- JsonSerializer.SerializeToNode(item.WorkItem |> Option.map (fun facts ->
+                        {| workLevel = facts.WorkLevel; workLevelOptionId = facts.WorkLevelOptionId
+                           hierarchy = {| parent = facts.Parent |> Option.map (fun value -> {| issue = issueWire value.Issue; nodeId = value.NodeId |})
+                                          children = facts.Children |> List.map (fun value -> {| issue = issueWire value.Issue; nodeId = value.NodeId; state = value.State; stateReason = value.StateReason; closedAt = value.ClosedAt |})
+                                          complete = facts.Complete; gap = facts.Gap; observedAt = facts.ObservedAt; sha256 = facts.Sha256 |}
+                           closure = {| stateReason = facts.StateReason; closedAt = facts.ClosedAt; doneWhen = facts.DoneWhen; blockedOn = facts.BlockedOn; acceptanceEvidence = facts.AcceptanceEvidence; acceptance = "Unverified"; gaps = facts.ClosureGaps |} |}))
                 itemNode.["sourceRevision"] <- JsonSerializer.SerializeToNode(item.SourceRevision)
                 itemNode.["accountableOwner"] <- JsonSerializer.SerializeToNode(item.Owner)
                 itemNode.["currentDeliverable"] <- JsonSerializer.SerializeToNode({| provenance = "native-observed"; declaration = item.CurrentDeliverable; references = item.Deliverables; gap = item.DeliverableGap; reconciliationRequired = (item.CurrentDeliverable |> Option.exists (fun value -> value <> "None")) |})
@@ -418,6 +433,7 @@ module BoardV2Application =
     let private migrationResponse (change: V2Migration.Change) (request: Transport.Request) (response: Transport.Response) =
         let name =
             match change with
+            | V2Migration.CreateWorkLevel -> "createProjectV2Field"
             | V2Migration.AddInReview _ -> "updateProjectV2Field"
             | V2Migration.AddMembership _ -> "addProjectV2ItemById"
             | V2Migration.InitializePlanningValue _ -> "updateProjectV2ItemFieldValue"
@@ -437,6 +453,7 @@ module BoardV2Application =
                         let payload = data.GetProperty name
                         let identityName =
                             match change with
+                            | V2Migration.CreateWorkLevel -> "projectV2Field"
                             | V2Migration.AddInReview _ -> "projectV2Field"
                             | V2Migration.AddMembership _ -> "item"
                             | V2Migration.InitializePlanningValue _ -> "projectV2Item"
@@ -718,7 +735,7 @@ module BoardV2Application =
         (try parseArguments arguments with error -> Error("invalid input path: " + error.Message)) |> Result.bind (fun (bindingPath, previousPath, reportPath, integratorInput) ->
             try
                 parseBinding (readBindingFile bindingPath) |> Result.bind (fun binding ->
-                    if binding.BindingVersion = 4 then
+                    if isProgrammeBinding binding then
                         privatePath bindingPath
                         privatePath reportPath
                     use stream = File.OpenRead typeof<Binding>.Assembly.Location
@@ -728,7 +745,7 @@ module BoardV2Application =
                         let previous = match previousPath with None -> Ok None | Some path -> decodePreviousReport (File.ReadAllText path) |> Result.map Some
                         previous |> Result.bind (fun history ->
                             let context =
-                                if integratorInput && binding.BindingVersion <> 4 then Error "integrator stdin is restricted to organization binding 4 inspection"
+                                if integratorInput && not (isProgrammeBinding binding) then Error "integrator stdin is restricted to organization binding 4 inspection"
                                 elif integratorInput then readIntegratorInput reader binding |> Result.map Some
                                 else Ok None
                             context |> Result.map (fun supplied -> binding, history, reportPath, supplied)))
@@ -761,18 +778,18 @@ module BoardV2Application =
             let evidence = match box transport with :? V2ObservationTransport.IDispatchEvidence as evidence -> evidence.DispatchReceipts | _ -> []
             let report = { report with NativeDispatch = evidence; Cleanup = "Root-local project exclusive OS handle released; no distributed lease or background work" }
             let json = encodeReport report + Environment.NewLine
-            if binding.BindingVersion = 4 then privateJson syncMigrationDirectory reportPath json
+            if isProgrammeBinding binding then privateJson syncMigrationDirectory reportPath json
             else File.WriteAllText(reportPath, json)
             if report.PopulationGap.IsSome || report.Selected <> Some report.Verified then 3 else 0
-        with error -> refuse (if binding.BindingVersion = 4 then "private refresh/report failed" else "refresh/report failed: " + error.Message)
+        with error -> refuse (if isProgrammeBinding binding then "private refresh/report failed" else "refresh/report failed: " + error.Message)
     let private executeInspection transport (binding, previous, reportPath, context) =
         try
             let report = V2ProjectionSource.inspectFixed (bounded transport) binding previous
             let json = encodeInspectionWithContext report context DateTimeOffset.UtcNow + Environment.NewLine
-            if binding.BindingVersion = 4 then privateJson syncMigrationDirectory reportPath json
+            if isProgrammeBinding binding then privateJson syncMigrationDirectory reportPath json
             else File.WriteAllText(reportPath, json)
             if report.Evidence.PopulationGap.IsSome || report.MembershipGap.IsSome || (report.Items |> List.exists (fun item -> item.SourceCurrentness <> "Current" || item.PlanningGap.IsSome)) then 3 else 0
-        with error -> refuse (if binding.BindingVersion = 4 then "private inspection/report failed" else "inspection/report failed: " + error.Message)
+        with error -> refuse (if isProgrammeBinding binding then "private inspection/report failed" else "inspection/report failed: " + error.Message)
 
     let runWithTransportAndInput transport (reader: TextReader) arguments =
         match prepare reader arguments with

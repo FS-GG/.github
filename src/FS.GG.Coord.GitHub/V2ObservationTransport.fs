@@ -65,7 +65,7 @@ module V2ObservationTransport =
                             let repository = content.GetProperty("repository").GetProperty("nameWithOwner").GetString()
                             let number = content.GetProperty("number").GetInt32()
                             let issue = $"{repository}#{number}"
-                            if node.GetProperty("id").GetString() <> item || node.GetProperty("project").GetProperty("id").GetString() <> binding.ProjectId || ((binding.BindingVersion = 3 || binding.BindingVersion = 4) && not (binding.Repositories.Contains repository)) || Map.tryFind nativeId binding.SelectedIssues <> Some issue then
+                            if node.GetProperty("id").GetString() <> item || node.GetProperty("project").GetProperty("id").GetString() <> binding.ProjectId || ((binding.BindingVersion = 3 || isProgrammeBinding binding) && not (binding.Repositories.Contains repository)) || Map.tryFind nativeId binding.SelectedIssues <> Some issue then
                                 Error(Malformed("V2 Observation authority", "fresh item project/content is not an admitted native pilot issue"))
                             else Ok()) |> Result.bind (fun () -> nativeOnce request)) })
 

@@ -40,38 +40,21 @@ Check that the request landed before waiting for a reply. After a push or commen
 - Make retries idempotent where possible. Before reposting after a timeout or tool error, check whether the original message landed; do not create duplicate requests or claim delivery from a local draft.
 - A message is communication, not a state transition. Verify the actual issue, merge, published artifact, deployment, or test result before declaring completion.
 
-## Conditional programme pilot
+## Coordinator handoffs
 
-For the original outcomes and ROUTINEV3 source work in the [work-programme pilot](../work-programme/SKILL.md#conditional-three-outcome-pilot),
-replace the fixed mailbox checks and unchanged-status reporting below only after protected delivery of
-the reviewed governing change. Its deadline and session-start reconciliation are the detection route;
-no notification service is an activation condition. Until protected delivery, keep the current route.
-
-After activation, post an outcome update when a deliverable is ready, a blocker appears or clears, a
-decision is needed or a promised delivery time changes; publish one daily programme summary while active.
-Use the six-field owning issue as current state and link native evidence and necessary private context.
-External requests retain the canonical channel/request identity, owner, expected response, response
-deadline, escalation time and last complete successful read in the existing issue or private handoff.
-Read each pending thread at session start/resume and at its agreed deadline; check earlier on a useful
-notification, user request or before an action depends on the reply. Reconcile changed replies since the
-last complete read; when that baseline is absent or unreliable, read the full thread. A failed, partial,
-inaccessible or conflicting read means reply status unknown: retain the prior position and affected hold.
-At a missed deadline, send one follow-up or escalate only if progress is blocked, with a new deadline.
-For every still-pending or unknown request, record a next observation deadline even when no comment is
-needed; a failed read never becomes a successful baseline. The next deadline follows the request's
-response contract or a concrete recovery need, not a fixed polling interval.
-Before reposting, verify the expected reply or an equivalent follow-up did not already land. Notifications
-are optional hints, never authority. Silence cannot admit an operation, replay or reservation release;
-preserve original identities, unknown effects, custody and every unresolved reservation. At session exit,
-transfer pending monitoring explicitly; never imply background checks continue.
-This exception changes neither consequential-action verification nor operation-specific admission.
+Apply canonical [work-board](../work-board/SKILL.md) ownership, material-event reporting and
+session-start/deadline reply reconciliation. Use the existing owning issue/native evidence and private
+context; no duplicate status table or fixed unchanged-mail polling. Retain canonical request identity,
+owner, expected answer, response/escalation and next-observation deadlines and last complete read.
+A failed/partial/conflicting read keeps Unknown and its hold. Before reposting verify the equivalent
+reply/follow-up did not already land. Silence grants no operation, replay or release. Transfer pending
+monitoring explicitly at session exit; never imply background checks continue.
 
 ## Maintain the loop
 
-- Outside the activated pilot and ROUTINEV3 source extension, during an active handoff or mailbox-monitoring session, check the chosen mailbox at least once every five minutes, measured from the last successful remote read. A shorter requested interval or time-sensitive reply may require earlier checks. Record the last check and the next due time; continue independent work between checks. If a blocking operation makes a check late, read the mailbox immediately afterward and report the gap. Do not imply that checks continue after the session ends unless a real scheduled mechanism is installed.
 - On new mail, acknowledge the request by taking the owned action or replying with a precise blocker and a new owner. Avoid acknowledgment-only traffic.
 - If an owner cannot act, route the smallest missing decision or access request to the person who can resolve it. Escalate to the user when there is no viable agent path, with the decision needed and the consequence of waiting.
-- Outside the activated pilot and ROUTINEV3 source extension, in user updates, report the last check time, new information, each owner's working/waiting status, the next roadmap gate, and verification status. Say “no new mail” when that is the result; do not suggest progress from silence. In the pilot, update only for the material events above and in the daily programme summary.
+
 
 An active handoff does not end merely because a local action finished, a request was sent, or another owner or the user must reply. Keep checking the manual mailbox through the agreed reply time, act on the response, and do independent work while waiting. Required user authentication pauses only the work that depends on it.
 

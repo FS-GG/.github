@@ -11,6 +11,15 @@ retired `scripts/new-sdd-fullstack.sh` (see [ADR-0016](https://github.com/FS-GG/
 > `--no-governance` drops a layer — so the honest name is **workspace**, the ADR-0020 term for
 > what a consumer scaffolds. The old preview id (≤`0.1.1-preview.1`) is superseded.
 
+## Current source and published boundary
+
+Prospective source **0.17.0** packages the canonical work-board product driver cohort against the
+normal coherent **0.107.0** project graph. Its own candidate and publisher use independent journal017;
+a coherent107 release does not publish this tool. Published016 and its frozen099 dependency helper,
+and historical013 recovery profiles, remain immutable. Source package qualification does not establish
+publication or installed product creation. Product coordination retains its explicitly selected V2
+binding and provenance; organization successor hierarchy grammar grants no product authority.
+
 ## Install
 
 ```sh
@@ -281,7 +290,7 @@ Output degrades to plain (ANSI-free) when piped, under `NO_COLOR`, or on a non-T
 
 For a target that was absent when this invocation began, successful SDD scaffold provenance
 and an immediate tool-manifest byte/mode snapshot identify its generated coordination default.
-Creator0.16 can replace only that unchanged generated Coord entry with the exact selected Kit pin,
+Creator0.16 and its source successor can replace only that unchanged generated Coord entry with the exact selected Kit pin,
 preserving SDD and other tools. An existing directory without Git, retained repository or retrofit
 receives no such allowance. Missing ownership evidence or edits after the snapshot refuse; preview
 and atomic apply continue to protect all owner preimages. Published0.15 remains immutable.

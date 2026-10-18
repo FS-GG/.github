@@ -29,14 +29,16 @@ diagnostic, not zero usage. These finite diagnostics are not the durable passive
 Modern `token_usage_record` response/turn capture through the existing native reader and journal is
 a separate next window; a modern-only input has unavailable diagnostic totals, not zero tokens.
 
-**Rebuild the metadata file before every ten-minute update.** Recheck the
-running agent roster and explicit launch settings, query current PR heads and
-UTC commit times, reconcile workstream/check/risk counts, and push the roadmap
-source evidence first. Set `metadataObservedAt` to the UTC time of that
-check. The F# adapter refuses metadata older than two minutes or dated after
-the scan. This is a freshness guard, not independent proof that a caller
-actually performed those checks; inspect the source evidence before publishing.
-The wrapper refreshes local diagnostic observations; it does not authenticate remote telemetry.
+At a material update or explicitly requested report, rebuild metadata from actual owner/native evidence.
+The ten-minute counter period is a diagnostic aggregation window, not a reporting schedule. Do not push
+roadmap status/projection edits merely to report progress. Set `metadataObservedAt` to the actual UTC
+read; the adapter's two-minute freshness guard is not proof those source checks happened.
+Optional `boardInspection` carries an existing selected CLI inspection object into the same renderer.
+Inspection/3 exposes explicit Outcome/Delivery, raw scoped promise/missing-fact/evidence, relationships
+and native completion reason/date; old reports show Unknown metadata instead of dropping work. Parent
+promise and acceptance remain independent from child completion or counts. The reporting projection
+never mutates Status, Work level, enrollment or closure, and cannot certify acceptance. Retain actual
+inspection observation cutoffs separately from report time and verify selected caller/binding provenance.
 
 For each run, record a new evidence cutoff and verify the metadata against it:
 

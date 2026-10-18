@@ -280,6 +280,25 @@ type Completion = {
     RecordedRoadmapHead: string
 }
 
+/// Read-only reporting facts from the selected inspection. Native completion is not acceptance.
+type BoardWorkItem = {
+    Issue: string
+    WorkLevel: string
+    PlanningStatus: string option
+    NativeState: string option
+    StateReason: string option
+    ClosedAt: DateTimeOffset option
+    Parent: string option
+    Children: string list
+    HierarchyComplete: bool
+    HierarchyGap: string option
+    ObservedAt: DateTimeOffset option
+    DoneWhen: string option
+    BlockedOn: string option
+    AcceptanceEvidence: string option
+    Acceptance: string
+}
+
 type ProgressSnapshot = {
     AsOf: DateTimeOffset
     RoadmapHead: string
@@ -295,6 +314,7 @@ type ProgressSnapshot = {
     Risks: NamedState list
     NextActions: string list
     CompletionHistory: Completion list
+    BoardItems: BoardWorkItem list
 }
 
 type DerivedProgress = {
@@ -306,6 +326,10 @@ type DerivedProgress = {
 }
 
 module ProgressRenderer =
+    /// Decode selected read-only inspection facts. Old reports remain visible with Unknown work level;
+    /// this does not authenticate freshness, infer acceptance, mutate intent or select work.
+    val boardItemsFromInspection: string -> Result<BoardWorkItem list, string>
+
     val statusText: Status -> string
 
     /// Validates caller-supplied facts and derives only counts and display order.

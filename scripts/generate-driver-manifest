@@ -181,6 +181,36 @@ DRIVERS = [
         "materializes-when": "always",
     },
     {
+        "id": "continue-from-handoff",
+        "scope": "driver",
+        "supplied-by": ".claude/skills/continue-from-handoff",
+        "materializes-when": "always",
+    },
+    {
+        "id": "stop-with-handoff",
+        "scope": "driver",
+        "supplied-by": ".claude/skills/stop-with-handoff",
+        "materializes-when": "always",
+    },
+    {
+        "id": "routine-decisions",
+        "scope": "driver",
+        "supplied-by": ".claude/skills/routine-decisions",
+        "materializes-when": "always",
+    },
+    {
+        "id": "agent-handoff",
+        "scope": "driver",
+        "supplied-by": ".claude/skills/agent-handoff",
+        "materializes-when": "always",
+    },
+    {
+        "id": "work-programme",
+        "scope": "driver",
+        "supplied-by": ".claude/skills/work-programme",
+        "materializes-when": "always",
+    },
+    {
         "id": "work-board",
         "scope": "driver",
         "supplied-by": ".claude/skills/work-board",
@@ -266,22 +296,17 @@ DRIVERS = [
 ROUTED_VARIANTS = {
     "drive-board-normal": ("gpt-6.1-sol", "medium", "sonnet", "high", "operator", "false"),
     "drive-board-best": ("gpt-6-astra", "high", "opus", "high", "operator", "false"),
-    "work-board-normal": ("gpt-5.6-terra", "medium", "sonnet", "high", "driver", "always"),
-    "work-board-best": ("gpt-5.6-sol", "medium", "opus", "high", "driver", "always"),
+    "work-board-normal": ("gpt-6.1-sol", "medium", "sonnet", "high", "driver", "always"),
+    "work-board-best": ("gpt-6-astra", "high", "opus", "high", "driver", "always"),
 }
 
 # Absence is a reviewed decision, not an indistinguishable omission. Every other skill directory must
 # appear in DRIVERS or in the coordination-kit manifest.
 REPO_NATIVE_EXEMPTIONS = {
     "show-progress": "repo-native Unified Roadmap progress, effort and completion forecasting with timestamped reports; not packaged",
-    "agent-handoff": "repo-native coordination pilot; kit distribution follows a qualified release",
     "pipeline-preflight": "initial pipeline-preflight standard and helpers; staged kit distribution follows measured pilot adoption",
     "technical-writer": "repo-native technical-writing and lightweight prose landing route; it has no producer manifest",
     "spectre-console": "repo-native co-tenant; it has no producer manifest",
-    "work-programme": "temporary FS-GG Unified Roadmap coordinator; repo-native, not a shared driver package",
-    "routine-decisions": "repo-native advisory routine routing for the temporary programme; no producer package or execution authority",
-    "continue-from-handoff": "repo-native entry point resuming the Unified Roadmap from its latest saved handoff; not packaged",
-    "stop-with-handoff": "repo-native session shutdown and timestamped Unified Roadmap handoff; not packaged",
 }
 
 
@@ -724,6 +749,29 @@ def build_kit_manifest(repo_root: str = REPO_ROOT) -> str:
     return json.dumps({"schemaVersion": MANIFEST_SCHEMA_VERSION, "skills": rows}, indent=2) + "\n"
 
 
+def synchronize_coordinator_contract(mode: str) -> int:
+    """One maintained Kit contract, derived into Drivers so offline instructions are closed."""
+    failed = False
+    for runtime in SKILL_ROOTS:
+        source = os.path.join(REPO_ROOT, runtime, "check-board/references/organization-v2-inspection.md")
+        target = os.path.join(REPO_ROOT, runtime, "work-board/references/organization-v2-inspection.md")
+        with open(source, "rb") as handle:
+            expected = handle.read()
+        try:
+            with open(target, "rb") as handle:
+                actual = handle.read()
+        except FileNotFoundError:
+            actual = None
+        if actual != expected:
+            if mode == "write":
+                with open(target, "wb") as handle:
+                    handle.write(expected)
+            else:
+                sys.stderr.write(f"::error::{target}: derived organization inspection contract is stale\n")
+                failed = True
+    return int(failed)
+
+
 def synchronize_projections(mode: str) -> int:
     """Establish fresh projection bytes before digesting the skill tree.
 
@@ -841,6 +889,8 @@ def main(argv: list[str]) -> int:
         sys.stdout.write(f"coordination-kit-skill-manifest\t{KIT_MANIFEST_PATH}\t\n")
         return 0
 
+    if synchronize_coordinator_contract(mode):
+        return 1
     report, catalog_errors = validate_catalog(catalog_root)
     if mode == "catalog-report":
         print_catalog_report(report)

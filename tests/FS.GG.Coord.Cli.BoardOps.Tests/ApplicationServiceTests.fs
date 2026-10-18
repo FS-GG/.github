@@ -1179,6 +1179,7 @@ module ApplicationServiceTests =
             )
 
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
 
         let cache =
             Path.Combine(Path.GetTempPath(), "fsgg-2127-driver-" + Guid.NewGuid().ToString "n")
@@ -1215,6 +1216,15 @@ module ApplicationServiceTests =
 
         try
             Directory.CreateDirectory cache |> ignore
+            // Historical driver mechanics are fixture input, never authority from
+            // the current canonical coordinator's retired-wave-free instructions.
+            let legacyPolicy = Path.Combine(cache, ".agents", "skills", "work-board", "references")
+            Directory.CreateDirectory legacyPolicy |> ignore
+            File.WriteAllText(
+                Path.Combine(legacyPolicy, "host-loop.md"),
+                "<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->"
+            )
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", cache)
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
             let code, stdout, stderr = invoke None
 
@@ -1326,6 +1336,7 @@ module ApplicationServiceTests =
             Console.SetOut previousOut
             Console.SetError previousErr
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
 
             try
                 Directory.Delete(cache, true)

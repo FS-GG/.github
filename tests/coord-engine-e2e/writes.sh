@@ -2015,7 +2015,7 @@ no_mutation() {
   if [ "$rc" -eq 0 ] && [ "$(printf '%s' "$ledger" | jq -r .count)" = 0 ]; then
     ok "#1569: $name is a valid never-write invocation (wire ledger empty)"
   else
-    bad "#1569: $name must not mutate" "rc=$rc output=$output ledger=$ledger fixture=$(tail -n +2 \"$SRV_OUT\")"
+    bad "#1569: $name must not mutate" "rc=$rc output=$output ledger=$ledger fixture=$(tail -n +2 "$SRV_OUT")"
   fi
 }
 
@@ -2041,7 +2041,21 @@ no_mutation "board" run board
 no_mutation "bootstrap" run bootstrap
 no_mutation "budget" run budget
 no_mutation "command-contract" run command-contract --json
-no_mutation "driver" run driver --repo FS.GG.SDD --json
+# The legacy driver is still tested as a historical utility, not as the canonical
+# coordinator. Current instructions must refuse its retired wave dependency; only
+# this isolated historical fixture may supply that declaration for the positive leg.
+legacy_driver_contract() {
+  local refused rc legacy_root="$PREDICATE_FIX/legacy-driver-kit"
+  refused="$(FSGG_KIT_ROOT="$REPO_ROOT" "$ENGINE" driver --repo FS.GG.SDD --json --worker vole-418 2>&1)"; rc=$?
+  if [ "$rc" -ne 1 ] || ! grep -q 'expected exactly one fsgg:wave-model:v1 declaration, found 0' <<<"$refused"; then
+    printf 'canonical instructions must refuse legacy wave authority: rc=%s %s\n' "$rc" "$refused" >&2
+    return 1
+  fi
+  mkdir -p "$legacy_root/.agents/skills/work-board/references"
+  printf '%s\n' '<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->' >"$legacy_root/.agents/skills/work-board/references/host-loop.md"
+  FSGG_KIT_ROOT="$legacy_root" "$ENGINE" driver --repo FS.GG.SDD --json --worker vole-418
+}
+no_mutation "driver" legacy_driver_contract
 no_mutation "facts" run facts
 no_mutation "field-id" run field-id Status
 no_mutation "inbox" run inbox --repo FS.GG.SDD

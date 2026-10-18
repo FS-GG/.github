@@ -30,14 +30,47 @@ bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | 
 
 [ -f "$PROJ" ] || { echo "::error::missing $PROJ — nothing to test"; exit 1; }
 
-echo "new-sdd-workspace parse fixture — building the CLI (Release)…"
-dotnet build "$PROJ" -c Release --nologo -v quiet -m:1 -nr:false -p:UseSharedCompilation=false 1>&2
+# The current Creator references the complete coordination graph. Every project
+# must build outside the caller checkout; downstream fixtures use only this output.
+WORK=""
+BUILD_ROOT_OWNED=0
+if [ -n "${FSGG_CREATOR_SOURCE_ARTIFACTS:-}" ]; then
+  BUILD_ROOT="$FSGG_CREATOR_SOURCE_ARTIFACTS"
+  [ ! -e "$BUILD_ROOT" ] || { echo "::error::Creator fixture requires a fresh artifacts root"; exit 1; }
+else
+  BUILD_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/creator-source-build.XXXXXX")"
+  BUILD_ROOT_OWNED=1
+fi
+cleanup() {
+  [ -z "$WORK" ] || rm -rf "$WORK"
+  [ "$BUILD_ROOT_OWNED" -eq 0 ] || rm -rf "$BUILD_ROOT"
+}
+trap cleanup EXIT
+python3 - "$REPO_ROOT" "$BUILD_ROOT" <<'PY_BOUND'
+from pathlib import Path
+import sys
+root, output = map(Path, sys.argv[1:])
+if not output.is_absolute() or output.is_symlink() or output.resolve().is_relative_to(root.resolve()):
+    raise SystemExit("Creator build artifacts must be an absolute isolated root outside the source checkout")
+PY_BOUND
+[ "$BUILD_ROOT_OWNED" -eq 1 ] || mkdir -m 700 "$BUILD_ROOT"
+python3 -B "$HERE/test-build-artifact-state.py"
+python3 -B "$HERE/build-artifact-state.py" --output "$BUILD_ROOT/caller-before.json"
+echo "new-sdd-workspace parse fixture — building the CLI (Release, isolated project outputs)…"
+build_rc=0
+dotnet build "$PROJ" -c Release --artifacts-path "$BUILD_ROOT" --nologo -v quiet \
+  -m:1 -nr:false -p:UseSharedCompilation=false 1>&2 || build_rc=$?
+python3 -B "$HERE/build-artifact-state.py" --output "$BUILD_ROOT/caller-after.json"
+if ! cmp -s "$BUILD_ROOT/caller-before.json" "$BUILD_ROOT/caller-after.json"; then
+  echo "::error::Creator fixture changed caller workspace artifacts or selected installed entry" >&2
+  [ "$build_rc" -ne 0 ] || build_rc=1
+fi
+[ "$build_rc" -eq 0 ] || exit "$build_rc"
+echo "PASS  isolated Creator build preserved workspace artifacts and selected caller identity"
 
-# Newest *built artifact* wins by modification time. Lexical path order used to prefer a stale
-# `publish/` DLL over the just-built `net*/` DLL, which let the mutation controls compile a changed
-# subject and then execute yesterday's artifact — a false green in the guard that prevents false green.
-DLL="$(find "$REPO_ROOT/scripts/NewSddWorkspace/bin/Release" -type f -name new-sdd-workspace.dll -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)"
-[ -n "$DLL" ] && [ -f "$DLL" ] || { echo "::error::could not locate built new-sdd-workspace.dll under bin/Release"; exit 1; }
+# Exact fresh output wins; never search a stale source bin/publish tree.
+DLL="$BUILD_ROOT/bin/NewSddWorkspace/release/new-sdd-workspace.dll"
+[ -f "$DLL" ] || { echo "::error::missing freshly built Creator DLL in isolated artifacts"; exit 1; }
 echo "new-sdd-workspace parse fixture — dll='$DLL'"
 
 # Exercise the wizard's pure decision boundary directly. The normal interactive path intentionally
@@ -55,7 +88,6 @@ dotnet fsi --reference:"$DLL" "$HERE/pinned-governance.fsx"
 DOTNET_DIR="$(dirname "$(command -v dotnet)")"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/new-sdd-workspace-fixture.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
 # Logic fixtures use exact public overlay bodies; this is not installed SDK acceptance.
 export DOTNET_CLI_HOME="$WORK/cli-home"
 dotnet fsi --reference:"$DLL" "$HERE/pinned-governance.fsx" --prepare-hive "$DOTNET_CLI_HOME/.templateengine"
