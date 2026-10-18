@@ -6,6 +6,41 @@ only work with a verified remaining outcome. Reuse existing repository issue and
 The board provides planning and visibility; native delivery and the selected V2 operation authorities
 remain the sources of delivery truth.
 
+## Selected outcome and delivery successor — source boundary
+
+Canonical [work-board](../../.agents/skills/work-board/SKILL.md) now owns the common programme,
+product, recovery and delivery instruction route; historical work-programme entrypoints redirect.
+The selected organization successor is binding5/schema3 with exactly one **Work level** select field
+and the exact options **Outcome** and **Delivery**, inspection/3 and integrator/2 hierarchy-digest joins.
+Native issue-type discovery was unavailable in the selected access scope; this does not prove native
+types are absent. Status, Track and Roadmap retain their existing meanings. No seventh owning-body
+heading or runtime classification fallback is introduced.
+
+An Outcome keeps its full original acceptance promise, including undecomposed installed, restart,
+rollback and participant obligations. A Delivery is independently meaningful under the existing six
+headings. Only explicitly enrolled Delivery identities can be selected by the successor; native child
+links supply relationships, never action authority. Incomplete relevant relationships, contradictory
+identities or cycles remain scoped Unknown. A parent's incomplete child list withholds parent rollup,
+without automatically blocking an independently complete child. A blocked sibling or parent is not an
+automatic prerequisite. Preserve existing owners, attempts, PRs, accepted evidence and uncertain custody.
+
+Inspection exposes bounded parent/direct-child facts, completeness, native reason/date and raw scoped
+acceptance fields; it certifies no prose acceptance. The accountable owner reconciles the scoped issue,
+Status and parent remaining requirements through the authorized native route, retaining partial effects.
+Merged source, all children closed, deferred requirements and Observation refresh never satisfy missing
+parent acceptance. Do not invoke legacy automatic upward closure. Views distinguish deliveries,
+outcomes/milestones/remaining assertions, exact blockers/suppliers, scoped completions/native dates and
+unfiltered All items; preserve existing identities and orthogonal settings. Counts are not percentages.
+
+The [maintained migration route](../../tests/coord-board-v2-cli-join/INSPECT.md) prepares the selected
+field, absent-only explicit classifications and bounded view changes. The authenticated private
+enrollment-payload/v1 issue/node/Roadmap triples and public commitment/v3 remain unchanged; schema3
+target and exact new field/options still require their own protected binding/enrollment delivery.
+Current qualified binding4/schema2 and product3/schema1 retain their actual accepted scope until
+separate successor qualification/adoption. Source support neither creates a field, changes membership,
+selects an installed executable nor activates this model. The accepted historical cutover below stays
+within its original scope; unavailable originals, including the439 inherited and46 later holds, remain.
+
 **Programme cutover accepted — 2026-10-18:** [COORD-BOARD-V2-01.7–.11](https://github.com/FS-GG/.github/issues/4634)
 is accepted for the current Codex programme cohort. Root decided at **07:42:17.703507 UTC** that
 private Coordination V2 Project 3 becomes the current Unified Roadmap v3 planning and lane-selection
