@@ -1670,3 +1670,53 @@ let ``complete selected hierarchy cycle refuses affected nodes without blocking 
         Assert.Equal(affected.Evidence.Issue, refusal.Head.Issue)
         Assert.Equal("unknown", refusal.Head.Decision)
     Assert.Empty reads.Mutations
+
+[<Fact>]
+let ``selected hierarchy joins exact issue and node pairs while independent delivery stays ready`` () =
+    let b = {ProgrammeFixture.issue with Number = 6001}
+    let independent = {ProgrammeFixture.issue with Number = 6000}
+    let rows =
+        [ "I_independent", independent, "docs/coordination/programme.md"
+          "I_outcome", ProgrammeFixture.issue, "docs/coordination/programme.md"
+          "I_b", b, "docs/coordination/programme.md" ]
+    let selected =
+        {ProgrammeFixture.successorBinding () with SelectedIssues = rows |> List.map (fun (id, issue, _) -> id, $"{issue.Owner}/{issue.Repository}#{issue.Number}") |> Map.ofList}
+        |> fun binding -> ProgrammeFixture.enroll binding rows
+    for mode in ["unchanged"; "child-pair"; "parent-pair"; "child-reverse"; "parent-reverse"] do
+        let change (request: Transport.Request) response =
+            if request.Subject <> "selected native work hierarchy" then response
+            else response |> Result.map (fun (value: Transport.Response) ->
+                let root = System.Text.Json.Nodes.JsonNode.Parse value.Body
+                let native = root.["data"].["repository"].["issue"]
+                let id = native.["id"].GetValue<string>()
+                let setIdentity (node: System.Text.Json.Nodes.JsonNode) nodeId repository number =
+                    node.["id"] <- System.Text.Json.Nodes.JsonValue.Create(nodeId: string)
+                    node.["number"] <- System.Text.Json.Nodes.JsonValue.Create(number: int)
+                    node.["repository"].["nameWithOwner"] <- System.Text.Json.Nodes.JsonValue.Create(repository: string)
+                let parent = native.["parent"]
+                let child = native.["subIssues"].["nodes"].[0]
+                if id = "I_outcome" then
+                    setIdentity child "I_b" "FS-GG/.github" b.Number
+                    if mode = "child-pair" then setIdentity child "I_b" "Other/Repo" 77
+                    if mode = "child-reverse" then setIdentity child "I_wrong" "FS-GG/.github" b.Number
+                elif id = "I_b" then
+                    setIdentity parent "I_outcome" "FS-GG/.github" ProgrammeFixture.issue.Number
+                    setIdentity child "I_b-external-child" "FS-GG/.github" 9997
+                    if mode = "parent-pair" then setIdentity parent "I_outcome" "Other/Repo" 77
+                    if mode = "parent-reverse" then setIdentity parent "I_wrong" "FS-GG/.github" ProgrammeFixture.issue.Number
+                else setIdentity child "I_independent-external-child" "FS-GG/.github" 9996
+                {value with Body = root.ToJsonString()})
+        let reads = ProgrammeFixture.successorTransportFor selected rows (Some "Delivery") change
+        let report = V2ProjectionSource.inspectFixed reads selected None
+        for item in report.Items do
+            if mode = "unchanged" || item.ExpectedNodeId = "I_independent" then
+                Assert.True(item.WorkItem.Value.Complete, mode + ": " + string item.WorkItem.Value.Gap)
+            else
+                Assert.False(item.WorkItem.Value.Complete, mode)
+                Assert.True(item.WorkItem.Value.Sha256.IsNone)
+                let scoped = {report with Items = item :: (report.Items |> List.filter (fun other -> other.ExpectedNodeId <> item.ExpectedNodeId))}
+                Assert.Equal("unknown", (V2ProjectionSource.selectActions scoped (Some(ProgrammeFixture.context scoped)) report.NativeIntegrator.ObservedAt).Head.Decision)
+        let result = V2ProjectionSource.selectActions report (Some(ProgrammeFixture.context report)) report.NativeIntegrator.ObservedAt
+        Assert.Equal("ready", result.Head.Decision)
+        Assert.Equal(independent, result.Head.Issue)
+        Assert.Empty reads.Mutations

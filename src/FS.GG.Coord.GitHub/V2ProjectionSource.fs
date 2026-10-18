@@ -948,7 +948,16 @@ module V2ProjectionSource =
             walk (Map.tryFind start outgoing |> Option.defaultValue Set.empty |> Set.toList) Set.empty
         let mutable affected = complete |> Map.keys |> Seq.filter cyclic |> Set.ofSeq
         let mark left right = affected <- affected.Add left |> Set.add right
+        let selectedIdentities = items |> List.map (fun item -> item.ExpectedNodeId, item.Evidence.Issue) |> Map.ofList
+        let checkIdentity source node issue =
+            match Map.tryFind node selectedIdentities with
+            | Some expected when expected <> issue -> mark source node
+            | _ -> ()
+            selectedIdentities |> Map.iter (fun expectedNode expectedIssue ->
+                if expectedIssue = issue && expectedNode <> node then mark source expectedNode)
         for KeyValue(node, facts) in complete do
+            facts.Parent |> Option.iter (fun parent -> checkIdentity node parent.NodeId parent.Issue)
+            facts.Children |> List.iter (fun child -> checkIdentity node child.NodeId child.Issue)
             match facts.Parent with
             | Some parent ->
                 match Map.tryFind parent.NodeId complete with
@@ -965,7 +974,7 @@ module V2ProjectionSource =
         items |> List.map (fun item ->
             if not (affected.Contains item.ExpectedNodeId) then item
             else
-                let gap = "Complete observed native relationships contain a cycle or contradictory parent/child identities"
+                let gap = "Complete observed native relationships contain a cycle or contradictory exact issue/node identities"
                 { item with SourceCurrentness = "Unknown"
                             WorkItem = item.WorkItem |> Option.map (fun facts -> {facts with Complete = false; Sha256 = None; Gap = Some gap})
                             Evidence = {item.Evidence with Health = "Unknown"; Gap = Some(Malformed("native hierarchy consistency", gap))} })
