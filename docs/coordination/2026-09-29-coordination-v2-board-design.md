@@ -24,6 +24,14 @@ all 82 installed payload files against the accepted original 0.105 candidate, in
 entry and GitHub adapter. This source delivery updates published inventory and the canonical tool pin;
 it does not republish, install, activate consumers or change a board.
 
+The [first inventory/enrollment PR qualification](https://github.com/FS-GG/.github/actions/runs/39101666662/job/117599360741)
+refused an edit to a packaged check-board reference because source and published Kit were both 0.105.
+A packed instruction change needs a prospective higher package version even when no F# or API changes.
+Source-only work is not necessarily package-byte-neutral: check actual materialization and the Kit PR
+arm against the genuine published version before admission. This correction restores the published
+reference exactly and keeps programme-only qualification-order guidance in the existing repo-native
+work-programme context reference. No scope reclassification, gate bypass or new release is introduced.
+
 The subsequent fresh remaining-only migration has retained an original successful thirteen-effect
 apply, independent final joins over 22 memberships/eight views and all seventeen declared planning
 rows, and a separately selected read-only zero-effect repeat. Root accepted the combined mechanical
