@@ -12,6 +12,7 @@ on:
       - "scripts/v2-progress/**"
       - "src/FS.GG.V2.Progress/**"
       - "tests/FS.GG.V2.Progress.Tests/**"
+      - "tests/v2-progress/**"
       - "tests/fsc-census/**"
       - "tests/fsc02-telemetry-closure/**"
       - "Directory.Build.props"
@@ -29,6 +30,7 @@ on:
       - "scripts/v2-progress/**"
       - "src/FS.GG.V2.Progress/**"
       - "tests/FS.GG.V2.Progress.Tests/**"
+      - "tests/v2-progress/**"
       - "tests/fsc-census/**"
       - "tests/fsc02-telemetry-closure/**"
       - "Directory.Build.props"
@@ -64,6 +66,9 @@ jobs:
 
       - name: Exercise the renderer contract
         run: dotnet test tests/FS.GG.V2.Progress.Tests/FS.GG.V2.Progress.Tests.fsproj --configuration Release --no-build --logger "console;verbosity=normal"
+
+      - name: Exercise offline collector and actual FSharp adapter
+        run: python3 tests/v2-progress/run.py --render
 
       - name: Exercise the FSC-00 census controls
         run: python3 tests/fsc-census/run.py

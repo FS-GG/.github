@@ -7,16 +7,27 @@ machine's local Codex session family:
 scripts/v2-progress/run.sh METADATA.json ROOT_SESSION_ID FS-GG/.github /tmp/v2-progress.md
 ```
 
-The wrapper builds the F# renderer in locked mode, obtains fresh authenticated
-`fdev-telemetry health` and exact-workspace status, reads local JSONL counter
-histories, and passes a typed snapshot to `render.fsx`. It writes the report
-only after the renderer accepts the snapshot. The metadata file supplies the
-lane roster, explicit launch evidence, workstreams, declared counts, protected
-holds, checks, risks, next actions and completion history. The collector
-**overwrites** metadata telemetry observations with the direct authenticated
-CLI results. It fails if health is not ready or the workspace is not
-configured with `pending=0`, `pendingUnacknowledged=0`,
-`unacknowledgedLossy=false`.
+The wrapper restores the F# renderer in locked mode, reads bounded local JSONL counter histories,
+and passes a typed snapshot to `render.fsx`. Local observation and reporting invoke no receiver or
+provider process and do not require protected host-policy qualification. The report is written only
+after the renderer accepts the snapshot. Metadata supplies the lane roster, launch evidence,
+workstreams, declared counts, protected holds, checks, risks, next actions and completion history.
+
+The collector discards metadata health/workspace observations rather than presenting them as fresh
+receiver facts. Readiness and end-to-end capture remain Pending; remote queue counts, delivery and
+lossless status are Unknown. A separately acquired snapshot may carry actual authenticated health and
+workspace observations; the renderer still requires their exact identity, freshness and queue checks
+before showing Active/Healthy. Local counters never become a Host receipt or fully attributed usage.
+
+The scan is limited to 512 files, 64 MiB total, 8 MiB per file, 1 MiB per line and 10,000 counter
+samples per file. It retains only allowlisted scalar samples and opaque session provenance, not raw
+prompts/tool output or source paths. Incomplete reads, malformed tails, rotation/changes, missing
+lineage, absent actual zero baseline and cumulative resets withhold a complete-period total. The
+report still shows bounded observed cumulative samples with explicit coverage gaps; snapshots are
+never summed as independent requests. A session younger than ten minutes has no completed-period
+diagnostic, not zero usage. These finite diagnostics are not the durable passive-capture pipeline.
+Modern `token_usage_record` response/turn capture through the existing native reader and journal is
+a separate next window; a modern-only input has unavailable diagnostic totals, not zero tokens.
 
 **Rebuild the metadata file before every ten-minute update.** Recheck the
 running agent roster and explicit launch settings, query current PR heads and
@@ -25,7 +36,7 @@ source evidence first. Set `metadataObservedAt` to the UTC time of that
 check. The F# adapter refuses metadata older than two minutes or dated after
 the scan. This is a freshness guard, not independent proof that a caller
 actually performed those checks; inspect the source evidence before publishing.
-The wrapper only refreshes telemetry and local counters.
+The wrapper refreshes local diagnostic observations; it does not authenticate remote telemetry.
 
 For each run, record a new evidence cutoff and verify the metadata against it:
 
@@ -45,7 +56,8 @@ Do not carry forward an old `METADATA.json` with only its timestamp changed.
 If a PR lands after the cutoff, rebuild and rerun or name the earlier cutoff
 when sharing the report.
 
-The counter input is always `LocalCounterDiagnostic`: the local JSONL scan has
+A complete counter window is always `LocalCounterDiagnostic`; an incomplete or unavailable window
+uses `UnknownPeriodUsage`: the local JSONL scan has
 no authenticated collector/account scope and no orchestration-runner/Host
 receipt. The F# script always sets capture to pending. Its weekly projection
 is conditional on the local root-session percentage samples sharing the

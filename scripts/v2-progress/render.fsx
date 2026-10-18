@@ -85,14 +85,17 @@ let readSnapshot (root: JsonElement) : ProgressSnapshot =
     let lanes = prop root "lanes" |> items |> List.map readLane
     let streams = prop root "workstreams" |> items |> List.map readWorkstream
     let telemetry = prop root "telemetry"
-    let health = prop telemetry "health"
-    let workspace = prop telemetry "workspace"
-    let period = prop root "localCounterWindow"
-    let counterWindow : TeamCounterWindow =
-        { RootSessionId = string period "rootSessionId"
-          WindowStart = time period "windowStart"; WindowEnd = time period "windowEnd"
-          DeclaredSessionCount = number period "declaredSessionCount"
-          Sessions = prop period "sessions" |> items |> List.map (readSession asOf) }
+    let health = optional telemetry "health"
+    let workspace = optional telemetry "workspace"
+    let period = optional root "localCounterWindow"
+    let usage =
+        period |> Option.map (fun value ->
+            LocalCounterDiagnostic
+                { RootSessionId = string value "rootSessionId"
+                  WindowStart = time value "windowStart"; WindowEnd = time value "windowEnd"
+                  DeclaredSessionCount = number value "declaredSessionCount"
+                  Sessions = prop value "sessions" |> items |> List.map (readSession asOf) })
+        |> Option.defaultValue UnknownPeriodUsage
     let declared = prop root "declaredCounts"
     let byModel = [ (Gpt6Sol, number declared "gpt6Sol") ]
     { AsOf = asOf; RoadmapHead = string root "roadmapHead"; Lanes = lanes
@@ -103,26 +106,29 @@ let readSnapshot (root: JsonElement) : ProgressSnapshot =
                              ByModel = byModel }
       Workstreams = streams
       DeclaredEvidenceCounts = { Prs = number declared "prs"; Evidence = number declared "evidence" }
-      Telemetry = { WorkspaceId = string telemetry "workspaceId"; Readiness = ActiveHealthy
-                    HealthObservation = Some { Authenticated = boolean health "authenticated"
-                                               Ready = boolean health "ready"
-                                               CollectorVerified = boolean health "collectorVerified"
-                                               ObservedAt = time health "observedAt"
-                                               EvidenceId = string health "evidenceId" }
-                    WorkspaceObservation = Some { Configured = boolean workspace "configured"
-                                                  CollectorVerified = boolean workspace "collectorVerified"
-                                                  WorkspaceId = string telemetry "workspaceId"
-                                                  Pending = number workspace "pending"
-                                                  PendingUnacknowledged = number workspace "pendingUnacknowledged"
-                                                  UnacknowledgedLossy = boolean workspace "unacknowledgedLossy"
-                                                  ObservedAt = time workspace "observedAt"
-                                                  EvidenceId = string workspace "evidenceId" }
-                    Pending = number workspace "pending"
-                    PendingUnacknowledged = number workspace "pendingUnacknowledged"
-                    UnacknowledgedLossy = boolean workspace "unacknowledgedLossy"
+      Telemetry = { WorkspaceId = string telemetry "workspaceId"
+                    Readiness = if health.IsSome && workspace.IsSome then ActiveHealthy else Pending
+                    HealthObservation = health |> Option.map (fun value ->
+                        { Authenticated = boolean value "authenticated"
+                          Ready = boolean value "ready"
+                          CollectorVerified = boolean value "collectorVerified"
+                          ObservedAt = time value "observedAt"
+                          EvidenceId = string value "evidenceId" })
+                    WorkspaceObservation = workspace |> Option.map (fun value ->
+                        { Configured = boolean value "configured"
+                          CollectorVerified = boolean value "collectorVerified"
+                          WorkspaceId = string telemetry "workspaceId"
+                          Pending = number value "pending"
+                          PendingUnacknowledged = number value "pendingUnacknowledged"
+                          UnacknowledgedLossy = boolean value "unacknowledgedLossy"
+                          ObservedAt = time value "observedAt"
+                          EvidenceId = string value "evidenceId" })
+                    Pending = workspace |> Option.map (fun value -> number value "pending")
+                    PendingUnacknowledged = workspace |> Option.map (fun value -> number value "pendingUnacknowledged")
+                    UnacknowledgedLossy = workspace |> Option.map (fun value -> boolean value "unacknowledgedLossy")
                     Capture = NoAcceptedCaptureClaim }
       CliStatus = None // The live /status panel lacks authenticated collector provenance.
-      PeriodUsage = LocalCounterDiagnostic counterWindow
+      PeriodUsage = usage
       ProtectedHolds = strings root "protectedHolds"
       Checks = prop root "checks" |> items |> List.map readNamed
       Risks = prop root "risks" |> items |> List.map readNamed

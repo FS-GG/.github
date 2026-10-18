@@ -155,9 +155,9 @@ type Telemetry = {
     Readiness: Status
     HealthObservation: AuthenticatedHealthObservation option
     WorkspaceObservation: ConfiguredWorkspaceObservation option
-    Pending: int
-    PendingUnacknowledged: int
-    UnacknowledgedLossy: bool
+    Pending: int option
+    PendingUnacknowledged: int option
+    UnacknowledgedLossy: bool option
     Capture: CaptureClaim
 }
 
