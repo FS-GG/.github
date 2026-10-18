@@ -10,6 +10,26 @@ this reference's helper artifacts remain optional diagnostics, never a second cu
 capacity supplier or a prerequisite to routine work. Missing evidence is attributed Unknown.
 
 
+## Selected qualification before routine adoption
+
+The integration owner may separately select a pre-cutover qualification invocation to establish the
+positive installed reads and .11 real-use comparisons above. Use the final authenticated binding,
+exact qualified installed caller/adapter and already authorized necessary work, retaining its actual
+owner, current declaration/native PR and original reservations. This is the same maintained inspect
+composition, not another route. Binding/currentness, native joins, intake, proposed-action
+prerequisites, remaining capacity and reservation checks apply in full; absent facts withhold the
+affected action. Source delivery or this qualification selection grants no new native effect.
+
+Do not require completed continuation/blocked/ordinary-delivery qualification before running the
+separately selected invocation that establishes those cases. Accept each original result at its
+actual scope. Routine post-cutover queue use and coordinated programme/driver/recovery/report adoption
+remain held until the applicable gates and explicit cutover decision are accepted. CLI installation
+does not load these instructions: retain the actual reviewed pinned-source or separately qualified
+materialized consumer identity. Supporting-view UI observations remain attributed separately and do
+not authorize a queue switch.
+
+Use the [same maintained inspect command](../../check-board/references/organization-v2-inspection.md#one-invocation-after-the-gates-are-accepted) with the final reviewed binding and a new private report path. No new caller, flag or persistent observation ledger is introduced.
+
 The [conditional pilot](../SKILL.md#conditional-three-outcome-pilot) replaces mandatory context-helper,
 packet and reducer use for the original outcomes and ROUTINEV3 source work after protected delivery
 of the applicable governing rule; automatic evidence qualification is a separate fact-specific boundary.
