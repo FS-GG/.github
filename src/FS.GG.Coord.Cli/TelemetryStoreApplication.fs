@@ -3092,10 +3092,10 @@ ORDER BY f.identity LIMIT 413701;
                     if observations.Count < 256 then observations.Add(JsonNode.Parse(reader.GetString 0))
                     else truncated <- true
                 let result = JsonObject()
-                result["schema"] <- "fsgg.telemetry.passive-snapshot/1"
-                result["capture"] <- "receiver-applied"
-                result["attribution"] <- "unknown"
-                result["populationCoverage"] <- "partial"
+                result["schema"] <- JsonValue.Create "fsgg.telemetry.passive-snapshot/1"
+                result["capture"] <- JsonValue.Create "receiver-applied"
+                result["attribution"] <- JsonValue.Create "unknown"
+                result["populationCoverage"] <- JsonValue.Create "partial"
                 result["truncated"] <- JsonValue.Create truncated
                 result["observations"] <- observations
                 Ok(result.ToJsonString() + "\n")
