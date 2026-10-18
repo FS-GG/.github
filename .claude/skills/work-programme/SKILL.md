@@ -10,7 +10,8 @@ Verify source and live state before action; unavailable Atlas does not block aut
 # Work Programme
 
 Temporary replacement for `work-unified-roadmap`. The
-[Unified Roadmap v3](../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md) open index and existing owner plans remain authoritative.
+[Unified Roadmap v3](../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md) strategic scope and existing owning plans remain authoritative.
+The coordinated consumer boundary below defines when Project 3 replaces manual current-status selection.
 Start development only on requested advancement; inspection, maintenance and audits retain their own scope.
 
 ## Conditional three-outcome pilot
@@ -18,27 +19,45 @@ Start development only on requested advancement; inspection, maintenance and aud
 The historical pilot below and its ROUTINEV3 issue/native route remain bounded by their actual
 protected acceptance. They do not authenticate the successor organization binding or installed tool.
 
-## Prepared V2 programme consumer
+## Coordinated V2 programme consumer
 
-This .9/.11 source edition does not switch the live planning queue. Read the
-[organization inspection contract](../check-board/references/organization-v2-inspection.md) for the
-exact installed/migration/UI/real-use gates and the future authenticated final binding. Until those
-gates close, continue existing authorized issue/plan/native-PR work; no V1 fallback or duplicate
-implementation is introduced. Manual v3 current-status maintenance is retained until accepted cutover.
+The [owning V2 plan](../../../docs/coordination/2026-09-29-coordination-v2-board-design.md#accepted-installed-real-use-qualification--2026-10-18)
+records accepted installed, migration, real-use and scoped user UI qualification. This consumer source
+becomes the programme route only when root accepts the actual coordinated programme, board-driver,
+recovery and progress instruction loads and records that acceptance in the owning plan. Until that
+selection, keep the existing authorized issue/plan/native-PR route and manual current-status boundary;
+source edits, CI or installation do not activate cutover.
 
-After that cutover, programme, drivers, recovery and reporting use binding-v4/inspection2 together.
-The existing integrator supplies attributed ephemeral stdin action/prerequisite/intake/runtime facts
-for exact enrollment, native issue/body/plan revisions and independently identified current slices.
-Native PR/Current deliverable, owner, dependency and permission joins do not authenticate reported
-runtime facts. Use the ordered selected/deferred fold, not every eligible candidate as one batch.
-Counts are remaining capacity after active work; account each selected operation and retain every
-uncertain hold before admitting another. Recheck determining native/runtime facts beside execution.
+After accepted cutover, use Project 3 for current programme planning and lane selection under the
+[unchanged organization contract](../check-board/references/organization-v2-inspection.md).
+Use binding-v4/schema2/inspection2, exact protected enrollment and the authenticated installed caller.
+The existing integrator supplies attributed one-invocation stdin action, prerequisite, intake,
+capacity and reservation facts for exact native issue/body/plan revisions and current slices.
+Consume the complete membership reconciliation and ordered selected/deferred fold. Recheck determining
+facts beside the selected operation; a historical report never renews evidence or supplies authority.
 
-Planning Status, Roadmap and Track remain human-owned. Observation health never means eligibility or
-acceptance; merged PRs establish only their delivered scope. The six-field owning issue and native PR
-remain assignment/recovery records; no packet, return, reducer/current-view or dispatch-index artifact
-is mandatory for this scope. Optional helper contracts below keep their own semantics and grant no
-V2 authority. Routine review/CI/delivery and effect-specific admission remain independent.
+The roadmap's section 2 is strategic outcome and owning-plan navigation after that acceptance.
+Do not maintain a duplicate manual Entry/blocking or Done table there. Current owning issues, human
+planning fields, native delivery/acceptance evidence and owning plans retain their respective roles;
+formal closure needs the full owning acceptance, never a healthy read or merged slice. Update strategic
+navigation for changed scope or a durable plan link, not each CI or status transition. Historical
+snapshot links preserve the former table and completed evidence. Games and product contracts remain
+separate. Missing or conflicting board evidence keeps scoped Unknowns and independent authorized
+issue/plan/native-PR work; no V1 fallback, new issue, scheduler or duplicate implementation is introduced.
+
+Programme, canonical board drivers, recovery and reporting must use the same accepted source and
+binding boundary together. Record actual loaded absolute paths, real source revision/tree and relevant
+file hashes; a manifest or package installation is not proof that an instruction was read. Preserve
+user-owned dirty files and reconcile their intent in an isolated checkout before switching reporting.
+Unchanged qualified packaged check-board, driver and executable bytes require no repacking merely to
+apply their existing conditional contract after root acceptance.
+
+Planning Status, Roadmap and Track remain human-owned. Observation Verified means read health, not
+readiness or outcome acceptance. Counts mean remaining capacity after active work; preserve all known
+and Unknown reservations before admitting another operation. Retain original identities and effects,
+including unavailable history. The six-field issue and native PR remain assignment/recovery records;
+optional packets, returns and helpers grant no operation authority. Routine review, CI, delivery and
+protected effect-specific admission remain independent.
 
 ## Historical pilot and ROUTINEV3 route
 
@@ -46,7 +65,7 @@ V2 authority. Routine review/CI/delivery and effect-specific admission remain in
 
 The selected [pilot](../../../docs/roadmaps/2026-10-05-programme-context-efficiency.md#selected-three-outcome-programme-pilot--2026-10-16)
 replaces conflicting coordination requirements below and in this skill's references **only for its
-three original outcomes and ROUTINEV3 source work from the v3 open index after protected delivery
+three original outcomes and ROUTINEV3 source work within the v3 strategic scope after protected delivery
 of the applicable reviewed governing change**. The replacement applies
 to the default workflow and its adapter, bootstrap, context and crash-recovery references, including
 their mandatory packet, typed-return, reducer/current-view and dispatch-index directions. The owning
@@ -172,7 +191,7 @@ and report the limitation.
 
 The parent reads its own governing instructions and the decision view, rather than detailed handoffs,
 whole roadmaps or packet bodies. The protected [Unified Roadmap v3](../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md#2-open-work-and-owning-plans),
-its named open outcomes and owning plans remain authoritative. The bootstrap worker resolves their relevant sections
+its strategic outcome scope and owning plans remain authoritative; after accepted V2 cutover, current owning/native facts and Project 3 supply current selection. The bootstrap worker resolves their relevant sections
 and organization-inspection obligations. Fresh-read native admission before parent-owned effects. Preserve
 campaign, feature, original/current item and attempt, owner, branch/PR and unknown operations through restart.
 Pin the governing skill revision once per selected window; unchanged applicable instructions need no
@@ -448,17 +467,16 @@ installed adoption and native acceptance remain separate. Owners cannot admit pa
 Keep plans in owning repositories and retain v3 owning-plan links and workspace adoption boundaries.
 BAR/SC2/FourD product outcomes use the [games roadmap](../../../docs/roadmaps/2026-10-07-games-development-roadmap.md);
 shared producers and Game template consolidation remain in v3. When the selected item meets all required
-acceptance outcomes, close it in its owning plan with durable evidence and land that closure. Set the
-corresponding v3 row to **Done: Yes** only when its whole remaining outcome is accepted; link the closure
-evidence and retain the compact row, excluding it from scheduling and recovery. For partial completion,
-narrow the remaining outcome with **Done: No**. Land the index in the same `.github` PR or immediate
-asynchronous cross-repository follow-up; preparation, source delivery and a completed window alone do
-not close the item. Games closures follow their owning index; preserve detailed history in owning plans.
-Keep each open-index row compact: current accepted frontier, remaining assertion, entry/blocking join
-and owning evidence link. Replace stale current claims after authoritative acceptance; an accepted
-migration of one exact store must not remain a task for that store or imply fleet migration. Move
-extended completed history to owning reports while preserving links and historical evidence. Report
-accepted submilestones inside broad open rows without converting their binary count into a percentage.
+acceptance outcomes, close it in its owning plan and owning issue with durable native evidence and land
+that closure. After accepted V2 cutover, current planning and scoped closure use that native/owning
+evidence; do not recreate manual v3 Done or Entry/blocking cells. Preserve the strategic outcome and
+plan/evidence links, updating them only when scope or navigation changes. Partial slice delivery narrows
+the owning remainder without closing its parent. Before cutover, retain the previous protected index
+boundary. Games closures still follow their separately qualified owning index. Preparation, source
+delivery and a completed window never establish whole-outcome acceptance; preserve detailed history
+and original failures in owning plans/reports. Accepted migration of one exact store does not imply
+fleet migration. Report accepted submilestones without converting binary counts into engineering
+percentages.
 Prefer generating and landing projections with the delivery or its automatic immediate follow-up instead
 of another manual coordination cycle. Preserve current projection fences where the helper or owning contract
 requires them; never mark a pending projection landed to unlock work. Independent implementation and lanes

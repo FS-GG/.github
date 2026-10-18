@@ -14,9 +14,9 @@ supersession/conflicts and verify citations/live facts. Keep missing knowledge e
 ## Select the current roadmap
 
 Use the protected [Unified Roadmap v3](../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md)
-for shared/platform open work and the [games roadmap](../../../docs/roadmaps/2026-10-07-games-development-roadmap.md)
+for shared/platform strategic scope and owning-plan navigation and the [games roadmap](../../../docs/roadmaps/2026-10-07-games-development-roadmap.md)
 for BAR/SC2/FourD product outcomes within the recovered scope. An older handoff's v2/§9.8/§0 links
-are archive references: map surviving feature IDs to these current open indexes, preserve original
+are archive references: map surviving feature IDs to the strategic catalogue and current owning/native facts, preserve original
 attempts/reservations and verify native closure before omitting an inherited obligation. Do not
 restart completed or superseded v2 rows. Game template consolidation remains in v3.
 Verify these files and the governing skill on current protected main, including native readback of
@@ -26,9 +26,12 @@ and reconcile its owner rather than treating omission as cancellation.
 
 ## Recover the newest saved state
 
-For .9/.11 source preparation, retain the
+Recover the explicit coordinated .11 cutover acceptance from the owning V2 plan and retain the
 [organization consumer boundary](../check-board/references/organization-v2-inspection.md) in recovery
-and handoff. Source delivery does not activate v4 or retire manual v3 current-status maintenance.
+and handoff. Source delivery alone does not activate v4. After accepted cutover, section 2 is strategic navigation;
+recover current selection and closure from the enrolled owning issues, human planning and native
+evidence rather than a duplicate manual v3 status table. Before that acceptance, preserve the former
+protected index boundary.
 After accepted cutover, preserve final binding/enrollment, exact outcome/slice/attempt and owner,
 existing Current deliverable/native PR/head, issue/body/current-plan revisions, pending requests and
 all original/uncertain reservations. Fresh-read determining native/action/intake/runtime facts through

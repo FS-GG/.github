@@ -33,10 +33,12 @@ Previous report: [relative link and embedded UTC cutoff, or first snapshot].
 Comparison: [since previous report; separate trailing 24-hour baseline when different;
 unavailable comparisons and why]. Scope: [selected population; additions/removals and exclusions].
 
-Consumer boundary: [prepared-only or actual accepted cutover evidence; exact binding/enrollment and
+Consumer boundary: [source-only or actual root-accepted coordinated instruction loads; exact binding/enrollment and
 inspection2 identity if consumed, native observation time/coverage and scoped gaps]. Planning Status,
 Observation health, per-slice advisory eligibility and accepted outcomes remain separate. Source
-preparation leaves manual v3 current-status upkeep intact. Use existing facts, not reporting workloads.
+delivery alone leaves the previous protected boundary intact. After acceptance, use strategic v3
+scope plus native/owning current facts; no duplicate manual status table. Use existing facts, not
+reporting workloads.
 
 ## Current state
 
