@@ -503,10 +503,20 @@ let existingProduct (requestPath: string) =
     output.["binding"] <- binding
     output
 
-let organizationMain (args: string array) =
-    try
-        require (args.Length = 1 || (args.Length = 2 && args.[1] = "--pilot-plan")) "usage: board-v2-import MANIFEST [--pilot-plan]"
-        let manifest = JsonNode.Parse(File.ReadAllText args.[0])
+let private programmeRead limit (path: string) =
+    let options = FileStreamOptions(Mode = FileMode.Open, Access = FileAccess.Read, Share = FileShare.Read,
+                                    Options = FileOptions.SequentialScan)
+    use stream = new FileStream(path, options)
+    // Length and all reads use this same handle. No path-stat/read-all allocation race;
+    // growth and truncation refuse, including a byte beyond the selected bound.
+    let length = stream.Length
+    require (length > 0L && length <= int64 limit) "programme input bound"
+    let bytes = Array.zeroCreate<byte> (int length)
+    stream.ReadExactly bytes
+    require (stream.ReadByte() = -1 && stream.Length = length) "programme input changed"
+    bytes
+
+let private organizationLegacy (manifest: JsonNode) (args: string array) =
         let items,pilots,created = validate manifest
         let result : JsonNode =
             if args.Length = 2 then pilotPlan manifest :> JsonNode
@@ -522,7 +532,32 @@ let organizationMain (args: string array) =
                 summary :> JsonNode
         printfn "%s" (result.ToJsonString())
         0
-    with error -> eprintfn "board-v2 import refused: %s" error.Message; 2
+
+let organizationMain (args: string array) =
+    let mutable historicalImport = false
+    try
+        require (args.Length = 1 || (args.Length = 2 && args.[1] = "--pilot-plan")) "usage: board-v2-import MANIFEST [--pilot-plan]"
+        let original = System.Text.UTF8Encoding(false, true).GetString(programmeRead (256 * 1024) args.[0])
+        let manifest = JsonNode.Parse original
+        if s manifest "schema" = "fsgg.coordination-board-v2-enrollment/v3" then
+            require (args.Length = 1) "public commitment cannot construct a pilot plan"
+            match FS.GG.Coord.GitHub.V2Projection.decodeProgrammePublicCommitment original with
+            | Error _ -> invalidOp "closed public programme commitment refused"
+            | Ok _ ->
+                // Shape only: no private binding or authenticated protected source is available here.
+                printfn "{\"publicCommitmentValid\":true,\"authenticated\":false,\"executable\":false}"
+                0
+        elif s manifest "schema" = "fsgg.coordination-board-v2-import/v1" then
+            historicalImport <- true
+            organizationLegacy manifest args
+        else
+            invalidOp "unsupported public document"
+    with error ->
+        // Only the explicitly classified historical constructor retains its diagnostic contract.
+        // Current/unknown documents and preclassification failures may contain private input.
+        if historicalImport then eprintfn "board-v2 import refused: %s" error.Message
+        else eprintfn "board-v2 public document refused"
+        2
 
 // Current programme preparation is offline. Enrollment parsing and commitment construction
 // belong to the same maintained API as runtime authentication, not to a second tool decoder.
@@ -542,19 +577,6 @@ let private programmePath (path: string) =
                    | :? DirectoryInfo as directory -> directory.Parent :> FileSystemInfo
                    | _ -> null
     full
-
-let private programmeRead limit (path: string) =
-    let options = FileStreamOptions(Mode = FileMode.Open, Access = FileAccess.Read, Share = FileShare.Read,
-                                    Options = FileOptions.SequentialScan)
-    use stream = new FileStream(path, options)
-    // Length and all reads use this same handle. No path-stat/read-all allocation race;
-    // growth and truncation refuse, including a byte beyond the selected bound.
-    let length = stream.Length
-    require (length > 0L && length <= int64 limit) "programme input bound"
-    let bytes = Array.zeroCreate<byte> (int length)
-    stream.ReadExactly bytes
-    require (stream.ReadByte() = -1 && stream.Length = length) "programme input changed"
-    bytes
 
 // Same narrow Linux-x64 directory-entry barrier used by the maintained migration CLI.
 // File Flush(true) alone does not make a newly created directory entry durable.
