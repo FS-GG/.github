@@ -227,7 +227,11 @@ module ProgrammeFixture =
                 Join = { NativeId = native.NodeId; UpdatedAt = native.UpdatedAt; BodySha256 = native.BodySha256; SourceRevision = item.SourceRevision |> Option.defaultValue "missing source revision" }
                 Observation = observation; PullRequest = pull |> Option.map _.Url; PullRequestId = pull |> Option.map _.Id
                 PullRequestUpdatedAt = pull |> Option.map _.UpdatedAt; Head = pull |> Option.map _.Head
-                Prerequisites = []; PrerequisitesComplete = true; IntakeAuthorized = Some true } ]
+                Prerequisites =
+                    (if item.CurrentDeliverable |> Option.exists (fun value -> value <> "None") then
+                        [ { Action = V2ProjectionSource.Source; Reference = "current-deliverable"; Satisfied = Some true; SupplyingOwner = "/root/programme" } ]
+                     else [])
+                PrerequisitesComplete = true; IntakeAuthorized = Some true } ]
           ImplementationSlots = Some 1; ReviewSlots = Some 1; HostedCiSlots = Some 1; CapacityMeaning = "remaining-after-active"
           CapacityObservation = Some observation; Reservations = Some []; ReservationObservation = Some observation
           ObservedAt = observation.ObservedAt; ValidUntil = observation.ValidUntil; Evidence = "inert actual parent caller observation" }

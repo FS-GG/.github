@@ -238,7 +238,7 @@ module BoardV2Application =
                 let itemNode = itemNodes.[index]
                 itemNode.["sourceRevision"] <- JsonSerializer.SerializeToNode(item.SourceRevision)
                 itemNode.["accountableOwner"] <- JsonSerializer.SerializeToNode(item.Owner)
-                itemNode.["currentDeliverable"] <- JsonSerializer.SerializeToNode({| provenance = "native-observed"; references = item.Deliverables; gap = item.DeliverableGap |})
+                itemNode.["currentDeliverable"] <- JsonSerializer.SerializeToNode({| provenance = "native-observed"; declaration = item.CurrentDeliverable; references = item.Deliverables; gap = item.DeliverableGap; reconciliationRequired = (item.CurrentDeliverable |> Option.exists (fun value -> value <> "None")) |})
                 itemNode.["nativeIntake"] <- JsonSerializer.SerializeToNode(
                     {| provenance = if item.Intake.ObservedAt = DateTimeOffset.MinValue then "missing" else "native-observed"
                        observedAt = if item.Intake.ObservedAt = DateTimeOffset.MinValue then None else Some item.Intake.ObservedAt

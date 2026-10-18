@@ -131,11 +131,13 @@ module V2ProjectionSource =
 
     let private deliverableField (binding: Binding) (body: string) =
         match recordFields (binding.BindingVersion = 4) body |> Option.bind (Map.tryFind "Current deliverable") with
-        | None -> [], Some "Native Current deliverable field is missing or malformed; absence of closing references does not establish no existing work"
-        | Some "None" -> [], None
+        | None -> None, [], Some "Native Current deliverable field is missing or malformed; absence of closing references does not establish no existing work"
+        | Some "None" -> Some "None", [], None
         | Some value ->
             let urls =
-                System.Text.RegularExpressions.Regex.Matches(value, "https?://[^\\s<>()\\[\\]]+")
+                let options = if binding.BindingVersion = 4 then System.Text.RegularExpressions.RegexOptions.IgnoreCase else System.Text.RegularExpressions.RegexOptions.None
+                let pattern = if binding.BindingVersion = 4 then "[A-Za-z][A-Za-z0-9+.-]*://[^\\s<>()\\[\\]]+" else "https?://[^\\s<>()\\[\\]]+"
+                System.Text.RegularExpressions.Regex.Matches(value, pattern, options)
                 |> Seq.cast<System.Text.RegularExpressions.Match> |> Seq.map _.Value |> Seq.distinct |> Seq.toList
             let canonical (url: string) =
                 let mutable uri = Unchecked.defaultof<Uri>
@@ -150,9 +152,21 @@ module V2ProjectionSource =
                         binding.Repositories |> Seq.tryFind (fun repository -> String.Equals(repository, parts[0] + "/" + parts[1], StringComparison.OrdinalIgnoreCase))
                         |> Option.map (fun repository -> $"https://github.com/{repository}/pull/{number}")
             let normalized = urls |> List.choose canonical |> List.distinct
-            if urls.IsEmpty || (urls |> List.exists (canonical >> Option.isNone)) then
-                [], Some "Native Current deliverable must explicitly say None or contain canonical PR links in selected repositories"
-            else normalized, None
+            if binding.BindingVersion = 4 then
+                let malformedPull =
+                    urls |> List.exists (fun url ->
+                        System.Text.RegularExpressions.Regex.IsMatch(url, "/pulls?(?:/|%2[fF]|[?#]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                        && (canonical url).IsNone)
+                let barePull =
+                    System.Text.RegularExpressions.Regex.IsMatch(value, "(?<![A-Za-z0-9/:])(?:www\\.)?github\\.com/[^\\s<>()\\[\\]]*/pulls?(?:/|%2f|[?#]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                if String.IsNullOrWhiteSpace value || System.Text.Encoding.UTF8.GetByteCount(value) > 16 * 1024 then
+                    None, [], Some "Native Current deliverable declaration is empty or exceeds the bounded16KiB field"
+                elif malformedPull || barePull then
+                    Some value, [], Some "Native Current deliverable contains a malformed or out-of-scope PR-shaped reference"
+                else Some value, normalized, None
+            elif urls.IsEmpty || (urls |> List.exists (canonical >> Option.isNone)) then
+                Some value, [], Some "Native Current deliverable must explicitly say None or contain canonical PR links in selected repositories"
+            else Some value, normalized, None
 
     let private sourceRepository (binding: Binding) =
         if binding.BindingVersion = 3 then Set.minElement binding.Repositories else "FS-GG/.github"
@@ -381,7 +395,7 @@ module V2ProjectionSource =
     type private SourceCollection =
         { Verification: IoResult<SourceVerification>; Native: NativeObservation option
           Dependencies: NativeObservation list; DependenciesComplete: bool; Plan: NativeObservation option; Owner: string option
-          Deliverables: string list; DeliverableGap: string option }
+          CurrentDeliverable: string option; Deliverables: string list; DeliverableGap: string option }
 
     let private collectSource (transport: IGitHubTransport) (binding: Binding) (row: Selected) =
         let mutable native = None
@@ -389,6 +403,7 @@ module V2ProjectionSource =
         let mutable dependenciesComplete = false
         let mutable plan = None
         let mutable owner = None
+        let mutable currentDeliverable = None
         let mutable deliverables = []
         let mutable deliverableGap = Some "Native issue body was not collected"
         let verification =
@@ -396,7 +411,8 @@ module V2ProjectionSource =
             | Error error -> Error error
             | Ok(observation, body) ->
                 owner <- ownerField binding body
-                let references, gap = deliverableField binding body
+                let declaration, references, gap = deliverableField binding body
+                currentDeliverable <- declaration
                 deliverables <- references
                 deliverableGap <- gap
                 native <- Some observation
@@ -417,7 +433,7 @@ module V2ProjectionSource =
                                 plan <- planObservation
                                 let dependencyRevision = dependencies |> List.map (fun dependency -> $"{dependency.NodeId}@{dependency.UpdatedAt}:{dependency.State}") |> List.sort |> String.concat ";"
                                 Ok(Current $"{observation.NodeId}@{observation.UpdatedAt}:{observation.BodySha256};dependencies=complete:{dependencyRevision};plan={planRevision};recipe={binding.RecipeRevision}")
-        { Verification = verification; Native = native; Dependencies = dependencies; DependenciesComplete = dependenciesComplete; Plan = plan; Owner = owner; Deliverables = deliverables; DeliverableGap = deliverableGap }
+        { Verification = verification; Native = native; Dependencies = dependencies; DependenciesComplete = dependenciesComplete; Plan = plan; Owner = owner; CurrentDeliverable = currentDeliverable; Deliverables = deliverables; DeliverableGap = deliverableGap }
 
     let private artifactCheck (binding: Binding) =
         try
@@ -548,7 +564,7 @@ module V2ProjectionSource =
     type InspectionItem =
         { Evidence: ItemReport; ExpectedNodeId: string; SourceCurrentness: string
           Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list; Owner: string option; SourceRevision: string option
-          Deliverables: string list; DeliverableGap: string option; Intake: NativeIntakeObservation }
+          CurrentDeliverable: string option; Deliverables: string list; DeliverableGap: string option; Intake: NativeIntakeObservation }
 
     type InspectionReport =
         { Binding: Binding; Evidence: BatchReport; Items: InspectionItem list
@@ -827,7 +843,7 @@ module V2ProjectionSource =
                           Health = if planningGap.IsSome then "Unknown" elif currentness = "Stale" then "Stale" elif currentness = "Current" && (observed |> Option.exists (fun value -> value.Observation = Some "Verified")) then "Verified" else "Unknown"
                           Reads = calls; MutationAttempts = 0; MembershipPages = observed |> Option.map _.MembershipPages
                           Projection = None; Gap = sourceGap; LastVerified = historical }
-                    { Evidence = evidence; ExpectedNodeId = row.NodeId; SourceCurrentness = currentness; Planning = observed; PlanningGap = planningGap; Discrepancies = discrepancies; Owner = collection.Owner; Deliverables = collection.Deliverables; DeliverableGap = collection.DeliverableGap; Intake = nativeIntake intakeGate intakeObservedAt binding collection.Native
+                    { Evidence = evidence; ExpectedNodeId = row.NodeId; SourceCurrentness = currentness; Planning = observed; PlanningGap = planningGap; Discrepancies = discrepancies; Owner = collection.Owner; CurrentDeliverable = collection.CurrentDeliverable; Deliverables = collection.Deliverables; DeliverableGap = collection.DeliverableGap; Intake = nativeIntake intakeGate intakeObservedAt binding collection.Native
                       SourceRevision = match collection.Verification with Ok(Current revision) -> Some revision | _ -> None })
                 let integration = if binding.BindingVersion = 4 && membershipGap.IsNone then nativeIntegrator reads binding (items |> List.collect _.Deliverables) else emptyNative
                 let items =
@@ -851,7 +867,7 @@ module V2ProjectionSource =
                         let item = { item with Intake = intake }
                         let evidence: ItemReport = { item.Evidence with Reads = item.Evidence.Reads + additionalReads }
                         match barrier.Verification, planning with
-                        | Ok(Current revision), Ok intent when item.SourceRevision = Some revision && barrier.Owner = item.Owner && barrier.Deliverables = item.Deliverables && barrier.DeliverableGap = item.DeliverableGap && item.Planning = Some intent -> { item with Evidence = evidence }
+                        | Ok(Current revision), Ok intent when item.SourceRevision = Some revision && barrier.Owner = item.Owner && barrier.CurrentDeliverable = item.CurrentDeliverable && barrier.Deliverables = item.Deliverables && barrier.DeliverableGap = item.DeliverableGap && item.Planning = Some intent -> { item with Evidence = evidence }
                         | _ -> { item with SourceCurrentness = "Unknown"; Evidence = { evidence with Health = "Unknown"; Gap = Some(Malformed("final source/planning barrier", "issue/dependency/plan or human planning changed/became unavailable; refresh affected selection")) } }) selected items
                 let membershipGap =
                     if binding.BindingVersion <> 4 || membershipGap.IsSome then membershipGap
@@ -1034,6 +1050,9 @@ module V2ProjectionSource =
                             candidate.Repository = current.Repository
                             && not (allSlices |> List.exists (fun other -> other.Issue = issue && other.PullRequest = Some candidate.Url)))
                     let prerequisites = current.Prerequisites |> List.filter (fun prerequisite -> prerequisite.Action = action)
+                    let reconciliations = prerequisites |> List.filter (fun prerequisite -> prerequisite.Reference = "current-deliverable")
+                    let declaredWork = item.CurrentDeliverable |> Option.exists (fun declaration -> declaration <> "None")
+                    let reconciliationMissing = (declaredWork && reconciliations.Length <> 1) || reconciliations.Length > 1
                     let unsatisfied = prerequisites |> List.filter (fun prerequisite -> prerequisite.Satisfied = Some false)
                     let unknown = prerequisites |> List.filter (fun prerequisite -> prerequisite.Satisfied.IsNone || String.IsNullOrWhiteSpace prerequisite.SupplyingOwner)
                     let openEdges = item.Evidence.DependencyObservations |> List.filter (fun edge -> edge.State <> "CLOSED")
@@ -1057,6 +1076,8 @@ module V2ProjectionSource =
                     elif item.Intake.Allowed.IsNone || item.Intake.Gap.IsSome || not (fresh item.Intake.ObservedAt) then
                         result "unknown" [ "Native repository policy/current issue-author allowance is missing, changed or expired" ]
                     elif current.IntakeAuthorized = Some false then result "blocked" [ "The current integrator intake decision refuses this action" ]
+                    elif reconciliationMissing then
+                        result "unknown" [ "The complete declared Current deliverable requires exactly one current-deliverable reconciliation for this action; it establishes scoped nonduplication, never completion or execution authority" ]
                     elif not unsatisfied.IsEmpty then result "blocked" (unsatisfied |> List.map (fun prerequisite -> "Unsatisfied action prerequisite: " + prerequisite.Reference))
                     elif not current.PrerequisitesComplete || unclassified || not unknown.IsEmpty || current.IntakeAuthorized.IsNone then
                         result "unknown" [ "Action-specific native and owning-plan prerequisite/intake coverage is incomplete; supplying owner is the integrator" ]
@@ -1064,7 +1085,8 @@ module V2ProjectionSource =
                     elif not repositoryGaps.IsEmpty then result "unknown" (repositoryGaps |> List.map (fun (repository, gap) -> repository + ": " + gap))
                     elif not unreadablePulls.IsEmpty then result "unknown" [ "Relevant in-flight PR identity/head/file scope or review/check evidence is unreadable; no disjointness conclusion is possible" ]
                     elif item.DeliverableGap.IsSome then result "unknown" [ item.DeliverableGap.Value ]
-                    elif current.PullRequest.IsNone && (associatedAll |> List.exists (fun candidate -> candidate.Repository = current.Repository && candidate.State <> "OPEN")) && not (associations |> List.exists (fun candidate -> candidate.Repository = current.Repository)) then
+                    elif current.PullRequest.IsNone && (associatedAll |> List.exists (fun candidate -> candidate.Repository = current.Repository && candidate.State <> "OPEN")) && not (associations |> List.exists (fun candidate -> candidate.Repository = current.Repository))
+                         && not (current.Operation = Implement && declaredWork && reconciliations.Length = 1 && reconciliations.Head.Satisfied = Some true) then
                         result "needs-decision" [ "Only historical closed/merged Current deliverable references remain; reconcile the current action without inferring acceptance" ]
                     elif not unassignedAssociations.IsEmpty then result "needs-decision" [ "Native Current deliverable/closing associations are not mapped unambiguously to declared slices; withhold duplicate work" ]
                     elif current.PullRequest.IsSome && pull.IsNone then result "needs-decision" [ "Declared existing PR is not a current native owning-issue association" ]
