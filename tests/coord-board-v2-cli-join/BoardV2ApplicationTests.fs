@@ -758,6 +758,7 @@ let ``actual caller retains declared work while discovering only canonical PR re
           ("None plus retained work is still declared work", false);
           ("Existing PR", false);
           ("Artifact protocol reference https://artifacts.example/pull/protocol", false);
+          ("Artifact selected-route protocol https://artifacts.example/FS-GG/.github/pull/protocol", false);
           ("Artifact source file https://github.com/FS-GG/.github/blob/main/docs/pull/protocol.md", false);
           ("Historical plan https://github.com/FS-GG/.github/pull/41 current source investigation remains independent", false);
           ("Source https://github.com/FS-GG/.github/pull/42\nReceipt evidence https://github.com/FS-GG/.github/issues/1 https://github.com/FS-GG/.github/actions/runs/1 https://github.com/FS-GG/.github/releases/tag/synthetic", true) ]

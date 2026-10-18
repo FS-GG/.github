@@ -171,7 +171,10 @@ module V2ProjectionSource =
                         let parts = path.Trim('/').Split('/')
                         let githubAuthority = authority.Contains("github.com", StringComparison.OrdinalIgnoreCase)
                         let selectedRoute =
-                            parts.Length >= 2 && (binding.Repositories |> Set.exists (fun repository -> String.Equals(repository, parts[0] + "/" + parts[1], StringComparison.OrdinalIgnoreCase)))
+                            parts.Length = 4
+                            && parts[3].Length > 0
+                            && (parts[3] |> Seq.forall (fun character -> character >= '0' && character <= '9'))
+                            && (binding.Repositories |> Set.exists (fun repository -> String.Equals(repository, parts[0] + "/" + parts[1], StringComparison.OrdinalIgnoreCase)))
                         let pull (part: string) = String.Equals(part, "pull", StringComparison.OrdinalIgnoreCase) || String.Equals(part, "pulls", StringComparison.OrdinalIgnoreCase)
                         (githubAuthority || selectedRoute)
                         && ((parts.Length >= 3 && pull parts[2]) || (githubAuthority && parts.Length >= 1 && pull parts[0]))
