@@ -789,6 +789,8 @@ module WorkspaceTelemetryApplicationTests =
             let cleanup, root = temp ()
             use cleanup = cleanup
             let unwrap value = value |> Result.defaultWith (sprintf "%A" >> failwith)
+            let expectError (expected: string list) (actual: Result<string, string list>) =
+                Assert.True((actual = Error expected), sprintf "expected Error %A; actual %A" expected actual)
             let home, path = passiveSource root "receiver"
             let store = Path.Combine(root, "store")
             let approved = TelemetryStore.ApprovedLocalDurable
@@ -884,7 +886,7 @@ module WorkspaceTelemetryApplicationTests =
                     Assert.Contains("\"status\":\"rejected\"", TelemetryStoreApplication.lookupReceipt store approved scope batchId |> unwrap)
                     Assert.False(File.Exists retainedFile)
                 else
-                    Assert.Equal(Error [ "storage-unavailable" ], outcome)
+                    expectError [ "storage-unavailable" ] outcome
                     Assert.Contains("\"status\":\"durably-received\"", TelemetryStoreApplication.lookupReceipt store approved scope batchId |> unwrap)
                     Assert.Equal<byte>(retainedBytes, File.ReadAllBytes retainedFile)
                     TelemetryStoreApplication.drainReceipts store approved scope.Workspace |> unwrap |> ignore
@@ -899,7 +901,23 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Contains("\"status\":\"rejected\"", TelemetryStoreApplication.lookupReceipt store approved collector.Scope "collector-passive" |> unwrap)
             let final = System.Text.Json.Nodes.JsonNode.Parse(TelemetryStoreApplication.passiveObservations store approved scope |> unwrap)
             Assert.Equal(snapshot["observations"].ToJsonString(), final["observations"].ToJsonString())
-            Assert.Equal(Error [ "passive-observation-authenticated-owner-required" ], TelemetryStoreApplication.ingest store approved batches[1])
+            // The existing scoped-store guard precedes passive fact admission. Neither route
+            // may bypass authority: verify its exact public result, then the unscoped inner guard.
+            expectError [ "scoped-store-requires-receipt-ingestion" ] (TelemetryStoreApplication.ingest store approved batches[1])
+            let fresh = System.Text.Json.Nodes.JsonNode.Parse batches[1]
+            fresh["ingestId"] <- System.Text.Json.Nodes.JsonValue.Create "fresh-unauthenticated-passive-attempt"
+            let freshBytes = Encoding.UTF8.GetBytes(fresh.ToJsonString())
+            expectError [ "scoped-store-requires-receipt-ingestion" ] (TelemetryStoreApplication.ingest store approved freshBytes)
+            let afterDirectRefusals = System.Text.Json.Nodes.JsonNode.Parse(TelemetryStoreApplication.passiveObservations store approved scope |> unwrap)
+            Assert.Equal(snapshot["observations"].ToJsonString(), afterDirectRefusals["observations"].ToJsonString())
+            let unscoped = Path.Combine(root, "unscoped-store")
+            TelemetryStoreApplication.initialize unscoped approved |> unwrap |> ignore
+            expectError [ "passive-observation-authenticated-owner-required" ] (TelemetryStoreApplication.ingest unscoped approved freshBytes)
+            use unscopedConnection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(unscoped, TelemetryStoreApplication.databaseFileName)};Mode=ReadOnly;Pooling=False")
+            unscopedConnection.Open()
+            use unscopedFacts = unscopedConnection.CreateCommand()
+            unscopedFacts.CommandText <- "SELECT count(*) FROM ingest_facts;"
+            Assert.Equal(0L, Convert.ToInt64(unscopedFacts.ExecuteScalar()))
 
     [<Fact>]
     let ``passive source keeps absent dimensions unknown and accounts for nonusage scan budgets`` () =
