@@ -1490,7 +1490,7 @@ let ``explicit delivery has independent capacity while outcome and unknown never
 
 [<Fact>]
 let ``hierarchy changed partial or cyclic reads cannot qualify delivery`` () =
-    for mode in ["denied"; "partial"; "cycle"; "moved"; "classification"] do
+    for mode in ["denied"; "partial"; "cycle"; "moved"; "classification"; "null"; "identity"; "errors"] do
         let mutable hierarchyReads = 0
         let mutable classificationReads = 0
         let change request response =
@@ -1499,7 +1499,10 @@ let ``hierarchy changed partial or cyclic reads cannot qualify delivery`` () =
                 if mode = "denied" then Error(Http(403, "inert denied"))
                 else response |> Result.map (fun (value: Transport.Response) ->
                     let body =
-                        if mode = "partial" then value.Body.Replace("\"totalCount\":1", "\"totalCount\":2")
+                        if mode = "null" then value.Body.Replace("\"subIssues\":{", "\"subIssues\":null,\"unused\":{")
+                        elif mode = "identity" then value.Body.Replace("\"id\":\"I_outcome\"", "\"id\":\"I_foreign\"")
+                        elif mode = "errors" then "{\"data\":null,\"errors\":[{\"message\":\"inert partial native response\"}]}"
+                        elif mode = "partial" then value.Body.Replace("\"totalCount\":1", "\"totalCount\":2")
                         elif mode = "cycle" then value.Body.Replace("I_unselected-child", "I_outcome")
                         elif mode = "moved" && hierarchyReads > 1 then value.Body.Replace("I_unselected-child", "I_changed-child")
                         else value.Body
@@ -1569,4 +1572,28 @@ let ``done and completed parent discrepancies never use child count as acceptanc
     let work = report.Items.Head.WorkItem.Value
     Assert.Contains("Human Status Done has no scoped acceptance qualification", work.ClosureGaps)
     Assert.Contains("Completed parent has open child scope; required-scope applicability remains unverified", work.ClosureGaps)
+    Assert.Empty reads.Mutations
+
+
+[<Fact>]
+let ``existing delivery PR observation retains exact owner and consumes no new capacity`` () =
+    let selected = ProgrammeFixture.successorBinding ()
+    let nativePr = ProgrammeFixture.transport ProgrammeFixture.unchanged
+    let change (request: Transport.Request) response =
+        if request.Subject.EndsWith("open PR inventory", StringComparison.Ordinal) then
+            (nativePr :> IGitHubTransport).Send request
+        elif request.Subject.EndsWith("native observation", StringComparison.Ordinal) || request.Subject = "selected native work hierarchy" then
+            response |> Result.map (fun (value: Transport.Response) ->
+                {value with Body = value.Body.Replace("None", "https://github.com/FS-GG/.github/pull/42")})
+        else response
+    let reads = ProgrammeFixture.successorTransport selected (Some "Delivery") change
+    let report = V2ProjectionSource.inspectFixed reads selected None
+    let supplied = ProgrammeFixture.context report
+    Assert.Equal(V2ProjectionSource.ObserveExisting, supplied.Slices.Head.Operation)
+    let context = {supplied with ImplementationSlots = None; ReviewSlots = None; HostedCiSlots = None; CapacityObservation = None; Reservations = None; ReservationObservation = None}
+    let result = V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt
+    Assert.Equal("continue-existing", result.Head.Decision)
+    let wrongOwner = {context with Slices = [{context.Slices.Head with AccountableOwner = "other-owner"}]}
+    Assert.Equal("needs-decision", (V2ProjectionSource.selectActions report (Some wrongOwner) report.NativeIntegrator.ObservedAt).Head.Decision)
+    Assert.Equal("owner-attempt", result.Head.Attempt.Value)
     Assert.Empty reads.Mutations

@@ -233,7 +233,7 @@ module V2Projection =
         let allFieldIds = [ binding.Status.Id; binding.RoadmapFieldId; binding.Track.Id; binding.Observation.Id ] @ (binding.WorkLevel |> Option.map (fun value -> [value.Id]) |> Option.defaultValue [])
 
         if binding.BindingVersion <> 2 && binding.BindingVersion <> 3 && not (isProgrammeBinding binding) then
-            invalid subject "only historical organization v2, product v3 or programme v4 is supported"
+            invalid subject "only historical organization v2, product v3 or explicit programme v4/v5 is supported"
         elif String.IsNullOrWhiteSpace binding.ImportRecipeRevision || binding.ImportRecipeRevision.Length <> 40 || binding.ImportRecipeRevision |> Seq.exists (Uri.IsHexDigit >> not)
              || String.IsNullOrWhiteSpace binding.ImportArtifactSha256 || binding.ImportArtifactSha256.Length <> 64 || binding.ImportArtifactSha256 |> Seq.exists (Uri.IsHexDigit >> not) then
             invalid subject "distinct reviewed import constructor provenance is incomplete"
