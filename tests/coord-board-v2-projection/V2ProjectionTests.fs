@@ -1453,7 +1453,9 @@ let ``programme instruction provenance admits both exact observation paths and r
         Assert.Empty reads.Mutations
         Assert.True(report.Evidence.PopulationGap.IsNone, string report.Evidence.PopulationGap)
         Assert.Equal(admitted, report.Items.Head.SourceCurrentness = "Current")
-        if not admitted then Assert.True(report.Items.Head.Gap.IsSome)
+        if not admitted then
+            Assert.True(report.Items.Head.Evidence.Gap.IsSome)
+            Assert.Equal("Unknown", report.Items.Head.Evidence.Health)
 
 [<Fact>]
 let ``successor Work level binding is explicit and legacy contracts reject its field`` () =
