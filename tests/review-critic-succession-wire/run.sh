@@ -145,7 +145,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
-ENGINE_DLL="$REPO_ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine.dll"
+ENGINE_DLL="${FSGG_COORD_ENGINE_DLL:-$REPO_ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine.dll}"
 
 pass=0; failcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
