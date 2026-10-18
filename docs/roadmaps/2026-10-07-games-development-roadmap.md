@@ -16,6 +16,11 @@ Its initial evidence boundary is protected `.github` revision
 [`65c8d8ce`](https://github.com/FS-GG/.github/commit/65c8d8ced152cea2634e44521cf25a572c26f79c).
 Refresh each owner's native state before selecting the next operation.
 
+Current programme priority follows the [selected system-capability focus](2026-10-07-unified-development-roadmap-v3.md#16-system-capability-focus--2026-10-18).
+Defer new product features unless a named selected system acceptance requires their specific shared
+capability. Preserve every owning product promise and original operation; safe observed stop/terminal
+handling is not completion, cleanup or authority to retry. This index does not schedule work.
+
 ## 1. Open product outcomes
 
 | Feature and owner | Remaining outcome | Next dependency or boundary | Owning plan |

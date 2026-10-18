@@ -202,6 +202,9 @@ and other original effects remain held under their existing admission gates.
 
 ## 1.5. Priority unblockers — 2026-10-16
 
+Retain the original acceptance and evidence below; the later selected focus in section1.6 governs
+new work. This historical ordering does not dispatch a deferred product lane.
+
 Advance these priorities through the existing open outcomes and owner plans; this section
 is their ordering and acceptance guidance, not another task ledger. The
 [ROUTINEV3 extension](2026-10-05-programme-context-efficiency.md#routinev3-source-extension--2026-10-16)
@@ -259,6 +262,38 @@ Original `.103` remains attempted-unknown and unreplayed; `.104` remains held. U
 [#4517](https://github.com/FS-GG/.github/issues/4517) for their existing reply contracts;
 refresh current facts at agreed deadlines and before dependent actions. No source-only
 milestone closes the provider journey or the physical-fit outcome.
+
+## 1.6. System capability focus — 2026-10-18
+
+The user selected usable system capabilities as the current development focus. Advance the existing
+owning outcomes and independently meaningful delivery issues through canonical work-board. This is
+strategic priority guidance, not another current-status table, scheduler, enrollment or closure ledger.
+The coordinator and normal/best drivers remain reusable for organization and explicitly selected
+product scope; this selection is not a permanent skill lane allowlist.
+
+| Selected capability | Owning scope and necessary shared suppliers |
+|---|---|
+| Canonical coordinator and driver | [Coordinator source4677 and full outcome4641](unified-programme-driver.md#canonical-board-coordinator-migration--2026-10-18), [context and installed adoption](2026-10-05-programme-context-efficiency.md), [V2 contract](../coordination/2026-09-29-coordination-v2-board-design.md). Retain programme/product journeys, recovery, exact selected instruction discovery and caller qualification. |
+| UTEL and useful reporting | [Telemetry correctness](utel-01-telemetry-correctness.md), [successor](utel-release-successor.md), [dashboard](utel-telemetry-dashboard.md), [Host release](../coordination/telemetry-host-release.md). Usable collection/reporting needs actual qualified producer, receiver and retained data, not source or publication alone. |
+| PROC, typed administration and diagnostics | [Shared supervision](2026-10-05-shared-process-supervision.md), [process contracts](2026-10-11-shared-process-contracts.md), [typed administration](2026-10-01-typed-administrative-fsharp-quint.md), [diagnostics](diagnostic-execution.md). Select the enforcing profile and actual consumer assertions; no new product feature is implied. |
+| Podman and the selected persistent receiver | [Provisioned profile/storage](2026-10-13-provisioned-podman-execution.md), [persistent receiver](learn-c2-persistent-receiver-v3.md). Retain actual allocation, storage, launcher, persistent execution, teardown/recovery and separately promised two-machine/unattended proof. |
+| LEARN | [Learning outcome](2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md), [causal receiver](learn-01-causal-receiver.md). Retain genuine turn/capture/restart, census/data coverage and the separately selected comparison; infrastructure alone is not learning acceptance. |
+| Necessary shared lifecycle and knowledge suppliers | SDD/Templates/Wizard/providers and Governance loaders supply the exact contract needed by a named selected system acceptance. [Creator source boundary](unified-programme-driver.md#independent-creator-source-closure), [language/provider plan](2026-09-29-language-independent-workspaces-and-agent-integration.md) and [Atlas](../../.agents/skills/atlas/SKILL.md) retain their own publication, installed receiver, compatibility and knowledge-delivery obligations. |
+
+Defer new SVG, Unity, SC2 and other product features unless a named system acceptance assertion
+requires that specific shared capability. An open product epic, parent Blocked state or unrelated
+unfinished child is not a global prerequisite for an independently qualified system delivery. State
+the exact supplied contract, affected assertion and supplying owner; share that dependency once rather
+than reopening the product's whole promise. Product scope, accepted milestones and all remaining
+technical, installed, native and participant obligations remain intact for later explicit selection.
+
+Bring already running operations to their safe observed terminal or authorized stop and retain their
+original evidence, uncertain effects and reservations. Deferral neither cancels operations blindly nor
+means cleanup, completion, release, retry or abandonment. All439 inherited and46 later original holds
+remain. Source4677/full parent4641 scope is unchanged; source, package publication, installed discovery,
+native migration/enrollment/views, receiver activation and restart/rollback remain separate acceptance.
+Report usable capabilities, the next executable delivery and its exact missing inputs/supplying owners.
+Only canonical work-board and current native/owning facts determine concrete action admission.
 
 ## 2. Open work and owning plans
 
@@ -326,6 +361,9 @@ The [staged adoption plan](2026-10-01-staged-fable-game-adoption.md#remaining-ga
 owns the next implementation window and detailed conformance.
 
 ## 4. Parallel opportunities and integration joins
+
+These are technical separation opportunities, not a selected work queue. Apply the current system
+focus in section1.6 before proposing new work; deferred product examples below do not dispatch themselves.
 
 These are opportunities, subject to current ownership, resource and CI admission. They do not
 reserve workers or authorize operations. Resume existing partial work before creating replacements.

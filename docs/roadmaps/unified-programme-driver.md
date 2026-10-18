@@ -51,6 +51,14 @@ continuation, explicit product selection, blocked scope, old handoff and complet
 parent obligations. Current-package publication, installed absolute-path discovery, native product
 creation and restart/adoption remain separate acceptance gates under the owning outcome.
 
+### Current strategic priority
+
+The [selected system-capability focus](2026-10-07-unified-development-roadmap-v3.md#16-system-capability-focus--2026-10-18)
+governs new programme selections while preserving all original outcomes. Required shared suppliers
+are named by the specific system acceptance assertion they enable; a product epic is not a global
+readiness prerequisite. Canonical skills remain reusable for selected organization/product scope.
+This changes strategic priority, not source4677/full outcome4641 acceptance or operation authority.
+
 ## Retained roadmap-driver history
 
 The following decisions, technical acceptance obligations and evidence retain their original scope.
