@@ -597,7 +597,7 @@ module V2ProjectionSource =
     type NativeIntakeObservation =
         { Admission: BoardIntake.Admission option; Allowed: bool option; ObservedAt: DateTimeOffset; Gap: IoError option }
 
-    /// Native hierarchy observations never widen enrollment or establish acceptance.
+    // Native hierarchy observations never widen enrollment or establish acceptance.
     type HierarchyIdentity = { Issue: IssueRef; NodeId: string }
     type HierarchyChild =
         { Issue: IssueRef; NodeId: string; State: string; StateReason: string option; ClosedAt: string option }

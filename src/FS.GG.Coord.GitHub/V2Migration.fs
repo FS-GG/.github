@@ -22,11 +22,11 @@ module V2Migration =
         | PlanningText of string
         | PlanningSelect of PlanningOption
 
-    /// Explicit selected classification only; no title, leaf, Status or Track inference.
+    // Explicit selected classification only; no title, leaf, Status or Track inference.
     type WorkLevelAssignment = { IssueId: string; Name: string }
 
-    /// None FieldId permits one create only when no same-name field exists. Exact independently
-    /// read-back field/option identities then bind subsequent absent-only initialization.
+    // None FieldId permits one create only when no same-name field exists. Exact independently
+    // read-back field/option identities then bind subsequent absent-only initialization.
     type WorkLevelPlan = { FieldId: string option; Assignments: WorkLevelAssignment list }
 
     type Scope =

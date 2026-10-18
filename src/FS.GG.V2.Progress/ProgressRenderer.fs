@@ -248,7 +248,7 @@ type Completion = {
     RecordedRoadmapHead: string
 }
 
-/// Read-only reporting facts from the selected inspection. Native completion is not acceptance.
+// Read-only reporting facts from the selected inspection. Native completion is not acceptance.
 type BoardWorkItem = {
     Issue: string
     WorkLevel: string
