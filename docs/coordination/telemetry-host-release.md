@@ -14,7 +14,8 @@ The installed-browser fixture keeps a strict one-receipt default for historical 
 Store14 producer-correction profile explicitly requires two applied receipts and zero rejected receipts,
 with both applied SQLite rows checked before and after backup/restore. The earlier one-receipt assertion
 failed on that current profile; passing the other package stages did not qualify the installed browser.
-The repaired source and pure controls still require actual hosted installed-package qualification.
+The genuine candidate subsequently passed hosted browser and installed-package qualification.
+The corrective publisher source still requires its own hosted checks and admitted native qualification.
 
 The fixed 0.6 release rails use Store14 and logical `utel-host-rel-12`. Source and
 installed-package qualification passed before authentic [candidate39135954294](https://github.com/FS-GG/.github/actions/runs/39135954294).
