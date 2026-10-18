@@ -1474,7 +1474,7 @@ let ``successor Work level binding is explicit and legacy contracts reject its f
 [<Fact>]
 let ``explicit delivery has independent capacity while outcome and unknown never select`` () =
     let selected = ProgrammeFixture.successorBinding ()
-    for level, decision in [Some "Delivery", "selected"; Some "Outcome", "needs-decision"; None, "unknown"] do
+    for level, decision in [Some "Delivery", "ready"; Some "Outcome", "needs-decision"; None, "unknown"] do
         let reads = ProgrammeFixture.successorTransport selected level ProgrammeFixture.unchanged
         let report = V2ProjectionSource.inspectFixed reads selected None
         let item = report.Items.Head
@@ -1484,6 +1484,20 @@ let ``explicit delivery has independent capacity while outcome and unknown never
         let context = ProgrammeFixture.context report
         let result = V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt
         Assert.Equal(decision, result.Head.Decision)
+        if level = Some "Delivery" then
+            let supplied = context.Slices.Head
+            Assert.Equal(Some V2ProjectionSource.Implement, result.Head.Operation)
+            Assert.Equal(V2ProjectionSource.Source, result.Head.Action)
+            Assert.Equal(supplied.Issue, result.Head.Issue)
+            Assert.Equal(Some supplied.Owner, result.Head.Owner)
+            Assert.Equal(Some supplied.Id, result.Head.SliceId)
+            Assert.Equal(Some supplied.Attempt, result.Head.Attempt)
+            Assert.Equal(item.WorkItem.Value.Sha256, supplied.Join.HierarchySha256)
+            Assert.Contains(result.Head.Reasons, fun reason -> reason.Contains("action-specific remaining capacity"))
+            let exhausted = {context with ImplementationSlots = Some 0}
+            Assert.Equal("deferred", (V2ProjectionSource.selectActions report (Some exhausted) report.NativeIntegrator.ObservedAt).Head.Decision)
+            let missing = {context with ImplementationSlots = None}
+            Assert.Equal("unknown", (V2ProjectionSource.selectActions report (Some missing) report.NativeIntegrator.ObservedAt).Head.Decision)
         Assert.Empty reads.Mutations
         Assert.Contains("unverified", item.WorkItem.Value.ClosureGaps.Head)
         let unselected = { context.Slices.Head with Issue = { ProgrammeFixture.issue with Number = 9999 } }
@@ -1641,6 +1655,18 @@ let ``complete selected hierarchy cycle refuses affected nodes without blocking 
         else
             Assert.False(item.WorkItem.Value.Complete)
             Assert.True(item.WorkItem.Value.Sha256.IsNone)
-    let result = V2ProjectionSource.selectActions report (Some(ProgrammeFixture.context report)) report.NativeIntegrator.ObservedAt
-    Assert.Equal("selected", result.Head.Decision)
+    let context = ProgrammeFixture.context report
+    let result = V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt
+    Assert.Equal("ready", result.Head.Decision)
+    Assert.Equal("I_independent", context.Slices.Head.Join.NativeId)
+    Assert.Equal({ProgrammeFixture.issue with Number = 6000}, result.Head.Issue)
+    Assert.Equal(Some context.Slices.Head.Owner, result.Head.Owner)
+    Assert.Equal(Some context.Slices.Head.Attempt, result.Head.Attempt)
+    Assert.Equal(Some V2ProjectionSource.Implement, result.Head.Operation)
+    Assert.Contains(result.Head.Reasons, fun reason -> reason.Contains("action-specific remaining capacity"))
+    for affected in report.Items |> List.filter (fun item -> item.ExpectedNodeId <> "I_independent") do
+        let scoped = {report with Items = affected :: (report.Items |> List.filter (fun item -> item.ExpectedNodeId <> affected.ExpectedNodeId))}
+        let refusal = V2ProjectionSource.selectActions scoped (Some(ProgrammeFixture.context scoped)) report.NativeIntegrator.ObservedAt
+        Assert.Equal(affected.Evidence.Issue, refusal.Head.Issue)
+        Assert.Equal("unknown", refusal.Head.Decision)
     Assert.Empty reads.Mutations
