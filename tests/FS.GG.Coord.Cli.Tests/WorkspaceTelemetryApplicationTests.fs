@@ -548,7 +548,9 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Equal("unknown", second["attribution"].GetValue<string>())
             Assert.Equal("unknown", second["delivery"].GetValue<string>())
             Assert.Equal(2, calls.Count)
-            let noNew = capture (fun _ -> failwith "duplicate observation was enqueued")
+            let mutable duplicateEnqueues = 0
+            let noNew = capture (fun _ -> duplicateEnqueues <- duplicateEnqueues + 1; Ok "locally-retained")
+            Assert.Equal(0, duplicateEnqueues)
             Assert.Single(noNew["observations"].AsArray()) |> ignore
             File.AppendAllText(path, nativeRow "response-a" 23000L 50L)
             let mutable correction = Array.empty<byte>
@@ -561,7 +563,9 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Single parsed.Facts |> ignore
             Assert.Equal(row["identity"].GetValue<string>(), parsed.Facts.Head.Identity)
             let before = File.ReadAllBytes statePath
-            let refused = SkillTelemetryAdapter.capturePassive root "different-owner" "passive-stream" home [path] (fun _ -> failwith "owner conflict invoked enqueue")
+            let mutable ownerConflictEnqueues = 0
+            let refused = SkillTelemetryAdapter.capturePassive root "different-owner" "passive-stream" home [path] (fun _ -> ownerConflictEnqueues <- ownerConflictEnqueues + 1; Ok "locally-retained")
+            Assert.Equal(0, ownerConflictEnqueues)
             Assert.Equal(1, refused.ExitCode)
             Assert.Equal<byte>(before, File.ReadAllBytes statePath)
 
@@ -596,7 +600,9 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Equal(256, before["responses"].AsObject().Count)
             let cursor = before["sources"].ToJsonString()
             File.AppendAllText(path, nativeRow "overflow" 10L 0L)
-            let after = SkillTelemetryAdapter.capturePassive root "owner" "passive-stream" home [path] (fun _ -> failwith "index overload enqueued") |> parseCapture
+            let mutable overflowEnqueues = 0
+            let after = SkillTelemetryAdapter.capturePassive root "owner" "passive-stream" home [path] (fun _ -> overflowEnqueues <- overflowEnqueues + 1; Ok "locally-retained") |> parseCapture
+            Assert.Equal(0, overflowEnqueues)
             Assert.Equal(256, after["observations"].AsArray().Count)
             Assert.Contains("response-index-full-capture-deferred", after["gaps"].ToJsonString())
             let state = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes statePath)
@@ -742,19 +748,22 @@ module WorkspaceTelemetryApplicationTests =
             let before = File.ReadAllBytes file
             let envelope = TelemetryReceipt.parse before |> Result.defaultWith (sprintf "%A" >> failwith)
             let mutable reject = false
+            let submittedBytes = ResizeArray<byte array>()
             let operations: WorkspaceTelemetryApplication.RemoteOperations =
                 { Lookup = fun _ _ _ _ ->
                     System.Threading.Tasks.Task.FromResult(FS.GG.Telemetry.RemoteClient.Unacknowledged(if reject then "receipt-unavailable" else "unsupported-version"))
                   Submit = fun _ bytes _ ->
-                    Assert.Equal<byte>(before, bytes)
+                    submittedBytes.Add(Array.copy bytes)
                     System.Threading.Tasks.Task.FromResult(FS.GG.Telemetry.RemoteClient.Acknowledged
                         { Scope = scope; BatchId = envelope.BatchId; Digest = envelope.Digest; Status = "rejected"; Code = Some "invalid-request" }) }
             let first = WorkspaceTelemetryApplication.tryDrainWithOperationsForTesting (Some config) (Some "FS-GG/.github") operations
             Assert.Equal(Error [ "passive-receiver-capability-refused:unsupported-version" ], first)
+            Assert.Empty submittedBytes
             Assert.Equal<byte>(before, File.ReadAllBytes file)
             reject <- true
             let second = WorkspaceTelemetryApplication.tryDrainWithOperationsForTesting (Some config) (Some "FS-GG/.github") operations
             Assert.Equal(Error [ "passive-receiver-capability-or-admission-refused:invalid-request" ], second)
+            Assert.Equal<byte>(before, Assert.Single submittedBytes)
             Assert.Equal<byte>(before, File.ReadAllBytes file)
             Assert.False(Directory.Exists(Path.Combine(spool, "outcomes")))
 
@@ -765,11 +774,13 @@ module WorkspaceTelemetryApplicationTests =
             use cleanup = cleanup
             let home, path = passiveSource root "concurrent"
             File.WriteAllText(path, nativeRow "response-a" 10L 0L)
+            let mutable competingEnqueues = 0
             let enqueue _ =
-                let competitor = SkillTelemetryAdapter.capturePassive root "owner" "passive-stream" home [path] (fun _ -> failwith "competing capture passed stream lock")
+                let competitor = SkillTelemetryAdapter.capturePassive root "owner" "passive-stream" home [path] (fun _ -> competingEnqueues <- competingEnqueues + 1; Ok "locally-retained")
                 Assert.Equal(1, competitor.ExitCode)
                 Ok "locally-retained"
             let captured = SkillTelemetryAdapter.capturePassive root "owner" "passive-stream" home [path] enqueue |> parseCapture
+            Assert.Equal(0, competingEnqueues)
             Assert.Single(captured["observations"].AsArray()) |> ignore
 
     [<Fact>]
@@ -1019,13 +1030,17 @@ module WorkspaceTelemetryApplicationTests =
             queue "ordinary-ready" true
             let visited = System.Collections.Generic.HashSet<string>()
             let mutable ordinaryApplied = false
+            let mutable unexpectedSubmits = 0
+            let mutable canceledEntries = 0
             let operations: WorkspaceTelemetryApplication.RemoteOperations =
                 { Lookup = fun _ batchId digest _ ->
                     visited.Add batchId |> ignore
                     if batchId = "ordinary-ready" then ordinaryApplied <- true
                     System.Threading.Tasks.Task.FromResult(FS.GG.Telemetry.RemoteClient.Acknowledged
                         { Scope = scope; BatchId = batchId; Digest = digest; Status = (if batchId = "ordinary-ready" then "applied" else "durably-received"); Code = None })
-                  Submit = fun _ _ _ -> failwith "durable lookup must never resubmit blocked heads" }
+                  Submit = fun _ _ _ ->
+                    unexpectedSubmits <- unexpectedSubmits + 1
+                    System.Threading.Tasks.Task.FromResult(FS.GG.Telemetry.RemoteClient.Unacknowledged "unexpected-submit") }
             // Corrupt advisory metadata resets safely; it is neither queued intent nor authority.
             let cursor = Path.Combine(spool, "drain-cursor")
             File.WriteAllText(cursor, "invalid")
@@ -1033,6 +1048,7 @@ module WorkspaceTelemetryApplicationTests =
             let originals = Directory.GetFiles(spool, "*.ready") |> Array.map (fun file -> file, File.ReadAllBytes file) |> Map.ofArray
             for _ in 1..8 do
                 WorkspaceTelemetryApplication.tryDrainWithOperationsForTesting (Some config) (Some "FS-GG/.github") operations |> ignore
+            Assert.Equal(0, unexpectedSubmits)
             Assert.True ordinaryApplied
             Assert.Equal(22, visited.Count)
             Assert.Equal(52, Directory.GetFiles(spool, "*.ready").Length)
@@ -1051,25 +1067,37 @@ module WorkspaceTelemetryApplicationTests =
                 use cutoff = new System.Threading.CancellationTokenSource()
                 let slow: WorkspaceTelemetryApplication.RemoteOperations =
                     { Lookup = fun _ batchId digest token ->
-                        Assert.False token.IsCancellationRequested
+                        if token.IsCancellationRequested then canceledEntries <- canceledEntries + 1
                         serviced.Add batchId |> ignore
                         if batchId = "ordinary-after-cancellation" then ordinaryAfterCancellation <- true
                         cutoff.Cancel()
                         System.Threading.Tasks.Task.FromResult(FS.GG.Telemetry.RemoteClient.Acknowledged
                             { Scope = scope; BatchId = batchId; Digest = digest; Status = (if batchId = "ordinary-after-cancellation" then "applied" else "durably-received"); Code = None })
-                      Submit = fun _ _ _ -> failwith "expired budget must not start submit" }
+                      Submit = fun _ _ _ ->
+                        unexpectedSubmits <- unexpectedSubmits + 1
+                        System.Threading.Tasks.Task.FromResult(FS.GG.Telemetry.RemoteClient.Unacknowledged "unexpected-submit") }
                 WorkspaceTelemetryApplication.tryDrainWithDeadlineForTesting (Some config) (Some "FS-GG/.github") slow cutoff.Token |> ignore
+            Assert.Equal(0, unexpectedSubmits)
+            Assert.Equal(0, canceledEntries)
             Assert.True ordinaryAfterCancellation
             Assert.Equal(22, serviced.Count)
             Assert.Equal(52, Directory.GetFiles(spool, "*.ready").Length)
             for file in Directory.GetFiles(spool, "*.ready") do Assert.Equal<byte>(originals[file], File.ReadAllBytes file)
 
             use submitCutoff = new System.Threading.CancellationTokenSource()
+            let mutable canceledLookupCalls = 0
             let canceledLookup: WorkspaceTelemetryApplication.RemoteOperations =
                 { Lookup = fun _ _ _ token ->
-                    Assert.False token.IsCancellationRequested
+                    canceledLookupCalls <- canceledLookupCalls + 1
+                    if token.IsCancellationRequested then canceledEntries <- canceledEntries + 1
                     submitCutoff.Cancel()
                     System.Threading.Tasks.Task.FromResult(FS.GG.Telemetry.RemoteClient.Unacknowledged "receipt-unavailable")
-                  Submit = fun _ _ _ -> failwith "canceled lookup must not start a submit" }
-            WorkspaceTelemetryApplication.tryDrainWithDeadlineForTesting (Some config) (Some "FS-GG/.github") canceledLookup submitCutoff.Token |> ignore
+                  Submit = fun _ _ _ ->
+                    unexpectedSubmits <- unexpectedSubmits + 1
+                    System.Threading.Tasks.Task.FromResult(FS.GG.Telemetry.RemoteClient.Unacknowledged "unexpected-submit") }
+            let canceledResult = WorkspaceTelemetryApplication.tryDrainWithDeadlineForTesting (Some config) (Some "FS-GG/.github") canceledLookup submitCutoff.Token
+            Assert.Equal(Error [ "unacknowledged-lossy" ], canceledResult)
+            Assert.Equal(1, canceledLookupCalls)
+            Assert.Equal(0, canceledEntries)
+            Assert.Equal(0, unexpectedSubmits)
             Assert.Equal(52, Directory.GetFiles(spool, "*.ready").Length)
