@@ -22,6 +22,19 @@ campaign/attempt identities, available references and actual capacity/operation 
 parent skill and applicable governing instructions in full; do not inherit the parent's conversation.
 Use the implementation route selected by the skill. Bootstrap is recovery, not feature planning.
 
+## Selected unavailable-history boundary
+
+Follow the parent's [forward-recovery decision](../SKILL.md#forward-recovery-after-unavailable-evidence--2026-10-18).
+The historical evidence-search task is closed as unavailable. Do not reopen its searches or repeated
+requests to satisfy complete-inventory wording below. Preserve known original records, 439 inherited
+reservations and 46 later records, with historical outcomes Unknown and holds unreleased. Recover
+current relevant ownership, remaining-after-active capacity and demonstrated separation for the exact
+proposed fresh operation. Separate its generation, writable state, identity and outputs; shared
+destinations require fencing/idempotency against old actors. Missing history is not empty relevant
+coverage; a relevant unresolved interference/capacity gap still fences that operation. No new ID may
+disguise a retry. Unrelated historical Unknowns do not globally block independent work. Use the existing
+journal/custody route; create no new ledger and perform no cleanup or release during bootstrap.
+
 ## Recover the selected window
 
 Read the existing private dispatch index first if available. It is a navigation cache, never authority.
@@ -33,13 +46,15 @@ failed/unknown attempts; never infer completion from their summaries or recreate
 If the session was killed before saving a handoff, or the latest report predates the interrupted work,
 use [crash recovery](crash-recovery.md). A missing index, packet or temporary artifact does not prevent
 recovery from the protected plans, surviving Git work and native authorities. Establish a complete
-reservation view and reconcile unknown effects before marking affected lanes ready.
+current relevant reservation view under the selected unavailable-history boundary before marking
+affected lanes ready; retain unknown original effects without reconstructing unavailable history.
 
 Retain the complete active-reservation population, including unreadable owners and pending operations,
 even when only a subset is ready. Distinguish original/current items and attempts, source/publication/
 installed/native/projection boundaries, exact source and PR heads, touch-sets and prerequisites. Unknown
-reservations continue to occupy their declared resources. A changed owner or missing return requires
-reconciliation by the parent, not reassignment by this worker.
+reservations retain their declared-resource holds. Their relation to a fresh operation is assessed
+against current capacity and demonstrated separation under the selected boundary above. A changed owner
+or missing return requires reconciliation by the parent, not reassignment by this worker.
 
 For explicitly selected organization V2 inspection, read the existing
 [organization contract](../../check-board/references/organization-v2-inspection.md) and preserve its

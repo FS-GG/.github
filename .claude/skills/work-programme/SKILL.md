@@ -175,6 +175,33 @@ For horizon planning, recurring qualification failures or changes to acceptance 
 its findings to these defaults; its historical observations are neither a current frontier nor another
 task ledger. Refresh the owning facts before selecting work.
 
+## Forward recovery after unavailable evidence — 2026-10-18
+
+The selected [forward-recovery decision](../../../docs/roadmaps/2026-10-07-games-development-roadmap.md#2-custody-recovery-and-safe-continuation)
+closes the unavailable historical evidence-search task. Stop its searches and repeated requests; keep
+surviving records, original effects, first failures and unproved outcomes Unknown. The 439 inherited
+reservations and 46 later original records remain distinct and unreleased. This decision qualifies
+complete-history/inventory wording in this skill and its bootstrap/crash-recovery references: preserve
+all known records, but do not require reconstruction of unavailable history before demonstrably
+independent fresh work. Existing issue/plan/native routes and effect-specific admission remain.
+
+The accountable owner supplies fresh, attributed current relevant ownership, remaining-after-active
+capacity and separation evidence for the concrete proposed operation. Use a fresh generation, separate
+writable state, operation identity and output destinations; shared destinations require demonstrated
+fencing or idempotency against old-actor interference. Do not declare empty relevant coverage from
+missing history or assume an unknown actor ended. An unresolved relevant conflict or capacity gap
+still withholds that operation; unrelated historical Unknowns are not a global scheduling gate. A new
+identity cannot disguise an uncertain-effect retry. Keep existing journals and custody, with no new
+recovery ledger or automatic reservation release. These facts permit the established admission route
+to assess a genuinely new operation; documentation, self-reported independence and a read-only
+selection never grant execution authority.
+
+SC2 qualification uses containers on the existing host, with exact image/legal assets, actual mounts
+and resource envelope, native protocol/gameplay/replay/recording, preserved output and recreation/
+recovery proof; expensive runs are serial. Its scope adds no separate physical machine, desktop or
+unrelated stronger platform prerequisite. V3-ENV's two-machine blank-slate and unattended lifecycle
+remain independent, unchanged and unclosed.
+
 ## Delegate recovery before loading history
 
 First check available runtime capacity; a killed parent does not prove its children or operations ended.
@@ -263,7 +290,9 @@ identity/exact head, changes since the prior return, boundary state, evidence re
 stays in the artifact; keep packet, original-attempt, source and return-revision joins truthful. The same owner
 repairs malformed returns. Neither a return nor an acknowledgment establishes acceptance.
 
-Consume decision deltas and the complete reservation inventory, retaining unknown/absent owners. Expand
+Consume decision deltas and preserve the known reservation inventory, retaining unknown/absent owners.
+Apply the selected forward-recovery boundary above to unavailable history; require complete fresh
+relevant coverage for the proposed operation, not a fabricated global census. Expand
 exact evidence only for inconsistencies, architectural joins, user requests or root safeguards. Before each
 expansion, name the parent decision or required review obligation and select only the evidence needed to
 resolve it. An exception category alone does not justify reading an entire artifact set. Use bounded

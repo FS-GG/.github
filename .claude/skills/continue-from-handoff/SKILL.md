@@ -64,6 +64,17 @@ receiver state, outstanding progress projections, partial files, and worker or
 process status against available live evidence. Keep observed results separate
 from worker reports and proposals. Missing temporary evidence remains unknown;
 do not reconstruct results or repeat a consumed operation to fill that gap.
+Apply the selected [forward-recovery boundary](../work-programme/SKILL.md#forward-recovery-after-unavailable-evidence--2026-10-18):
+the unavailable historical evidence-search task is closed as unavailable; stop repeated searches and
+requests. Preserve all known original records, 439 inherited reservations, 46 later original records
+and unproved outcomes Unknown, without release or replay. For a genuinely fresh operation, reconcile
+current relevant ownership and remaining capacity, separate generation/writable state/identity/outputs,
+and fence shared destinations against old-actor interference. Missing history is not empty coverage;
+unresolved relevant interference still blocks its operation. Unrelated unavailable history does not
+globally block demonstrated-independent work, and a new ID cannot disguise an uncertain-effect retry.
+Use existing journals/custody, not another recovery ledger. SC2's existing-host container scope does
+not change the separate V3 two-machine portability requirement.
+
 For an activated pilot and ROUTINEV3 source extension, also recover each pending request's canonical
 channel and original message identity, owner, expected response, response/escalation
 deadline and last complete successful read from the issue or restricted handoff.

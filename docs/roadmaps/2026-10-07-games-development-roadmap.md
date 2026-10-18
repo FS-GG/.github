@@ -20,9 +20,9 @@ Refresh each owner's native state before selecting the next operation.
 
 | Feature and owner | Remaining outcome | Next dependency or boundary | Owning plan |
 |---|---|---|---|
-| **SC2C-01.6f — SC2 Client** | Genuine independent-module/native/replay/recording acceptance, including advisor terminal diagnostics and qualified controller/advisor behavior. | The [typed replay-progress source fix](https://github.com/FS-GG/FS.GG.SC2.Client/pull/42) is merged as `289fe632` after [exact-head product verification](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/37552527897). Recover original private custody or a byte-preserving backup; preserve all consumed/unknown operations. Source/toolchain qualification does not replace native .6f acceptance. Rebuild/qualify the exact selected source and obtain fresh effect-specific admission only after prerequisite closure. | [SC2 design](../2026-09-08-132131-fable-sc2-wasm-client-design-roadmap.md), [SC2 .6 owner](https://github.com/FS-GG/FS.GG.SC2.Client/blob/main/docs/SC2C-01.6-plan.md) |
+| **SC2C-01.6f — SC2 Client** | Genuine independent-module/native/replay/recording acceptance, including advisor terminal diagnostics and qualified controller/advisor behavior. | The [typed replay-progress source fix](https://github.com/FS-GG/FS.GG.SC2.Client/pull/42) is merged as `289fe632` after [exact-head product verification](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/37552527897). The unavailable historical evidence search is closed under section 2; original outcomes and consumed/unknown operations remain unchanged. Qualify containers on the existing host: exact image and legally supplied headless engine/assets, mounts and current resource envelope, real protocol/gameplay/replay/recording, preserved outputs and container recreation/recovery. Serialize expensive runs. Fresh native work requires current relevant ownership/capacity and demonstrated separation; no separate physical machine, desktop session or unrelated stronger platform prerequisite is selected. Source/toolchain qualification does not replace native .6f acceptance. | [SC2 design](../2026-09-08-132131-fable-sc2-wasm-client-design-roadmap.md), [SC2 .6 owner](https://github.com/FS-GG/FS.GG.SC2.Client/blob/main/docs/SC2C-01.6-plan.md) |
 | **SC2C-01.7 — SC2 Client** | Product publication, clean installation, promised retained adoption and declared platform qualification. | Exact accepted product/native inputs and genuine package/archive identity; no released-product claim from source delivery. | [SC2 design](../2026-09-08-132131-fable-sc2-wasm-client-design-roadmap.md) |
-| **BARC-01.5 — FSBarV2/HighBarV3** | Qualify the selected unmodified stock Recoil/plugin/observer path, Count1 and all six useful-play journeys. | Recover original parent/root custody and reconcile unknown outcomes; preserve first failures and 0/6 useful-play acceptance. Protected diagnostic source is an input. A new rebuild/packet and observable native operation require original-identity reconciliation and fresh admission. | [BAR design](../2026-09-08-134900-fable-bar-wasm-client-design-roadmap.md), [useful-play owner](https://github.com/FS-GG/FSBarV2/blob/main/docs/roadmaps/barc-01-useful-play.md), [headless qualification](2026-10-02-bar-headless-infolog-qualification.md) |
+| **BARC-01.5 — FSBarV2/HighBarV3** | Qualify the selected unmodified stock Recoil/plugin/observer path, Count1 and all six useful-play journeys. | Preserve original parent/root custody where available, first failures and 0/6 useful-play acceptance. The unavailable historical evidence search is closed under section 2; unproved outcomes remain Unknown. Protected diagnostic source is an input. Fresh independent work requires the scoped ownership/capacity/separation checks below; this amendment selects no new BAR native attempt and does not permit an uncertain original retry. | [BAR design](../2026-09-08-134900-fable-bar-wasm-client-design-roadmap.md), [useful-play owner](https://github.com/FS-GG/FSBarV2/blob/main/docs/roadmaps/barc-01-useful-play.md), [headless qualification](2026-10-02-bar-headless-infolog-qualification.md) |
 | **BARC-01.7 — FSBarV2/HighBarV3** | Product publication and genuine installed/retained adoption. | Complete the selected useful-play/native scope and exact production module graph first; diagnostic fixtures do not prove gameplay. | [BAR design](../2026-09-08-134900-fable-bar-wasm-client-design-roadmap.md) |
 | **BAR knowledge keeper — BAR operational owner** | Qualify keeper restart supervision and sustainable retained backup behavior. | Reuse existing bounded retention and observed cycles; inspect actual running-host ownership before changing services or replaying requests. | [Backup retention](bar-knowledge-backup-retention.md) |
 | **FOURD-01 remaining .5 evaluation and dependent .6 — FourD** | Resolve player-derived usability/comparison where the owning original scope still requires it; finish its dependent product outcomes without reopening accepted automated V2 technical qualification. | Genuine consenting-player evidence is separate from automated technical cases. Do not manufacture unavailable human feedback or treat the later technical-scope amendment as an original player-study result. | [Algorithm roadmap](../2026-09-08-152551-4d-grid-tactics-algorithms-design-roadmap.md), [design v2](2026-09-28-four-dimensional-skirmish-design-v2.md), [owning .6](https://github.com/FS-GG/FS.GG.FourD/blob/main/docs/FOURD-01.6.md) |
@@ -33,23 +33,39 @@ Refresh each owner's native state before selecting the next operation.
 
 ## 2. Custody recovery and safe continuation
 
-SC2 and BAR retained attempts need their genuine original qualification records. Inspect the
-original owner volume, exact recorded paths and authorized byte-preserving backups; match complete
-file membership, hashes and original operation identities. A handoff summary, fresh run or
-reconstructed receipt is not a replacement. Missing custody remains unknown and fences the
-corresponding operation; it need not stop disjoint source inventory or other product work.
+**Selected forward-recovery decision — 2026-10-18.** The search/repeated-request task for
+unavailable historical qualification evidence is **closed as unavailable**. Stop searching for those
+missing records; retain genuine surviving records, original identities, first failures, known data and
+unproved historical outcomes as Unknown. Neither a handoff summary, reconstructed receipt nor fresh
+run replaces an original. The 439 inherited reservations and 46 later original-operation records
+remain distinct and unreleased; this disposition is not cleanup or historical acceptance.
 
-Preserve interrupted branches, private evidence, consumed grants and the first failed attempt.
-Do not retry an unknown native effect because a process is absent or a timestamp expired. Observe
-its original identity through the existing supported route before any separately admitted operation.
-The [diagnostic execution policy](../coordination/diagnostic-execution.md) governs budgets, independent
-failure collection and cleanup. This roadmap adds no broader host/resource permission.
+For a concrete proposed fresh operation, the existing owner and integrator reconcile current relevant
+resource/effect ownership, remaining capacity after active work and possible interference. Establish a
+fresh generation with separate writable state, operation identity and output destinations. Shared
+destinations require demonstrated fencing or idempotency against old-actor interference. A new ID
+must not disguise an uncertain-effect retry. Unknown occupancy or interference that can affect the
+proposed operation still blocks it; absent historical records never prove empty relevant coverage.
+Present capacity and demonstrated separation can admit otherwise authorized independent work without
+recovering unrelated unavailable history. Preserve the original holds in the existing journal/custody
+route; add no second recovery ledger and release no reservation by inference.
+
+SC2's selected native environment is containers on the existing host. Qualify the exact image,
+legally supplied real headless engine/assets, mounts and resource envelope, actual protocol/gameplay,
+replay/recording, output preservation and container recreation/recovery; serialize expensive runs.
+A separate physical machine, desktop session or unrelated stronger platform is not a prerequisite.
+[V3-ENV portability](2026-10-13-provisioned-podman-execution.md) retains its separate two-machine
+blank-slate and unattended-lifecycle obligations, unchanged and unclosed. BAR retains its own native
+acceptance and no new BAR attempt is selected here. Preserve interrupted branches and private evidence;
+the [diagnostic execution policy](../coordination/diagnostic-execution.md) still governs concrete budgets,
+failure collection, export-before-delete and observed cleanup. This decision grants no blanket native,
+privileged, publication or uncertain-original replay authority.
 
 ## 3. Parallel opportunities
 
 | Lanes that can prepare concurrently | Prerequisite and conflict rule | Serial acceptance join |
 |---|---|---|
-| SC2 and BAR original-custody discovery | Read only known custody locations/backups, preserve existing ownership and secret boundaries. | Original identity/unknown-effect reconciliation before native retry. |
+| SC2 and BAR fresh-operation preparation | Historical evidence search is closed as unavailable. Preserve originals; reconcile current relevant ownership/capacity and demonstrate separate generation, writable state and outputs, with fencing/idempotency for shared destinations. | Independently admitted operation only; no disguised original retry, inferred cleanup or new BAR attempt. SC2 expensive container runs remain serialized. |
 | SC2 advisor/source diagnostics, BAR diagnostic/build preparation and FourD acquisition/package preparation | Separate owning repos and disjoint touch-sets; resume retained work rather than replace it. | Actual CPU/process/native environment limits and machine admission; producer source is not native gameplay. |
 | FourD evaluation-pack/access preparation and shared Game template inventory | No dependency on native BAR/SC2 qualification; keep actual player evidence unknown until received. | Consenting evaluation where required and independently qualified template installation. |
 | SC2 and BAR WASM-only adapters | Each waits for its compatible published producer and exact ABI/profile; no rendering-pilot gate. | Product-specific browser/native conformance and retaining adoption before duplicate removal. |
