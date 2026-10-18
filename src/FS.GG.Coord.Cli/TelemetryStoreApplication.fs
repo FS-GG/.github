@@ -5576,6 +5576,9 @@ WHERE f.kind='learn-installed-origin/1' AND a.producer=$producer AND a.stream=$s
                                 || error.Contains("constraint", StringComparison.OrdinalIgnoreCase)
                                 || error = "invalid-request"
                                 // These exact receiver admission refusals are semantic, not storage faults.
+                                || error = "passive-observation-authenticated-owner-required"
+                                || error = "passive-observation-owner-mismatch"
+                                || error = "passive-observation-kind-is-immutable"
                                 || error = "responses-native-receipt-required"
                                 || error = "responses-current-installed-origin-required"
                                 || error = "activity usage attribution requires known source counters"

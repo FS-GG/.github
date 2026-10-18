@@ -848,6 +848,48 @@ module WorkspaceTelemetryApplicationTests =
             TelemetryStoreApplication.submitReceipt store approved peer peerEnvelope |> unwrap |> ignore
             TelemetryStoreApplication.drainReceipts store approved scope.Workspace |> unwrap |> ignore
             Assert.Contains("\"status\":\"rejected\"", TelemetryStoreApplication.lookupReceipt store approved peer "peer-correction" |> unwrap)
+            let replacement = System.Text.Json.Nodes.JsonNode.Parse batches[1]
+            replacement["ingestId"] <- System.Text.Json.Nodes.JsonValue.Create "kind-replacement"
+            replacement["eventCount"] <- System.Text.Json.Nodes.JsonValue.Create 1
+            replacement["events"] <- System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize
+                [| {| kind = "diagnostic"; identity = current["identity"].GetValue<string>(); revision = 3L; code = "fixture"; severity = "info" |} |])
+            TelemetryStoreApplication.submitReceipt store approved scope (envelope scope "kind-replacement" (Encoding.UTF8.GetBytes(replacement.ToJsonString()))) |> unwrap |> ignore
+            TelemetryStoreApplication.drainReceipts store approved scope.Workspace |> unwrap |> ignore
+            Assert.Contains("\"status\":\"rejected\"", TelemetryStoreApplication.lookupReceipt store approved scope "kind-replacement" |> unwrap)
+            let afterReplacement = System.Text.Json.Nodes.JsonNode.Parse(TelemetryStoreApplication.passiveObservations store approved scope |> unwrap)
+            Assert.Equal(snapshot["observations"].ToJsonString(), afterReplacement["observations"].ToJsonString())
+            // Exercise the existing application error boundary, including the owner-required
+            // refusal whose normal unauthenticated route is direct ingest rather than a receipt.
+            let cases = [ "passive-observation-authenticated-owner-required", true
+                          "passive-observation-owner-mismatch", true
+                          "passive-observation-kind-is-immutable", true
+                          "passive-observation-projection-unavailable", false
+                          "inert-storage-fault", false ]
+            for index, (code, semantic) in List.indexed cases do
+                let batchId = "application-boundary-" + string index
+                let replayPayload = System.Text.Json.Nodes.JsonNode.Parse batches[1]
+                replayPayload["ingestId"] <- System.Text.Json.Nodes.JsonValue.Create batchId
+                TelemetryStoreApplication.submitReceipt store approved scope (envelope scope batchId (Encoding.UTF8.GetBytes(replayPayload.ToJsonString()))) |> unwrap |> ignore
+                let retainedFile = Assert.Single(Directory.GetFiles(Path.Combine(store, "receipt-inbox"), "*.ready"))
+                let retainedBytes = File.ReadAllBytes retainedFile
+                let mutable hookCalls = 0
+                let hook (stage: string) =
+                    if stage = "before-application-commit" then
+                        hookCalls <- hookCalls + 1
+                        raise (InvalidOperationException code)
+                let outcome = TelemetryStoreApplication.drainReceiptsWithHook store approved scope.Workspace hook
+                Assert.Equal(1, hookCalls)
+                if semantic then
+                    Assert.Contains("\"rejected\":1", outcome |> unwrap)
+                    Assert.Contains("\"status\":\"rejected\"", TelemetryStoreApplication.lookupReceipt store approved scope batchId |> unwrap)
+                    Assert.False(File.Exists retainedFile)
+                else
+                    Assert.Equal(Error [ "storage-unavailable" ], outcome)
+                    Assert.Contains("\"status\":\"durably-received\"", TelemetryStoreApplication.lookupReceipt store approved scope batchId |> unwrap)
+                    Assert.Equal<byte>(retainedBytes, File.ReadAllBytes retainedFile)
+                    TelemetryStoreApplication.drainReceipts store approved scope.Workspace |> unwrap |> ignore
+                let unchanged = System.Text.Json.Nodes.JsonNode.Parse(TelemetryStoreApplication.passiveObservations store approved scope |> unwrap)
+                Assert.Equal(snapshot["observations"].ToJsonString(), unchanged["observations"].ToJsonString())
             let collector: TelemetryReceipt.Principal =
                 { Scope = { scope with Producer = "native-collector"; Stream = "inventory" }
                   Role = TelemetryReceipt.NativeCollector; GrantId = Some "native-grant"; GrantGeneration = Some 1L }
@@ -857,7 +899,7 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Contains("\"status\":\"rejected\"", TelemetryStoreApplication.lookupReceipt store approved collector.Scope "collector-passive" |> unwrap)
             let final = System.Text.Json.Nodes.JsonNode.Parse(TelemetryStoreApplication.passiveObservations store approved scope |> unwrap)
             Assert.Equal(snapshot["observations"].ToJsonString(), final["observations"].ToJsonString())
-            Assert.True(TelemetryStoreApplication.ingest store approved batches[1] |> Result.isError)
+            Assert.Equal(Error [ "passive-observation-authenticated-owner-required" ], TelemetryStoreApplication.ingest store approved batches[1])
 
     [<Fact>]
     let ``passive source keeps absent dimensions unknown and accounts for nonusage scan budgets`` () =
