@@ -470,7 +470,7 @@ module WorkspaceTelemetryApplicationTests =
         $"""{{"timestamp":"2026-10-18T06:41:48.322Z","type":"token_usage_record","payload":{{"thread_id":"7f4b2770-a3ce-54b8-be37-7992c3c9091b","turn_id":"f8097483-03a3-5055-88a4-eb7e2ee32446","response_id":"{response}","usage":{{"input_tokens":{input},"cached_input_tokens":0,"cache_write_input_tokens":{cacheWrite},"output_tokens":72,"reasoning_output_tokens":0,"total_tokens":{input + 72L}}},"turn_token_usage":{{"input_tokens":999999,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0,"total_tokens":1000000}}}}}}""" + "\n"
 
     let private parseCapture (value: SkillTelemetryAdapter.CommandResult) =
-        Assert.True(value.ExitCode = 0, Encoding.UTF8.GetString value.Stderr)
+        Assert.True((value.ExitCode = 0), Encoding.UTF8.GetString value.Stderr)
         System.Text.Json.Nodes.JsonNode.Parse value.Stdout
 
     [<Fact>]
@@ -498,8 +498,8 @@ module WorkspaceTelemetryApplicationTests =
             File.WriteAllText(path, row)
             let rotated = scan (Some complete.Cursor) 4194304
             Assert.Contains("source-continuity-gap", rotated.Diagnostics)
-            Assert.NotEqual(complete.Cursor.SourceInstance, rotated.Cursor.SourceInstance)
-            Assert.NotEqual(complete.Cursor.Generation, rotated.Cursor.Generation)
+            Assert.NotEqual<string>(complete.Cursor.SourceInstance, rotated.Cursor.SourceInstance)
+            Assert.NotEqual<string>(complete.Cursor.Generation, rotated.Cursor.Generation)
             File.WriteAllText(path, String('x', 2 * 1024 * 1024) + "\n" + row)
             let oversized = scan (Some rotated.Cursor) 1200000
             Assert.True(oversized.Cursor.SkippingOversized)
@@ -659,7 +659,7 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Contains("credential-unavailable", defaultError)
             Assert.False(File.Exists config)
             let code, configured, error = invoke "activate-remote" ("--capture-only" :: args)
-            Assert.True(code = 0, error)
+            Assert.True((code = 0), error)
             Assert.Equal("capture-configured;receiver-unverified", configured)
             let statusCode, status, _ = invoke "status" [ "--config"; config; "--repository"; "FS-GG/.github" ]
             Assert.Equal(0, statusCode)
@@ -974,7 +974,7 @@ module WorkspaceTelemetryApplicationTests =
                     Console.SetError priorError
             let args = [ "--config"; config; "--repository"; "FS-GG/.github" ]
             let code, output, error = run ([ "capture" ] @ args @ [ "--input"; selection ])
-            Assert.True(code = 0, error)
+            Assert.True((code = 0), error)
             let captured = System.Text.Json.Nodes.JsonNode.Parse output
             Assert.Single(captured["observations"].AsArray()) |> ignore
             Assert.Equal("locally-retained", captured["capture"].GetValue<string>())
@@ -983,7 +983,7 @@ module WorkspaceTelemetryApplicationTests =
             Assert.DoesNotContain(root, output)
             Assert.Single(Directory.GetFiles(spool, "*.ready")) |> ignore
             let reportCode, reportOutput, reportError = run ([ "report" ] @ args)
-            Assert.True(reportCode = 0, reportError)
+            Assert.True((reportCode = 0), reportError)
             let report = System.Text.Json.Nodes.JsonNode.Parse reportOutput
             Assert.Equal(captured["observations"].ToJsonString(), report["observations"].ToJsonString())
             let invalidCode, _, _ = run ([ "capture" ] @ args @ [ "--input"; selection; "--item"; "invented" ])
