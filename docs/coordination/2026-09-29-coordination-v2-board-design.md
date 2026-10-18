@@ -297,10 +297,14 @@ installed/no-dispatch consumers remain accepted only at their recorded finite sc
 v3 outcomes and their native issue/PR mappings require a bounded current reconciliation before
 population migration. Preserve active owners, PRs, dependencies and original operation references.
 
-Actual authenticated UI/browser/computer capability is currently unavailable under the local
-workload hold. API metadata can establish native IDs and configuration but cannot satisfy the
-required UI verification of columns, cards, filters and ordering. This blocks presentation acceptance,
-not independent plan/source work. No local CLR, native or browser workload is authorized by this plan.
+Agent browser/computer capability remains unavailable. The user independently completed the
+existing main view, and user confirmation plus authenticated configuration readback accepted that
+finite main-view check on 2026-10-18. Preserve the exact user-selected name `Programme Board`, its
+identity, Board layout, Active delivery/open filter, Status columns and order, no group or automatic
+sort, and legitimate extra card fields. Future migration must freshly observe these edits rather
+than restore an old snapshot. Complete-population and supporting-view UI verification remain later
+acceptance work; no agent-rendered browser claim follows. Runtime workloads require their separately
+selected resource profile; this plan itself grants no execution authority.
 
 ### One current contract and its sources of truth
 
@@ -315,7 +319,7 @@ not independent plan/source work. No local CLR, native or browser workload is au
 
 The current owning-issue model accepts one complete six-field record in either maintained inline
 or heading form. Duplicate, missing, mixed or unknown field structure withholds the source join;
-fenced examples cannot complete the record. Current deliverable preserves bounded native field text:
+fenced examples cannot complete the record. Current deliverable preserves native field text bounded to 16 KiB UTF-8:
 exact trimmed `None` declares no current deliverable, while nonempty prose, artifacts, publication,
 installation or original-operation references remain declared work. Canonical in-scope PR links are
 discovery hints joined to fresh native identity/state/head and complete inventories. Malformed or

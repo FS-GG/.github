@@ -871,15 +871,15 @@ contracts:
         dotnet-only: "all modules explicitly excluded by compatibility-profile.v1.json"
         oracle: "tests/Game.Core.Fable.Tests/fixtures/v1/expected.bin — 442 bytes, SHA-256 9c0d7128f7b9558ef7e985618b1165199f83a0bb4af7533b175cc95b340c4a24"
   - id: wasm-shared-runtime
-    version: "0.6.0"   # SOURCE/PUBLISHED: accepted original39085989107/a1 at P8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e; installed0.6 remains unqualified.
-    package-version: "0.6.0"   # Both feeds and release416167085 accepted; last accepted installed profile remains0.5 P8054/Qc938.
+    version: "0.6.0"   # SOURCE/PUBLISHED: accepted original39085989107/a1 at P8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e; finite installed0.6 accepted via Q9a98f5da.
+    package-version: "0.6.0"   # Both feeds/release416167085 and original installed39091471055/a1 accepted; prior0.5 remains historical.
     package-tag: "wasm/v0.6.0"
     owner: game
     surface: "FS.GG.Wasm.Contracts and FS.GG.Wasm.Browser coherent package set; closed generated-policy Worker, browser lifecycle, terminal Process retirement, portable Fable sources and coupled author SDK archive"
     consumers: []   # Producer/installed qualification does not establish BAR/SC2/FourD product adoption.
     profiles:
       shared-wasm:
-        source-frontier: "0.6.0 at 8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e (Game#723), genuinely published. No installed0.6 or consumer acceptance follows; last accepted installed profile remains0.5."
+        source-frontier: "0.6.0 at 8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e (Game#723), genuinely published and finite both-feed installed-qualified by Q9a98f5da4043ec5d231acca97edfeebba7d4efb2. Consumer acceptance remains separate."
         identity: "wasm/v0.6.0 — genuinely published coherent current set"
         packages: "FS.GG.Wasm.Contracts@0.6.0 / FS.GG.Wasm.Browser@0.6.0; exact same-version Browser-to-Contracts dependency; genuinely published coherent pair"
         sdk: "fsgg-wasm-sdk-0.6.0.tar.gz — coupled source archive under wasm/v0.6.0; SHA-256 b06bdd4a75e9f9727f58cdbeb272e42f1c88607f2326152c67feb5dc5aeccd6f. Prior immutable0.5 SDK SHA-256 1aaa536f13e2afe93cf5b8bd825461b6ac7232df90e9f246a73f9fabb9ed8390."
@@ -889,9 +889,9 @@ contracts:
         toolchain: ".NET 10.0.401 / Fable 5.18.0 / Node 26 / Quint 0.32.0 / Rust 1.90.0 / WASI SDK 34.0"
         browser: "Pinned Playwright 1.63.0 Chromium profile"
         abi: "BAR ABI 1; strict imported SC2 ABI 0x00010000"
-        qualification: "Original protected full WASM39084881928/a1 and publication39085989107/a1 accepted at immutable producer P=8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e. Fresh both-feed installed0.6 qualification remains separate and unaccepted. Last accepted installed0.5 remains39076218708/a1, producer80540027623d9b1a8aa7715d0591de48455403b7 and exact qualifier Q=c938e9158542e3a0572b62dd09c01ad01cbb344f."
-        installed-evidence: "Last accepted installed0.5 original39076218708/a1 independently joins org/public originals, manifest/feed/dependency roles, closed Worker and Core against producer80540027623d9b1a8aa7715d0591de48455403b7. Direct cleanup exited0; descendant cleanup was not proved. This does not qualify installed0.6, SC2/product timing or native authority. Preserve historical0.4 installed39023332496/a1 and failed39016307973/a1 and39020851715/a1 evidence; original0.3 H4/.5-P2 remains bound to its own producer."
-        qualifier: "Current0.6 package/SDK/manifest/tag and original publisher executor are immutable P=8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e. A new exact installed qualifier is still required. Historical0.5 Q=c938e9158542e3a0572b62dd09c01ad01cbb344f qualifies only its finite producer80540027623d9b1a8aa7715d0591de48455403b7 closure; no arbitrary qualifier, overlay, rebuild, replay or receipt transfer follows."
+        qualification: "Original protected full WASM39084881928/a1 and publication39085989107/a1 accepted at immutable producer P=8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e. Both-feed installed0.6 original39091471055/a1 accepted at exact qualifier Q=9a98f5da4043ec5d231acca97edfeebba7d4efb2. Historical installed0.5 remains39076218708/a1, producer80540027623d9b1a8aa7715d0591de48455403b7 and Q=c938e9158542e3a0572b62dd09c01ad01cbb344f."
+        installed-evidence: "Accepted installed0.6 original39091471055/a1 independently joins both575-member eligible artifacts and original org/public package, manifest, SDK and dependency roles against producer8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e through qualifier9a98f5da4043ec5d231acca97edfeebba7d4efb2. Runtime/collection/direct cleanup exited0; descendant absence remains unproved. Failed stale-collector original39088631914/a1 remains failed. Historical accepted installed0.5 original39076218708/a1 P8054/Qc938, older0.4 installed39023332496/a1 and failed39016307973/a1/39020851715/a1, and original0.3 H4/.5-P2 retain their own identities. No SC2/product timing or native authority transfers."
+        qualifier: "Current0.6 package/SDK/manifest/tag and original publisher executor are immutable P=8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e; exact finite installed qualifier Q=9a98f5da4043ec5d231acca97edfeebba7d4efb2 is separately accepted. Historical0.5 Q=c938e9158542e3a0572b62dd09c01ad01cbb344f qualifies only producer80540027623d9b1a8aa7715d0591de48455403b7; no arbitrary qualifier, overlay, rebuild, replay or receipt transfer follows."
         unqualified: "Additional browsers, npm/bundler permutations, OS support, WASI execution, deterministic fuel/replay, product adoption and native authority"
   - id: game-physics-box2d
     version: "0.17.0"

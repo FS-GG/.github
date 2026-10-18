@@ -27,17 +27,20 @@ The [immutable owning plan at P](https://github.com/FS-GG/FS.GG.Game/blob/8a5e63
 defines source obligations; the accepted native original establishes publication, rather than
 inferring it from preparation prose.
 
-Fresh both-feed installed **0.6** qualification remains separate. The last accepted installed
-profile is **0.5**, producer `80540027623d9b1a8aa7715d0591de48455403b7` and exact finite qualifier
-Q=`c938e9158542e3a0572b62dd09c01ad01cbb344f`, from
-[original installed qualification `39076218708/attempt1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39076218708).
-Its source/Worker/Core custody, direct cleanup and native upload do not transfer to 0.6; global
-descendant settlement remains unproved. Original 0.5 publication `39073209865/attempt1`, release
-`416092764` and all historical 0.4/0.3 identities and failures remain immutable.
+Fresh both-feed installed **0.6** qualification is separately accepted through exact qualifier
+Q=`9a98f5da4043ec5d231acca97edfeebba7d4efb2`, from
+[original installed qualification `39091471055/attempt1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39091471055).
+Both575-member eligible artifacts and served org/public package, manifest, SDK and dependency joins
+were independently verified. Runtime, collection and direct cleanup exited0; descendant absence
+remains unproved. The failed stale-collector original `39088631914/attempt1` stays failed.
+Historical accepted installed0.5 producer `80540027623d9b1a8aa7715d0591de48455403b7` and qualifier
+`c938e9158542e3a0572b62dd09c01ad01cbb344f`, original `39076218708/attempt1`, retain their own finite
+scope. Original0.5 publication `39073209865/attempt1`, release `416092764` and all historical0.4/0.3
+identities and failures remain immutable.
 
-The shared registry now records source and published 0.6 while retaining last installed 0.5.
-Empty consumers remain intentional: producer publication does not establish SC2/BAR/FourD pins,
-product timing, native authority, consumer adoption or completion of stages .5–.7.
+The shared registry now records source, published and finite installed0.6. Empty consumers remain
+intentional: producer qualification does not establish SC2/BAR/FourD pins, product timing, native
+or image authority, wholeS1, consumer adoption or completion of stages .5–.7.
 
 ## Inspected source and existing consumers
 

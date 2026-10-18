@@ -19,6 +19,10 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+### 2026-10-18 — `wasm-shared-runtime`: accepted finite installed 0.6 (game; Game#725, #718)
+
+Record [original installed qualification39091471055/attempt1](https://github.com/FS-GG/FS.GG.Game/actions/runs/39091471055) at exact qualifier Q=`9a98f5da4043ec5d231acca97edfeebba7d4efb2` against immutable published producer P=`8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e`. Both575-member eligible artifacts and org/public served-feed identities were independently verified and accepted. Runtime, collection and direct cleanup exited0; descendant absence remains unproved. Retain failed stale-collector original39088631914 and accepted installed0.5 P8054/Qc938 as historical evidence. Consumers remain empty; this finite producer qualification does not establish wholeS1, SC2/BAR/FourD adoption, native/image/product acceptance or any Coordination operation.
+
 ### 2026-10-18 — `wasm-shared-runtime`: accepted 0.6 publication, separate last installed 0.5 (game; Game#723, #718)
 
 Record original publisher39085989107/attempt1 at producer8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e, release416167085/tagwasm/v0.6.0 and its exact manifest/SDK/promotion transaction. Both feeds and all four served assets were independently verified and accepted. Installed0.6 remains unqualified; the last accepted installed0.5 P8054/Qc938 and every prior immutable receipt remain separate. Consumers stay empty. This publication-only projection establishes no SC2/BAR/FourD adoption, product timing or native authority.
