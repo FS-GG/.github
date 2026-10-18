@@ -6,6 +6,12 @@ on:
   pull_request:
     paths:
       - "tools/BoardV2Import/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "global.json"
       - "tools/board-v2-import.py"
       - "tools/board-v2-import.schema.json"
       - "docs/coordination/board-v2-import-manifest.json"
@@ -16,6 +22,12 @@ on:
     branches: [main]
     paths:
       - "tools/BoardV2Import/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "global.json"
       - "tools/board-v2-import.py"
       - "tools/board-v2-import.schema.json"
       - "docs/coordination/board-v2-import-manifest.json"
@@ -40,5 +52,5 @@ jobs:
         run: dotnet restore tools/BoardV2Import/BoardV2Import.fsproj --locked-mode
       - name: Validate exact import manifest
         run: python3 tools/board-v2-import.py docs/coordination/board-v2-import-manifest.json
-      - name: Exercise bounded pilot plan and pending-target refusals
+      - name: Exercise legacy and private programme preparation controls
         run: python3 tests/board-v2-import/run.py

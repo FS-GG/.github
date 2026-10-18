@@ -1802,3 +1802,9 @@ observations and before Observation mutation/no-op. Product3 remains separate. R
 preparation checks input composition only; it does not qualify a package, protected commitment,
 installed caller or remaining migration. Preserve original PR4663 qualification evidence separately
 from the changed-source hosted obligations; do not repack the accepted 0.104 artifact.
+
+The offline import preflight remains the existing linear locked-restore/validate/test job with its
+10-minute limit. Its mirrored pull/push path filters include the newly shared GitHub/Core source
+closure and build configuration. Existing static path-coherence controls are proportionate; no
+new model, gate, credential route or measured CI savings is claimed. The private real-input
+preparation and native qualification remain separate from synthetic/public fixtures.
