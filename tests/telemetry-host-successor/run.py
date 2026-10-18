@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import pathlib
+import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -114,6 +115,26 @@ class EarlyQualificationTests(unittest.TestCase):
                            source.replace('e["passiveReceiptQualified"] is True', 'True')]:
                 with self.assertRaises((AssertionError, ValueError)):
                     check(mutant, expensive, native)
+
+
+class InstalledPassiveInputTests(unittest.TestCase):
+    def test_actual_embedded_package_producer_preserves_native_identity(self):
+        source = (ROOT / "tests/standalone-telemetry-host-package/production.sh").read_text()
+        marker = '  python3 - "$WORK/envelope.json" <<' + "'PY'\n"
+        block = source.split(marker, 1)[1].split("\nPY\n", 1)[0]
+        def identity(program, output):
+            subprocess.run([sys.executable, "-c", program, str(output)], check=True, capture_output=True)
+            value = json.loads(output.read_text())
+            self.assertEqual(value["payload"]["eventCount"], len(value["payload"]["events"]))
+            return value["payload"]["events"][1]["identity"]
+        expected = "passive-" + hashlib.sha256(b"codex-rollout/1\x1f22222222-2222-2222-2222-222222222222\x1f33333333-3333-3333-3333-333333333333\x1fpackage-response").hexdigest()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            self.assertEqual(identity(block, root / "good.json"), expected)
+            # A syntactically valid escaped-text identity must fail this protocol control.
+            bad = block.replace(chr(92) + "x1f", chr(92) * 2 + "x1f")
+            self.assertNotEqual(bad, block)
+            self.assertNotEqual(identity(bad, root / "bad.json"), expected)
 
 
 class Journal:
