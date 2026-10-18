@@ -10,6 +10,12 @@ The [Host package](../../src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj),
 profile. The envelope and receipt ABI remain unchanged. Passive facts retain authenticated owner
 checks, corrections and canonical-only attribution; they do not become qualified item totals.
 
+The installed-browser fixture keeps a strict one-receipt default for historical profiles. The current
+Store14 producer-correction profile explicitly requires two applied receipts and zero rejected receipts,
+with both applied SQLite rows checked before and after backup/restore. The earlier one-receipt assertion
+failed on that current profile; passing the other package stages did not qualify the installed browser.
+The repaired source and pure controls still require actual hosted installed-package qualification.
+
 The fixed 0.6 release rails use Store14 and `utel-host-rel-12`. Bounded local compilation and
 actual HTTP/schema controls passed; full hosted, installed-package and candidate qualification
 remain pending. A clean unsupported-storage refusal is not positive passive acceptance.
