@@ -52,7 +52,12 @@ delivered driver cohort in both mirrors, then packs the tool and validates built
 bytes and release-manifest correspondence. Creator017's normal dependency graph includes Coord.Cli,
 so the maintained fixture builds every project into a fresh external artifacts root, reads the exact
 Creator output for FSI/package qualification, and compares workspace engine artifacts plus the selected
-caller before/after build. Retained in-tree outputs cannot rescue a missing or changed isolated assembly.
+caller before/after build. Both the ordinary selftest and current Creator candidate retain that root
+across their real FSI, pack and built-versus-packed checks; recursive mutation children own fresh roots.
+The maintained pure source-flow control checks all workflow callers before expensive qualification and
+rejects lost environment retention, stale FSI paths, repacking or a different validator root. This is a
+bounded static check for the existing linear producer/consumer chain, not a new workflow/model or
+measured cost saving. Retained in-tree outputs cannot rescue a missing or changed isolated assembly.
 Source-only offline qualification exercises programme
 continuation, explicit product selection, blocked scope, old handoff and completed source with remaining
 parent obligations. Current-package publication, installed absolute-path discovery, native product

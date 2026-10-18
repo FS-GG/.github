@@ -93,6 +93,7 @@ jobs:
           dotnet-version: "10.0.x"
       - name: Run the new-sdd-workspace parse fixture
         run: |
+          python3 tests/new-sdd-workspace-successor/run.py WizardReleaseTests.test_current_source_flows_keep_one_isolated_producer
           export FSGG_CREATOR_SOURCE_ARTIFACTS="$RUNNER_TEMP/creator017-source-build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           echo "FSGG_CREATOR_SOURCE_ARTIFACTS=$FSGG_CREATOR_SOURCE_ARTIFACTS" >> "$GITHUB_ENV"
           bash tests/new-sdd-workspace/run.sh

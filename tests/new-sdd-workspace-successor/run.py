@@ -17,6 +17,7 @@ import tempfile
 import unittest
 import zipfile
 import runpy
+import shlex
 from xml.etree import ElementTree
 from unittest.mock import patch
 
@@ -27,6 +28,58 @@ from release_successor_journal import Refused as JournalRefused
 from new_sdd_workspace_successor_admission import WizardAdmission
 from new_sdd_workspace_successor_execution import effects, CURRENT_017, CURRENT_016, CURRENT_015, CURRENT_014, HISTORICAL_013, ReleaseBinding
 from new_sdd_workspace_successor_provider import WizardProvider, NotFound, output_signals, publisher_error, DIAGNOSTIC_LIMIT
+
+
+SOURCE_FLOWS = {
+    "new-sdd-workspace-selftest.yml": (
+        "Run the new-sdd-workspace parse fixture",
+        "Qualify the compiled product binding and complete driver materialization",
+        "Qualify Creator 0.17 normal-source package closure", "source"),
+    "release-new-sdd-workspace-successor-candidate.yml": (
+        "Qualify wizard source", "Qualify the real compiled product board boundary",
+        "Pack and bind one package archive", "candidate"),
+}
+
+
+def source_flow(workflow: str, names: tuple[str, str, str, str]) -> None:
+    """Bound the existing linear producer/consumer commands, without executing a build."""
+    def step(name):
+        marker = f"      - name: {name}\n"
+        if workflow.count(marker) != 1:
+            raise ValueError("Creator source flow: missing or repeated step")
+        section = workflow.split(marker, 1)[1].split("\n      - ", 1)[0]
+        _, sep, body = section.partition("        run: |\n")
+        if not sep:
+            raise ValueError("Creator source flow: expected explicit run body")
+        return "\n".join(line[10:] for line in body.splitlines() if line.startswith("          "))
+
+    producer, materializer, package = map(step, names[:3])
+    assignment = ('export FSGG_CREATOR_SOURCE_ARTIFACTS="$RUNNER_TEMP/creator017-'
+                  + names[3] + '-build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"')
+    retention = 'echo "FSGG_CREATOR_SOURCE_ARTIFACTS=$FSGG_CREATOR_SOURCE_ARTIFACTS" >> "$GITHUB_ENV"'
+    launch = 'bash tests/new-sdd-workspace/run.sh'
+    if (assignment not in producer or retention not in producer or launch not in producer
+            or not producer.index(assignment) < producer.index(retention) < producer.index(launch)):
+        raise ValueError("Creator source flow: fresh root must be retained before the real producer")
+    directory = '$FSGG_CREATOR_SOURCE_ARTIFACTS/bin/NewSddWorkspace/release/'
+    if (f'--lib:"{directory}"' not in materializer
+            or any(f'--reference:"{directory}{leaf}"' not in materializer for leaf in (
+                'new-sdd-workspace.dll', 'fsgg-coord-engine.dll',
+                'FS.GG.Coord.GitHub.dll', 'FS.GG.Coord.Core.dll'))
+            or '--exec tests/new-sdd-workspace/product-board.fsx' not in materializer):
+        raise ValueError("Creator source flow: FSI must consume the retained producer")
+    commands = [shlex.split(line) for line in package.replace('\\\n', ' ').splitlines()
+                if line.strip().startswith('dotnet pack ')]
+    if len(commands) != 1:
+        raise ValueError("Creator source flow: expected one pack command")
+    pack = commands[0]
+    if (pack[:3] != ['dotnet', 'pack', 'scripts/NewSddWorkspace/NewSddWorkspace.fsproj']
+            or '--no-build' not in pack or '--artifacts-path' not in pack
+            or pack[pack.index('--artifacts-path') + 1:pack.index('--artifacts-path') + 2]
+                != ['$FSGG_CREATOR_SOURCE_ARTIFACTS']
+            or '--build-artifacts "$FSGG_CREATOR_SOURCE_ARTIFACTS"' not in package
+            or 'scripts/NewSddWorkspace/bin/' in materializer + package):
+        raise ValueError("Creator source flow: pack and validator must use the retained producer")
 
 
 def manifest():
@@ -536,6 +589,32 @@ class WizardReleaseTests(unittest.TestCase):
                         candidate.index('Qualify wizard source'))
         self.assertNotIn('FsggFrozenCoordDependencies', candidate)
         self.assertNotIn('FsggFrozenCoordSource', candidate)
+
+    def test_current_source_flows_keep_one_isolated_producer(self):
+        workflows = ROOT / '.github/workflows'
+        actual = {path.name for path in workflows.glob('*.yml')
+                  if ('bash tests/new-sdd-workspace/run.sh' in path.read_text()
+                      or '--exec tests/new-sdd-workspace/product-board.fsx' in path.read_text()
+                      or 'dotnet pack scripts/NewSddWorkspace/NewSddWorkspace.fsproj' in path.read_text())}
+        self.assertEqual(actual, set(SOURCE_FLOWS), 'unreviewed Creator source build consumer')
+        for name, steps in SOURCE_FLOWS.items():
+            original = (workflows / name).read_text()
+            source_flow(original, steps)
+            mutations = (
+                ('echo "FSGG_CREATOR_SOURCE_ARTIFACTS=$FSGG_CREATOR_SOURCE_ARTIFACTS" >> "$GITHUB_ENV"', ':'),
+                ('-build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT', '-fixed-root'),
+                ('$FSGG_CREATOR_SOURCE_ARTIFACTS/bin/NewSddWorkspace/release/', 'scripts/NewSddWorkspace/bin/Release/net10.0/'),
+                ('--no-build', ''),
+                ('--artifacts-path "$FSGG_CREATOR_SOURCE_ARTIFACTS"', '--artifacts-path "$OTHER_ROOT"'),
+                ('--build-artifacts "$FSGG_CREATOR_SOURCE_ARTIFACTS"', ''),
+            )
+            for old, new in mutations:
+                with self.subTest(workflow=name, mutation=old):
+                    self.assertIn(old, original, 'mutation preimage missing')
+                    changed = original.replace(old, new)
+                    self.assertNotEqual(original, changed)
+                    with self.assertRaisesRegex(ValueError, 'Creator source flow:'):
+                        source_flow(changed, steps)
 
     def test_workflow_retains_exact_historical_title_and_isolates_current_mode(self):
         workflow = (ROOT / '.github/workflows/release-new-sdd-workspace.yml').read_text()

@@ -131,11 +131,6 @@ DECLARED_SITES: dict[str, str | None] = {
         "the in-tree build is the mutation subject; the tree is dirty under the engine's source "
         "trees by construction while it runs, which is tier 2a's protected case"
     ),
-    # Builds `$PROJ`, assigned `scripts/NewSddWorkspace/NewSddWorkspace.fsproj` ten lines earlier. It is
-    # here rather than excluded by NON_ENGINE_PROJECT_MARKERS precisely because the project is named
-    # through a variable, so this gate cannot READ that it is not the engine — and default-deny means
-    # "cannot read" is answered by a human writing this sentence, not by the gate guessing. Its output
-    # lands under `scripts/NewSddWorkspace/bin/Release`, a path `scripts/fsgg-coord` never probes.
     # The image-closure gate builds only its explicit non-engine F# CLI, tests,
     # correspondence and mutant projects. Their ProjectReference graphs contain
     # PersistentV3.ImageClosure only (plus FSharp.Core/FsQuint packages), with no
