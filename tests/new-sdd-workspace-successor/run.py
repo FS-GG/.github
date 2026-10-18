@@ -58,26 +58,35 @@ def source_flow(workflow: str, names: tuple[str, str, str, str]) -> None:
                   + names[3] + '-build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"')
     retention = 'echo "FSGG_CREATOR_SOURCE_ARTIFACTS=$FSGG_CREATOR_SOURCE_ARTIFACTS" >> "$GITHUB_ENV"'
     launch = 'bash tests/new-sdd-workspace/run.sh'
-    if (assignment not in producer or retention not in producer or launch not in producer
+    if (any(producer.splitlines().count(line) != 1 for line in (assignment, retention, launch))
             or not producer.index(assignment) < producer.index(retention) < producer.index(launch)):
         raise ValueError("Creator source flow: fresh root must be retained before the real producer")
     directory = '$FSGG_CREATOR_SOURCE_ARTIFACTS/bin/NewSddWorkspace/release/'
-    if (f'--lib:"{directory}"' not in materializer
-            or any(f'--reference:"{directory}{leaf}"' not in materializer for leaf in (
-                'new-sdd-workspace.dll', 'fsgg-coord-engine.dll',
-                'FS.GG.Coord.GitHub.dll', 'FS.GG.Coord.Core.dll'))
-            or '--exec tests/new-sdd-workspace/product-board.fsx' not in materializer):
+    def commands(body):
+        return [shlex.split(line, comments=True) for line in body.replace('\\\n', ' ').splitlines() if line.strip()]
+    materializers = [args for args in commands(materializer) if args[:2] == ['dotnet', 'fsi']]
+    references = {f'--reference:{directory}{leaf}' for leaf in (
+        'new-sdd-workspace.dll', 'fsgg-coord-engine.dll',
+        'FS.GG.Coord.GitHub.dll', 'FS.GG.Coord.Core.dll')}
+    if (len(materializers) != 1
+            or [arg for arg in materializers[0] if arg.startswith('--lib:')] != [f'--lib:{directory}']
+            or len([arg for arg in materializers[0] if arg.startswith('--reference:')]) != 4
+            or set(arg for arg in materializers[0] if arg.startswith('--reference:')) != references
+            or materializers[0][-2:] != ['--exec', 'tests/new-sdd-workspace/product-board.fsx']):
         raise ValueError("Creator source flow: FSI must consume the retained producer")
-    commands = [shlex.split(line) for line in package.replace('\\\n', ' ').splitlines()
-                if line.strip().startswith('dotnet pack ')]
-    if len(commands) != 1:
+    packs = [args for args in commands(package) if args[:2] == ['dotnet', 'pack']]
+    validators = [args for args in commands(package)
+                  if args[:2] == ['python3', 'tests/new-sdd-workspace-successor/run.py'] and '--board-package' in args]
+    if len(packs) != 1 or len(validators) != 1:
         raise ValueError("Creator source flow: expected one pack command")
-    pack = commands[0]
+    pack, validator = packs[0], validators[0]
     if (pack[:3] != ['dotnet', 'pack', 'scripts/NewSddWorkspace/NewSddWorkspace.fsproj']
-            or '--no-build' not in pack or '--artifacts-path' not in pack
+            or pack.count('--no-build') != 1 or pack.count('--artifacts-path') != 1
             or pack[pack.index('--artifacts-path') + 1:pack.index('--artifacts-path') + 2]
                 != ['$FSGG_CREATOR_SOURCE_ARTIFACTS']
-            or '--build-artifacts "$FSGG_CREATOR_SOURCE_ARTIFACTS"' not in package
+            or validator.count('--build-artifacts') != 1
+            or validator[validator.index('--build-artifacts') + 1:validator.index('--build-artifacts') + 2]
+                != ['$FSGG_CREATOR_SOURCE_ARTIFACTS']
             or 'scripts/NewSddWorkspace/bin/' in materializer + package):
         raise ValueError("Creator source flow: pack and validator must use the retained producer")
 
@@ -607,6 +616,8 @@ class WizardReleaseTests(unittest.TestCase):
                 ('--no-build', ''),
                 ('--artifacts-path "$FSGG_CREATOR_SOURCE_ARTIFACTS"', '--artifacts-path "$OTHER_ROOT"'),
                 ('--build-artifacts "$FSGG_CREATOR_SOURCE_ARTIFACTS"', ''),
+                ('--build-artifacts "$FSGG_CREATOR_SOURCE_ARTIFACTS"', '# --build-artifacts "$FSGG_CREATOR_SOURCE_ARTIFACTS"'),
+                ('--artifacts-path "$FSGG_CREATOR_SOURCE_ARTIFACTS"', '--artifacts-path "$FSGG_CREATOR_SOURCE_ARTIFACTS" --artifacts-path "$OTHER_ROOT"'),
             )
             for old, new in mutations:
                 with self.subTest(workflow=name, mutation=old):
