@@ -64,6 +64,10 @@ module WorkspaceTelemetryApplication =
     val tryDrainWithOperationsForTesting:
         configArg: string option -> repositoryArg: string option -> operations: RemoteOperations -> Result<string, string list>
 
+    /// Inject cancellation into the unchanged 30-second drain budget, without waiting on wall time.
+    val tryDrainWithDeadlineForTesting:
+        configArg: string option -> repositoryArg: string option -> operations: RemoteOperations -> deadline: System.Threading.CancellationToken -> Result<string, string list>
+
     val tryDrain: configArg: string option -> repositoryArg: string option -> Result<string, string list>
 
     val tryDrainExpected:

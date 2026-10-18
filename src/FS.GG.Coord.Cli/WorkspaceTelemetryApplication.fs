@@ -721,6 +721,8 @@ module WorkspaceTelemetryApplication =
 
             let result =
                 match result with
+                | RemoteClient.Unacknowledged "receipt-unavailable" when token.IsCancellationRequested ->
+                    RemoteClient.Unacknowledged "network-unavailable"
                 | RemoteClient.Unacknowledged "receipt-unavailable" ->
                     (selected.Submit (scope a) bytes token).GetAwaiter().GetResult()
                 | other -> other
@@ -1095,7 +1097,7 @@ module WorkspaceTelemetryApplication =
     let tryPublish configArg repositoryArg payload =
         tryPublishExpected configArg repositoryArg None payload
 
-    let private tryDrainBoundWith (operations: RemoteOperations option) (configArg: string option) (repositoryArg: string option) (expectedBinding: string option) =
+    let private tryDrainBoundWith (operations: RemoteOperations option) (externalDeadline: CancellationToken option) (configArg: string option) (repositoryArg: string option) (expectedBinding: string option) =
         let path = configPath configArg
 
         if not (File.Exists path) then
@@ -1123,7 +1125,8 @@ module WorkspaceTelemetryApplication =
                                 match ensurePrivateDirectory spool with
                                 | Error errors -> Error errors
                                 | Ok directory ->
-                                    use deadline = new CancellationTokenSource(TimeSpan.FromSeconds 30.)
+                                    use deadline = CancellationTokenSource.CreateLinkedTokenSource([| externalDeadline |> Option.defaultValue CancellationToken.None |])
+                                    deadline.CancelAfter(TimeSpan.FromSeconds 30.)
 
                                     let inventory = Directory.EnumerateFiles(directory, "*.ready") |> Seq.truncate 129 |> Seq.toArray
                                     let selection = selectReadyFiles (readDrainCursor directory) inventory
@@ -1131,11 +1134,19 @@ module WorkspaceTelemetryApplication =
                                         match selection with
                                         | Error errors -> [ Error errors ]
                                         | Ok files ->
-                                            // Advance before network: crashes/uncertain outcomes change visit order only.
-                                            match List.tryLast files with
-                                            | Some last -> atomicWriteWith true directory "drain-cursor" (Encoding.UTF8.GetBytes(Path.GetFileName last)) |> ignore
-                                            | None -> ()
-                                            files |> List.map (remoteOneWith operations association endpoint reference deadline.Token)
+                                            let rec visit (remaining: string list) (completed: Result<RemoteContract.Receipt, string list> list) =
+                                                match remaining with
+                                                | [] -> List.rev completed
+                                                | _ when deadline.IsCancellationRequested -> List.rev (Error [ "drain-deadline-expired" ] :: completed)
+                                                | file :: tail ->
+                                                    // Advance only over this attempted head. A slow predecessor must not
+                                                    // skip the unattempted remainder when the shared deadline expires.
+                                                    atomicWriteWith true directory "drain-cursor" (Encoding.UTF8.GetBytes(Path.GetFileName file)) |> ignore
+                                                    let result =
+                                                        try remoteOneWith operations association endpoint reference deadline.Token file
+                                                        with :? OperationCanceledException -> Error [ "drain-deadline-expired" ]
+                                                    visit tail (result :: completed)
+                                            visit files []
 
                                     match
                                         results
@@ -1164,10 +1175,13 @@ module WorkspaceTelemetryApplication =
             with _ ->
                 Error [ "drain-advisory-failure" ]
 
-    let private tryDrainBound configArg repositoryArg expectedBinding = tryDrainBoundWith None configArg repositoryArg expectedBinding
+    let private tryDrainBound configArg repositoryArg expectedBinding = tryDrainBoundWith None None configArg repositoryArg expectedBinding
 
     let tryDrainWithOperationsForTesting configArg repositoryArg operations =
-        tryDrainBoundWith (Some operations) configArg repositoryArg None
+        tryDrainBoundWith (Some operations) None configArg repositoryArg None
+
+    let tryDrainWithDeadlineForTesting configArg repositoryArg operations deadline =
+        tryDrainBoundWith (Some operations) (Some deadline) configArg repositoryArg None
 
     let tryDrain configArg repositoryArg =
         tryDrainBound configArg repositoryArg None

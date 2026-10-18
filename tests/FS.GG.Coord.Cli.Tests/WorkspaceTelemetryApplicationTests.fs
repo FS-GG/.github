@@ -1041,3 +1041,35 @@ module WorkspaceTelemetryApplicationTests =
             File.Delete cursor
             WorkspaceTelemetryApplication.tryDrainWithOperationsForTesting (Some config) (Some "FS-GG/.github") operations |> ignore
             Assert.Equal(22, visited.Count)
+
+            // Expire every drain immediately after its first usable lookup. Unattempted selected
+            // tails must resume next time rather than being skipped by a last-selected cursor.
+            queue "ordinary-after-cancellation" true
+            let serviced = System.Collections.Generic.HashSet<string>()
+            let mutable ordinaryAfterCancellation = false
+            for _ in 1..23 do
+                use cutoff = new System.Threading.CancellationTokenSource()
+                let slow: WorkspaceTelemetryApplication.RemoteOperations =
+                    { Lookup = fun _ batchId digest token ->
+                        Assert.False token.IsCancellationRequested
+                        serviced.Add batchId |> ignore
+                        if batchId = "ordinary-after-cancellation" then ordinaryAfterCancellation <- true
+                        cutoff.Cancel()
+                        System.Threading.Tasks.Task.FromResult(FS.GG.Telemetry.RemoteClient.Acknowledged
+                            { Scope = scope; BatchId = batchId; Digest = digest; Status = (if batchId = "ordinary-after-cancellation" then "applied" else "durably-received"); Code = None })
+                      Submit = fun _ _ _ -> failwith "expired budget must not start submit" }
+                WorkspaceTelemetryApplication.tryDrainWithDeadlineForTesting (Some config) (Some "FS-GG/.github") slow cutoff.Token |> ignore
+            Assert.True ordinaryAfterCancellation
+            Assert.Equal(22, serviced.Count)
+            Assert.Equal(52, Directory.GetFiles(spool, "*.ready").Length)
+            for file in Directory.GetFiles(spool, "*.ready") do Assert.Equal<byte>(originals[file], File.ReadAllBytes file)
+
+            use submitCutoff = new System.Threading.CancellationTokenSource()
+            let canceledLookup: WorkspaceTelemetryApplication.RemoteOperations =
+                { Lookup = fun _ _ _ token ->
+                    Assert.False token.IsCancellationRequested
+                    submitCutoff.Cancel()
+                    System.Threading.Tasks.Task.FromResult(FS.GG.Telemetry.RemoteClient.Unacknowledged "receipt-unavailable")
+                  Submit = fun _ _ _ -> failwith "canceled lookup must not start a submit" }
+            WorkspaceTelemetryApplication.tryDrainWithDeadlineForTesting (Some config) (Some "FS-GG/.github") canceledLookup submitCutoff.Token |> ignore
+            Assert.Equal(52, Directory.GetFiles(spool, "*.ready").Length)
