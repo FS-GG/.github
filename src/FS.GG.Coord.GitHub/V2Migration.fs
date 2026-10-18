@@ -994,7 +994,7 @@ module V2Migration =
     let snapshotDigest (snapshot: Snapshot) = hash (snapshotTokens snapshot)
     let encodeReadback (scope: Scope) (snapshot: Snapshot) =
         let root =
-            objectNode [ "schema", jsonString "fs.gg.board-v2.migration-readback/1";
+            objectNode [ "schema", jsonString (if scope.WorkLevel.IsSome then "fs.gg.board-v2.migration-readback/2" else "fs.gg.board-v2.migration-readback/1");
                          "observedAt", jsonString (snapshot.ObservedAt.ToString "O");
                          "scope", scopeNode scope; "snapshot", stringsNode (snapshotTokens snapshot);
                          "snapshotDigest", jsonString (snapshotDigest snapshot);

@@ -416,8 +416,10 @@ module V2MigrationTests =
               Repository = Some "FS-GG/.github"; Number = Some 42; UpdatedAt = "2026-10-17T13:00:00Z";
               Archived = false; Values = [] }
         let populated = { after with Items = [ existing ] }
-        let classified = { resolved with WorkLevel = resolved.WorkLevel |> Option.map (fun plan ->
-            { plan with Assignments = [ { IssueId = "synthetic-issue"; Name = "Delivery" } ] }) }
+        let classified =
+            { resolved with
+                WorkLevel = resolved.WorkLevel |> Option.map (fun plan ->
+                    { plan with Assignments = [ { IssueId = "synthetic-issue"; Name = "Delivery" } ] }) }
         let declaration = prepare classified populated |> get
         let initialization = declaration.Changes |> List.find (function InitializePlanningValue(_, _, id, _) -> id = field.Id | _ -> false)
         let option = field.Options |> List.find (fun option -> option.Name = "Outcome")
