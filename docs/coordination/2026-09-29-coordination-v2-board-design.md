@@ -26,8 +26,10 @@ it does not republish, install, activate consumers or change a board.
 
 The subsequent fresh remaining-only migration has retained an original successful thirteen-effect
 apply, independent final joins over 22 memberships/eight views and all seventeen declared planning
-rows, and a separately selected read-only zero-effect repeat. The combined original-data acceptance
-remains a separate accountable decision. Existing human values, the original five cards, the earlier
+rows, and a separately selected read-only zero-effect repeat. Root accepted the combined mechanical
+migration and repeated zero-effect result at 2026-10-18 05:37:25 UTC after independent original-data
+review. These accepted counts are attributed to that restricted original-data review and owner
+acceptance, not established by this source change. Existing human values, the original five cards, the earlier
 added membership and all six Status IDs/order remain preserved. The accepted main view remains exactly
 **Programme Board**, with its original identity and eight ordered visible fields, including the
 legitimate Status and Sub-issues progress fields; supporting-view/full-population UI acceptance is separate.

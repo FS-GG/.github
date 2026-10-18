@@ -19,6 +19,10 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+### 2026-10-18 — `coord-engine`: accepted coherent 0.105 and canonical tool pin (github; #4634, #4663)
+
+Record exact candidate source `e54a59885580c894c8fbc67b0b27af3571ea9883`, [original candidate39095711219/attempt1](https://github.com/FS-GG/.github/actions/runs/39095711219), promoted `coherent-set/v0.105.0` and release416229635. Initial publisher39096861301 remains its incomplete generation14 checkpoint; separately selected [completion39098313280/attempt1](https://github.com/FS-GG/.github/actions/runs/39098313280) settled the original Kit intent without resend and completed all16/final33. Advance published inventory/tag and the canonical `.github` tool pin to105 after accepted publication and exact82-file developer-installed correspondence. Retain immutable104 and original103Unknown/439/consumed operations. This closure prepares the opaque public programme-enrollment commitment; private exact cohort and final binding remain restricted and unadmitted until protected currentness. No republish, install, board write, receiver fleet adoption, consumer activation or manual-status retirement follows from these scalars.
+
 ### 2026-10-18 — `wasm-shared-runtime`: accepted finite installed 0.6 (game; Game#725, #718)
 
 Record [original installed qualification39091471055/attempt1](https://github.com/FS-GG/FS.GG.Game/actions/runs/39091471055) at exact qualifier Q=`9a98f5da4043ec5d231acca97edfeebba7d4efb2` against immutable published producer P=`8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e`. Both575-member eligible artifacts and org/public served-feed identities were independently verified and accepted. Runtime, collection and direct cleanup exited0; descendant absence remains unproved. Retain failed stale-collector original39088631914 and accepted installed0.5 P8054/Qc938 as historical evidence. Consumers remain empty; this finite producer qualification does not establish wholeS1, SC2/BAR/FourD adoption, native/image/product acceptance or any Coordination operation.
