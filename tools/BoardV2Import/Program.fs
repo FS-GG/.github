@@ -556,6 +556,32 @@ let private programmeRead limit (path: string) =
     require (stream.ReadByte() = -1 && stream.Length = length) "programme input changed"
     bytes
 
+// Same narrow Linux-x64 directory-entry barrier used by the maintained migration CLI.
+// File Flush(true) alone does not make a newly created directory entry durable.
+module private ProgrammeDirectoryNative =
+    [<System.Runtime.InteropServices.DllImport("libc", EntryPoint = "open", SetLastError = true)>]
+    extern int openDirectory(string path, int flags)
+    [<System.Runtime.InteropServices.DllImport("libc", SetLastError = true)>]
+    extern int fsync(int descriptor)
+    [<System.Runtime.InteropServices.DllImport("libc", SetLastError = true)>]
+    extern int close(int descriptor)
+
+let private programmeDirectorySupported () =
+    OperatingSystem.IsLinux()
+    && System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = System.Runtime.InteropServices.Architecture.X64
+
+let private programmeSyncDirectory (path: string) =
+    require (programmeDirectorySupported()) "programme directory durability unavailable"
+    // Linux O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW. No fallback, retry or pair-atomicity claim.
+    let descriptor = ProgrammeDirectoryNative.openDirectory(path, 0x10000 ||| 0x80000 ||| 0x20000)
+    require (descriptor >= 0) "programme directory durability unavailable"
+    let mutable complete = false
+    try
+        complete <- ProgrammeDirectoryNative.fsync descriptor = 0
+    finally
+        if ProgrammeDirectoryNative.close descriptor <> 0 then complete <- false
+    require complete "programme directory durability unavailable"
+
 let private programmeWrite (path: string) (bytes: byte array) =
     let options = FileStreamOptions(Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None,
                                     Options = FileOptions.WriteThrough)
@@ -564,6 +590,7 @@ let private programmeWrite (path: string) (bytes: byte array) =
     use stream = new FileStream(path, options)
     stream.Write bytes
     stream.Flush(true)
+    programmeSyncDirectory (Path.GetDirectoryName path)
 
 let private programmeRetained (path: string) (expected: byte array) =
     if not (OperatingSystem.IsWindows()) then
@@ -575,8 +602,8 @@ let private programmeMain (args: string array) =
     // No caught exception text, supplied path, payload, nonce or native identity is printed.
     // A partially created pair is retained on failure; never delete, retry, reseed or overwrite.
     try
-        // This route currently qualifies restrictive Unix creation, not ambient Windows ACLs.
-        require (not (OperatingSystem.IsWindows())) "programme private creation unavailable"
+        // Both restrictive creation and directory durability must be supported before RNG/outputs.
+        require (programmeDirectorySupported()) "programme private creation unavailable"
         require (args.Length = 9 && args.[1] = "--binding-template" && args.[3] = "--payload"
                  && args.[5] = "--private-output" && args.[7] = "--public-output") "programme arguments"
         let paths = [ args.[2]; args.[4]; args.[6]; args.[8] ] |> List.map programmePath
