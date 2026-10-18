@@ -28,7 +28,8 @@ module V2Projection =
     /// Version 4 is the source-only Project 3 successor, schema 2, with one-to-100 exact native issues
     /// and In review. It never falls back to an older binding. Observation-only refresh requires
     /// the exact successor native schema, selected issue identity and current source joins.
-    /// Version 4 alone adds private programmeEnrollment; version 3 keeps its exact wire contract.
+    /// Version 5 explicitly selects schema 3 and Work level Outcome/Delivery; it retains exact private enrollment.
+    /// Versions 4 and 5 require private programmeEnrollment; version 3 keeps its exact wire contract.
     type Binding =
         {
             ProgrammeEnrollment: ProgrammeEnrollment option
@@ -50,8 +51,12 @@ module V2Projection =
             RoadmapFieldId: string
             Track: SelectFieldBinding
             Observation: SelectFieldBinding
+            WorkLevel: SelectFieldBinding option
             Repositories: Set<string>
         }
+
+    /// Explicit supported organization modes; never treats future versions as admitted.
+    val isProgrammeBinding: binding: Binding -> bool
 
     type IssueRef =
         {

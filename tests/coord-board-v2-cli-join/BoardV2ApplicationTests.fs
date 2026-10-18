@@ -1293,3 +1293,36 @@ let ``actual integrator input must bind the authenticated whole enrollment commi
         Assert.Equal(1, code)
         Assert.True(report.IsNone)
         Assert.Equal(0, reads)
+
+[<Fact>]
+let ``successor actual CLI requires versioned hierarchy join and emits scope without parent acceptance`` () =
+    let selected = ProgrammeFixture.successorBinding ()
+    let baseline = V2ProjectionSource.inspectFixed (ProgrammeFixture.successorTransport selected (Some "Delivery") ProgrammeFixture.unchanged) selected None
+    let context = ProgrammeFixture.context baseline
+    let input = ProgrammeFixture.successorIntegratorJson context
+    Assert.True(Result.isOk(BoardV2Application.parseIntegratorObservations selected input))
+    Assert.True(Result.isError(BoardV2Application.parseIntegratorObservations selected (ProgrammeFixture.integratorJson context)))
+    let stale = Text.Json.Nodes.JsonNode.Parse input
+    stale.["slices"].[0].["join"].["hierarchySha256"] <- Text.Json.Nodes.JsonValue.Create(String.replicate 64 "f")
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-successor-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+    try
+        let bindingPath = Path.Combine(directory, "binding.json")
+        File.WriteAllText(bindingPath, ProgrammeFixture.bindingJsonFor selected)
+        for index, json, expected in [0, input, "selected"; 1, stale.ToJsonString(), "unknown"] do
+            let output = Path.Combine(directory, $"report-{index}.json")
+            let reads = ProgrammeFixture.successorTransport selected (Some "Delivery") ProgrammeFixture.unchanged
+            use reader = new StringReader(json)
+            let code = BoardV2Application.runWithTransportAndInput reads reader ["inspect"; "--binding-file"; bindingPath; "--report-file"; output; "--integrator-stdin"]
+            Assert.Equal(0, code)
+            use report = JsonDocument.Parse(File.ReadAllText output)
+            let root = report.RootElement
+            Assert.Equal("fsgg.coord.board-v2-inspection/3", root.GetProperty("schema").GetString())
+            let work = root.GetProperty("items").[0].GetProperty("workItem")
+            Assert.Equal("Delivery", work.GetProperty("workLevel").GetString())
+            Assert.Equal("Unverified", work.GetProperty("closure").GetProperty("acceptance").GetString())
+            Assert.Equal("I_parent", work.GetProperty("hierarchy").GetProperty("parent").GetProperty("nodeId").GetString())
+            Assert.Equal(expected, root.GetProperty("selection").[0].GetProperty("decision").GetString())
+            Assert.False(root.GetProperty("selection").[0].GetProperty("dispatchAuthority").GetBoolean())
+            Assert.Empty reads.Mutations
+    finally Directory.Delete(directory, true)

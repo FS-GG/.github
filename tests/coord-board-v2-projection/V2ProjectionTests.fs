@@ -20,7 +20,7 @@ let private ok body =
 
 let private binding =
     {
-        ProgrammeEnrollment = None
+        WorkLevel = None; ProgrammeEnrollment = None
         BindingVersion = 2
         ImportRecipeRevision = String.replicate 40 "e"
         ImportArtifactSha256 = String.replicate 64 "f"
@@ -1048,7 +1048,7 @@ let ``declared work reconciliation is local while independent slices retain orde
         { template with
             Id = id; Attempt = id + "-attempt"; Issue = item.Evidence.Issue; Operation = V2ProjectionSource.Implement;
             Paths = [ "src/" + id + ".fs" ]; PullRequest = None; PullRequestId = None; PullRequestUpdatedAt = None; Head = None;
-            Join = { NativeId = native.NodeId; UpdatedAt = native.UpdatedAt; BodySha256 = native.BodySha256; SourceRevision = item.SourceRevision.Value };
+            Join = { NativeId = native.NodeId; UpdatedAt = native.UpdatedAt; BodySha256 = native.BodySha256; SourceRevision = item.SourceRevision.Value; HierarchySha256 = None };
             Prerequisites = [ { Action = V2ProjectionSource.Source; Reference = "current-deliverable"; Satisfied = satisfied; SupplyingOwner = "programme-owner" } ] }
     let unknownItem = report.Items |> List.find (fun item -> item.Evidence.Issue = ProgrammeFixture.issue)
     let independentItem = report.Items |> List.find (fun item -> item.Evidence.Issue = other)
@@ -1454,3 +1454,119 @@ let ``programme instruction provenance admits both exact observation paths and r
         Assert.True(report.Evidence.PopulationGap.IsNone, string report.Evidence.PopulationGap)
         Assert.Equal(admitted, report.Items.Head.SourceCurrentness = "Current")
         if not admitted then Assert.True(report.Items.Head.Gap.IsSome)
+
+[<Fact>]
+let ``successor Work level binding is explicit and legacy contracts reject its field`` () =
+    let selected = ProgrammeFixture.successorBinding ()
+    Assert.True(Result.isOk (validateBinding selected))
+    Assert.True(Result.isOk (decodeBinding (ProgrammeFixture.bindingJsonFor selected)))
+    for invalid in
+        [ { selected with WorkLevel = None }
+          { selected with BindingVersion = 4; SchemaVersion = 2 }
+          { selected with WorkLevel = Some { selected.WorkLevel.Value with Id = selected.Status.Id } }
+          { selected with WorkLevel = Some { selected.WorkLevel.Value with Options = Map.ofList ["Delivery", "delivery-option"] } } ] do
+        Assert.True(Result.isError(validateBinding invalid))
+    let historical = ProgrammeFixture.binding ()
+    Assert.True(Result.isOk(decodeBinding (ProgrammeFixture.bindingJsonFor historical)))
+
+[<Fact>]
+let ``explicit delivery has independent capacity while outcome and unknown never select`` () =
+    let selected = ProgrammeFixture.successorBinding ()
+    for level, decision in [Some "Delivery", "selected"; Some "Outcome", "needs-decision"; None, "unknown"] do
+        let reads = ProgrammeFixture.successorTransport selected level ProgrammeFixture.unchanged
+        let report = V2ProjectionSource.inspectFixed reads selected None
+        let item = report.Items.Head
+        Assert.True(item.WorkItem.Value.Complete, string item.WorkItem.Value.Gap)
+        Assert.Single(item.WorkItem.Value.Children) |> ignore
+        Assert.False(selected.SelectedIssues.ContainsKey item.WorkItem.Value.Children.Head.NodeId)
+        let context = ProgrammeFixture.context report
+        let result = V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt
+        Assert.Equal(decision, result.Head.Decision)
+        Assert.Empty reads.Mutations
+        Assert.Contains("unverified", item.WorkItem.Value.ClosureGaps.Head)
+        let unselected = { context.Slices.Head with Issue = { ProgrammeFixture.issue with Number = 9999 } }
+        let refused = V2ProjectionSource.selectActions report (Some {context with Slices = [unselected]}) report.NativeIntegrator.ObservedAt
+        Assert.Equal("unknown", refused.Head.Decision)
+
+[<Fact>]
+let ``hierarchy changed partial or cyclic reads cannot qualify delivery`` () =
+    for mode in ["denied"; "partial"; "cycle"; "moved"; "classification"] do
+        let mutable hierarchyReads = 0
+        let mutable classificationReads = 0
+        let change request response =
+            if request.Subject = "selected native work hierarchy" then
+                hierarchyReads <- hierarchyReads + 1
+                if mode = "denied" then Error(Http(403, "inert denied"))
+                else response |> Result.map (fun (value: Transport.Response) ->
+                    let body =
+                        if mode = "partial" then value.Body.Replace("\"totalCount\":1", "\"totalCount\":2")
+                        elif mode = "cycle" then value.Body.Replace("I_unselected-child", "I_outcome")
+                        elif mode = "moved" && hierarchyReads > 1 then value.Body.Replace("I_unselected-child", "I_changed-child")
+                        else value.Body
+                    {value with Body = body})
+            elif request.Subject = "selected work classification" then
+                classificationReads <- classificationReads + 1
+                response |> Result.map (fun (value: Transport.Response) ->
+                    if mode = "classification" && classificationReads > 1 then
+                        {value with Body = value.Body.Replace("Delivery", "Outcome").Replace("delivery-option", "outcome-option")}
+                    else value)
+            else response
+        let reads = ProgrammeFixture.successorTransport (ProgrammeFixture.successorBinding ()) (Some "Delivery") change
+        let report = V2ProjectionSource.inspectFixed reads (ProgrammeFixture.successorBinding ()) None
+        Assert.False(report.Items.Head.WorkItem.Value.Complete, mode)
+        Assert.True(report.Items.Head.WorkItem.Value.Sha256.IsNone, mode)
+        let result = V2ProjectionSource.selectActions report (Some(ProgrammeFixture.context report)) report.NativeIntegrator.ObservedAt
+        Assert.Equal("unknown", result.Head.Decision)
+        Assert.Empty reads.Mutations
+
+[<Fact>]
+let ``completed source delivery retains parent promise and cannot manufacture acceptance`` () =
+    let selected = ProgrammeFixture.successorBinding ()
+    let change (request: Transport.Request) response =
+        response |> Result.map (fun (value: Transport.Response) ->
+            if request.Subject.EndsWith("native observation", StringComparison.Ordinal) || request.Subject = "selected native work hierarchy" then
+                let root = System.Text.Json.Nodes.JsonNode.Parse value.Body
+                let issue = root.["data"].["repository"].["issue"]
+                issue.["state"] <- System.Text.Json.Nodes.JsonValue.Create "CLOSED"
+                if request.Subject = "selected native work hierarchy" then
+                    issue.["stateReason"] <- System.Text.Json.Nodes.JsonValue.Create "COMPLETED"
+                    issue.["closedAt"] <- System.Text.Json.Nodes.JsonValue.Create "2026-10-17T12:00:00Z"
+                {value with Body = root.ToJsonString()}
+            else value)
+    let reads = ProgrammeFixture.successorTransport selected (Some "Delivery") change
+    let report = V2ProjectionSource.inspectFixed reads selected None
+    let work = report.Items.Head.WorkItem.Value
+    Assert.True(work.Complete, string work.Gap)
+    Assert.Equal(Some "COMPLETED", work.StateReason)
+    Assert.Equal(Some "2026-10-17T12:00:00Z", work.ClosedAt)
+    Assert.Equal("I_parent", work.Parent.Value.NodeId)
+    Assert.Contains("Completed native issue and human Status disagree", work.ClosureGaps)
+    Assert.Contains("Scoped owner acceptance and applicability of all parent requirements are unverified", work.ClosureGaps)
+    let result = V2ProjectionSource.selectActions report (Some(ProgrammeFixture.context report)) report.NativeIntegrator.ObservedAt
+    Assert.Equal("needs-decision", result.Head.Decision)
+    Assert.Empty reads.Mutations
+
+[<Fact>]
+let ``done and completed parent discrepancies never use child count as acceptance`` () =
+    let selected = ProgrammeFixture.successorBinding ()
+    let change (request: Transport.Request) response =
+        response |> Result.map (fun (value: Transport.Response) ->
+            let root = System.Text.Json.Nodes.JsonNode.Parse value.Body
+            if request.Subject.EndsWith("native observation", StringComparison.Ordinal) || request.Subject = "selected native work hierarchy" then
+                let issue = root.["data"].["repository"].["issue"]
+                issue.["state"] <- System.Text.Json.Nodes.JsonValue.Create "CLOSED"
+                if request.Subject = "selected native work hierarchy" then
+                    issue.["stateReason"] <- System.Text.Json.Nodes.JsonValue.Create "COMPLETED"
+                    issue.["closedAt"] <- System.Text.Json.Nodes.JsonValue.Create "2026-10-17T12:00:00Z"
+                {value with Body = root.ToJsonString()}
+            elif request.Subject = "bound V2 planning fields" then
+                root.["data"].["node"].["status"].["name"] <- System.Text.Json.Nodes.JsonValue.Create "Done"
+                root.["data"].["node"].["status"].["optionId"] <- System.Text.Json.Nodes.JsonValue.Create "Done"
+                {value with Body = root.ToJsonString()}
+            else value)
+    let reads = ProgrammeFixture.successorTransport selected (Some "Outcome") change
+    let report = V2ProjectionSource.inspectFixed reads selected None
+    let work = report.Items.Head.WorkItem.Value
+    Assert.Contains("Human Status Done has no scoped acceptance qualification", work.ClosureGaps)
+    Assert.Contains("Completed parent has open child scope; required-scope applicability remains unverified", work.ClosureGaps)
+    Assert.Empty reads.Mutations

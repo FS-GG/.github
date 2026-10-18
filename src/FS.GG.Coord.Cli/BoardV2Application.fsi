@@ -10,7 +10,8 @@ module BoardV2Application =
     /// Product mode requires its selected organization-owned project, one repository and native cohort;
     /// no organization default, user-owned execution or legacy board fallback is introduced.
     val parseBinding: json: string -> Result<V2Projection.Binding, string>
-    /// Decode one ephemeral organization-v4 fsgg.coord.board-v2-integrator-observations/1 document.
+    /// Decode ephemeral organization binding4 observations/1 or binding5 observations/2.
+    /// Version2 requires the current source-produced hierarchySha256 in every slice join.
     /// The schema is closed at every object: duplicate, unknown and missing keys are errors;
     /// null explicitly means a missing capacity/reservation observation, never an empty population.
     /// Bounds: 262144 UTF-8 bytes, depth 12, 64 unique slices, 256 reservations, 128 paths or
@@ -26,7 +27,8 @@ module BoardV2Application =
     /// Emit an explicit report wire shape, including gaps and independent acceptance facts.
     val encodeReport: report: V2ProjectionSource.BatchReport -> string
     /// Encode structurally read-only inspection, human planning values, native PR facts and action-specific selection.
-    /// Product inspection/1 retains its closed wire shape; programme inspection/2 alone exposes successor fields.
+    /// Product inspection/1 and binding4 inspection/2 retain their closed wire shapes.
+    /// Binding5 inspection/3 alone exposes explicit work classification, native hierarchy and unverified closure.
     /// Without --integrator-stdin the CLI reports missing attributed action/resource observations.
     val encodeInspection: report: V2ProjectionSource.InspectionReport -> string
     /// Existing integrators may supply attributed current action facts; no command/input can mint acceptance.

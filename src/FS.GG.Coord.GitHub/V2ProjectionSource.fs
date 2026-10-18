@@ -118,9 +118,9 @@ module V2ProjectionSource =
         else None
 
     let private ownerField (binding: Binding) (body: string) =
-        match recordFields (binding.BindingVersion = 4) body with
+        match recordFields (isProgrammeBinding binding) body with
         | Some fields -> Map.tryFind "Owner" fields |> Option.filter (String.IsNullOrWhiteSpace >> not)
-        | None when binding.BindingVersion = 4 || body.Contains("##", StringComparison.Ordinal) -> None
+        | None when isProgrammeBinding binding || body.Contains("##", StringComparison.Ordinal) -> None
         | None ->
             let values =
                 FS.GG.Coord.Markdown.unfenced body |> List.choose (fun line ->
@@ -129,15 +129,15 @@ module V2ProjectionSource =
             match values with [ owner ] when not (String.IsNullOrWhiteSpace owner) -> Some owner | _ -> None
 
     let private deliverableField (binding: Binding) (body: string) =
-        match recordFields (binding.BindingVersion = 4) body |> Option.bind (Map.tryFind "Current deliverable") with
+        match recordFields (isProgrammeBinding binding) body |> Option.bind (Map.tryFind "Current deliverable") with
         | None -> None, [], Some "Native Current deliverable field is missing or malformed; absence of closing references does not establish no existing work"
         | Some "None" -> Some "None", [], None
-        | Some value when binding.BindingVersion = 4 && (String.IsNullOrWhiteSpace value || System.Text.Encoding.UTF8.GetByteCount(value) > 16 * 1024) ->
+        | Some value when isProgrammeBinding binding && (String.IsNullOrWhiteSpace value || System.Text.Encoding.UTF8.GetByteCount(value) > 16 * 1024) ->
             None, [], Some "Native Current deliverable declaration is empty or exceeds the bounded16KiB field"
         | Some value ->
             let urls =
-                let options = if binding.BindingVersion = 4 then System.Text.RegularExpressions.RegexOptions.IgnoreCase else System.Text.RegularExpressions.RegexOptions.None
-                let pattern = if binding.BindingVersion = 4 then "[A-Za-z][A-Za-z0-9+.-]*://[^\\s<>()\\[\\]]+" else "https?://[^\\s<>()\\[\\]]+"
+                let options = if isProgrammeBinding binding then System.Text.RegularExpressions.RegexOptions.IgnoreCase else System.Text.RegularExpressions.RegexOptions.None
+                let pattern = if isProgrammeBinding binding then "[A-Za-z][A-Za-z0-9+.-]*://[^\\s<>()\\[\\]]+" else "https?://[^\\s<>()\\[\\]]+"
                 System.Text.RegularExpressions.Regex.Matches(value, pattern, options)
                 |> Seq.cast<System.Text.RegularExpressions.Match> |> Seq.map _.Value |> Seq.distinct |> Seq.toList
             let canonical (url: string) =
@@ -153,7 +153,7 @@ module V2ProjectionSource =
                         binding.Repositories |> Seq.tryFind (fun repository -> String.Equals(repository, parts[0] + "/" + parts[1], StringComparison.OrdinalIgnoreCase))
                         |> Option.map (fun repository -> $"https://github.com/{repository}/pull/{number}")
             let normalized = urls |> List.choose canonical |> List.distinct
-            if binding.BindingVersion = 4 then
+            if isProgrammeBinding binding then
                 let options = System.Text.RegularExpressions.RegexOptions.IgnoreCase
                 let matches (pattern: string) (text: string) =
                     System.Text.RegularExpressions.Regex.Matches(text, pattern, options)
@@ -218,7 +218,7 @@ module V2ProjectionSource =
                     [ "owner", VString binding.Owner; "repo", VString (expectedRepository.Split('/')[1]) ]
                 else
                     "query($expression: String!, $currentExpression: String!) { repository(owner: \"FS-GG\", name: \".github\") { nameWithOwner ref(qualifiedName: \"refs/heads/main\") { target { oid } } object(expression: $expression) { ... on Blob { oid text } } current: object(expression: $currentExpression) { ... on Blob { oid text } } } rateLimit { cost remaining } }", []
-            GraphQl.read transport (query document (ownerVariables @ [ "expression", VString (if binding.BindingVersion = 4 && path <> populationPath then $"main:{path}" else $"{revision}:{path}"); "currentExpression", VString $"main:{path}" ]) subject) (fun data ->
+            GraphQl.read transport (query document (ownerVariables @ [ "expression", VString (if isProgrammeBinding binding && path <> populationPath then $"main:{path}" else $"{revision}:{path}"); "currentExpression", VString $"main:{path}" ]) subject) (fun data ->
                 let repository = data.GetProperty "repository"
                 let text = repository.GetProperty("object").GetProperty("text").GetString()
                 if repository.GetProperty("nameWithOwner").GetString() <> expectedRepository
@@ -352,7 +352,7 @@ module V2ProjectionSource =
                 let emptyDigest = System.Security.Cryptography.SHA256.HashData(Array.empty<byte>) |> Convert.ToHexStringLower
                 if native.Url <> path || native.BodySha256 = emptyDigest then Error(Malformed("programme issue", "native URL/body is unreadable or mismatched"))
                 else Ok(Some native, $"{native.NodeId}@{native.UpdatedAt}:{native.Url}:{native.BodySha256}"))
-        elif binding.BindingVersion = 4 && path.StartsWith("https://", StringComparison.Ordinal) then
+        elif isProgrammeBinding binding && path.StartsWith("https://", StringComparison.Ordinal) then
             readDeclaredPlan transport binding path
         elif path.StartsWith("docs/", StringComparison.Ordinal) then
             readProtectedBlob transport binding binding.PopulationRevision path |> Result.map (fun (_, revision, blob) -> None, $"{path}@{revision}:{blob}")
@@ -382,7 +382,7 @@ module V2ProjectionSource =
                || target.GetProperty("id").GetString() <> binding.ProjectId
                || target.GetProperty("number").GetInt32() <> binding.ProjectNumber then
                 Error(Malformed("reviewed population", "manifest is not bound to the exact admitted project"))
-            elif binding.BindingVersion = 4 then
+            elif isProgrammeBinding binding then
                 Error(Malformed("reviewed population", "programme binding requires enrollment/v2, never pilot fallback"))
             else
                 let rows = root.GetProperty("items").EnumerateArray() |> Seq.filter (fun row -> row.GetProperty("pilot").GetBoolean() && (row.GetProperty("decision").GetString() = "import" || row.GetProperty("decision").GetString() = "follow-up") && row.GetProperty("adjudication").GetString() = "verified-remaining") |> Seq.toList
@@ -426,7 +426,7 @@ module V2ProjectionSource =
                         accumulated @ [ row ]))) (Ok []))
 
     let private selectedPopulation binding text =
-        if binding.BindingVersion = 4 then programmePopulation binding text else population binding text
+        if isProgrammeBinding binding then programmePopulation binding text else population binding text
 
     type private SourceCollection =
         { Verification: IoResult<SourceVerification>; Native: NativeObservation option
@@ -453,7 +453,7 @@ module V2ProjectionSource =
                 deliverableGap <- gap
                 native <- Some observation
                 if observation.NodeId <> row.NodeId then Ok(Refused "native issue node identity changed")
-                elif binding.BindingVersion <> 4 && (observation.UpdatedAt <> row.UpdatedAt || observation.State <> "OPEN") then Ok(Stale None)
+                elif not (isProgrammeBinding binding) && (observation.UpdatedAt <> row.UpdatedAt || observation.State <> "OPEN") then Ok(Stale None)
                 else
                     match readBlockedBy transport binding row.Issue with
                     | Error error -> Error error
@@ -461,7 +461,7 @@ module V2ProjectionSource =
                         dependencies <- observed
                         dependenciesComplete <- true
                         let actual = observed |> List.map _.Issue |> Set.ofList
-                        if binding.BindingVersion <> 4 && actual <> Set.ofList row.Dependencies then Ok(Stale None)
+                        if not (isProgrammeBinding binding) && actual <> Set.ofList row.Dependencies then Ok(Stale None)
                         else
                             match readPlan transport binding row.Roadmap with
                             | Error error -> Error error
@@ -485,7 +485,7 @@ module V2ProjectionSource =
     let private protectedEnrollmentInputs (binding: Binding) (revision: string) (blob: string) =
         let source = (if binding.BindingVersion = 3 then sourceRepository binding + ":" + populationPath else populationPath), revision, blob
         match binding.ProgrammeEnrollment with
-        | Some enrollment when binding.BindingVersion = 4 ->
+        | Some enrollment when isProgrammeBinding binding ->
             match programmeCommitment enrollment with
             | Ok digest -> [ source; "programme-enrollment/v3-commitment", revision, digest ]
             | Error _ -> [ source ]
@@ -571,7 +571,7 @@ module V2ProjectionSource =
     type AttributedObservation =
         { Supplier: string; ObservedAt: DateTimeOffset; ValidUntil: DateTimeOffset; Evidence: string list }
     type SliceJoin =
-        { NativeId: string; UpdatedAt: string; BodySha256: string; SourceRevision: string }
+        { NativeId: string; UpdatedAt: string; BodySha256: string; SourceRevision: string; HierarchySha256: string option }
     type Prerequisite = { Action: Action; Reference: string; Satisfied: bool option; SupplyingOwner: string }
     type CurrentSlice =
         { Id: string; Attempt: string; Operation: Operation; Issue: IssueRef
@@ -597,10 +597,21 @@ module V2ProjectionSource =
     type NativeIntakeObservation =
         { Admission: BoardIntake.Admission option; Allowed: bool option; ObservedAt: DateTimeOffset; Gap: IoError option }
 
+    /// Native hierarchy observations never widen enrollment or establish acceptance.
+    type HierarchyIdentity = { Issue: IssueRef; NodeId: string }
+    type HierarchyChild =
+        { Issue: IssueRef; NodeId: string; State: string; StateReason: string option; ClosedAt: string option }
+    type WorkItemObservation =
+        { WorkLevel: string; WorkLevelOptionId: string option; Parent: HierarchyIdentity option
+          Children: HierarchyChild list; Complete: bool; Gap: string option; ObservedAt: DateTimeOffset
+          Sha256: string option; StateReason: string option; ClosedAt: string option
+          DoneWhen: string option; BlockedOn: string option; AcceptanceEvidence: string option; ClosureGaps: string list }
+
     type InspectionItem =
         { Evidence: ItemReport; ExpectedNodeId: string; SourceCurrentness: string
           Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list; Owner: string option; SourceRevision: string option
-          CurrentDeliverable: string option; Deliverables: string list; DeliverableGap: string option; Intake: NativeIntakeObservation }
+          CurrentDeliverable: string option; Deliverables: string list; DeliverableGap: string option; Intake: NativeIntakeObservation
+          WorkItem: WorkItemObservation option }
 
     type InspectionReport =
         { Binding: Binding; Evidence: BatchReport; Items: InspectionItem list
@@ -645,7 +656,7 @@ module V2ProjectionSource =
 
     let private nativeIntake (gate: BoardIntake.Gate) (observedAt: DateTimeOffset) (binding: Binding) (expected: NativeObservation option) =
         let absent = { Admission = None; Allowed = None; ObservedAt = DateTimeOffset.MinValue; Gap = None }
-        if binding.BindingVersion <> 4 || expected.IsNone then absent
+        if not (isProgrammeBinding binding) || expected.IsNone then absent
         else
             let native = expected.Value
             let issue = native.Issue
@@ -825,6 +836,98 @@ module V2ProjectionSource =
                 | None -> all <- all @ [ pull ]
         { PullRequests = all; RepositoryGaps = repositoryGaps; ObservedAt = observedAt }
 
+    let private readWorkItem (transport: IGitHubTransport) (binding: Binding) (row: Selected) (native: NativeObservation option) (planning: PlanningObservation option) =
+        let observedAt = DateTimeOffset.UtcNow
+        let absent gap =
+            { WorkLevel = "Unknown"; WorkLevelOptionId = None; Parent = None; Children = []; Complete = false
+              Gap = Some gap; ObservedAt = observedAt; Sha256 = None; StateReason = None; ClosedAt = None
+              DoneWhen = None; BlockedOn = None; AcceptanceEvidence = None; ClosureGaps = ["Scoped owner acceptance is unverified"] }
+        let subject = "selected native work hierarchy"
+        let malformed () = Error(Malformed(subject, "native hierarchy/classification is incomplete or mismatched"))
+        let optionalText name (value: JsonElement) =
+            let entry = value.GetProperty(name: string)
+            if entry.ValueKind = JsonValueKind.Null then None
+            elif entry.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(entry.GetString())) then Some(entry.GetString())
+            else invalidArg "hierarchy" "invalid nullable text"
+        let identity (value: JsonElement) : HierarchyIdentity =
+            let repository = value.GetProperty("repository").GetProperty("nameWithOwner").GetString().Split('/')
+            let number = value.GetProperty("number").GetInt32()
+            let nodeId = value.GetProperty("id").GetString()
+            if repository.Length <> 2 || repository |> Array.exists String.IsNullOrWhiteSpace || number <= 0 || String.IsNullOrWhiteSpace nodeId then invalidArg "hierarchy" "invalid native identity"
+            { Issue = { Owner = repository[0]; Repository = repository[1]; Number = number }; NodeId = nodeId }
+        let closure state (value: JsonElement) =
+            let reason = optionalText "stateReason" value
+            let closed = optionalText "closedAt" value
+            if (state <> "OPEN" && state <> "CLOSED") || (state = "OPEN" && closed.IsSome)
+               || (state = "CLOSED" && (closed.IsNone || not (closed |> Option.exists (fun date -> fst (DateTimeOffset.TryParse date)))))
+               || (reason |> Option.exists (fun value -> not (List.contains value ["COMPLETED"; "NOT_PLANNED"; "REOPENED"; "DUPLICATE"]))) then invalidArg "hierarchy" "invalid closure facts"
+            reason, closed
+        match native, planning, binding.WorkLevel with
+        | Some expected, Some intent, Some field ->
+            try
+                let classification =
+                    let document = "query($itemId: ID!) { node(id: $itemId) { ... on ProjectV2Item { id project { id } content { ... on Issue { id } } workLevel: fieldValueByName(name: \"Work level\") { __typename ... on ProjectV2ItemFieldSingleSelectValue { name optionId field { ... on ProjectV2SingleSelectField { id } } } } } } rateLimit { cost remaining } }"
+                    GraphQl.read transport (query document ["itemId", VId intent.ItemId] "selected work classification") (fun data ->
+                        let node = data.GetProperty "node"
+                        if node.GetProperty("id").GetString() <> intent.ItemId || node.GetProperty("project").GetProperty("id").GetString() <> binding.ProjectId || node.GetProperty("content").GetProperty("id").GetString() <> row.NodeId then malformed()
+                        else
+                            let value = node.GetProperty "workLevel"
+                            if value.ValueKind = JsonValueKind.Null then Ok("Unknown", None)
+                            else
+                                let name = value.GetProperty("name").GetString()
+                                let option = value.GetProperty("optionId").GetString()
+                                if value.GetProperty("__typename").GetString() <> "ProjectV2ItemFieldSingleSelectValue" || value.GetProperty("field").GetProperty("id").GetString() <> field.Id || Map.tryFind name field.Options <> Some option then malformed()
+                                else Ok(name, Some option))
+                let mutable parent = None
+                let mutable nativeClosure = None
+                let mutable fields = None
+                let mutable first = true
+                let fetch after =
+                    let document = "query($owner: String!, $repo: String!, $number: Int!, $after: String) { repository(owner: $owner, name: $repo) { nameWithOwner issue(number: $number) { id number updatedAt state stateReason closedAt body repository { nameWithOwner } parent { id number repository { nameWithOwner } } subIssues(first: 50, after: $after) { totalCount nodes { id number state stateReason closedAt repository { nameWithOwner } } pageInfo { hasNextPage endCursor } } } } rateLimit { cost remaining } }"
+                    let vars = ["owner", VString row.Issue.Owner; "repo", VString row.Issue.Repository; "number", VNumber(double row.Issue.Number)] @ (after |> Option.map (fun cursor -> ["after", VString cursor]) |> Option.defaultValue [])
+                    GraphQl.read transport (query document vars subject) (fun data ->
+                        let repository = data.GetProperty "repository"
+                        let value = repository.GetProperty "issue"
+                        let found = identity value
+                        let state = value.GetProperty("state").GetString()
+                        let body = value.GetProperty("body").GetString()
+                        let digest = body |> Text.Encoding.UTF8.GetBytes |> Security.Cryptography.SHA256.HashData |> Convert.ToHexStringLower
+                        let rawParent = value.GetProperty "parent"
+                        let thisParent = if rawParent.ValueKind = JsonValueKind.Null then None else Some(identity rawParent)
+                        let thisClosure = closure state value
+                        if found.Issue <> row.Issue || found.NodeId <> row.NodeId || value.GetProperty("updatedAt").GetString() <> expected.UpdatedAt || state <> expected.State || digest <> expected.BodySha256 || repository.GetProperty("nameWithOwner").GetString() <> row.Issue.Owner + "/" + row.Issue.Repository
+                           || (thisParent |> Option.exists (fun value -> value.NodeId = row.NodeId || value.Issue = row.Issue)) then malformed()
+                        elif not first && (parent <> thisParent || nativeClosure <> Some thisClosure) then malformed()
+                        else
+                            first <- false; parent <- thisParent; nativeClosure <- Some thisClosure; fields <- recordFields true body
+                            let connection = value.GetProperty "subIssues"
+                            let decodeChild (child: JsonElement) =
+                                let found = identity child
+                                let state = child.GetProperty("state").GetString()
+                                let reason, closed = closure state child
+                                if found.NodeId = row.NodeId || found.Issue = row.Issue || (parent |> Option.exists (fun parent -> parent.NodeId = found.NodeId || parent.Issue = found.Issue)) then invalidArg "hierarchy" "cyclic native hierarchy"
+                                Ok { Issue = found.Issue; NodeId = found.NodeId; State = state; StateReason = reason; ClosedAt = closed }
+                            GraphQl.page subject "native direct children" (fun (child: HierarchyChild) -> child.NodeId) decodeChild connection)
+                match classification, GraphQl.drain subject "native direct children" { MaxPages = 10; MaxItems = 500 } fetch with
+                | Ok(level, option), Ok children when (children |> List.map _.NodeId |> Set.ofList |> Set.count) = children.Length && (children |> List.map _.Issue |> Set.ofList |> Set.count) = children.Length ->
+                    let reason, closed = nativeClosure.Value
+                    let fieldValue name = fields |> Option.bind (Map.tryFind name) |> Option.filter (String.IsNullOrWhiteSpace >> not)
+                    let children = children |> List.sortBy _.NodeId
+                    let canonical = JsonSerializer.Serialize {| fieldId = field.Id; optionId = option; workLevel = level; issue = row.Issue; nodeId = row.NodeId; state = expected.State; stateReason = reason; closedAt = closed; parent = parent; children = children; complete = true |}
+                    let digest = Text.Encoding.UTF8.GetBytes("fsgg.coord.work-hierarchy/v1\u0000" + canonical) |> Security.Cryptography.SHA256.HashData |> Convert.ToHexStringLower
+                    { WorkLevel = level; WorkLevelOptionId = option; Parent = parent; Children = children; Complete = true; Gap = None; ObservedAt = observedAt; Sha256 = Some digest
+                      StateReason = reason; ClosedAt = closed; DoneWhen = fieldValue "Done when"; BlockedOn = fieldValue "Blocked on"; AcceptanceEvidence = fieldValue "Acceptance evidence"
+                      ClosureGaps = [ "Scoped owner acceptance and applicability of all parent requirements are unverified"
+                                      if fieldValue "Done when" |> Option.isNone then "Done when is missing"
+                                      if fieldValue "Acceptance evidence" |> Option.isNone then "Acceptance evidence is missing"
+                                      if expected.State = "CLOSED" && reason = Some "COMPLETED" && intent.Status <> Some "Done" then "Completed native issue and human Status disagree"
+                                      if intent.Status = Some "Done" then "Human Status Done has no scoped acceptance qualification"
+                                      if level = "Outcome" && expected.State = "CLOSED" && (children |> List.exists (fun child -> child.State = "OPEN")) then "Completed parent has open child scope; required-scope applicability remains unverified" ] }
+                | Error error, _ | _, Error error -> absent (Errors.explain error)
+                | _ -> absent "Native hierarchy contains duplicate identities"
+            with _ -> absent "Native hierarchy/classification facts are unreadable"
+        | _ -> absent "Current native identity, planning item or bound classification is unavailable"
+
     let inspectFixed (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
         let reads = inspectionReads transport binding
         let intakeObservedAt = DateTimeOffset.UtcNow
@@ -837,7 +940,7 @@ module V2ProjectionSource =
               PopulationGap = gap; Cleanup = "Read-only inspection; no project lock, claims, mutation, durable effect or background work" }
         let emptyNative =
             { PullRequests = []; ObservedAt = DateTimeOffset.MinValue
-              RepositoryGaps = if binding.BindingVersion = 4 then binding.Repositories |> Seq.map (fun repository -> repository, "Native integrator not collected because global enrollment/project/schema/membership admission is incomplete") |> Map.ofSeq else Map.empty }
+              RepositoryGaps = if isProgrammeBinding binding then binding.Repositories |> Seq.map (fun repository -> repository, "Native integrator not collected because global enrollment/project/schema/membership admission is incomplete") |> Map.ofSeq else Map.empty }
         let failed error = { Binding = binding; Evidence = metadata [] None [] (Some error); Items = []; Memberships = []; MembershipGap = Some error; NativeIntegrator = emptyNative }
         match validateBinding binding |> Result.bind (fun () -> artifactCheck binding) with
         | Error error -> failed error
@@ -845,7 +948,7 @@ module V2ProjectionSource =
             match readProtectedBlob reads binding binding.PopulationRevision populationPath |> Result.bind (fun (text, current, blob) -> selectedPopulation binding text |> Result.map (fun selected -> selected, current, blob)) with
             | Error error -> failed error
             | Ok(selected, current, blob) ->
-                let membership = if binding.BindingVersion = 4 then readMemberships reads binding else Ok []
+                let membership = if isProgrammeBinding binding then readMemberships reads binding else Ok []
                 let members, membershipGap = match membership with Ok values -> values, None | Error error -> [], Some error
                 let items: InspectionItem list = selected |> List.map (fun (row: Selected) ->
                     let mutable calls = 0
@@ -865,6 +968,7 @@ module V2ProjectionSource =
                     let observed, planningGap = match planning with Ok value -> Some value, None | Error error -> None, Some error
                     let historical = previous |> Option.filter (fun batch -> batch.ProjectId = binding.ProjectId) |> Option.bind (fun batch ->
                         batch.Items |> List.tryFind (fun item -> item.Issue = row.Issue) |> Option.bind _.LastVerified)
+                    let workItem = if binding.BindingVersion = 5 then Some(readWorkItem counted binding row collection.Native observed) else None
                     let discrepancies =
                         [ if collection.Native |> Option.exists (fun native -> native.State = "CLOSED") then "Native issue is closed; remaining outcome acceptance is unverified"
                           match observed with
@@ -879,11 +983,11 @@ module V2ProjectionSource =
                           Health = if planningGap.IsSome then "Unknown" elif currentness = "Stale" then "Stale" elif currentness = "Current" && (observed |> Option.exists (fun value -> value.Observation = Some "Verified")) then "Verified" else "Unknown"
                           Reads = calls; MutationAttempts = 0; MembershipPages = observed |> Option.map _.MembershipPages
                           Projection = None; Gap = sourceGap; LastVerified = historical }
-                    { Evidence = evidence; ExpectedNodeId = row.NodeId; SourceCurrentness = currentness; Planning = observed; PlanningGap = planningGap; Discrepancies = discrepancies; Owner = collection.Owner; CurrentDeliverable = collection.CurrentDeliverable; Deliverables = collection.Deliverables; DeliverableGap = collection.DeliverableGap; Intake = nativeIntake intakeGate intakeObservedAt binding collection.Native
+                    { Evidence = evidence; ExpectedNodeId = row.NodeId; SourceCurrentness = currentness; Planning = observed; PlanningGap = planningGap; Discrepancies = discrepancies; Owner = collection.Owner; CurrentDeliverable = collection.CurrentDeliverable; Deliverables = collection.Deliverables; DeliverableGap = collection.DeliverableGap; Intake = nativeIntake intakeGate intakeObservedAt binding collection.Native; WorkItem = workItem
                       SourceRevision = match collection.Verification with Ok(Current revision) -> Some revision | _ -> None })
-                let integration = if binding.BindingVersion = 4 && membershipGap.IsNone then nativeIntegrator reads binding (items |> List.collect _.Deliverables) else emptyNative
+                let integration = if isProgrammeBinding binding && membershipGap.IsNone then nativeIntegrator reads binding (items |> List.collect _.Deliverables) else emptyNative
                 let items =
-                    if binding.BindingVersion <> 4 then items
+                    if not (isProgrammeBinding binding) then items
                     else List.map2 (fun (row: Selected) (item: InspectionItem) ->
                         let mutable additionalReads = 0
                         let counted =
@@ -900,20 +1004,26 @@ module V2ProjectionSource =
                         let intake =
                             if finalIntake.Admission = item.Intake.Admission && finalIntake.Allowed = item.Intake.Allowed && finalIntake.Gap = item.Intake.Gap then item.Intake
                             else { item.Intake with Allowed = None; Gap = Some(Malformed("final native intake barrier", "repository policy/author/permission changed or became unavailable")) }
-                        let item = { item with Intake = intake }
+                        let workItem = if binding.BindingVersion = 5 then Some(readWorkItem counted binding row barrier.Native (planning |> Result.toOption)) else None
+                        let stableWorkItem =
+                            match item.WorkItem, workItem with
+                            | Some before, Some after when before.Complete && after.Complete && before.Sha256 = after.Sha256 && before.Sha256.IsSome -> true
+                            | None, None -> true
+                            | _ -> false
+                        let item = { item with Intake = intake; WorkItem = if stableWorkItem then item.WorkItem else workItem |> Option.map (fun value -> { value with Complete = false; Sha256 = None; Gap = Some "Hierarchy/classification changed or became unavailable at the final barrier" }) }
                         let evidence: ItemReport = { item.Evidence with Reads = item.Evidence.Reads + additionalReads }
                         match barrier.Verification, planning with
-                        | Ok(Current revision), Ok intent when item.SourceRevision = Some revision && barrier.Owner = item.Owner && barrier.CurrentDeliverable = item.CurrentDeliverable && barrier.Deliverables = item.Deliverables && barrier.DeliverableGap = item.DeliverableGap && item.Planning = Some intent -> { item with Evidence = evidence }
+                        | Ok(Current revision), Ok intent when stableWorkItem && item.SourceRevision = Some revision && barrier.Owner = item.Owner && barrier.CurrentDeliverable = item.CurrentDeliverable && barrier.Deliverables = item.Deliverables && barrier.DeliverableGap = item.DeliverableGap && item.Planning = Some intent -> { item with Evidence = evidence }
                         | _ -> { item with SourceCurrentness = "Unknown"; Evidence = { evidence with Health = "Unknown"; Gap = Some(Malformed("final source/planning barrier", "issue/dependency/plan or human planning changed/became unavailable; refresh affected selection")) } }) selected items
                 let membershipGap =
-                    if binding.BindingVersion <> 4 || membershipGap.IsSome then membershipGap
+                    if not (isProgrammeBinding binding) || membershipGap.IsSome then membershipGap
                     else
                         match readMemberships reads binding with
                         | Ok final when List.sortBy (fun (value: Membership) -> value.ItemId) final = List.sortBy (fun (value: Membership) -> value.ItemId) members -> None
                         | Ok _ -> Some(Malformed("final membership barrier", "project membership changed; reconcile complete population before selection"))
                         | Error error -> Some error
                 let enrollmentGap =
-                    if binding.BindingVersion <> 4 then membershipGap
+                    if not (isProgrammeBinding binding) then membershipGap
                     else
                         match readProtectedBlob reads binding binding.PopulationRevision populationPath with
                         | Ok(text, _, finalBlob) when finalBlob = blob && Result.isOk (programmePopulation binding text) -> membershipGap
@@ -930,7 +1040,7 @@ module V2ProjectionSource =
                   item.Discrepancies @
                   [ if item.SourceCurrentness <> "Current" then yield "Current source/native coverage is unavailable or stale"
                     if item.Evidence.Gap.IsSome || item.PlanningGap.IsSome then yield "One or more selected reads failed"
-                    if report.Binding.BindingVersion <> 4 then
+                    if not (isProgrammeBinding report.Binding) then
                         yield item.Evidence.Delivery; yield item.Evidence.Publication; yield item.Evidence.NativeAcceptance
                     if facts.OpenPullRequests.IsNone then yield "Open PR facts are unknown"
                     if facts.TouchSets.IsNone then yield "Touch-set facts are unknown"
@@ -1026,7 +1136,7 @@ module V2ProjectionSource =
                   Issue = issue; Action = action; Decision = decision; Owner = owner
                   PullRequest = pull |> Option.map _.Url; Head = pull |> Option.map _.Head; Reasons = reasons
                   Evidence = [ "enrolled: " + identity issue ] @ nativeEvidence @ pullEvidence @ suppliedEvidence @ invocationEvidence }
-            let globalGap = report.Binding.BindingVersion <> 4 || report.Evidence.PopulationGap.IsSome || report.MembershipGap.IsSome
+            let globalGap = not (isProgrammeBinding report.Binding) || report.Evidence.PopulationGap.IsSome || report.MembershipGap.IsSome
             if globalGap then result "unknown" [ "Global enrollment/project/schema/membership read is incomplete or historical/product mode does not select programme actions" ]
             elif not (fresh report.NativeIntegrator.ObservedAt) then result "unknown" [ "Native integrator snapshot expired or is from the future; refresh before action" ]
             elif slice.IsSome && currentContext.IsNone then
@@ -1036,6 +1146,10 @@ module V2ProjectionSource =
                 let item = itemOption.Value
                 if item.SourceCurrentness <> "Current" || item.Evidence.Gap.IsSome || item.PlanningGap.IsSome then
                     result "unknown" [ "Current issue/dependency/plan/planning read is unavailable or changed" ]
+                elif report.Binding.BindingVersion = 5 && (item.WorkItem |> Option.forall (fun facts -> not facts.Complete || facts.Sha256.IsNone || facts.WorkLevel = "Unknown")) then
+                    result "unknown" [ "Explicit Work level and complete current native hierarchy/classification are required" ]
+                elif report.Binding.BindingVersion = 5 && (item.WorkItem |> Option.exists (fun facts -> facts.WorkLevel = "Outcome")) then
+                    result "needs-decision" [ "Outcome nodes retain accountable acceptance; select an explicitly enrolled Delivery node instead" ]
                 elif item.Owner |> Option.forall String.IsNullOrWhiteSpace then
                     result "needs-decision" [ "Current accountable owner is missing or ambiguous" ]
                 elif item.Discrepancies |> List.contains "Human Roadmap differs from the admitted owning plan" then
@@ -1056,7 +1170,8 @@ module V2ProjectionSource =
                     let joinMatches =
                         native |> Option.exists (fun observed ->
                             observed.NodeId = current.Join.NativeId && observed.UpdatedAt = current.Join.UpdatedAt
-                            && observed.BodySha256 = current.Join.BodySha256 && item.SourceRevision = Some current.Join.SourceRevision)
+                            && observed.BodySha256 = current.Join.BodySha256 && item.SourceRevision = Some current.Join.SourceRevision
+                            && (report.Binding.BindingVersion <> 5 || (item.WorkItem |> Option.exists (fun facts -> facts.Complete && facts.Sha256.IsSome && facts.Sha256 = current.Join.HierarchySha256))))
                     let referenceRepositories (references: string list) =
                         references |> List.choose (fun reference ->
                             let mutable uri = Unchecked.defaultof<Uri>

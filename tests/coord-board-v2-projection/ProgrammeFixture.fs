@@ -31,7 +31,7 @@ module ProgrammeFixture =
     let binding () : Binding =
         use stream = File.OpenRead typeof<Binding>.Assembly.Location
         let value: Binding =
-          { ProgrammeEnrollment = None; BindingVersion = 4; SchemaVersion = 2; ImportRecipeRevision = String.replicate 40 "a"; ImportArtifactSha256 = String.replicate 64 "b"
+          { WorkLevel = None; ProgrammeEnrollment = None; BindingVersion = 4; SchemaVersion = 2; ImportRecipeRevision = String.replicate 40 "a"; ImportArtifactSha256 = String.replicate 64 "b"
             SelectedIssues = Map.ofList [ ("I_outcome", "FS-GG/.github#4634") ]; RecipeRevision = String.replicate 40 "c"; PopulationRevision = String.replicate 40 "e"
             OrganizationId = "O_kgDOEYAWYw"; ArtifactSha256 = SHA256.HashData stream |> Convert.ToHexStringLower
             OwnerKind = Org; Owner = "FS-GG"; ProjectNumber = 3; ProjectTitle = "Coordination V2"; ProjectId = project
@@ -50,6 +50,9 @@ module ProgrammeFixture =
                status = {| id = value.Status.Id; options = value.Status.Options |}; roadmapFieldId = value.RoadmapFieldId
                track = {| id = value.Track.Id; options = value.Track.Options |}; observation = {| id = value.Observation.Id; options = value.Observation.Options |}
                repositories = value.Repositories |> Set.toList |})
+        let node = Text.Json.Nodes.JsonNode.Parse json
+        value.WorkLevel |> Option.iter (fun field -> node.["workLevel"] <- JsonSerializer.SerializeToNode {| id = field.Id; options = field.Options |})
+        let json = node.ToJsonString()
         match value.ProgrammeEnrollment with
         | None -> json
         | Some enrollment ->
@@ -224,7 +227,7 @@ module ProgrammeFixture =
           Slices =
             [ { Id = "source-slice"; Attempt = "owner-attempt"; Operation = if pull.IsSome then V2ProjectionSource.ObserveExisting else V2ProjectionSource.Implement
                 Issue = issue; AccountableOwner = "worker"; Owner = "worker"; Repository = "FS-GG/.github"; Paths = [ "src/new.fs" ]; Action = V2ProjectionSource.Source
-                Join = { NativeId = native.NodeId; UpdatedAt = native.UpdatedAt; BodySha256 = native.BodySha256; SourceRevision = item.SourceRevision |> Option.defaultValue "missing source revision" }
+                Join = { NativeId = native.NodeId; UpdatedAt = native.UpdatedAt; BodySha256 = native.BodySha256; SourceRevision = item.SourceRevision |> Option.defaultValue "missing source revision"; HierarchySha256 = item.WorkItem |> Option.bind _.Sha256 }
                 Observation = observation; PullRequest = pull |> Option.map _.Url; PullRequestId = pull |> Option.map _.Id
                 PullRequestUpdatedAt = pull |> Option.map _.UpdatedAt; Head = pull |> Option.map _.Head
                 Prerequisites =
@@ -290,3 +293,43 @@ module ProgrammeFixture =
                     if options.[index].["name"].GetValue<string>() = "In review" then options.RemoveAt index
                 { value with Body = root.ToJsonString() })
         | _ -> result
+
+    let successorBinding () =
+        let value = { binding () with BindingVersion = 5; SchemaVersion = 3
+                                      WorkLevel = Some { Id = "work-level"; Options = Map.ofList ["Outcome", "outcome-option"; "Delivery", "delivery-option"] } }
+        enroll value ["I_outcome", issue, "docs/coordination/programme.md"]
+
+    /// Actual fixed reader over inert complete native connections, with one extra unenrolled child.
+    let successorTransport (selected: Binding) (level: string option) change =
+        let rows = ["I_outcome", issue, "docs/coordination/programme.md"]
+        let original = populationTransport selected rows unchanged
+        Fake.Recorder(fun request ->
+            let result =
+                match request.Body with
+                | Query(_, _) when request.Subject = "selected work classification" ->
+                    let value = level |> Option.map (fun name ->
+                        {| __typename = "ProjectV2ItemFieldSingleSelectValue"; name = name; optionId = selected.WorkLevel.Value.Options[name]; field = {| id = "work-level" |} |})
+                    wire {| node = {| id = "synthetic-member-I_outcome"; project = {| id = project |}; content = {| id = "I_outcome" |}; workLevel = value |} |}
+                | Query(_, _) when request.Subject = "selected native work hierarchy" ->
+                    let child = {| id = "I_unselected-child"; number = 9999; state = "OPEN"; stateReason = (None: string option); closedAt = (None: string option); repository = {| nameWithOwner = "FS-GG/.github" |} |}
+                    let parent = {| id = "I_parent"; number = 9998; repository = {| nameWithOwner = "FS-GG/.github" |} |}
+                    wire {| repository = {| nameWithOwner = "FS-GG/.github"; issue =
+                                {| id = "I_outcome"; number = issue.Number; updatedAt = revision; state = "OPEN"; stateReason = (None: string option); closedAt = (None: string option)
+                                   body = ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", "None"); repository = {| nameWithOwner = "FS-GG/.github" |}
+                                   parent = parent; subIssues = connection [child] |} |} |}
+                | Query(document, _) when document.Contains("projectV2(number:") ->
+                    (original :> IGitHubTransport).Send request |> Result.map (fun response ->
+                        let root = Text.Json.Nodes.JsonNode.Parse response.Body
+                        let fields = root.["data"].["organization"].["projectV2"].["fields"]
+                        fields.["nodes"].AsArray().Add(JsonSerializer.SerializeToNode {| id = "work-level"; name = "Work level"; dataType = "SINGLE_SELECT"; options = [ {| id = "outcome-option"; name = "Outcome" |}; {| id = "delivery-option"; name = "Delivery" |} ] |})
+                        fields.["totalCount"] <- Text.Json.Nodes.JsonValue.Create(fields.["nodes"].AsArray().Count)
+                        { response with Body = root.ToJsonString() })
+                | _ -> (original :> IGitHubTransport).Send request
+            change request result)
+
+    let successorIntegratorJson (context: V2ProjectionSource.SelectionContext) =
+        let root = Text.Json.Nodes.JsonNode.Parse(integratorJson context)
+        root.["schema"] <- Text.Json.Nodes.JsonValue.Create "fsgg.coord.board-v2-integrator-observations/2"
+        context.Slices |> List.iteri (fun index slice ->
+            root.["slices"].[index].["join"].["hierarchySha256"] <- JsonSerializer.SerializeToNode slice.Join.HierarchySha256)
+        root.ToJsonString()
