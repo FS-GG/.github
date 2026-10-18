@@ -260,6 +260,7 @@ type BoardWorkItem = {
     Children: string list
     HierarchyComplete: bool
     HierarchyGap: string option
+    ObservedAt: DateTimeOffset option
     DoneWhen: string option
     BlockedOn: string option
     AcceptanceEvidence: string option
@@ -337,7 +338,11 @@ module ProgressRenderer =
                       Parent = hierarchy |> Option.bind (fun value -> optional value "parent") |> Option.map identities
                       Children = hierarchy |> Option.bind (fun value -> optional value "children")
                                  |> Option.map (fun values -> values.EnumerateArray() |> Seq.map identities |> Seq.toList) |> Option.defaultValue []
-                      HierarchyComplete = complete; HierarchyGap = gap
+                      HierarchyComplete = complete && gap.IsNone; HierarchyGap = gap
+                      ObservedAt = hierarchy |> Option.bind (fun value -> text value "observedAt") |> Option.map (fun value ->
+                          let observed = DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+                          if observed.Offset <> TimeSpan.Zero then invalidArg "inspection" "observation time must use UTC"
+                          observed)
                       DoneWhen = raw "doneWhen"; BlockedOn = raw "blockedOn"; AcceptanceEvidence = raw "acceptanceEvidence"
                       // A read-only report has no authority to mint acceptance, including for CLOSED+COMPLETED.
                       Acceptance = "Unverified" }) |> Seq.toList
@@ -804,6 +809,9 @@ module ProgressRenderer =
             requireText "board issue" item.Issue
             require (List.contains item.WorkLevel [ "Outcome"; "Delivery"; "Unknown" ]) "board work level is not explicit"
             require (item.Acceptance = "Unverified") "inspection reporting cannot certify acceptance"
+            item.ObservedAt |> Option.iter (fun value ->
+                requireUtc "hierarchy observation" value
+                require (value <= snapshot.AsOf) "hierarchy observation exceeds report time")
             item.ClosedAt |> Option.iter (fun value ->
                 requireUtc "native issue closure" value
                 require (value <= snapshot.AsOf) "native issue closure exceeds report time")
@@ -869,7 +877,9 @@ module ProgressRenderer =
                 let hierarchy = if item.HierarchyComplete then "complete direct relationships" else "Unknown direct relationships"
                 let evidence = item.AcceptanceEvidence |> Option.defaultValue "Acceptance evidence unavailable"
                 let gap = item.HierarchyGap |> Option.defaultValue "none reported"
-                let detail = $"{promise}; Blocked on: {blocked}; {parent}; {hierarchy}; hierarchy gap: {gap}; evidence: {evidence}; acceptance Unverified"
+                let observed = item.ObservedAt |> Option.map timeText |> Option.defaultValue "Unknown"
+                let children = if item.Children.IsEmpty then "none observed" else String.concat ", " item.Children
+                let detail = $"{promise}; Blocked on: {blocked}; {parent}; {hierarchy}; direct children: {children}; observed: {observed}; hierarchy gap: {gap}; evidence: {evidence}; acceptance Unverified"
                 $"| {escape item.Issue} | {escape item.WorkLevel} | {escape planning} | {escape native} / {escape reason} / {escape closed} | {escape detail} |")
         let completionRows =
             progress.RecentCompletions |> List.map (fun row ->

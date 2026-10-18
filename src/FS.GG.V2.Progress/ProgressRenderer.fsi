@@ -292,6 +292,7 @@ type BoardWorkItem = {
     Children: string list
     HierarchyComplete: bool
     HierarchyGap: string option
+    ObservedAt: DateTimeOffset option
     DoneWhen: string option
     BlockedOn: string option
     AcceptanceEvidence: string option

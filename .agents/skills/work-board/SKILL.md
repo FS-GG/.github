@@ -18,8 +18,9 @@ independent work whose actual scope is known may continue.
 
 - **Organization:** read [organization scope](references/org-scope.md) and the unchanged
   [organization inspection contract](references/organization-v2-inspection.md).
-  Current planning uses Project 3, binding4/schema2/inspection2, protected exact enrollment and the
-  authenticated qualified installed caller. Accepted coordinated cutover is recorded in the
+  Current accepted planning uses Project 3, binding4/schema2/inspection2, protected exact enrollment and the
+  authenticated qualified installed caller. The outcome/delivery successor below uses its own explicit
+  binding5/schema3/inspection3/integrator2 adoption; never claim these semantics from the old caller. Accepted coordinated cutover is recorded in the
   [owning plan](https://github.com/FS-GG/.github/blob/main/docs/coordination/2026-09-29-coordination-v2-board-design.md#accepted-installed-real-use-qualification--2026-10-18).
   The integrator supplies attributed one-invocation action, prerequisite, intake, remaining-capacity
   and reservation facts for exact native issue/body/plan revisions and slices. Consume complete membership
@@ -41,6 +42,55 @@ Missing/conflicting board facts retain scoped Unknowns while independent authori
 work may continue with fresh relevant ownership, capacity and operation admission. A new issue/cohort
 requires its separately authorized binding/membership route. Human-named heavyweight scope retains its
 substantive safeguards without reviving legacy writes. Technical refusal fences its affected effect.
+
+## Outcomes and independently meaningful deliveries
+
+An outcome retains its full original promise and every applicable owning-plan acceptance anchor,
+including undecomposed installed, participant, recovery or publication requirements. A delivery is an
+independently meaningful scoped result with the same six-field owning issue contract. Native parent/
+sub-issue links represent decomposition, not action authority. Do not turn every acceptance clause or
+old completed submilestone into a card, mechanically decompose the current membership, or invent a
+retrospective Done backlog. Materialize only the next useful bounded delivery when needed, keeping the
+original issue IDs, owner, PR/head, attempt and operation history. Shared prerequisites have one owner.
+
+For the selected organization successor, Work level is one explicit SINGLE_SELECT field with exactly
+Outcome and Delivery. Native type discovery was unavailable in the bounded read; this is not evidence
+that types do not exist. The reviewed field fallback requires binding5/schema3, inspection/3 and
+integrator-observations/2, with an exact hierarchy digest in each action join. No Status/Track/Roadmap
+repurposing, seventh body field or runtime classification fallback is permitted. Binding4/schema2 and
+product binding3/schema1 retain their actual qualified behavior until explicit successor adoption;
+reading these instructions neither creates the field nor changes enrollment, binding or installed selector.
+
+Only explicitly enrolled Delivery nodes may be selected by the new model. Outcome nodes are never
+implementation assignments; missing/conflicting classification refuses that selection. A linked but
+unenrolled child remains visible and unschedulable. Preserve the complete membership population and
+known/Unknown reservations. A blocked parent/sibling is not an automatic prerequisite for a disjoint
+child; relevant native/plan/action prerequisites still bind. Incomplete parent child coverage withholds
+parent rollup, not a child's independently complete action facts. Missing/null/partial/truncated or changed
+relevant hierarchy, identity contradiction or cycle keeps the affected join Unknown, never an empty list.
+Refresh relationships/classification used by the decision at the final barrier. Continue an existing
+owner/PR/slice/attempt without another assignment, capacity demand or reservation; changed identities refuse.
+
+Reconcile closure against the actual scoped promise and evidence. Read-only inspection exposes raw Done
+when, Blocked on, Acceptance evidence and native state reason/date; it does not interpret arbitrary prose
+as accepted work. A merged source PR cannot establish installed acceptance. Native completed differs from
+not planned, and stale Done/closed disagreement remains a discrepancy to resolve. The accountable owner
+records accepted scope/date/evidence, closes the exact native issue with the correct reason and updates
+Status only through the authorized native route, then reconciles parent remaining assertions. Preserve
+partial effects and original identity after interruption; resume only the remaining independently read-back
+effect. Never use legacy Done.rollUpParents or automatically climb/close parents. All children closed,
+healthy inspection, deferred work or successful Observation refresh cannot satisfy missing parent scope.
+Read-only refresh writes no closure, Work level, Status, Track, Roadmap or intent.
+
+Use the selected five views: deliveries; outcomes with accepted milestones, remaining assertions and
+suppliers; blocked with exact missing fact/supplier; completed with scoped evidence/native dates; and
+unfiltered All items. Preserve existing view IDs, layout/grouping/sorting/columns and unrelated settings
+through reviewed bounded changes and readback. Unknown metadata stays visible. Counts are not percentages.
+The maintained typed migration writer prepares exact field/absent-classification/view effects; it refuses
+conflicting existing values and retains originals after uncertainty. New enrollment still requires its
+normal authenticated private binding/protected commitment pair, not a child link or view filter. Publication,
+actual installed instruction discovery, selected caller qualification, field/enrollment/view migration and
+native consumer acceptance remain separate required joins before activating this successor.
 
 ## Recover ownership and unavailable history
 

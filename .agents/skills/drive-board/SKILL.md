@@ -6,7 +6,8 @@ description: "Advance the organization FS-GG Coordination board through canonica
 # Drive Board
 
 Load [$work-board](../work-board/SKILL.md) and select its **organization** scope: Project 3,
-binding4/schema2/inspection2 and the authenticated qualified installed caller. This wrapper
+the exact currently qualified binding/caller, with separately admitted binding5/schema3/inspection3
+required for successor outcome/delivery semantics. Current binding4 keeps its original accepted scope. This wrapper
 selects scope only; all recovery, ownership, capacity, intake, qualification, delivery, observation
 and progress rules live there. No legacy fallback, roadmap scheduling or duplicate status upkeep.
 Use [normal](../drive-board-normal/SKILL.md) or [best](../drive-board-best/SKILL.md) only for the

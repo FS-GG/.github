@@ -26,6 +26,14 @@ required CI, exact reviewed/tested/delivered correspondence, later publication a
 absolute-path/runtime-policy discovery (including project overrides), plus separately qualified caller
 adoption where compiled support changes. Historical evidence below retains its original scope and times.
 
+The selected source scope also implements explicit outcome/delivery classification, bounded native
+hierarchy and scoped closure reporting through binding5/schema3/inspection3/integrator2. Current qualified
+binding4/CLI0.105 and product3 keep their actual accepted scope until successor adoption. The maintained
+migration writer adds one Work level field and absent-only explicit classifications, preserves existing
+view identities/orthogonal settings, and never repurposes Status/Track/Roadmap or automatically closes
+parents. Root selects exact native field/classification/view/enrollment effects in a separate admitted
+window; no schema mutation, membership expansion or caller activation is claimed by this plan update.
+
 Current open scope: [Unified Roadmap v3](2026-10-07-unified-development-roadmap-v3.md) and the separate
 [games roadmap](2026-10-07-games-development-roadmap.md). Older v2 links in retained packets and
 handoffs are archive lineage; recover surviving IDs against these indexes before selecting work.

@@ -125,11 +125,25 @@ class OfflineTests(unittest.TestCase):
 
     @unittest.skipUnless(RENDER, "actual FSI qualification selected by hosted workflow only")
     def test_actual_fsharp_adapter_offline_and_strict_health(self):
+        # Exercise the new inspection consumer through the actual maintained collector + FSI route.
+        self.metadata['boardInspection'] = {'schema': 'fsgg.coord.board-v2-inspection/3', 'items': [
+            {'issue': {'owner': 'FS-GG', 'repository': '.github', 'number': 42},
+             'native': {'state': 'CLOSED'}, 'planning': {'status': 'Done'}, 'workItem': {
+                 'workLevel': 'Delivery', 'hierarchy': {'parent': None, 'children': [], 'complete': True,
+                     'gap': None, 'observedAt': self.now.isoformat()}, 'closure': {
+                     'stateReason': 'COMPLETED', 'closedAt': self.started.isoformat(),
+                     'doneWhen': 'Scoped source routing promise', 'blockedOn': 'Installed parent scope remains open',
+                     'acceptanceEvidence': 'Fixture native source evidence', 'acceptance': 'Unverified'}}}]}
         self.source()
         report = self.collect()
         command = ["dotnet", "fsi", str(ROOT / "scripts/v2-progress/render.fsx"), str(self.out)]
         rendered = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=45)
         self.assertEqual(0, rendered.returncode, rendered.stderr)
+        self.assertIn("Outcomes and deliveries", rendered.stdout)
+        self.assertIn("Scoped source routing promise", rendered.stdout)
+        self.assertIn("Installed parent scope remains open", rendered.stdout)
+        self.assertIn("CLOSED / COMPLETED", rendered.stdout)
+        self.assertIn("acceptance Unverified", rendered.stdout)
         self.assertIn("Current queue: Unknown", rendered.stdout)
         self.assertNotIn("pending=0", rendered.stdout)
         self.assertIn("no end-to-end capture acceptance claimed", rendered.stdout)

@@ -677,6 +677,41 @@ class ProgrammePreparationTests(unittest.TestCase):
             self.refused(self.call())
             self.assertFalse(self.private_path.exists()); self.assertFalse(self.public_path.exists())
 
+
+class OutcomeDeliveryProgrammePreparationTests(ProgrammePreparationTests):
+    """The same actual offline constructor handles the selected new binding, not a second writer."""
+    def setUp(self):
+        super().setUp()
+        self.template['bindingVersion'] = 5
+        self.template['schemaVersion'] = 3
+        self.template['workLevel'] = {'id': 'synthetic-work-level',
+            'options': {'Outcome': 'synthetic-level-outcome', 'Delivery': 'synthetic-level-delivery'}}
+        self.payload['target']['schemaVersion'] = 3
+
+    def test_actual_successor_pair_keeps_enrollment_wire_and_exact_field_identities(self):
+        raw = self.wire(self.payload) + b' \n'
+        result = self.call(raw_payload=raw)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assert_pair(raw)
+        private = json.loads(self.private_path.read_bytes())
+        self.assertEqual(5, private['bindingVersion'])
+        self.assertEqual(3, private['schemaVersion'])
+        self.assertEqual(self.template['workLevel'], private['workLevel'])
+
+    def test_wrong_successor_target_schema_refuses_without_output(self):
+        self.payload['target']['schemaVersion'] = 2
+        self.refused(self.call())
+        self.assertFalse(self.private_path.exists())
+        self.assertFalse(self.public_path.exists())
+
+    def test_legacy_binding_cannot_acquire_new_field_by_extra_property(self):
+        self.template['bindingVersion'] = 4
+        self.template['schemaVersion'] = 2
+        self.payload['target']['schemaVersion'] = 2
+        self.refused(self.call())
+        self.assertFalse(self.private_path.exists())
+        self.assertFalse(self.public_path.exists())
+
 if __name__ == '__main__':
     if '--no-build' in sys.argv:
         sys.argv.remove('--no-build')

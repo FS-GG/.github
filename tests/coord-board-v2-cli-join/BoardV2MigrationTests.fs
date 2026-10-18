@@ -1051,3 +1051,61 @@ module BoardV2MigrationTests =
         Assert.True filled
         Assert.Single fixture.Native.Mutations |> ignore
         Assert.Equal(500, fixture.Native.Requests.Length - initialReads + fixture.Native.Mutations.Length)
+
+    [<Fact>]
+    let ``actual successor CLI creates one Work level and initializes only explicit absent delivery intent`` () =
+        use fixture = new Fixture()
+        fixture.Native.Snapshot <- planningSchema fixture.Native.Snapshot
+        let oldView: View =
+            { Id = "synthetic-retained-view"; Name = "Selected deliveries"; Layout = "TABLE_LAYOUT";
+              Filter = "old-filter"; VisibleFieldIds = [ scope.StatusFieldId; scope.RoadmapFieldId ]; UnsupportedConfiguration = "[[],[],[]]" }
+        let unrelated = { oldView with Id = "synthetic-unfiltered-view"; Name = "All items"; Filter = "" }
+        fixture.Native.Snapshot <- { fixture.Native.Snapshot with Views = [ oldView; unrelated ] }
+        fixture.Scope <-
+            { fixture.Scope with
+                WorkLevel = Some { FieldId = None; Assignments = [ { IssueId = "synthetic-issue"; Name = "Delivery" } ] }
+                Views = [ { Id = Some oldView.Id; Name = oldView.Name; Layout = oldView.Layout;
+                            Filter = "synthetic-explicit-delivery-filter"; VisibleFieldIds = oldView.VisibleFieldIds } ] }
+        let code, path = fixture.Prepare "outcome-delivery-successor"
+        Assert.Equal(0, code)
+        Assert.Empty fixture.Native.Mutations
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        let field = fixture.Native.Snapshot.Fields |> List.filter (fun field -> field.Name = "Work level") |> Assert.Single
+        let card = fixture.Native.Snapshot.Items |> Assert.Single
+        let level = card.Values |> List.filter (fun value -> value.FieldId = field.Id) |> Assert.Single
+        Assert.Contains("Delivery", level.Value)
+        Assert.DoesNotContain(card.Values, fun value -> value.FieldId = scope.StatusFieldId || value.FieldId = scope.TrackFieldId || value.FieldId = scope.RoadmapFieldId || value.FieldId = scope.ObservationFieldId)
+        Assert.Equal(unrelated, fixture.Native.Snapshot.Views |> List.find (fun view -> view.Id = unrelated.Id))
+        let updated = fixture.Native.Snapshot.Views |> List.find (fun view -> view.Id = oldView.Id)
+        Assert.Equal("synthetic-explicit-delivery-filter", updated.Filter)
+        Assert.Equal(oldView.Layout, updated.Layout)
+        Assert.Equal<string>(oldView.VisibleFieldIds, updated.VisibleFieldIds)
+        Assert.Equal(4, fixture.Native.Mutations.Length) // field, membership, absent classification, selected view
+        let mutations = fixture.Native.Mutations.Length
+        // A new bounded invocation must explicitly select the independently read-back field identity.
+        fixture.Scope <- { fixture.Scope with WorkLevel = fixture.Scope.WorkLevel |> Option.map (fun plan -> { plan with FieldId = Some field.Id }) }
+        let repeatCode, repeatPath = fixture.Prepare "outcome-delivery-native-equal"
+        Assert.Equal(0, repeatCode)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments repeatPath))
+        Assert.Equal(mutations, fixture.Native.Mutations.Length)
+
+    [<Fact>]
+    let ``lost Work level creation retains original uncertainty and readback performs no replay`` () =
+        use fixture = new Fixture()
+        fixture.Native.Snapshot <- planningSchema fixture.Native.Snapshot
+        fixture.Scope <- { fixture.Scope with WorkLevel = Some { FieldId = None; Assignments = [] } }
+        let preparedCode, path = fixture.Prepare "work-level-original-unknown"
+        Assert.Equal(0, preparedCode)
+        fixture.Native.FailAfterEffect <- true
+        let arguments = fixture.ApplyArguments path
+        Assert.Equal(3, fixture.Run arguments)
+        Assert.Single(fixture.Native.Mutations) |> ignore
+        Assert.Single(fixture.Native.Snapshot.Fields |> List.filter (fun field -> field.Name = "Work level")) |> ignore
+        Assert.Equal(3, fixture.Run arguments)
+        Assert.Single(fixture.Native.Mutations) |> ignore
+        Assert.Equal(3, fixture.Run [ "migration-readback"; "--prepared-file"; path ])
+        Assert.Single(fixture.Native.Mutations) |> ignore
+        let readback = Directory.GetFiles(path + ".invocation", "readback-*.json") |> Assert.Single
+        Assert.Contains("fs.gg.board-v2.migration-readback/2", File.ReadAllText readback)
+        use terminal = JsonDocument.Parse(File.ReadAllText(Path.Combine(path + ".invocation", "terminal.json")))
+        Assert.Equal("Unknown", terminal.RootElement.GetProperty("state").GetString())

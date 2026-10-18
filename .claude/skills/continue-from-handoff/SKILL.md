@@ -27,7 +27,9 @@ and reconcile its owner rather than treating omission as cancellation.
 ## Recover the newest saved state
 
 Recover current scope through canonical work-board. Organization scope uses the accepted Project 3
-cutover and exact binding4/schema2/inspection2/qualified installed caller; products use only their selected
+cutover and its exact currently qualified binding/caller. The selected outcome/delivery successor requires
+separate binding5/schema3/inspection3/integrator2 adoption; old binding4 remains within its original scope.
+Products use only their selected
 V2 binding and provenance. Old preparation-only text/manual index/Project 1 directions in handoffs are
 history, never fallback. Source delivery alone still establishes no new executable/caller adoption.
 Preserve exact outcome/slice/attempt/owner, existing Current deliverable/native PR/head, issue/body/plan

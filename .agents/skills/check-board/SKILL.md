@@ -25,6 +25,15 @@ Inspection grants no dispatch. The existing integrator verifies genuine action/p
 capacity/reservation suppliers and refreshes determining facts beside actual owner execution. Missing
 or failed V2 reads preserve Unknown and independent authorized issue/plan/PR work, with no V1 fallback.
 
+## Selected outcome/delivery successor
+
+The [organization contract](references/organization-v2-inspection.md#outcomedelivery-successor-source-contract--2026-10-18)
+also defines prepared binding5/schema3/inspection3/integrator2 with explicit Work level and bounded
+hierarchy/closure metadata. Require its separately qualified caller and selected binding before use;
+current binding4 and product3 do not acquire these semantics from new instructions. Canonical
+[work-board](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/SKILL.md) owns action
+selection and closure. Inspection stays read-only; Unknown metadata remains visible, not fallback.
+
 ## Separately qualified product scope
 
 Product bindingVersion3/schemaVersion1 keeps its qualified inspection/1 contract and five-status
