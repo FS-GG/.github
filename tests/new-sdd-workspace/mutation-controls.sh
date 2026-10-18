@@ -39,7 +39,9 @@ expect_red() {
   local label="$1" old="$2" new="$3" needle="$4" log="$5"
   restore
   mutate_exactly_once "$old" "$new"
-  if FSGG_MUTATION_CHILD=1 bash "$HERE/run.sh" >"$log" 2>&1; then
+  # Each recursive real build owns a fresh temporary artifacts root; never reuse
+  # the outer positive build retained for later FSI and package qualification.
+  if env -u FSGG_CREATOR_SOURCE_ARTIFACTS FSGG_MUTATION_CHILD=1 bash "$HERE/run.sh" >"$log" 2>&1; then
     echo "FAIL  $label — mutated suite stayed green"
     sed 's/^/    | /' "$log"
     exit 1
