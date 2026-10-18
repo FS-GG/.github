@@ -103,9 +103,8 @@ module V2ProjectionSource =
             let unknownLabel =
                 lines |> Array.exists (fun line ->
                     let value = line.Trim()
-                    let label = System.Text.RegularExpressions.Regex.Match(value, "^([A-Za-z][A-Za-z ]*):")
-                    label.Success && label.Groups[1].Value <> "https" && label.Groups[1].Value <> "http"
-                    && not (names.Contains label.Groups[1].Value))
+                    let label = System.Text.RegularExpressions.Regex.Match(value, "^([A-Za-z][A-Za-z ]*):(?!//)")
+                    label.Success && not (names.Contains label.Groups[1].Value))
             if not (complete parsed) || unknownLabel then None
             else
                 inlineFields |> Array.mapi (fun index (start, name, first) ->

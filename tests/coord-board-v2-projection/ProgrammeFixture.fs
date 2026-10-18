@@ -258,9 +258,9 @@ module ProgrammeFixture =
                       prerequisitesComplete = slice.PrerequisitesComplete; intakeAuthorized = slice.IntakeAuthorized |})
                capacity = context.CapacityObservation |> Option.map (fun observed ->
                    {| meaning = context.CapacityMeaning; implementation = context.ImplementationSlots; review = context.ReviewSlots; hostedCi = context.HostedCiSlots; observation = observation observed |})
-               reservations = context.ReservationObservation |> Option.map (fun observed ->
+               reservations = (context.Reservations, context.ReservationObservation) ||> Option.map2 (fun items observed ->
                    {| observation = observation observed
-                      items = context.Reservations |> Option.defaultValue [] |> List.map (fun reservation ->
+                      items = items |> List.map (fun reservation ->
                           {| sliceId = reservation.SliceId; attempt = reservation.Attempt; operation = operation reservation.Operation; owner = reservation.Owner
                              repository = reservation.Repository; paths = reservation.Paths; pullRequest = reservation.PullRequest; head = reservation.Head; custodyReference = reservation.CustodyReference |}) |}) |})
 
