@@ -534,6 +534,7 @@ let private organizationLegacy (manifest: JsonNode) (args: string array) =
         0
 
 let organizationMain (args: string array) =
+    let mutable historicalImport = false
     try
         require (args.Length = 1 || (args.Length = 2 && args.[1] = "--pilot-plan")) "usage: board-v2-import MANIFEST [--pilot-plan]"
         let original = System.Text.UTF8Encoding(false, true).GetString(programmeRead (256 * 1024) args.[0])
@@ -546,9 +547,17 @@ let organizationMain (args: string array) =
                 // Shape only: no private binding or authenticated protected source is available here.
                 printfn "{\"publicCommitmentValid\":true,\"authenticated\":false,\"executable\":false}"
                 0
-        else
+        elif s manifest "schema" = "fsgg.coordination-board-v2-import/v1" then
+            historicalImport <- true
             organizationLegacy manifest args
-    with error -> eprintfn "board-v2 import refused: %s" error.Message; 2
+        else
+            invalidOp "unsupported public document"
+    with error ->
+        // Only the explicitly classified historical constructor retains its diagnostic contract.
+        // Current/unknown documents and preclassification failures may contain private input.
+        if historicalImport then eprintfn "board-v2 import refused: %s" error.Message
+        else eprintfn "board-v2 public document refused"
+        2
 
 // Current programme preparation is offline. Enrollment parsing and commitment construction
 // belong to the same maintained API as runtime authentication, not to a second tool decoder.

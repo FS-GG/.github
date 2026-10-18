@@ -56,6 +56,14 @@ class ManifestTests(unittest.TestCase):
         valid = '{"schema":"fsgg.coordination-board-v2-enrollment/v3","commitmentSha256":"' + 'a'*64 + '"}'
         invalid = [
             valid.replace('/v3', '/v99'),
+            '{"schema":"fsgg.coordination-board-v2-enrollment/v99","SYNTHETIC_PRIVATE_SENTINEL":null}',
+            valid[:-1] + ',"SYNTHETIC_PRIVATE_SENTINEL":null,"SYNTHETIC_PRIVATE_SENTINEL":null}',
+            '{"schema":{"SYNTHETIC_PRIVATE_SENTINEL":null}}',
+            '{"schema":["SYNTHETIC_PRIVATE_SENTINEL"]}',
+            '{"schema":null,"SYNTHETIC_PRIVATE_SENTINEL":null}',
+            '{"SYNTHETIC_PRIVATE_SENTINEL":null}',
+            '{"SYNTHETIC_PRIVATE_SENTINEL":',
+
             '{"schema":"fsgg.coordination-board-v2-enrollment/v3"}',
             valid[:-1] + ',"commitmentSha256":"' + 'a'*64 + '"}',
             valid.replace('a'*64, 'A'*64),
@@ -91,7 +99,7 @@ class ManifestTests(unittest.TestCase):
             path.write_text(valid)
             plan = subprocess.run(['dotnet',str(DLL),str(path),'--pilot-plan'],capture_output=True,text=True)
             self.assertEqual(2,plan.returncode)
-            self.assertIn('cannot construct a pilot plan',plan.stderr)
+            self.assertEqual('board-v2 public document refused',plan.stderr.strip())
 
     def approved(self, count=3):
         m = copy.deepcopy(self.manifest)
