@@ -163,6 +163,10 @@ def early(value):
     assert '--filter' not in full and 'FS.GG.Coord.Cli.Tests.fsproj' in full, "full CLI coverage must remain"
     for step in (focus,full):
         assert '--blame' in step and '--blame-hang' not in step and '--blame-crash' not in step
+    host = by_name['Test — passive Host HTTP authority before expensive qualification']
+    assert names.index('Build the engine') < names.index('Test — passive Host HTTP authority before expensive qualification') < names.index(required[4])
+    assert 'FullyQualifiedName~HostPassiveReceiptTests|FullyQualifiedName~HostSchemaProfileTests|FullyQualifiedName~RemoteTelemetryTests.protected native collector resolves durable dispatch and replays retained envelope' in host and 'timeout-minutes: 5' in host
+    assert 'coord-engine/host-passive/host-passive.trx" --minimum 4' in value
     assert 'coord-engine/workspace/workspace.trx" --minimum 20' in value
     evidence = by_name['Retain early executable test diagnostics']
     assert 'if: ${{ always() }}' in evidence and 'coord-engine/' in evidence and 'retention-days: 7' in evidence
@@ -182,6 +186,9 @@ late = source[:start] + source[end:] + focus_block
 for bad in [late,source.replace('Test — workspace telemetry routes before expensive qualification','late workspace test'),
             source.replace('--filter "FullyQualifiedName~WorkspaceTelemetryApplicationTests"','--filter "unrelated"'),
             source.replace('--blame ',''),
+            source.replace('FullyQualifiedName~HostPassiveReceiptTests','FullyQualifiedName~UnrelatedHost'),
+            source.replace('FullyQualifiedName~RemoteTelemetryTests.protected native collector','FullyQualifiedName~UnrelatedNativeCollector'),
+            source.replace('host-passive.trx" --minimum 4','host-passive.trx" --minimum 0'),
             source.replace('if: ${{ always() }}','if: success()'),
             source.replace('Test — the wire contract, and the residue rule','missing full suite')]:
     try: early(bad)

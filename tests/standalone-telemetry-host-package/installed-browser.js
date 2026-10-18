@@ -1,6 +1,6 @@
 "use strict";
 const {chromium}=require(process.argv[2]);
-const [base,principal,key,workspace,item,spki]=process.argv.slice(3);
+const [base,principal,key,workspace,item,spki,expectedApplied="1"]=process.argv.slice(3);
 (async()=>{
   const browser=await chromium.launch({headless:true,args:[`--ignore-certificate-errors-spki-list=${spki}`]});
   try {
@@ -12,7 +12,8 @@ const [base,principal,key,workspace,item,spki]=process.argv.slice(3);
     await page.getByRole("button",{name:"Sign in"}).click();
     await page.locator(`#workspace option[value="${workspace}"]`).waitFor({state:"attached"});
     await page.getByRole("listitem").filter({hasText:item}).waitFor();
-    const body=await page.locator("body").innerText();
-    if(!body.includes("1 applied receipts")||body.includes("1 rejected receipts"))throw new Error("receipt health was not applied");
+    const health=await page.locator("#health").innerText();
+    const fields=health.split(" · ");
+    if(!/^[1-9][0-9]{0,3}$/.test(expectedApplied)||fields[1]!==`${expectedApplied} applied receipts`||fields[2]!=="0 rejected receipts")throw new Error(`receipt health mismatch: ${JSON.stringify(health)}`);
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exit(1);});

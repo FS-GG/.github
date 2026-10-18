@@ -17,7 +17,7 @@ import zipfile
 
 REPOSITORY_ID = 1269292704
 WORKFLOW = ".github/workflows/release-telemetry-host-successor-candidate.yml"
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 PACKAGE = f"FS.GG.Telemetry.Host.{VERSION}.nupkg"
 MEMBERS = {PACKAGE, "manifest.json", "package-evidence.json"}
 
@@ -68,9 +68,23 @@ def verify(artifact: dict, run: dict, archive_path: pathlib.Path, output: pathli
             mode = (member.external_attr >> 16) & 0xFFFF
             require(not member.is_dir() and not stat.S_ISLNK(mode) and member.file_size <= 250_000_000,
                     "unsafe candidate archive member")
+        require(all(member.file_size <= 65536 for member in archive.infolist()
+                    if member.filename in {"manifest.json", "package-evidence.json"}),
+                "Host candidate JSON evidence is oversized")
         manifest = json.loads(archive.read("manifest.json"))
         require(manifest.get("sourceSha") == source_sha and manifest.get("version") == VERSION,
                 "Host manifest source or version differs")
+        evidence = json.loads(archive.read("package-evidence.json"))
+        require(evidence.get("schema") == "fsgg.telemetry-host-package-evidence/v1"
+                and evidence.get("packageId") == "FS.GG.Telemetry.Host"
+                and evidence.get("version") == VERSION
+                and evidence.get("archiveSha256") == manifest.get("archiveSha256")
+                and type(evidence.get("failed")) is int and evidence["failed"] == 0
+                and type(evidence.get("passed")) is int and evidence["passed"] > 0
+                and evidence.get("productionStorage") == "eligible-linux-x64"
+                and evidence.get("syntheticTls") is True
+                and evidence.get("passiveReceiptQualified") is True,
+                "Host package evidence lacks exact positive passive receipt qualification")
         with tempfile.TemporaryDirectory(prefix="host-candidate-", dir=output.parent) as temporary:
             work = pathlib.Path(temporary)
             for name in names:

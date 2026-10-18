@@ -96,6 +96,7 @@ AFTER="$(find "$WORK/private" -mindepth 1 -printf '%P\t%y\n' | sort)"
 [ "$STATUS_RC" -ne 0 ] && [ "$PREFLIGHT_RC" -ne 0 ] && [ "$EXPORT_RC" -ne 0 ] && [ "$BEFORE" = "$AFTER" ] && ok "installed status, preflight and export-learning fail closed without provisioning" || bad "installed status, preflight and export-learning fail closed without provisioning" "status=$STATUS_RC preflight=$PREFLIGHT_RC export-learning=$EXPORT_RC"
 
 HOST_PRODUCTION_PROFILE="not-run"
+HOST_PASSIVE_RECEIPT_QUALIFIED=false
 export HOST_PRODUCTION_PROFILE
 # shellcheck source-path=SCRIPTDIR
 # shellcheck source=production.sh
@@ -104,10 +105,10 @@ qualify_installed_host
 
 if dotnet tool uninstall "$PACKAGE_ID" --tool-path "$WORK/tools" >"$WORK/uninstall.log" 2>&1; then ok "local tool uninstall succeeds"; else bad "local tool uninstall succeeds" "$(tail -5 "$WORK/uninstall.log" | tr '\n' ' ')"; fi
 
-python3 - "$EVIDENCE" "$PACKAGE_SHA" "$PACKAGE_BYTES" "$PASS" "$FAIL" "$HOST_PRODUCTION_PROFILE" "$PACKAGE_VERSION" <<'PY'
+python3 - "$EVIDENCE" "$PACKAGE_SHA" "$PACKAGE_BYTES" "$PASS" "$FAIL" "$HOST_PRODUCTION_PROFILE" "$PACKAGE_VERSION" "$HOST_PASSIVE_RECEIPT_QUALIFIED" <<'PY'
 import json,pathlib,platform,sys
-out,sha,size,passed,failed,profile,version=sys.argv[1:]
-pathlib.Path(out).write_text(json.dumps({'schema':'fsgg.telemetry-host-package-evidence/v1','packageId':'FS.GG.Telemetry.Host','version':version,'archiveSha256':sha,'archiveBytes':int(size),'passed':int(passed),'failed':int(failed),'runtime':platform.machine(),'productionStorage':profile,'syntheticTls':profile=='eligible-linux-x64'},sort_keys=True,separators=(',',':'))+'\n')
+out,sha,size,passed,failed,profile,version,passive=sys.argv[1:]
+pathlib.Path(out).write_text(json.dumps({'schema':'fsgg.telemetry-host-package-evidence/v1','packageId':'FS.GG.Telemetry.Host','version':version,'archiveSha256':sha,'archiveBytes':int(size),'passed':int(passed),'failed':int(failed),'runtime':platform.machine(),'productionStorage':profile,'syntheticTls':profile=='eligible-linux-x64','passiveReceiptQualified':passive=='true'},sort_keys=True,separators=(',',':'))+'\n')
 PY
 printf 'standalone-telemetry-host-package fixture: %d passed, %d failed; evidence=%s\n' "$PASS" "$FAIL" "$EVIDENCE"
 [ "$FAIL" -eq 0 ]

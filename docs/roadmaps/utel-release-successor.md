@@ -2,7 +2,45 @@
 
 Owner: `FS-GG/.github` release and telemetry producer. Main/SystemAdmin owns installed-host adoption. This item is a separate, additive publication route; it does not reopen the accepted GS2-08.9 legacy routes or authorize `OpenV2`.
 
-## Selected prospective source: 0.106 over accepted 0.105 — 2026-10-18
+## Accepted coherent 0.106 publication — 2026-10-18
+
+Root accepted complete publication at **13:23:51 UTC**. The original
+[candidate 39124245029](https://github.com/FS-GG/.github/actions/runs/39124245029), artifact
+`12135274968`, binds protected source `2e42faaa994367b9f50be87439e8fd973ad21501`, raw archive
+SHA256 `77cd2d0500bd04014ff4671d282ec0595d4a53f5f7e179d1c8dff6fac07b6ff0` and content
+`sha256:351a435c1f162f3ff8ca8e6722d58b34b193b44744a6a207f9bb57f015f8204d`.
+The original [preflight 39127327235](https://github.com/FS-GG/.github/actions/runs/39127327235)
+passed without journal mutation. [Publisher 39127872315](https://github.com/FS-GG/.github/actions/runs/39127872315)
+remains an incomplete generation 16 checkpoint: the finite visibility window expired after the
+Drivers upload was acknowledged. Its successful job exit was not publication completion.
+
+A separately admitted [ordinary forward operation 39130246438](https://github.com/FS-GG/.github/actions/runs/39130246438)
+read the same journal24, settled the independently matched Drivers intent without resending a package,
+then completed the eight omitted asset and promotion effects. Its 657-second original job returned
+`publicationComplete=true`. Independent readback verifies **all 16 effects at generation 33**, logical
+head `084d166c73030fc26c6836c920eb8e99643429a1`, state SHA256
+`e5f37d5a43b7473df9bac97f5e18f8ee5a3a61017cb79e324f18c75c714f11af`, and the promoted
+[seven-asset release 416441527](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.106.0).
+The native release was published at **13:18:34 UTC**; the source-generated channel timestamp is
+separate. Tag, original package and qualification bytes, final manifest descriptor, content identity
+and channel receipt agree. No repack, journal reset, component tag or old-selector reuse occurred.
+
+All three packages match their original normalized payloads on both feeds. Independent public
+downloads confirm those payloads; NuGet signing changes the outer archive hashes. Local independent
+GitHub Packages access remains unavailable, so that feed's readback retains the actual protected
+publisher, journal and final-manifest provenance. The App cleanup step logged token revocation;
+independent token-invalidity and NuGet key revocation/expiry were not proved. The raw complete result
+retains its last pending-promotion marker, while its final disposition and independently read journal
+establish completion. Original checkpoints, failures, private evidence and all inherited holds remain.
+
+Registry published metadata and the source-distributed tool manifest now select 0.106.0. This does
+not replace the active installed **0.105** executable, selector or accepted board binding. Isolated
+candidate-data acceptance, installed fleet adoption, receiver delivery, attribution and restart/restore
+remain separate. Host 0.6 source and its independently versioned release are not a fourth coherent-set
+package. The selected publication main hold ended after terminal result and cleanup collection;
+no further dispatch or adoption is authorized by this record.
+
+## Historical 0.106 source preparation over accepted 0.105 — 2026-10-18
 
 Root selected coherent **0.106.0** source preparation for passive modern native observations through
 PR #4672 and its existing application/reader/store composition. The accepted predecessor is

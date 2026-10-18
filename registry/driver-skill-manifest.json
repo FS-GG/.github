@@ -5,7 +5,7 @@
       "id": "atlas",
       "scope": "driver",
       "sha256": "c18e56fcc56abf80903e2fc6829cd94b44f42947724a26318ebcbf1ac5e1b35b",
-      "tree-sha256": "008b481148ed61a7558a295203ab1db01e4d4886818d64b9d30dcad69b561037",
+      "tree-sha256": "c18d1a8edc021bdf1bbf71cb403041b4749400af9ff67904befc0e0faea3f1a3",
       "files": [
         {
           "path": "SKILL.md",
@@ -24,7 +24,7 @@
         },
         {
           "path": "assets/seed/catalog.json",
-          "sha256": "6ad30cfdf5dea5607a94c889e5fdcaf23a6297f5da415e747820f11769b417c6",
+          "sha256": "2ad04f3d212c5df08bd4c354c8fbcc8021347400a07c8e072b290a399bf22585",
           "executable": false
         },
         {
@@ -240,6 +240,11 @@
         {
           "path": "assets/seed/records/2fb2ed7902a8e35dc36489a23245d963026d688008c92fed6fdc1f6bc27198a6.json",
           "sha256": "2fb2ed7902a8e35dc36489a23245d963026d688008c92fed6fdc1f6bc27198a6",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/3018f389f6928af5830bdd081c9d03530a379f37d1c2f9196e6fb3c44eb337d5.json",
+          "sha256": "3018f389f6928af5830bdd081c9d03530a379f37d1c2f9196e6fb3c44eb337d5",
           "executable": false
         },
         {
@@ -470,6 +475,11 @@
         {
           "path": "assets/seed/records/5f2a75b89983d1005a38afa2cabccc3a39f31989807120281d8505ffd564e0c6.json",
           "sha256": "5f2a75b89983d1005a38afa2cabccc3a39f31989807120281d8505ffd564e0c6",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/5f43c837f39d207c35a58e9b36fe3144017b2012ac7da334714247606f1906d2.json",
+          "sha256": "5f43c837f39d207c35a58e9b36fe3144017b2012ac7da334714247606f1906d2",
           "executable": false
         },
         {
@@ -798,6 +808,11 @@
           "executable": false
         },
         {
+          "path": "assets/seed/records/9b466e8fcabe551bb6292d23a359be3ea15b7627a6ad9c9e6a4ff11444c20860.json",
+          "sha256": "9b466e8fcabe551bb6292d23a359be3ea15b7627a6ad9c9e6a4ff11444c20860",
+          "executable": false
+        },
+        {
           "path": "assets/seed/records/9bbd03293bf53e9db51401d157b3eb2aa51e9c70449350e98b9a0a3fc9a684ce.json",
           "sha256": "9bbd03293bf53e9db51401d157b3eb2aa51e9c70449350e98b9a0a3fc9a684ce",
           "executable": false
@@ -805,6 +820,11 @@
         {
           "path": "assets/seed/records/9cf90b3aa59f3ca0e40fd9e1fec9703428752d63bded6b091d28f614c9ba99ae.json",
           "sha256": "9cf90b3aa59f3ca0e40fd9e1fec9703428752d63bded6b091d28f614c9ba99ae",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/9d8637e5adebaca208f21af0a254e80712988867411be560031f4b7a23cc04f6.json",
+          "sha256": "9d8637e5adebaca208f21af0a254e80712988867411be560031f4b7a23cc04f6",
           "executable": false
         },
         {
@@ -855,6 +875,11 @@
         {
           "path": "assets/seed/records/a91c8a1431a4120667cd523cf56bac004794fc5b8b24275ad2f9c8a15c75fba1.json",
           "sha256": "a91c8a1431a4120667cd523cf56bac004794fc5b8b24275ad2f9c8a15c75fba1",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/a986593807953215f834ba73e7d2565659b32aa849986013f8614bb1c61ea8cf.json",
+          "sha256": "a986593807953215f834ba73e7d2565659b32aa849986013f8614bb1c61ea8cf",
           "executable": false
         },
         {
@@ -1789,12 +1814,12 @@
     {
       "id": "publishing-and-deployment",
       "scope": "operator",
-      "sha256": "d9c2996dc8600e8850b3a0aa69a5c4ed1e0297f6d16a3d20c332135ba1edbc4b",
-      "tree-sha256": "0e134aecffef4c7e85069499de2a938d878074e0a2b346c6e099fca89ece0dcf",
+      "sha256": "8fc1a95790c226ee930fd792f99a91584087119941524e3401f463110614ccb1",
+      "tree-sha256": "1f360be2c8a70b5af7d5fe39697099a0149bdb30493062fcf0792300579a4f49",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "d9c2996dc8600e8850b3a0aa69a5c4ed1e0297f6d16a3d20c332135ba1edbc4b",
+          "sha256": "8fc1a95790c226ee930fd792f99a91584087119941524e3401f463110614ccb1",
           "executable": false
         },
         {

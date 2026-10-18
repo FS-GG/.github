@@ -1,7 +1,7 @@
 name: release-telemetry-host-successor-candidate
 
-# Published predecessor is immutable Host0.4.0 (utel-host-rel-10).
-# Independent Host 0.5.0 source and byte qualification only. This workflow has
+# Published predecessor is immutable Host0.5.0 (utel-host-rel-11).
+# Independent Host 0.6.0 source and byte qualification only. This workflow has
 # no package-feed, tag, release, journal, OIDC or promotion write capability.
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   candidate:
-    name: telemetry-host-050-candidate
+    name: telemetry-host-060-candidate
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -29,6 +29,11 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+      - name: Check closed Host schema candidate and verifier bindings early
+        run: |
+          set -euo pipefail
+          python3 tests/telemetry-host-successor/run.py
+          bash tests/telemetry-host-release/run.sh
       - name: Bind exact current main and unused Host version
         env:
           SOURCE_SHA: ${{ github.sha }}
@@ -41,16 +46,31 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
           version="$(dotnet msbuild src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -getProperty:Version | tr -d '[:space:]')"
-          test "$version" = 0.5.0
-          existing_tag="$(git ls-remote --tags origin refs/tags/telemetry-host/v0.5.0)"
+          test "$version" = 0.6.0
+          existing_tag="$(git ls-remote --tags origin refs/tags/telemetry-host/v0.6.0)"
           test -z "$existing_tag"
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
-            'https://api.nuget.org/v3-flatcontainer/fs.gg.telemetry.host/0.5.0/fs.gg.telemetry.host.0.5.0.nupkg')"
+            'https://api.nuget.org/v3-flatcontainer/fs.gg.telemetry.host/0.6.0/fs.gg.telemetry.host.0.6.0.nupkg')"
           test "$response" = 404
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
             -u "$GITHUB_ACTOR:$GITHUB_TOKEN" \
-            'https://nuget.pkg.github.com/FS-GG/download/fs.gg.telemetry.host/0.5.0/fs.gg.telemetry.host.0.5.0.nupkg')"
+            'https://nuget.pkg.github.com/FS-GG/download/fs.gg.telemetry.host/0.6.0/fs.gg.telemetry.host.0.6.0.nupkg')"
           test "$response" = 404
+      - name: Test passive Host HTTP authority before browser qualification
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          dotnet restore tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj --locked-mode
+          dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj -c Release --no-restore --filter "FullyQualifiedName~HostPassiveReceiptTests|FullyQualifiedName~HostSchemaProfileTests|FullyQualifiedName~RemoteTelemetryTests.protected native collector resolves durable dispatch and replays retained envelope" --blame --logger "console;verbosity=normal" --logger "trx;LogFileName=host-passive.trx" --results-directory "$RUNNER_TEMP/host-passive"
+          python3 scripts/read-trx-count.py "$RUNNER_TEMP/host-passive/host-passive.trx" --minimum 4 --label "passive Host HTTP" --summary-file "$GITHUB_STEP_SUMMARY"
+      - name: Retain passive Host HTTP diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: telemetry-host-candidate-passive-tests-${{ github.sha }}
+          path: ${{ runner.temp }}/host-passive/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Qualify Host, dashboard and browser
         env:
           FSGG_RUN_REAL_BROWSER: '1'
@@ -75,16 +95,17 @@ jobs:
           mkdir -p artifacts/telemetry-host
           dotnet pack src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -c Release --no-restore \
             -p:RepositoryCommit="$SOURCE_SHA" -o artifacts/telemetry-host
-          package=artifacts/telemetry-host/FS.GG.Telemetry.Host.0.5.0.nupkg
+          package=artifacts/telemetry-host/FS.GG.Telemetry.Host.0.6.0.nupkg
           manifest=artifacts/telemetry-host/manifest.json
           test -f "$package"
           python3 scripts/telemetry-host-release.py prepare --package "$package" \
             --lock src/FS.GG.Telemetry.Host/packages.lock.json \
             --assets src/FS.GG.Telemetry.Dashboard/Assets \
-            --source-sha "$SOURCE_SHA" --version 0.5.0 --tag telemetry-host/v0.5.0 \
+            --source-sha "$SOURCE_SHA" --version 0.6.0 --tag telemetry-host/v0.6.0 \
             --output "$manifest"
           python3 scripts/telemetry-host-release.py verify --manifest "$manifest" --package "$package"
           bash tests/standalone-telemetry-host-package/run.sh "$package" artifacts/telemetry-host/package-evidence.json
+          python3 -c 'import json,sys; e=json.load(open(sys.argv[1])); assert e["productionStorage"]=="eligible-linux-x64" and e["passiveReceiptQualified"] is True and e["failed"]==0' artifacts/telemetry-host/package-evidence.json
           bash tests/telemetry-host-release/run.sh
       - name: Refuse changed main before retaining candidate
         env:
@@ -94,7 +115,7 @@ jobs:
         with:
           name: telemetry-host-successor-candidate-${{ github.sha }}-${{ github.run_id }}
           path: |
-            artifacts/telemetry-host/FS.GG.Telemetry.Host.0.5.0.nupkg
+            artifacts/telemetry-host/FS.GG.Telemetry.Host.0.6.0.nupkg
             artifacts/telemetry-host/manifest.json
             artifacts/telemetry-host/package-evidence.json
           if-no-files-found: error

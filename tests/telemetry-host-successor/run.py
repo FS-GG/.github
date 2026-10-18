@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import pathlib
+import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -25,7 +26,7 @@ from telemetry_host_successor_provider import HostProvider, NotFound
 def manifest():
     return {
         "schema": "fsgg.telemetry.host-release/1", "packageId": "FS.GG.Telemetry.Host",
-        "version": "0.5.0", "tag": "telemetry-host/v0.5.0", "sourceSha": "a" * 40,
+        "version": "0.6.0", "tag": "telemetry-host/v0.6.0", "sourceSha": "a" * 40,
         "archiveSha256": "b" * 64, "producerPayloadSha256": "sha256:" + "c" * 64,
     }
 
@@ -40,7 +41,7 @@ class StoreProfileTests(unittest.TestCase):
             package = root / "fixture.nupkg"
             with zipfile.ZipFile(package, "w") as archive:
                 archive.writestr("FS.GG.Telemetry.Host.nuspec",
-                                 "<package><metadata><id>FS.GG.Telemetry.Host</id><version>0.5.0</version></metadata></package>")
+                                 "<package><metadata><id>FS.GG.Telemetry.Host</id><version>0.6.0</version></metadata></package>")
                 archive.writestr("tools/net10.0/linux-x64/FS.GG.Telemetry.Host.dll", b"fixture")
             lock = root / "lock.json"
             lock.write_text("{}")
@@ -48,14 +49,15 @@ class StoreProfileTests(unittest.TestCase):
             assets.mkdir()
             (assets / "app.js").write_text("fixture")
             prepared = module.build_manifest(SimpleNamespace(package=package, lock=lock, assets=assets,
-                                             version="0.5.0", tag="telemetry-host/v0.5.0", source_sha="a" * 40))
+                                             version="0.6.0", tag="telemetry-host/v0.6.0", source_sha="a" * 40))
             self.assertEqual((prepared["supportedStoreSchemaMin"], prepared["supportedStoreSchemaMax"]), (14, 14))
-            self.assertEqual(prepared["version"], "0.5.0")
+            self.assertEqual(prepared["version"], "0.6.0")
 
     def test_current_profile_is_schema14_only_and_legacy_artifact_stays_unchanged(self):
         spec = importlib.util.spec_from_file_location("host_release_profile", ROOT / "scripts/telemetry-host-release.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        self.assertEqual(module.store_schema_profile("0.6.0"), (14, 14))
         self.assertEqual(module.store_schema_profile("0.5.0"), (14, 14))
         self.assertEqual(module.store_schema_profile("0.4.0"), (10, 12))
         with tempfile.TemporaryDirectory() as temporary:
@@ -77,8 +79,98 @@ class StoreProfileTests(unittest.TestCase):
                    "supportedStoreSchemaMin": 10, "supportedStoreSchemaMax": 12}
             path.write_text(json.dumps(old))
             self.assertEqual(module.load_manifest(path), old)
-            with self.assertRaisesRegex(Refused, "exact Host 0.5.0"):
+            with self.assertRaisesRegex(Refused, "exact Host 0.6.0"):
                 effects(old)
+            previous = {**value, "version": "0.5.0", "tag": "telemetry-host/v0.5.0"}
+            path.write_text(json.dumps(previous))
+            self.assertEqual(module.load_manifest(path), previous)
+            with self.assertRaisesRegex(Refused, "exact Host 0.6.0"):
+                effects(previous)
+
+
+class EarlyQualificationTests(unittest.TestCase):
+    def test_actual_host_http_and_closed_bindings_run_before_costly_work(self):
+        def check(source, expensive, native=False):
+            pure = source.index("python3 tests/telemetry-host-successor/run.py")
+            test = source.index('--filter "FullyQualifiedName~HostPassiveReceiptTests|FullyQualifiedName~HostSchemaProfileTests|FullyQualifiedName~RemoteTelemetryTests.protected native collector resolves durable dispatch and replays retained envelope"')
+            assert pure < test < source.index(expensive)
+            assert 'host-passive.trx" --minimum 4' in source
+            assert 'timeout-minutes: 5' in source
+            assert '--blame ' in source and '--blame-hang' not in source and '--blame-crash' not in source
+            assert 'Retain passive Host HTTP diagnostics' in source and 'always()' in source
+            assert 'retention-days: 7' in source and 'continue-on-error:' not in source
+            assert 'dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj -c Release --no-restore\n' in source
+            assert 'e["passiveReceiptQualified"] is True' in source
+            if native:
+                assert 'if: ${{ !(inputs.learn_native_fixture || inputs.learn_native_preflight) }}' in source
+        for path, expensive, native in [
+            (".github/workflows/telemetry-host-package.yml", "Qualify the typed HOST binding", True),
+            (".github/workflows/release-telemetry-host-successor-candidate.yml", "Qualify Host, dashboard and browser", False)]:
+            source = (ROOT / path).read_text()
+            check(source, expensive, native)
+            for mutant in [source.replace('FullyQualifiedName~HostPassiveReceiptTests', 'FullyQualifiedName~Unrelated'),
+                           source.replace('FullyQualifiedName~RemoteTelemetryTests.protected native collector', 'FullyQualifiedName~UnrelatedNativeCollector'),
+                           source.replace('host-passive.trx" --minimum 4', 'host-passive.trx" --minimum 0'),
+                           source.replace('python3 tests/telemetry-host-successor/run.py', 'echo absent'),
+                           source.replace('always()', 'success()'),
+                           source.replace('e["passiveReceiptQualified"] is True', 'True')]:
+                with self.assertRaises((AssertionError, ValueError)):
+                    check(mutant, expensive, native)
+
+
+class InstalledPassiveInputTests(unittest.TestCase):
+    def test_actual_embedded_package_producer_preserves_native_identity(self):
+        source = (ROOT / "tests/standalone-telemetry-host-package/production.sh").read_text()
+        marker = '  python3 - "$WORK/envelope.json" <<' + "'PY'\n"
+        block = source.split(marker, 1)[1].split("\nPY\n", 1)[0]
+        def identity(program, output):
+            subprocess.run([sys.executable, "-c", program, str(output)], check=True, capture_output=True)
+            value = json.loads(output.read_text())
+            self.assertEqual(value["payload"]["eventCount"], len(value["payload"]["events"]))
+            return value["payload"]["events"][1]["identity"]
+        expected = "passive-" + hashlib.sha256(b"codex-rollout/1\x1f22222222-2222-2222-2222-222222222222\x1f33333333-3333-3333-3333-333333333333\x1fpackage-response").hexdigest()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            self.assertEqual(identity(block, root / "good.json"), expected)
+            correction_marker = '  python3 - "$WORK/envelope.json" "$WORK/passive-correction.json" <<' + "'PY_PASSIVE'\n"
+            correction = source.split(correction_marker, 1)[1].split("\nPY_PASSIVE\n", 1)[0]
+            subprocess.run([sys.executable, "-c", correction, str(root / "good.json"), str(root / "correction.json")], check=True, capture_output=True)
+            original = json.loads((root / "good.json").read_text())
+            corrected = json.loads((root / "correction.json").read_text())
+            self.assertNotEqual(original["batchId"], corrected["batchId"])
+            self.assertEqual(corrected["batchId"], corrected["payload"]["ingestId"])
+            self.assertEqual([2, 1], [value["payload"]["eventCount"] for value in [original, corrected]])
+            self.assertEqual([expected], [event["identity"] for event in corrected["payload"]["events"]])
+            self.assertEqual(2, corrected["payload"]["events"][0]["revision"])
+            calls = [line for line in source.splitlines() if 'node "$ROOT/tests/standalone-telemetry-host-package/installed-browser.js"' in line]
+            self.assertEqual(2, len(calls))
+            self.assertTrue(all('"$browser_spki" 2 >' in line for line in calls))
+            # A syntactically valid escaped-text identity must fail this protocol control.
+            bad = block.replace(chr(92) + "x1f", chr(92) * 2 + "x1f")
+            self.assertNotEqual(bad, block)
+            self.assertNotEqual(identity(bad, root / "bad.json"), expected)
+
+    def test_actual_browser_receipt_check_preserves_old_profile_and_exact_correction_count(self):
+        # Execute the maintained script with a page double: no browser or network is launched.
+        with tempfile.TemporaryDirectory() as temporary:
+            mock = pathlib.Path(temporary) / "playwright.js"
+            for applied, rejected, expected, success in [
+                (1, 0, None, True), (2, 0, "2", True),
+                (1, 0, "2", False), (2, 0, None, False),
+                (12, 0, "2", False), (2, 1, "2", False),
+                (2, 2, "2", False), (0, 0, "2", False),
+                (2, 0, "0", False), (2, 0, "invalid", False)]:
+                with self.subTest(applied=applied, rejected=rejected, expected=expected):
+                    health = f"0 pending receipts · {applied} applied receipts · {rejected} rejected receipts · consistent"
+                    mock.write_text("const control={fill:async()=>{},click:async()=>{},waitFor:async()=>{},innerText:async()=>" + json.dumps(health) + "};\n"
+                                    "const page={goto:async()=>({status:()=>200}),locator:()=>control,getByRole:()=>({filter:()=>control,...control})};\n"
+                                    "module.exports={chromium:{launch:async()=>({newPage:async()=>page,close:async()=>{}})}};\n")
+                    args = ["node", str(ROOT / "tests/standalone-telemetry-host-package/installed-browser.js"), str(mock),
+                            "https://fixture.invalid", "fixture-principal", "fixture-key", "fixture-workspace", "fixture-item", "fixture-spki"]
+                    if expected is not None:
+                        args.append(expected)
+                    result = subprocess.run(args, capture_output=True, text=True, timeout=10)
+                    self.assertEqual(success, result.returncode == 0, result.stderr)
 
 
 class Journal:
@@ -137,11 +229,13 @@ class HostReleaseTests(unittest.TestCase):
         self.assertEqual(self.ordered[0].target_digest, "a" * 40)
         publisher = (ROOT / "scripts" / "telemetry-host-successor-publish.py").read_text()
         candidate = (ROOT / ".github" / "workflows" / "release-telemetry-host-successor-candidate.yml").read_text()
-        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-11"', publisher)
+        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-12"', publisher)
         self.assertNotIn("utel-host-rel-10", publisher)
-        self.assertIn('"version": "0.5.0"', publisher)
-        self.assertIn("--version 0.5.0 --tag telemetry-host/v0.5.0", candidate)
-        self.assertIn("FS.GG.Telemetry.Host.0.5.0.nupkg", candidate)
+        self.assertIn('"version": "0.6.0"', publisher)
+        self.assertIn("--version 0.6.0 --tag telemetry-host/v0.6.0", candidate)
+        self.assertIn("FS.GG.Telemetry.Host.0.6.0.nupkg", candidate)
+        self.assertIn("telemetry-host-060-candidate", candidate)
+        self.assertIn("telemetry-host-060-publisher", (ROOT / ".github/workflows/release-telemetry-host-successor-publish.yml").read_text())
 
     def test_every_effect_is_admitted_and_read_back_once(self):
         self.assertEqual(len(self.ordered), 8)
@@ -176,10 +270,16 @@ class HostReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             archive = root / "candidate.zip"
-            with zipfile.ZipFile(archive, "w") as zipped:
-                zipped.writestr("manifest.json", json.dumps(manifest()))
-                zipped.writestr("package-evidence.json", "{}")
-                zipped.writestr("FS.GG.Telemetry.Host.0.5.0.nupkg", "fixture")
+            package_digest = hashlib.sha256(b"fixture").hexdigest()
+            positive = {"schema": "fsgg.telemetry-host-package-evidence/v1", "packageId": "FS.GG.Telemetry.Host",
+                        "version": "0.6.0", "archiveSha256": package_digest, "passed": 1, "failed": 0,
+                        "productionStorage": "eligible-linux-x64", "syntheticTls": True, "passiveReceiptQualified": True}
+            def write_archive(evidence):
+                with zipfile.ZipFile(archive, "w") as zipped:
+                    zipped.writestr("manifest.json", json.dumps({**manifest(), "archiveSha256": package_digest}))
+                    zipped.writestr("package-evidence.json", json.dumps(evidence))
+                    zipped.writestr("FS.GG.Telemetry.Host.0.6.0.nupkg", "fixture")
+            write_archive(positive)
             digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             run = {"id": 123, "path": verifier.WORKFLOW, "head_sha": source,
                    "head_branch": "main", "event": "workflow_dispatch", "conclusion": "success",
@@ -190,7 +290,18 @@ class HostReleaseTests(unittest.TestCase):
                                          "repository_id": verifier.REPOSITORY_ID,
                                          "head_repository_id": verifier.REPOSITORY_ID}}
             with patch.object(verifier.subprocess, "run"):
-                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.5.0")
+                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.6.0")
+            for field, value in [("productionStorage", "not-qualified:overlay"), ("passiveReceiptQualified", False),
+                                 ("syntheticTls", False), ("failed", 1), ("failed", False), ("version", "0.5.0"),
+                                 ("archiveSha256", "0" * 64)]:
+                with self.subTest(field=field):
+                    write_archive({**positive, field: value})
+                    changed_artifact = {**artifact, "digest": "sha256:" + hashlib.sha256(archive.read_bytes()).hexdigest()}
+                    with patch.object(verifier.subprocess, "run") as checker:
+                        with self.assertRaisesRegex(ValueError, "positive passive receipt"):
+                            verifier.verify(changed_artifact, run, archive, root / ("bad-" + field), source)
+                        checker.assert_not_called()
+            write_archive(positive)
             altered = {**run, "run_attempt": 2}
             with self.assertRaisesRegex(ValueError, "first-attempt"):
                 verifier.verify(artifact, altered, archive, root / "rerun", source)
@@ -216,9 +327,9 @@ class HostReleaseTests(unittest.TestCase):
                 self.assets = {}
                 self.writes = []
             def get(self, path):
-                if path.endswith("/git/ref/tags/telemetry-host/v0.5.0") and self.tag:
+                if path.endswith("/git/ref/tags/telemetry-host/v0.6.0") and self.tag:
                     return {"object": {"sha": self.tag}}
-                if path.endswith("/releases/tags/telemetry-host/v0.5.0") and self.release and not self.release["draft"]:
+                if path.endswith("/releases/tags/telemetry-host/v0.6.0") and self.release and not self.release["draft"]:
                     return self.release
                 if path.endswith("/releases?per_page=100&page=1"):
                     return [self.release] if self.release else []
@@ -242,7 +353,7 @@ class HostReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             row = manifest()
-            package = root / "FS.GG.Telemetry.Host.0.5.0.nupkg"
+            package = root / "FS.GG.Telemetry.Host.0.6.0.nupkg"
             package.write_bytes(b"exact original Host archive")
             row["archiveSha256"] = hashlib.sha256(package.read_bytes()).hexdigest()
             manifest_path = root / "manifest.json"
@@ -270,10 +381,10 @@ class HostReleaseTests(unittest.TestCase):
             def __init__(self, raw):
                 self.raw = raw
             def get(self, path):
-                if path.endswith("/releases/tags/telemetry-host/v0.5.0"):
+                if path.endswith("/releases/tags/telemetry-host/v0.6.0"):
                     raise NotFound(path)
                 if path.endswith("/releases?per_page=100&page=1"):
-                    return [{"id": 1, "tag_name": "telemetry-host/v0.5.0", "draft": True}]
+                    return [{"id": 1, "tag_name": "telemetry-host/v0.6.0", "draft": True}]
                 if path.endswith("/releases/1/assets?per_page=100"):
                     return [{"id": 1, "name": "publication-journal.json"}]
                 raise AssertionError(path)

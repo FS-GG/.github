@@ -120,7 +120,15 @@ type private CountedSinglePageTransport(response: Transport.Response) =
             Ok response
     interface IDisposable with member _.Dispose() = ()
 
+[<Collection("Host schema profile")>]
 module RemoteTelemetryTests =
+    let private parseCapturedOutput (label: string) (captured: string) =
+        try JsonDocument.Parse captured
+        with :? JsonException as error ->
+            // All captures below contain synthetic fixture output; escape and bound diagnostics.
+            failwithf "%s returned invalid JSON stdout: length=%d; first128=%s; %s"
+                label captured.Length (JsonSerializer.Serialize(captured.Substring(0, min 128 captured.Length))) error.Message
+
     let scope: TelemetryReceipt.Scope =
         {
             Workspace = "workspace-a"
@@ -1443,7 +1451,7 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                 finally
                     Console.SetOut originalOutput
                 if qualified then
-                    use exported = JsonDocument.Parse(output.ToString())
+                    use exported = parseCapturedOutput "export-learning" (output.ToString())
                     Assert.Equal("fsgg.telemetry.protected-learning-export/1", exported.RootElement.GetProperty("schema").GetString())
                     let captures = exported.RootElement.GetProperty("captures").EnumerateArray() |> Seq.toArray
                     Assert.Single captures |> ignore
@@ -1730,11 +1738,11 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                     Assert.Equal(3, collectAt fixedNow)
                     restoreTemporalFixture ()
                     use installed =
-                        JsonDocument.Parse(captureOutput fixedNow [| "collect-installed-origin"; "--config"; configPath |])
+                        parseCapturedOutput "collect-installed-origin" (captureOutput fixedNow [| "collect-installed-origin"; "--config"; configPath |])
                     Assert.Equal("fsgg.learn.installed-producer-receipt/1",
                                  installed.RootElement.GetProperty("schema").GetString())
                     use reread =
-                        JsonDocument.Parse(captureOutput fixedNow [| "read-installed-origin"; "--config"; configPath |])
+                        parseCapturedOutput "read-installed-origin" (captureOutput fixedNow [| "read-installed-origin"; "--config"; configPath |])
                     Assert.Equal(
                         installed.RootElement.GetProperty("source").GetProperty("recordId").GetString(),
                         reread.RootElement.GetProperty("source").GetProperty("recordId").GetString())
@@ -1981,10 +1989,10 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                     Assert.Equal(0, run args)
                     output.ToString()
                 finally Console.SetOut original
-            use v1 = JsonDocument.Parse(export [| "export-learning"; "--config"; configPath |])
+            use v1 = parseCapturedOutput "export-learning" (export [| "export-learning"; "--config"; configPath |])
             Assert.Equal("fsgg.telemetry.protected-learning-export/1", v1.RootElement.GetProperty("schema").GetString())
             Assert.False(v1.RootElement.TryGetProperty("deliveryCaptures") |> fst)
-            use v2 = JsonDocument.Parse(export [| "export-learning"; "--config"; configPath; "--include-native-delivery" |])
+            use v2 = parseCapturedOutput "export-learning-delivery" (export [| "export-learning"; "--config"; configPath; "--include-native-delivery" |])
             Assert.Equal("fsgg.telemetry.protected-learning-export/2", v2.RootElement.GetProperty("schema").GetString())
             let deliveryCaptures = v2.RootElement.GetProperty("deliveryCaptures").EnumerateArray() |> Seq.toArray
             Assert.Single deliveryCaptures |> ignore

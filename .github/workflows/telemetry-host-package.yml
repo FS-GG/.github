@@ -134,6 +134,28 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: 10.0.401
+      - name: Refuse stale Host schema candidate and verifier bindings early
+        if: ${{ !(inputs.learn_native_fixture || inputs.learn_native_preflight) }}
+        run: |
+          set -euo pipefail
+          python3 tests/telemetry-host-successor/run.py
+          bash tests/telemetry-host-release/run.sh
+      - name: Test passive Host HTTP authority before expensive qualification
+        if: ${{ !(inputs.learn_native_fixture || inputs.learn_native_preflight) }}
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          dotnet restore tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj --locked-mode
+          dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj -c Release --no-restore --filter "FullyQualifiedName~HostPassiveReceiptTests|FullyQualifiedName~HostSchemaProfileTests|FullyQualifiedName~RemoteTelemetryTests.protected native collector resolves durable dispatch and replays retained envelope" --blame --logger "console;verbosity=normal" --logger "trx;LogFileName=host-passive.trx" --results-directory "$RUNNER_TEMP/host-passive"
+          python3 scripts/read-trx-count.py "$RUNNER_TEMP/host-passive/host-passive.trx" --minimum 4 --label "passive Host HTTP" --summary-file "$GITHUB_STEP_SUMMARY"
+      - name: Retain passive Host HTTP diagnostics
+        if: ${{ always() && !(inputs.learn_native_fixture || inputs.learn_native_preflight) }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: telemetry-host-passive-tests-${{ github.sha }}
+          path: ${{ runner.temp }}/host-passive/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Qualify the typed HOST binding and private template
         env:
           NUGET_PACKAGES: ${{ runner.temp }}/host-binding-nuget
@@ -521,6 +543,7 @@ jobs:
           python3 scripts/telemetry-host-release.py verify --manifest artifacts/telemetry-host-manifest.json --package "$package_a"
           python3 scripts/telemetry-host-release.py verify --manifest artifacts/telemetry-host-manifest.json --package "$package_b" --payload-only
           bash tests/standalone-telemetry-host-package/run.sh "$package_a" artifacts/telemetry-host-package-evidence.json
+          python3 -c 'import json,sys; e=json.load(open(sys.argv[1])); assert e["productionStorage"]=="eligible-linux-x64" and e["passiveReceiptQualified"] is True and e["failed"]==0' artifacts/telemetry-host-package-evidence.json
           bash tests/telemetry-host-release/run.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
