@@ -742,7 +742,7 @@ let ``actual caller recovers Current deliverable only PR and retains mixed deliv
     let mixedContext = observedContext mixed
     let _, history, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson mixedContext)) mixed
     Assert.Equal(2, history.Value.GetProperty("nativeIntegrator").GetProperty("pullRequests").GetArrayLength())
-    for replacement in [ "https://evil.invalid/FS-GG/.github/pull/42"; "https://github.com/FS-GG/foreign/pull/42"; "https://github.com/FS-GG/.github/pull/42?replace=43"; "https://github.com/FS-GG/.github/PULL/42"; "https://github.com/FS-GG/.github/pull/042"; "https://github.com/FS-GG/.github/pull/43"; "HTTPS://github.com/FS-GG/.github/pull/42"; "https://github.com/FS-GG/.github/pulls/42"; "https://github.com/FS-GG/.github/pull%2F42"; "ftp://github.com/FS-GG/.github/pull/42"; "github.com/FS-GG/.github/pull/42"; "https://github.com/FS-GG/.github/%70ull/42"; "github.com/FS-GG/.github/%70ull/42" ] do
+    for replacement in [ "https://evil.invalid/FS-GG/.github/pull/42"; "https://github.com/FS-GG/foreign/pull/42"; "https://github.com/FS-GG/.github/pull/42?replace=43"; "https://github.com/FS-GG/.github/PULL/42"; "https://github.com/FS-GG/.github/pull/042"; "https://github.com/FS-GG/.github/pull/43"; "HTTPS://github.com/FS-GG/.github/pull/42"; "https://github.com/FS-GG/.github/pulls/42"; "https://github.com/FS-GG/.github/pull%2F42"; "ftp://github.com/FS-GG/.github/pull/42"; "github.com/FS-GG/.github/pull/42"; "https://github.com/FS-GG/.github/%70ull/42"; "github.com/FS-GG/.github/%70ull/42"; "//github.com/FS-GG/.github/pull/42"; "/github.com/FS-GG/.github/pull/42"; "https%3A%2F%2Fgithub.com%2FFS-GG%2F.github%2Fpull%2F42"; "//github.com/FS-GG/.github/%70ull/42"; "https:/github.com/FS-GG/.github/pull/42"; "https://github.com@evil.invalid/FS-GG/.github/pull/42"; "https://github.com.evil.invalid/FS-GG/.github/pull/42"; "https://github.com:bad/FS-GG/.github/pull/42" ] do
         let body = ProgrammeFixture.ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", replacement)
         let change = currentDeliverableBody body
         let context = observedContext change
@@ -757,6 +757,8 @@ let ``actual caller retains declared work while discovering only canonical PR re
           ("Retain the original release operation: https://github.com/FS-GG/.github/releases/tag/synthetic", false);
           ("None plus retained work is still declared work", false);
           ("Existing PR", false);
+          ("Artifact protocol reference https://artifacts.example/pull/protocol", false);
+          ("Artifact source file https://github.com/FS-GG/.github/blob/main/docs/pull/protocol.md", false);
           ("Historical plan https://github.com/FS-GG/.github/pull/41 current source investigation remains independent", false);
           ("Source https://github.com/FS-GG/.github/pull/42\nReceipt evidence https://github.com/FS-GG/.github/issues/1 https://github.com/FS-GG/.github/actions/runs/1 https://github.com/FS-GG/.github/releases/tag/synthetic", true) ]
     for declaration, hasReference in declarations do

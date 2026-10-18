@@ -132,6 +132,8 @@ module V2ProjectionSource =
         match recordFields (binding.BindingVersion = 4) body |> Option.bind (Map.tryFind "Current deliverable") with
         | None -> None, [], Some "Native Current deliverable field is missing or malformed; absence of closing references does not establish no existing work"
         | Some "None" -> Some "None", [], None
+        | Some value when binding.BindingVersion = 4 && (String.IsNullOrWhiteSpace value || System.Text.Encoding.UTF8.GetByteCount(value) > 16 * 1024) ->
+            None, [], Some "Native Current deliverable declaration is empty or exceeds the bounded16KiB field"
         | Some value ->
             let urls =
                 let options = if binding.BindingVersion = 4 then System.Text.RegularExpressions.RegexOptions.IgnoreCase else System.Text.RegularExpressions.RegexOptions.None
@@ -152,19 +154,42 @@ module V2ProjectionSource =
                         |> Option.map (fun repository -> $"https://github.com/{repository}/pull/{number}")
             let normalized = urls |> List.choose canonical |> List.distinct
             if binding.BindingVersion = 4 then
+                let options = System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                let matches (pattern: string) (text: string) =
+                    System.Text.RegularExpressions.Regex.Matches(text, pattern, options)
+                    |> Seq.cast<System.Text.RegularExpressions.Match> |> Seq.map _.Value |> Seq.toList
+                let urlPattern = "[A-Za-z][A-Za-z0-9+.-]*://[^\\s<>()\\[\\]]+"
+                // Classification is a refusal witness only. Decoding/relative syntax never
+                // creates a discovery URL or changes the original canonical identity rule.
+                let githubPullShape (reference: string) =
+                    let withoutScheme = System.Text.RegularExpressions.Regex.Replace(reference.TrimStart('/'), "^[A-Za-z][A-Za-z0-9+.-]*:/*", "")
+                    let slash = withoutScheme.IndexOf('/')
+                    if slash < 0 then false
+                    else
+                        let authority = withoutScheme.Substring(0, slash)
+                        let path = withoutScheme.Substring(slash).Split([| '?'; '#' |]).[0]
+                        let parts = path.Trim('/').Split('/')
+                        let githubAuthority = authority.Contains("github.com", StringComparison.OrdinalIgnoreCase)
+                        let selectedRoute =
+                            parts.Length >= 2 && (binding.Repositories |> Set.exists (fun repository -> String.Equals(repository, parts[0] + "/" + parts[1], StringComparison.OrdinalIgnoreCase)))
+                        let pull (part: string) = String.Equals(part, "pull", StringComparison.OrdinalIgnoreCase) || String.Equals(part, "pulls", StringComparison.OrdinalIgnoreCase)
+                        (githubAuthority || selectedRoute)
+                        && ((parts.Length >= 3 && pull parts[2]) || (githubAuthority && parts.Length >= 1 && pull parts[0]))
                 let malformedPull =
-                    urls |> List.exists (fun url ->
-                        let mutable uri = Unchecked.defaultof<Uri>
-                        let path = if Uri.TryCreate(url, UriKind.Absolute, &uri) then uri.AbsolutePath else url
-                        let decodedPath = try Uri.UnescapeDataString path with _ -> path
-                        System.Text.RegularExpressions.Regex.IsMatch(decodedPath, "/pulls?(?:/|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-                        && (canonical url).IsNone)
-                let decodedDeclaration = try Uri.UnescapeDataString value with _ -> value
-                let barePull =
-                    System.Text.RegularExpressions.Regex.IsMatch(decodedDeclaration, "(?<![A-Za-z0-9/:])(?:www\\.)?github\\.com/[^\\s<>()\\[\\]]*/pulls?(?:/|%2f|[?#]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-                if String.IsNullOrWhiteSpace value || System.Text.Encoding.UTF8.GetByteCount(value) > 16 * 1024 then
-                    None, [], Some "Native Current deliverable declaration is empty or exceeds the bounded16KiB field"
-                elif malformedPull || barePull then
+                    matches "[^\\s<>()\\[\\]]+" value |> List.exists (fun token ->
+                        let decoded = try Uri.UnescapeDataString token with _ -> token
+                        let rawCanonical = matches urlPattern token |> List.filter (fun reference -> (canonical reference).IsSome)
+                        let candidates =
+                            matches urlPattern decoded @ matches "(?<!:)//[^\\s<>()\\[\\]]+" decoded @ [ decoded ]
+                        let badReference =
+                            candidates |> List.exists (fun reference ->
+                                githubPullShape reference && (decoded <> token || not (List.contains reference rawCanonical)))
+                        let badBareHost =
+                            matches "(?:www\\.)?github\\.com/[^\\s<>()\\[\\]]+" decoded
+                            |> List.exists (fun reference ->
+                                githubPullShape reference && (decoded <> token || not (List.contains ("https://" + reference) rawCanonical)))
+                        badReference || badBareHost)
+                if malformedPull then
                     Some value, [], Some "Native Current deliverable contains a malformed or out-of-scope PR-shaped reference"
                 else Some value, normalized, None
             elif urls.IsEmpty || (urls |> List.exists (canonical >> Option.isNone)) then
