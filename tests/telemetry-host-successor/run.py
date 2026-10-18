@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import copy
+import io
+import contextlib
+import urllib.error
 import os
 import hashlib
 import importlib.util
@@ -481,6 +484,81 @@ class RepairAPI:
         raise AssertionError(path)
 
 
+class HostDispatchDiagnosticTests(unittest.TestCase):
+    def publisher(self):
+        spec = importlib.util.spec_from_file_location("host_safe_diagnostic", ROOT / "scripts/telemetry-host-successor-publish.py")
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        return module
+
+    def test_actual_http_permission_failure_is_safe_unknown_and_stale_read_is_not_joined(self):
+        from release_successor_provider import GitHubAPI
+        secret = "SECRET-credential-argv-body"
+        error = urllib.error.HTTPError("https://api.github.com/repos/FS-GG/.github/git/refs", 403, secret,
+             {"X-GitHub-Request-Id": "FAKE:123", "Authorization": secret,
+              "X-Accepted-GitHub-Permissions": "contents=write; workflows=write"},
+             io.BytesIO(json.dumps({"message": "refusing to allow a GitHub App to create or update workflow " + secret + " without workflows permission",
+                                   "token": secret}).encode()))
+        for failure in (error, urllib.error.URLError(secret)):
+            with self.subTest(kind=type(failure).__name__), tempfile.TemporaryDirectory() as temporary:
+                root = pathlib.Path(temporary); path = root / "manifest.json"; path.write_text(json.dumps(manifest()))
+                api = GitHubAPI(secret)
+                api.last_request_diagnostic = {"method": "GET", "path": "/repos/FS-GG/.github/old-observation", "status": 404}
+                provider = HostProvider(api, path, secret, secret)
+                with patch("urllib.request.urlopen", side_effect=failure) as opening:
+                    outcome = provider.dispatch(effects(manifest())[1][0])
+                self.assertEqual(outcome.state, "unknown")
+                if isinstance(failure, urllib.error.HTTPError):
+                    failure.close()
+                self.assertEqual(opening.call_count, 1)
+                diagnostic = provider.last_dispatch_diagnostic
+                rendered = json.dumps(diagnostic)
+                self.assertNotIn(secret, rendered)
+                self.assertNotIn("old-observation", rendered)
+                if isinstance(failure, urllib.error.HTTPError):
+                    self.assertEqual(diagnostic["category"], "provider-refused")
+                    self.assertEqual(diagnostic["request"]["status"], 403)
+                    self.assertEqual(diagnostic["request"]["responseClass"], "workflow-permission-denied")
+                    self.assertEqual(diagnostic["request"]["acceptedPermissions"], "contents=write; workflows=write")
+                else:
+                    self.assertEqual(diagnostic["category"], "transport-failure")
+                    self.assertEqual(diagnostic["request"], {"method": "POST", "path": "/repos/FS-GG/.github/git/refs", "status": None})
+                # A later real successful send clears the old error; no inherited diagnostic.
+                response = SimpleNamespace(status=201, headers={}, read=lambda: b'{}')
+                with patch("urllib.request.urlopen") as opening:
+                    opening.return_value.__enter__.return_value = response
+                    self.assertEqual(provider.dispatch(effects(manifest())[1][0]).state, "applied")
+                self.assertIsNone(provider.last_dispatch_diagnostic)
+
+    def test_process_and_malformed_diagnostics_never_emit_raw_secrets_or_replace_unknown(self):
+        secret = "SECRET-process-key-and-output"
+        with tempfile.TemporaryDirectory() as temporary:
+            path = pathlib.Path(temporary) / "manifest.json"; path.write_text(json.dumps(manifest()))
+            api = SimpleNamespace(last_request_diagnostic={"status": 404})
+            provider = HostProvider(api, path, secret, secret)
+            failure = subprocess.CalledProcessError(7, ["dotnet", "--api-key", secret], output=secret, stderr=secret)
+            with patch.object(subprocess, "run", side_effect=failure):
+                self.assertEqual(provider.dispatch(effects(manifest())[1][2]).state, "unknown")
+            self.assertEqual(provider.last_dispatch_diagnostic, {"category": "process-failure", "returnCode": 7})
+            with patch.object(subprocess, "run", side_effect=failure), \
+                 patch("telemetry_host_successor_provider.sanitized_dispatch_diagnostic", side_effect=RuntimeError(secret)):
+                self.assertEqual(provider.dispatch(effects(manifest())[1][2]).state, "unknown")
+            self.assertEqual(provider.last_dispatch_diagnostic, {"category": "process-failure", "diagnosticUnavailable": True})
+            publisher = self.publisher()
+            provider.last_dispatch_diagnostic = {"category": "process-failure", "returnCode": 7, "argv": secret,
+                "request": {"method": "POST", "path": "/repos/FS-GG/.github/git/refs?token=" + secret,
+                            "status": 403, "responseClass": secret, "rawBody": secret, "acceptedPermissions": secret}}
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                publisher.emit_dispatch_diagnostic(provider)
+                publisher.emit_dispatch_diagnostic(provider)
+            self.assertEqual(output.getvalue().count("Host successor dispatch diagnostic:"), 1)
+            self.assertNotIn(secret, output.getvalue())
+            self.assertIsNone(provider.last_dispatch_diagnostic)
+            with patch.object(publisher, "sanitized_dispatch_diagnostic", side_effect=RuntimeError(secret)), \
+                 patch("builtins.print", side_effect=OSError(secret)):
+                publisher.emit_dispatch_diagnostic(provider)  # Reporting failure cannot escape into effect control.
+
+
 class HostMainJournalRepairTests(unittest.TestCase):
     def validate(self, api, **changes):
         values = dict(manifest=RETAINED_MANIFEST, publisher_sha=api.head,
@@ -574,8 +652,9 @@ class HostMainJournalRepairTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("host_publisher_actual_main", ROOT / "scripts/telemetry-host-successor-publish.py")
         publisher = importlib.util.module_from_spec(spec); spec.loader.exec_module(publisher)
         original_run = subprocess.run
-        for interrupt in (False, True):
-            with self.subTest(interrupt=interrupt), tempfile.TemporaryDirectory() as temporary:
+        for mode in ("complete", "policy", "unknown"):
+            interrupt = mode == "policy"
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
                 policy = self.authority_fixture()
                 class Authority(RealGit):
                     def get(self, path):
@@ -618,7 +697,13 @@ class HostMainJournalRepairTests(unittest.TestCase):
                     def observe(self, effect):
                         return Observation("matched", effect.target_digest) if effect.identity in visible else Observation("absent")
                     def dispatch(self, effect):
-                        dispatched.append(effect.identity); visible.add(effect.identity)
+                        dispatched.append(effect.identity)
+                        if mode == "unknown":
+                            self.last_dispatch_diagnostic = {"category": "provider-refused", "request": {
+                                "method": "POST", "path": "/repos/FS-GG/.github/git/refs", "status": 403,
+                                "responseClass": "workflow-permission-denied", "rawBody": "SECRET-body"}}
+                            return Dispatch("unknown")
+                        visible.add(effect.identity)
                         return Dispatch("applied")
                 original_advance = publisher.advance_effects
                 def advance(*args):
@@ -642,16 +727,24 @@ class HostMainJournalRepairTests(unittest.TestCase):
                        "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REPOSITORY": "FS-GG/.github",
                        "GITHUB_REF": "refs/heads/main", "GITHUB_RUN_ATTEMPT": "1", "GH_TOKEN": "fixture",
                        "ORDINARY_LEDGER_TOKEN": "ledger", "NUGET_API_KEY": "fixture"}
-                with patch.dict(os.environ, env), patch.object(sys, "argv", argv), \
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output), patch.dict(os.environ, env), patch.object(sys, "argv", argv), \
                      patch.object(publisher, "GitHubAPI", side_effect=[api, authority]), \
                      patch.object(publisher.subprocess, "run", side_effect=run), \
                      patch.object(publisher.time, "sleep"), patch.object(publisher, "HostProvider", Provider), \
-                     patch.object(publisher, "advance_effects", side_effect=advance):
-                    self.assertEqual(publisher.main(), 1 if interrupt else 0)
+                     patch.object(publisher, "advance_effects", side_effect=advance), \
+                     patch.object(publisher.time, "monotonic", side_effect=[0, 1, 2701] if mode == "unknown" else None, return_value=0):
+                    self.assertEqual(publisher.main(), 0 if mode == "complete" else 1)
                 journal = ProtectedReleaseJournal(authority, publisher.REF, main_directory=True)
                 state = journal.read()
-                self.assertEqual(state.generation, 1 if interrupt else 17)
-                self.assertEqual(dispatched, [] if interrupt else [effect.identity for effect in effects(RETAINED_MANIFEST)[1]])
+                self.assertEqual(state.generation, {"policy": 1, "unknown": 2, "complete": 17}[mode])
+                self.assertEqual(dispatched, [] if interrupt else ["tag"] if mode == "unknown" else [effect.identity for effect in effects(RETAINED_MANIFEST)[1]])
+                self.assertEqual(output.getvalue().count("Host successor dispatch diagnostic: "), 1 if mode == "unknown" else 0)
+                if mode == "unknown":
+                    self.assertIn('"responseClass":"workflow-permission-denied"', output.getvalue())
+                    self.assertEqual(output.getvalue().count("Host successor effect state: waiting"), 2)
+                    self.assertEqual(state.effects, {"tag": "intent"})
+                self.assertNotIn("SECRET", output.getvalue())
                 self.assertEqual(authority.command("show", "main:state/releases/unrelated/retained.txt"), unrelated)
                 self.assertEqual(journal.validate_intent({"contentId": FAILED_ORIGINAL["contentId"], "sourceSha": api.source,
                     "version": "0.6.0", "candidateArchiveSha256": FAILED_ORIGINAL["archiveSha256"], "operator": "EHotwagner"}), None)

@@ -13,7 +13,7 @@ import time
 
 from release_successor_execution import Refused, advance_effects
 from release_successor_journal import ProtectedReleaseJournal, REPOSITORY as JOURNAL_REPOSITORY
-from release_successor_provider import GitHubAPI, NotFound
+from release_successor_provider import GitHubAPI, NotFound, sanitized_dispatch_diagnostic
 from telemetry_host_successor_admission import HostAdmission, ordinary_route, validate_failed_original
 from telemetry_host_successor_execution import effects
 from telemetry_host_successor_provider import HostProvider
@@ -25,6 +25,21 @@ REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-12"
 def require(ok: bool, detail: str) -> None:
     if not ok:
         raise Refused(detail)
+
+
+def emit_dispatch_diagnostic(provider) -> None:
+    """Consume a best-effort safe diagnostic once; never change effect semantics."""
+    try:
+        pending = getattr(provider, "last_dispatch_diagnostic", None)
+        provider.last_dispatch_diagnostic = None
+        value = sanitized_dispatch_diagnostic(pending)
+        if value is not None:
+            print("Host successor dispatch diagnostic: " + json.dumps(value, sort_keys=True, separators=(",", ":")), flush=True)
+    except BaseException:
+        try:
+            print("Host successor dispatch diagnostic unavailable", flush=True)
+        except BaseException:
+            pass
 
 
 def main() -> int:
@@ -115,6 +130,7 @@ def main() -> int:
         deadline = time.monotonic() + 45 * 60
         for _ in range(len(ordered) * 2 + 120):
             result = advance_effects(content_id, ordered, journal, admission, provider)
+            emit_dispatch_diagnostic(provider)
             print(f"Host successor effect state: {result}", flush=True)
             if result == "complete":
                 return 0
