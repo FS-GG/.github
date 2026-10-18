@@ -3070,7 +3070,7 @@ ORDER BY f.identity LIMIT 413701;
 
     // Bounded, read-only partial observations from the existing current canonical ledger.
     // These unassigned facts never enter item usage, budget or efficiency projections.
-    let passiveObservations path assessment (scope: TelemetryReceipt.Scope) =
+    let passiveObservations (path: string) (assessment: TelemetryStore.DurabilityAssessment) (scope: TelemetryReceipt.Scope) =
         match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
         | Error errors -> Error errors
         | Ok(connection, _) ->

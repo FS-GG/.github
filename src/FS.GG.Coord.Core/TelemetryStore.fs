@@ -1561,19 +1561,19 @@ module TelemetryStore =
             | "provider-usage-observation/1" ->
                 try
                     let get result = Result.defaultWith invalidOp result
-                    let text name = requiredBoundedText label 200 node name |> get
-                    let optional name = optionalText label node name |> get
-                    let count name = optionalInt label node name |> get
+                    let text (name: string) = requiredBoundedText label 200 node name |> get
+                    let optional (name: string) = optionalText label node name |> get
+                    let count (name: string) = optionalInt label node name |> get
                     let thread, turn, response = text "threadId", text "turnId", text "responseId"
                     let guid (value: string) = match Guid.TryParseExact(value, "D") with true, parsed -> parsed <> Guid.Empty && parsed.ToString("D") = value | _ -> false
                     let input, cached, cacheWrite = count "input", count "cachedInput", count "cacheWriteInput"
                     let output, reasoning, total = count "output", count "reasoning", count "total"
-                    let subset part whole = match part, whole with Some p, Some w -> p <= w | _ -> true
-                    let digest name =
+                    let subset (part: int64 option) (whole: int64 option) = match part, whole with Some p, Some w -> p <= w | _ -> true
+                    let digest (name: string) =
                         let value = text name
                         if not (Regex.IsMatch(value, "^[0-9a-f]{64}$")) then invalidOp "passive source digest is invalid"
                         value
-                    let profile name =
+                    let profile (name: string) =
                         let value = optional name
                         if value |> Option.exists (fun v -> v.Length > 200 || (v |> Seq.exists Char.IsControl)) then invalidOp "passive profile is invalid"
                         value

@@ -1084,14 +1084,14 @@ module SkillTelemetryAdapter =
     let private maximumPassiveIdentities = 256
     let private passiveStateSchema = "fsgg.telemetry.passive-producer-state/1"
 
-    let private passiveStateDirectory root = Path.Combine(root, "orchestrator-passive")
+    let private passiveStateDirectory (root: string) = Path.Combine(root, "orchestrator-passive")
 
-    let private savePassive directory (state: JsonObject) =
+    let private savePassive (directory: string) (state: JsonObject) =
         let bytes = utf8.GetBytes(state.ToJsonString compact)
         if bytes.Length >= maximumStateBytes then fail "passive-state-overload; cursor retained"
         writePrivateBytes directory "producer" bytes |> ignore
 
-    let private passiveState directory owner sourceIdentity =
+    let private passiveState (directory: string) (owner: string) (sourceIdentity: string) =
         let path = Path.Combine(directory, "producer.json")
         if File.Exists path || FileInfo(path).LinkTarget <> null then
             let state = readObject path "passive producer state is unavailable"
@@ -1125,13 +1125,13 @@ module SkillTelemetryAdapter =
                      "offset", node cursor.Offset; "anchorDigest", node cursor.AnchorDigest
                      "skippingOversized", node cursor.SkippingOversized ]
 
-    let private passiveGap (state: JsonObject) code =
+    let private passiveGap (state: JsonObject) (code: string) =
         // One reserved bounded status slot; original distinct reasons survive subsequent passes.
         let gaps = state["gaps"].AsArray()
         if not (gaps |> Seq.exists (fun value -> value.GetValue<string>() = code)) && gaps.Count < 32 then
             gaps.Add(node code)
 
-    let private passiveFact capturedAt (cursor: PassiveCursor) (record: PassiveNativeRecord) revision =
+    let private passiveFact (capturedAt: string) (cursor: PassiveCursor) (record: PassiveNativeRecord) (revision: int64) =
         let optional value = value |> Option.map node |> Option.defaultValue nullNode
         let counts = record.Usage
         jsonObject [ "kind", node "provider-usage-observation/1"
@@ -1160,7 +1160,7 @@ module SkillTelemetryAdapter =
                      "firstEnqueueFailure", (if isNull state["firstEnqueueFailure"] then nullNode else state["firstEnqueueFailure"].DeepClone())
                      "lastEnqueueFailure", (if isNull state["lastEnqueueFailure"] then nullNode else state["lastEnqueueFailure"].DeepClone()) ]
 
-    let private replayPassive directory (state: JsonObject) (enqueue: byte array -> Result<string, string list>) hook =
+    let private replayPassive (directory: string) (state: JsonObject) (enqueue: byte array -> Result<string, string list>) (hook: string -> unit) =
         match state["pending"] with
         | null -> true
         | pending ->
@@ -1313,7 +1313,7 @@ module SkillTelemetryAdapter =
     let capturePassive root owner sourceIdentity codexHome paths enqueue =
         capturePassiveWithHook root owner sourceIdentity codexHome paths enqueue ignore
 
-    let reportPassive root owner sourceIdentity =
+    let reportPassive (root: string) (owner: string) (sourceIdentity: string) =
         try
             let directory = passiveStateDirectory root
             let state = passiveState directory owner sourceIdentity

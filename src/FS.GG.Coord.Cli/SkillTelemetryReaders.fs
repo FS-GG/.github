@@ -30,7 +30,7 @@ module internal SkillPrivateDurability =
     [<DllImport("libc", EntryPoint = "flock", SetLastError = true)>]
     extern int private Flock(int descriptor, int operation)
 
-    let withLock path action =
+    let withLock (path: string) (action: unit -> 'a) : 'a =
         if OperatingSystem.IsLinux() then
             let descriptor = OpenPrivate(path, 0x2 ||| 0x40 ||| 0x800 ||| 0x20000 ||| 0x80000, 0x180u)
             if descriptor < 0 then raise (IOException "private producer lock is unavailable")
@@ -948,7 +948,7 @@ module SkillTelemetryReaders =
                 Ok { Input = input; CachedInput = cached; CacheWriteInput = cacheWrite; Output = output; Reasoning = reasoning; Total = total }
             with :? InvalidOperationException -> failure "native usage counters are malformed"
 
-        let private counters value : Result<NativeCounters, ReaderError> =
+        let private counters (value: JsonElement) : Result<NativeCounters, ReaderError> =
             observedCounters value
             |> Result.bind (fun counts ->
                 match counts.Input, counts.CachedInput, counts.Output, counts.Reasoning, counts.Total with
@@ -1373,12 +1373,12 @@ module SkillTelemetryReaders =
         [<Literal>]
         let PassiveMaximumObservations = 64
 
-        let passiveIdentity (thread: Guid) (turn: Guid) response =
+        let passiveIdentity (thread: Guid) (turn: Guid) (response: string) =
             "passive-" + sha256(Encoding.UTF8.GetBytes("codex-rollout/1\u001f" + thread.ToString("D") + "\u001f" + turn.ToString("D") + "\u001f" + response))
 
         // Reads only selected files through the same no-follow opener as complete native accounting.
         // The inode/device identity comes from the opened descriptor, never the pathname's metadata.
-        let scanPassive codexHome path (prior: PassiveCursor option) maximumBytes maximumRecords =
+        let scanPassive (codexHome: string) (path: string) (prior: PassiveCursor option) (maximumBytes: int) (maximumRecords: int) : Result<PassiveScan, ReaderError> =
             if maximumBytes < 16384 || maximumBytes > PassiveMaximumScanBytes
                || maximumRecords < 1 || maximumRecords > PassiveMaximumObservations then
                 failure "passive native scan bounds are invalid"
@@ -1396,7 +1396,7 @@ module SkillTelemetryReaders =
                            || (stat.Mode &&& 0xF000u) <> 0x8000u then invalidOp "passive source is not a regular file"
                         let instance = sha256(Encoding.UTF8.GetBytes($"codex-file/1:{stat.Device}:{stat.Inode}"))
                         let mutable scanned = 0
-                        let anchor offset =
+                        let anchor (offset: int64) =
                             use retained = new MemoryStream()
                             for start, length in [ 0L, min 4096L offset; max 0L (offset - 4096L), min 4096L offset ] do
                                 source.Position <- start
@@ -1453,7 +1453,7 @@ module SkillTelemetryReaders =
                                             | Error _ -> diagnostics.Add "malformed-row-skipped" |> ignore
                                             | Ok None -> ()
                                             | Ok(Some(thread, turn, response, usage, payload, row)) ->
-                                                let profile name =
+                                                let profile (name: string) =
                                                     stringField name payload
                                                     |> Option.filter (fun text -> not (String.IsNullOrWhiteSpace text) && text.Length <= 200 && not (text |> Seq.exists Char.IsControl))
                                                 let occurred =

@@ -1059,7 +1059,7 @@ module TelemetryApplication =
         with ex ->
             fail "roadmap unit revision" [ ex.Message ]
 
-    let private passive action args =
+    let private passive (action: string) (args: string list) =
         match option "--repository" args with
         | None -> fail "telemetry passive" [ "--repository is required" ]
         | Some repository ->

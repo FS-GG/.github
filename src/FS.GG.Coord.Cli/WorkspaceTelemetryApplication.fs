@@ -201,7 +201,7 @@ module WorkspaceTelemetryApplication =
         else
             Ok()
 
-    let private readPrivateDescriptor maximumBytes (path: string) =
+    let private readPrivateDescriptor (maximumBytes: int64) (path: string) =
         let unsafeFile () = Error [ "efficiency-claim-template-unsafe" ]
         if not (OperatingSystem.IsLinux()) then Error [ "efficiency-claim-template-platform-unavailable" ]
         elif String.IsNullOrWhiteSpace path || not (Path.IsPathFullyQualified path) then unsafeFile ()
@@ -244,7 +244,7 @@ module WorkspaceTelemetryApplication =
 
     let readEfficiencyClaimTemplate path = readPrivateDescriptor 16384L path
 
-    let readPassiveSelection path =
+    let readPassiveSelection (path: string) =
         readPrivateDescriptor 32768L path |> Result.mapError (fun _ -> [ "passive-selection-unsafe" ])
 
     let private exactObject (node: JsonObject) names =
@@ -639,7 +639,7 @@ module WorkspaceTelemetryApplication =
 
     let selectReadyFilesForTesting files = selectReadyFiles files
 
-    let private passivePredecessor directory (current: TelemetryReceipt.Envelope) =
+    let private passivePredecessor (directory: string) (current: TelemetryReceipt.Envelope) =
         if not (passiveBatch current.Batch) then false
         else
             try
@@ -1012,7 +1012,7 @@ module WorkspaceTelemetryApplication =
                 Error [ "publication-advisory-failure" ]
 
     // Capture-only persistence. This path never resolves credentials, probes health or calls remoteOne.
-    let tryEnqueueBound configArg repositoryArg expectedProducer expectedBinding payload =
+    let tryEnqueueBound (configArg: string option) (repositoryArg: string option) (expectedProducer: string option) (expectedBinding: string option) (payload: byte array) =
         let path = configPath configArg
         try
             withLock path (fun () ->
@@ -1060,7 +1060,7 @@ module WorkspaceTelemetryApplication =
         with _ -> Error [ "capture-advisory-failure" ]
 
     // One serialized passive owner per existing private state root; another association must refuse.
-    let passiveProducer configArg repositoryArg =
+    let passiveProducer (configArg: string option) (repositoryArg: string option) =
         load configArg
         |> Result.bind (select repositoryArg)
         |> Result.bind (fun association ->
@@ -1074,7 +1074,7 @@ module WorkspaceTelemetryApplication =
     let tryPublish configArg repositoryArg payload =
         tryPublishExpected configArg repositoryArg None payload
 
-    let private tryDrainBoundWith operations configArg repositoryArg (expectedBinding: string option) =
+    let private tryDrainBoundWith (operations: RemoteOperations option) (configArg: string option) (repositoryArg: string option) (expectedBinding: string option) =
         let path = configPath configArg
 
         if not (File.Exists path) then

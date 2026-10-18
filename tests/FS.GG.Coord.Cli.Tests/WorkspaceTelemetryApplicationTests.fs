@@ -459,14 +459,14 @@ module WorkspaceTelemetryApplicationTests =
                 )
             finally
                 Environment.SetEnvironmentVariable("FSGG_TELEMETRY_CREDENTIAL_MAIN", null)
-    let private passiveSource root name =
+    let private passiveSource (root: string) (name: string) =
         let home = Path.Combine(root, "codex")
         let sessions = Path.Combine(home, "sessions")
         Directory.CreateDirectory sessions |> ignore
         home, Path.Combine(sessions, name + ".jsonl")
 
     // Inert native shape, using one real observed counter tuple with pseudonymous native IDs.
-    let private nativeRow response input cacheWrite =
+    let private nativeRow (response: string) (input: int64) (cacheWrite: int64) =
         $"""{{"timestamp":"2026-10-18T06:41:48.322Z","type":"token_usage_record","payload":{{"thread_id":"7f4b2770-a3ce-54b8-be37-7992c3c9091b","turn_id":"f8097483-03a3-5055-88a4-eb7e2ee32446","response_id":"{response}","usage":{{"input_tokens":{input},"cached_input_tokens":0,"cache_write_input_tokens":{cacheWrite},"output_tokens":72,"reasoning_output_tokens":0,"total_tokens":{input + 72L}}},"turn_token_usage":{{"input_tokens":999999,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0,"total_tokens":1000000}}}}}}""" + "\n"
 
     let private parseCapture (value: SkillTelemetryAdapter.CommandResult) =
@@ -602,7 +602,7 @@ module WorkspaceTelemetryApplicationTests =
             let state = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes statePath)
             Assert.Equal(cursor, state["sources"].ToJsonString())
 
-    let private passiveRemoteConfig root =
+    let private passiveRemoteConfig (root: string) =
         let config = Path.Combine(root, "passive-config.json")
         let spool = Path.Combine(root, "spool")
         let node =
@@ -627,7 +627,7 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Single(captured["observations"].AsArray()) |> ignore
             let file = Assert.Single(Directory.GetFiles(spool, "*.ready"))
             let original = File.ReadAllBytes file
-            Assert.Equal("locally-retained", enqueue (Encoding.UTF8.GetBytes((System.Text.Json.Nodes.JsonNode.Parse original)["payload"].ToJsonString())) |> Result.defaultWith (sprintf "%A" >> failwith))
+            Assert.Equal("locally-retained", enqueue (Encoding.UTF8.GetBytes(((System.Text.Json.Nodes.JsonNode.Parse original)["payload"]).ToJsonString())) |> Result.defaultWith (sprintf "%A" >> failwith))
             Assert.Equal<byte>(original, File.ReadAllBytes file)
             // Existing spool bound, including uncertain ready entries, refuses rather than overwrites.
             for index in 1..127 do
@@ -700,7 +700,7 @@ module WorkspaceTelemetryApplicationTests =
             let submitted = ResizeArray<int>()
             let received = System.Collections.Generic.HashSet<string>()
             let mutable phase = "durable"
-            let receipt batchId status code : FS.GG.Telemetry.RemoteContract.Receipt =
+            let receipt (batchId: string) (status: string) (code: string option) : FS.GG.Telemetry.RemoteContract.Receipt =
                 { Scope = scope; BatchId = batchId; Digest = envelopes[batchId].Digest; Status = status; Code = code }
             let operations: WorkspaceTelemetryApplication.RemoteOperations =
                 { Lookup = fun _ batchId _ _ ->
@@ -818,7 +818,7 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Equal("partial", snapshot["populationCoverage"].GetValue<string>())
             use connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(store, TelemetryStoreApplication.databaseFileName)};Pooling=False")
             connection.Open()
-            let scalar query =
+            let scalar (query: string) =
                 use command = connection.CreateCommand()
                 command.CommandText <- query
                 command.ExecuteScalar()
@@ -888,7 +888,7 @@ module WorkspaceTelemetryApplicationTests =
                 File.WriteAllText(path, nativeRow "response-a" 10L 0L)
                 let enqueued = ResizeArray<byte array>()
                 let enqueue (bytes: byte array) = enqueued.Add(Array.copy bytes); Ok "locally-retained"
-                let hook stage = if stage = cut then raise (IOException "inert crash cut")
+                let hook (stage: string) = if stage = cut then raise (IOException "inert crash cut")
                 let interrupted = SkillTelemetryAdapter.capturePassiveWithHook root "owner" "observations" home [path] enqueue hook
                 Assert.Equal(1, interrupted.ExitCode)
                 let statePath = Path.Combine(root, "orchestrator-passive", "producer.json")
@@ -919,7 +919,7 @@ module WorkspaceTelemetryApplicationTests =
             let statePath = Path.Combine(root, "orchestrator-passive", "producer.json")
             let mutable before = Array.empty<byte>
             let enqueue _ = before <- File.ReadAllBytes statePath; Error [ "spool-overload" ]
-            let hook stage = if stage = "before-status-write" then raise (IOException "inert status slot failure")
+            let hook (stage: string) = if stage = "before-status-write" then raise (IOException "inert status slot failure")
             let failure = SkillTelemetryAdapter.capturePassiveWithHook root "owner" "observations" home [path] enqueue hook
             Assert.Equal(1, failure.ExitCode)
             Assert.Equal<byte>(before, File.ReadAllBytes statePath)
@@ -960,7 +960,7 @@ module WorkspaceTelemetryApplicationTests =
             let selection = Path.Combine(root, "selected.json")
             File.WriteAllText(selection, System.Text.Json.JsonSerializer.Serialize {| schema = "fsgg.telemetry.passive-selection/1"; codexHome = home; sources = [| path |] |})
             File.SetUnixFileMode(selection, enum<UnixFileMode> 0o600)
-            let run arguments =
+            let run (arguments: string list) =
                 let priorOut, priorError = Console.Out, Console.Error
                 use stdout = new StringWriter()
                 use stderr = new StringWriter()
