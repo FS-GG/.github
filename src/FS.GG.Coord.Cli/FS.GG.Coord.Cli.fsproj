@@ -133,7 +133,9 @@ coherent set cut from corrected source. All three partial sets are recorded in
     <PackageReleaseNotes>0.105.0 — Complete V2 migration visibility and bounded ordinary publication.
 
 The packaged V2 migration route reads complete owned memberships and reconciles the selected
-state through inspect, refresh and selection. The ordinary publisher separates pending-only
+state through inspect, refresh and selection. Programme enrollment authenticates a salted public
+commitment to a bounded private payload; offline pair preparation preserves private identities.
+The ordinary publisher separates pending-only
 visibility probes from full semantic transitions, freezes generated asset bytes, and refreshes
 native, source, protection and journal guards before effects and final completion. Current source
 selects one 0.105/0.104/journal23 composition. Original .103 Unknown, consumed .104 continuation
