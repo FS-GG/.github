@@ -11,13 +11,15 @@ Ready or Observation Verified never grants authority. Missing global facts withh
 selection; scoped gaps fence only affected conclusions. Independent authorized issue/plan/native-PR
 work may continue without V1 fallback or a second scheduler. Never release known/Unknown original holds.
 
-Instruction loading is distinct from executable adoption. The currently qualified 0.105 caller's
+Instruction loading is distinct from executable adoption. Retained qualification of the 0.105 caller's
 plan-path grammar admits docs/ and the historical `.agents/skills/work-programme/references/observation.md`.
 Keep that path as a historical compatibility reference when an existing plan/provenance requires it.
 The successor compiled allowlist additionally admits `.agents/skills/work-board/references/observation.md`;
-source delivery does not establish support in the executing 0.105 caller. Do not change enrollment,
+source delivery does not establish support in the actual executing caller. Do not change enrollment,
 plan URLs, binding or selector until separately qualified successor adoption. Inspect the actual
-loaded caller and current native plan source before choosing a provenance path.
+selected absolute caller path, source and current native plan before choosing a provenance path.
+An observed newer global selector is not full runtime or instruction-discovery qualification; if the
+pre-entry selector was not retained, preserve its change timing and unchanged-state claim as Unknown.
 
 ## Selected outcome/delivery successor
 

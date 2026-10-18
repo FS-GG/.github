@@ -188,9 +188,11 @@ Apply the [diagnostic execution policy](https://github.com/FS-GG/.github/blob/ma
 within original budgets, retaining independent failure collection, actual values and cleanup/reporting outcomes.
 
 Source delivery, publication, installation, selected caller adoption and native acceptance remain distinct.
-New instructions may load without changing the qualified CLI/binding/selector. Existing qualified 0.105
-caller authority remains valid at its accepted scope; published 0.106 does not silently switch it. New
-compiled path support requires its own successor qualification. Preserve actual technical acceptance and
+New instructions may load without changing the qualified CLI/binding/selector. Retained caller qualification
+remains bounded to its accepted source and scope; a published version or observed global selector does
+not prove the executing caller, instruction discovery or whole runtime qualification. Resolve the actual
+selected path and provenance before action, preserving an unavailable selector preimage or change timing
+as Unknown. New compiled path support requires its own successor qualification. Preserve actual technical acceptance and
 unavailable Unknowns; never substitute instruction loading or source checks for native acceptance.
 
 ## Observe and report once

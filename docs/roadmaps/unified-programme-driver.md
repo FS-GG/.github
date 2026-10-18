@@ -29,8 +29,11 @@ overrides) and qualified caller adoption where compiled support changes. Histori
 retains its original scope and times.
 
 The selected source scope also implements explicit outcome/delivery classification, bounded native
-hierarchy and scoped closure reporting through binding5/schema3/inspection3/integrator2. Current qualified
-binding4/CLI0.105 and product3 keep their actual accepted scope until successor adoption. The maintained
+hierarchy and scoped closure reporting through binding5/schema3/inspection3/integrator2. Accepted
+binding4/schema2/inspection2 and product3 keep their actual accepted scope until successor adoption.
+Retained105 qualification is historical scoped evidence; a later Root read observed the global selector
+targeting106, with pre-entry selector and change timing Unknown. That pointer alone does not establish
+whole runtime, instruction discovery or107 installed acceptance. The maintained
 migration writer adds one Work level field and absent-only explicit classifications, preserves existing
 view identities/orthogonal settings, and never repurposes Status/Track/Roadmap or automatically closes
 parents. Root selects exact native field/classification/view/enrollment effects in a separate admitted

@@ -1719,12 +1719,12 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "a1ec1f682fc3a64bbb6f9cb733884e8e8cee73f7c12d21010aa0a115494e39b7",
-      "tree-sha256": "65d86e8e2da6477b160a40e063804fc7c20aed58dc5ead7d2453c1afda758edd",
+      "sha256": "89ac1148ec26346b7c05ae766e9306820d6cd1fd6144b2013e2c9399f44b339c",
+      "tree-sha256": "798eb0eec80d50c057255e98d6fb496d605c40f4c70486285e14056bfdf356cd",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "a1ec1f682fc3a64bbb6f9cb733884e8e8cee73f7c12d21010aa0a115494e39b7",
+          "sha256": "89ac1148ec26346b7c05ae766e9306820d6cd1fd6144b2013e2c9399f44b339c",
           "executable": false
         },
         {
@@ -1794,7 +1794,7 @@
         },
         {
           "path": "references/org-scope.md",
-          "sha256": "325e568a70c9ba06121b701b210295431646559ae7eb70974193fbd7002f4e4c",
+          "sha256": "dc8102d6af819e5d75335736988b1c8e772c2f7c87950f7585fca7224b58b763",
           "executable": false
         },
         {

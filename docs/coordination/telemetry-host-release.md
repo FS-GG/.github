@@ -24,8 +24,10 @@ Archive signing differences are retained, not asserted byte equality across feed
 Old 0.6 journal 12 remains generation 2/tag intent Unknown with original candidate and failed attempts
 unchanged; publication 0.7 neither settles nor resends it. The temporary main reservation for this
 completed original operation is released; all 439+46 historical holds remain. App post cleanup logged
-revocation; independent credential invalidity and feed-key expiry remain unproved. Installed caller 105,
-board binding 4, Home endpoint/trust, installation, enrollment, restart/restore and receiver activation
+revocation; independent credential invalidity and feed-key expiry remain unproved. Accepted programme binding 4/schema 2/inspection 2 remains. A later Root read observed the global
+CLI selector targeting 0.106, but its pre-entry value and change timing are Unknown; a pointer is not
+whole runtime or instruction-discovery qualification. Home endpoint/trust, installation, enrollment,
+restart/restore and receiver activation
 remain separate acceptance. No local observation queues or Home state were changed by publication.
 
 ## Delivered Host 0.7 source profile — 2026-10-18
@@ -93,7 +95,7 @@ transport follows from0.7 preparation. App cleanup logged revocation; independen
 key revocation/expiry remain unproved. Original state, candidate and package bytes remain unchanged.
 
 Published [Host0.5.0](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.5.0) and all historical
-artifacts/journals remain immutable. Coherent published CLI0.106 and active installed0.105 remain separate.
+artifacts/journals remain immutable. Coherent published CLI0.106 is accepted; actual selected-caller/runtime and installed discovery proof remain separately scoped.
 No service installation, TLS/trust change, enrollment, native provider capture or Home durability follows
 from this source. Home owns final endpoint/reference, service custody and receiver adoption. Existing
 TLS/bearer capability does not establish readiness. Historical sections below retain their original scopes.
