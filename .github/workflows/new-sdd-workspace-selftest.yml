@@ -94,6 +94,15 @@ jobs:
       - name: Run the new-sdd-workspace parse fixture
         run: bash tests/new-sdd-workspace/run.sh
 
+      - name: Qualify the compiled product binding and complete driver materialization
+        run: |
+          dotnet fsi --lib:scripts/NewSddWorkspace/bin/Release/net10.0/ \
+            --reference:scripts/NewSddWorkspace/bin/Release/net10.0/new-sdd-workspace.dll \
+            --reference:scripts/NewSddWorkspace/bin/Release/net10.0/fsgg-coord-engine.dll \
+            --reference:scripts/NewSddWorkspace/bin/Release/net10.0/FS.GG.Coord.GitHub.dll \
+            --reference:scripts/NewSddWorkspace/bin/Release/net10.0/FS.GG.Coord.Core.dll \
+            --exec tests/new-sdd-workspace/product-board.fsx
+
       - name: Qualify Wizard successor identity, effect ordering and legacy seals
         run: |
           set -euo pipefail
