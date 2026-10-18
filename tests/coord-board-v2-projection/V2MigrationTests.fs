@@ -314,6 +314,7 @@ module V2MigrationTests =
             let after = collect connection.Reads selected |> get
             let operation, payload, kind =
                 match change with
+            | CreateWorkLevel -> failwith "legacy manual fixture unexpectedly selected successor field creation"
                 | AddInReview _ -> "updateProjectV2Field", "projectV2Field", "status"
                 | AddMembership _ -> "addProjectV2ItemById", "item", "membership"
                 | InitializePlanningValue _ -> "updateProjectV2ItemFieldValue", "projectV2Item", "initialize"
@@ -374,7 +375,7 @@ module V2MigrationTests =
         let prepared = prepare originalScope before |> get
         Assert.Equal(CreateWorkLevel, prepared.Changes.Head)
         // New semantics are digest-bound; original scope/prepare remains exactly the old mode.
-        Assert.NotEqual((prepare scope before |> get).Digest, prepared.Digest)
+        Assert.NotEqual<string>((prepare scope before |> get).Digest, prepared.Digest)
         let bound = { prepared with PreparedPath = Some(System.IO.Path.GetFullPath "synthetic-work-level-prepared.json") }
         let wire = encodePrepared bound
         Assert.Contains("fs.gg.board-v2.migration-prepare/2", wire)
@@ -437,3 +438,17 @@ module V2MigrationTests =
             Assert.True(Result.isError (validateScope invalid))
         let drifted = { after with Fields = after.Fields |> List.map (fun current -> if current.Id = field.Id then { current with Options = current.Options.Tail } else current) }
         Assert.True(Result.isError (prepare resolved drifted))
+
+    [<Fact>]
+    let ``successor view repair cannot replace layout columns or filter away All items`` () =
+        let selected = { scope with WorkLevel = Some { FieldId = None; Assignments = [] } }
+        let original: View =
+            { Id = "synthetic-existing-view"; Name = "All items"; Layout = "TABLE_LAYOUT"; Filter = "";
+              VisibleFieldIds = [ scope.StatusFieldId; scope.RoadmapFieldId ]; UnsupportedConfiguration = "[[],[],[]]" }
+        let current = { snapshot with Views = [ original ] }
+        let desired: DesiredView =
+            { Id = Some original.Id; Name = original.Name; Layout = original.Layout; Filter = ""; VisibleFieldIds = original.VisibleFieldIds }
+        for mutated in [ { desired with Filter = "is:open" }; { desired with Layout = "BOARD_LAYOUT" };
+                         { desired with VisibleFieldIds = [ scope.StatusFieldId ] } ] do
+            Assert.True(Result.isError(prepare { selected with Views = [ mutated ] } current))
+        Assert.True(Result.isOk(prepare { selected with Views = [ desired ] } current))

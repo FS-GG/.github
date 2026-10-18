@@ -114,7 +114,8 @@ module V2Migration =
                 || isNull view.Filter || view.Filter.Length > 2048 || (view.Filter |> Seq.exists Char.IsControl)
                 || view.VisibleFieldIds.IsEmpty || view.VisibleFieldIds.Length > 50
                 || not (unique view.VisibleFieldIds) || (view.VisibleFieldIds |> List.exists (bounded 256 >> not))
-                || (view.Id |> Option.exists (bounded 256 >> not)))
+                || (view.Id |> Option.exists (bounded 256 >> not))
+                || (scope.WorkLevel.IsSome && view.Name.Equals("All items", StringComparison.OrdinalIgnoreCase) && view.Filter <> ""))
         let selectedIds = scope.SelectedIssues |> List.map (fun (issue: SelectedIssue) -> issue.Id) |> Set.ofList
         let optionValid (value: PlanningOption) = bounded 256 value.Id && bounded 100 value.Name
         let invalidPlanning =
@@ -620,7 +621,15 @@ module V2Migration =
                                 | Some _, [] -> invalid "explicit existing view is absent"
                                 | None, [] -> Ok [ CreateView desired ]
                                 | _, [ current ] ->
-                                    if current.Name = desired.Name && current.Layout = desired.Layout
+                                    let preservedColumns =
+                                        desired.VisibleFieldIds = current.VisibleFieldIds
+                                        || (scope.WorkLevel |> Option.bind _.FieldId |> Option.exists (fun id ->
+                                            not (List.contains id current.VisibleFieldIds)
+                                            && desired.VisibleFieldIds = current.VisibleFieldIds @ [ id ]))
+                                    if scope.WorkLevel.IsSome && (current.Layout <> desired.Layout || not preservedColumns
+                                       || (desired.Name.Equals("All items", StringComparison.OrdinalIgnoreCase) && desired.Filter <> "")) then
+                                        invalid "successor view change must preserve layout/columns and unfiltered All items; only explicit Work level append is allowed"
+                                    elif current.Name = desired.Name && current.Layout = desired.Layout
                                        && current.Filter = desired.Filter && current.VisibleFieldIds = desired.VisibleFieldIds then Ok []
                                     elif desired.Id.IsNone then invalid "same-name existing view differs; select its exact native ID before updating"
                                     else Ok [ UpdateView(current.Id, desired) ]
@@ -638,6 +647,14 @@ module V2Migration =
                                 @ (if snapshot.CanUpdate then [] else [ "Native principal lacks project update capability; this read-only preparation grants no effect permission." ])
                                 @ (scope.InitialPlanning |> List.choose (fun (initial: InitialPlanning) ->
                                     if initial.Status.IsNone then Some("Initial Status is intentionally unresolved for " + initial.IssueId) else None))
+                            let ownerActions =
+                                if scope.WorkLevel.IsNone then ownerActions
+                                else
+                                    (ownerActions |> List.map (fun value ->
+                                        if value = "Readback IDs must be independently finalized into protected enrollment before v4 consumer activation." then
+                                            "Independently read-back Work level/option IDs and selected enrollment require binding5/schema3 acceptance; existing binding4 is unchanged."
+                                        else value))
+                                    @ [ "Only explicitly selected absent Work level values may be initialized; conflicts remain held and no outcome closure is inferred." ]
                             { Scope = scope; Snapshot = snapshot; Changes = all; OwnerActions = ownerActions; PreparedPath = None;
                               Digest = hash (scopeTokens scope @ snapshotTokens snapshot @ [ string all.Length ] @ (all |> List.collect changeTokens)) })))
 
