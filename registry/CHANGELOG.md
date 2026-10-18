@@ -1,5 +1,13 @@
 # Registry changelog
 
+## 2026-10-18 — accepted independent Host0.7 publication
+
+Advance only the Host published version/tag to0.7 after original39148437514/a1 completed journal13
+generation17/all8 verified. Both feeds share the normalized candidate payload; signed archive bytes
+differ. Preserve old0.6 journal12/tag intent Unknown without resend. Coherent107/Creator017 remain
+source-only, installed105/binding4 unchanged, and Home receiver adoption remains separate.
+
+
 ## 2026-10-18 — canonical coordinator and independent Creator source (#4677)
 
 Advance only source declarations to coherent coordination0.107 and Creator0.17. Canonical work-board,
