@@ -1,7 +1,7 @@
 interface:
   display_name: "Work Board"
-  short_description: "Burn down one coordination-wired workspace board"
-  default_prompt: "Use $work-board to reconcile and burn down one coordination-wired product workspace board."
+  short_description: "Coordinate organization and product V2 development"
+  default_prompt: "Use $work-board to recover owners and advance authorized organization or selected product V2 work."
 
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

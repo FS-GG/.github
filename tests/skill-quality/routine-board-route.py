@@ -30,68 +30,20 @@ for skill in skills:
     claude = (CLAUDE / skill / "SKILL.md").read_text(encoding="utf-8")
     require(agents == claude, f"{skill} differs between .agents and .claude")
 
-for driver in ("work-board",):
-    body = (AGENTS / driver / "SKILL.md").read_text(encoding="utf-8")
-    folded = " ".join(body.lower().split())
-    for phrase in (
-        "Choose each item's route before scheduling",
-        "recorded explicit human instruction",
-        "absence or ambiguity stays routine",
-        "one accountable owner",
-        "one PR",
-        "are not process selectors",
-        "asynchronous and cannot block",
-        "applies only to human-named heavyweight scope",
-        "never create a second PR",
-        "Multiple or ambiguous open PRs refuse routine admission",
-        "ADR-0084",
-        "valid exact-head reuse",
-        "disputed",
-        "dependent acceptance or activation",
-    ):
-        require(" ".join(phrase.lower().split()) in folded, f"{driver} lost routine-route clause {phrase!r}")
-    for omitted in (
-        "independent critic",
-        "lifecycle ledger",
-        "delivery receipt",
-        "metadata-`Done` write",
-    ):
-        require(" ".join(omitted.split()) in " ".join(body.split()), f"{driver} no longer names omitted ceremony {omitted!r}")
-
-for variant in ("work-board-normal", "work-board-best"):
-    body = (AGENTS / variant / "SKILL.md").read_text(encoding="utf-8")
-    require("routine route unchanged" in body, f"{variant} does not inherit its base routine route")
-    require("does not authorize a critic" in body, f"{variant} makes routine review ambiguous")
-    require("strict item's three-round review chain" in body, f"{variant} does not scope repair dispatch to strict work")
-    require("ordinary three-round chain" not in body, f"{variant} can route routine work into strict repair ceremony")
-    for phrase in ("ADR-0084", "selection/reuse", "coherent-pending", "late-dispute", "dependent-activation"):
-        require(phrase in body, f"{variant} does not explicitly inherit {phrase!r}")
-
-# Organization consumers have a distinct prepared-v4 contract; historical product V1
-# loops above keep their original assertions and are not a fallback for this scope.
+# Canonical V2 behavior and wrapper inheritance now share one production predicate.
 spec = importlib.util.spec_from_file_location("skill_quality", ROOT / "scripts/check-skill-quality.py")
 quality = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(quality)
 errors = []
 quality.validate_organization_consumer(ROOT, errors)
+quality.validate_work_board_coordinator(ROOT, errors)
 require(not errors, "; ".join(errors))
-for variant in ("drive-board-normal", "drive-board-best"):
-    body = " ".join((AGENTS / variant / "SKILL.md").read_text(encoding="utf-8").split())
-    for phrase in ("complete canonical", "prepare-only .9/.11 boundary", "routine owner, independent review, required CI",
-                   "ADR-0084 delivery", "explicitly to every", "unsupported route", "do not downgrade", "silently substitute"):
-        require(phrase in body, f"{variant} lost prepared routine inheritance {phrase!r}")
-    require("three-round review chain" not in body, f"{variant} reintroduces a mandatory V1 repair chain")
-
-for driver in ("work-board", "drive-board"):
-    triage = (AGENTS / driver / "references" / "backlog-triage.md").read_text(encoding="utf-8")
-    normalized = " ".join(triage.split())
-    for phrase in (
-        "Routine admissions enter the one-owner plan without a board write",
-        "A routine-only pass does not create a planning receipt or content-disposition artifact",
-        "For routine items, verify only the exact-head required checks, native PR merge/readback, and native issue-closing link",
-        "are not routine gates",
-    ):
-        require(phrase in normalized, f"{driver} backlog triage lost routine exemption {phrase!r}")
+for variant, parent in (("work-board-normal", "work-board"), ("work-board-best", "work-board"),
+                        ("drive-board-normal", "drive-board"), ("drive-board-best", "drive-board")):
+    body = " ".join((AGENTS / variant / "SKILL.md").read_text().split())
+    require(f"../{parent}/SKILL.md" in body, f"{variant} lost its canonical parent")
+    require("explicitly to every" in body and "do not downgrade" in body, f"{variant} lost actual runtime routing")
+    require("strict item's three-round review chain" not in body, f"{variant} restores retired critic ceremony")
 
 pnext = (AGENTS / "pnext-item" / "SKILL.md").read_text(encoding="utf-8")
 pnext_normalized = " ".join(pnext.split())

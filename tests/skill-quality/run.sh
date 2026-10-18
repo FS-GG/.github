@@ -85,7 +85,7 @@ mutations = (
     (contract, "Counts mean remaining capacity after active work", "Counts mean total capacity before active work", "inspection contract lost"),
     (contract, "Recheck determining issue/body/owner/action", "Reuse the saved issue/body/owner/action", "inspection contract lost"),
     (contract, "with no V1 fallback", "with a V1 fallback", "inspection contract lost"),
-    ("drive-board/SKILL.md", "Continue an existing unambiguous owner and PR/head", "Assign another implementation", "driver contract lost"),
+    ("drive-board/SKILL.md", "scope only", "independent workflow", "driver contract lost"),
     ("check-board/SKILL.md", "No historical organization live opt-in exists", "Historical organization live operations may opt in", "check-board scope contract lost"),
     ("check-board/SKILL.md", "Before any product command, verify the actual product target/binding and configured product repository", "A repository filter alone chooses a board", "check-board scope contract lost"),
 )
@@ -378,7 +378,7 @@ expect_rejection "broken relative links fail before distribution" "broken relati
 # A target present in the repository can still be absent from the partial tree.
 seed
 printf '\n[repository-only test](../../../../tests/work-programme/routine-decisions.fsx)\n' \
-  >>"$WORK/tree/.claude/skills/work-programme/references/context.md"
+  >>"$WORK/tree/.claude/skills/work-board/references/context.md"
 expect_rejection "repository-only test links fail in the actual partial tree" "broken relative link"
 
 # Exercise the real Atlas delivery predicate on an omitted seed projection.
@@ -475,91 +475,9 @@ PY
 expect_rejection "padd-item cannot fall back from the workspace's configured board" \
   "padd-item: workspace filing contract lost 'Never silently fall back'"
 
-seed
-mutate_workboard_phrase "without mutating the board" "after attempting a board write"
-expect_rejection "work-board missing wiring fails without mutation" \
-  "work-board: backlog planning contract lost 'without mutating the board'"
-
-seed
-mutate_workboard_phrase "Promotion changes eligibility, not assignment" "Promotion assigns the chosen item"
-expect_rejection "work-board promotion remains scheduler-selected and collision-safe" \
-  "work-board: backlog planning contract lost 'Promotion changes eligibility, not assignment'"
-
-seed
-mutate_workboard_phrase "follow-up filed by the preceding wave" "follow-up already present at startup"
-expect_rejection "work-board sees worker-filed backlog on the next wave" \
-  "work-board: backlog planning contract lost 'follow-up filed by the preceding wave'"
-
-seed
-mutate_workboard_phrase "An empty Ready batch is not completion" "An empty Ready batch is completion"
-expect_rejection "work-board cannot terminate over actionable backlog" \
-  "work-board: backlog planning contract lost 'An empty Ready batch is not completion'"
-
-seed
-mutate_workboard_phrase "Do not spin" "Poll the same rows until they change"
-expect_rejection "work-board reports parked and human backlog without spinning" \
-  "work-board: backlog planning contract lost 'Do not spin'"
-
-# .github#2088: two concurrent waves, three implementer slots each, two RESERVED review slots (never
-# filled by implementers), a testable three-or-fewer consolidation threshold, and an explicit
-# fleet-wide EX_RATE stop. These legs are the point, not the passing case: a driver that let a wave
-# fill all eight slots with implementers, or scoped EX_RATE to one wave, or let the two host-loop
-# copies drift, or let a routed variant restate the numbers instead of inheriting them, must be
-# rejected — each leg below breaks exactly one of those and checks the gate catches it.
-mutate_hostloop_phrase() {
-  python3 - "$WORK/tree" "$1" "$2" "$3" <<'PY'
-import sys
-from pathlib import Path
-
-root, driver, old, new = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
-for runtime in (".claude", ".agents"):
-    path = root / runtime / "skills" / driver / "references/host-loop.md"
-    text = path.read_text()
-    if old not in text:
-        raise SystemExit(f"fixture phrase missing: {old}")
-    path.write_text(text.replace(old, new))
-PY
-}
-
-seed
-printf '\n<!-- BEGIN GENERATED: fsgg-protocol:wave-policy -->\n<!-- fsgg:wave-model:v1 waves=2 -->\n<!-- END GENERATED: fsgg-protocol:wave-policy -->\n' \
-  >>"$WORK/tree/.claude/skills/drive-board/references/host-loop.md"
-expect_rejection "organization driver cannot restore retired generated wave authority" \
-  "organization successor: retired generated wave authority returned"
-
-seed
-mutate_hostloop_phrase work-board "RESERVED, not advisory" "reserved when convenient"
-expect_rejection "work-board's review slots stay reserved rather than fillable by implementers" \
-  "work-board: host-loop lost two-wave contract statement 'RESERVED, not advisory'"
-
-seed
-mutate_hostloop_phrase work-board "fleet-wide stop for BOTH waves" "a stop for the reporting wave only"
-expect_rejection "work-board cannot scope an EX_RATE stop to a single wave" \
-  "work-board: host-loop lost two-wave contract statement 'fleet-wide stop for BOTH waves'"
-
-seed
-mutate_hostloop_phrase work-board "consolidation-threshold=3" "consolidation-threshold=2"
-expect_rejection "product host-loop must still match the genuine generated wave policy" \
-  "generated process contract is stale"
-
-seed
-python3 - "$WORK/tree" <<'PY'
-import sys
-from pathlib import Path
-
-root = Path(sys.argv[1])
-for runtime in (".claude", ".agents"):
-    path = root / runtime / "skills/drive-board-best/SKILL.md"
-    text = path.read_text()
-    path.write_text(
-        text.replace(
-            "Never let a host default",
-            "Run three implementer slots per wave. Never let a host default",
-        )
-    )
-PY
-expect_rejection "a routed variant cannot restate the two-wave contract instead of inheriting it" \
-  "drive-board-best: restates the two-wave contract"
+# The canonical V2 coordinator no longer owns V1 waves, promotion or feedback ledgers.
+# Exercise its actual source and consumer staging closure with refusal controls instead.
+python3 -B "$ROOT/tests/skill-quality/work-board-migration.py"
 
 # .github#1574: a schema id the semantic gate does not support must be an ERROR from the semantic
 # gate itself. Its sibling validate_invocations already shouts, and that shout is repairable by
@@ -850,7 +768,7 @@ for runtime in .claude .agents; do
     >>"$WORK/tree/$runtime/skills/work-board/references/host-loop.md"
 done
 expect_rejection "hand-authored duplicate wave literals are rejected" \
-  "work-board: hand-authored duplicate of generated wave policy"
+  "organization successor: retired generated wave authority returned"
 
 # --- .github#2510: routed dispatch must resolve from THIS repo ---------------------------------
 #

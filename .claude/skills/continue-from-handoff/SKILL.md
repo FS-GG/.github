@@ -1,20 +1,20 @@
 ---
 name: continue-from-handoff
-description: "Resume FS-GG work from the newest saved handoff, reconcile live state and finish Unified Roadmap through work-programme."
+description: "Resume authorized FS-GG work from the newest saved handoff, reconcile current native state and original effects through canonical work-board."
 ---
 
 # Continue From Handoff
 
-Resume the saved programme and work the roadmap to its actual acceptance outcomes.
+Resume the saved authorized scope through canonical work-board to its actual acceptance outcomes.
 Creating, editing, or inspecting this skill does not start programme execution.
 
 Retrieve Atlas IDs named by the handoff using [$atlas](../atlas/SKILL.md); reconcile
 supersession/conflicts and verify citations/live facts. Keep missing knowledge explicit.
 
-## Select the current roadmap
+## Resolve strategic scope
 
-Use the protected [Unified Roadmap v3](../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md)
-for shared/platform strategic scope and owning-plan navigation and the [games roadmap](../../../docs/roadmaps/2026-10-07-games-development-roadmap.md)
+Use the protected [Unified Roadmap v3](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md)
+for shared/platform strategic scope and owning-plan navigation and the [games roadmap](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-10-07-games-development-roadmap.md)
 for BAR/SC2/FourD product outcomes within the recovered scope. An older handoff's v2/§9.8/§0 links
 are archive references: map surviving feature IDs to the strategic catalogue and current owning/native facts, preserve original
 attempts/reservations and verify native closure before omitting an inherited obligation. Do not
@@ -26,18 +26,14 @@ and reconcile its owner rather than treating omission as cancellation.
 
 ## Recover the newest saved state
 
-Recover the explicit coordinated .11 cutover acceptance from the owning V2 plan and retain the
-[organization consumer boundary](../check-board/references/organization-v2-inspection.md) in recovery
-and handoff. Source delivery alone does not activate v4. After accepted cutover, section 2 is strategic navigation;
-recover current selection and closure from the enrolled owning issues, human planning and native
-evidence rather than a duplicate manual v3 status table. Before that acceptance, preserve the former
-protected index boundary.
-After accepted cutover, preserve final binding/enrollment, exact outcome/slice/attempt and owner,
-existing Current deliverable/native PR/head, issue/body/current-plan revisions, pending requests and
-all original/uncertain reservations. Fresh-read determining native/action/intake/runtime facts through
-the existing integrator before resuming an operation; a saved inspection or stdin digest supplies no
-authority or renewed freshness. Missing facts keep scoped Unknowns without duplicate implementation
-or V1 fallback. Hand off original unresolved effects; never settle or retry them from board status.
+Recover current scope through canonical work-board. Organization scope uses the accepted Project 3
+cutover and exact binding4/schema2/inspection2/qualified installed caller; products use only their selected
+V2 binding and provenance. Old preparation-only text/manual index/Project 1 directions in handoffs are
+history, never fallback. Source delivery alone still establishes no new executable/caller adoption.
+Preserve exact outcome/slice/attempt/owner, existing Current deliverable/native PR/head, issue/body/plan
+revisions, requests and original/uncertain reservations. Fresh determining native/action/intake/runtime
+joins must come from the existing integrator beside execution. Missing facts retain scoped Unknowns;
+never duplicate implementation, settle original effects from board status or revive roadmap scheduling.
 
 
 Resolve the FS-GG `.github` repository from the current checkout or its existing
@@ -60,11 +56,11 @@ record the missing handoff and recover from the canonical roadmap and live work
 rather than waiting for human input.
 
 Reconcile its open PRs, current heads/checks, merged trees, publication and
-receiver state, outstanding progress projections, partial files, and worker or
+receiver state, partial files, and worker or
 process status against available live evidence. Keep observed results separate
 from worker reports and proposals. Missing temporary evidence remains unknown;
 do not reconstruct results or repeat a consumed operation to fill that gap.
-Apply the selected [forward-recovery boundary](../work-programme/SKILL.md#forward-recovery-after-unavailable-evidence--2026-10-18):
+Apply the selected [forward-recovery boundary](../work-board/SKILL.md#recover-ownership-and-unavailable-history):
 the unavailable historical evidence-search task is closed as unavailable; stop repeated searches and
 requests. Preserve all known original records, 439 inherited reservations, 46 later original records
 and unproved outcomes Unknown, without release or replay. For a genuinely fresh operation, reconcile
@@ -75,7 +71,7 @@ globally block demonstrated-independent work, and a new ID cannot disguise an un
 Use existing journals/custody, not another recovery ledger. SC2's existing-host container scope does
 not change the separate V3 two-machine portability requirement.
 
-For an activated pilot and ROUTINEV3 source extension, also recover each pending request's canonical
+Also recover each pending request's canonical
 channel and original message identity, owner, expected response, response/escalation
 deadline and last complete successful read from the issue or restricted handoff.
 At session start, reconcile changed replies or the full thread when that baseline is
@@ -86,13 +82,13 @@ explicit narrower constraints in the current request still apply.
 
 ## Execute through the programme coordinator
 
-Read and apply [$work-programme](../work-programme/SKILL.md), including
+Read and apply [$work-board](../work-board/SKILL.md), including
 its referenced guidance when relevant. Resolve its actual installed path if
 the sibling is absent; if the required skill cannot be found, report that
 capability gap instead of inventing a replacement route. Pass the recovered
 frontier, priorities, ownership, evidence, and interrupted work to that skill.
-It owns model routing, parallel lanes, telemetry, PR admission, native checks,
-source integration, publication, receiver adoption, and progress projections.
+It owns model routing, lanes, telemetry, PR admission, native checks, source integration and the
+separate publication/receiver acceptance boundaries. Do not restore duplicate status or closure upkeep.
 Do not duplicate its lifecycle here.
 
 Invocation authorizes autonomous decisions and completion of the recovered
@@ -111,10 +107,8 @@ worker, CPU, integrator and hosted-CI capacity. Repair and integrate the existin
 queue before opening excess PRs. Resume interrupted source preparation before
 starting replacements; recheck source and admission before any fresh operation.
 
-Outside the activated pilot and ROUTINEV3 source extension, give structured updates every 30 minutes
-with **Progress**, **Working on**, and **Problems**. In the pilot, update at a ready
-deliverable, changed blocker, needed decision or changed promised time, plus one
-daily programme summary; deadline and session-start reply reads replace fixed polling.
+Report material deliverables, changed blockers/decisions/promised times and one daily active summary
+under work-board, using current native results. No fixed polling or unchanged-status projection.
 Keep executing
 through ordinary failures, CI waits and context compaction. Neither a checked
 local milestone list nor a session boundary proves completion: verify the

@@ -26,7 +26,7 @@ def suites(root):
     return [
         dict(id=name + suffix,
              command=['dotnet', 'fsi', *defines, '--exec', 'tests/work-programme/' + name + '.fsx'],
-             inputs=[skill_root + '/skills/work-programme/scripts/programme.fsx',
+             inputs=[skill_root + '/skills/work-board/scripts/programme.fsx',
                      'tests/work-programme/' + name + '.fsx'] + extra,
              prerequisites=['dotnet'], dependsOn=[], independent=True)
         for skill_root, suffix, defines in [('.agents', '', []),
@@ -39,7 +39,7 @@ def suites(root):
               inputs=['tests/work-programme/context-baseline/' + f for f in ['test_collect.py', 'collect.py', 'replay.json']],
               prerequisites=['python'], dependsOn=[], independent=True),
          dict(id='context-controls', command=[sys.executable, 'tests/work-programme/test_context.py'],
-              inputs=['tests/work-programme/test_context.py', '.agents/skills/work-programme/scripts/context.py'],
+              inputs=['tests/work-programme/test_context.py', '.agents/skills/work-board/scripts/context.py'],
               prerequisites=['python'], dependsOn=[], independent=True),
          dict(id='context-restart-structure', command=[sys.executable, restart + 'structural-check.py'],
               inputs=[restart + 'structural-check.py', restart + 'fixture-index.json'] +
@@ -142,8 +142,8 @@ def preflight(root, selected):
 
 
 def fsi_receiver_matches(command, inputs):
-    receivers = ['.agents/skills/work-programme/scripts/programme.fsx',
-                 '.claude/skills/work-programme/scripts/programme.fsx']
+    receivers = ['.agents/skills/work-board/scripts/programme.fsx',
+                 '.claude/skills/work-board/scripts/programme.fsx']
     selected = [path for path in receivers if path in inputs]
     claude = '--define:CLAUDE_SKILLS' in command
     # Existing standalone FSI fixture commands need no programme helper. The

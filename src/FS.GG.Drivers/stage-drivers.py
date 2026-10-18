@@ -48,6 +48,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
+from pathlib import Path
+from urllib.parse import unquote
 import shutil
 import sys
 
@@ -138,6 +141,33 @@ def stage_workspace(out: str) -> int:
     return len(staged_rows)
 
 
+def validate_coordinator_links(out: str) -> None:
+    """Validate the actual offline instruction closure, including recovery and historical entrypoints."""
+    root = Path(out, "skills").resolve()
+    pending = ["work-board", "work-programme", "continue-from-handoff", "routine-decisions", "agent-handoff"]
+    visited = set()
+    while pending:
+        name = pending.pop()
+        if name in visited:
+            continue
+        visited.add(name)
+        directory = root / name
+        if not (directory / "SKILL.md").is_file():
+            die(f"required coordinator entrypoint is not delivered: {name}")
+        for source in directory.rglob("*.md"):
+            text = source.read_text(encoding="utf-8-sig")
+            links = re.findall(r"!?\[[^\]]*\]\(([^)]+)\)", text)
+            links += [a or b for a, b in re.findall(r"(?m)^ {0,3}\[[^\]\n]+\]:\s*(?:<([^>\n]+)>|(\S+))", text)]
+            for raw in links:
+                target = raw.strip().strip("<>").split(maxsplit=1)[0]
+                if target.startswith(("#", "/")) or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", target):
+                    continue
+                path = (source.parent / unquote(target.split("#", 1)[0].split("?", 1)[0])).resolve()
+                if not path.is_relative_to(root) or not path.exists():
+                    die(f"coordinator relative link is not delivered: {source.relative_to(root)} -> {target}")
+                pending.append(path.relative_to(root).parts[0])
+
+
 def main(argv: list) -> int:
     if len(argv) != 1:
         die("usage: stage-drivers.py <out-dir>")
@@ -225,6 +255,25 @@ def main(argv: list) -> int:
     if staged == 0:
         die("no scope:driver rows in the manifest — nothing to deliver (a truncated/empty manifest?).")
 
+    # A packaged coordinator must carry the unchanged Kit inspection contract offline. It is derived
+    # by the producer, never independently authored or dependent on an uninstalled sibling skill.
+    kit_manifest_path = os.path.join(REPO_ROOT, "registry", "coordination-kit-skill-manifest.json")
+    with open(kit_manifest_path, encoding="utf-8") as handle:
+        kit = json.load(handle)
+    contracts = [file for skill in kit["skills"] if skill["id"] == "check-board"
+                 for file in skill["files"] if file["path"] == "references/organization-v2-inspection.md"]
+    if len(contracts) != 1:
+        die("canonical organization inspection contract is absent or ambiguous")
+    contract = os.path.join(out, "skills", "work-board", "references", "organization-v2-inspection.md")
+    try:
+        with open(contract, "rb") as handle:
+            actual = hashlib.sha256(handle.read()).hexdigest()
+    except OSError as error:
+        die(f"coordinator contract is not staged: {error}")
+    if actual != contracts[0]["sha256"]:
+        die("coordinator inspection contract differs from the canonical Kit contract")
+
+    validate_coordinator_links(out)
     workspace_files = stage_workspace(out)
     sys.stdout.write(
         f"stage-drivers: staged {staged} driver skill(s) + {workspace_files} workspace file(s) "

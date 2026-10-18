@@ -1,7 +1,7 @@
 #if CLAUDE_SKILLS
-#load "../../.claude/skills/work-programme/scripts/programme.fsx"
+#load "../../.claude/skills/work-board/scripts/programme.fsx"
 #else
-#load "../../.agents/skills/work-programme/scripts/programme.fsx"
+#load "../../.agents/skills/work-board/scripts/programme.fsx"
 #endif
 open System
 open System.IO

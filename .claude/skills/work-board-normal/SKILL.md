@@ -1,46 +1,19 @@
 ---
 name: work-board-normal
-description: Use when explicitly asked to burn down a wired product board with normal-cost routed workers and explicit runtime-specific subagent model selection.
+description: Use when explicitly asked to coordinate an organization or selected product V2 board with normal-cost workers and explicit runtime-specific model selection.
 ---
 
 # work-board-normal
 
-Run the complete canonical [work-board](../work-board/SKILL.md) host workflow. This variant changes
-only the model routing of deployed workers; workspace checks, triage, lane selection, feedback,
-verification, and termination remain owned by `work-board`.
-
-Inherit `work-board`'s routine route unchanged. A routine item may remain with the accountable host and
-never requires a dispatch; if isolation or useful parallel capacity calls for one delegated routine
-owner, the table below selects that owner's model. It does not authorize a critic, confirmation worker,
-or any strict-route artifact.
-That inheritance explicitly includes canonical `work-board`'s ADR-0084 selection/reuse, coherent-pending,
-late-dispute, and dependent-activation behavior; this variant changes none of it.
-It also includes the canonical begin/started/finish telemetry around every native dispatch and follow-up; this
-model-routing variant may not omit or upgrade its explicit unsupported-usage coverage gap.
-
-Before every worker dispatch, identify the active host runtime. Pass this route explicitly to every
-subagent spawn:
+Apply the complete canonical [work-board](../work-board/SKILL.md) workflow and its explicit scope.
+This wrapper changes only model routing, never ownership, intake, capacity, review, qualification,
+delivery, telemetry or operation authority. The host may remain accountable owner; no dispatch is mandatory.
+Identify the active runtime and pass this route explicitly to every authorized subagent spawn:
 
 | runtime | model | effort |
 |---|---|---|
-| Codex | `gpt-5.6-terra` | `medium` |
+| Codex | `gpt-6.1-sol` | `medium` |
 | Claude Code | `sonnet` | `high` |
 
-Never let a host default choose the model or effort. If the active runtime cannot request this exact
-model and effort, report the unsupported route and stop before dispatching a worker; do not downgrade,
-fall back, or continue a partial wave.
-
-**Repair-phase route.** When a strict item's three-round review chain exhausts, automatically enter the
-repair phase and dispatch its fresh
-implementer and fresh critic at `work-board-best`'s route instead
-of the table above:
-
-| runtime | model | effort |
-|---|---|---|
-| Codex | `gpt-5.6-sol` | `medium` |
-| Claude Code | `opus` | `high` |
-
-Never let a host default choose the model or effort for the repair-phase dispatch either. If the active
-runtime cannot request this exact model and effort, report the unsupported route and stop before
-dispatching a repair-phase worker; do not downgrade, fall back, or continue a partial repair-phase
-chain.
+Never use a host default. If unsupported, report the exact route and stop before dispatch;
+do not downgrade, fall back or continue a partial wave. No fixed waves or critic/repair chains apply.

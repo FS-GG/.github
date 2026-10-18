@@ -1434,3 +1434,23 @@ let ``programme preparation validates before RNG and final binding retains priva
     Assert.Equal<byte>(payload, actual.ProgrammeEnrollment |> Option.get |> _.PayloadBase64 |> Convert.FromBase64String)
     Assert.True(Result.isOk (authenticateProgrammeEnrollment actual publicJson))
     Assert.True(Result.isError (decodeBinding (template.ToJsonString())))
+
+[<Fact>]
+let ``programme instruction provenance admits both exact observation paths and refuses sibling paths`` () =
+    // Exercise the production native/enrollment/plan join with inert transport, not a string-only grammar test.
+    // This successor assertion does not qualify any already installed earlier executable.
+    let prefix = "https://github.com/FS-GG/.github/blob/" + ProgrammeFixture.head + "/"
+    for path, admitted in
+        [ ".agents/skills/work-programme/references/observation.md", true
+          ".agents/skills/work-board/references/observation.md", true
+          ".agents/skills/work-board/SKILL.md", false
+          ".agents/skills/work-board/references/other.md", false
+          ".claude/skills/work-board/references/observation.md", false ] do
+        let rows = [ "I_outcome", ProgrammeFixture.issue, prefix + path ]
+        let selected = ProgrammeFixture.enroll (ProgrammeFixture.binding ()) rows
+        let reads = ProgrammeFixture.populationTransport selected rows ProgrammeFixture.unchanged
+        let report = V2ProjectionSource.inspectFixed reads selected None
+        Assert.Empty reads.Mutations
+        Assert.True(report.Evidence.PopulationGap.IsNone, string report.Evidence.PopulationGap)
+        Assert.Equal(admitted, report.Items.Head.SourceCurrentness = "Current")
+        if not admitted then Assert.True(report.Items.Head.Gap.IsSome)

@@ -13,7 +13,7 @@ import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-SPEC = importlib.util.spec_from_file_location('context', ROOT / '.agents/skills/work-programme/scripts/context.py')
+SPEC = importlib.util.spec_from_file_location('context', ROOT / '.agents/skills/work-board/scripts/context.py')
 ctx = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ctx)
 

@@ -110,7 +110,7 @@ backing relied on the supplied environment admission rather than independently v
 **Second workload held:** background process ownership/reservation completeness and the second candidate's
 profile, disjoint output/cache joins and combined measured headroom have not been established. No second
 workload was requested or admitted in this pilot. Follow the existing
-[worked admission route](../../.agents/skills/work-programme/references/context.md#worked-admission-and-evidence-route)
+[worked admission route](../../.agents/skills/work-board/references/context.md#worked-admission-and-evidence-route)
 when real ready work supplies those prerequisites. The Coordination/SystemAdmin cross-repository source cohort is evaluated below; comparable
 attempts/diagnosis baselines remain incomplete.
 Retain the preflight correctness change with **inconclusive economics**; this is not a wider-rollout decision.

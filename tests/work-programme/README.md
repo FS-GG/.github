@@ -6,7 +6,7 @@ shape, hashed entrypoints, declared dependency order and input paths. Missing to
 named in JSON. Exit 0 means preflight only; no child ran and qualification remains `not-evaluated`.
 Missing/malformed/unknown results and timeout cannot qualify. It does not inspect undeclared
 transitive source behavior or provide resource admission. See the skill's
-[capacity window](../../.agents/skills/work-programme/references/context.md#capacity-window-and-assembled-test-candidate).
+[capacity window](../../.agents/skills/work-board/references/context.md#capacity-window-and-assembled-test-candidate).
 
 Run `bash tests/work-programme/run.sh` for full qualification. The four FSI suites, Python
 collector tests, context controls, owner-restart structural controls, synthetic

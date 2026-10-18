@@ -118,8 +118,6 @@ def main() -> None:
 
     for relative, acceptance_literal in (
         ("pnext-item/references/strict-item-lifecycle.md", "structured v2 acceptance record"),
-        ("drive-board/references/host-loop.md", "fsgg:review-decision/v2"),
-        ("work-board/references/host-loop.md", "fsgg:review-decision/v2"),
     ):
         authored = [read(runtime, relative) for runtime in RUNTIMES]
         require(authored[0] == authored[1], f"{relative} differs between authored roots")

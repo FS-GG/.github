@@ -6,20 +6,17 @@ description: "Route FS-GG programme observations with typed output and compact v
 # Routine decisions
 
 Use this for current programme observations and ordinary same-owner repair. The existing
-[work-programme](../work-programme/SKILL.md) owns scope, integration and operation authority.
+[work-board](../work-board/SKILL.md) owns scope, integration and operation authority.
 Apply the full governing instructions once per selected window. This skill does not select
 new work or grant execution, merge, publication, cleanup or ownership transfer.
 
-For the original outcomes and ROUTINEV3 source work, apply the [conditional pilot](../work-programme/SKILL.md#conditional-three-outcome-pilot)
-first. After its reviewed rule is protected, the six-field owning issue, native PR/check identities and
-linked evidence replace mandatory reducer, packet, return and duplicate current-view artifacts below.
-The reducer remains optional diagnostics. Where an automatic CI result has not yet qualified a required
-join, mark that gap and perform one targeted native read; do not infer it from a PR head alone. Ordinary
-same-owner execution and delivery need no per-attempt parent turn. Required checks, ADR-0084 coherent
-validation, resource admission, original effects and credential custody remain mandatory. Deadline and
-session-start reply reconciliation replaces fixed polling at the same protected rule boundary.
+The six-field owning issue and native evidence carry assignment and recovery. The reducer is optional
+pure diagnostics, never a required packet/return/current-view ledger, capacity supplier or operation grant.
+Use one targeted native read for a missing acceptance-determining join. Ordinary same-owner repair and
+delivery need no per-attempt parent turn. Required checks, coherent validation, resources, original effects
+and custody remain mandatory. Apply material-event and deadline/session-start reply rules from work-board.
 
-Read the [typed contract](../work-programme/references/adapter.md#additive-routine-decisions)
+Read the [typed contract](../work-board/references/adapter.md#additive-routine-decisions)
 when assembling or interpreting inputs. Run the existing helper's `routine-decisions` command
 against explicit observed time, the complete snapshot/reservations, genuine return joins,
 current resource observations and operation identities. Keep legacy return schemas unchanged.
@@ -40,7 +37,7 @@ missing ownership and protected operations retain their affected fence. Observe 
 the original identity before retrying an uncertain effect; a newer clean summary cannot erase it.
 An integration decision routes the current integrator through existing admission/delivery tools.
 
-Use the full retained result as one current view per lane/attempt. Keep first failures,
+When using optional diagnostics, retain the full result as evidence linked from the existing owner record. Keep first failures,
 superseded observations and historical details in their linked original artifacts. Feed the
 previous current view back to the next evaluation so unresolved effects/conflicts survive.
 Missing or conflicting revision joins require refresh/reconciliation; never resolve conflict

@@ -126,11 +126,11 @@
     "boundary": "Design the widget projection and snapshots, but do not change the command behavior."
   },
   "work-board": {
-    "positive": "Burn down this product workspace's wired project board, including actionable backlog triage before each disjoint wave.",
-    "indirect": "Reconcile this workspace, classify parked follow-ups, and keep spawning isolated item workers until no safe local lane remains.",
+    "positive": "Use $work-board to advance authorized organization or selected product V2 work.",
+    "indirect": "Recover current owners and finish eligible coordination work within actual capacity.",
     "incomplete": "Drive this workspace board",
-    "negative": "Burn down the org-wide FS-GG Coordination board across all repositories.",
-    "boundary": "Reconcile and classify this workspace's backlog for a proposed disjoint wave, but do not claim items."
+    "negative": "Explain an offline data structure; do not coordinate development.",
+    "boundary": "Inspect selected V2 facts only; do not dispatch, change binding or perform writes."
   },
   "work-board-normal": {
     "positive": "Use $work-board-normal to burn down this workspace board with ordinary-cost routed workers.",
@@ -161,7 +161,7 @@
     "boundary": "For this one-off thirty-minute run, compare a short inspection with building a new model; do not assume a model pays back."
   },
   "work-programme": {
-    "positive": "Use $work-programme to advance the FS-GG Unified Development Roadmap after simplification.",
+    "positive": "Use $work-programme from this old handoff and resolve its canonical successor without replaying effects.",
     "indirect": "Resume the FS-GG programme using small pinned lane packets and a deterministic current frontier.",
     "incomplete": "Continue the FS-GG Unified Roadmap",
     "negative": "Create a personal skill for an unrelated project without starting FS-GG development.",

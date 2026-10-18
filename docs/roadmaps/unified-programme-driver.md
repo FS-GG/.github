@@ -1,10 +1,36 @@
 # Temporary Unified Roadmap driver
 
+
+## Canonical board coordinator migration — 2026-10-18
+
+The user selected existing `$work-board` as the canonical coordinator, replacing the active
+`$work-programme` workflow. This source migration remains owned by [.github#4641](https://github.com/FS-GG/.github/issues/4641);
+its whole integrated restart/adoption/recovery Done when remains open. Organization current selection
+uses accepted Project 3 binding4/schema2/inspection2 and the authenticated qualified installed caller;
+products retain their selected V2 binding and provenance. Roadmaps retain strategic scope and actual
+technical acceptance/history without duplicate scheduling, current-status or closure upkeep.
+
+Required source closure includes both skill mirrors and UI/discovery metadata, recovery/routine callers,
+producer registries/manifests, executable package staging and actual product materialization. Canonical
+work-board is normally discoverable; other explicit-only entrypoints retain their policy. Old programme
+paths are compatibility redirects/diagnostic shims, never a second planner. The unchanged organization
+inspection contract is derived into Drivers and checked against its Kit source digest for offline closure.
+External Roadmap field, roadmap-telemetry, persisted schemas/producer IDs and helper command basenames
+stay compatible. Qualified CLI 0.105 accepts the historical observation provenance path; the successor
+compiled grammar additionally accepts the new work-board path. Source/instruction loading changes no
+binding, enrollment or executing selector. Preserve all 439 inherited and 46 later original Unknown holds.
+
+Coherent 0.107 source preparation does not claim publication or installed adoption. Acceptance needs
+independent realistic programme-continuation/product-selection/blocked-lane/old-handoff journeys,
+required CI, exact reviewed/tested/delivered correspondence, later publication and actual selected
+absolute-path/runtime-policy discovery (including project overrides), plus separately qualified caller
+adoption where compiled support changes. Historical evidence below retains its original scope and times.
+
 Current open scope: [Unified Roadmap v3](2026-10-07-unified-development-roadmap-v3.md) and the separate
 [games roadmap](2026-10-07-games-development-roadmap.md). Older v2 links in retained packets and
 handoffs are archive lineage; recover surviving IDs against these indexes before selecting work.
 
-The repository-owned [work-programme](../../.agents/skills/work-programme/SKILL.md) skill replaces
+The repository-owned [work-board](../../.agents/skills/work-board/SKILL.md) skill replaces
 `work-unified-roadmap` for this programme. It keeps the parent focused on lane frontiers, integration
 and decisions; implementation owners retain detailed source investigations and evidence. It is temporary,
 does not change generated-workspace defaults, and needs no package release or permanent Host rollout.
@@ -67,7 +93,7 @@ integration and measured savings remain pending. Existing default delivery behav
 ### User-selected coordination default, 2026-10-05
 
 The user selected the delivered V2-CTX-01 improvements as the `$work-programme` default.
-The [skill](../../.agents/skills/work-programme/SKILL.md) now routes applicable work through typed
+The [skill](../../.agents/skills/work-board/SKILL.md) now routes applicable work through typed
 returns, compact deltas, bounded evidence views, mechanical reuse advice and native-check watchers.
 This supersedes the earlier default deferral for these components. Full integration and economic
 measurement remain open; operation authority, original attempts and unknown reservations are preserved.

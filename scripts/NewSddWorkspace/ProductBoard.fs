@@ -202,7 +202,15 @@ module ProductBoard =
                 | Some ids when Set.ofSeq found <> ids -> invalidOp "published product consumer payload is incomplete"
                 | _ -> ()
             stageSkills "registry/coordination-kit-skill-manifest.json" (Some(Set.ofList [ "check-board"; "cross-repo-coordination"; "initialize-sdd-workspace"; "intra-repo-parallel-work"; "pnext-item" ]))
-            stageSkills "registry/driver-skill-manifest.json" (Some(Set.ofList [ "work-board"; "work-board-normal"; "work-board-best"; "padd-item" ]))
+            // The published driver manifest owns the complete delivered instruction closure. Do not
+            // retain a hand-copied four-skill subset that drops recovery, Atlas or optional diagnostics.
+            let driverManifest = JsonNode.Parse(source "registry/driver-skill-manifest.json").AsObject()
+            let deliveredDrivers =
+                driverManifest.["skills"].AsArray()
+                |> Seq.filter (fun row -> row.["scope"].GetValue<string>() = "driver")
+                |> Seq.map (fun row -> row.["id"].GetValue<string>()) |> Set.ofSeq
+            if not (Set.contains "work-board" deliveredDrivers) then invalidOp "canonical coordinator is not delivered"
+            stageSkills "registry/driver-skill-manifest.json" (Some deliveredDrivers)
             staged.Add("scripts/fsgg-coord", source "scripts/fsgg-coord" |> bytes, true, false)
             let manifest = JsonNode.Parse(source "dist/dotnet/.config/dotnet-tools.json").AsObject()
             let selectedTool = manifest.["tools"].["fs.gg.coord.cli"].AsObject()

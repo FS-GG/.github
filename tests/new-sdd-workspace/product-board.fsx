@@ -125,13 +125,13 @@ try
     Directory.Delete(Path.Combine(root, ".git"), true)
     originCheck retainedAuthority true unborn |> refuse "retained Git disappearance"
     let kit = [ "check-board"; "cross-repo-coordination"; "initialize-sdd-workspace"; "intra-repo-parallel-work"; "pnext-item" ]
-    let drivers = [ "work-board"; "work-board-normal"; "work-board-best"; "padd-item" ]
+    let drivers = [ "atlas"; "work-roadmap"; "work-board"; "work-board-normal"; "work-board-best"; "padd-item"; "continue-from-handoff"; "stop-with-handoff"; "routine-decisions"; "agent-handoff"; "work-programme" ]
     let content = "fixture consumer\n"
     let manifest ids =
         let rows = ids |> List.map (fun id ->
             let leaves = if id = "work-board" then [ "SKILL.md"; "references/workspace-scope.md" ] else [ "SKILL.md" ]
             let files = leaves |> List.map (fun path -> sprintf "{\"path\":\"%s\",\"sha256\":\"%s\",\"executable\":false}" path (digest (Text.Encoding.UTF8.GetBytes content)))
-            sprintf "{\"id\":\"%s\",\"files\":[%s]}" id (String.concat "," files))
+            sprintf "{\"id\":\"%s\",\"scope\":\"driver\",\"files\":[%s]}" id (String.concat "," files))
         "{\"schemaVersion\":2,\"skills\":[" + String.concat "," rows + "]}"
     let version =
         (Reflection.Assembly.Load("fsgg-coord-engine").GetCustomAttributes(typeof<Reflection.AssemblyInformationalVersionAttribute>, false)

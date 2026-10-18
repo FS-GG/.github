@@ -141,6 +141,14 @@ def kit_lock(write):
     return ["registry/repos.lock"]
 
 
+def coordinator_contract(write):
+    generator = runpy.run_path(str(local("scripts/generate-driver-manifest")))
+    paths = [root + "/work-board/references/organization-v2-inspection.md" for root in generator["SKILL_ROOTS"]]
+    if generator["synchronize_coordinator_contract"]("write" if write else "check"):
+        return paths
+    return []
+
+
 def manifests(write):
     generator = runpy.run_path(str(local("scripts/generate-driver-manifest")))
     manifest_sources(generator)
@@ -212,15 +220,17 @@ def main():
     failed = False
     upstream = False
     generator = None
-    for family in ("public-atlas-seeds", "registry-projections", "kit-source-lock", "skill-manifests", "own-registry-rows"):
+    for family in ("public-atlas-seeds", "registry-projections", "coordinator-contract", "kit-source-lock", "skill-manifests", "own-registry-rows"):
         try:
-            dependent = upstream and family in ("kit-source-lock", "skill-manifests", "own-registry-rows")
+            dependent = upstream and family in ("coordinator-contract", "kit-source-lock", "skill-manifests", "own-registry-rows")
             write = args.write and not dependent
             if family == "public-atlas-seeds":
                 changed = seeds(write)
             elif family == "registry-projections":
                 code = projections(write)
                 changed = ["see generator diagnostics"] if code else []
+            elif family == "coordinator-contract":
+                changed = coordinator_contract(write)
             elif family == "kit-source-lock":
                 changed = kit_lock(write)
             elif family == "skill-manifests":
@@ -251,7 +261,7 @@ def main():
         if projections(True):
             failed = True
         if not failed:
-            if seeds(False) or kit_lock(False) or manifests(False)[0] or own_rows(False, generator) or projections(False):
+            if seeds(False) or coordinator_contract(False) or kit_lock(False) or manifests(False)[0] or own_rows(False, generator) or projections(False):
                 failed = True
         print("Review authored registry dates/changelogs before delivery.")
     print("preparation " + ("INCOMPLETE" if failed else "current") + "; full required CI remains mandatory")

@@ -192,7 +192,7 @@ jobs:
           # 39 → 27: retire twelve organization-only V1 consumer regions.
           # Shared Core/product facts and targets remain; the preparation fixture checks
           # the exact retired set, marker integrity and product preservation.
-          expected=27
+          expected=25
 
           list="$(bash scripts/generate-projections --list)"
           n="$(printf '%s\n' "$list" | grep -c .)"

@@ -299,7 +299,12 @@ module V2ProjectionSource =
                         String.Equals(repository, parts.[0] + "/" + parts.[1], StringComparison.OrdinalIgnoreCase))
                 else None
             let path = if parts.Length >= 5 then String.Join("/", parts |> Array.skip 4) else ""
-            let allowedPath = path.StartsWith("docs/", StringComparison.Ordinal) || path = ".agents/skills/work-programme/references/observation.md"
+            // Preserve the qualified historical provenance path; instruction migration alone does not
+            // upgrade an executing caller. The new path requires this successor's installed qualification.
+            let allowedPath =
+                path.StartsWith("docs/", StringComparison.Ordinal)
+                || path = ".agents/skills/work-programme/references/observation.md"
+                || path = ".agents/skills/work-board/references/observation.md"
             if repository.IsNone || parts.Length < 5 || parts.[2] <> "blob"
                || (parts.[3] <> "main" && not (hex parts.[3])) || not allowedPath
                || (segments |> Array.exists (fun part -> part = "" || part = "." || part = ".." || part.Contains(':')))

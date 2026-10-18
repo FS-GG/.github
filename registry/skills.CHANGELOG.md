@@ -1,5 +1,7 @@
 # Skill registry changelog
 
+
+- **2026-10-18** — SOURCE PREPARATION (.github#4641): make work-board the normally discoverable canonical organization/product V2 coordinator; deliver recovery/routine/historical-handoff closure in Drivers and reconcile actual product materialization. Retain external Roadmap/telemetry identities and old observation provenance compatibility. Coherent 0.107 source declares no publication, installed discovery, hierarchy adoption or selector/binding change.
 Reverse-chronological log of changes to [`skills.yml`](skills.yml) — the FS-GG org skill
 registry (the authoritative catalog of process + product skills, ADR-0017). Its human projection
 is [`../docs/registry/compatibility.md`](../docs/registry/compatibility.md) (§Versioned contracts →
