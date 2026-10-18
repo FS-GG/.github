@@ -1084,9 +1084,9 @@ gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
 path = root / ".claude/skills/drive-board/references/host-loop.md"
 text = path.read_text()
-if gate.CANONICAL + "\n\n" not in text:
-    raise SystemExit("fixture: drive-board host-loop does not carry the canonical dispatch step")
-path.write_text(text.replace(gate.CANONICAL + "\n\n", "", 1))
+if text.count(gate.CANONICAL) != 1:
+    raise SystemExit("fixture: drive-board host-loop must carry exactly one canonical dispatch step")
+path.write_text(text.replace(gate.CANONICAL, "", 1))
 PY
 expect_analyst_rejection "a host loop that never collects finding packets is rejected" \
   ".claude/skills/drive-board/references/host-loop.md carries the canonical analyst-dispatch step 0 time(s)"
