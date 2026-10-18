@@ -576,7 +576,7 @@ module WorkspaceTelemetryApplication =
             finally
                 Native.close descriptor |> ignore
 
-    let private atomicWrite directory name bytes =
+    let private atomicWriteWith (overwrite: bool) (directory: string) (name: string) (bytes: byte array) =
         let target = Path.Combine(directory, name)
         let temporary = Path.Combine(directory, "." + Guid.NewGuid().ToString("N") + ".tmp")
 
@@ -596,9 +596,11 @@ module WorkspaceTelemetryApplication =
         output.Write bytes
         output.Flush true
         output.Close()
-        File.Move(temporary, target, false)
+        File.Move(temporary, target, overwrite)
         flushDirectory directory
         target
+
+    let private atomicWrite directory name bytes = atomicWriteWith false directory name bytes
 
     let private credential (reference: string) (_: CancellationToken) =
         task {
@@ -614,30 +616,49 @@ module WorkspaceTelemetryApplication =
     let private passiveBatch (batch: TelemetryStore.Batch) =
         batch.Facts |> List.exists (fun fact -> fact.Kind = "provider-usage-observation/1" || (fact.Kind = "source" && fact.Identity.StartsWith("passive-source-", StringComparison.Ordinal)))
 
-    // Validate the complete bounded inventory before selecting a drain quantum. Taking an
-    // arbitrary filesystem prefix first can permanently hide the earliest passive predecessor.
-    let private selectReadyFiles (files: string array) =
+    // Only each passive correction chain's earliest pending head is eligible. Rotate the
+    // bounded eligible inventory with advisory metadata, never queued bytes or receipt state.
+    let private selectReadyFiles (after: string option) (files: string array) =
         if files.Length > 128 then Error [ "spool-overload" ]
         else
             try
-                let ranked =
+                let parsed =
                     files |> Array.map (fun file ->
                         let info = FileInfo file
                         if info.LinkTarget <> null || info.Length > int64 TelemetryReceipt.MaxEnvelopeBytes
                            || (not (OperatingSystem.IsWindows()) && File.GetUnixFileMode(file) <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite)) then
                             invalidOp "spool-invalid"
-                        let parsed = TelemetryReceipt.parse (File.ReadAllBytes file) |> Result.defaultWith (fun _ -> invalidOp "spool-invalid")
-                        let rank =
-                            if passiveBatch parsed.Batch then
-                                let cursor = Int64.Parse(parsed.Batch.Cursor, Globalization.CultureInfo.InvariantCulture)
+                        let envelope = TelemetryReceipt.parse (File.ReadAllBytes file) |> Result.defaultWith (fun _ -> invalidOp "spool-invalid")
+                        let chain =
+                            if passiveBatch envelope.Batch then
+                                let cursor = Int64.Parse(envelope.Batch.Cursor, Globalization.CultureInfo.InvariantCulture)
                                 if cursor < 1L then invalidOp "passive-sequence-invalid"
-                                0, parsed.Scope.Producer + ":" + parsed.Scope.Stream + ":" + parsed.Batch.SourceIdentity + ":" + parsed.Batch.Generation, cursor, Path.GetFileName file
-                            else 1, "", 0L, Path.GetFileName file
-                        rank, file)
-                Ok(ranked |> Array.sortBy fst |> Array.truncate 16 |> Array.map snd |> Array.toList)
+                                Some(envelope.Scope, envelope.Batch.SourceIdentity, envelope.Batch.Generation, cursor)
+                            else None
+                        file, chain)
+                let heads =
+                    parsed |> Array.choose (fun (file, chain) ->
+                        chain |> Option.map (fun (scope, source, generation, cursor) -> (scope, source, generation), (cursor, file)))
+                    |> Array.groupBy fst
+                    |> Array.map (fun (_, values) -> values |> Array.map snd |> Array.minBy fst |> snd)
+                    |> Set.ofArray
+                let eligible =
+                    parsed |> Array.choose (fun (file, chain) -> if chain.IsNone || heads.Contains file then Some file else None)
+                    |> Array.sortWith (fun left right -> StringComparer.Ordinal.Compare(Path.GetFileName left, Path.GetFileName right))
+                let later, earlier =
+                    eligible |> Array.partition (fun file -> after |> Option.forall (fun previous -> StringComparer.Ordinal.Compare(Path.GetFileName file, previous) > 0))
+                Ok(Array.append later earlier |> Array.truncate 16 |> Array.toList)
             with _ -> Error [ "spool-invalid" ]
 
-    let selectReadyFilesForTesting files = selectReadyFiles files
+    let selectReadyFilesForTesting files = selectReadyFiles None files
+
+    let private readDrainCursor (directory: string) =
+        // Invalid/missing advisory state resets visit order deterministically. It grants no authority.
+        match readPrivateDescriptor 256L (Path.Combine(directory, "drain-cursor")) with
+        | Ok bytes ->
+            let value = Encoding.UTF8.GetString bytes
+            if System.Text.RegularExpressions.Regex.IsMatch(value, @"\A[0-9a-f]{64}\.ready\z") then Some value else None
+        | Error _ -> None
 
     let private passivePredecessor (directory: string) (current: TelemetryReceipt.Envelope) =
         if not (passiveBatch current.Batch) then false
@@ -1105,11 +1126,16 @@ module WorkspaceTelemetryApplication =
                                     use deadline = new CancellationTokenSource(TimeSpan.FromSeconds 30.)
 
                                     let inventory = Directory.EnumerateFiles(directory, "*.ready") |> Seq.truncate 129 |> Seq.toArray
-                                    let selection = selectReadyFiles inventory
+                                    let selection = selectReadyFiles (readDrainCursor directory) inventory
                                     let results =
                                         match selection with
                                         | Error errors -> [ Error errors ]
-                                        | Ok files -> files |> List.map (remoteOneWith operations association endpoint reference deadline.Token)
+                                        | Ok files ->
+                                            // Advance before network: crashes/uncertain outcomes change visit order only.
+                                            match List.tryLast files with
+                                            | Some last -> atomicWriteWith true directory "drain-cursor" (Encoding.UTF8.GetBytes(Path.GetFileName last)) |> ignore
+                                            | None -> ()
+                                            files |> List.map (remoteOneWith operations association endpoint reference deadline.Token)
 
                                     match
                                         results

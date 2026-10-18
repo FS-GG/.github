@@ -696,7 +696,7 @@ module WorkspaceTelemetryApplicationTests =
             let selected = WorkspaceTelemetryApplication.selectReadyFilesForTesting scrambled |> Result.defaultWith (sprintf "%A" >> failwith)
             let cursors = selected |> List.map (fun file ->
                 (TelemetryReceipt.parse(File.ReadAllBytes file) |> Result.defaultWith (sprintf "%A" >> failwith)).Batch.Cursor |> Int32.Parse)
-            Assert.Equal<int>([1..16], cursors)
+            Assert.Equal<int>([1], cursors)
             let submitted = ResizeArray<int>()
             let received = System.Collections.Generic.HashSet<string>()
             let mutable phase = "durable"
@@ -723,7 +723,7 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Equal<int>([1], submitted)
             Assert.Equal(32, Directory.GetFiles(spool, "*.ready").Length)
             phase <- "applied"
-            for _ in 1..4 do drain () |> ignore
+            for _ in 1..32 do drain () |> ignore
             Assert.Empty(Directory.GetFiles(spool, "*.ready"))
             Assert.Equal<int>([1..32], submitted)
 
@@ -989,3 +989,55 @@ module WorkspaceTelemetryApplicationTests =
             let invalidCode, _, _ = run ([ "capture" ] @ args @ [ "--input"; selection; "--item"; "invented" ])
             Assert.Equal(1, invalidCode)
             Assert.Single(Directory.GetFiles(spool, "*.ready")) |> ignore
+
+    [<Fact>]
+    let ``passive blocked chains leave ordinary delivery fair across more than sixteen heads`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let config, spool = passiveRemoteConfig root
+            let stateRoot, scope, binding = WorkspaceTelemetryApplication.passiveProducer (Some config) (Some "FS-GG/.github") |> Result.defaultWith (sprintf "%A" >> failwith)
+            let home, path = passiveSource root "fair"
+            File.WriteAllText(path, "")
+            let enqueue = WorkspaceTelemetryApplication.tryEnqueueBound (Some config) (Some "FS-GG/.github") (Some scope.Producer) (Some binding)
+            for index in 1..32 do
+                File.AppendAllText(path, nativeRow "response-a" (int64 index) 0L)
+                SkillTelemetryAdapter.capturePassive stateRoot "owner" scope.Stream home [path] enqueue |> parseCapture |> ignore
+            let inventory = Directory.GetFiles(spool, "*.ready")
+            let first = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes inventory[0])
+            let original = first["payload"].ToJsonString()
+            let queue (name: string) (ordinary: bool) =
+                let payload = System.Text.Json.Nodes.JsonNode.Parse original
+                payload["ingestId"] <- System.Text.Json.Nodes.JsonValue.Create name
+                payload["sourceIdentity"] <- System.Text.Json.Nodes.JsonValue.Create name
+                payload["cursor"] <- System.Text.Json.Nodes.JsonValue.Create "1"
+                if ordinary then
+                    payload["eventCount"] <- System.Text.Json.Nodes.JsonValue.Create 1
+                    payload["events"] <- System.Text.Json.Nodes.JsonNode.Parse "[{\"kind\":\"diagnostic\",\"identity\":\"ordinary-status\",\"revision\":1,\"code\":\"fixture\",\"severity\":\"info\"}]"
+                enqueue (Encoding.UTF8.GetBytes(payload.ToJsonString())) |> Result.defaultWith (sprintf "%A" >> failwith) |> ignore
+            for index in 1..20 do queue ("independent-passive-" + string index) false
+            queue "ordinary-ready" true
+            let visited = System.Collections.Generic.HashSet<string>()
+            let mutable ordinaryApplied = false
+            let operations: WorkspaceTelemetryApplication.RemoteOperations =
+                { Lookup = fun _ batchId digest _ ->
+                    visited.Add batchId |> ignore
+                    if batchId = "ordinary-ready" then ordinaryApplied <- true
+                    System.Threading.Tasks.Task.FromResult(FS.GG.Telemetry.RemoteClient.Acknowledged
+                        { Scope = scope; BatchId = batchId; Digest = digest; Status = (if batchId = "ordinary-ready" then "applied" else "durably-received"); Code = None })
+                  Submit = fun _ _ _ -> failwith "durable lookup must never resubmit blocked heads" }
+            // Corrupt advisory metadata resets safely; it is neither queued intent nor authority.
+            let cursor = Path.Combine(spool, "drain-cursor")
+            File.WriteAllText(cursor, "invalid")
+            File.SetUnixFileMode(cursor, enum<UnixFileMode> 0o600)
+            let originals = Directory.GetFiles(spool, "*.ready") |> Array.map (fun file -> file, File.ReadAllBytes file) |> Map.ofArray
+            for _ in 1..8 do
+                WorkspaceTelemetryApplication.tryDrainWithOperationsForTesting (Some config) (Some "FS-GG/.github") operations |> ignore
+            Assert.True ordinaryApplied
+            Assert.Equal(22, visited.Count)
+            Assert.Equal(52, Directory.GetFiles(spool, "*.ready").Length)
+            for file in Directory.GetFiles(spool, "*.ready") do Assert.Equal<byte>(originals[file], File.ReadAllBytes file)
+            // Metadata reset/crash can alter visit order only; retained correction successors stay held.
+            File.Delete cursor
+            WorkspaceTelemetryApplication.tryDrainWithOperationsForTesting (Some config) (Some "FS-GG/.github") operations |> ignore
+            Assert.Equal(22, visited.Count)

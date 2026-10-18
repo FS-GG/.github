@@ -58,7 +58,7 @@ module WorkspaceTelemetryApplication =
         payload: byte array ->
             Result<string, string list>
 
-    /// Same bounded complete-inventory selection used by the actual drain, before its 16-file quantum.
+    /// Same bounded eligible-head selection used by the actual drain, initially without its advisory cursor.
     val selectReadyFilesForTesting: files: string array -> Result<string list, string list>
 
     val tryDrainWithOperationsForTesting:
