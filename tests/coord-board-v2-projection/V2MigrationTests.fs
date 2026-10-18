@@ -449,6 +449,8 @@ module V2MigrationTests =
         let desired: DesiredView =
             { Id = Some original.Id; Name = original.Name; Layout = original.Layout; Filter = ""; VisibleFieldIds = original.VisibleFieldIds }
         for mutated in [ { desired with Filter = "is:open" }; { desired with Layout = "BOARD_LAYOUT" };
+                         { desired with Name = "Selected deliveries"; Filter = "is:open" };
+                         { desired with Name = "Selected deliveries" };
                          { desired with VisibleFieldIds = [ scope.StatusFieldId ] } ] do
             Assert.True(Result.isError(prepare { selected with Views = [ mutated ] } current))
         Assert.True(Result.isOk(prepare { selected with Views = [ desired ] } current))

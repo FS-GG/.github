@@ -626,7 +626,11 @@ module V2Migration =
                                         || (scope.WorkLevel |> Option.bind _.FieldId |> Option.exists (fun id ->
                                             not (List.contains id current.VisibleFieldIds)
                                             && desired.VisibleFieldIds = current.VisibleFieldIds @ [ id ]))
+                                    let repurposedPopulationView =
+                                        current.Name.Equals("All items", StringComparison.OrdinalIgnoreCase)
+                                        && (desired.Name <> current.Name || desired.Filter <> "")
                                     if scope.WorkLevel.IsSome && (current.Layout <> desired.Layout || not preservedColumns
+                                       || repurposedPopulationView
                                        || (desired.Name.Equals("All items", StringComparison.OrdinalIgnoreCase) && desired.Filter <> "")) then
                                         invalid "successor view change must preserve layout/columns and unfiltered All items; only explicit Work level append is allowed"
                                     elif current.Name = desired.Name && current.Layout = desired.Layout
