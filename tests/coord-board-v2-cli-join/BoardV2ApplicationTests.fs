@@ -404,14 +404,40 @@ let ``actual CLI joins twenty enrolled issues to current native plan blobs acros
             let reference = if repo = "FS.GG.Templates" then String.replicate 40 "a" else "main"
             "synthetic-enrolled-" + string index, issue, $"https://github.com/fs-gg/{repo}/blob/{reference}/{path}#selected-outcome")
     let scope = repositories |> List.map (fun repo -> "FS-GG/" + repo) |> Set.ofList
-    let code, report, transport = inspectDeclaredPopulation rows scope ProgrammeFixture.unchanged
-    Assert.Equal(0, code)
-    Assert.Equal(20, report.GetProperty("items").GetArrayLength())
-    for item in report.GetProperty("items").EnumerateArray() do
-        Assert.Equal<string>("Current", item.GetProperty("sourceCurrentness").GetString())
-        let provenance = item.GetProperty("sourceRevision").GetString()
-        Assert.Contains("plan=FS-GG/", provenance)
-        Assert.Contains("#selected-outcome", provenance)
+    for includeLegacy in [ false; true ] do
+        let forms (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+            if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
+                response |> Result.map (fun (value: Transport.Response) ->
+                    let root = Text.Json.Nodes.JsonNode.Parse value.Body
+                    let issue = root.["data"].["repository"].["issue"]
+                    let index = issue.["number"].GetValue<int>() - 100
+                    let body =
+                        if includeLegacy && index > 17 then "Historical narrative without an accountable six-field record"
+                        elif index <= 16 then ProgrammeFixture.inlineOwnerBody.Replace("https://github.com/FS-GG/.github/pull/42", "None")
+                        else ProgrammeFixture.ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", "None")
+                    issue.["body"] <- Text.Json.Nodes.JsonValue.Create body
+                    { value with Body = root.ToJsonString() })
+            else response
+        let code, report, transport = inspectDeclaredPopulation rows scope forms
+        Assert.Equal(0, code)
+        Assert.Equal(20, report.GetProperty("items").GetArrayLength())
+        let items = report.GetProperty("items").EnumerateArray() |> Seq.toArray
+        let missing = items |> Array.filter (fun item -> item.GetProperty("accountableOwner").ValueKind = JsonValueKind.Null)
+        Assert.Equal((if includeLegacy then 3 else 0), missing.Length)
+        for item in items do
+            Assert.Equal<string>("Current", item.GetProperty("sourceCurrentness").GetString())
+            let provenance = item.GetProperty("sourceRevision").GetString()
+            Assert.Contains("plan=FS-GG/", provenance)
+            Assert.Contains("#selected-outcome", provenance)
+            if item.GetProperty("accountableOwner").ValueKind <> JsonValueKind.Null then
+                Assert.Equal("worker", item.GetProperty("accountableOwner").GetString())
+        let ownerDecisions =
+            report.GetProperty("selection").EnumerateArray()
+            |> Seq.filter (fun selection -> selection.GetProperty("decision").GetString() = "needs-decision")
+            |> Seq.toArray
+        Assert.Equal((if includeLegacy then 3 else 0), ownerDecisions.Length)
+        for selection in ownerDecisions do
+            Assert.Contains("accountable owner is missing", selection.GetProperty("reasons").ToString())
     let actualOwners = rows |> List.map (fun (_, issue, _) -> issue.Repository) |> Set.ofList
     Assert.Equal<Set<string>>(Set.ofList ownerRepositories, actualOwners)
     for repository in readOnlyRepositories do
@@ -698,7 +724,9 @@ let ``actual caller recovers Current deliverable only PR and retains mixed deliv
         [ ("closing and Current deliverable", ProgrammeFixture.unchanged);
           ("Current deliverable only", relatedOnly);
           ("historical merged plus current open", mixed);
-          ("mixed-case repository link", mixedCase) ]
+          ("mixed-case repository link", mixedCase);
+          ("complete inline six fields", currentDeliverableBody ProgrammeFixture.inlineOwnerBody);
+          ("fenced duplicate declarations are data", currentDeliverableBody ("````text\nOwner: forged\n## Owner\n~~~\n```\n````\n" + ProgrammeFixture.inlineOwnerBody)) ]
     for variant, change in variants do
         let context = observedContext change
         let _, report, transport = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson context)) change
@@ -720,6 +748,60 @@ let ``actual caller recovers Current deliverable only PR and retains mixed deliv
         let context = observedContext change
         let _, report, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson context)) change
         Assert.Equal("unknown", (inputSelections report.Value).[0].GetProperty("decision").GetString())
+
+[<Fact>]
+let ``actual caller refuses ambiguous six field forms without inventing owner or current deliverable`` () =
+    let inlineBody = ProgrammeFixture.inlineOwnerBody
+    let variants: (string * string) list =
+        [ ("duplicate inline owner", inlineBody + "\nOwner: forged");
+          ("missing inline field", inlineBody.Replace("Blocked on:", "Missing:"));
+          ("unknown inline label", inlineBody + "\nUnexpected field: extra");
+          ("mixed forms", ProgrammeFixture.ownerBody + "\nOwner: forged");
+          ("duplicate heading", ProgrammeFixture.ownerBody + "\n## Owner\nforged");
+          ("unknown heading", ProgrammeFixture.ownerBody + "\n## Unexpected field\nextra");
+          ("missing heading", ProgrammeFixture.ownerBody.Replace("## Owner", "## Unknown"));
+          ("fenced record only", "```\n" + inlineBody + "\n```");
+          ("fenced declaration cannot complete record", "```\nOwner: worker\n```\n" + inlineBody.Replace("Owner: worker", "")) ]
+    for name, body in variants do
+        let change = currentDeliverableBody body
+        let context = observedContext change
+        let _, report, transport = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson context)) change
+        let item = (report.Value.GetProperty("items")).[0]
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("accountableOwner").ValueKind)
+        let selection = (inputSelections report.Value).[0]
+        Assert.True(selection.GetProperty("decision").GetString() = "needs-decision", name)
+        Assert.Contains("accountable owner is missing", selection.GetProperty("reasons").ToString())
+        Assert.False(transport.Logged "https://github.com/FS-GG/.github/pull/42 Current deliverable native join")
+
+[<Fact>]
+let ``actual caller does not promote Next action history or changed inline body into current work`` () =
+    let withoutCurrent = ProgrammeFixture.inlineOwnerBody.Replace("Current deliverable: https://github.com/FS-GG/.github/pull/42", "Current deliverable: None")
+    let body = withoutCurrent.Replace("Next action: Current source", "Next action: https://github.com/FS-GG/.github/pull/42")
+    let noClosing (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+        let changed = currentDeliverableBody body request response
+        if request.Subject.EndsWith("closingIssuesReferences", StringComparison.Ordinal) then
+            changed |> Result.map (fun (value: Transport.Response) -> { value with Body = value.Body.Replace("I_outcome", "I_related").Replace("\"number\":4634", "\"number\":999") })
+        else changed
+    let native = V2ProjectionSource.inspectFixed (ProgrammeFixture.transport noClosing) (ProgrammeFixture.binding ()) None
+    Assert.Empty native.Items.Head.Deliverables
+    Assert.True(native.Items.Head.DeliverableGap.IsNone)
+    let current = ProgrammeFixture.context native
+    let known = (observedContext ProgrammeFixture.unchanged).Slices.Head
+    let context =
+        { current with Slices = [ { current.Slices.Head with Operation = ObserveExisting; PullRequest = known.PullRequest; PullRequestId = known.PullRequestId; PullRequestUpdatedAt = known.PullRequestUpdatedAt; Head = known.Head } ] }
+    let _, report, transport = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson context)) noClosing
+    Assert.Equal("needs-decision", (inputSelections report.Value).[0].GetProperty("decision").GetString())
+    Assert.False(transport.Logged "https://github.com/FS-GG/.github/pull/42 Current deliverable native join")
+    let mutable reads = 0
+    let changedBody (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+        if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
+            reads <- reads + 1
+            currentDeliverableBody (if reads = 1 then ProgrammeFixture.inlineOwnerBody else ProgrammeFixture.inlineOwnerBody.Replace("Owner: worker", "Owner: changed")) request response
+        else response
+    let code, changed, _ = inspectProgrammeInput None changedBody
+    Assert.Equal(3, code)
+    Assert.NotEqual<string>("Current", (changed.Value.GetProperty("items")).[0].GetProperty("sourceCurrentness").GetString())
+    Assert.Equal("unknown", (inputSelections changed.Value).[0].GetProperty("decision").GetString())
 
 [<Fact>]
 let ``actual native caller refuses conflicting open deliverables changed heads and native intake read gaps`` () =

@@ -69,6 +69,10 @@ module ProgrammeFixture =
     let private enrollment () = publicEnrollment (binding ())
 
     let ownerBody = "## Owner\n\nworker\n\n## Done when\n\nAccepted outcome\n\n## Current deliverable\n\nhttps://github.com/FS-GG/.github/pull/42\n\n## Next action\n\nCurrent source\n\n## Blocked on\n\nSee owning plan\n\n## Acceptance evidence\n\nNative links"
+    let inlineOwnerBody =
+        [ "Owner"; "Done when"; "Current deliverable"; "Next action"; "Blocked on"; "Acceptance evidence" ]
+        |> List.fold (fun (body: string) name -> body.Replace("## " + name + "\n\n", name + ": ")) ownerBody
+
 
     let private content = {| id = "I_outcome"; number = 4634; repository = {| nameWithOwner = "FS-GG/.github" |} |}
     let private prNode (variables: (string * Var) list) (field: string) (value: 'a) =

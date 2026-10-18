@@ -71,27 +71,57 @@ module V2ProjectionSource =
 
     let private readIssue transport issue = readIssueDetails transport issue |> Result.map fst
 
-    // Closed maintained six-field headings; prose remains observation, never authority.
-    let private recordFields (body: string) =
+    // Closed maintained six-field forms. Programme records select one complete form;
+    // prose/fenced examples never supply missing fields or a second declaration.
+    let private recordFields (allowInline: bool) (body: string) =
         let lines = FS.GG.Coord.Markdown.unfenced body |> List.toArray
         let names = Set.ofList [ "Owner"; "Done when"; "Current deliverable"; "Next action"; "Blocked on"; "Acceptance evidence" ]
         let headings =
             lines |> Array.indexed |> Array.choose (fun (index, line) ->
                 let value = line.Trim()
                 if value.StartsWith("##", StringComparison.Ordinal) then Some(index, value) else None)
-        let parsed = headings |> Array.map (fun (_, value) -> if value.StartsWith("## ", StringComparison.Ordinal) then value.Substring(3).Trim() else "")
-        if parsed.Length <> names.Count || Set.ofArray parsed <> names then None
-        else
-            parsed |> Array.mapi (fun index name ->
-                let start, _ = headings[index]
-                let finish = if index + 1 < headings.Length then fst headings[index + 1] else lines.Length
-                name, (lines[(start + 1)..(finish - 1)] |> String.concat "\n" |> _.Trim()))
-            |> Map.ofArray |> Some
+        let inlineFields =
+            lines |> Array.indexed |> Array.choose (fun (index, line) ->
+                let value = line.Trim()
+                names |> Seq.tryPick (fun name ->
+                    let prefix = name + ":"
+                    if value.StartsWith(prefix, StringComparison.Ordinal) then
+                        Some(index, name, value.Substring(prefix.Length).Trim())
+                    else None))
+        let complete (values: string array) = values.Length = names.Count && Set.ofArray values = names
+        if headings.Length > 0 then
+            let parsed = headings |> Array.map (fun (_, value) -> if value.StartsWith("## ", StringComparison.Ordinal) then value.Substring(3).Trim() else "")
+            if not (complete parsed) || (allowInline && inlineFields.Length > 0) then None
+            else
+                parsed |> Array.mapi (fun index name ->
+                    let start, _ = headings[index]
+                    let finish = if index + 1 < headings.Length then fst headings[index + 1] else lines.Length
+                    name, (lines[(start + 1)..(finish - 1)] |> String.concat "\n" |> _.Trim()))
+                |> Map.ofArray |> Some
+        elif allowInline then
+            let parsed = inlineFields |> Array.map (fun (_, name, _) -> name)
+            let unknownLabel =
+                lines |> Array.exists (fun line ->
+                    let value = line.Trim()
+                    let label = System.Text.RegularExpressions.Regex.Match(value, "^([A-Za-z][A-Za-z ]*):")
+                    label.Success && label.Groups[1].Value <> "https" && label.Groups[1].Value <> "http"
+                    && not (names.Contains label.Groups[1].Value))
+            if not (complete parsed) || unknownLabel then None
+            else
+                inlineFields |> Array.mapi (fun index (start, name, first) ->
+                    let finish =
+                        if index + 1 < inlineFields.Length then
+                            let next, _, _ = inlineFields[index + 1]
+                            next
+                        else lines.Length
+                    name, (Array.append [| first |] lines[(start + 1)..(finish - 1)] |> String.concat "\n" |> _.Trim()))
+                |> Map.ofArray |> Some
+        else None
 
-    let private ownerField (body: string) =
-        match recordFields body with
+    let private ownerField (binding: Binding) (body: string) =
+        match recordFields (binding.BindingVersion = 4) body with
         | Some fields -> Map.tryFind "Owner" fields |> Option.filter (String.IsNullOrWhiteSpace >> not)
-        | None when body.Contains("##", StringComparison.Ordinal) -> None
+        | None when binding.BindingVersion = 4 || body.Contains("##", StringComparison.Ordinal) -> None
         | None ->
             let values =
                 FS.GG.Coord.Markdown.unfenced body |> List.choose (fun line ->
@@ -100,7 +130,7 @@ module V2ProjectionSource =
             match values with [ owner ] when not (String.IsNullOrWhiteSpace owner) -> Some owner | _ -> None
 
     let private deliverableField (binding: Binding) (body: string) =
-        match recordFields body |> Option.bind (Map.tryFind "Current deliverable") with
+        match recordFields (binding.BindingVersion = 4) body |> Option.bind (Map.tryFind "Current deliverable") with
         | None -> [], Some "Native Current deliverable field is missing or malformed; absence of closing references does not establish no existing work"
         | Some "None" -> [], None
         | Some value ->
@@ -365,7 +395,7 @@ module V2ProjectionSource =
             match readIssueDetails transport row.Issue with
             | Error error -> Error error
             | Ok(observation, body) ->
-                owner <- ownerField body
+                owner <- ownerField binding body
                 let references, gap = deliverableField binding body
                 deliverables <- references
                 deliverableGap <- gap
