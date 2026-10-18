@@ -130,18 +130,19 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.105.0 — Complete V2 migration visibility and bounded ordinary publication.
+    <PackageReleaseNotes>0.106.0 — Capture partial native usage independently of receiver readiness.
 
-The packaged V2 migration route reads complete owned memberships and reconciles the selected
-state through inspect, refresh and selection. Programme enrollment authenticates a salted public
-commitment to a bounded private payload; offline pair preparation preserves private identities.
-Current work retains non-PR deliverables and requires fresh action-specific reconciliation.
-The ordinary publisher separates pending-only
-visibility probes from full semantic transitions, freezes generated asset bytes, and refreshes
-native, source, protection and journal guards before effects and final completion. Current source
-selects one 0.105/0.104/journal23 composition. Original .103 Unknown, consumed .104 continuation
-and all inherited reservations remain unchanged. Publication, installed update and Project3
-migration recovery or consumer acceptance require their separate qualification and admission.
+Capture-only workspace setup and bounded passive capture/report retain available native usage
+observations without inventing complete token attribution, dispatch identity or receiver health.
+Strict native decoding, correction lineage and bounded pending storage preserve unknowns; later
+upload still requires the existing credential, enrollment and durable receiver acceptance gates.
+Independent pending heads use an advisory per-attempt drain cursor while numeric successors remain
+behind unresolved predecessors. Compatible Telemetry Host publication and adoption remain separate.
+
+The coherent source selects one 0.106/0.105/journal24 composition through the existing candidate
+and publisher rails. This source version does not claim package publication, installed adoption,
+receiver deployment or a new Project3 binding. Published and installed 0.105 identities, original
+.103 Unknown, consumed .104 continuation and all inherited reservations remain unchanged.
 
 $(FsggStandingAdvisories)
 

@@ -103,8 +103,9 @@ operational acceptance, custody, enrollment and recovery. One owner carries ordi
 repair, PR updates and delivery through existing admission in an isolated worktree; one integrator owns
 shared surfaces. Existing authorization persists. Escalate changed scope/authority, unresolved user
 choices, conflicts and uncertain effects. Ordinary milestones require no extra parent approval or
-repeated parent file-by-file review. Explicitly activate an idle designated reviewer when the exact
-candidate is ready, supplying its head and review obligations; an assignment alone is not a review.
+repeated parent file-by-file review. Explicitly activate an idle or completed designated owner or
+reviewer when work is ready, supplying its head and obligations. Where messages do not start turns, use a turn-starting follow-up
+and confirm active status; a sent assignment alone establishes neither ongoing work nor a review.
 Preserve PR-body admission metadata through the canonical delivery tooling whenever the body changes;
 until automatic preservation is qualified, verify the native metadata and repair through that route
 before delivery. Keep one active implementation PR per coherent change. Open a lane
