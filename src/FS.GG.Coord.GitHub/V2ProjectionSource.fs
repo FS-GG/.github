@@ -923,7 +923,7 @@ module V2ProjectionSource =
                                       if fieldValue "Acceptance evidence" |> Option.isNone then "Acceptance evidence is missing"
                                       if expected.State = "CLOSED" && reason = Some "COMPLETED" && intent.Status <> Some "Done" then "Completed native issue and human Status disagree"
                                       if intent.Status = Some "Done" then "Human Status Done has no scoped acceptance qualification"
-                                      if level = "Outcome" && expected.State = "CLOSED" && (children |> List.exists (fun child -> child.State = "OPEN")) then "Completed parent has open child scope; required-scope applicability remains unverified" ] }
+                                      if level = "Outcome" && expected.State = "CLOSED" && reason = Some "COMPLETED" && (children |> List.exists (fun child -> child.State = "OPEN")) then "Completed parent has open child scope; required-scope applicability remains unverified" ] }
                 | Error error, _ | _, Error error -> absent (Errors.explain error)
                 | _ -> absent "Native hierarchy contains duplicate identities"
             with _ -> absent "Native hierarchy/classification facts are unreadable"

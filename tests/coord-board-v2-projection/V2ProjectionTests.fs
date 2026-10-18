@@ -1598,6 +1598,30 @@ let ``done and completed parent discrepancies never use child count as acceptanc
 
 
 [<Fact>]
+let ``not planned or duplicate parent is never described as completed by open children`` () =
+    let selected = ProgrammeFixture.successorBinding ()
+    for reason in ["NOT_PLANNED"; "DUPLICATE"] do
+        let change (request: Transport.Request) response =
+            response |> Result.map (fun (value: Transport.Response) ->
+                if request.Subject.EndsWith("native observation", StringComparison.Ordinal) || request.Subject = "selected native work hierarchy" then
+                    let root = System.Text.Json.Nodes.JsonNode.Parse value.Body
+                    let native = root.["data"].["repository"].["issue"]
+                    native.["state"] <- System.Text.Json.Nodes.JsonValue.Create "CLOSED"
+                    if request.Subject = "selected native work hierarchy" then
+                        native.["stateReason"] <- System.Text.Json.Nodes.JsonValue.Create reason
+                        native.["closedAt"] <- System.Text.Json.Nodes.JsonValue.Create "2026-10-17T12:00:00Z"
+                    {value with Body = root.ToJsonString()}
+                else value)
+        let reads = ProgrammeFixture.successorTransport selected (Some "Outcome") change
+        let report = V2ProjectionSource.inspectFixed reads selected None
+        let work = report.Items.Head.WorkItem.Value
+        Assert.True(work.Complete, string work.Gap)
+        Assert.Equal(Some reason, work.StateReason)
+        Assert.DoesNotContain(work.ClosureGaps, fun gap -> gap.StartsWith("Completed parent", StringComparison.Ordinal))
+        Assert.Contains("Scoped owner acceptance and applicability of all parent requirements are unverified", work.ClosureGaps)
+        Assert.Empty reads.Mutations
+
+[<Fact>]
 let ``existing delivery PR observation retains exact owner and consumes no new capacity`` () =
     let selected = ProgrammeFixture.successorBinding ()
     let nativePr = ProgrammeFixture.transport ProgrammeFixture.unchanged
