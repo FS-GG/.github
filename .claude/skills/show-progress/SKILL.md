@@ -39,15 +39,18 @@ the completion unless it contains a blocking exception or the user asks for stat
 An ordinary chat question about progress stays in the current conversation; do not
 spawn a worker or save a report unless the user invokes reporting or requests saving.
 
-## Prepared organization consumer
+## Coordinated organization consumer
 
-Read the [organization contract](../check-board/references/organization-v2-inspection.md). This source
-prepares .9/.11 consumption and grants no installed/live switch, schema mutation or manual v3 status
-retirement. After accepted cutover, report the same exact v4 enrollment/inspection2, six-field owner
-records, per-slice/native PR facts and actual acceptance used by programme/recovery. Keep human
-planning, observation health, advisory selection and acceptance distinct. Reuse existing observations;
-do not launch an inspection, test or other workload solely to make a report look fresh. State its
-original time, coverage and any scoped gaps; never renew old evidence or infer Done from a merged slice.
+Read the [organization contract](../check-board/references/organization-v2-inspection.md) and the
+[programme consumer boundary](../work-programme/SKILL.md#coordinated-v2-programme-consumer).
+Root must accept actual coordinated programme, board-driver, recovery and progress instruction loads
+before this route replaces manual v3 current-status upkeep. Source delivery or CLI installation alone
+is not activation. After that acceptance, report the same exact binding-v4/schema2/inspection2,
+enrolled six-field owning issues, per-slice/native PR facts and acceptance used by programme/recovery.
+The roadmap supplies strategic scope and plan links, not another live status table. Before acceptance,
+retain the existing protected boundary. Keep human planning, read health, advisory selection and
+accepted outcomes distinct. Reuse necessary existing observations with their original time, coverage
+and gaps; no reporting-only inspection, test, or other evidence workload is introduced.
 
 ## Scope and evidence
 
@@ -68,12 +71,14 @@ original time, coverage and any scoped gaps; never renew old evidence or infer D
    may be stale: say which source was used. Beyond the dedicated reporting subagent,
    do not launch tests, jobs, releases or workers to produce status evidence, and do not
    interrupt an active owner for reporting alone.
-4. Find the newest earlier progress report by its embedded UTC cutoff, not filesystem
+4. After accepted cutover, compare formal outcome closure from owning-plan/native acceptance; do
+   not count human Done or Observation Verified as accepted completion.
+5. Find the newest earlier progress report by its embedded UTC cutoff, not filesystem
    mtime. For a 24-hour comparison use evidence at or before the window start; separately
    show change since the previous report when its cutoff differs. A later observation
    cannot silently stand in for the earlier baseline. Reconstruct from contemporaneous
    handoffs/native events only where supported; otherwise mark the delta unavailable.
-5. Distinguish observed facts, owner reports and analyst estimates. Retain failures,
+6. Distinguish observed facts, owner reports and analyst estimates. Retain failures,
    pending checks, unknown effects and unobserved consumers. Missing evidence means
    unknown, not zero or unchanged. Newer evidence discovered during writing either gets
    excluded after the cutoff or causes one explicit cutoff/window refresh for the report.
@@ -170,7 +175,9 @@ specific uncertainty. An explicit shared unknown applies to each named item; sil
 not. Preserve every applicable estimation field through a row, shared statement or linked
 exception. Metrics require native observations, a defined denominator and coverage; omit
 unsupported ratios and mark missing measurements unknown. Report bytes alone prove no
-cost or effort saving. Retain the development process recommendations verdict once;
+cost or effort saving. Include a visible complications and churn summary once, using the main
+rows and changed exceptions without repeating unchanged history. Retain the development process
+recommendations verdict once;
 link any shared cause instead of repeating it in item details.
 
 Save as `docs/reports/progressReports/YYYY-MM-DD-HHMMSSZ-unified-v3-progress.md`, using the

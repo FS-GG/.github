@@ -1,13 +1,14 @@
 # Estimation method — show-progress/2
 
-The .9/.11 programme consumer is prepared only under the
-[organization contract](../../check-board/references/organization-v2-inspection.md). After accepted
-cutover, use the same binding-v4/inspection2, six-field owning issue, current slice/native PR and
-acceptance evidence as execution/recovery, with actual observation times and coverage. Human Status
-and Verified are neither accepted completion nor resource capacity. Preserve partial milestones,
-uncertain effects and unselected/historical discrepancies. Until cutover retain the existing manual
-v3 current-status boundary; reporting does not activate or mutate the board.
-
+The coordinated .11 consumer follows the
+[organization contract](../../check-board/references/organization-v2-inspection.md) and
+[programme boundary](../../work-programme/SKILL.md#coordinated-v2-programme-consumer).
+After root accepts actual coordinated instruction loads, use the same binding-v4/schema2/inspection2,
+six-field owning issue, current slice/native PR and native/owning acceptance evidence as execution and
+recovery, with actual observation times and coverage. The v3 catalogue is strategic navigation, not a
+manual status or closure denominator. Before acceptance retain the existing protected boundary.
+Human Status and Verified are neither accepted completion nor resource capacity. Preserve partial
+milestones, original effects and unselected/historical discrepancies; reporting grants no mutation.
 
 This is a lightweight reporting method, not a replacement for owning plans or an earned
 value management system. The percentages and forecasts describe explicitly named
@@ -43,7 +44,7 @@ Missing telemetry is unknown, never zero. Do not start extra workloads for repor
 
 Report three different quantities only when their inputs exist:
 
-1. **Formal outcome closure:** accepted Done rows / in-scope rows. This is a count, not
+1. **Formal outcome closure:** natively accepted owning outcomes / declared in-scope outcomes. This is a count, not
    an effort-weighted completion percentage. Show additions/removals separately.
 2. **Acceptance readiness:** credit for evidenced acceptance units within each item's
    fixed scope. Prefer the owner's existing breakdown and planned relative effort weights.

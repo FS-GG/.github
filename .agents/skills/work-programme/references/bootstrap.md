@@ -1,9 +1,9 @@
 # Delegated bootstrap and restart
 
-For the prepared .9/.11 programme successor, follow the
+For the coordinated .11 programme consumer, follow the
 [organization contract](../../check-board/references/organization-v2-inspection.md) and the parent
-[prepared consumer boundary](../SKILL.md#prepared-v2-programme-consumer). Source preparation does not
-activate it. After accepted cutover, recover exact outcome/slice/attempt, accountable owner, existing
+[consumer boundary](../SKILL.md#coordinated-v2-programme-consumer). Root acceptance of actual
+coordinated instruction loads activates it; source delivery alone does not. After that acceptance, recover exact outcome/slice/attempt, accountable owner, existing
 PR/head, native issue/body/current-plan joins and original reservations from their actual records.
 Use the existing integrator's one-invocation stdin/native composition and fresh execution-side recheck;
 this reference's helper artifacts remain optional diagnostics, never a second current-state ledger,
