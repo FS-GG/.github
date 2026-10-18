@@ -524,10 +524,98 @@ let organizationMain (args: string array) =
         0
     with error -> eprintfn "board-v2 import refused: %s" error.Message; 2
 
+// Current programme preparation is offline. Enrollment parsing and commitment construction
+// belong to the same maintained API as runtime authentication, not to a second tool decoder.
+let private programmeInputLimit = 256 * 1024
+let private programmePayloadLimit = 128 * 1024
+
+let private programmePath (path: string) =
+    let full = Path.GetFullPath path
+    let mutable current = FileInfo(full) :> FileSystemInfo
+    while not (isNull current) do
+        // Refuse links in the supplied custody path. This is an ordinary local custody
+        // check, not a sandbox against another process replacing parent directories.
+        if current.Exists then
+            require ((current.Attributes &&& FileAttributes.ReparsePoint) = enum<FileAttributes> 0) "programme path refused"
+        current <- match current with
+                   | :? FileInfo as file -> file.Directory :> FileSystemInfo
+                   | :? DirectoryInfo as directory -> directory.Parent :> FileSystemInfo
+                   | _ -> null
+    full
+
+let private programmeRead limit (path: string) =
+    let options = FileStreamOptions(Mode = FileMode.Open, Access = FileAccess.Read, Share = FileShare.Read,
+                                    Options = FileOptions.SequentialScan)
+    use stream = new FileStream(path, options)
+    // Length and all reads use this same handle. No path-stat/read-all allocation race;
+    // growth and truncation refuse, including a byte beyond the selected bound.
+    let length = stream.Length
+    require (length > 0L && length <= int64 limit) "programme input bound"
+    let bytes = Array.zeroCreate<byte> (int length)
+    stream.ReadExactly bytes
+    require (stream.ReadByte() = -1 && stream.Length = length) "programme input changed"
+    bytes
+
+let private programmeWrite (path: string) (bytes: byte array) =
+    let options = FileStreamOptions(Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None,
+                                    Options = FileOptions.WriteThrough)
+    if not (OperatingSystem.IsWindows()) then
+        options.UnixCreateMode <- UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+    use stream = new FileStream(path, options)
+    stream.Write bytes
+    stream.Flush(true)
+
+let private programmeRetained (path: string) (expected: byte array) =
+    if not (OperatingSystem.IsWindows()) then
+        require (File.GetUnixFileMode(path) = (UnixFileMode.UserRead ||| UnixFileMode.UserWrite)) "programme output custody"
+    let actual = programmeRead programmeInputLimit path
+    require (actual.AsSpan().SequenceEqual(expected.AsSpan())) "programme output readback"
+
+let private programmeMain (args: string array) =
+    // No caught exception text, supplied path, payload, nonce or native identity is printed.
+    // A partially created pair is retained on failure; never delete, retry, reseed or overwrite.
+    try
+        // This route currently qualifies restrictive Unix creation, not ambient Windows ACLs.
+        require (not (OperatingSystem.IsWindows())) "programme private creation unavailable"
+        require (args.Length = 9 && args.[1] = "--binding-template" && args.[3] = "--payload"
+                 && args.[5] = "--private-output" && args.[7] = "--public-output") "programme arguments"
+        let paths = [ args.[2]; args.[4]; args.[6]; args.[8] ] |> List.map programmePath
+        let comparison = if OperatingSystem.IsWindows() then StringComparer.OrdinalIgnoreCase else StringComparer.Ordinal
+        require ((Collections.Generic.HashSet<string>(paths, comparison)).Count = paths.Length) "programme paths overlap"
+        let templatePath, payloadPath, privatePath, publicPath = paths.[0], paths.[1], paths.[2], paths.[3]
+        // Reject existing outputs before nonce generation. CreateNew also protects a collision
+        // arriving after this check. Failed creation retains every original and partial output.
+        for path in [ privatePath; publicPath ] do
+            require (not (File.Exists path || Directory.Exists path)) "programme output exists"
+        let template = programmeRead programmeInputLimit templatePath |> Text.UTF8Encoding(false, true).GetString
+        let payload = programmeRead programmePayloadLimit payloadPath
+        match FS.GG.Coord.GitHub.V2Projection.prepareProgrammeBinding template payload
+                  (fun () -> Security.Cryptography.RandomNumberGenerator.GetBytes(32)) with
+        | Error _ -> invalidOp "programme validation"
+        | Ok (privateJson, publicJson) ->
+            let privateBytes = Text.UTF8Encoding(false, true).GetBytes privateJson
+            let publicBytes = Text.UTF8Encoding(false, true).GetBytes publicJson
+            require (privateBytes.Length > 0 && privateBytes.Length <= programmeInputLimit
+                     && publicBytes.Length > 0 && publicBytes.Length <= programmeInputLimit) "programme output bound"
+            programmeWrite privatePath privateBytes
+            programmeRetained privatePath privateBytes
+            programmeWrite publicPath publicBytes
+            programmeRetained publicPath publicBytes
+            // Independently reread both after the complete pair has been retained.
+            programmeRetained privatePath privateBytes
+            programmeRetained publicPath publicBytes
+            printfn "programme enrollment pair prepared; offline only"
+            0
+    with _ ->
+        eprintfn "board-v2 programme preparation refused"
+        2
+
 [<EntryPoint>]
 let main args =
     try
-        if args.Length = 2 && args.[1] = "--existing-product" then
+        if args.Length > 0 && args.[0] = "prepare-programme" then
+            programmeMain args
+        elif args.Length = 2 && args.[1] = "--existing-product" then
             let result = existingProduct args.[0]
             printfn "%s" (result.ToJsonString())
             0
