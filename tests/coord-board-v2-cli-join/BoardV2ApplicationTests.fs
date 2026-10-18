@@ -438,30 +438,30 @@ let ``actual CLI joins twenty enrolled issues to current native plan blobs acros
         Assert.Equal((if includeLegacy then 3 else 0), ownerDecisions.Length)
         for selection in ownerDecisions do
             Assert.Contains("accountable owner is missing", selection.GetProperty("reasons").ToString())
-    let actualOwners = rows |> List.map (fun (_, issue, _) -> issue.Repository) |> Set.ofList
-    Assert.Equal<Set<string>>(Set.ofList ownerRepositories, actualOwners)
-    for repository in readOnlyRepositories do
-        Assert.False(actualOwners.Contains repository)
-        Assert.Contains<Transport.Request>(transport, fun (request: Transport.Request) -> request.Subject = $"FS-GG/{repository} open PR inventory")
-    for repository in ownerRepositories do
-        let permissionPath = $"repos/FS-GG/{repository}/collaborators/author/permission"
-        let decidingReads = transport |> List.filter (fun (request: Transport.Request) -> request.Method = "GET" && request.Path = permissionPath)
-        Assert.True(decidingReads.Length >= 2, repository)
-    let planReads = transport |> List.filter (fun (request: Transport.Request) -> request.Subject = "enrolled native owning plan")
-    Assert.NotEmpty planReads
-    Assert.True(transport.Length < 500)
-    for request in planReads do
-        match request.Body with
-        | Transport.Query(document, variables) when document.Contains("object(expression:") ->
-            let expression = variables |> List.pick (function "expression", Transport.VString value -> Some value | _ -> None)
-            Assert.DoesNotContain("main:", expression)
-            let repo = variables |> List.pick (function "repo", Transport.VString value -> Some value | _ -> None)
-            let commit = if repo = "FS.GG.Templates" then String.replicate 40 "a" else ProgrammeFixture.head
-            Assert.StartsWith(commit + ":", expression)
-        | Transport.Query(document, variables) when document.Contains("qualifiedName:") ->
-            let repo = variables |> List.pick (function "repo", Transport.VString value -> Some value | _ -> None)
-            Assert.NotEqual<string>("FS.GG.Templates", repo)
-        | _ -> ()
+        let actualOwners = rows |> List.map (fun (_, issue, _) -> issue.Repository) |> Set.ofList
+        Assert.Equal<Set<string>>(Set.ofList ownerRepositories, actualOwners)
+        for repository in readOnlyRepositories do
+            Assert.False(actualOwners.Contains repository)
+            Assert.Contains<Transport.Request>(transport, fun (request: Transport.Request) -> request.Subject = $"FS-GG/{repository} open PR inventory")
+        for repository in ownerRepositories do
+            let permissionPath = $"repos/FS-GG/{repository}/collaborators/author/permission"
+            let decidingReads = transport |> List.filter (fun (request: Transport.Request) -> request.Method = "GET" && request.Path = permissionPath)
+            Assert.True(decidingReads.Length >= 2, repository)
+        let planReads = transport |> List.filter (fun (request: Transport.Request) -> request.Subject = "enrolled native owning plan")
+        Assert.NotEmpty planReads
+        Assert.True(transport.Length < 500)
+        for request in planReads do
+            match request.Body with
+            | Transport.Query(document, variables) when document.Contains("object(expression:") ->
+                let expression = variables |> List.pick (function "expression", Transport.VString value -> Some value | _ -> None)
+                Assert.DoesNotContain("main:", expression)
+                let repo = variables |> List.pick (function "repo", Transport.VString value -> Some value | _ -> None)
+                let commit = if repo = "FS.GG.Templates" then String.replicate 40 "a" else ProgrammeFixture.head
+                Assert.StartsWith(commit + ":", expression)
+            | Transport.Query(document, variables) when document.Contains("qualifiedName:") ->
+                let repo = variables |> List.pick (function "repo", Transport.VString value -> Some value | _ -> None)
+                Assert.NotEqual<string>("FS.GG.Templates", repo)
+            | _ -> ()
 
 [<Fact>]
 let ``actual CLI enrolled main plan content advances without enrollment republish but mid-snapshot drift refuses`` () =
