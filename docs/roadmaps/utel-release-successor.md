@@ -2,6 +2,22 @@
 
 Owner: `FS-GG/.github` release and telemetry producer. Main/SystemAdmin owns installed-host adoption. This item is a separate, additive publication route; it does not reopen the accepted GS2-08.9 legacy routes or authorize `OpenV2`.
 
+## Selected current source: 0.105 after accepted 0.104 — 2026-10-18
+
+The selected source composition is **0.105.0**, with predecessor **0.104.0** and the
+closed journal reference `refs/heads/fsgg/v2/journal/release/utel-rel-23`. This joins the
+ordinary publisher observation repair and the V2 migration visibility repair in one source
+qualification. Published inventory, the canonical installed-tool pin and the qualified developer
+installation remain **0.104.0**. No 0.105 candidate, publication, installation or migration operation
+is selected by this source decision. The dated release selections below retain their original
+identities and grants; they are not defaults for the new composition.
+
+The original 0.104 candidate source is `912eba8bbd707dabcbc5011d508c479109010b71`.
+The later publication controller is not its package source. A new 0.105 candidate must prove the
+selected 0.104 predecessor and its immutable source identity, then qualify its own exact archive.
+The original .103 Unknown, installed suspension, consumed .104 continuation and inherited reservations
+remain unchanged. The 0.105 ordinary route cannot borrow the .104 continuation claim or its grant.
+
 ## Accepted .104 publication — 2026-10-18
 
 Root accepted the original [continuation `39080633461/attempt1`](https://github.com/FS-GG/.github/actions/runs/39080633461)
@@ -34,9 +50,9 @@ recorded; no separate remote-erasure or descendant-settlement proof is inferred.
 
 Registry publication/tag now name **0.104.0**. The earlier registry deferral below is historical:
 the accepted publication releases that hold and permits the deferred Game 0.5 inventory reconciliation.
-Game's immutable published producer and installed qualifier stay distinct from its newer unpublished
-0.6 source. Installed-host update, private-caller acceptance, Project3 migration/UI and consumer adoption
-remain separate. Original **.103 Unknown**, the 439 holds and every inherited reservation remain unresolved.
+Game's separately accepted 0.6 publication is now projected in the same source delivery; its last
+accepted installed qualifier remains the immutable 0.5 profile. Neither transfers to Coordination
+installed-host, private-caller, Project3 migration/UI or consumer acceptance. Original **.103 Unknown**, the 439 holds and every inherited reservation remain unresolved.
 
 ### Canonical tool pin correction after durable closure
 
@@ -1697,3 +1713,81 @@ so its original failure must not be relabelled as complete publication or hidden
 The continuation helper changes none of that workflow's existing path subjects; this scope separation
 changes no checker, selector or required context. Every check required by the final diff must pass
 normally. No .104 inventory flip, promotion, updater or adoption is inferred.
+
+
+### Selected ordinary forward policy for the current 0.105 composition
+
+Keep one closed current binding, rather than a caller-selected version, journal or policy registry.
+The existing original .103 selectors must resolve their fixed original version, predecessor and
+journal before the current default. Historical .101/.102 selections, the .103 suspension and the
+consumed .104 continuation remain bound to their original source and journal identities. Merely
+advancing the coherent scalar would not establish this composition: the current journal cache,
+committed-intent provider fence, candidate and predecessor checks must select 0.105 explicitly.
+
+The ordinary caller separates full transition admission from pending visibility. A validated pending
+witness permits only bounded read-only observation of its exact pending effect. It cannot settle an
+effect, grant a send, classify an uncertain outcome as NoSend or carry authority across a wait.
+Potential visibility requires complete semantic prefix and current-effect verification, followed by
+fresh candidate, native run/source, protection and journal admission before settlement or the next
+dispatch. Final completion rereads the journal and verifies the complete sixteen-effect result.
+Unknown sender outcomes checkpoint without polling to manufacture success or resending.
+
+Retain the same original **1500 Authority entries**, quota floor **1800** and **2700-second** inner
+deadline captured before caller startup. The current forward policy permits at most 135 visibility
+probes, waits five seconds only on actual absence, and retains the existing finite full-transition
+bound. These are distinct counters; publisher and feed acquisitions remain visible separately.
+The existing sixty-minute hard job includes setup, issuer, candidate acquisition and cleanup outside
+the inner controller. An inner check cannot interrupt an already blocking child. No limit renewal,
+request-cap increase, new journal schema or additional native operation follows from this repair.
+
+The journal may reuse only previously validated immutable physical-OID history within the same
+bounded invocation. Opening and closing main references, current policy, source/native admission and
+mutation sandwiches remain fresh. The 0.105 provider checks the exact committed intent through the
+same current journal reader immediately before its delegate. This current fence is independent of
+the .104 release-specific suspension and consumed claim.
+
+Prepare and freeze the exact ordinary channel and manifest bytes before upload. Matching upload
+hashes alone are insufficient: subsequent owned semantic readback, promotion and final verification
+must compare remote raw bytes with this invocation's frozen payload. Valid-shaped timestamp or state
+changes cannot settle the owned send. Recovered historical intents without an owned payload retain
+their existing semantic scope; this change grants no new recovery or replay permission.
+
+The final unflagged default 0.105 MAIN calibration completes all sixteen effects at generation33
+with **1222 Authority entries** (958 GET,231 POST,33 PATCH),561 separate publisher entries and198
+feed acquisitions. The original ninety-two extra absent-observation shape remains1222 Authority
+entries with108 probes and460 virtual seconds; the135-probe complete case remains1222 with595
+virtual seconds. Concurrent synthetic unrelated history reaches1226 Authority entries, with four
+external-actor calls accounted separately. The1500 ceiling is unchanged; these finite synthetic
+history shapes do not establish arbitrary-store or native-latency headroom. The final seven suites
+include198 PASS and2 explicit private skips of200 recovery cases, not200 passed. The earlier
+owned frozen-byte readback defect and stale historical/default live-test failure remain retained.
+
+The joined 0.105 F# closure also compiled with zero warnings/errors and passed fourteen migration
+unit plus thirty-four actual-caller tests. The delayed full seventy-seven-effect fixture retains
+468 apply requests plus four preparation requests and77 virtual seconds. This is source integration
+qualification, not a packaged or installed 0.105 identity, measured HTTP latency or live migration.
+
+The initial 1498-entry fixture was a cap PASS rejected for its two-entry margin, not exhaustion.
+The later 1400-entry result exercised the historical .104-shaped caller and is not 0.105 evidence.
+Source qualification must exercise the actual unflagged default 0.105 caller and MAIN entry through
+cold startup, original .103 and consumed .104 siblings, genesis, all sixteen effects and final
+readback. Synthetic 0.105 packages and native envelopes must be labelled synthetic. Genuine original
+0.104 archive verification remains a historical byte check, not a genuine 0.105 candidate. Preserve
+original delayed-observation, tamper, denial, Unknown, deadline and budget failures and report exact
+pass/skip denominators. Inert request counts and virtual sleeps do not prove native HTTP or whole-job fit.
+
+For candidate/readiness workflow joining, reuse the maintained configuration and caller fixtures.
+They check the actual current/predecessor tuple, strict inputs, artifact layout and unchanged issuer
+and publication exclusions before costly qualification. The job graph and sixteen-effect state
+machine are unchanged, so a new model would duplicate existing obligations; use the bounded cold
+production-caller calibration for this change instead. Required hosted build/package/isolated-install,
+separate V2 evidence, source retention and cleanup gates remain. Setup, restore/build, pack, install,
+nine local-refusal controls and terminal collection all contribute to the complete candidate budget;
+prior timings are historical observations, not a 0.105 timing guarantee or demonstrated savings.
+
+A genuine promoted 0.105 release and fresh installed qualification are prerequisites for using the new
+migration visibility bytes. The generic maintained developer updater itself needs no version edit:
+it selects the highest stable package only when the promoted coherent manifest agrees, installs side
+by side, checks the version and updates its symlink. Independent surrounding qualification must still
+verify every expected payload byte and intended caller behavior. Source delivery does not update the
+current 0.104 installation or qualify remaining Project3 effects, final binding, UI or real-use acceptance.

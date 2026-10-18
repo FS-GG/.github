@@ -47,10 +47,83 @@ module MigrationFixture =
           Items = []; Views = [];
           Issues = [ { Id = "synthetic-issue"; Repository = "FS-GG/.github"; Number = 42; UpdatedAt = "2026-10-17T12:00:00Z"; State = "OPEN" } ] }
 
+    // Sanitized structural replay of retained original002: 16 fields, five items
+    // (four seven-value/one two-value), five five-column views, 20 selected issues.
+    // All identifiers/content below are synthetic; the stable token shape is436.
+    let original002 () : Scope * Snapshot =
+        let repositories: string list =
+            [ "FS-GG/.github"; "FS-GG/FS.GG.Coordination"; "FS-GG/FS.GG.Game";
+              "FS-GG/FS.GG.SDD"; "FS-GG/FS.GG.Templates"; "FS-GG/FS.GG.Unity.Client" ]
+        let selected: SelectedIssue list =
+            [ 0 .. 19 ] |> List.map (fun index ->
+                { Id = "synthetic-selected-" + string index; Repository = repositories.[index % repositories.Length];
+                  Number = index + 1; Slice = "synthetic-slice-" + string index })
+        let systemFields: Field list =
+            [ ("Repository", "REPOSITORY"); ("Reviewers", "REVIEWERS"); ("Title", "TITLE");
+              ("Assignees", "ASSIGNEES"); ("Labels", "LABELS"); ("Linked pull requests", "LINKED_PULL_REQUESTS");
+              ("Milestone", "MILESTONE"); ("Parent issue", "PARENT_ISSUE"); ("Sub-issues progress", "SUB_ISSUES_PROGRESS");
+              ("Created", "CREATED"); ("Updated", "UPDATED"); ("Closed", "CLOSED") ]
+            |> List.mapi (fun index (name, kind) ->
+                { Id = "synthetic-system-" + string index; Name = name; DataType = kind; Options = [] })
+        let fields: Field list =
+            snapshot.Fields |> List.map (fun (field: Field) ->
+                let options: SelectOption list =
+                    if field.Id = scope.StatusFieldId then
+                        field.Options @ [ { Id = "synthetic-review-option"; Name = "In review"; Color = scope.InReviewColor; Description = scope.InReviewDescription } ]
+                    elif field.Id = scope.TrackFieldId || field.Id = scope.ObservationFieldId then
+                        [ 0 .. (if field.Id = scope.TrackFieldId then 1 else 2) ] |> List.map (fun index ->
+                            { Id = field.Id + "-option-" + string index; Name = "synthetic-option-" + string index;
+                              Color = "GRAY"; Description = "synthetic retained descriptor" })
+                    else field.Options
+                { field with Options = options })
+        let scalar (index: int) (fieldId: string) (kind: string) (payload: string list) : ItemValue =
+            { Id = fieldId; FieldId = fieldId; Kind = kind;
+              Value = JsonSerializer.Serialize([ "id"; JsonSerializer.Serialize("synthetic-value-" + string index + "-" + fieldId);
+                                                "updatedAt"; "\"2026-10-04T13:04:40Z\"" ] @ payload) }
+        let items: Item list =
+            [ 0 .. 4 ] |> List.map (fun index ->
+                let issue: SelectedIssue =
+                    if index < 3 then selected.[17 + index]
+                    else
+                        { Id = "synthetic-unselected-" + string index; Repository = "FS-GG/.github";
+                          Number = 100 + index; Slice = "synthetic-unselected" }
+                let system: ItemValue list =
+                    [ { Id = systemFields.[0].Id; FieldId = systemFields.[0].Id; Kind = "ProjectV2ItemFieldRepositoryValue"; Value = "[]" };
+                      scalar index systemFields.[2].Id "ProjectV2ItemFieldTextValue" [ "text"; "\"synthetic title\"" ] ]
+                let values: ItemValue list =
+                    if index = 4 then system
+                    else
+                        system @
+                        [ { Id = systemFields.[4].Id; FieldId = systemFields.[4].Id; Kind = "ProjectV2ItemFieldLabelValue"; Value = "[]" };
+                          scalar index scope.RoadmapFieldId "ProjectV2ItemFieldTextValue" [ "text"; "\"synthetic retained roadmap\"" ] ]
+                        @ ([ scope.StatusFieldId; scope.TrackFieldId; scope.ObservationFieldId ] |> List.map (fun fieldId ->
+                            let option = fields |> List.find (fun (field: Field) -> field.Id = fieldId) |> _.Options.Head
+                            scalar index fieldId "ProjectV2ItemFieldSingleSelectValue"
+                                [ "optionId"; JsonSerializer.Serialize(option.Id); "name"; JsonSerializer.Serialize(option.Name) ]))
+                { Id = "synthetic-retained-item-" + string index; ContentId = issue.Id; ContentKind = "Issue";
+                  Repository = Some issue.Repository; Number = Some issue.Number; UpdatedAt = "2026-10-04T13:04:40Z";
+                  Archived = false; Values = values })
+        let views: View list =
+            [ 0 .. 4 ] |> List.map (fun index ->
+                { Id = "synthetic-retained-view-" + string index; Name = "synthetic view " + string index;
+                  Layout = "TABLE_LAYOUT"; Filter = "";
+                  VisibleFieldIds = [ systemFields.[2].Id; systemFields.[0].Id; scope.StatusFieldId; scope.TrackFieldId; scope.RoadmapFieldId ];
+                  UnsupportedConfiguration = "[[\"\"],[],[],[]]" })
+        let issues: NativeIssue list =
+            selected |> List.map (fun (issue: SelectedIssue) ->
+                { Id = issue.Id; Repository = issue.Repository; Number = issue.Number;
+                  UpdatedAt = "2026-10-04T13:04:40Z"; State = "OPEN" })
+        ({ scope with SelectedIssues = selected },
+         { snapshot with UpdatedAt = "2026-10-04T13:04:40Z"; Fields = systemFields @ fields;
+                         Items = items; Views = views; Issues = issues })
+
     type Native(initial: Snapshot) =
         let mutable snapshot = initial
         let requests = ResizeArray<Transport.Request>()
         let mutations = ResizeArray<Transport.Request>()
+        let mutable visibilityDelay = 0
+        let mutable pendingVisibility: (Snapshot * int) option = None
+        let mutable visibilitySnapshot: Snapshot option = None
         let mutable failAfterEffect = false
         let mutable beforeRead: Transport.Request -> unit = ignore
         let mutable beforeDispatch: Transport.Request -> unit = ignore
@@ -88,6 +161,15 @@ module MigrationFixture =
             beforeRead request
             match request.Body with
             | Query(document, variables) ->
+                if document.Contains("viewer{id login}") && document.Contains("fields(first:") then
+                    match pendingVisibility with
+                    | Some(before, remaining) when remaining > 0 ->
+                        visibilitySnapshot <- Some({ before with UpdatedAt = snapshot.UpdatedAt })
+                        pendingVisibility <- Some(before, remaining - 1)
+                    | _ ->
+                        visibilitySnapshot <- None
+                        pendingVisibility <- None
+                let snapshot = visibilitySnapshot |> Option.defaultValue snapshot
                 let id = variables |> List.tryPick (function "id", VId id -> Some id | _ -> None) |> Option.defaultValue snapshot.ProjectId
                 let parent connection values = response (objectNode [ "node", objectNode [ "id", value id; connection, page values ] ])
                 if document.Contains "viewer{id login}" then
@@ -130,6 +212,7 @@ module MigrationFixture =
             | _ -> Error(Malformed("synthetic migration", "unexpected read"))
         let dispatch (request: Transport.Request) : IoResult<Transport.Response> =
             mutations.Add request
+            let before = snapshot
             beforeDispatch request
             match request.Body with
             | Json json ->
@@ -195,6 +278,9 @@ module MigrationFixture =
                                     if existing.Id = view.Id then view else existing)
                         snapshot <- { snapshot with Views = views }
                         if create then "createProjectV2View" else "updateProjectV2View"
+                if visibilityDelay > 0 then
+                    snapshot <- { snapshot with UpdatedAt = "2026-10-18T00:32:24Z" }
+                    pendingVisibility <- Some(before, visibilityDelay)
                 if failAfterEffect then Error(Transport "synthetic lost response")
                 else
                     let payloadName, nativeId =
@@ -211,6 +297,7 @@ module MigrationFixture =
                 member _.Send(request: Transport.Request) = read request |> Result.bind (transform request)
                 member _.SendMutation(_: MutationIntent) = Error(Malformed("synthetic", "raw effects refused"))
                 member _.RetryMutation(_: string) = Error(Malformed("synthetic", "replay refused")) }
+        member _.VisibilityDelay with get() = visibilityDelay and set value = visibilityDelay <- value
         member _.Snapshot with get() = snapshot and set value = snapshot <- value
         member _.Requests = requests |> Seq.toList
         member _.Mutations = mutations |> Seq.toList

@@ -12,6 +12,22 @@ cutover remains open; the original finite .1–.6 acceptance and completed roadm
 The [selected window below](#selected-programme-cutover--2026-10-17) is source preparation,
 not installed adoption, board-mutation admission or consumer activation.
 
+**Current accepted boundary — 2026-10-18:** coherent 0.104 publication is accepted through the
+[sole release plan](../roadmaps/utel-release-successor.md). Independent qualification after the maintained developer update verified
+all 82 installed payload files against the retained source-912 candidate, and genuine read-only
+migration preparation passed. A separately selected apply confirmed its schema-option addition and
+one membership, then stopped with its original Unknown when immediate complete readback still showed
+the pre-effect membership state. Later independent readback confirmed those partial effects; the
+original invocation remains readback-only. Restricted original custody stays outside this document.
+
+The bounded visibility correction below joins the selected 0.105 source composition, with actual
+compiler and inert unit/caller qualification; it is not carried by the already published/installed
+0.104 bytes. A qualified successor,
+fresh preparation and separately selected remaining migration are still needed. Final native-ID
+binding, positive installed inspection/refresh/selection, actual UI and coordinated real use remain
+open. Human UI edits can proceed independently when no apply is active and must be observed by fresh
+preparation. No original Unknown, inherited reservation or completed historical outcome is reset.
+
 **Historical design/adoption frontier — 2026-09-29 through 2026-10-10:** organization pilot passed 2026-10-02.
 On 2026-10-03 the exact four-target successor, public installed 0.95.0 closure,
 one-shot import with independent readbacks, zero-mutation refresh/inspection and
@@ -258,8 +274,8 @@ six copied `Generated/Coordination` V1 admission files are not this inspection i
 are outside the selected source window. Reuse the canonical `TouchSet` parser/conflict rules without
 restoring V1 claims, Class/Phase ranking, lease machinery or a compatibility wrapper.
 
-The current prepared source declares coherent 0.104.0; published package inventory remains 0.102.0.
-The accessible developer global CLI is 0.102.0,
+At that starting source window, prepared source declared coherent 0.104.0 while published inventory
+remained 0.102.0. The then-accessible developer global CLI was 0.102.0,
 repository source `6e9be17bacd288ece103b67ecd5842d37a9c8e50`; its 82 installed tool members matched
 the cached package without execution. That observation does not identify the active Project 3
 consumer or authenticate a current feed/channel. Root has selected the existing accessible developer
@@ -684,6 +700,40 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   The full engine executed2743 tests across eight suites. Original compile-only failures remain
   on the PR. This accepts source composition and its synthetic complete migration controls;
   actual candidate execution, private installed/native positives, timing, UI and adoption remain open.
+
+  **Bounded visibility observation source correction (2026-10-18).** A clear correlated mutation
+  response can precede visibility in a complete native snapshot. Treat only the exact pre-effect
+  state, under the existing effect-specific timestamp normalization, as pending visibility. A matching
+  result requires the same complete witness to establish returned native identity and the exact
+  selected transition. Partial reads, conflicts, unrelated drift, malformed/error/null responses or
+  uncertain sends remain Unknown and stop; absence never proves NoSend or permits another mutation.
+
+  The existing caller retains its original intent and sends once. After a clear successful response,
+  it may collect at most seven complete observations with bounded waits of 1, 1, 2, 4, 8 and 14 seconds.
+  Each witness is retained in the same private invocation. Only a complete exact pre-effect witness
+  may omit the redundant second identity query while deciding to wait; this grants no transition or
+  send permission. A candidate-confirmed witness still receives the original final native identity,
+  principal and capability comparison on that same witness. Standard preparation, precondition and
+  readback collection remain strict. Waits and acquisitions share the
+  original 500-request/270-second budget and selected planning deadline; no clock, request counter or
+  operation identity is renewed. Complete first pages remain observation-local. The finite window is
+  best effort: a long visibility delay or many delayed effects can exhaust the original bound and
+  must stop truthfully. It does not guarantee completion of the full population.
+
+  The sanitized retained-lag control covers the complete pre-effect witness followed by delayed
+  membership visibility; sibling controls cover schema, initial values and both view operations,
+  contradictions, invalid responses, deadline and request exhaustion. Both affected test projects
+  compiled under the separately selected bounded source-build profile with zero warnings/errors.
+  Focused inert execution passed 14 unit and 34 caller cases with no failures or skips; no live
+  credential, GitHub, publisher, installer or browser route was exercised.
+  The inert full journey with one stale read per effect completes 77 sends in 468 apply requests and
+  77 virtual seconds; the separate preparation adds four requests. Its no-delay sibling uses 391
+  apply requests. These counters exclude actual HTTP/custody latency and do not prove native fit.
+  Exact required hosted qualification and delivery remain separate gates.
+  This source correction does not change the immutable published 0.104 package or update an installed
+  caller. A genuine qualified successor and separately selected remaining migration are still needed;
+  original partial/Unknown operations remain readback-only. Legitimate human UI edits must be observed
+  by fresh preparation and preserved, rather than blocked to retain an old snapshot.
 
   Final stable enrollment uses the existing protected manifest route and the exact selected population
   and Roadmap strings. Final binding4/schema2 joins that protected population and the qualified package/

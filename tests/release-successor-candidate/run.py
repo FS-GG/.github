@@ -222,7 +222,7 @@ class SuccessorRailBindingTests(unittest.TestCase):
         self.assertIn('test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"', workflow)
         self.assertIn("python3 tests/release-successor-candidate/run.py", workflow)
         self.assertIn("python3 scripts/check-release-candidate-uniqueness.py", workflow)
-        self.assertIn("--version 0.104.0 --predecessor 0.102.0", workflow)
+        self.assertIn("--version 0.105.0 --predecessor 0.104.0", workflow)
         for forbidden in (
             "packages: write", "contents: write", "id-token:", "environment:", "secrets.",
             "release-successor-publish.py", "release-saga.py", "dotnet pack",
@@ -233,15 +233,25 @@ class SuccessorRailBindingTests(unittest.TestCase):
 
     def test_candidate_binds_the_next_version_and_exact_predecessor(self) -> None:
         workflow = (ROOT / ".github/workflows/release-successor-candidate.yml").read_text()
-        self.assertIn('test "$version" = 0.104.0', workflow)
-        self.assertIn("gh release download coherent-set/v0.102.0", workflow)
-        self.assertIn("--tag-source 6e9be17bacd288ece103b67ecd5842d37a9c8e50", workflow)
-        self.assertEqual(workflow.count("--predecessor 0.102.0"), 2)
-        self.assertIn("--release-tag coherent-set/v0.102.0", workflow)
+        self.assertIn('test "$version" = 0.105.0', workflow)
+        self.assertIn("gh release download coherent-set/v0.104.0", workflow)
+        self.assertIn("--tag-source 912eba8bbd707dabcbc5011d508c479109010b71", workflow)
+        self.assertEqual(workflow.count("--predecessor 0.104.0"), 2)
+        self.assertIn("--release-tag coherent-set/v0.104.0", workflow)
         for namespace in ("coherent-set", "kit", "drivers", "coord-engine"):
-            self.assertIn(f"refs/tags/{namespace}/v0.104.0", workflow)
+            self.assertIn(f"refs/tags/{namespace}/v0.105.0", workflow)
         for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
             self.assertEqual(workflow.count(f"dotnet pack src/{project}/"), 1)
+        initial=workflow.split('      - name: Verify the stable predecessor and unused package version',1)[1].split('      - name: Test the telemetry producer',1)[0]
+        retention=workflow.split('      - name: Refuse a changed main or newly occupied version before retention',1)[1].split('      - uses: actions/upload-artifact',1)[0]
+        self.assertIn('releases/tags/coherent-set/v0.105.0',initial)
+        self.assertIn('git ls-remote',initial)
+        self.assertIn('refs/heads/main',retention)
+        self.assertIn('--predecessor 0.104.0',retention)
+        self.assertNotIn('releases/tags/',retention)
+        self.assertNotIn('refs/tags/',retention)
+        self.assertIn('timeout-minutes: 45',workflow)
+        self.assertIn('name: board-v2-packaged-qualification-${{ github.sha }}-${{ github.run_id }}',workflow)
         self.assertIn("--policy-version release-successor/1", workflow)
         self.assertNotIn("--bridge-binding", workflow)
         self.assertNotIn("--bridge-qualification", workflow)
@@ -279,9 +289,9 @@ class SuccessorRailBindingTests(unittest.TestCase):
     def test_publisher_and_journal_bind_one_unused_successor(self) -> None:
         publisher = (ROOT / "scripts/release-successor-publish.py").read_text()
         journal = (ROOT / "scripts/release_successor_journal.py").read_text()
-        self.assertIn('SUCCESSOR_VERSION = "0.103.0"', publisher)
-        self.assertIn('SUCCESSOR_PREDECESSOR = "0.102.0"', publisher)
-        self.assertIn('SUCCESSOR_REF = "refs/heads/fsgg/v2/journal/release/utel-rel-21"', publisher)
+        self.assertIn('SUCCESSOR_VERSION = CURRENT_RELEASE["version"]', publisher)
+        self.assertIn('SUCCESSOR_PREDECESSOR = CURRENT_RELEASE["predecessor"]', publisher)
+        self.assertIn('SUCCESSOR_REF = CURRENT_RELEASE["logicalRef"]', publisher)
         self.assertIn('manifest["descriptor"]["version"] == version', publisher)
         self.assertIn('"--version", version, "--predecessor", predecessor', publisher)
         self.assertIn('coherent-set/v{manifest', publisher)

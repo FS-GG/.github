@@ -594,33 +594,48 @@ module BoardV2Application =
                                                                                reason = migrationFailureReason error |}
                                                                         privateJson (prefix + "-error.json") (JsonSerializer.Serialize(errorMetadata))
                                                                         Error error
-                                                                let readback = V2Migration.collect connection.Reads current.Scope
-                                                                match readback with
-                                                                | Error _ -> Error "Unknown-after-possible-send-readback-unavailable"
-                                                                | Ok snapshot ->
-                                                                    privateJson (prefix + "-native-readback.json") (V2Migration.encodeReadback current.Scope snapshot)
-                                                                    let resolved =
-                                                                        V2Migration.resolveReadback current.Scope current.Snapshot snapshot change
-                                                                        |> Result.bind (fun resolved -> V2Migration.prepare resolved snapshot)
-                                                                    match resolved with
-                                                                    | Error _ -> Error "Unknown-original-outcome-retained-readback-only"
-                                                                    | Ok observed ->
-                                                                        let after = { observed with PreparedPath = current.PreparedPath }
-                                                                        privateJson (prefix + "-readback.json") (V2Migration.encodePrepared after)
-                                                                        let observedIdentity =
-                                                                            match change with
-                                                                            | V2Migration.AddInReview(fieldId, _, _, _) -> Some fieldId
-                                                                            | V2Migration.AddMembership issueId ->
-                                                                                snapshot.Items |> List.filter (fun (item: V2Migration.Item) -> item.ContentId = issueId)
-                                                                                |> function [ item ] -> Some item.Id | _ -> None
-                                                                            | V2Migration.CreateView desired ->
-                                                                                snapshot.Views |> List.filter (fun (view: V2Migration.View) -> view.Name = desired.Name)
-                                                                                |> function [ view ] -> Some view.Id | _ -> None
-                                                                            | V2Migration.InitializePlanningValue(_, itemId, _, _) -> Some itemId
-                                                                            | V2Migration.UpdateView(viewId, _) -> Some viewId
-                                                                        match accepted, V2Migration.validateTransition current.Scope current.Snapshot snapshot change with
-                                                                        | Ok returnedId, Ok() when observedIdentity = Some returnedId -> effects (sequence + 1) after
-                                                                        | _ -> Error "Unknown-original-outcome-retained-readback-only"))
+                                                                let rec observe (attempt: int) : Result<V2Migration.Prepared, string> =
+                                                                    if clock.GetUtcNow() >= admission.WindowUntil || connection.RemainingTime <= TimeSpan.Zero then Error "Unknown-after-possible-send-observation-window-expired"
+                                                                    else
+                                                                        let observationReads = connection.ObservationReads admission.WindowUntil
+                                                                        let observation =
+                                                                            match accepted with
+                                                                            | Ok returnedId -> V2Migration.collectEffectReadback observationReads current.Scope current.Snapshot change returnedId
+                                                                            | Error _ -> V2Migration.collect observationReads current.Scope
+                                                                        match observation with
+                                                                        | Error _ -> Error "Unknown-after-possible-send-readback-unavailable"
+                                                                        | Ok snapshot ->
+                                                                            let observationPrefix =
+                                                                                if attempt = 1 then prefix
+                                                                                else prefix + "-visibility-" + attempt.ToString("D3", Globalization.CultureInfo.InvariantCulture)
+                                                                            privateJson (observationPrefix + "-native-readback.json") (V2Migration.encodeReadback current.Scope snapshot)
+                                                                            let prepared =
+                                                                                V2Migration.resolveReadback current.Scope current.Snapshot snapshot change
+                                                                                |> Result.bind (fun resolved -> V2Migration.prepare resolved snapshot)
+                                                                                |> Result.map (fun (observed: V2Migration.Prepared) -> { observed with PreparedPath = current.PreparedPath })
+                                                                            match prepared with
+                                                                            | Ok after -> privateJson (observationPrefix + "-readback.json") (V2Migration.encodePrepared after)
+                                                                            | Error _ -> ()
+                                                                            if clock.GetUtcNow() >= admission.WindowUntil || connection.RemainingTime <= TimeSpan.Zero then Error "Unknown-after-possible-send-observation-window-expired"
+                                                                            else
+                                                                                match accepted with
+                                                                                | Error _ -> Error "Unknown-original-outcome-retained-readback-only"
+                                                                                | Ok returnedId ->
+                                                                                    match V2Migration.observeTransition current.Scope current.Snapshot snapshot change returnedId with
+                                                                                    | Ok(V2Migration.ObservedEffect resolved) ->
+                                                                                        match prepared with
+                                                                                        | Ok after when after.Scope = resolved -> Ok after
+                                                                                        | _ -> Error "Unknown-original-outcome-retained-readback-only"
+                                                                                    | Ok V2Migration.PendingVisibility when attempt < 7 ->
+                                                                                        let delay = TimeSpan.FromSeconds([| 1.0; 1.0; 2.0; 4.0; 8.0; 14.0 |].[attempt - 1])
+                                                                                        if min (admission.WindowUntil - clock.GetUtcNow()) connection.RemainingTime <= delay then
+                                                                                            Error "Unknown-after-possible-send-observation-window-expired"
+                                                                                        else
+                                                                                            System.Threading.Tasks.Task.Delay(delay, clock, System.Threading.CancellationToken.None).GetAwaiter().GetResult()
+                                                                                            observe (attempt + 1)
+                                                                                    | Ok V2Migration.PendingVisibility -> Error "Unknown-visibility-observation-exhausted-original-intent-retained"
+                                                                                    | Error _ -> Error "Unknown-original-outcome-retained-readback-only"
+                                                                observe 1 |> Result.bind (effects (sequence + 1))))
                                         effects 1 admission.Prepared)))
             | MigrationReadback preparedPath ->
                 let original = Path.Combine(preparedPath + ".invocation", "prepared.json")

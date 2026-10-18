@@ -16,6 +16,8 @@ module V2MigrationTransport =
     type IConnection =
         inherit IDisposable
         abstract Reads: IGitHubTransport
+        abstract RemainingTime: TimeSpan
+        abstract ObservationReads: planningWindowUntil: DateTimeOffset -> IGitHubTransport
         abstract Dispatch: prepared: V2Migration.Prepared * change: V2Migration.Change * planningWindowUntil: DateTimeOffset -> IoResult<Transport.Response>
 
     let private refused detail = Error(Malformed("Project 3 migration transport", detail))
@@ -41,7 +43,7 @@ module V2MigrationTransport =
             else
                 calls <- calls + 1
                 action request (deadline - now) deadline
-        let reads =
+        let reads (windowUntil: DateTimeOffset option) =
             { new IGitHubTransport with
                 member _.Send(request: Transport.Request) =
                     match request.Body with
@@ -50,14 +52,18 @@ module V2MigrationTransport =
                                               && request.Budget = GraphQl && document.StartsWith("query", StringComparison.Ordinal)
                                               && not (document.Contains("mutation", StringComparison.Ordinal))
                                               && not (document.Contains("subscription", StringComparison.Ordinal)) ->
-                        invoke request None read |> Result.bind (fun response ->
+                        invoke request windowUntil read |> Result.bind (fun response ->
                             if response.Status <> 200 then refused "native read returned non-success HTTP status; snapshot incomplete"
                             else validateClearEnvelope response.Body |> Result.map (fun () -> response))
                     | _ -> refused "only fixed GraphQL query reads are allowed"
                 member _.SendMutation(_: MutationIntent) = refused "effects require the typed migration reconstruction edge"
                 member _.RetryMutation(_: string) = refused "migration never retries or replays a mutation" }
         { new IConnection with
-            member _.Reads = reads
+            member _.RemainingTime =
+                if disposed then TimeSpan.Zero
+                else max TimeSpan.Zero (TimeSpan.FromSeconds 270.0 - clock.Elapsed)
+            member _.Reads = reads None
+            member _.ObservationReads(planningWindowUntil: DateTimeOffset) = reads (Some planningWindowUntil)
             member _.Dispatch(prepared: V2Migration.Prepared, change: V2Migration.Change, planningWindowUntil: DateTimeOffset) =
                 V2Migration.request prepared change |> Result.bind (fun request -> invoke request (Some planningWindowUntil) once)
             member _.Dispose() =

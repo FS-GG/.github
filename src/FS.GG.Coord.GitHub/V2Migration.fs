@@ -62,6 +62,10 @@ module V2Migration =
         | CreateView of DesiredView
         | UpdateView of viewId: string * DesiredView
 
+    type ReadbackObservation =
+        | ObservedEffect of Scope
+        | PendingVisibility
+
     type Prepared =
         { Scope: Scope; Snapshot: Snapshot; Changes: Change list; OwnerActions: string list;
           Digest: string; PreparedPath: string option }
@@ -349,7 +353,7 @@ module V2Migration =
                         { Project = project; Fields = node.GetProperty("fields").Clone();
                           Items = node.GetProperty("items").Clone(); Views = node.GetProperty("views").Clone(); Issues = issues }))))
 
-    let collect (transport: IGitHubTransport) (scope: Scope) : IoResult<Snapshot> =
+    let private collectComplete (confirmIdentity: bool) (transport: IGitHubTransport) (scope: Scope) : IoResult<Snapshot> =
         let observedAt = DateTimeOffset.UtcNow
         match validateScope scope with
         | Error error -> Error error
@@ -376,9 +380,16 @@ module V2Migration =
                                 |> Result.map (fun values -> { item with Values = values })) |> sequence
                             |> Result.bind (fun items ->
                                 collectViews (Some first.Views) transport initial.ProjectId |> Result.bind (fun views ->
-                                    project transport observedAt |> Result.bind (fun final ->
-                                        if final <> initial then invalid "project/principal changed during complete snapshot collection"
-                                        else Ok ({ initial with Fields = fields; Items = items; Views = views; Issues = first.Issues })))))))
+                                    let snapshot: Snapshot =
+                                        { initial with Fields = fields; Items = items; Views = views; Issues = first.Issues }
+                                    if not confirmIdentity then Ok snapshot
+                                    else
+                                        project transport observedAt |> Result.bind (fun final ->
+                                            if final <> initial then invalid "project/principal changed during complete snapshot collection"
+                                            else Ok snapshot))))))
+
+    let collect (transport: IGitHubTransport) (scope: Scope) : IoResult<Snapshot> =
+        collectComplete true transport scope
 
     let private desiredTokens (view: DesiredView) =
         [ view.Id |> Option.defaultValue ""; view.Name; view.Layout; view.Filter;
@@ -813,6 +824,63 @@ module V2Migration =
                     | _ -> false
             if reconciled then Ok()
             else invalid "readback differs beyond the one exact effect; preserve original intent and stop writes for reconciliation"
+    let observeTransition (scope: Scope) (before: Snapshot) (after: Snapshot) (change: Change) (returnedId: string) : IoResult<ReadbackObservation> =
+        let identityPossible =
+            bounded 256 returnedId
+            && (match change with
+                | AddInReview(fieldId, _, _, _) -> returnedId = fieldId
+                | InitializePlanningValue(_, itemId, _, _) -> returnedId = itemId
+                | UpdateView(viewId, _) -> returnedId = viewId
+                | AddMembership _ -> before.Items |> List.forall (fun (item: Item) -> item.Id <> returnedId)
+                | CreateView _ -> before.Views |> List.forall (fun (view: View) -> view.Id <> returnedId))
+        let observedIdentity =
+            match change with
+            | AddInReview(fieldId, _, _, _) -> Some fieldId
+            | InitializePlanningValue(_, itemId, _, _) -> Some itemId
+            | UpdateView(viewId, _) -> Some viewId
+            | AddMembership issueId ->
+                after.Items |> List.filter (fun (item: Item) -> item.ContentId = issueId)
+                |> function [ item ] -> Some item.Id | _ -> None
+            | CreateView desired ->
+                after.Views |> List.filter (fun (view: View) -> view.Name = desired.Name)
+                |> function [ view ] -> Some view.Id | _ -> None
+        // The only pending state is the exact complete pre-effect observation.
+        // Reuse the already allowed target item timestamp change for initialization;
+        // no issue facts, other item timestamps, values or orthogonal view facts move.
+        let pending =
+            let items: Item list =
+                match change with
+                | InitializePlanningValue(issueId, itemId, _, _) ->
+                    after.Items |> List.map (fun (item: Item) ->
+                        match before.Items |> List.tryFind (fun (original: Item) -> original.Id = itemId && original.ContentId = issueId) with
+                        | Some original when item.Id = itemId && item.ContentId = issueId -> { item with UpdatedAt = original.UpdatedAt }
+                        | _ -> item)
+                | _ -> after.Items
+            let normalized: Snapshot =
+                { after with ObservedAt = before.ObservedAt; UpdatedAt = before.UpdatedAt; Items = items }
+            snapshotTokens normalized = snapshotTokens before
+        prepare scope before |> Result.bind (fun prepared ->
+            if not identityPossible || not (List.contains change prepared.Changes) then
+                invalid "correlated native result identity or original selected effect differs"
+            else
+                match validateTransition scope before after change with
+                | Ok() when observedIdentity = Some returnedId ->
+                    resolveReadback scope before after change |> Result.map ObservedEffect
+                | Ok() -> invalid "independent effect identity differs from correlated native result"
+                | Error _ when pending -> Ok PendingVisibility
+                | Error error -> Error error)
+    let collectEffectReadback (transport: IGitHubTransport) (scope: Scope) (before: Snapshot) (change: Change) (returnedId: string) : IoResult<Snapshot> =
+        collectComplete false transport scope |> Result.bind (fun snapshot ->
+            match observeTransition scope before snapshot change returnedId with
+            | Ok PendingVisibility -> Ok snapshot
+            | _ ->
+                // Only a complete exact pre-effect witness may omit this redundant read.
+                // Any candidate settlement or contradiction keeps the strict final identity barrier.
+                project transport snapshot.ObservedAt |> Result.bind (fun final ->
+                    let initial: Snapshot = { snapshot with Fields = []; Items = []; Views = []; Issues = [] }
+                    if final <> initial then invalid "project/principal changed during complete snapshot collection"
+                    else Ok snapshot))
+
     let snapshotDigest (snapshot: Snapshot) = hash (snapshotTokens snapshot)
     let encodeReadback (scope: Scope) (snapshot: Snapshot) =
         let root =

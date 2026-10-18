@@ -16,6 +16,9 @@ import sys
 import tempfile
 import zipfile
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from release_successor_journal import CURRENT_RELEASE
+
 REPOSITORY_ID = 1269292704  # FS-GG/.github, independent of a caller-supplied slug
 WORKFLOW = ".github/workflows/release-successor-candidate.yml"
 PACKAGES = ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers")
@@ -135,6 +138,11 @@ def extract_verified(
                 text=True,
             )
             predecessor = json.loads((work / "previous-stable-channel.json").read_text())
+            if version == CURRENT_RELEASE["version"]:
+                require(predecessor.get("version") == CURRENT_RELEASE["predecessor"]
+                        and predecessor.get("sourceSha") == CURRENT_RELEASE["predecessorSource"]
+                        and predecessor.get("contentId") == CURRENT_RELEASE["predecessorContentId"],
+                        "current candidate predecessor identity differs")
             require(
                 predecessor.get("contentId") == descriptor.get("previousStableContentId")
                 and predecessor.get("version") == descriptor.get("previousStableVersion"),

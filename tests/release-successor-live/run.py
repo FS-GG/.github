@@ -272,13 +272,13 @@ class PublisherJournalTests(unittest.TestCase):
         self.assertEqual(self.journal.state.generation, 1)
         self.assertEqual(self.provider.calls, [])
 
-    def test_fresh_successor_uses_canonical_version_tag_and_selected_journal(self):
-        self.manifest = candidate_manifest(publisher.SUCCESSOR_VERSION)
-        self.intent = {**self.intent, "contentId": self.manifest["contentId"], "version": publisher.SUCCESSOR_VERSION}
-        self.ledger = AuthorityAPI(ref=publisher.SUCCESSOR_REF)
-        self.journal = PreparedJournal(self.intent, ref=publisher.SUCCESSOR_REF)
+    def test_original103_denial_uses_fixed_identity_after_current_default_advances(self):
+        self.manifest = candidate_manifest("0.103.0")
+        self.intent = {**self.intent, "contentId": self.manifest["contentId"], "version": "0.103.0"}
+        self.ledger = AuthorityAPI(ref=publisher.SUSPENDED_REF)
+        self.journal = PreparedJournal(self.intent, ref=publisher.SUSPENDED_REF)
         base = SingleOperatorAdmission(self.source, self.manifest, "b" * 40, 1, "EHotwagner", "refs/heads/main")
-        self.admission = publisher.ProtectedPublisherAdmission(base, self.ledger, publisher.SUCCESSOR_REF)
+        self.admission = publisher.ProtectedPublisherAdmission(base, self.ledger, publisher.SUSPENDED_REF)
         # The original default binding is retained for explicit denial; it cannot
         # initialize a new .103 journal after the prospective suspension cut.
         with self.assertRaises(RuntimeError):

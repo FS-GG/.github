@@ -108,6 +108,12 @@ The focused controls require hosted CI; no local CLR/native/browser workload was
 
 ## Bounded migration source contract
 
+The accepted 0.104 package and installed-byte qualification remain tied to their original candidate.
+The visibility correction described here is later source; source builds and inert caller tests do
+not update that installation or grant another apply. Original partial/Unknown invocations retain
+readback-only custody. A genuine qualified successor and fresh selected preparation precede any
+remaining mutation; supported human UI edits are legitimate new facts for that preparation.
+
 The packaged `board-v2` route also prepares the selected .10 migration. This source is not an
 installed candidate or a live-operation grant. The accountable owner separately selects the exact
 operation after installed qualification; native principal/capability establishes permission only.
@@ -141,6 +147,29 @@ created-view ID plus complete same-ID readback may resolve only its originally s
 filter update within the same invocation. Existing human planning values, option/card identities,
 unrelated views and orthogonal grouping/vertical/sort configuration remain preserved. API metadata
 cannot verify UI columns/cards/order or replace actual installed Project 3 acceptance.
+
+After a clear correlated successful response, an exact complete pre-effect snapshot may mean
+pending native visibility. The same complete snapshot must establish both returned identity and the
+exact selected transition before proceeding. The caller sends only once and may retain up to seven
+complete readbacks with waits of 1, 1, 2, 4, 8 and 14 seconds (at most 30 seconds total). Only the existing project timestamp and the
+existing target-item timestamp allowance for initialization are normalized; unrelated facts stay
+strict. Conflicting/partial/error reads, invalid response identities and uncertain sends stop Unknown.
+There is no resend or absence-as-NoSend inference.
+
+A complete exact pre-effect witness may support only waiting without the second identity query.
+Every candidate-confirmed witness still receives the existing final project/principal/capability
+identity recheck on that same data before advancement. Partial pages never become Pending; standard
+prepare, precondition and original-path readback collections keep their full identity barrier.
+
+Observation acquisitions and waits consume the original 500-request/270-second envelope and selected
+planning deadline. The transport exposes remaining time from that original stopwatch; it does not
+start another budget. A wait that cannot fit refuses. Every additional witness stays in the same
+exclusive invocation custody. Exhaustion remains incomplete/readback-only, including when a full
+many-effect journey cannot fit. The inert 77-effect case with one stale read per effect uses 468
+apply requests and 77 virtual seconds; the separate preparation uses four more requests. Its no-lag
+sibling uses 391 apply requests. These counts exclude real HTTP and custody latency and do not prove
+native fit. This source contract does not retroactively repair or reactivate an older installed
+package or original partial invocation.
 
 The closed scope now includes `initialPlanning`: explicit selected issue identities, exact Track
 option ID/name, genuine Roadmap text and an optional selected Status option. Use an empty array when
