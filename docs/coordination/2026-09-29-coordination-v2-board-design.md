@@ -13,15 +13,16 @@ The [selected window below](#selected-programme-cutover--2026-10-17) is source p
 not installed adoption, board-mutation admission or consumer activation.
 
 **Current accepted boundary — 2026-10-18:** coherent 0.104 publication is accepted through the
-[sole release plan](../roadmaps/utel-release-successor.md). The maintained developer update verified
+[sole release plan](../roadmaps/utel-release-successor.md). Independent qualification after the maintained developer update verified
 all 82 installed payload files against the retained source-912 candidate, and genuine read-only
 migration preparation passed. A separately selected apply confirmed its schema-option addition and
 one membership, then stopped with its original Unknown when immediate complete readback still showed
 the pre-effect membership state. Later independent readback confirmed those partial effects; the
 original invocation remains readback-only. Restricted original custody stays outside this document.
 
-The bounded visibility correction below is new source, with actual compiler and inert unit/caller
-qualification; it is not carried by the already published/installed 0.104 bytes. A qualified successor,
+The bounded visibility correction below joins the selected 0.105 source composition, with actual
+compiler and inert unit/caller qualification; it is not carried by the already published/installed
+0.104 bytes. A qualified successor,
 fresh preparation and separately selected remaining migration are still needed. Final native-ID
 binding, positive installed inspection/refresh/selection, actual UI and coordinated real use remain
 open. Human UI edits can proceed independently when no apply is active and must be observed by fresh
@@ -273,8 +274,8 @@ six copied `Generated/Coordination` V1 admission files are not this inspection i
 are outside the selected source window. Reuse the canonical `TouchSet` parser/conflict rules without
 restoring V1 claims, Class/Phase ranking, lease machinery or a compatibility wrapper.
 
-The current prepared source declares coherent 0.104.0; published package inventory remains 0.102.0.
-The accessible developer global CLI is 0.102.0,
+At that starting source window, prepared source declared coherent 0.104.0 while published inventory
+remained 0.102.0. The then-accessible developer global CLI was 0.102.0,
 repository source `6e9be17bacd288ece103b67ecd5842d37a9c8e50`; its 82 installed tool members matched
 the cached package without execution. That observation does not identify the active Project 3
 consumer or authenticate a current feed/channel. Root has selected the existing accessible developer
