@@ -3893,6 +3893,26 @@ class OrdinaryCallerControls(SuspensionFixture):
                 self.assertIsNone(self.native.tag);self.assertEqual(self.publisher_ports.count('post'),0)
                 self.assertEqual(self.rows['lastObservedJournal']['effects'],{'tag':'intent'})
 
+    def test_valid_shape_remote_timestamp_or_state_tamper_cannot_settle_owned_payload(self):
+        for name,identity,field in (('stable-channel.json','channel-asset','promotedAt'),
+                                     ('release-manifest.json','manifest-asset','updatedAt')):
+            with self.subTest(name=name):
+                self.prepare_caller();original=self.native.upload_asset;tampered=[False]
+                def upload(release,asset,path,expected_sha256=None):
+                    result=original(release,asset,path,expected_sha256)
+                    if asset==name:
+                        ident=result['id'];value=json.loads(self.native.assets[ident][1])
+                        if field=='promotedAt':value[field]='2099-01-01T00:00:00Z'
+                        else:value['state'][field]='2099-01-01T00:00:00Z'
+                        self.native.assets[ident]=(asset,canonical(value));tampered[0]=True
+                    return result
+                self.native.upload_asset=upload
+                with self.assertRaisesRegex(RuntimeError,'ordinary frozen .* payload differs'):self.invoke_caller()
+                self.assertTrue(tampered[0])
+                self.assertEqual(self.rows['lastObservedJournal']['effects'][identity],'intent')
+                self.assertEqual(self.rows['lastDispatch']['state'],'applied')
+                self.assertEqual(self.dispatches[-1],identity);self.assertNotIn('promote',self.dispatches)
+
     def test_actual_main_serializes_complete_terminal_result(self):
         self.prepare_caller();self.assertEqual(self.invoke_caller(main=True),0)
         value=json.loads(self.args.result_path.read_bytes())

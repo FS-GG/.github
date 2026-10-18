@@ -1406,6 +1406,9 @@ class LiveProvider:
         raw = self._asset("stable-channel.json")
         if raw is None:
             return None
+        owned = getattr(self, "_ordinary_asset_bytes", {}).get("channel-asset")
+        if owned is not None and raw != owned[1]:
+            raise Refused("ordinary frozen channel payload differs from remote readback")
         receipt = json.loads(raw)
         if (
             receipt.get("contentId") != self.content_id
@@ -1420,6 +1423,9 @@ class LiveProvider:
         raw = self._asset("release-manifest.json")
         if raw is None:
             return None
+        owned = getattr(self, "_ordinary_asset_bytes", {}).get("manifest-asset")
+        if owned is not None and raw != owned[1]:
+            raise Refused("ordinary frozen manifest payload differs from remote readback")
         value = json.loads(raw)
         receipt = self._channel()
         if (
