@@ -1309,7 +1309,11 @@ let ``successor actual CLI requires versioned hierarchy join and emits scope wit
     try
         let bindingPath = Path.Combine(directory, "binding.json")
         File.WriteAllText(bindingPath, ProgrammeFixture.bindingJsonFor selected)
-        for index, json, expected in [0, input, "selected"; 1, stale.ToJsonString(), "unknown"] do
+        for index, json, expected in
+            [ 0, input, "ready"
+              1, stale.ToJsonString(), "unknown"
+              2, ProgrammeFixture.successorIntegratorJson {context with ImplementationSlots = Some 0}, "deferred"
+              3, ProgrammeFixture.successorIntegratorJson {context with ImplementationSlots = None}, "unknown" ] do
             let output = Path.Combine(directory, $"report-{index}.json")
             let reads = ProgrammeFixture.successorTransport selected (Some "Delivery") ProgrammeFixture.unchanged
             use reader = new StringReader(json)
@@ -1322,7 +1326,26 @@ let ``successor actual CLI requires versioned hierarchy join and emits scope wit
             Assert.Equal("Delivery", work.GetProperty("workLevel").GetString())
             Assert.Equal("Unverified", work.GetProperty("closure").GetProperty("acceptance").GetString())
             Assert.Equal("I_parent", work.GetProperty("hierarchy").GetProperty("parent").GetProperty("nodeId").GetString())
-            Assert.Equal(expected, root.GetProperty("selection").[0].GetProperty("decision").GetString())
-            Assert.False(root.GetProperty("selection").[0].GetProperty("dispatchAuthority").GetBoolean())
+            let hierarchy = work.GetProperty("hierarchy")
+            Assert.True(hierarchy.GetProperty("complete").GetBoolean())
+            Assert.Equal(baseline.Items.Head.WorkItem.Value.Sha256.Value, hierarchy.GetProperty("sha256").GetString())
+            let unselected = hierarchy.GetProperty("children").[0].GetProperty("nodeId").GetString()
+            Assert.False(selected.SelectedIssues.ContainsKey unselected)
+            let action = root.GetProperty("selection").[0]
+            let supplied = context.Slices.Head
+            Assert.Equal(expected, action.GetProperty("decision").GetString())
+            Assert.Equal("source", action.GetProperty("action").GetString())
+            Assert.Equal("implement", action.GetProperty("operation").GetString())
+            Assert.Equal(supplied.Owner, action.GetProperty("owner").GetString())
+            Assert.Equal(supplied.Id, action.GetProperty("sliceId").GetString())
+            Assert.Equal(supplied.Attempt, action.GetProperty("attempt").GetString())
+            Assert.Equal(supplied.Issue.Number, action.GetProperty("issue").GetProperty("number").GetInt32())
+            Assert.Equal(supplied.Issue.Owner, action.GetProperty("issue").GetProperty("owner").GetString())
+            Assert.Equal(supplied.Issue.Repository, action.GetProperty("issue").GetProperty("repository").GetString())
+            let demand = action.GetProperty("resourceDemand")
+            Assert.Equal(1, demand.GetProperty("implementation").GetInt32())
+            Assert.Equal(0, demand.GetProperty("review").GetInt32())
+            Assert.Equal(0, demand.GetProperty("hostedCi").GetInt32())
+            Assert.False(action.GetProperty("dispatchAuthority").GetBoolean())
             Assert.Empty reads.Mutations
     finally Directory.Delete(directory, true)
