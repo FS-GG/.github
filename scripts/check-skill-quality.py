@@ -507,6 +507,7 @@ def validate_work_board_coordinator(root: Path, errors: list[str]) -> None:
             "439 inherited reservations", "46 later originals", "one independent source",
             "tools/routine-delivery.py", "actual tested", "roadmap-telemetry",
             "Source delivery, publication, installation", "No fixed polling",
+            "Preserve the complete Done when; a merged slice narrows the remainder without closing its parent",
         )
         normalized = " ".join(work.split())
         for clause in required:

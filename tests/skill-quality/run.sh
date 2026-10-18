@@ -443,11 +443,13 @@ from pathlib import Path
 
 root = Path(sys.argv[1])
 for runtime in (".claude", ".agents"):
-    path = root / runtime / "skills/drive-board/references/backlog-triage.md"
-    path.write_text(path.read_text().replace("A parent remains open when a delivered slice leaves acceptance", "A merged slice completes its parent"))
+    path = root / runtime / "skills/work-board/SKILL.md"
+    old = "Preserve the complete Done when; a merged slice narrows the\nremainder without closing its parent"
+    assert old in path.read_text(), "canonical parent-boundary fixture preimage missing"
+    path.write_text(path.read_text().replace(old, "A merged slice completes its parent"))
 PY
-expect_rejection "drive-board cannot complete a parent from one merged slice" \
-  "organization successor: triage contract lost"
+expect_rejection "canonical coordinator cannot complete a parent from one merged slice" \
+  "work-board coordinator: missing"
 
 seed
 python3 - "$WORK/tree" <<'PY'
