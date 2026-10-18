@@ -206,7 +206,7 @@ module V2Projection =
             | _ -> enrollmentFailure()
         with _ -> enrollmentFailure()
 
-    let authenticateProgrammeEnrollment (binding: Binding) (publicJson: string) : IoResult<(string * string * string) list> =
+    let decodeProgrammePublicCommitment (publicJson: string) : IoResult<string> =
         try
             use document = strictDocument 1024 (strictUtf8.GetBytes publicJson)
             let root = document.RootElement
@@ -214,12 +214,16 @@ module V2Projection =
             let expected = root.GetProperty("commitmentSha256").GetString()
             if root.GetProperty("schema").GetString() <> "fsgg.coordination-board-v2-enrollment/v3"
                || isNull expected || expected.Length <> 64 || expected |> Seq.exists (fun character -> not (Char.IsAsciiHexDigitLower character)) then invalidArg "enrollment" "public-schema"
+            Ok expected
+        with _ -> enrollmentFailure()
+
+    let authenticateProgrammeEnrollment (binding: Binding) (publicJson: string) : IoResult<(string * string * string) list> =
+        decodeProgrammePublicCommitment publicJson |> Result.bind (fun expected ->
             match binding.ProgrammeEnrollment with
             | Some value ->
                 programmeCommitment value |> Result.bind (fun actual ->
                     if actual <> expected then enrollmentFailure() else programmeRows binding)
-            | None -> enrollmentFailure()
-        with _ -> enrollmentFailure()
+            | None -> enrollmentFailure())
 
     let private validateBindingCore (binding: Binding) =
         let subject = "the Coordination V2 binding"

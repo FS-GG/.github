@@ -110,6 +110,10 @@ module V2Projection =
     /// Validate the complete closed private payload against the selected exact binding; grants no enrollment.
     val programmeRows: binding: Binding -> IoResult<(string * string * string) list>
 
+    /// Validate only the closed bounded public v3 document and return its digest.
+    /// This offline shape check grants no authentication, enrollment or native authority.
+    val decodeProgrammePublicCommitment: publicJson: string -> IoResult<string>
+
     /// Authenticate private enrollment against the fixed protected public two-field v3 commitment.
     /// Only native source acquisition and freshness establish authority; a local digest grants none.
     val authenticateProgrammeEnrollment: binding: Binding -> publicJson: string -> IoResult<(string * string * string) list>
