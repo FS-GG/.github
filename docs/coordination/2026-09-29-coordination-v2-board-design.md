@@ -6,11 +6,14 @@ only work with a verified remaining outcome. Reuse existing repository issue and
 The board provides planning and visibility; native delivery and the selected V2 operation authorities
 remain the sources of delivery truth.
 
-**Current selected outcome — 2026-10-17:** [COORD-BOARD-V2-01.7–.11](https://github.com/FS-GG/.github/issues/4634)
-will make Project 3 the Unified Roadmap v3 planning and lane-selection surface. This new programme
-cutover remains open; the original finite .1–.6 acceptance and completed roadmap row stay unchanged.
-The [selected window below](#selected-programme-cutover--2026-10-17) is source preparation,
-not installed adoption, board-mutation admission or consumer activation.
+**Programme cutover accepted — 2026-10-18:** [COORD-BOARD-V2-01.7–.11](https://github.com/FS-GG/.github/issues/4634)
+is accepted for the current Codex programme cohort. Root decided at **07:42:17.703507 UTC** that
+private Coordination V2 Project 3 becomes the current Unified Roadmap v3 planning and lane-selection
+surface **upon protected delivery of this decision**. Until that delivery, the prior manual-status
+fallback remains authoritative. At delivery, programme, board-driver, recovery and progress consumers
+switch together and duplicate manual v3 current-status upkeep retires; strategic scope, owning links
+and historical evidence remain. [Acceptance and limits below](#operational-programme-cutover-acceptance--2026-10-18)
+retain the actual consumer and delivery boundary. The original finite .1–.6 acceptance is unchanged.
 
 **Current accepted package boundary — 2026-10-18:** coherent 0.105 publication is accepted through the
 [sole release plan](../roadmaps/utel-release-successor.md). The exact protected source is
@@ -83,15 +86,45 @@ supporting views. Root accepted that scoped user UI evidence; it is separate fro
 and does not claim an agent-rendered browser inspection. The existing main Programme Board
 presentation remains accepted. This later confirmation does not change the earlier report cutoffs.
 
-These are accepted submilestones, not programme cutover. Coordinated adoption by programme,
-board-driver, recovery and progress consumers remains open. Actual loaded instruction identities
-must be verified; package installation alone does not load them. Manual v3
-current-status upkeep remains unretired, and the six user-owned reporting edits remain untouched.
+These qualification submilestones are incorporated into the operational acceptance below. The six
+user-owned reporting files remain untouched in the shared checkout; their intended changes were
+reconciled in the independently reviewed isolated consumer source.
 Observation Verified describes read health, not readiness, delivery or whole-outcome acceptance.
 Product binding-v3/schema1 behavior is unchanged. The old 0.104 two-effect original and later stopped
 partial invocation retain Unknown/readback-only custody. The original 0.103 Unknown, all 439 inherited
 reservations, the forty-six prior original operation records and later original results remain distinct;
 none is released or replayed by these qualifications or this source update.
+
+### Operational programme cutover acceptance — 2026-10-18
+
+[PR4669](https://github.com/FS-GG/.github/pull/4669) delivered the coordinated repo-native consumer
+source at `248d40d7ab1a516fc6bafaaa61b59837783f5797`, tree
+`3ec2c1887b372fa78f0a28c662f806abeb23fdd2`. Independent source review passed; all 55 required
+checks passed with four configured skips, and reviewed, tested and delivered trees matched.
+Root accepted actual whole-instruction loads for programme, canonical board-driver with normal/best
+wrappers, recovery and progress at **07:37:29.371499 UTC** against that source. A fresh static check
+also matched all 82 installed payload members, the active entry, adapter and final binding to their
+accepted originals. No additional runtime invocation was used to establish those unchanged bytes.
+
+Root's **07:42:17.703507 UTC** operational decision takes effect when this canonical record reaches
+the protected default branch through ordinary reviewed delivery and required checks. That delivery
+accepts .7–.11 at the declared current programme scope: the qualified installed composition, final
+stable enrollment, complete migration, genuine continuation and blocked handling, necessary ordinary
+PR4665 delivery, Observation qualification, scoped user UI verification and coordinated consumer loads.
+The [strategic v3 catalogue](../roadmaps/2026-10-07-unified-development-roadmap-v3.md#2-open-work-and-owning-plans)
+then retains scope and owning-plan navigation while Project 3 supplies current planning and lane
+selection; duplicate manual Entry/blocking and Done upkeep retires. The previous protected table and
+all original owner, effect and acceptance records remain historical evidence.
+
+This acceptance covers the current Codex operator cohort; identical Claude mirrors establish source
+parity, not Claude execution or fleet adoption. Package, executable, check-board, driver and binding
+bytes are unchanged by this followup. Every subsequent action still needs fresh determining source,
+owner/body, intake, native capability, conflict and resource admission. Unknown capacity or native
+prerequisites withhold that action; a healthy Observation is never readiness. Games/product contracts,
+other fleet consumers, original partial/Unknown effects, all 439 inherited reservations and forty-six
+prior originals remain separate and unreleased. No native SC2 action, refresh replay, automatic human
+field change or general operation authority follows from this cutover. Restricted original evidence
+and private enrollment identities remain outside this public record.
 
 **Historical design/adoption frontier — 2026-09-29 through 2026-10-10:** organization pilot passed 2026-10-02.
 On 2026-10-03 the exact four-target successor, public installed 0.95.0 closure,
@@ -551,6 +584,10 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
 
 ## Delivery and acceptance
 
+The .7–.11 checkmarks record the operational decision above and become effective only with its
+protected delivery. Their detailed source-window notes below retain historical prerequisites and
+failures; those notes do not reopen accepted stages or grant any new effect.
+
 - [x] **COORD-BOARD-V2-01.1 — Select the design.** Record the planning boundary, selective carryover,
   host restriction and implementation sequence in the Unified and V2 roadmaps.
 - [x] **COORD-BOARD-V2-01.2 — Prepare the bounded import.** Inventory live consumers and candidate
@@ -588,7 +625,7 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   Record adopted workspace/board identities and any unresolved consumers. Depends on .5; each
   product's own verified binding permits its adoption without waiting for all other products.
 
-- [ ] **COORD-BOARD-V2-01.7 — Stable programme enrollment and current observations** — route: routine.
+- [x] **COORD-BOARD-V2-01.7 — Stable programme enrollment and current observations** — route: routine.
   Depends on canonical producer resolution and bounded outcome/native-issue mapping. Scope: current
   organization binding/parser/source/transport/report and existing focused tests. Separate stable
   enrollment from live revisions, remove pilot-only 3–5/open/empty-dependency assumptions from the
@@ -596,14 +633,14 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   Acceptance: ordinary edit/closure/dependency transition changes observations without reenrollment;
   unexpected members stay unselected; wrong identity/schema, incomplete pages and item gaps refuse
   truthfully; human planning values remain unchanged. No installed cutover is implied.
-- [ ] **COORD-BOARD-V2-01.8 — Actual action-specific integrator selection** — route: routine.
+- [x] **COORD-BOARD-V2-01.8 — Actual action-specific integrator selection** — route: routine.
   Depends on .7; typed inputs and tests may share its coherent source window. Scope: maintained CLI
   and integrator seam, actual native PR/evidence readers, canonical touch-set conflict rules and
   attributed capacity/reservations. Acceptance: existing PR continuation, duplicate-owner refusal,
   conflicting/disjoint slices, non-enrolled in-flight work, broad-parent independence, source-ready
   versus activation-blocked and changed-head/prerequisite invalidation. Emit compact reasons/evidence
   for ready, continue existing, blocked, needs decision and unknown; grant no dispatch authority.
-- [ ] **COORD-BOARD-V2-01.9 — Qualify the published and installed composition** — route: routine.
+- [x] **COORD-BOARD-V2-01.9 — Qualify the published and installed composition** — route: routine.
   Depends on .7/.8 qualification and a separately admitted fresh coherent candidate. Use the existing
   release/receiver route; preserve original .103/.104 holds. Prepare paired skills/package sources
   coherently, authenticate exact delivered package/tool/caller/consumer bytes and run actual installed
@@ -675,7 +712,7 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   and uses only `--installed-cli` at all helper callers. Existing direct guards/inert controls pass;
   corrected hosted compilation, migration tests, packaged execution and acceptance remain required.
 
-- [ ] **COORD-BOARD-V2-01.10 — Migrate and verify Project 3** — route: routine.
+- [x] **COORD-BOARD-V2-01.10 — Migrate and verify Project 3** — route: routine.
   Depends on complete bounded outcome mapping, .9 and admitted native mutation capability. Scope:
   selected enrollment/issue identities, necessary durable owner records, In review and exact bindings,
   main Board/supporting views. Independently read complete membership/fields/bindings and explicit
@@ -856,7 +893,7 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   no-op, partial-effect, lost-response, drift and Observation/product-isolation controls through the
   actual CLI-to-authorizer-to-provider-to-readback path.
 
-- [ ] **COORD-BOARD-V2-01.11 — Adopt programme consumers and retire duplicate tracking** — route: routine.
+- [x] **COORD-BOARD-V2-01.11 — Adopt programme consumers and retire duplicate tracking** — route: routine.
   Depends on .9/.10 and discrepancy-free comparison with current in-flight work. Scope: work-programme,
   organization drivers/wrappers, recovery, show-progress and maintained mirrored/generated/package
   sources, plus superseded current guidance. Reconcile the six user changes before edits. Prove

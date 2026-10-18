@@ -262,20 +262,21 @@ milestone closes the provider journey or the physical-fit outcome.
 
 ## 2. Open work and owning plans
 
-This catalogue preserves strategic outcome scope and owning-plan navigation. After root accepts the
-actual coordinated programme, board-driver, recovery and progress instruction loads in the
-[owning cutover plan](../coordination/2026-09-29-coordination-v2-board-design.md#accepted-installed-real-use-qualification--2026-10-18),
-Coordination V2 Project 3 supplies current planning and lane selection through the qualified installed
-binding-v4/schema2/inspection2 route. Current owning issues, human planning and native acceptance
-retain their separate authority; Observation Verified and human Done do not prove outcome completion.
+This catalogue preserves strategic outcome scope and owning-plan navigation. Root accepted the
+actual coordinated programme, board-driver, recovery and progress instruction loads and decided
+operational cutover at **2026-10-18 07:42:17.703507 UTC**, effective upon protected delivery in the
+[canonical owning plan](../coordination/2026-09-29-coordination-v2-board-design.md#operational-programme-cutover-acceptance--2026-10-18).
+Until that delivery, the
+[previous protected current-status table](https://github.com/FS-GG/.github/blob/bba5d43f134e610ae0be8054ed4dd987d6877a21/docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md#2-open-work-and-owning-plans)
+retains its prior boundary. At delivery, Coordination V2 Project 3 supplies current planning and lane
+selection through the qualified installed binding-v4/schema2/inspection2 route, and duplicate manual
+Entry/blocking and Done upkeep retires. Use this catalogue for changed strategic scope or plan links;
+retain the immutable table as history.
 
-This source candidate does not itself activate cutover. Until root records that actual acceptance,
-the [previous protected current-status table](https://github.com/FS-GG/.github/blob/bba5d43f134e610ae0be8054ed4dd987d6877a21/docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md#2-open-work-and-owning-plans)
-retains its existing boundary. After acceptance, stop duplicate manual Entry/blocking and Done upkeep;
-use this catalogue for changed strategic scope or plan links only, preserving historical evidence at
-that immutable source. Completed scopes stay closed through their accepted owning evidence, not an
-added current task. A catalogue row does not enroll a card or dispatch a lane. Games and conditional
-work in section 6 retain their separate selection and acceptance boundaries.
+Current owning issues, human planning and native acceptance retain their separate authority;
+Observation Verified and human Done do not prove outcome completion. Completed scopes stay closed
+through their accepted owning evidence. A catalogue row does not enroll a card or dispatch a lane.
+Games and conditional work in section 6 retain separate selection and acceptance boundaries.
 
 | Feature and accountable owner | Strategic outcome | Owning plan |
 |---|---|---|
@@ -293,7 +294,7 @@ work in section 6 retain their separate selection and acceptance boundaries.
 | **WASM-SHARED-01 consumer joins / .7 — Game and product owners** | Complete selected SC2 joint S1 conformance/S2 browser-source adoption, remaining product/native joins, and retire only proven superseded duplication. | [Shared WASM](2026-10-02-shared-wasm-foundation.md) |
 | **LEARN-01.2/.4–.5 / Akka orchestration — Coordination/telemetry/receiver owners** | Complete causal-declaration receiver and producer projection, then qualify publication and receiver-first adoption. Verify served Manager/runtime closure, inactive persistent-v3 images and genuine receiver grant/turn/capture/restart/cleanup; establish census/shared costs and enrollment, then a locked dataset or truthful stopped-window comparison. | [LEARN](2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md), [actor observation](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/learn-01-actor-observation.md), [persistent-v3 receiver](learn-c2-persistent-receiver-v3.md) |
 | **COORD-BOARD-V2-01 — `.github`/SDD/Templates/selected products** | Complete for the declared organization outcomes and selected two public qualification workspace cohorts; retain unresolved consumers and fleet boundaries. | [V2 board design](../coordination/2026-09-29-coordination-v2-board-design.md) |
-| **COORD-BOARD-V2-01.7–.11 programme cutover — `.github` / programme integration** | Make private Coordination V2 Project 3 the current v3 planning and lane-selection surface, then retire duplicate manual current-status upkeep. | [Accepted qualification and remaining cutover](../coordination/2026-09-29-coordination-v2-board-design.md#accepted-installed-real-use-qualification--2026-10-18) |
+| **COORD-BOARD-V2-01.7–.11 programme cutover — `.github` / programme integration** | Accepted at the declared current programme scope upon protected delivery of the operational decision; preserve strategic navigation and retire duplicate manual current-status upkeep. | [Operational cutover acceptance](../coordination/2026-09-29-coordination-v2-board-design.md#operational-programme-cutover-acceptance--2026-10-18) |
 | **V2-LANG-01.2 P3–P5 and full .5 adoption — Coordination/Governance/SDD/Templates/Sandbox** | Complete actual Governance Verify/package-backed SDD integration, blocked-read/uncertain-close capture retention coverage and bounded execution/evidence acceptance; qualify any selected stronger profiles, then qualify C3 public release and C4 receivers. Publish the portable successor; qualify genuine provider/runtime facts and cleanup, supported cold receivers, upgrade/matrix closure and TypeScript/Rust/Go installed adoption. | [Language-independent workspaces](2026-09-29-language-independent-workspaces-and-agent-integration.md), [GOV-423 C2 phases](https://github.com/FS-GG/FS.GG.Governance/blob/91ba9aeb304763f9c75635cf35f94381a789b50e/docs/roadmaps/governance-423-neutral-capability-bindings.md#c2-selected-source-phases), [bounded component window](https://github.com/FS-GG/FS.GG.Governance/blob/9ec0c651e06100a320050f36c9b0ecb954eca71b/docs/roadmaps/governance-423-neutral-capability-bindings.md#c2-bounded-direct-child-source-window), [explicit selector slice](https://github.com/FS-GG/FS.GG.Governance/blob/fb634622deea757f01dd375bf43b647dec98a10b/docs/roadmaps/governance-423-neutral-capability-bindings.md#gov423-c2-explicit-selector-source-slice-2026-10-09), [capture component and remaining gaps](https://github.com/FS-GG/FS.GG.Governance/blob/74dde68efd5fc4a1d5264ae88a82fc86d7858f06/docs/roadmaps/governance-423-neutral-capability-bindings.md#gov423-c2-retained-provider-document-capture-tier-1-local-qualification) |
 | **OPS-TYPED-01 remaining shared/operational adoption — Coordination and qualification owners** | Adopt published typed replacements at selected production entrypoints and complete the bounded administrative-owner migration. Product-specific FourD and SC2 slices are tracked in the games roadmap. | [Typed administrative policy](2026-10-01-typed-administrative-fsharp-quint.md) |
 | **FBX-07 public successor and upstream assessment — Templates** | Resolve compatibility and qualify genuinely selected upstream updates; retain live assessment without automatic pin changes. | [Accepted public receiver and remaining Xantham boundary](https://github.com/FS-GG/FS.GG.Templates/blob/5acf3bba234595fc6404545777c687140b4390be/docs/roadmaps/fable-bindings-xantham-candidates.md#public-0190-second-runtime-receiver-window--2026-10-14) |
