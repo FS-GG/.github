@@ -403,6 +403,211 @@ class ExistingProductTests(unittest.TestCase):
             r=self.call_product(f);self.assertEqual(expected,r.returncode,r.stderr)
             if expected:self.assertIn('header exceeds bound',r.stderr)
 
+class ProgrammePreparationTests(unittest.TestCase):
+    """Actual offline CLI, synthetic enrollment only; hashlib is an independent wire oracle."""
+    DOMAIN = b'fsgg.coordination-board-v2-enrollment/v3\x00'
+    SENTINEL = 'SYNTHETIC_PRIVATE_SENTINEL_9f310'
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.directory = pathlib.Path(self.temp.name)
+        self.template_path = self.directory / 'template.json'
+        self.payload_path = self.directory / 'payload.json'
+        self.private_path = self.directory / 'private.json'
+        self.public_path = self.directory / 'public.json'
+        self.template, self.payload = self.fixture()
+
+    def fixture(self):
+        rows = [{'issue': f'FS-GG/.github#{70001+i}', 'nodeId': f'I_synthetic_{i}',
+                 'roadmap': f'docs/coordination/{self.SENTINEL}-{i}.md'} for i in range(20)]
+        def field(name, options):
+            return {'id': 'synthetic-' + name,
+                    'options': {value: f'synthetic-{name}-{i}' for i, value in enumerate(options)}}
+        template = {
+            'bindingVersion': 4, 'schemaVersion': 2,
+            'importRecipeRevision': 'a'*40, 'importArtifactSha256': 'b'*64,
+            'selectedIssues': {row['nodeId']: row['issue'] for row in rows},
+            'recipeRevision': 'c'*40, 'populationRevision': 'e'*40,
+            'organizationId': 'O_kgDOEYAWYw', 'artifactSha256': 'd'*64,
+            'ownerKind': 'organization', 'owner': 'FS-GG', 'projectNumber': 3,
+            'projectTitle': 'Coordination V2', 'projectId': 'PVT_kwDOEYAWY84Bldpa',
+            'status': field('status', ['Backlog', 'Ready', 'In progress', 'In review', 'Blocked', 'Done']),
+            'roadmapFieldId': 'synthetic-roadmap',
+            'track': field('track', ['Active delivery', 'Follow-up']),
+            'observation': field('observation', ['Verified', 'Stale', 'Unknown']),
+            'repositories': ['FS-GG/.github']}
+        payload = {
+            'schema': 'fsgg.coordination-board-v2-enrollment-payload/v1',
+            'target': {'owner': 'FS-GG', 'organizationId': template['organizationId'],
+                       'projectId': template['projectId'], 'projectNumber': 3, 'schemaVersion': 2},
+            'binding': {'recipeRevision': template['importRecipeRevision'],
+                        'artifactSha256': template['importArtifactSha256'],
+                        'repositories': template['repositories']},
+            'items': rows}
+        return template, payload
+
+    @staticmethod
+    def wire(value):
+        return json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+
+    def call(self, template=None, payload=None, *, raw_template=None, raw_payload=None, arguments=None):
+        self.template_path.write_bytes(raw_template if raw_template is not None else self.wire(self.template if template is None else template))
+        self.payload_path.write_bytes(raw_payload if raw_payload is not None else self.wire(self.payload if payload is None else payload))
+        args = ['prepare-programme', '--binding-template', str(self.template_path), '--payload', str(self.payload_path),
+                '--private-output', str(self.private_path), '--public-output', str(self.public_path)]
+        return subprocess.run(['dotnet', str(DLL), *(args if arguments is None else arguments)],
+                              capture_output=True, text=True, timeout=30)
+
+    def refused(self, result):
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        self.assertEqual('', result.stdout)
+        self.assertEqual('board-v2 programme preparation refused\n', result.stderr)
+        self.assertNotIn(self.SENTINEL, result.stdout + result.stderr)
+
+    def assert_pair(self, raw_payload):
+        private_bytes, public_bytes = self.private_path.read_bytes(), self.public_path.read_bytes()
+        private, public = json.loads(private_bytes), json.loads(public_bytes)
+        self.assertEqual(set(self.template) | {'programmeEnrollment'}, set(private))
+        self.assertEqual({'nonceHex', 'payloadBase64'}, set(private['programmeEnrollment']))
+        for key in self.template:
+            self.assertEqual(self.template[key], private[key])
+        envelope = private['programmeEnrollment']
+        self.assertRegex(envelope['nonceHex'], r'^[0-9a-f]{64}$')
+        nonce = bytes.fromhex(envelope['nonceHex'])
+        self.assertNotEqual(bytes(32), nonce)
+        self.assertEqual(raw_payload, base64.b64decode(envelope['payloadBase64'], validate=True))
+        self.assertEqual(base64.b64encode(raw_payload).decode(), envelope['payloadBase64'])
+        self.assertEqual({'schema', 'commitmentSha256'}, set(public))
+        self.assertEqual('fsgg.coordination-board-v2-enrollment/v3', public['schema'])
+        expected = hashlib.sha256(self.DOMAIN + nonce + len(raw_payload).to_bytes(8, 'big') + raw_payload).hexdigest()
+        self.assertEqual(expected, public['commitmentSha256'])
+        self.assertNotEqual(hashlib.sha256(self.DOMAIN[:-1] + b'\\0' + nonce + len(raw_payload).to_bytes(8, 'big') + raw_payload).hexdigest(), expected)
+        for secret in [self.SENTINEL, envelope['nonceHex'], envelope['payloadBase64'], 'I_synthetic', '70001']:
+            self.assertNotIn(secret, public_bytes.decode())
+        if os.name != 'nt':
+            self.assertEqual(0o600, self.private_path.stat().st_mode & 0o777)
+            self.assertEqual(0o600, self.public_path.stat().st_mode & 0o777)
+        return envelope
+
+    def test_actual_twenty_row_pair_matches_independent_exact_byte_hash(self):
+        raw = self.wire(self.payload) + b' \n'
+        result = self.call(raw_payload=raw)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual('programme enrollment pair prepared; offline only\n', result.stdout)
+        self.assertEqual('', result.stderr)
+        envelope = self.assert_pair(raw)
+        self.assertNotIn(envelope['nonceHex'], result.stdout + result.stderr)
+        self.assertNotIn(self.SENTINEL, result.stdout + result.stderr)
+        # A separately prepared pair gets a new production RNG nonce; no deterministic/default salt.
+        other = self.directory / 'other'
+        other.mkdir()
+        self.private_path, self.public_path = other/'private.json', other/'public.json'
+        result = self.call(raw_payload=raw)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotEqual(envelope['nonceHex'], self.assert_pair(raw)['nonceHex'])
+
+    def test_exact_input_byte_bounds_and_one_beyond(self):
+        for kind, limit in [('template', 256*1024), ('payload', 128*1024)]:
+            with self.subTest(kind=kind):
+                original = self.wire(self.template if kind == 'template' else self.payload)
+                raw = original + b' '*(limit-len(original))
+                result = self.call(**{'raw_'+kind: raw})
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assert_pair(raw if kind == 'payload' else self.wire(self.payload))
+                self.private_path.unlink(); self.public_path.unlink()
+                self.refused(self.call(**{'raw_'+kind: raw+b' '}))
+                self.assertFalse(self.private_path.exists()); self.assertFalse(self.public_path.exists())
+
+    def test_empty_invalid_utf8_bom_and_invalid_json_never_write_or_echo(self):
+        for kind in ['template', 'payload']:
+            for raw in [b'', b'\xff'+self.SENTINEL.encode(), b'\xef\xbb\xbf{}', b'{'+self.SENTINEL.encode()]:
+                with self.subTest(kind=kind, raw=raw[:4]):
+                    self.refused(self.call(**{'raw_'+kind: raw}))
+                    self.assertFalse(self.private_path.exists()); self.assertFalse(self.public_path.exists())
+
+    def test_duplicate_nested_unknown_and_depth_inputs_refuse(self):
+        cases = []
+        raw = self.wire(self.payload)
+        cases.append(raw[:-1] + b',"schema":"duplicate"}')
+        cases.append(raw.replace(b'"projectNumber":3', b'"projectNumber":3,"projectNumber":3'))
+        cases.append(raw.replace(b'"nodeId":"I_synthetic_0"', b'"nodeId":"I_synthetic_0","nodeId":"I_synthetic_0"'))
+        extra = copy.deepcopy(self.payload); extra['items'][0]['unexpected'] = self.SENTINEL
+        cases.append(self.wire(extra))
+        extra = copy.deepcopy(self.payload); extra['unexpected'] = [[[[[[[[[[[[[[[[[self.SENTINEL]]]]]]]]]]]]]]]]]
+        cases.append(self.wire(extra))
+        for raw in cases:
+            with self.subTest(raw=raw[:20]):
+                self.refused(self.call(raw_payload=raw))
+                self.assertFalse(self.private_path.exists()); self.assertFalse(self.public_path.exists())
+        raw = self.wire(self.template)
+        self.refused(self.call(raw_template=raw[:-1] + b',"bindingVersion":4}'))
+
+    def test_template_selection_and_closed_payload_joins_refuse(self):
+        for mutate in [lambda p: p['target'].update(projectNumber=1),
+                       lambda p: p['binding'].update(recipeRevision='f'*40),
+                       lambda p: p['binding'].update(artifactSha256='f'*64),
+                       lambda p: p['binding'].update(repositories=['FS-GG/Other']),
+                       lambda p: p['items'].pop(),
+                       lambda p: p['items'].append(copy.deepcopy(p['items'][0])),
+                       lambda p: p['items'][0].update(nodeId='I_foreign'),
+                       lambda p: p['items'][0].update(issue='FS-GG/Other#70001'),
+                       lambda p: p.update(schema='fsgg.coordination-board-v2-enrollment/v2')]:
+            payload = copy.deepcopy(self.payload); mutate(payload)
+            self.refused(self.call(payload=payload))
+            self.assertFalse(self.private_path.exists()); self.assertFalse(self.public_path.exists())
+        for mutate in [lambda t: t.update(bindingVersion=3),
+                       lambda t: t.update(programmeEnrollment={'nonceHex':'0'*64, 'payloadBase64':'e30='}),
+                       lambda t: t.update(unexpected=self.SENTINEL)]:
+            template = copy.deepcopy(self.template); mutate(template)
+            self.refused(self.call(template=template))
+            self.assertFalse(self.private_path.exists()); self.assertFalse(self.public_path.exists())
+
+    def test_existing_either_output_preserved_and_pair_not_reseeded(self):
+        result = self.call()
+        self.assertEqual(0, result.returncode, result.stderr)
+        originals = (self.private_path.read_bytes(), self.public_path.read_bytes())
+        self.refused(self.call())
+        self.assertEqual(originals, (self.private_path.read_bytes(), self.public_path.read_bytes()))
+        for retained in ['private', 'public']:
+            with self.subTest(retained=retained):
+                directory = self.directory / retained; directory.mkdir()
+                self.private_path, self.public_path = directory/'private.json', directory/'public.json'
+                path = self.private_path if retained == 'private' else self.public_path
+                path.write_bytes(self.SENTINEL.encode())
+                self.refused(self.call())
+                self.assertEqual(self.SENTINEL.encode(), path.read_bytes())
+                self.assertFalse((self.public_path if retained == 'private' else self.private_path).exists())
+
+    def test_partial_second_output_failure_preserves_private_and_never_retries(self):
+        self.public_path = self.directory / self.SENTINEL / 'absent-parent' / 'public.json'
+        self.refused(self.call())
+        original = self.private_path.read_bytes()
+        envelope = json.loads(original)['programmeEnrollment']
+        result = self.call()
+        self.assertNotIn(envelope['nonceHex'], result.stderr)
+        self.refused(result)
+        self.assertEqual(original, self.private_path.read_bytes())
+        self.assertFalse(self.public_path.exists())
+
+    def test_disjoint_normalized_paths_arguments_and_link_custody_refuse(self):
+        for pair in [('private', self.template_path), ('public', self.payload_path), ('public', self.private_path)]:
+            original_private, original_public = self.private_path, self.public_path
+            if pair[0] == 'private': self.private_path = pair[1]
+            else: self.public_path = pair[1]
+            self.refused(self.call())
+            self.assertEqual(self.wire(self.template), self.template_path.read_bytes())
+            self.assertEqual(self.wire(self.payload), self.payload_path.read_bytes())
+            self.private_path, self.public_path = original_private, original_public
+        self.refused(self.call(arguments=['prepare-programme', '--nonce', self.SENTINEL]))
+        self.refused(self.call(arguments=['prepare-programme']))
+        if os.name != 'nt':
+            real = self.directory/'real.json'; real.write_bytes(self.wire(self.payload))
+            self.payload_path.unlink(); self.payload_path.symlink_to(real)
+            # call() intentionally writes through this synthetic link; CLI itself must reject it.
+            self.refused(self.call())
+            self.assertFalse(self.private_path.exists()); self.assertFalse(self.public_path.exists())
+
 if __name__ == '__main__':
     if '--no-build' in sys.argv:
         sys.argv.remove('--no-build')

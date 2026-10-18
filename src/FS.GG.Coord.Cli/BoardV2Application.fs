@@ -22,36 +22,7 @@ module BoardV2Application =
         closed [ "owner"; "repository"; "number" ] element
         { Owner = text "owner" element; Repository = text "repository" element; Number = number "number" element }
 
-    let parseBinding json =
-        try
-            use document = JsonDocument.Parse(json: string)
-            let root = document.RootElement
-            closed [ "bindingVersion"; "importRecipeRevision"; "importArtifactSha256"; "selectedIssues"; "schemaVersion"; "recipeRevision"; "populationRevision"; "organizationId"; "artifactSha256"; "ownerKind"; "owner"; "projectNumber"; "projectTitle"; "projectId"; "status"; "roadmapFieldId"; "track"; "observation"; "repositories" ] root
-            if text "ownerKind" root <> "organization" then invalidArg "ownerKind" "only organization is admitted"
-            let field (name: string) =
-                let value = root.GetProperty(name)
-                closed [ "id"; "options" ] value
-                let options = value.GetProperty("options").EnumerateObject() |> Seq.map (fun item -> item.Name, item.Value.GetString()) |> Seq.toList
-                if options.Length <> (options |> Map.ofList |> Map.count) then invalidArg "options" "duplicate options"
-                { Id = text "id" value; Options = Map.ofList options }
-            let repositories = root.GetProperty("repositories").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
-            if repositories.Length <> (repositories |> Set.ofList |> Set.count) then invalidArg "repositories" "duplicate repositories"
-            let selected = root.GetProperty("selectedIssues").EnumerateObject() |> Seq.map (fun entry -> entry.Name, entry.Value.GetString()) |> Seq.toList
-            if selected.Length <> (selected |> Map.ofList |> Map.count) then invalidArg "selectedIssues" "duplicate native issue IDs"
-            let binding =
-                { BindingVersion = number "bindingVersion" root; ImportRecipeRevision = text "importRecipeRevision" root
-                  ImportArtifactSha256 = text "importArtifactSha256" root
-                  SelectedIssues = Map.ofList selected
-                  SchemaVersion = number "schemaVersion" root; RecipeRevision = text "recipeRevision" root
-                  PopulationRevision = text "populationRevision" root; OrganizationId = text "organizationId" root
-                  ArtifactSha256 = text "artifactSha256" root; OwnerKind = Org; Owner = text "owner" root
-                  ProjectNumber = number "projectNumber" root; ProjectTitle = text "projectTitle" root; ProjectId = text "projectId" root
-                  Status = field "status"; RoadmapFieldId = text "roadmapFieldId" root; Track = field "track"
-                  Observation = field "observation"; Repositories = Set.ofList repositories }
-            // Version 3 uses this same closed wire shape for a selected receiver repository.
-            // Local-only workspaces select no board command; no implicit binding is constructed.
-            V2Projection.validateBinding binding |> Result.map (fun () -> binding) |> Result.mapError Errors.explain
-        with error -> Error("invalid binding: " + error.Message)
+    let parseBinding json = V2Projection.decodeBinding json
 
     // JSON is an attributed caller report, never authentication or native acceptance. All groups
     // retain their original observation interval; decoding/serialization cannot renew a fact.
@@ -63,7 +34,7 @@ module BoardV2Application =
             let options = JsonDocumentOptions(MaxDepth = 12)
             use document = JsonDocument.Parse(json, options)
             let root = document.RootElement
-            closed [ "schema"; "invocation"; "projectId"; "schemaVersion"; "recipeRevision"; "artifactSha256"; "populationRevision"; "enrollmentBlob";
+            closed [ "schema"; "invocation"; "projectId"; "schemaVersion"; "recipeRevision"; "artifactSha256"; "populationRevision"; "enrollmentBlob"; "enrollmentCommitmentSha256";
                      "observedAt"; "validUntil"; "evidence"; "slices"; "capacity"; "reservations" ] root
             let boundedText (name: string) (limit: int) (value: JsonElement) =
                 let result = text name value
@@ -149,7 +120,7 @@ module BoardV2Application =
             let context: SelectionContext =
                 { Invocation = boundedText "invocation" 128 root; ProjectId = boundedText "projectId" 256 root; SchemaVersion = number "schemaVersion" root
                   RecipeRevision = boundedText "recipeRevision" 40 root; ArtifactSha256 = boundedText "artifactSha256" 64 root
-                  PopulationRevision = boundedText "populationRevision" 40 root; EnrollmentBlob = boundedText "enrollmentBlob" 40 root
+                  PopulationRevision = boundedText "populationRevision" 40 root; EnrollmentBlob = boundedText "enrollmentBlob" 40 root; EnrollmentCommitment = boundedText "enrollmentCommitmentSha256" 64 root
                   InputSha256 = SHA256.HashData(utf8.GetBytes json) |> Convert.ToHexStringLower
                   Slices = slices; CapacityMeaning = capacity |> Option.map (fun (meaning, _, _, _, _) -> meaning) |> Option.defaultValue "missing"
                   ImplementationSlots = capacity |> Option.bind (fun (_, count, _, _, _) -> count); ReviewSlots = capacity |> Option.bind (fun (_, _, count, _, _) -> count)
@@ -158,7 +129,8 @@ module BoardV2Application =
                   ObservedAt = timestamp "observedAt" root; ValidUntil = timestamp "validUntil" root; Evidence = boundedText "evidence" 2048 root }
             if text "schema" root <> "fsgg.coord.board-v2-integrator-observations/1" || context.ProjectId <> binding.ProjectId
                || context.SchemaVersion <> binding.SchemaVersion || context.RecipeRevision <> binding.RecipeRevision || context.ArtifactSha256 <> binding.ArtifactSha256
-               || context.PopulationRevision <> binding.PopulationRevision then invalidArg "input" "exact organization binding required"
+               || context.PopulationRevision <> binding.PopulationRevision
+               || (binding.ProgrammeEnrollment |> Option.bind (fun value -> V2Projection.programmeCommitment value |> Result.toOption)) <> Some context.EnrollmentCommitment then invalidArg "input" "exact organization binding required"
             Ok context
         with _ -> Error "invalid integrator observations: organization-only closed bounded schema and exact binding required; no native authority inferred"
 
@@ -224,7 +196,8 @@ module BoardV2Application =
         if report.Binding.BindingVersion <> 4 then JsonSerializer.Serialize(common)
         else
             let successor =
-                {| membershipGap = report.MembershipGap |> Option.map Errors.explain
+                {| enrollmentCommitmentSha256 = report.Evidence.ProtectedInputs |> List.tryPick (fun (path, _, digest) -> if path = "programme-enrollment/v3-commitment" then Some digest else None)
+                   membershipGap = report.MembershipGap |> Option.map Errors.explain
                    memberships = report.Memberships |> List.map (fun memberItem ->
                        {| itemId = memberItem.ItemId; contentId = memberItem.ContentId; kind = memberItem.Kind
                           issue = memberItem.Issue |> Option.map issueWire; enrolled = memberItem.Enrolled
@@ -257,7 +230,7 @@ module BoardV2Application =
             let wire = JsonSerializer.SerializeToNode(common)
             wire.["schema"] <- JsonSerializer.SerializeToNode("fsgg.coord.board-v2-inspection/2")
             let extension = JsonSerializer.SerializeToNode(successor)
-            for name in [ "membershipGap"; "memberships"; "nativeIntegrator"; "integratorObservation"; "selectionCoverage"; "selection" ] do
+            for name in [ "enrollmentCommitmentSha256"; "membershipGap"; "memberships"; "nativeIntegrator"; "integratorObservation"; "selectionCoverage"; "selection" ] do
                 let value = extension.[name]
                 wire.[name] <- if isNull value then null else value.DeepClone()
             let itemNodes = wire.["items"].AsArray()
@@ -728,10 +701,26 @@ module BoardV2Application =
             else parseIntegratorObservations binding (String(buffer, 0, count))
         with _ -> Error "could not read bounded integrator stdin; no native authority inferred"
 
+    let private readBindingFile (path: string) =
+        // One opened handle; bound before allocating from provider-reported file length.
+        use stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)
+        if stream.Length <= 0L || stream.Length > 262144L then invalidArg "binding" "binding-byte-bound"
+        let buffer = Array.zeroCreate<byte> 262145
+        let mutable count = 0
+        let mutable finished = false
+        while not finished && count < buffer.Length do
+            let read = stream.Read(buffer, count, buffer.Length - count)
+            if read = 0 then finished <- true else count <- count + read
+        if count > 262144 then invalidArg "binding" "binding-byte-bound"
+        System.Text.UTF8Encoding(false, true).GetString(buffer, 0, count)
+
     let private prepare (reader: TextReader) arguments =
         (try parseArguments arguments with error -> Error("invalid input path: " + error.Message)) |> Result.bind (fun (bindingPath, previousPath, reportPath, integratorInput) ->
             try
-                parseBinding (File.ReadAllText bindingPath) |> Result.bind (fun binding ->
+                parseBinding (readBindingFile bindingPath) |> Result.bind (fun binding ->
+                    if binding.BindingVersion = 4 then
+                        privatePath bindingPath
+                        privatePath reportPath
                     use stream = File.OpenRead typeof<Binding>.Assembly.Location
                     let actual = SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
                     if not (String.Equals(actual, binding.ArtifactSha256, StringComparison.OrdinalIgnoreCase)) then Error "selected binding does not match the loaded adapter assembly SHA-256"
@@ -743,7 +732,7 @@ module BoardV2Application =
                                 elif integratorInput then readIntegratorInput reader binding |> Result.map Some
                                 else Ok None
                             context |> Result.map (fun supplied -> binding, history, reportPath, supplied)))
-            with error -> Error("could not read refresh input: " + error.Message))
+            with _ -> Error "could not read refresh input: bounded binding/history input unavailable")
 
     // Leave enough time for the existing 30 second transport timeout. Stop before dispatch,
     // without cancelling an in-flight writer; serialization is owned by the fixed job.
@@ -771,15 +760,19 @@ module BoardV2Application =
                 V2ProjectionSource.runFixed (bounded transport) binding previous
             let evidence = match box transport with :? V2ObservationTransport.IDispatchEvidence as evidence -> evidence.DispatchReceipts | _ -> []
             let report = { report with NativeDispatch = evidence; Cleanup = "Root-local project exclusive OS handle released; no distributed lease or background work" }
-            File.WriteAllText(reportPath, encodeReport report + Environment.NewLine)
+            let json = encodeReport report + Environment.NewLine
+            if binding.BindingVersion = 4 then privateJson syncMigrationDirectory reportPath json
+            else File.WriteAllText(reportPath, json)
             if report.PopulationGap.IsSome || report.Selected <> Some report.Verified then 3 else 0
-        with error -> refuse ("refresh/report failed: " + error.Message)
+        with error -> refuse (if binding.BindingVersion = 4 then "private refresh/report failed" else "refresh/report failed: " + error.Message)
     let private executeInspection transport (binding, previous, reportPath, context) =
         try
             let report = V2ProjectionSource.inspectFixed (bounded transport) binding previous
-            File.WriteAllText(reportPath, encodeInspectionWithContext report context DateTimeOffset.UtcNow + Environment.NewLine)
+            let json = encodeInspectionWithContext report context DateTimeOffset.UtcNow + Environment.NewLine
+            if binding.BindingVersion = 4 then privateJson syncMigrationDirectory reportPath json
+            else File.WriteAllText(reportPath, json)
             if report.Evidence.PopulationGap.IsSome || report.MembershipGap.IsSome || (report.Items |> List.exists (fun item -> item.SourceCurrentness <> "Current" || item.PlanningGap.IsSome)) then 3 else 0
-        with error -> refuse ("inspection/report failed: " + error.Message)
+        with error -> refuse (if binding.BindingVersion = 4 then "private inspection/report failed" else "inspection/report failed: " + error.Message)
 
     let runWithTransportAndInput transport (reader: TextReader) arguments =
         match prepare reader arguments with
