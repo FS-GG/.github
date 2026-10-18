@@ -12,21 +12,41 @@ cutover remains open; the original finite .1–.6 acceptance and completed roadm
 The [selected window below](#selected-programme-cutover--2026-10-17) is source preparation,
 not installed adoption, board-mutation admission or consumer activation.
 
-**Current accepted boundary — 2026-10-18:** coherent 0.104 publication is accepted through the
-[sole release plan](../roadmaps/utel-release-successor.md). Independent qualification after the maintained developer update verified
-all 82 installed payload files against the retained source-912 candidate, and genuine read-only
-migration preparation passed. A separately selected apply confirmed its schema-option addition and
-one membership, then stopped with its original Unknown when immediate complete readback still showed
-the pre-effect membership state. Later independent readback confirmed those partial effects; the
-original invocation remains readback-only. Restricted original custody stays outside this document.
+**Current accepted package boundary — 2026-10-18:** coherent 0.105 publication is accepted through the
+[sole release plan](../roadmaps/utel-release-successor.md). The exact protected source is
+`e54a59885580c894c8fbc67b0b27af3571ea9883`, original candidate
+[39095711219/attempt 1](https://github.com/FS-GG/.github/actions/runs/39095711219).
+The [initial publisher](https://github.com/FS-GG/.github/actions/runs/39096861301) remains an incomplete
+generation-14 checkpoint. A separately selected [completion invocation](https://github.com/FS-GG/.github/actions/runs/39098313280)
+settled the original Kit intent without resending it and completed all sixteen effects at generation 33.
+Release 416229635 is promoted. Independent qualification after the maintained developer update verified
+all 82 installed payload files against the accepted original 0.105 candidate, including its actual
+entry and GitHub adapter. This source delivery updates published inventory and the canonical tool pin;
+it does not republish, install, activate consumers or change a board.
 
-The bounded visibility correction below joins the selected 0.105 source composition, with actual
-compiler and inert unit/caller qualification; it is not carried by the already published/installed
-0.104 bytes. A qualified successor,
-fresh preparation and separately selected remaining migration are still needed. Final native-ID
-binding, positive installed inspection/refresh/selection, actual UI and coordinated real use remain
-open. Human UI edits can proceed independently when no apply is active and must be observed by fresh
-preparation. No original Unknown, inherited reservation or completed historical outcome is reset.
+The subsequent fresh remaining-only migration has retained an original successful thirteen-effect
+apply, independent final joins over 22 memberships/eight views and all seventeen declared planning
+rows, and a separately selected read-only zero-effect repeat. The combined original-data acceptance
+remains a separate accountable decision. Existing human values, the original five cards, the earlier
+added membership and all six Status IDs/order remain preserved. The accepted main view remains exactly
+**Programme Board**, with its original identity and eight ordered visible fields, including the
+legitimate Status and Sub-issues progress fields; supporting-view/full-population UI acceptance is separate.
+
+The protected enrollment document now prepares the closed public `enrollment/v3` commitment only.
+All twenty exact issue identities and plan paths remain in the existing restricted constructor-produced
+payload. Native final IDs match the private binding's existing fields/options; the unchanged payload,
+nonce and commitment are retained. Updating the outer binding to the actual 0.105 source/adapter does
+not require another nonce. Its protected population revision is not fabricated: the prospective
+private binding remains unadmitted until this source is reviewed/delivered and its actual protected
+revision/blob are authenticated. No private identity or payload is admitted to the public manifest.
+
+Positive installed inspection/Observation refresh/action selection, fresh attributed integrator facts,
+remaining human UI and coordinated real use still precede consumer activation and retirement of manual
+v3 current-status maintenance. Pinned-source instruction loading is separate from package installation;
+the root's user-owned reporting edits remain untouched. Product binding-v3/schema1 behavior is unchanged.
+The old 0.104 two-effect original and later stopped partial invocation retain their original Unknown
+and readback-only custody. The 0.103 Unknown, consumed claims, inherited reservations and completed
+historical outcomes are not reset or transferred.
 
 **Historical design/adoption frontier — 2026-09-29 through 2026-10-10:** organization pilot passed 2026-10-02.
 On 2026-10-03 the exact four-target successor, public installed 0.95.0 closure,
