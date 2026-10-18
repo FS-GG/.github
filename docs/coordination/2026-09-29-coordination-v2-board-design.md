@@ -78,10 +78,14 @@ response hashes and request identities are retained; raw response preimages are 
 canonical snapshot does not establish absence of arbitrary underlying label, assignee or linked-PR
 changes. Original reports and accountable acceptance remain in restricted custody.
 
-These are accepted submilestones, not programme cutover. Actual rendered verification of the five
-supporting views and coordinated adoption by programme, board-driver, recovery and progress consumers
-remain open. The existing main Programme Board presentation is already accepted. Actual loaded
-instruction identities must be verified; package installation alone does not load them. Manual v3
+The user subsequently forwarded the side-thread confirmation “view is verified” for the five
+supporting views. Root accepted that scoped user UI evidence; it is separate from the API readbacks
+and does not claim an agent-rendered browser inspection. The existing main Programme Board
+presentation remains accepted. This later confirmation does not change the earlier report cutoffs.
+
+These are accepted submilestones, not programme cutover. Coordinated adoption by programme,
+board-driver, recovery and progress consumers remains open. Actual loaded instruction identities
+must be verified; package installation alone does not load them. Manual v3
 current-status upkeep remains unretired, and the six user-owned reporting edits remain untouched.
 Observation Verified describes read health, not readiness, delivery or whole-outcome acceptance.
 Product binding-v3/schema1 behavior is unchanged. The old 0.104 two-effect original and later stopped
