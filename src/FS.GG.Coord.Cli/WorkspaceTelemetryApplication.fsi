@@ -58,6 +58,9 @@ module WorkspaceTelemetryApplication =
         payload: byte array ->
             Result<string, string list>
 
+    /// Same bounded complete-inventory selection used by the actual drain, before its 16-file quantum.
+    val selectReadyFilesForTesting: files: string array -> Result<string list, string list>
+
     val tryDrainWithOperationsForTesting:
         configArg: string option -> repositoryArg: string option -> operations: RemoteOperations -> Result<string, string list>
 

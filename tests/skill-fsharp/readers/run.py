@@ -309,6 +309,18 @@ def test_native():
         environment["SKILL_FS_01_ROLLOUT"] = str(rollout)
 
         original_rollout = rollout.read_bytes()
+        for defect, raw in (
+            ("duplicate-counter", original_rollout.replace(b'"input_tokens":10', b'"input_tokens":999,"input_tokens":10', 1)),
+            ("duplicate-thread", original_rollout.replace(b'"thread_id":', b'"thread_id":"99999999-9999-9999-9999-999999999999","thread_id":', 1)),
+            ("invalid-utf8", original_rollout.replace(b'"response-a"', b'"response-\xff"', 1)),
+        ):
+            malformed = sessions / f"{defect}.jsonl"
+            malformed.write_bytes(raw)
+            environment["SKILL_FS_01_ROLLOUT"] = str(malformed)
+            refused = probe("native", FAKE_CODEX, home, PARENT, "child_1", "root-1",
+                            f"invocation-{defect}", 0, environment=environment)
+            require(not refused["ok"], f"complete native decoder accepted {defect}")
+        environment["SKILL_FS_01_ROLLOUT"] = str(rollout)
         for wire_mode in ("crlf", "eof-final"):
             exact_rollout = sessions / f"{wire_mode}.jsonl"
             raw = original_rollout.replace(b"\n", b"\r\n") if wire_mode == "crlf" else original_rollout.rstrip(b"\n")

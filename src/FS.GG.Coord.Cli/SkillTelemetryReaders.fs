@@ -959,19 +959,21 @@ module SkillTelemetryReaders =
         // Both complete accounting and passive capture use this decoder. It retains no raw text.
         let private decodeUsageRecord (raw: byte array) =
             try
-                use document = JsonDocument.Parse raw
-                let row = document.RootElement
-                if stringField "type" row <> Some "token_usage_record" then Ok None
-                else
-                    let payload = row.GetProperty "payload"
-                    match guidField "thread_id" payload, guidField "turn_id" payload, stringField "response_id" payload with
-                    | Some thread, Some turn, Some response when thread <> Guid.Empty && turn <> Guid.Empty
-                                                                && identityPattern.IsMatch response ->
-                        observedCounters (payload.GetProperty "usage")
-                        |> Result.map (fun usage -> Some(thread, turn, response, usage, payload.Clone(), row.Clone()))
-                    | _ -> failure "native usage record identity is malformed"
+                // Retain the complete collector's strict UTF-8 and recursive duplicate-property refusal.
+                match Json.parse (Encoding.UTF8.GetBytes(decodedLine raw)) with
+                | Error _ -> failure "native usage record is malformed"
+                | Ok row ->
+                    if stringField "type" row <> Some "token_usage_record" then Ok None
+                    else
+                        let payload = row.GetProperty "payload"
+                        match guidField "thread_id" payload, guidField "turn_id" payload, stringField "response_id" payload with
+                        | Some thread, Some turn, Some response when thread <> Guid.Empty && turn <> Guid.Empty
+                                                                    && identityPattern.IsMatch response ->
+                            observedCounters (payload.GetProperty "usage")
+                            |> Result.map (fun usage -> Some(thread, turn, response, usage, payload.Clone(), row.Clone()))
+                        | _ -> failure "native usage record identity is malformed"
             with
-            | :? JsonException | :? InvalidOperationException | :? KeyNotFoundException -> failure "native usage record is malformed"
+            | :? JsonException | :? InvalidOperationException | :? KeyNotFoundException | :? DecoderFallbackException -> failure "native usage record is malformed"
 
         type private AppServer(command: string, protectedHome: string option) =
             let start = ProcessStartInfo(command)

@@ -614,6 +614,31 @@ module WorkspaceTelemetryApplication =
     let private passiveBatch (batch: TelemetryStore.Batch) =
         batch.Facts |> List.exists (fun fact -> fact.Kind = "provider-usage-observation/1" || (fact.Kind = "source" && fact.Identity.StartsWith("passive-source-", StringComparison.Ordinal)))
 
+    // Validate the complete bounded inventory before selecting a drain quantum. Taking an
+    // arbitrary filesystem prefix first can permanently hide the earliest passive predecessor.
+    let private selectReadyFiles (files: string array) =
+        if files.Length > 128 then Error [ "spool-overload" ]
+        else
+            try
+                let ranked =
+                    files |> Array.map (fun file ->
+                        let info = FileInfo file
+                        if info.LinkTarget <> null || info.Length > int64 TelemetryReceipt.MaxEnvelopeBytes
+                           || (not (OperatingSystem.IsWindows()) && File.GetUnixFileMode(file) <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite)) then
+                            invalidOp "spool-invalid"
+                        let parsed = TelemetryReceipt.parse (File.ReadAllBytes file) |> Result.defaultWith (fun _ -> invalidOp "spool-invalid")
+                        let rank =
+                            if passiveBatch parsed.Batch then
+                                let cursor = Int64.Parse(parsed.Batch.Cursor, Globalization.CultureInfo.InvariantCulture)
+                                if cursor < 1L then invalidOp "passive-sequence-invalid"
+                                0, parsed.Scope.Producer + ":" + parsed.Scope.Stream + ":" + parsed.Batch.SourceIdentity + ":" + parsed.Batch.Generation, cursor, Path.GetFileName file
+                            else 1, "", 0L, Path.GetFileName file
+                        rank, file)
+                Ok(ranked |> Array.sortBy fst |> Array.truncate 16 |> Array.map snd |> Array.toList)
+            with _ -> Error [ "spool-invalid" ]
+
+    let selectReadyFilesForTesting files = selectReadyFiles files
+
     let private passivePredecessor directory (current: TelemetryReceipt.Envelope) =
         if not (passiveBatch current.Batch) then false
         else
@@ -1079,11 +1104,12 @@ module WorkspaceTelemetryApplication =
                                 | Ok directory ->
                                     use deadline = new CancellationTokenSource(TimeSpan.FromSeconds 30.)
 
-                                    let files =
-                                        Directory.EnumerateFiles(directory, "*.ready") |> Seq.truncate 16 |> Seq.toList
-
+                                    let inventory = Directory.EnumerateFiles(directory, "*.ready") |> Seq.truncate 129 |> Seq.toArray
+                                    let selection = selectReadyFiles inventory
                                     let results =
-                                        files |> List.map (remoteOneWith operations association endpoint reference deadline.Token)
+                                        match selection with
+                                        | Error errors -> [ Error errors ]
+                                        | Ok files -> files |> List.map (remoteOneWith operations association endpoint reference deadline.Token)
 
                                     match
                                         results

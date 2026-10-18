@@ -1088,10 +1088,8 @@ module TelemetryApplication =
                         with _ ->
                             { SkillTelemetryAdapter.CommandResult.ExitCode = 1; Stdout = Array.empty
                               Stderr = Encoding.UTF8.GetBytes "fsgg passive telemetry: source selection unavailable or invalid\n" }
-                use stdout = Console.OpenStandardOutput()
-                use stderr = Console.OpenStandardError()
-                stdout.Write(completed.Stdout, 0, completed.Stdout.Length)
-                stderr.Write(completed.Stderr, 0, completed.Stderr.Length)
+                Console.Out.Write(Encoding.UTF8.GetString completed.Stdout)
+                Console.Error.Write(Encoding.UTF8.GetString completed.Stderr)
                 completed.ExitCode
 
     let tryRun argv =

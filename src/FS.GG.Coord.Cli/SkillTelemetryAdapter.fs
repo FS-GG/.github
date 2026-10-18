@@ -1193,7 +1193,7 @@ module SkillTelemetryAdapter =
     // One bounded pass over explicit sources. The production caller always supplies its selected association root.
     // Same-owner state cloning/reinitialization/root migration requires original-state/fence reconciliation;
     // undeclared clones cannot be detected offline and are outside this supported first profile.
-    let capturePassiveWithHook root owner sourceIdentity codexHome (paths: string list) enqueue hook =
+    let capturePassiveWithHook (root: string) (owner: string) (sourceIdentity: string) (codexHome: string) (paths: string list) (enqueue: byte array -> Result<string, string list>) (hook: string -> unit) =
         try
             if paths.IsEmpty || paths.Length > NativeUsage.PassiveMaximumFiles
                || (paths |> List.exists (Path.IsPathFullyQualified >> not))
@@ -1298,7 +1298,7 @@ module SkillTelemetryAdapter =
                             savePassive directory state
                         else
                             FS.GG.Coord.TelemetryStore.parseBatch bytes |> Result.defaultWith (fun _ -> fail "passive batch validation failed") |> ignore
-                            state["pending"] <- jsonObject [ "batchBase64", node (Convert.ToBase64String bytes); "batchDigest", node (sha256 bytes)
+                            state["pending"] <- jsonObject [ "batchBase64", node (Convert.ToBase64String bytes); "batchDigest", node (sha256 bytes);
                                                             "sourcesAfter", sources; "responsesAfter", responses; "sequenceAfter", node (sequence + 1) ]
                             // Intent is written before enqueue. A crash at either subsequent write replays identical bytes.
                             hook "before-intent-write"

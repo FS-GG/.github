@@ -608,7 +608,7 @@ module WorkspaceTelemetryApplicationTests =
         let node =
             System.Text.Json.Nodes.JsonNode.Parse
                 $"""{{"schema":"fsgg.telemetry.workspace-config/1","engine":"absent-fixture-engine","associations":[{{"workspaceId":"workspace-a","producerId":"passive-a","streamId":"native-observations","repositories":["FS-GG/.github"],"destination":{{"kind":"remote","endpoint":"https://127.0.0.1:1/","credentialReference":"absent-passive-fixture","spoolRoot":"unused"}}}}],"retiredAssociations":[]}}"""
-        node["associations"][0]["destination"]["spoolRoot"] <- System.Text.Json.Nodes.JsonValue.Create spool
+        node["associations"].[0].["destination"].["spoolRoot"] <- System.Text.Json.Nodes.JsonValue.Create spool
         File.WriteAllText(config, node.ToJsonString())
         if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(config, enum<UnixFileMode> 0o600)
         config, spool
@@ -683,13 +683,20 @@ module WorkspaceTelemetryApplicationTests =
             let home, path = passiveSource root "ordered"
             File.WriteAllText(path, "")
             let enqueue = WorkspaceTelemetryApplication.tryEnqueueBound (Some config) (Some "FS-GG/.github") (Some scope.Producer) (Some binding)
-            for index in 1..10 do
+            for index in 1..32 do
                 File.AppendAllText(path, nativeRow "response-a" (int64 index) 0L)
                 SkillTelemetryAdapter.capturePassive stateRoot "owner" scope.Stream home [path] enqueue |> parseCapture |> ignore
             let envelopes =
                 Directory.GetFiles(spool, "*.ready") |> Array.map (fun file ->
                     let value = TelemetryReceipt.parse(File.ReadAllBytes file) |> Result.defaultWith (sprintf "%A" >> failwith)
                     value.BatchId, value) |> Map.ofArray
+            // Force the earliest predecessor outside an arbitrary first-16 inventory prefix.
+            let scrambled = Directory.GetFiles(spool, "*.ready") |> Array.sortByDescending (fun file ->
+                (TelemetryReceipt.parse(File.ReadAllBytes file) |> Result.defaultWith (sprintf "%A" >> failwith)).Batch.Cursor |> Int32.Parse)
+            let selected = WorkspaceTelemetryApplication.selectReadyFilesForTesting scrambled |> Result.defaultWith (sprintf "%A" >> failwith)
+            let cursors = selected |> List.map (fun file ->
+                (TelemetryReceipt.parse(File.ReadAllBytes file) |> Result.defaultWith (sprintf "%A" >> failwith)).Batch.Cursor |> Int32.Parse)
+            Assert.Equal<int>([1..16], cursors)
             let submitted = ResizeArray<int>()
             let received = System.Collections.Generic.HashSet<string>()
             let mutable phase = "durable"
@@ -710,15 +717,15 @@ module WorkspaceTelemetryApplicationTests =
             let drain () = WorkspaceTelemetryApplication.tryDrainWithOperationsForTesting (Some config) (Some "FS-GG/.github") operations
             drain () |> ignore
             Assert.Equal<int>([1], submitted)
-            Assert.Equal(10, Directory.GetFiles(spool, "*.ready").Length)
+            Assert.Equal(32, Directory.GetFiles(spool, "*.ready").Length)
             phase <- "uncertain"
             drain () |> ignore
             Assert.Equal<int>([1], submitted)
-            Assert.Equal(10, Directory.GetFiles(spool, "*.ready").Length)
+            Assert.Equal(32, Directory.GetFiles(spool, "*.ready").Length)
             phase <- "applied"
-            for _ in 1..11 do drain () |> ignore
+            for _ in 1..4 do drain () |> ignore
             Assert.Empty(Directory.GetFiles(spool, "*.ready"))
-            Assert.Equal<int>([1..10], submitted)
+            Assert.Equal<int>([1..32], submitted)
 
     [<Fact>]
     let ``unsupported and rejected passive receiver retains exact pending bytes without downgrade`` () =
@@ -825,7 +832,7 @@ module WorkspaceTelemetryApplicationTests =
             TelemetryStoreApplication.enrollReceiptProducer store approved peer |> unwrap |> ignore
             let changed = System.Text.Json.Nodes.JsonNode.Parse batches[1]
             changed["ingestId"] <- System.Text.Json.Nodes.JsonValue.Create "peer-correction"
-            changed["events"][0]["revision"] <- System.Text.Json.Nodes.JsonValue.Create 3L
+            changed["events"].[0].["revision"] <- System.Text.Json.Nodes.JsonValue.Create 3L
             let peerEnvelope = envelope peer "peer-correction" (Encoding.UTF8.GetBytes(changed.ToJsonString()))
             TelemetryStoreApplication.submitReceipt store approved peer peerEnvelope |> unwrap |> ignore
             TelemetryStoreApplication.drainReceipts store approved scope.Workspace |> unwrap |> ignore
@@ -921,3 +928,64 @@ module WorkspaceTelemetryApplicationTests =
             Assert.DoesNotContain("enqueue-deferred-cursor-retained", report["gaps"].ToJsonString())
             let recovered = SkillTelemetryAdapter.capturePassive root "owner" "observations" home [path] (fun _ -> Ok "locally-retained") |> parseCapture
             Assert.Single(recovered["observations"].AsArray()) |> ignore
+
+    [<Fact>]
+    let ``shared passive decoder refuses duplicate counters identities and invalid UTF8`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let home, path = passiveSource root "duplicate-fields"
+            let row = nativeRow "response-a" 10L 0L
+            for invalid in [ row.Replace("\"input_tokens\":10", "\"input_tokens\":999,\"input_tokens\":10")
+                             row.Replace("\"thread_id\":", "\"thread_id\":\"99999999-9999-9999-9999-999999999999\",\"thread_id\":") ] do
+                File.WriteAllText(path, invalid)
+                let scan = SkillTelemetryReaders.NativeUsage.scanPassive home path None 4194304 64 |> Result.defaultWith (fun error -> failwith error.Message)
+                Assert.Empty scan.Records
+                Assert.Contains("malformed-row-skipped", scan.Diagnostics)
+            let invalidUtf8 = Encoding.UTF8.GetBytes row
+            invalidUtf8[row.IndexOf("response-a", StringComparison.Ordinal) + 9] <- 0xFFuy
+            File.WriteAllBytes(path, invalidUtf8)
+            let scan = SkillTelemetryReaders.NativeUsage.scanPassive home path None 4194304 64 |> Result.defaultWith (fun error -> failwith error.Message)
+            Assert.Empty scan.Records
+            Assert.Contains("malformed-row-skipped", scan.Diagnostics)
+
+    [<Fact>]
+    let ``passive command capture and report execute offline through actual application route`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let config, spool = passiveRemoteConfig root
+            let home, path = passiveSource root "command"
+            File.WriteAllText(path, nativeRow "response-a" 10L 0L)
+            let selection = Path.Combine(root, "selected.json")
+            File.WriteAllText(selection, System.Text.Json.JsonSerializer.Serialize {| schema = "fsgg.telemetry.passive-selection/1"; codexHome = home; sources = [| path |] |})
+            File.SetUnixFileMode(selection, enum<UnixFileMode> 0o600)
+            let run arguments =
+                let priorOut, priorError = Console.Out, Console.Error
+                use stdout = new StringWriter()
+                use stderr = new StringWriter()
+                try
+                    Console.SetOut stdout
+                    Console.SetError stderr
+                    let code = TelemetryApplication.tryRun ([ "telemetry"; "passive" ] @ arguments) |> Option.defaultValue 99
+                    code, stdout.ToString(), stderr.ToString()
+                finally
+                    Console.SetOut priorOut
+                    Console.SetError priorError
+            let args = [ "--config"; config; "--repository"; "FS-GG/.github" ]
+            let code, output, error = run ([ "capture" ] @ args @ [ "--input"; selection ])
+            Assert.True(code = 0, error)
+            let captured = System.Text.Json.Nodes.JsonNode.Parse output
+            Assert.Single(captured["observations"].AsArray()) |> ignore
+            Assert.Equal("locally-retained", captured["capture"].GetValue<string>())
+            Assert.Equal("unknown", captured["attribution"].GetValue<string>())
+            Assert.Equal("unknown", captured["delivery"].GetValue<string>())
+            Assert.DoesNotContain(root, output)
+            Assert.Single(Directory.GetFiles(spool, "*.ready")) |> ignore
+            let reportCode, reportOutput, reportError = run ([ "report" ] @ args)
+            Assert.True(reportCode = 0, reportError)
+            let report = System.Text.Json.Nodes.JsonNode.Parse reportOutput
+            Assert.Equal(captured["observations"].ToJsonString(), report["observations"].ToJsonString())
+            let invalidCode, _, _ = run ([ "capture" ] @ args @ [ "--input"; selection; "--item"; "invented" ])
+            Assert.Equal(1, invalidCode)
+            Assert.Single(Directory.GetFiles(spool, "*.ready")) |> ignore
