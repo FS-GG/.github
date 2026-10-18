@@ -723,6 +723,8 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   membership visibility; sibling controls cover schema, initial values and both view operations,
   contradictions, invalid responses, deadline and request exhaustion. Both affected test projects
   compiled under the separately selected bounded source-build profile with zero warnings/errors.
+  Focused inert execution passed 14 unit and 34 caller cases with no failures or skips; no live
+  credential, GitHub, publisher, installer or browser route was exercised.
   The inert full journey with one stale read per effect completes 77 sends in 468 apply requests and
   77 virtual seconds; the separate preparation adds four requests. Its no-delay sibling uses 391
   apply requests. These counters exclude actual HTTP/custody latency and do not prove native fit.
