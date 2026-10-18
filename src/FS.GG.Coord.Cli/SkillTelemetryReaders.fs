@@ -930,7 +930,7 @@ module SkillTelemetryReaders =
         let private observedCounters (value: JsonElement) : Result<ObservedCounters, ReaderError> =
             try
                 if value.ValueKind <> JsonValueKind.Object then invalidOp "native usage counters are malformed"
-                let count name =
+                let count (name: string) =
                     match value.TryGetProperty name with
                     | false, _ -> None
                     | true, field when field.ValueKind = JsonValueKind.Null -> None

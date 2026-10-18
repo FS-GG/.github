@@ -480,7 +480,7 @@ module TelemetryStoreTests =
 
     [<Fact>]
     let ``passive parser refuses manufactured attribution completeness and invalid dimensions`` () =
-        let reject name (value: System.Text.Json.Nodes.JsonNode) =
+        let reject (name: string) (value: System.Text.Json.Nodes.JsonNode) =
             let event = passiveEvent ()
             event[name] <- value
             Assert.True(TelemetryStore.parseBatch(causalBatch (event.ToJsonString())) |> Result.isError, name)

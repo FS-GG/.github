@@ -1160,7 +1160,7 @@ module SkillTelemetryAdapter =
                      "firstEnqueueFailure", (if isNull state["firstEnqueueFailure"] then nullNode else state["firstEnqueueFailure"].DeepClone())
                      "lastEnqueueFailure", (if isNull state["lastEnqueueFailure"] then nullNode else state["lastEnqueueFailure"].DeepClone()) ]
 
-    let private replayPassive directory (state: JsonObject) enqueue =
+    let private replayPassive directory (state: JsonObject) (enqueue: byte array -> Result<string, string list>) =
         match state["pending"] with
         | null -> true
         | pending ->

@@ -524,7 +524,7 @@ module WorkspaceTelemetryApplicationTests =
             let calls = ResizeArray<byte array>()
             let statePath = Path.Combine(root, "orchestrator-passive", "producer.json")
             let mutable reject = true
-            let enqueue bytes =
+            let enqueue (bytes: byte array) =
                 let state = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes statePath)
                 Assert.Equal(Convert.ToBase64String bytes, state["pending"]["batchBase64"].GetValue<string>())
                 Assert.Empty(state["sources"].AsObject())
@@ -782,7 +782,7 @@ module WorkspaceTelemetryApplicationTests =
                 SkillTelemetryAdapter.capturePassive root "owner" scope.Stream home [path] (fun bytes -> batches.Add(Array.copy bytes); Ok "locally-retained") |> parseCapture
             File.WriteAllText(path, nativeRow "response-a" 10L 0L)
             capture () |> ignore
-            let envelope (who: TelemetryReceipt.Scope) batchId bytes =
+            let envelope (who: TelemetryReceipt.Scope) (batchId: string) (bytes: byte array) =
                 let value = System.Text.Json.Nodes.JsonObject()
                 value["schema"] <- System.Text.Json.Nodes.JsonValue.Create TelemetryReceipt.Schema
                 value["workspaceId"] <- System.Text.Json.Nodes.JsonValue.Create who.Workspace
