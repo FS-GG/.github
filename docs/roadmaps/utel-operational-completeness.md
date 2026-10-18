@@ -38,6 +38,39 @@ introduced. Existing uncertain publications remain under their original identiti
 supply no execution authority or reservation release. Required exact-source checks and operational
 receiver restart/restore readbacks remain distinct gates.
 
+### Modern passive source candidate — 2026-10-18
+
+The following candidate adds `telemetry passive capture --config CONFIG --repository REPOSITORY
+--input PRIVATE_SELECTION` and `telemetry passive report --config CONFIG --repository REPOSITORY`.
+It shares the maintained native decoder and retains partial `token_usage_record` responses as the
+additive `provider-usage-observation/1` payload in the existing canonical fact ledger. Stable native
+thread/turn/response identity, revisions, serialized pending intent, cursor and immutable spool retain
+corrections and replay; passive facts remain excluded from qualified item totals. No item, model,
+cost, complete inventory or terminal status is invented. Local capture/reporting calls neither
+App Server nor the receiver. This is source preparation, not compiled, installed or operational acceptance.
+
+The explicit mode0600 no-follow regular selection uses `fsgg.telemetry.passive-selection/1`, an absolute
+`codexHome` and explicit absolute `sources`. Initial bounds are eight source cursors, 4 MiB of reads
+and 24 normalized response rows per pass, a 64-event/64 KiB batch, 128 MiB source files, 1 MiB lines,
+a 256-response revision index and 1 MiB private state. Existing spool bounds remain 128 ready
+envelopes/8 MiB with bounded outcome retention. Partial tails defer; truncation/replacement creates a
+new source generation and continuity gap. Cumulative turn snapshots never become response spend.
+
+Existing `activate-remote --capture-only` is an explicit initial local setup option. It retains
+configuration, permission, conflict and lock checks while skipping credential presence; its result is
+capture-configured/receiver-unverified. Default activation and later credential/receipt checks remain
+unchanged. Local-store capture-only is unsupported in this first profile. One canonical association
+spool/state root owns the producer; undeclared same-principal cloned roots cannot be detected offline,
+so cloning, migration or reinitialization still requires original state/fence reconciliation. Receiver
+admission refuses cross-owner changes, and later numeric producer cursors wait behind uncertain or
+durable-but-not-applied predecessors. Unsupported/rejected receiver data stays pending.
+
+The existing Core, CLI and Telemetry test suites and maintained `coord-engine`, `coord-core` and
+semantic skill-quality workflows qualify this source. Source inclusion is not a passed test result;
+actual hosted compilation and focused assertions remain required. Coherent publication, receiver
+compatibility, installed producer capture and restart/restore durability remain separate gates. This
+candidate does not replace the qualified installed 0.105 board executable or its accepted binding.
+
 ## Capability boundary
 
 Instrument real repository-owned launch, dispatch, provider, check and delivery boundaries once. Guidance alone
