@@ -86,15 +86,18 @@ module BoardV2Application =
                         { Action = action (text "action" prerequisite); Reference = boundedText "reference" 2048 prerequisite
                           Satisfied = optional (fun entry -> entry.GetBoolean()) (prerequisite.GetProperty "satisfied")
                           SupplyingOwner = boundedText "supplyingOwner" 512 prerequisite })
+                let hierarchySha256 =
+                    if binding.BindingVersion = 5 then
+                        let hash = boundedText "hierarchySha256" 64 joined
+                        if hash.Length <> 64 || hash |> Seq.exists (Char.IsAsciiHexDigitLower >> not) then
+                            invalidArg "join" "invalid hierarchy digest"
+                        Some hash
+                    else None
                 { Id = boundedText "id" 128 value; Attempt = boundedText "attempt" 128 value; Operation = operation (text "operation" value)
                   Issue = issue; AccountableOwner = boundedText "accountableOwner" 4096 value; Owner = boundedText "owner" 512 value
                   Repository = repository value; Paths = strings 128 1024 (value.GetProperty "paths"); Action = action (text "action" value)
                   Join = { NativeId = nativeId; UpdatedAt = boundedText "updatedAt" 128 joined; BodySha256 = boundedText "bodySha256" 64 joined; SourceRevision = boundedText "sourceRevision" 16384 joined
-                           HierarchySha256 = if binding.BindingVersion = 5 then
-                               let hash = boundedText "hierarchySha256" 64 joined
-                               if hash.Length <> 64 || hash |> Seq.exists (Char.IsAsciiHexDigitLower >> not) then invalidArg "join" "invalid hierarchy digest"
-                               Some hash
-                           else None }
+                           HierarchySha256 = hierarchySha256 }
                   Observation = observation (value.GetProperty "observation"); PullRequest = optionalText (value.GetProperty "pullRequest")
                   PullRequestId = optionalText (value.GetProperty "pullRequestId"); PullRequestUpdatedAt = optionalText (value.GetProperty "pullRequestUpdatedAt"); Head = optionalText (value.GetProperty "head")
                   Prerequisites = prerequisites; PrerequisitesComplete = value.GetProperty("prerequisitesComplete").GetBoolean()
