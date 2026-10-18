@@ -59,6 +59,7 @@ module ProgressRendererTests =
         Checks = [ { Name = "Build"; State = CompletedInfo; Detail = "Focused tests pass" } ]
         Risks = [ { Name = "Capture"; State = BlockedIncompleteEvidence; Detail = "No accepted run" } ]
         NextActions = [ "Collect genuine runner evidence" ]
+        BoardItems = []
         CompletionHistory = []
     }
 
@@ -666,3 +667,37 @@ module ProgressRendererTests =
             { snapshot with Telemetry = { snapshot.Telemetry with Readiness = ActiveHealthy } }
         refuses "workspace observation queue disagrees with telemetry queue"
             { baseline with Telemetry = { baseline.Telemetry with Pending = None } }
+
+    [<Fact>]
+    let ``inspection progress keeps scoped native delivery completion apart from open outcome promise`` () =
+        let json = """{"schema":"fsgg.coord.board-v2-inspection/3","items":[
+          {"issue":{"owner":"FS-GG","repository":".github","number":41},"native":{"state":"OPEN"},"planning":{"status":"Blocked"},
+           "workItem":{"workLevel":"Outcome","hierarchy":{"parent":null,"children":[{"issue":{"owner":"FS-GG","repository":".github","number":42},"nodeId":"child"}],"complete":true,"gap":null},
+             "closure":{"stateReason":null,"closedAt":null,"doneWhen":"Source and installed restart promise","blockedOn":"Installed restart witness from receiver owner","acceptanceEvidence":"Source PR accepted; installed pending","acceptance":"Unverified"}}},
+          {"issue":{"owner":"FS-GG","repository":".github","number":42},"native":{"state":"CLOSED"},"planning":{"status":"Done"},
+           "workItem":{"workLevel":"Delivery","hierarchy":{"parent":{"issue":{"owner":"FS-GG","repository":".github","number":41},"nodeId":"parent"},"children":[],"complete":true,"gap":null},
+             "closure":{"stateReason":"COMPLETED","closedAt":"2026-09-30T08:00:00Z","doneWhen":"Source routing closure","blockedOn":"None","acceptanceEvidence":"Reviewed exact source merged","acceptance":"Unverified"}}}]}"""
+        let rows = ProgressRenderer.boardItemsFromInspection json |> Result.defaultWith failwith
+        Assert.Equal(2, rows.Length)
+        Assert.Equal("Outcome", rows.Head.WorkLevel)
+        Assert.Equal(Some "OPEN", rows.Head.NativeState)
+        Assert.Equal(Some "FS-GG/.github#41", rows.Tail.Head.Parent)
+        let text = render { baseline with BoardItems = rows }
+        Assert.Contains("Source and installed restart promise", text)
+        Assert.Contains("Installed restart witness from receiver owner", text)
+        Assert.Contains("CLOSED / COMPLETED", text)
+        Assert.Contains("acceptance Unverified", text)
+        Assert.Contains("Child counts are not progress percentages", text)
+
+    [<Fact>]
+    let ``legacy and missing hierarchy report Unknown rather than hide selected work or certify acceptance`` () =
+        let json = """{"schema":"fsgg.coord.board-v2-inspection/2","items":[{"issue":{"owner":"FS-GG","repository":".github","number":42},"native":{"state":"CLOSED"},"planning":{"status":"Done"}}]}"""
+        let rows = ProgressRenderer.boardItemsFromInspection json |> Result.defaultWith failwith
+        Assert.Single rows |> ignore
+        Assert.Equal("Unknown", rows.Head.WorkLevel)
+        Assert.False rows.Head.HierarchyComplete
+        Assert.True rows.Head.HierarchyGap.IsSome
+        Assert.Equal("Unverified", rows.Head.Acceptance)
+        Assert.True(Result.isError(ProgressRenderer.boardItemsFromInspection "{\"schema\":\"other\",\"items\":[]}"))
+        let forged = { rows.Head with Acceptance = "Accepted" }
+        Assert.True(Result.isError(ProgressRenderer.derive { baseline with BoardItems = [ forged ] }))

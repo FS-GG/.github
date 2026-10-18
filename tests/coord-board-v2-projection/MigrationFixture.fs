@@ -34,7 +34,7 @@ module MigrationFixture =
           SelectedIssues = [ { Id = "synthetic-issue"; Repository = "FS-GG/.github"; Number = 42; Slice = "synthetic-parent" } ];
           StatusFieldId = "synthetic-status"; RoadmapFieldId = "synthetic-roadmap"; TrackFieldId = "synthetic-track";
           ObservationFieldId = "synthetic-observation"; InReviewColor = "BLUE"; InReviewDescription = "synthetic review";
-          Views = []; InitialPlanning = [] }
+          Views = []; InitialPlanning = []; WorkLevel = None }
     let snapshot : Snapshot =
         { ObservedAt = DateTimeOffset.UtcNow; PrincipalId = scope.PrincipalId; PrincipalLogin = scope.PrincipalLogin;
           OrganizationId = "O_kgDOEYAWYw"; ProjectId = "PVT_kwDOEYAWY84Bldpa"; ProjectTitle = "Coordination V2";
@@ -221,7 +221,15 @@ module MigrationFixture =
                 let input = document.RootElement.GetProperty("variables").GetProperty "input"
                 let text (name: string) = input.GetProperty(name).GetString()
                 let name =
-                    if query.Contains "updateProjectV2Field(" then
+                    if query.Contains "createProjectV2Field(" then
+                        let options: SelectOption list =
+                            input.GetProperty("singleSelectOptions").EnumerateArray() |> Seq.mapi (fun index option ->
+                                { Id = "synthetic-level-option-" + string index; Name = option.GetProperty("name").GetString()
+                                  Color = option.GetProperty("color").GetString(); Description = option.GetProperty("description").GetString() }) |> Seq.toList
+                        let field: Field = { Id = "synthetic-work-level"; Name = text "name"; DataType = text "dataType"; Options = options }
+                        snapshot <- { snapshot with Fields = snapshot.Fields @ [ field ] }
+                        "createProjectV2Field"
+                    elif query.Contains "updateProjectV2Field(" then
                         let options: SelectOption list =
                             input.GetProperty("singleSelectOptions").EnumerateArray() |> Seq.map (fun option ->
                                 let mutable id = Unchecked.defaultof<JsonElement>
@@ -285,6 +293,7 @@ module MigrationFixture =
                 else
                     let payloadName, nativeId =
                         match name with
+                        | "createProjectV2Field" -> "projectV2Field", "synthetic-work-level"
                         | "updateProjectV2Field" -> "projectV2Field", text "fieldId"
                         | "addProjectV2ItemById" -> "item", "synthetic-item-" + text "contentId"
                         | "updateProjectV2ItemFieldValue" -> "projectV2Item", text "itemId"

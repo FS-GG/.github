@@ -27,12 +27,19 @@ module V2Migration =
         | PlanningText of string
         | PlanningSelect of PlanningOption
 
+    /// Explicit selected classification only; no title, leaf, Status or Track inference.
+    type WorkLevelAssignment = { IssueId: string; Name: string }
+
+    /// None FieldId permits one create only when no same-name field exists. Exact independently
+    /// read-back field/option identities then bind subsequent absent-only initialization.
+    type WorkLevelPlan = { FieldId: string option; Assignments: WorkLevelAssignment list }
+
     type Scope =
         { SourceRevision: string; ArtifactSha256: string; CliArtifactSha256: string; PrincipalId: string;
           PrincipalLogin: string; SelectedIssues: SelectedIssue list;
           StatusFieldId: string; RoadmapFieldId: string; TrackFieldId: string;
           ObservationFieldId: string; InReviewColor: string; InReviewDescription: string;
-          Views: DesiredView list; InitialPlanning: InitialPlanning list }
+          Views: DesiredView list; InitialPlanning: InitialPlanning list; WorkLevel: WorkLevelPlan option }
 
     type SelectOption =
         { Id: string; Name: string; Color: string; Description: string }
@@ -64,6 +71,7 @@ module V2Migration =
           Fields: Field list; Items: Item list; Views: View list; Issues: NativeIssue list }
 
     type Change =
+        | CreateWorkLevel
         | AddInReview of fieldId: string * retained: SelectOption list * color: string * description: string
         | AddMembership of issueId: string
         | InitializePlanningValue of issueId: string * itemId: string * fieldId: string * value: PlanningValue

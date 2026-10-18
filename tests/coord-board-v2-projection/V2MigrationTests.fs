@@ -364,3 +364,74 @@ module V2MigrationTests =
         Assert.Empty native.Mutations
         collect connection.Reads scope |> get |> ignore
         Assert.Equal(2, native.Requests.Length)
+
+    [<Fact>]
+    let ``Work level creation uses one typed effect then exact readback before absent initialization`` () =
+        let originalScope = { scope with WorkLevel = Some { FieldId = None; Assignments = [ { IssueId = "synthetic-issue"; Name = "Delivery" } ] } }
+        let native = Native snapshot
+        use connection = native.Connection()
+        let before = collect connection.Reads originalScope |> get
+        let prepared = prepare originalScope before |> get
+        Assert.Equal(CreateWorkLevel, prepared.Changes.Head)
+        // New semantics are digest-bound; original scope/prepare remains exactly the old mode.
+        Assert.NotEqual((prepare scope before |> get).Digest, prepared.Digest)
+        let bound = { prepared with PreparedPath = Some(System.IO.Path.GetFullPath "synthetic-work-level-prepared.json") }
+        let wire = encodePrepared bound
+        Assert.Contains("fs.gg.board-v2.migration-prepare/2", wire)
+        Assert.Contains("fs.gg.board-v2.work-level-migration/1", wire)
+        let decoded, digest, _, _ = decodePrepared wire |> get
+        Assert.Equal(originalScope, decoded)
+        Assert.Equal(prepared.Digest, digest)
+        let request = request prepared CreateWorkLevel |> get
+        match request.Body with
+        | Transport.Json json ->
+            use document = JsonDocument.Parse json
+            let input = document.RootElement.GetProperty("variables").GetProperty "input"
+            Assert.Equal("Work level", input.GetProperty("name").GetString())
+            Assert.Equal("SINGLE_SELECT", input.GetProperty("dataType").GetString())
+            Assert.Equal(2, input.GetProperty("singleSelectOptions").GetArrayLength())
+        | _ -> failwith "typed request expected"
+        connection.Dispatch(prepared, CreateWorkLevel, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
+        let after = collect connection.Reads originalScope |> get
+        validateTransition originalScope before after CreateWorkLevel |> get
+        let resolved = resolveReadback originalScope before after CreateWorkLevel |> get
+        Assert.Equal(Some "synthetic-work-level", resolved.WorkLevel |> Option.bind _.FieldId)
+        Assert.DoesNotContain(CreateWorkLevel, (prepare resolved after |> get).Changes)
+        // Reusing an unresolved absent preimage cannot adopt a same-name field or send a duplicate.
+        Assert.True(Result.isError (prepare originalScope after))
+        Assert.Single(native.Mutations) |> ignore
+
+    [<Fact>]
+    let ``Work level cannot reclassify existing intent or create duplicate field identities`` () =
+        let native = Native snapshot
+        use connection = native.Connection()
+        let selected = { scope with WorkLevel = Some { FieldId = None; Assignments = [] } }
+        let prepared = prepare selected snapshot |> get
+        connection.Dispatch(prepared, CreateWorkLevel, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
+        let after = collect connection.Reads selected |> get
+        let resolved = resolveReadback selected snapshot after CreateWorkLevel |> get
+        let field = after.Fields |> List.find (fun (field: Field) -> field.Name = "Work level")
+        let existing: Item =
+            { Id = "synthetic-card"; ContentId = "synthetic-issue"; ContentKind = "Issue";
+              Repository = Some "FS-GG/.github"; Number = Some 42; UpdatedAt = "2026-10-17T13:00:00Z";
+              Archived = false; Values = [] }
+        let populated = { after with Items = [ existing ] }
+        let classified = { resolved with WorkLevel = resolved.WorkLevel |> Option.map (fun plan ->
+            { plan with Assignments = [ { IssueId = "synthetic-issue"; Name = "Delivery" } ] }) }
+        let declaration = prepare classified populated |> get
+        let initialization = declaration.Changes |> List.find (function InitializePlanningValue(_, _, id, _) -> id = field.Id | _ -> false)
+        let option = field.Options |> List.find (fun option -> option.Name = "Outcome")
+        let value: ItemValue =
+            { Id = field.Id; FieldId = field.Id; Kind = "ProjectV2ItemFieldSingleSelectValue"
+              Value = JsonSerializer.Serialize([ "id"; JsonSerializer.Serialize "synthetic-value"; "updatedAt"; JsonSerializer.Serialize "2026-10-17T13:00:00Z";
+                                                 "optionId"; JsonSerializer.Serialize option.Id; "name"; JsonSerializer.Serialize option.Name ]) }
+        let conflicting = { populated with Items = [ { existing with Values = [ value ] } ] }
+        Assert.True(Result.isError (prepare classified conflicting))
+        Assert.True(Result.isError (request declaration CreateWorkLevel))
+        Assert.True(Result.isError (validateTransition classified populated conflicting initialization))
+        for invalid in [ { classified with WorkLevel = Some { FieldId = Some field.Id; Assignments = [ { IssueId = "not-selected"; Name = "Delivery" } ] } }
+                         { classified with WorkLevel = Some { FieldId = Some scope.StatusFieldId; Assignments = [] } }
+                         { classified with WorkLevel = Some { FieldId = Some field.Id; Assignments = [ { IssueId = "synthetic-issue"; Name = "Ready" } ] } } ] do
+            Assert.True(Result.isError (validateScope invalid))
+        let drifted = { after with Fields = after.Fields |> List.map (fun current -> if current.Id = field.Id then { current with Options = current.Options.Tail } else current) }
+        Assert.True(Result.isError (prepare resolved drifted))

@@ -248,6 +248,24 @@ type Completion = {
     RecordedRoadmapHead: string
 }
 
+/// Read-only reporting facts from the selected inspection. Native completion is not acceptance.
+type BoardWorkItem = {
+    Issue: string
+    WorkLevel: string
+    PlanningStatus: string option
+    NativeState: string option
+    StateReason: string option
+    ClosedAt: DateTimeOffset option
+    Parent: string option
+    Children: string list
+    HierarchyComplete: bool
+    HierarchyGap: string option
+    DoneWhen: string option
+    BlockedOn: string option
+    AcceptanceEvidence: string option
+    Acceptance: string
+}
+
 type ProgressSnapshot = {
     AsOf: DateTimeOffset
     RoadmapHead: string
@@ -263,6 +281,7 @@ type ProgressSnapshot = {
     Risks: NamedState list
     NextActions: string list
     CompletionHistory: Completion list
+    BoardItems: BoardWorkItem list
 }
 
 type DerivedProgress = {
@@ -274,6 +293,60 @@ type DerivedProgress = {
 }
 
 module ProgressRenderer =
+    let boardItemsFromInspection (json: string) : Result<BoardWorkItem list, string> =
+        try
+            if Text.Encoding.UTF8.GetByteCount json > 4 * 1024 * 1024 then invalidArg "inspection" "inspection exceeds read bound"
+            use document = Text.Json.JsonDocument.Parse(json, Text.Json.JsonDocumentOptions(MaxDepth = 32))
+            let root = document.RootElement
+            let schema = root.GetProperty("schema").GetString()
+            if not (List.contains schema [ "fsgg.coord.board-v2-inspection/1"; "fsgg.coord.board-v2-inspection/2"; "fsgg.coord.board-v2-inspection/3" ]) then
+                invalidArg "inspection" "unsupported inspection schema"
+            let optional (node: Text.Json.JsonElement) name =
+                match node.TryGetProperty(name: string) with
+                | true, value when value.ValueKind <> Text.Json.JsonValueKind.Null -> Some value
+                | _ -> None
+            let text node name = optional node name |> Option.map _.GetString()
+            let reference (node: Text.Json.JsonElement) =
+                let owner = node.GetProperty("owner").GetString()
+                let repository = node.GetProperty("repository").GetString()
+                let number = node.GetProperty("number").GetInt32()
+                if String.IsNullOrWhiteSpace owner || String.IsNullOrWhiteSpace repository || number <= 0 then invalidArg "inspection" "issue identity incomplete"
+                $"{owner}/{repository}#{number}"
+            let identities (node: Text.Json.JsonElement) = reference (node.GetProperty "issue")
+            let items = root.GetProperty("items")
+            if items.GetArrayLength() > 100 then invalidArg "inspection" "selected item count exceeds bound"
+            let result =
+                items.EnumerateArray() |> Seq.map (fun item ->
+                    let work = optional item "workItem"
+                    let hierarchy = work |> Option.bind (fun value -> optional value "hierarchy")
+                    let closure = work |> Option.bind (fun value -> optional value "closure")
+                    let level = work |> Option.bind (fun value -> text value "workLevel") |> Option.defaultValue "Unknown"
+                    let level = if level = "Outcome" || level = "Delivery" then level else "Unknown"
+                    let raw name = closure |> Option.bind (fun value -> text value name)
+                    let complete = hierarchy |> Option.bind (fun value -> optional value "complete") |> Option.exists (fun value -> value.GetBoolean())
+                    let gap = hierarchy |> Option.bind (fun value -> text value "gap")
+                    let gap = if work.IsNone then Some "Work level/hierarchy unavailable in this selected report" else gap
+                    let date = raw "closedAt" |> Option.map (fun value ->
+                        let date = DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+                        if date.Offset <> TimeSpan.Zero then invalidArg "inspection" "completion time must use UTC"
+                        date)
+                    { Issue = reference (item.GetProperty "issue"); WorkLevel = level
+                      PlanningStatus = optional item "planning" |> Option.bind (fun value -> text value "status")
+                      NativeState = optional item "native" |> Option.bind (fun value -> text value "state")
+                      StateReason = raw "stateReason"; ClosedAt = date
+                      Parent = hierarchy |> Option.bind (fun value -> optional value "parent") |> Option.map identities
+                      Children = hierarchy |> Option.bind (fun value -> optional value "children")
+                                 |> Option.map (fun values -> values.EnumerateArray() |> Seq.map identities |> Seq.toList) |> Option.defaultValue []
+                      HierarchyComplete = complete; HierarchyGap = gap
+                      DoneWhen = raw "doneWhen"; BlockedOn = raw "blockedOn"; AcceptanceEvidence = raw "acceptanceEvidence"
+                      // A read-only report has no authority to mint acceptance, including for CLOSED+COMPLETED.
+                      Acceptance = "Unverified" }) |> Seq.toList
+            if result |> List.map _.Issue |> List.distinct |> List.length <> result.Length then invalidArg "inspection" "duplicate selected issue identity"
+            Ok result
+        with
+        | :? Text.Json.JsonException | :? InvalidOperationException | :? ArgumentException
+        | :? Collections.Generic.KeyNotFoundException | :? FormatException -> Error "Selected inspection is incomplete, malformed or outside the reporting contract"
+
     let private maxTelemetryObservationAge = TimeSpan.FromMinutes 5.0
 
     let statusText = function
@@ -724,6 +797,16 @@ module ProgressRenderer =
         require (snapshot.Risks |> List.map _.Name |> List.distinct |> List.length = snapshot.Risks.Length)
             "risk names must be unique"
         for action in snapshot.NextActions do requireText "next action" action
+        require (snapshot.BoardItems.Length <= 100) "board report exceeds selected population bound"
+        require (snapshot.BoardItems |> List.map _.Issue |> List.distinct |> List.length = snapshot.BoardItems.Length)
+            "board issue identities must be unique"
+        for item in snapshot.BoardItems do
+            requireText "board issue" item.Issue
+            require (List.contains item.WorkLevel [ "Outcome"; "Delivery"; "Unknown" ]) "board work level is not explicit"
+            require (item.Acceptance = "Unverified") "inspection reporting cannot certify acceptance"
+            item.ClosedAt |> Option.iter (fun value ->
+                requireUtc "native issue closure" value
+                require (value <= snapshot.AsOf) "native issue closure exceeds report time")
         for completion in snapshot.CompletionHistory do
             requireUtc "completion time" completion.CompletedAt
             require (completion.CompletedAt <= snapshot.AsOf) "completion time exceeds report time"
@@ -774,6 +857,20 @@ module ProgressRenderer =
         let workstreamRows =
             workstreams |> List.map (fun row ->
                 $"| {escape row.Name} | {statusText row.State} | {row.PrCount} | {row.EvidenceCount} | {escape row.Detail} |")
+        let boardRows =
+            snapshot.BoardItems |> List.sortBy (fun item -> item.WorkLevel, item.Issue) |> List.map (fun item ->
+                let native = item.NativeState |> Option.defaultValue "Unknown"
+                let reason = item.StateReason |> Option.defaultValue "Unknown"
+                let closed = item.ClosedAt |> Option.map timeText |> Option.defaultValue "Unknown"
+                let planning = item.PlanningStatus |> Option.defaultValue "Unknown"
+                let promise = item.DoneWhen |> Option.defaultValue "Owning promise unavailable"
+                let blocked = item.BlockedOn |> Option.defaultValue "Missing fact/supplier not supplied"
+                let parent = item.Parent |> Option.defaultValue "No parent observed"
+                let hierarchy = if item.HierarchyComplete then "complete direct relationships" else "Unknown direct relationships"
+                let evidence = item.AcceptanceEvidence |> Option.defaultValue "Acceptance evidence unavailable"
+                let gap = item.HierarchyGap |> Option.defaultValue "none reported"
+                let detail = $"{promise}; Blocked on: {blocked}; {parent}; {hierarchy}; hierarchy gap: {gap}; evidence: {evidence}; acceptance Unverified"
+                $"| {escape item.Issue} | {escape item.WorkLevel} | {escape planning} | {escape native} / {escape reason} / {escape closed} | {escape detail} |")
         let completionRows =
             progress.RecentCompletions |> List.map (fun row ->
                 let link = row.Link |> Option.map renderLink |> Option.defaultValue "—"
@@ -883,6 +980,15 @@ module ProgressRenderer =
             ""
             $"PRs: {progress.EvidenceCounts.Prs}; evidence links: {progress.EvidenceCounts.Evidence}."
             ""
+            if not snapshot.BoardItems.IsEmpty then
+                yield "## Outcomes and deliveries"
+                yield ""
+                yield "Native completion dates below describe scoped issue facts, not accepted parent outcomes. Child counts are not progress percentages."
+                yield ""
+                yield "| Issue | Work level | Human Status | Native state / reason / closure | Scope, missing fact and remaining acceptance |"
+                yield "| --- | --- | --- | --- | --- |"
+                yield! boardRows
+                yield ""
             "## Telemetry and capture"
             ""
             $"- Telemetry readiness: {statusText snapshot.Telemetry.Readiness}"
