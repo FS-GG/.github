@@ -180,7 +180,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `fs-gg-net` | FS.GG.Net | `0.6.0` | `0.6.0` |
 | `keyboard-input` | FS.GG.Rendering | `0.5.0` | — |
 | `coord-engine` | FS-GG/.github | `0.106.0` | `0.105.0` |
-| `telemetry-host` | FS-GG/.github | `0.5.0` | `0.5.0` |
+| `telemetry-host` | FS-GG/.github | `0.6.0` | `0.5.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.16.0` | `0.16.0` |
 | `fs-gg-workspace-template` | FS.GG.Templates | `0.19.0` | `0.19.0` |
 | `game-skills` | FS.GG.Game | `0.9.0` | `0.9.0` |
