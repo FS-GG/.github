@@ -47,10 +47,13 @@ within its original scope; unavailable originals, including the439 inherited and
 **Programme cutover accepted — 2026-10-18:** [COORD-BOARD-V2-01.7–.11](https://github.com/FS-GG/.github/issues/4634)
 is accepted for the current Codex programme cohort. Root decided at **07:42:17.703507 UTC** that
 private Coordination V2 Project 3 becomes the current Unified Roadmap v3 planning and lane-selection
-surface **upon protected delivery of this decision**. Until that delivery, the prior manual-status
-fallback remains authoritative. At delivery, programme, board-driver, recovery and progress consumers
-switch together and duplicate manual v3 current-status upkeep retires; strategic scope, owning links
-and historical evidence remain. [Acceptance and limits below](#operational-programme-cutover-acceptance--2026-10-18)
+surface upon protected delivery. That delivery **has occurred** through
+[PR4670](https://github.com/FS-GG/.github/pull/4670), protected commit `28fbea6b9fb7527ab1249332211bc24ee77d6580`.
+Project 3 is therefore the accepted current programme surface at binding4/schema2/inspection2;
+programme, board-driver, recovery and progress consumers switched together and duplicate manual v3
+current-status upkeep retired. Strategic scope, owning links and historical evidence remain. Source107
+binding5 preparation does not reopen that acceptance, restore a manual/V1 fallback or condition existing
+V2 use on future schema, installed or enrollment adoption. [Acceptance and limits below](#operational-programme-cutover-acceptance--2026-10-18)
 retain the actual consumer and delivery boundary. The original finite .1–.6 acceptance is unchanged.
 
 **Current accepted package boundary — 2026-10-18:** coherent 0.105 publication is accepted through the
@@ -144,14 +147,14 @@ wrappers, recovery and progress at **07:37:29.371499 UTC** against that source. 
 also matched all 82 installed payload members, the active entry, adapter and final binding to their
 accepted originals. No additional runtime invocation was used to establish those unchanged bytes.
 
-Root's **07:42:17.703507 UTC** operational decision takes effect when this canonical record reaches
-the protected default branch through ordinary reviewed delivery and required checks. That delivery
-accepts .7–.11 at the declared current programme scope: the qualified installed composition, final
+Root's **07:42:17.703507 UTC** operational decision became effective when this canonical record reached
+the protected default branch through reviewed PR4670 and required checks. That delivery
+accepted .7–.11 at the declared current programme scope: the qualified installed composition, final
 stable enrollment, complete migration, genuine continuation and blocked handling, necessary ordinary
 PR4665 delivery, Observation qualification, scoped user UI verification and coordinated consumer loads.
 The [strategic v3 catalogue](../roadmaps/2026-10-07-unified-development-roadmap-v3.md#2-open-work-and-owning-plans)
-then retains scope and owning-plan navigation while Project 3 supplies current planning and lane
-selection; duplicate manual Entry/blocking and Done upkeep retires. The previous protected table and
+retains scope and owning-plan navigation while Project 3 supplies current planning and lane
+selection; duplicate manual Entry/blocking and Done upkeep retired. The previous protected table and
 all original owner, effect and acceptance records remain historical evidence.
 
 This acceptance covers the current Codex operator cohort; identical Claude mirrors establish source
