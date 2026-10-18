@@ -1,5 +1,28 @@
 # Telemetry host package and release boundary
 
+## Current source frontier — 2026-10-18
+
+Prospective Host **0.6.0** bundles the current Store14 implementation and accepts partial
+`provider-usage-observation/1` facts through the existing authenticated generic receipt route.
+The [Host package](../../src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj),
+[HTTP receipt controls](../../tests/FS.GG.Telemetry.Tests/HostPassiveReceiptTests.fs) and
+[closed candidate verifier](../../scripts/telemetry-host-successor-artifact.py) bind the new source
+profile. The envelope and receipt ABI remain unchanged. Passive facts retain authenticated owner
+checks, corrections and canonical-only attribution; they do not become qualified item totals.
+
+The fixed 0.6 release rails use Store14 and `utel-host-rel-12`. Bounded local compilation and
+actual HTTP/schema controls passed; full hosted, installed-package and candidate qualification
+remain pending. A clean unsupported-storage refusal is not positive passive acceptance.
+Published [Host 0.5.0](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.5.0),
+its original source and journal11, and every earlier release remain immutable. This source
+changes no coherent CLI/Kit/Drivers publication or active CLI selector.
+
+Host candidate qualification, authenticated publication, downloaded installation and service
+adoption require separate admission and readback. Existing TLS and bearer API capability does
+not establish an actual receiver endpoint, trust, enrollment, storage or readiness. Home owns
+stable receiver metadata; local producer capture remains useful without receiver credentials.
+The historical release and adoption sections below retain their original scopes.
+
 `FS.GG.Telemetry.Host` is an optional, independently versioned .NET tool. The
 next candidate is `0.2.1`, carrying the protected native capture provenance
 hardening merged after the immutable `0.2.0` release. Published `0.2.0` remains
