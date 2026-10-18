@@ -338,38 +338,12 @@ module V2ProjectionSource =
         | :? InvalidOperationException -> Error(Malformed("reviewed population", "manifest is incomplete or nonexecutable"))
 
     let private programmePopulation (binding: Binding) (text: string) =
-        try
-            use document = JsonDocument.Parse text
-            let root = document.RootElement
-            let closed (names: string list) (value: JsonElement) =
-                let actual = value.EnumerateObject() |> Seq.map _.Name |> Seq.toList
-                if actual.Length <> names.Length || Set.ofList actual <> Set.ofList names then invalidArg "enrollment" "closed schema required"
-            closed [ "schema"; "target"; "binding"; "items" ] root
-            if root.GetProperty("schema").GetString() <> "fsgg.coordination-board-v2-enrollment/v2" then invalidArg "schema" "programme enrollment/v2 required"
-            let target = root.GetProperty "target"
-            closed [ "owner"; "organizationId"; "projectId"; "projectNumber"; "schemaVersion" ] target
-            let admission = root.GetProperty "binding"
-            closed [ "recipeRevision"; "artifactSha256"; "repositories" ] admission
-            let repositories = admission.GetProperty("repositories").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
-            if target.GetProperty("owner").GetString() <> binding.Owner || target.GetProperty("organizationId").GetString() <> binding.OrganizationId
-               || target.GetProperty("projectId").GetString() <> binding.ProjectId || target.GetProperty("projectNumber").GetInt32() <> binding.ProjectNumber
-               || target.GetProperty("schemaVersion").GetInt32() <> binding.SchemaVersion
-               || admission.GetProperty("recipeRevision").GetString() <> binding.ImportRecipeRevision
-               || admission.GetProperty("artifactSha256").GetString() <> binding.ImportArtifactSha256
-               || Set.ofList repositories <> binding.Repositories || repositories.Length <> binding.Repositories.Count then
-                invalidArg "enrollment" "target/provenance/repository mismatch"
-            let rows = root.GetProperty("items").EnumerateArray() |> Seq.map (fun row ->
-                closed [ "issue"; "nodeId"; "roadmap" ] row
-                let issue = parseIssue (row.GetProperty("issue").GetString()) |> Result.defaultWith (Errors.explain >> failwith)
-                let node = row.GetProperty("nodeId").GetString()
-                let roadmap = row.GetProperty("roadmap").GetString()
-                if Map.tryFind node binding.SelectedIssues <> Some $"{issue.Owner}/{issue.Repository}#{issue.Number}" || String.IsNullOrWhiteSpace roadmap then
-                    invalidArg "enrollment" "issue identity/owning plan differs"
-                { Issue = issue; NodeId = node; UpdatedAt = ""; Roadmap = roadmap; Dependencies = [] }) |> Seq.toList
-            if rows.Length <> binding.SelectedIssues.Count || (rows |> List.map _.NodeId |> Set.ofList |> Set.count) <> rows.Length then
-                invalidArg "enrollment" "exact selected population required"
-            Ok rows
-        with error -> Error(Malformed("programme enrollment", error.Message))
+        authenticateProgrammeEnrollment binding text |> Result.bind (fun rows ->
+            rows |> List.fold (fun result (issue, node, roadmap) ->
+                result |> Result.bind (fun accumulated ->
+                    parseIssue issue |> Result.map (fun parsed ->
+                        let row: Selected = { Issue = parsed; NodeId = node; UpdatedAt = ""; Roadmap = roadmap; Dependencies = [] }
+                        accumulated @ [ row ]))) (Ok []))
 
     let private selectedPopulation binding text =
         if binding.BindingVersion = 4 then programmePopulation binding text else population binding text
@@ -426,6 +400,15 @@ module V2ProjectionSource =
                 else Ok()
         with :? System.IO.IOException -> Error(Malformed("reviewed executable", "loaded assembly bytes unavailable"))
 
+    let private protectedEnrollmentInputs (binding: Binding) (revision: string) (blob: string) =
+        let source = (if binding.BindingVersion = 3 then sourceRepository binding + ":" + populationPath else populationPath), revision, blob
+        match binding.ProgrammeEnrollment with
+        | Some enrollment when binding.BindingVersion = 4 ->
+            match programmeCommitment enrollment with
+            | Ok digest -> [ source; "programme-enrollment/v3-commitment", revision, digest ]
+            | Error _ -> [ source ]
+        | _ -> [ source ]
+
     let runFixed (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
         let failed error =
             { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision; ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256; NativeDispatch = []; ProtectedInputs = []; Selected = None; Attempted = 0; Verified = 0
@@ -479,7 +462,7 @@ module V2ProjectionSource =
                       MembershipPages = projection |> Option.map (fun report -> report.ProjectReads - (if report.Mutations = 0 then 3 else 4))
                       Projection = projection; Gap = match result with Error error -> Some error | _ -> None
                       LastVerified = projection |> Option.orElse historical })
-                { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision; ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256; NativeDispatch = []; ProtectedInputs = [ (if binding.BindingVersion = 3 then sourceRepository binding + ":" + populationPath else populationPath), protectedRevision, populationBlob ]; Selected = Some selected.Length
+                { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision; ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256; NativeDispatch = []; ProtectedInputs = protectedEnrollmentInputs binding protectedRevision populationBlob; Selected = Some selected.Length
                   Attempted = items.Length; Verified = items |> List.filter (fun item -> item.Health = "Verified") |> List.length
                   Items = items; PopulationGap = None; Cleanup = "No resources, claims or background work created" }
 
@@ -519,7 +502,7 @@ module V2ProjectionSource =
           PullRequest: string option; Head: string option; CustodyReference: string }
     type SelectionContext =
         { Invocation: string; ProjectId: string; SchemaVersion: int; RecipeRevision: string; ArtifactSha256: string
-          PopulationRevision: string; EnrollmentBlob: string; InputSha256: string
+          PopulationRevision: string; EnrollmentBlob: string; EnrollmentCommitment: string; InputSha256: string
           Slices: CurrentSlice list; ImplementationSlots: int option; ReviewSlots: int option; HostedCiSlots: int option
           CapacityMeaning: string; CapacityObservation: AttributedObservation option
           Reservations: Reservation list option; ReservationObservation: AttributedObservation option
@@ -847,8 +830,14 @@ module V2ProjectionSource =
                         | Ok final when List.sortBy (fun (value: Membership) -> value.ItemId) final = List.sortBy (fun (value: Membership) -> value.ItemId) members -> None
                         | Ok _ -> Some(Malformed("final membership barrier", "project membership changed; reconcile complete population before selection"))
                         | Error error -> Some error
+                let enrollmentGap =
+                    if binding.BindingVersion <> 4 then membershipGap
+                    else
+                        match readProtectedBlob reads binding binding.PopulationRevision populationPath with
+                        | Ok(text, _, finalBlob) when finalBlob = blob && Result.isOk (programmePopulation binding text) -> membershipGap
+                        | _ -> Some(Malformed("programme enrollment", "final-enrollment-currentness-unavailable-or-changed"))
                 { Binding = binding; Memberships = members; MembershipGap = membershipGap; NativeIntegrator = integration
-                  Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) [ (if binding.BindingVersion = 3 then sourceRepository binding + ":" + populationPath else populationPath), current, blob ] membershipGap; Items = items }
+                  Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) (protectedEnrollmentInputs binding current blob) enrollmentGap; Items = items }
 
     let planningCandidates (report: InspectionReport) (facts: IntegratorFacts) =
         if report.Evidence.Selected.IsNone || report.Evidence.PopulationGap.IsSome then []
@@ -902,7 +891,8 @@ module V2ProjectionSource =
                 && value.ProjectId = report.Binding.ProjectId && value.SchemaVersion = report.Binding.SchemaVersion
                 && value.RecipeRevision = report.Binding.RecipeRevision && value.ArtifactSha256 = report.Binding.ArtifactSha256
                 && value.PopulationRevision = report.Binding.PopulationRevision
-                && (report.Evidence.ProtectedInputs |> List.exists (fun (_, _, blob) -> blob = value.EnrollmentBlob)))
+                && (report.Evidence.ProtectedInputs |> List.exists (fun (path, _, blob) -> path = "docs/coordination/board-v2-import-manifest.json" && blob = value.EnrollmentBlob))
+                && (report.Evidence.ProtectedInputs |> List.exists (fun (path, _, digest) -> path = "programme-enrollment/v3-commitment" && digest = value.EnrollmentCommitment)))
         let proposals: (InspectionItem option * CurrentSlice option * IssueRef) list =
             match context with
             | Some value when not value.Slices.IsEmpty ->

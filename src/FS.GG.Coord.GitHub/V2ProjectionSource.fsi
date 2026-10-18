@@ -55,7 +55,7 @@ module V2ProjectionSource =
     /// Version 2 retains the organization manifest. Version 3 reads the same import/v1 manifest path
     /// from its sole selected receiver repository, checks its pinned/current main blob and reads only
     /// that repository's canonical docs/native plan. Product metadata never comes from the organization
-    /// manifest. Version 4 uses exact enrollment/v2 identities and current native closure/dependencies/
+    /// manifest. Version 4 authenticates exact private payload identities through the protected enrollment/v3 commitment and current native closure/dependencies/
     /// plan facts. Exact protected enrollment may declare HTTPS GitHub blob URLs in the bound
     /// repositories: docs paths or the maintained programme observation reference. Main resolves to
     /// a fresh native commit/blob each observation; immutable 40-hex plan refs remain pinned.
@@ -118,7 +118,7 @@ module V2ProjectionSource =
           PullRequest: string option; Head: string option; CustodyReference: string }
     type SelectionContext =
         { Invocation: string; ProjectId: string; SchemaVersion: int; RecipeRevision: string; ArtifactSha256: string
-          PopulationRevision: string; EnrollmentBlob: string; InputSha256: string
+          PopulationRevision: string; EnrollmentBlob: string; EnrollmentCommitment: string; InputSha256: string
           Slices: CurrentSlice list; ImplementationSlots: int option; ReviewSlots: int option; HostedCiSlots: int option
           CapacityMeaning: string; CapacityObservation: AttributedObservation option
           Reservations: Reservation list option; ReservationObservation: AttributedObservation option

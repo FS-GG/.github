@@ -50,7 +50,7 @@ let ``binding refuses caller currentness and executable inputs`` () =
 [<Fact>]
 let ``invalid loaded artifact and unknown flags perform no transport calls or report writes`` () =
     let directory = Path.Combine(Path.GetTempPath(), "board-v2-cli-" + Guid.NewGuid().ToString("N"))
-    Directory.CreateDirectory directory |> ignore
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
     try
         let bindingPath = Path.Combine(directory, "binding.json")
         let reportPath = Path.Combine(directory, "report.json")
@@ -112,7 +112,7 @@ let ``report history roundtrip strips current authority while retaining last ver
 [<Fact>]
 let ``partial CLI report is truthful and local lock releases after report failure`` () =
     let directory = Path.Combine(Path.GetTempPath(), "board-v2-cli-" + Guid.NewGuid().ToString("N"))
-    Directory.CreateDirectory directory |> ignore
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
     try
         let bindingPath = Path.Combine(directory, "binding.json")
         File.WriteAllText(bindingPath, bindingJson (loadedDigest ()))
@@ -142,7 +142,7 @@ let ``partial CLI report is truthful and local lock releases after report failur
 [<Fact>]
 let ``inspect emits unknown population evidence without any mutation dispatch`` () =
     let directory = Path.Combine(Path.GetTempPath(), "board-v2-inspect-" + Guid.NewGuid().ToString("N"))
-    Directory.CreateDirectory directory |> ignore
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
     try
         let bindingPath = Path.Combine(directory, "binding.json")
         let reportPath = Path.Combine(directory, "inspection.json")
@@ -199,7 +199,7 @@ let ``unchanged closed wire decoder distinguishes two receiver repository bindin
 [<Fact>]
 let ``product inspect missing receiver provenance stays Unknown and never queries organization population`` () =
     let directory = Path.Combine(Path.GetTempPath(), "board-v2-product-" + Guid.NewGuid().ToString("N"))
-    Directory.CreateDirectory directory |> ignore
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
     try
         for repository, project, number in [ "WidgetA", "product_a", 81; "WidgetB", "product_b", 82 ] do
             let input = Path.Combine(directory, project + "-binding.json")
@@ -233,7 +233,7 @@ let ``product inspect missing receiver provenance stays Unknown and never querie
 [<Fact>]
 let ``actual programme CLI caller joins native PR facts and retains attributed selection gaps`` () =
     let directory = Path.Combine(Path.GetTempPath(), "board-v2-programme-" + Guid.NewGuid().ToString("N"))
-    Directory.CreateDirectory directory |> ignore
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
     try
         let bindingPath = Path.Combine(directory, "binding.json")
         let reportPath = Path.Combine(directory, "inspection.json")
@@ -280,7 +280,7 @@ let ``actual programme CLI caller joins native PR facts and retains attributed s
 [<Fact>]
 let ``actual product CLI retains closed schema one top level and item property sets`` () =
     let directory = Path.Combine(Path.GetTempPath(), "board-v2-product-wire-" + Guid.NewGuid().ToString("N"))
-    Directory.CreateDirectory directory |> ignore
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
     try
         let input = Path.Combine(directory, "binding.json")
         let output = Path.Combine(directory, "inspection.json")
@@ -337,7 +337,7 @@ let ``actual product CLI retains closed schema one top level and item property s
 
 let private inspectProgrammeBindingInput (selectedBinding: string) (json: string option) (change: Transport.Request -> Errors.IoResult<Transport.Response> -> Errors.IoResult<Transport.Response>) =
     let directory = Path.Combine(Path.GetTempPath(), "board-v2-input-" + Guid.NewGuid().ToString("N"))
-    Directory.CreateDirectory directory |> ignore
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
     try
         let binding = Path.Combine(directory, "binding.json")
         let output = Path.Combine(directory, "report.json")
@@ -350,6 +350,7 @@ let private inspectProgrammeBindingInput (selectedBinding: string) (json: string
         let code = BoardV2Application.runWithTransportAndInput transport reader arguments
         let report =
             if File.Exists output then
+                Assert.Equal<UnixFileMode>(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode output)
                 use document = JsonDocument.Parse(File.ReadAllText output)
                 Some(document.RootElement.Clone())
             else None
@@ -364,8 +365,9 @@ let private inspectDeclaredPopulation (rows: (string * IssueRef * string) list) 
         { ProgrammeFixture.binding () with
             SelectedIssues = (rows |> List.map (fun (id, issue, _) -> id, $"{issue.Owner}/{issue.Repository}#{issue.Number}") |> Map.ofList);
             Repositories = repositories }
+        |> fun value -> ProgrammeFixture.enroll value rows
     let directory = Path.Combine(Path.GetTempPath(), "board-v2-native-plans-" + Guid.NewGuid().ToString("N"))
-    Directory.CreateDirectory directory |> ignore
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
     try
         let bindingPath = Path.Combine(directory, "binding.json")
         let reportPath = Path.Combine(directory, "report.json")
@@ -754,20 +756,18 @@ let ``actual native caller refuses conflicting open deliverables changed heads a
 
 [<Fact>]
 let ``actual native inventory gaps stay within proposed repository scope while binding gaps remain global`` () =
-    let binding = { ProgrammeFixture.binding () with Repositories = Set.ofList [ "FS-GG/.github"; "FS-GG/independent" ] }
-    let bindingNode = Text.Json.Nodes.JsonNode.Parse(ProgrammeFixture.bindingJson ())
-    bindingNode.["repositories"] <- JsonSerializer.SerializeToNode(Set.toList binding.Repositories)
-    let selectedBinding = bindingNode.ToJsonString()
+    let binding =
+        { ProgrammeFixture.binding () with Repositories = Set.ofList [ "FS-GG/.github"; "FS-GG/independent" ] }
+        |> fun value -> ProgrammeFixture.enroll value [ "I_outcome", ProgrammeFixture.issue, "docs/coordination/programme.md" ]
+    let selectedBinding = ProgrammeFixture.bindingJsonFor binding
     let change (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
         if request.Subject.EndsWith("board-v2-import-manifest.json", StringComparison.Ordinal) then
             response |> Result.map (fun value ->
                 let root = Text.Json.Nodes.JsonNode.Parse value.Body
                 let repository = root.["data"].["repository"]
-                let enrolled = Text.Json.Nodes.JsonNode.Parse(repository.["object"].["text"].GetValue<string>())
-                let enrollmentBinding = enrolled.["binding"]
-                enrollmentBinding.["repositories"] <- JsonSerializer.SerializeToNode(Set.toList binding.Repositories)
-                repository.["object"].["text"] <- Text.Json.Nodes.JsonValue.Create(enrolled.ToJsonString())
-                repository.["current"].["text"] <- Text.Json.Nodes.JsonValue.Create(enrolled.ToJsonString())
+                let enrolled = ProgrammeFixture.publicEnrollment binding
+                repository.["object"].["text"] <- Text.Json.Nodes.JsonValue.Create enrolled
+                repository.["current"].["text"] <- Text.Json.Nodes.JsonValue.Create enrolled
                 { value with Body = root.ToJsonString() })
         elif request.Subject = "FS-GG/.github open PR inventory" then Error(Errors.Unauthorized "repository A inventory unavailable")
         elif request.Subject = "FS-GG/independent open PR inventory" then
@@ -799,7 +799,7 @@ let ``actual native inventory gaps stay within proposed repository scope while b
 [<Fact>]
 let ``actual programme refresh caller updates only Observation then independently noops without integrator input`` () =
     let directory = Path.Combine(Path.GetTempPath(), "board-v2-refresh-" + Guid.NewGuid().ToString("N"))
-    Directory.CreateDirectory directory |> ignore
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
     try
         let bindingPath = Path.Combine(directory, "binding.json")
         File.WriteAllText(bindingPath, ProgrammeFixture.bindingJson ())
@@ -920,3 +920,150 @@ let ``actual caller final intake barrier rereads unchanged author policy and per
         Assert.Contains("changed or became unavailable", intake.GetProperty("gap").GetString())
         Assert.Equal("unknown", (inputSelections root).[0].GetProperty("decision").GetString())
         Assert.Empty transport.Mutations
+
+[<Fact>]
+let ``actual binding file acquisition enforces byte boundary before transport and keeps product input closed`` () =
+    let original = ProgrammeFixture.bindingJson ()
+    for size in [ 262144; 262145 ] do
+        let binding = original + String.replicate (size - Text.Encoding.UTF8.GetByteCount original) " "
+        let mutable reads = 0
+        let code, report, _ = inspectProgrammeBindingInput binding None (fun (_: Transport.Request) response -> reads <- reads + 1; response)
+        if size = 262144 then
+            Assert.Equal(0, code)
+            Assert.True(report.IsSome)
+            Assert.True(reads > 0)
+        else
+            Assert.Equal(1, code)
+            Assert.True(report.IsNone)
+            Assert.Equal(0, reads)
+    let product = Text.Json.Nodes.JsonNode.Parse(productJson "WidgetA" "product_a" 81)
+    Assert.True(Result.isOk (BoardV2Application.parseBinding (product.ToJsonString())))
+    product.AsObject().Add("programmeEnrollment", (Text.Json.Nodes.JsonNode.Parse original).["programmeEnrollment"].DeepClone())
+    let mutable productReads = 0
+    let code, report, _ = inspectProgrammeBindingInput (product.ToJsonString()) None (fun (_: Transport.Request) response -> productReads <- productReads + 1; response)
+    Assert.Equal(1, code)
+    Assert.True(report.IsNone)
+    Assert.Equal(0, productReads)
+
+[<Fact>]
+let ``actual private binding malformed fields refuse before native acquisition without sensitive diagnostics`` () =
+    let sensitive = "synthetic-sensitive-never-public"
+    for mode in [ "missing"; "nonce"; "base64"; "duplicate"; "payload"; "utf8" ] do
+        let root = Text.Json.Nodes.JsonNode.Parse(ProgrammeFixture.bindingJson ())
+        match mode with
+        | "missing" -> root.AsObject().Remove "programmeEnrollment" |> ignore
+        | "nonce" -> root.["programmeEnrollment"].["nonceHex"] <- Text.Json.Nodes.JsonValue.Create sensitive
+        | "base64" -> root.["programmeEnrollment"].["payloadBase64"] <- Text.Json.Nodes.JsonValue.Create sensitive
+        | "payload" -> root.["programmeEnrollment"].["payloadBase64"] <- Text.Json.Nodes.JsonValue.Create(Convert.ToBase64String(Text.Encoding.UTF8.GetBytes("{\"" + sensitive + "\":1}")))
+        | "utf8" -> root.["programmeEnrollment"].["payloadBase64"] <- Text.Json.Nodes.JsonValue.Create "/w=="
+        | _ -> ()
+        let json = root.ToJsonString()
+        let json = if mode = "duplicate" then json.Replace("\"nonceHex\":", "\"nonceHex\":\"" + sensitive + "\",\"nonceHex\":") else json
+        let mutable reads = 0
+        let code, report, _ = inspectProgrammeBindingInput json None (fun (_: Transport.Request) response -> reads <- reads + 1; response)
+        Assert.Equal(1, code)
+        Assert.True(report.IsNone)
+        Assert.Equal(0, reads)
+        match BoardV2Application.parseBinding json with
+        | Error error -> Assert.DoesNotContain(sensitive, error)
+        | Ok _ -> failwith "invalid private enrollment accepted"
+
+[<Fact>]
+let ``actual public commitment mismatch or raw public payload cannot enroll private rows or leak bytes`` () =
+    let sensitive = "synthetic-sensitive-never-public"
+    let selected = ProgrammeFixture.enroll (ProgrammeFixture.binding ()) [ "I_outcome", ProgrammeFixture.issue, "docs/" + sensitive + ".md" ]
+    let enrollment = selected.ProgrammeEnrollment |> Option.get
+    let payload = Convert.FromBase64String enrollment.PayloadBase64 |> Text.Encoding.UTF8.GetString
+    for publicText in [ payload; ProgrammeFixture.publicEnrollment (ProgrammeFixture.binding ()) ] do
+        let mutable reads = 0
+        let change (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+            reads <- reads + 1
+            if request.Subject.EndsWith("board-v2-import-manifest.json", StringComparison.Ordinal) then
+                response |> Result.map (fun value ->
+                    let root = Text.Json.Nodes.JsonNode.Parse value.Body
+                    root.["data"].["repository"].["object"].["text"] <- Text.Json.Nodes.JsonValue.Create publicText
+                    root.["data"].["repository"].["current"].["text"] <- Text.Json.Nodes.JsonValue.Create publicText
+                    { value with Body = root.ToJsonString() })
+            else response
+        let code, report, _ = inspectProgrammeBindingInput (ProgrammeFixture.bindingJsonFor selected) None change
+        Assert.Equal(3, code)
+        Assert.Equal(1, reads)
+        Assert.Equal(0, report.Value.GetProperty("items").GetArrayLength())
+        let output = report.Value.GetRawText()
+        for secret in [ sensitive; enrollment.NonceHex; enrollment.PayloadBase64 ] do Assert.DoesNotContain(secret, output)
+
+[<Fact>]
+let ``actual inspection revokes selection when protected commitment changes after slow native reads`` () =
+    let baseline = V2ProjectionSource.inspectFixed (ProgrammeFixture.transport ProgrammeFixture.unchanged) (ProgrammeFixture.binding ()) None
+    let input = ProgrammeFixture.context baseline |> ProgrammeFixture.integratorJson
+    let mutable protectedReads = 0
+    let change (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+        if request.Subject.EndsWith("board-v2-import-manifest.json", StringComparison.Ordinal) then
+            protectedReads <- protectedReads + 1
+            if protectedReads > 1 then
+                response |> Result.map (fun value ->
+                    let root = Text.Json.Nodes.JsonNode.Parse value.Body
+                    root.["data"].["repository"].["current"].["oid"] <- Text.Json.Nodes.JsonValue.Create(String.replicate 40 "f")
+                    { value with Body = root.ToJsonString() })
+            else response
+        else response
+    let code, report, _ = inspectProgrammeInput (Some input) change
+    Assert.Equal(3, code)
+    Assert.Equal(2, protectedReads)
+    Assert.NotEqual<JsonValueKind>(JsonValueKind.Null, report.Value.GetProperty("populationGap").ValueKind)
+    Assert.Equal("unknown", (inputSelections report.Value).[0].GetProperty("decision").GetString())
+    let publicCommitment = (report.Value.GetProperty("enrollmentCommitmentSha256")).GetString()
+    Assert.Equal<string>(ProgrammeFixture.binding () |> _.ProgrammeEnrollment |> Option.get |> programmeCommitment |> Result.defaultWith (Errors.explain >> failwith), publicCommitment)
+
+[<Fact>]
+let ``actual refresh reauthenticates public commitment before Observation send and Verified noop`` () =
+    for observation in [ "Unknown"; "Verified" ] do
+        let directory = Path.Combine(Path.GetTempPath(), "board-v2-private-refresh-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+        try
+            let binding = ProgrammeFixture.binding ()
+            let input = Path.Combine(directory, "binding.json")
+            let output = Path.Combine(directory, "report.json")
+            File.WriteAllText(input, ProgrammeFixture.bindingJsonFor binding)
+            let mutable publicReads = 0
+            let mutable writes = 0
+            let reads = ProgrammeFixture.transport (fun (request: Transport.Request) response ->
+                let response = ProgrammeFixture.observation observation request response
+                if request.Subject.EndsWith("board-v2-import-manifest.json", StringComparison.Ordinal) then
+                    publicReads <- publicReads + 1
+                    if publicReads > 1 then
+                        response |> Result.map (fun value ->
+                            let root = Text.Json.Nodes.JsonNode.Parse value.Body
+                            root.["data"].["repository"].["current"].["oid"] <- Text.Json.Nodes.JsonValue.Create(String.replicate 40 "f")
+                            { value with Body = root.ToJsonString() })
+                    else response
+                else response)
+            let guarded =
+                V2ObservationTransport.compose binding reads (fun (_: Transport.Request) ->
+                    writes <- writes + 1
+                    failwith "revoked public enrollment must never dispatch")
+                |> Result.defaultWith (Errors.explain >> failwith)
+            Assert.Equal(3, BoardV2Application.runWithTransport guarded [ "refresh"; "--binding-file"; input; "--report-file"; output ])
+            Assert.Equal(2, publicReads)
+            Assert.Equal(0, writes)
+            Assert.Equal<UnixFileMode>(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode output)
+            use report = JsonDocument.Parse(File.ReadAllText output)
+            Assert.Equal(0, report.RootElement.GetProperty("verified").GetInt32())
+            Assert.Equal(0, (report.RootElement.GetProperty("items")).[0].GetProperty("mutationAttempts").GetInt32())
+        finally Directory.Delete(directory, true)
+
+[<Fact>]
+let ``actual integrator input must bind the authenticated whole enrollment commitment before reads`` () =
+    let baseline = V2ProjectionSource.inspectFixed (ProgrammeFixture.transport ProgrammeFixture.unchanged) (ProgrammeFixture.binding ()) None
+    let context = ProgrammeFixture.context baseline
+    for mode in [ "missing"; "wrong"; "duplicate" ] do
+        let root = Text.Json.Nodes.JsonNode.Parse(ProgrammeFixture.integratorJson context)
+        if mode = "missing" then root.AsObject().Remove "enrollmentCommitmentSha256" |> ignore
+        elif mode = "wrong" then root.["enrollmentCommitmentSha256"] <- Text.Json.Nodes.JsonValue.Create(String.replicate 64 "f")
+        let json = root.ToJsonString()
+        let json = if mode = "duplicate" then json.Replace("\"enrollmentCommitmentSha256\":", "\"enrollmentCommitmentSha256\":\"duplicate\",\"enrollmentCommitmentSha256\":") else json
+        let mutable reads = 0
+        let code, report, _ = inspectProgrammeInput (Some json) (fun (_: Transport.Request) response -> reads <- reads + 1; response)
+        Assert.Equal(1, code)
+        Assert.True(report.IsNone)
+        Assert.Equal(0, reads)

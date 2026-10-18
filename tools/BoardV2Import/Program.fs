@@ -5,7 +5,7 @@ open System.IO
 open System.Text.Json.Nodes
 open System.Text.RegularExpressions
 
-// Offline administrative authority: no transport, effects, durable state or lifecycle reducer.
+// Offline preparation retains local output files; it grants no native operation authority and owns no native lifecycle state.
 let require condition message = if not condition then invalidOp message
 let prop (node: JsonNode) (name: string) = node.[name]
 let str (node: JsonNode) = if isNull node then "" else node.GetValue<string>()
