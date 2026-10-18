@@ -132,10 +132,45 @@ class InstalledPassiveInputTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             self.assertEqual(identity(block, root / "good.json"), expected)
+            correction_marker = '  python3 - "$WORK/envelope.json" "$WORK/passive-correction.json" <<' + "'PY_PASSIVE'\n"
+            correction = source.split(correction_marker, 1)[1].split("\nPY_PASSIVE\n", 1)[0]
+            subprocess.run([sys.executable, "-c", correction, str(root / "good.json"), str(root / "correction.json")], check=True, capture_output=True)
+            original = json.loads((root / "good.json").read_text())
+            corrected = json.loads((root / "correction.json").read_text())
+            self.assertNotEqual(original["batchId"], corrected["batchId"])
+            self.assertEqual(corrected["batchId"], corrected["payload"]["ingestId"])
+            self.assertEqual([2, 1], [value["payload"]["eventCount"] for value in [original, corrected]])
+            self.assertEqual([expected], [event["identity"] for event in corrected["payload"]["events"]])
+            self.assertEqual(2, corrected["payload"]["events"][0]["revision"])
+            calls = [line for line in source.splitlines() if 'node "$ROOT/tests/standalone-telemetry-host-package/installed-browser.js"' in line]
+            self.assertEqual(2, len(calls))
+            self.assertTrue(all('"$browser_spki" 2 >' in line for line in calls))
             # A syntactically valid escaped-text identity must fail this protocol control.
             bad = block.replace(chr(92) + "x1f", chr(92) * 2 + "x1f")
             self.assertNotEqual(bad, block)
             self.assertNotEqual(identity(bad, root / "bad.json"), expected)
+
+    def test_actual_browser_receipt_check_preserves_old_profile_and_exact_correction_count(self):
+        # Execute the maintained script with a page double: no browser or network is launched.
+        with tempfile.TemporaryDirectory() as temporary:
+            mock = pathlib.Path(temporary) / "playwright.js"
+            for applied, rejected, expected, success in [
+                (1, 0, None, True), (2, 0, "2", True),
+                (1, 0, "2", False), (2, 0, None, False),
+                (12, 0, "2", False), (2, 1, "2", False),
+                (2, 2, "2", False), (0, 0, "2", False),
+                (2, 0, "0", False), (2, 0, "invalid", False)]:
+                with self.subTest(applied=applied, rejected=rejected, expected=expected):
+                    health = f"0 pending receipts · {applied} applied receipts · {rejected} rejected receipts · consistent"
+                    mock.write_text("const control={fill:async()=>{},click:async()=>{},waitFor:async()=>{},innerText:async()=>" + json.dumps(health) + "};\n"
+                                    "const page={goto:async()=>({status:()=>200}),locator:()=>control,getByRole:()=>({filter:()=>control,...control})};\n"
+                                    "module.exports={chromium:{launch:async()=>({newPage:async()=>page,close:async()=>{}})}};\n")
+                    args = ["node", str(ROOT / "tests/standalone-telemetry-host-package/installed-browser.js"), str(mock),
+                            "https://fixture.invalid", "fixture-principal", "fixture-key", "fixture-workspace", "fixture-item", "fixture-spki"]
+                    if expected is not None:
+                        args.append(expected)
+                    result = subprocess.run(args, capture_output=True, text=True, timeout=10)
+                    self.assertEqual(success, result.returncode == 0, result.stderr)
 
 
 class Journal:

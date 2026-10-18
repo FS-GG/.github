@@ -149,6 +149,7 @@ with sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True) as db:
     for table in ('usage_observations','runtime_turn_usage','budget_dirty_items'):
         assert db.execute('SELECT count(*) FROM '+table).fetchone()[0]==0,table
     assert db.execute('SELECT count(*) FROM items').fetchone()[0]==1
+    assert db.execute('SELECT batch,state,code FROM transport_receipts ORDER BY batch').fetchall()==[('package-batch','applied',None),('package-passive-correction','applied',None)]
 PY_PASSIVE
   }
   assert_passive_state "$store" && ok "installed HTTPS passive correction stays canonical-only with absent counters unknown" || bad "installed HTTPS passive projection and item totals"
@@ -157,7 +158,7 @@ PY_PASSIVE
   browser_spki="$(openssl x509 -in "$tls/server.crt" -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | openssl base64)"
   (cd "$ROOT/tests/FS.GG.Telemetry.Browser.Tests" && FSGG_BROWSER_BASE_URL="$base" FSGG_BROWSER_PRINCIPAL_ID=package-browser FSGG_BROWSER_ACCESS_KEY="$browser_key" FSGG_BROWSER_KNOWN_WORKSPACE=package-workspace FSGG_BROWSER_UNAVAILABLE_WORKSPACE=outside-workspace FSGG_BROWSER_CERTIFICATE_SPKI="$browser_spki" npm run test:browser) >"$WORK/browser.out" 2>"$WORK/browser.err" \
     && ok "installed host passes the pinned-certificate HTTPS browser isolation journey" || bad "installed host passes the pinned-certificate HTTPS browser isolation journey" "$(tail -10 "$WORK/browser.err")"
-  node "$ROOT/tests/standalone-telemetry-host-package/installed-browser.js" "$ROOT/tests/FS.GG.Telemetry.Browser.Tests/node_modules/playwright" "$base" package-browser "$browser_key" package-workspace package-item "$browser_spki" >"$WORK/installed-browser.out" 2>"$WORK/installed-browser.err" \
+  node "$ROOT/tests/standalone-telemetry-host-package/installed-browser.js" "$ROOT/tests/FS.GG.Telemetry.Browser.Tests/node_modules/playwright" "$base" package-browser "$browser_key" package-workspace package-item "$browser_spki" 2 >"$WORK/installed-browser.out" 2>"$WORK/installed-browser.err" \
     && ok "installed browser snapshot contains the applied native package item" || bad "installed browser snapshot contains the applied native package item" "$(tail -10 "$WORK/installed-browser.err")"
   kill -TERM "$pid"
   rc=0
@@ -185,7 +186,7 @@ PY
   done
   code="$(curl --silent --show-error --cacert "$tls/server.crt" -H "Authorization: Bearer $producer_secret" --output "$WORK/restored-receipt.json" --write-out '%{http_code}' "$restored_base/v1/receipts/package-batch")"
   [ "$code" = 200 ] && cmp -s "$WORK/applied-receipt.json" "$WORK/restored-receipt.json" && ok "restored host retains the exact applied receipt" || bad "restored host retains the exact applied receipt" "HTTP $code"
-  node "$ROOT/tests/standalone-telemetry-host-package/installed-browser.js" "$ROOT/tests/FS.GG.Telemetry.Browser.Tests/node_modules/playwright" "$restored_base" package-browser "$browser_key" package-workspace package-item "$browser_spki" >"$WORK/restored-browser.out" 2>"$WORK/restored-browser.err" \
+  node "$ROOT/tests/standalone-telemetry-host-package/installed-browser.js" "$ROOT/tests/FS.GG.Telemetry.Browser.Tests/node_modules/playwright" "$restored_base" package-browser "$browser_key" package-workspace package-item "$browser_spki" 2 >"$WORK/restored-browser.out" 2>"$WORK/restored-browser.err" \
     && ok "restored browser snapshot retains the native package item" || bad "restored browser snapshot retains the native package item" "$(tail -10 "$WORK/restored-browser.err")"
   if assert_passive_state "$restored_root/package-workspace"; then
     # shellcheck disable=SC2034 # consumed by the package evidence writer
