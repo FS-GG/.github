@@ -1597,3 +1597,42 @@ let ``existing delivery PR observation retains exact owner and consumes no new c
     Assert.Equal("needs-decision", (V2ProjectionSource.selectActions report (Some wrongOwner) report.NativeIntegrator.ObservedAt).Head.Decision)
     Assert.Equal("owner-attempt", result.Head.Attempt.Value)
     Assert.Empty reads.Mutations
+
+[<Fact>]
+let ``complete selected hierarchy cycle refuses affected nodes without blocking independent delivery`` () =
+    let rows =
+        [ "I_independent", {ProgrammeFixture.issue with Number = 6000}, "docs/coordination/programme.md"
+          "I_outcome", ProgrammeFixture.issue, "docs/coordination/programme.md"
+          "I_b", {ProgrammeFixture.issue with Number = 6001}, "docs/coordination/programme.md"
+          "I_c", {ProgrammeFixture.issue with Number = 6002}, "docs/coordination/programme.md" ]
+    let selected =
+        {ProgrammeFixture.successorBinding () with SelectedIssues = rows |> List.map (fun (id, issue, _) -> id, $"{issue.Owner}/{issue.Repository}#{issue.Number}") |> Map.ofList}
+        |> fun binding -> ProgrammeFixture.enroll binding rows
+    let change (request: Transport.Request) response =
+        if request.Subject <> "selected native work hierarchy" then response
+        else response |> Result.map (fun (value: Transport.Response) ->
+            let root = System.Text.Json.Nodes.JsonNode.Parse value.Body
+            let native = root.["data"].["repository"].["issue"]
+            let id = native.["id"].GetValue<string>()
+            let parent, child =
+                match id with
+                | "I_outcome" -> "I_c", "I_b"
+                | "I_b" -> "I_outcome", "I_c"
+                | "I_c" -> "I_b", "I_outcome"
+                | _ -> "I_parent", "I_unselected-child"
+            let number id fallback = rows |> List.tryPick (fun (node, issue, _) -> if node = id then Some issue.Number else None) |> Option.defaultValue fallback
+            native.["parent"].["id"] <- System.Text.Json.Nodes.JsonValue.Create parent
+            native.["parent"].["number"] <- System.Text.Json.Nodes.JsonValue.Create(number parent 9998)
+            native.["subIssues"].["nodes"].[0].["id"] <- System.Text.Json.Nodes.JsonValue.Create child
+            native.["subIssues"].["nodes"].[0].["number"] <- System.Text.Json.Nodes.JsonValue.Create(number child 9999)
+            {value with Body = root.ToJsonString()})
+    let reads = ProgrammeFixture.successorTransportFor selected rows (Some "Delivery") change
+    let report = V2ProjectionSource.inspectFixed reads selected None
+    for item in report.Items do
+        if item.ExpectedNodeId = "I_independent" then Assert.True(item.WorkItem.Value.Complete, string item.WorkItem.Value.Gap)
+        else
+            Assert.False(item.WorkItem.Value.Complete)
+            Assert.True(item.WorkItem.Value.Sha256.IsNone)
+    let result = V2ProjectionSource.selectActions report (Some(ProgrammeFixture.context report)) report.NativeIntegrator.ObservedAt
+    Assert.Equal("selected", result.Head.Decision)
+    Assert.Empty reads.Mutations

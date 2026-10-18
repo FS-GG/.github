@@ -928,6 +928,47 @@ module V2ProjectionSource =
             with _ -> absent "Native hierarchy/classification facts are unreadable"
         | _ -> absent "Current native identity, planning item or bound classification is unavailable"
 
+    // Compare only complete observed relationships. Missing parent observations do not become
+    // prerequisites of an independently observed delivery; contradictory/cyclic facts remain scoped gaps.
+    let private reconcileHierarchy (items: InspectionItem list) =
+        let complete = items |> List.choose (fun item -> item.WorkItem |> Option.bind (fun facts -> if facts.Complete then Some(item.ExpectedNodeId, facts) else None)) |> Map.ofList
+        let edges =
+            complete |> Map.toList |> List.collect (fun (node, facts) ->
+                (facts.Children |> List.map (fun child -> node, child.NodeId))
+                @ (facts.Parent |> Option.map (fun parent -> [parent.NodeId, node]) |> Option.defaultValue []))
+        let outgoing = edges |> List.groupBy fst |> List.map (fun (node, values) -> node, values |> List.map snd |> Set.ofList) |> Map.ofList
+        let cyclic start =
+            let rec walk pending visited =
+                match pending with
+                | [] -> false
+                | node :: _ when node = start -> true
+                | node :: rest when Set.contains node visited -> walk rest visited
+                | node :: rest -> walk ((Map.tryFind node outgoing |> Option.defaultValue Set.empty |> Set.toList) @ rest) (Set.add node visited)
+            walk (Map.tryFind start outgoing |> Option.defaultValue Set.empty |> Set.toList) Set.empty
+        let mutable affected = complete |> Map.keys |> Seq.filter cyclic |> Set.ofSeq
+        let mark left right = affected <- affected.Add left |> Set.add right
+        for KeyValue(node, facts) in complete do
+            match facts.Parent with
+            | Some parent ->
+                match Map.tryFind parent.NodeId complete with
+                | Some observed when not (observed.Children |> List.exists (fun child -> child.NodeId = node)) -> mark node parent.NodeId
+                | _ -> ()
+            | None -> ()
+            for child in facts.Children do
+                match Map.tryFind child.NodeId complete with
+                | Some observed when observed.Parent |> Option.forall (fun parent -> parent.NodeId <> node) -> mark node child.NodeId
+                | _ -> ()
+        edges |> List.distinct |> List.groupBy snd |> List.iter (fun (_, incoming) ->
+            let parents = incoming |> List.map fst |> Set.ofList
+            if parents.Count > 1 then affected <- Set.union affected parents)
+        items |> List.map (fun item ->
+            if not (affected.Contains item.ExpectedNodeId) then item
+            else
+                let gap = "Complete observed native relationships contain a cycle or contradictory parent/child identities"
+                { item with SourceCurrentness = "Unknown"
+                            WorkItem = item.WorkItem |> Option.map (fun facts -> {facts with Complete = false; Sha256 = None; Gap = Some gap})
+                            Evidence = {item.Evidence with Health = "Unknown"; Gap = Some(Malformed("native hierarchy consistency", gap))} })
+
     let inspectFixed (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
         let reads = inspectionReads transport binding
         let intakeObservedAt = DateTimeOffset.UtcNow
@@ -1028,6 +1069,7 @@ module V2ProjectionSource =
                         match readProtectedBlob reads binding binding.PopulationRevision populationPath with
                         | Ok(text, _, finalBlob) when finalBlob = blob && Result.isOk (programmePopulation binding text) -> membershipGap
                         | _ -> Some(Malformed("programme enrollment", "final-enrollment-currentness-unavailable-or-changed"))
+                let items = if binding.BindingVersion = 5 then reconcileHierarchy items else items
                 { Binding = binding; Memberships = members; MembershipGap = membershipGap; NativeIntegrator = integration
                   Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) (protectedEnrollmentInputs binding current blob) enrollmentGap; Items = items }
 

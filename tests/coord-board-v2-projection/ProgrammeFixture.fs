@@ -226,7 +226,7 @@ module ProgrammeFixture =
           PopulationRevision = report.Binding.PopulationRevision; EnrollmentBlob = blob; EnrollmentCommitment = (report.Binding.ProgrammeEnrollment |> Option.get |> programmeCommitment |> Result.defaultWith (Errors.explain >> failwith)); InputSha256 = String.replicate 64 "a"
           Slices =
             [ { Id = "source-slice"; Attempt = "owner-attempt"; Operation = if pull.IsSome then V2ProjectionSource.ObserveExisting else V2ProjectionSource.Implement
-                Issue = issue; AccountableOwner = "worker"; Owner = "worker"; Repository = "FS-GG/.github"; Paths = [ "src/new.fs" ]; Action = V2ProjectionSource.Source
+                Issue = item.Evidence.Issue; AccountableOwner = "worker"; Owner = "worker"; Repository = item.Evidence.Issue.Owner + "/" + item.Evidence.Issue.Repository; Paths = [ "src/new.fs" ]; Action = V2ProjectionSource.Source
                 Join = { NativeId = native.NodeId; UpdatedAt = native.UpdatedAt; BodySha256 = native.BodySha256; SourceRevision = item.SourceRevision |> Option.defaultValue "missing source revision"; HierarchySha256 = item.WorkItem |> Option.bind _.Sha256 }
                 Observation = observation; PullRequest = pull |> Option.map _.Url; PullRequestId = pull |> Option.map _.Id
                 PullRequestUpdatedAt = pull |> Option.map _.UpdatedAt; Head = pull |> Option.map _.Head
@@ -300,21 +300,24 @@ module ProgrammeFixture =
         enroll value ["I_outcome", issue, "docs/coordination/programme.md"]
 
     /// Actual fixed reader over inert complete native connections, with one extra unenrolled child.
-    let successorTransport (selected: Binding) (level: string option) change =
-        let rows = ["I_outcome", issue, "docs/coordination/programme.md"]
+    let successorTransportFor (selected: Binding) (rows: (string * IssueRef * string) list) (level: string option) change =
         let original = populationTransport selected rows unchanged
         Fake.Recorder(fun request ->
             let result =
                 match request.Body with
-                | Query(_, _) when request.Subject = "selected work classification" ->
+                | Query(_, variables) when request.Subject = "selected work classification" ->
+                    let itemId = variables |> List.pick (function "itemId", VId id -> Some id | _ -> None)
+                    let id, _, _ = rows |> List.find (fun (id, _, _) -> itemId = "synthetic-member-" + id)
                     let value = level |> Option.map (fun name ->
                         {| __typename = "ProjectV2ItemFieldSingleSelectValue"; name = name; optionId = selected.WorkLevel.Value.Options[name]; field = {| id = "work-level" |} |})
-                    wire {| node = {| id = "synthetic-member-I_outcome"; project = {| id = project |}; content = {| id = "I_outcome" |}; workLevel = value |} |}
-                | Query(_, _) when request.Subject = "selected native work hierarchy" ->
+                    wire {| node = {| id = itemId; project = {| id = project |}; content = {| id = id |}; workLevel = value |} |}
+                | Query(_, variables) when request.Subject = "selected native work hierarchy" ->
+                    let number = variables |> List.pick (function "number", VNumber number -> Some(int number) | _ -> None)
+                    let id, selectedIssue, _ = rows |> List.find (fun (_, issue, _) -> issue.Number = number)
                     let child = {| id = "I_unselected-child"; number = 9999; state = "OPEN"; stateReason = (None: string option); closedAt = (None: string option); repository = {| nameWithOwner = "FS-GG/.github" |} |}
                     let parent = {| id = "I_parent"; number = 9998; repository = {| nameWithOwner = "FS-GG/.github" |} |}
                     wire {| repository = {| nameWithOwner = "FS-GG/.github"; issue =
-                                {| id = "I_outcome"; number = issue.Number; updatedAt = revision; state = "OPEN"; stateReason = (None: string option); closedAt = (None: string option)
+                                {| id = id; number = selectedIssue.Number; updatedAt = revision; state = "OPEN"; stateReason = (None: string option); closedAt = (None: string option)
                                    body = ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", "None"); repository = {| nameWithOwner = "FS-GG/.github" |}
                                    parent = parent; subIssues = connection [child] |} |} |}
                 | Query(document, _) when document.Contains("projectV2(number:") ->
@@ -326,6 +329,9 @@ module ProgrammeFixture =
                         { response with Body = root.ToJsonString() })
                 | _ -> (original :> IGitHubTransport).Send request
             change request result)
+
+    let successorTransport selected level change =
+        successorTransportFor selected ["I_outcome", issue, "docs/coordination/programme.md"] level change
 
     let successorIntegratorJson (context: V2ProjectionSource.SelectionContext) =
         let root = Text.Json.Nodes.JsonNode.Parse(integratorJson context)
