@@ -26,9 +26,26 @@ of those gates. Existing authorized issue/plan/native-PR work continues within i
 board unavailability does not start another PR, with no V1 fallback to Project 1. Product binding version3,
 schema1, product work-board routes and local-only workspaces keep their qualified contracts.
 
-## One invocation after the gates are accepted
+## Selected qualification before routine adoption
 
-Invoke the authenticated installed executable with the final reviewed binding and a new report path:
+The integration owner may separately select a pre-cutover qualification invocation to establish the
+positive installed reads and .11 real-use comparisons above. Use the final authenticated binding,
+exact qualified installed caller/adapter and already authorized necessary work, retaining its actual
+owner, current declaration/native PR and original reservations. This is the same maintained inspect
+composition, not another route. Binding/currentness, native joins, intake, proposed-action
+prerequisites, remaining capacity and reservation checks apply in full; absent facts withhold the
+affected action. Source delivery or this qualification selection grants no new native effect.
+
+Do not require completed continuation/blocked/ordinary-delivery qualification before running the
+separately selected invocation that establishes those cases. Accept each original result at its
+actual scope. Routine post-cutover queue use and coordinated programme/driver/recovery/report adoption
+remain held until the applicable gates and explicit cutover decision are accepted. CLI installation
+does not load these instructions: retain the actual reviewed pinned-source or separately qualified
+materialized consumer identity. Supporting-view UI observations remain attributed separately and do
+not authorize a queue switch.
+
+For either a separately selected qualification or accepted routine use, invoke the authenticated
+installed executable with the final reviewed binding and a new report path:
 
 ```sh
 fsgg-coord-engine board-v2 inspect --binding-file reviewed-binding.json --report-file new-inspection.json --integrator-stdin
