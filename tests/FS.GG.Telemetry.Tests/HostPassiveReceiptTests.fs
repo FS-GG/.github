@@ -17,6 +17,7 @@ open FS.GG.Coord.Cli
 open FS.GG.Telemetry
 open FS.GG.Telemetry.Host
 
+[<Collection("Host schema profile")>]
 module HostPassiveReceiptTests =
     [<Fact(Timeout = 30000)>]
     let ``passive HTTP receipt binds generic authority corrections and unknown attribution`` () =

@@ -92,9 +92,9 @@ class EarlyQualificationTests(unittest.TestCase):
     def test_actual_host_http_and_closed_bindings_run_before_costly_work(self):
         def check(source, expensive, native=False):
             pure = source.index("python3 tests/telemetry-host-successor/run.py")
-            test = source.index('--filter "FullyQualifiedName~HostPassiveReceiptTests|FullyQualifiedName~HostSchemaProfileTests"')
+            test = source.index('--filter "FullyQualifiedName~HostPassiveReceiptTests|FullyQualifiedName~HostSchemaProfileTests|FullyQualifiedName~RemoteTelemetryTests.protected native collector resolves durable dispatch and replays retained envelope"')
             assert pure < test < source.index(expensive)
-            assert 'host-passive.trx" --minimum 2' in source
+            assert 'host-passive.trx" --minimum 4' in source
             assert 'timeout-minutes: 5' in source
             assert '--blame ' in source and '--blame-hang' not in source and '--blame-crash' not in source
             assert 'Retain passive Host HTTP diagnostics' in source and 'always()' in source
@@ -109,7 +109,8 @@ class EarlyQualificationTests(unittest.TestCase):
             source = (ROOT / path).read_text()
             check(source, expensive, native)
             for mutant in [source.replace('FullyQualifiedName~HostPassiveReceiptTests', 'FullyQualifiedName~Unrelated'),
-                           source.replace('host-passive.trx" --minimum 2', 'host-passive.trx" --minimum 0'),
+                           source.replace('FullyQualifiedName~RemoteTelemetryTests.protected native collector', 'FullyQualifiedName~UnrelatedNativeCollector'),
+                           source.replace('host-passive.trx" --minimum 4', 'host-passive.trx" --minimum 0'),
                            source.replace('python3 tests/telemetry-host-successor/run.py', 'echo absent'),
                            source.replace('always()', 'success()'),
                            source.replace('e["passiveReceiptQualified"] is True', 'True')]:
