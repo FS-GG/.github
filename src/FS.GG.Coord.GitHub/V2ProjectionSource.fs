@@ -155,10 +155,14 @@ module V2ProjectionSource =
             if binding.BindingVersion = 4 then
                 let malformedPull =
                     urls |> List.exists (fun url ->
-                        System.Text.RegularExpressions.Regex.IsMatch(url, "/pulls?(?:/|%2[fF]|[?#]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                        let mutable uri = Unchecked.defaultof<Uri>
+                        let path = if Uri.TryCreate(url, UriKind.Absolute, &uri) then uri.AbsolutePath else url
+                        let decodedPath = try Uri.UnescapeDataString path with _ -> path
+                        System.Text.RegularExpressions.Regex.IsMatch(decodedPath, "/pulls?(?:/|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
                         && (canonical url).IsNone)
+                let decodedDeclaration = try Uri.UnescapeDataString value with _ -> value
                 let barePull =
-                    System.Text.RegularExpressions.Regex.IsMatch(value, "(?<![A-Za-z0-9/:])(?:www\\.)?github\\.com/[^\\s<>()\\[\\]]*/pulls?(?:/|%2f|[?#]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                    System.Text.RegularExpressions.Regex.IsMatch(decodedDeclaration, "(?<![A-Za-z0-9/:])(?:www\\.)?github\\.com/[^\\s<>()\\[\\]]*/pulls?(?:/|%2f|[?#]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
                 if String.IsNullOrWhiteSpace value || System.Text.Encoding.UTF8.GetByteCount(value) > 16 * 1024 then
                     None, [], Some "Native Current deliverable declaration is empty or exceeds the bounded16KiB field"
                 elif malformedPull || barePull then

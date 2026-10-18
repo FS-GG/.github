@@ -1080,7 +1080,7 @@ let ``programme selection uses actual slices nonenrolled work and action specifi
     let later: V2ProjectionSource.Prerequisite = { Action = V2ProjectionSource.Activation; Reference = "publication still required"; Satisfied = Some false; SupplyingOwner = "publisher" }
     let source = { context with Slices = [ { context.Slices.Head with Prerequisites = later :: context.Slices.Head.Prerequisites } ] }
     Assert.Equal("ready", (choose source report).Decision)
-    let activate = { source with Slices = [ { source.Slices.Head with Action = V2ProjectionSource.Activation } ] }
+    let activate = { source with Slices = [ { source.Slices.Head with Action = V2ProjectionSource.Activation; Prerequisites = source.Slices.Head.Prerequisites |> List.map (fun prerequisite -> if prerequisite.Reference = "current-deliverable" then { prerequisite with Action = V2ProjectionSource.Activation } else prerequisite) } ] }
     Assert.Equal("blocked", (choose activate report).Decision)
     let duplicate = { context with Slices = context.Slices @ context.Slices }
     Assert.Equal("needs-decision", (choose duplicate report).Decision)
@@ -1164,7 +1164,7 @@ let ``actual open native dependency is classified per action without suppressing
         let prerequisite: V2ProjectionSource.Prerequisite = { Action = V2ProjectionSource.Activation; Reference = reference; Satisfied = Some false; SupplyingOwner = "publisher" }
         let classified = { context with Slices = [ { context.Slices.Head with Prerequisites = prerequisite :: context.Slices.Head.Prerequisites } ] }
         Assert.Equal("ready", (choose classified).Decision)
-        let activation = { classified with Slices = [ { classified.Slices.Head with Action = V2ProjectionSource.Activation } ] }
+        let activation = { classified with Slices = [ { classified.Slices.Head with Action = V2ProjectionSource.Activation; Prerequisites = classified.Slices.Head.Prerequisites |> List.map (fun prerequisite -> if prerequisite.Reference = "current-deliverable" then { prerequisite with Action = V2ProjectionSource.Activation } else prerequisite) } ] }
         Assert.Equal("blocked", (choose activation).Decision)
         let source = { classified with Slices = [ { classified.Slices.Head with Prerequisites = { prerequisite with Action = V2ProjectionSource.Source } :: context.Slices.Head.Prerequisites } ] }
         Assert.Equal("blocked", (choose source).Decision)

@@ -742,7 +742,7 @@ let ``actual caller recovers Current deliverable only PR and retains mixed deliv
     let mixedContext = observedContext mixed
     let _, history, _ = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson mixedContext)) mixed
     Assert.Equal(2, history.Value.GetProperty("nativeIntegrator").GetProperty("pullRequests").GetArrayLength())
-    for replacement in [ "https://evil.invalid/FS-GG/.github/pull/42"; "https://github.com/FS-GG/foreign/pull/42"; "https://github.com/FS-GG/.github/pull/42?replace=43"; "https://github.com/FS-GG/.github/PULL/42"; "https://github.com/FS-GG/.github/pull/042"; "https://github.com/FS-GG/.github/pull/43"; "HTTPS://github.com/FS-GG/.github/pull/42"; "https://github.com/FS-GG/.github/pulls/42"; "https://github.com/FS-GG/.github/pull%2F42"; "ftp://github.com/FS-GG/.github/pull/42"; "github.com/FS-GG/.github/pull/42" ] do
+    for replacement in [ "https://evil.invalid/FS-GG/.github/pull/42"; "https://github.com/FS-GG/foreign/pull/42"; "https://github.com/FS-GG/.github/pull/42?replace=43"; "https://github.com/FS-GG/.github/PULL/42"; "https://github.com/FS-GG/.github/pull/042"; "https://github.com/FS-GG/.github/pull/43"; "HTTPS://github.com/FS-GG/.github/pull/42"; "https://github.com/FS-GG/.github/pulls/42"; "https://github.com/FS-GG/.github/pull%2F42"; "ftp://github.com/FS-GG/.github/pull/42"; "github.com/FS-GG/.github/pull/42"; "https://github.com/FS-GG/.github/%70ull/42"; "github.com/FS-GG/.github/%70ull/42" ] do
         let body = ProgrammeFixture.ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", replacement)
         let change = currentDeliverableBody body
         let context = observedContext change
@@ -757,7 +757,7 @@ let ``actual caller retains declared work while discovering only canonical PR re
           ("Retain the original release operation: https://github.com/FS-GG/.github/releases/tag/synthetic", false);
           ("None plus retained work is still declared work", false);
           ("Existing PR", false);
-          ("Historical plan https://github.com/FS-GG/.github/pull/41; current source investigation remains independent", false);
+          ("Historical plan https://github.com/FS-GG/.github/pull/41 current source investigation remains independent", false);
           ("Source https://github.com/FS-GG/.github/pull/42\nReceipt evidence https://github.com/FS-GG/.github/issues/1 https://github.com/FS-GG/.github/actions/runs/1 https://github.com/FS-GG/.github/releases/tag/synthetic", true) ]
     for declaration, hasReference in declarations do
         for inlineForm in [ false; true ] do
@@ -820,13 +820,18 @@ let ``actual caller binds current work reconciliation to action native body scop
           ("null", { slice with Prerequisites = [ { reconciliation with Satisfied = None } ] }, "unknown");
           ("wrong action", { slice with Prerequisites = [ { reconciliation with Action = Activation } ] }, "unknown");
           ("duplicate", { slice with Prerequisites = [ reconciliation; reconciliation ] }, "unknown");
-          ("missing supplier", { slice with Prerequisites = [ { reconciliation with SupplyingOwner = "" } ] }, "unknown");
           ("false", { slice with Prerequisites = [ { reconciliation with Satisfied = Some false } ] }, "blocked");
           ("wrong body", { slice with Join = { slice.Join with BodySha256 = String.replicate 64 "f" } }, "unknown");
           ("wrong revision", { slice with Join = { slice.Join with UpdatedAt = "2000-01-01T00:00:00Z" } }, "unknown");
-          ("stale attribution", { slice with Observation = { slice.Observation with ValidUntil = DateTimeOffset.MinValue } }, "unknown") ]
+          ("stale attribution", { slice with Observation = { slice.Observation with ObservedAt = slice.Observation.ObservedAt.AddMinutes(-6.0); ValidUntil = slice.Observation.ObservedAt.AddMinutes(-5.0) } }, "unknown") ]
     for name, candidate, expected in variants do
         Assert.True((choose { context with Slices = [ candidate ] }).GetProperty("decision").GetString() = expected, name)
+    let missingSupplier = { slice with Prerequisites = [ { reconciliation with SupplyingOwner = "" } ] }
+    let refusedCode, refusedReport, refusedTransport = inspectProgrammeInput (Some(ProgrammeFixture.integratorJson { context with Slices = [ missingSupplier ] })) change
+    Assert.Equal(1, refusedCode)
+    Assert.True(refusedReport.IsNone)
+    Assert.Equal(0, refusedTransport.GraphQlCalls)
+    Assert.Equal(0, refusedTransport.RestCalls)
     let activationHold: Prerequisite = { Action = Activation; Reference = "original-operation/current-custody"; Satisfied = Some false; SupplyingOwner = "operation-owner" }
     let independent = { slice with Prerequisites = activationHold :: slice.Prerequisites }
     Assert.Equal("ready", (choose { context with Slices = [ independent ] }).GetProperty("decision").GetString())
