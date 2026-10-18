@@ -46,6 +46,15 @@ Require organization `bindingVersion: 4`, `schemaVersion: 2` and
 adapter/caller provenance and selected protected enrollment revision/blob independently of report
 claims. Historical organization-v2 output and product inspection/1 do not qualify this route.
 Enrollment pins exact native issue identities and plan paths, not their ordinary content revisions.
+Programme enrollment uses the fixed protected public two-field commitment document and a
+restrictive private binding carrying the complete payload plus random nonce. Authenticate all
+selected identities and plan paths without publishing them. Verify the matched
+`enrollmentCommitmentSha256` against public source provenance and supply that same required digest
+in the one-invocation integrator stdin; it is not authority by itself. Never copy private binding,
+payload or nonce into public reports, PRs, fixtures or instruction files. The maintained offline
+BoardV2Import pair constructor prepares files only; protected enrollment and qualified installed
+bytes remain necessary. Use a restrictive existing private directory for version-4 binding and
+exclusive report files, retaining any original partial outputs without automatic retry.
 Read fresh issue ID/update/body, current protected plan, native dependencies, PR/head/files/reviews/
 checks, human planning and complete membership with separate provenance. Changed content does not
 require reenrollment; changed governing population/schema does. LastVerified is history, not freshness.

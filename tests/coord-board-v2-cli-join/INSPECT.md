@@ -17,6 +17,10 @@ outcome acceptance. Programme-v4 reads native PR/file facts directly and joins e
 attributed current integrator observations for action/runtime facts. Missing suppliers
 remain Unknown. Candidates do not dispatch or authorize work.
 
+Version-4 binding/report files use an existing restrictive private parent directory
+without symlink components. New reports are exclusive mode0600 and use the existing
+Linux x64 directory-entry barrier. Product-v3 paths and report behavior remain separate.
+
 Inspection performs queries and bounded dependency/issue-author-permission GETs only. It never sends or
 retries mutations, changes board fields, creates projection timestamps or takes the
 refresh writer lock. Optional `--previous-report-file` reads a refresh/v2 report
@@ -78,7 +82,12 @@ conservative start time and its read gaps; final barrier failures do not renew i
 
 The production organization-v4 `inspect` command accepts one optional
 `--integrator-stdin` document (`fsgg.coord.board-v2-integrator-observations/1`).
-The existing parent integrator supplies it for one invocation, with stable slice and
+The existing parent integrator supplies it for one invocation. Its required
+`enrollmentCommitmentSha256` must match the private binding commitment before native
+IO and the authenticated public source evidence before selection. Inspection/2 reports
+the matched `enrollmentCommitmentSha256` (null on unmatched population); protected
+inputs use `programme-enrollment/v3-commitment`. Neither contains nonce or raw payload.
+The other input joins retain stable slice and
 attempt IDs, explicit operation/order, accountable outcome owner and implementation
 owner, original supplier/time/expiry/evidence, exact binding/enrollment blob and
 native issue ID/update/body/source-plan revision joins. Source editing consumes one
