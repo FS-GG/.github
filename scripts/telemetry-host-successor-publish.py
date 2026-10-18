@@ -14,7 +14,7 @@ import time
 from release_successor_execution import Refused, advance_effects
 from release_successor_journal import ProtectedReleaseJournal, REPOSITORY as JOURNAL_REPOSITORY
 from release_successor_provider import GitHubAPI, NotFound
-from telemetry_host_successor_admission import HostAdmission
+from telemetry_host_successor_admission import HostAdmission, ordinary_route, validate_failed_original
 from telemetry_host_successor_execution import effects
 from telemetry_host_successor_provider import HostProvider
 
@@ -32,6 +32,7 @@ def main() -> int:
     parser.add_argument("--candidate-run-id", required=True, type=int)
     parser.add_argument("--candidate-artifact-id", required=True, type=int)
     parser.add_argument("--candidate-archive-sha256", required=True)
+    parser.add_argument("--continue-failed-original", action="store_true")
     parser.add_argument("--workdir", required=True, type=pathlib.Path)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--preflight-only", action="store_true")
@@ -82,23 +83,32 @@ def main() -> int:
         intent = {"contentId": content_id, "sourceSha": candidate_source, "version": "0.6.0",
                   "candidateArchiveSha256": args.candidate_archive_sha256, "operator": operator}
         ledger_api = GitHubAPI(ledger_token)
-        journal = ProtectedReleaseJournal(ledger_api, REF)
-        try:
-            ledger_api.get(f"repos/{JOURNAL_REPOSITORY}/git/ref/{REF.removeprefix('refs/')}")
-        except NotFound:
-            require(candidate_source == publisher_sha, "fresh Host publication requires exact current main candidate")
+        route = ordinary_route()
+        admission = route.ProtectedPublisherAdmission(admission, ledger_api, REF)
+        journal = ProtectedReleaseJournal(ledger_api, REF, main_directory=True)
+        if args.continue_failed_original:
+            validate_failed_original(api, manifest, publisher_sha, args.candidate_run_id,
+                                     args.candidate_artifact_id, args.candidate_archive_sha256)
+        fresh, physical = route.classify_journal_destination(ledger_api, REF)
+        if fresh:
+            require(candidate_source == publisher_sha or args.continue_failed_original,
+                    "fresh Host publication requires exact current main candidate")
             require(admission.authorize(content_id, "journal", "intent", content_id), "Host journal admission denied")
             for effect in ordered:
                 observation = provider.observe(effect)
                 require(observation.state == "absent", f"{effect.identity}: preexisting or unreadable effect")
+            require(route.authority_main(ledger_api) == physical, "Authority main moved before Host genesis")
             if args.preflight_only:
                 print("Host successor preflight passed; no journal, tag, feed or release changed.")
                 return 0
+            require(admission.authorize(content_id, "journal", "intent", content_id), "Host genesis protection changed")
             journal.initialize(intent)
         else:
+            require(route.authority_main(ledger_api) == physical, "Authority main moved before Host recovery")
             journal.read()
+            require(route.authority_main(ledger_api) == physical, "Authority main moved during Host recovery")
             require(not args.preflight_only, "preflight requires unused Host journal and version")
-            if candidate_source != publisher_sha:
+            if candidate_source != publisher_sha and not args.continue_failed_original:
                 comparison = api.get(f"repos/{REPOSITORY}/compare/{candidate_source}...{publisher_sha}")
                 require(comparison.get("status") == "ahead", "recovery publisher does not descend from candidate")
         journal.validate_intent(intent)
