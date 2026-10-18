@@ -17,6 +17,10 @@ outcome acceptance. Programme-v4 reads native PR/file facts directly and joins e
 attributed current integrator observations for action/runtime facts. Missing suppliers
 remain Unknown. Candidates do not dispatch or authorize work.
 
+Version-4 binding/report files use an existing restrictive private parent directory
+without symlink components. New reports are exclusive mode0600 and use the existing
+Linux x64 directory-entry barrier. Product-v3 paths and report behavior remain separate.
+
 Inspection performs queries and bounded dependency/issue-author-permission GETs only. It never sends or
 retries mutations, changes board fields, creates projection timestamps or takes the
 refresh writer lock. Optional `--previous-report-file` reads a refresh/v2 report
@@ -32,12 +36,38 @@ selection or fallback. Programme refresh uses the existing Observation-only writ
 schema/native/source checks. An installed old Project 3 schema still refuses before
 mutation; source support does not authorize schema migration or live board changes.
 
-The fixed manifest path holds `fsgg.coordination-board-v2-enrollment/v2`: a closed
-`target` (owner, organizationId, projectId, projectNumber, schemaVersion), closed
-`binding` (recipeRevision, artifactSha256, repositories), and exact selected `items`
-(issue, nodeId, roadmap). No issue revision, open state or empty-dependency snapshot
-belongs to enrollment. The pinned enrollment blob must still match protected main;
-selected plan paths are stable while their current protected-main blobs are observed.
+The fixed protected manifest path holds only the closed two-field public
+`fsgg.coordination-board-v2-enrollment/v3` document: `schema` and
+`commitmentSha256`. Programme identity and Roadmap values remain in the private
+binding's closed `programmeEnrollment` pair (`nonceHex`, `payloadBase64`). The nonce
+contains 32 random bytes; canonical padded Base64 carries the exact UTF-8 private
+payload, without a BOM. Its closed payload/v1 binds `target`, constructor `binding`
+and the entire selected `items` cohort (issue, nodeId, roadmap). No issue revision,
+open state or empty-dependency snapshot belongs to enrollment.
+
+The commitment hashes the ASCII domain `fsgg.coordination-board-v2-enrollment/v3`,
+one NUL byte, the decoded nonce, an unsigned eight-byte big-endian payload length
+and the original payload bytes. It never hashes reserialized JSON. Runtime verifies
+the exact protected public blob and private digest before selected issue/plan reads,
+then rechecks public currentness after inspection and before refresh writes or a
+Verified no-op. Missing, changed or mismatched enrollment withholds population selection.
+The report joins public source provenance and the matched commitment; it excludes
+private payload and nonce. Selected plan paths remain stable while their current
+protected-main blobs are observed.
+
+Binding acquisition is bounded to 256 KiB on the same opened handle before allocation;
+the private payload is bounded to 128 KiB and JSON depth to 16. Duplicate, unknown or
+missing fields, invalid UTF-8, noncanonical Base64, wrong scope/provenance and incomplete
+cohorts refuse. Product-v3 input remains unchanged and rejects `programmeEnrollment`;
+there is no raw-public programme fallback.
+
+The maintained offline `BoardV2Import prepare-programme` command accepts a reviewed
+binding template and complete private payload, validates before generating one random
+nonce, and retains exclusive restrictive private/public output files with flush and
+readback checks. Partial outputs remain original evidence; collisions do not overwrite,
+reseed or retry. Its outputs are preparation only. A reviewed protected public commit
+and qualified installed executable are still required for admission. Never put private
+inputs, nonce or binding in a public checkout, fixture, artifact or PR.
 
 Inspection/v2 adds complete membership reconciliation and actual repository-wide open
 PR inventories, including non-enrolled work, native closing-issue associations, head,
@@ -52,7 +82,12 @@ conservative start time and its read gaps; final barrier failures do not renew i
 
 The production organization-v4 `inspect` command accepts one optional
 `--integrator-stdin` document (`fsgg.coord.board-v2-integrator-observations/1`).
-The existing parent integrator supplies it for one invocation, with stable slice and
+The existing parent integrator supplies it for one invocation. Its required
+`enrollmentCommitmentSha256` must match the private binding commitment before native
+IO and the authenticated public source evidence before selection. Inspection/2 reports
+the matched `enrollmentCommitmentSha256` (null on unmatched population); protected
+inputs use `programme-enrollment/v3-commitment`. Neither contains nonce or raw payload.
+The other input joins retain stable slice and
 attempt IDs, explicit operation/order, accountable outcome owner and implementation
 owner, original supplier/time/expiry/evidence, exact binding/enrollment blob and
 native issue ID/update/body/source-plan revision joins. Source editing consumes one
@@ -74,8 +109,21 @@ names, fresh timestamps and the exact input digest do not authenticate its autho
 The accountable parent verifies genuine supplier observations through its existing
 work-programme authority; missing suppliers remain Unknown. Native Current deliverable
 links are discovery hints, directly joined to native PR identity/state/head and complete
-open inventories, including non-enrolled work. Merged historical links remain evidence
-and do not compete with one unambiguous current open PR or establish outcome acceptance.
+open inventories, including non-enrolled work. The maintained issue model requires one complete,
+unambiguous six-field record, expressed as six headings or six inline fields; duplicate, missing,
+mixed or unknown field structure refuses. Preserve the bounded Current deliverable declaration:
+exact trimmed `None` declares absence; nonempty prose and non-PR references remain declared work.
+PR-shaped references retain strict canonical validation and native joins. Non-PR links are not
+fetched, and Next action or arbitrary history never supplies a current PR association.
+
+Each non-`None` declaration requires exactly one proposed-action prerequisite whose reference is
+`current-deliverable`, with the existing fresh issue/body, slice, attempt, owner and evidence joins.
+True means scoped reconciliation of current work against that action, not acceptance or release of
+original holds. False blocks; missing, duplicate, stale or mismatched evidence withholds the affected
+selection. Native inventories and reservations remain independent. Historical PRs cannot become
+current through this observation; review, qualification and existing-work observation still require
+their actual native PR/head. Independent source work may proceed when later acceptance is pending.
+
 Native repository-policy/issue-author allowance reuses `BoardIntake.Gate` without disk
 cache reads or writes, remains separate from parent operation authority, and is bound
 to the exact current native issue ID/revision. All reads share the existing request/time
@@ -103,10 +151,16 @@ writes only Observation and does not consume the selection overlay or runtime ca
 Concurrent human Status/Track/Roadmap values survive. Original .103 uncertainty remains held;
 use the sole release plan and evaluated source/registry for the selected successor. Installed
 qualification, migration, UI and actual consumer cutover remain owner-gated.
-The focused controls require hosted CI; no local CLR/native/browser workload was run.
+Focused source builds and inert caller tests are separately bounded; required hosted CI remains. Neither is native installed or browser acceptance.
 
 
 ## Bounded migration source contract
+
+The accepted 0.104 package and installed-byte qualification remain tied to their original candidate.
+The visibility correction described here is later source; source builds and inert caller tests do
+not update that installation or grant another apply. Original partial/Unknown invocations retain
+readback-only custody. A genuine qualified successor and fresh selected preparation precede any
+remaining mutation; supported human UI edits are legitimate new facts for that preparation.
 
 The packaged `board-v2` route also prepares the selected .10 migration. This source is not an
 installed candidate or a live-operation grant. The accountable owner separately selects the exact
@@ -141,6 +195,29 @@ created-view ID plus complete same-ID readback may resolve only its originally s
 filter update within the same invocation. Existing human planning values, option/card identities,
 unrelated views and orthogonal grouping/vertical/sort configuration remain preserved. API metadata
 cannot verify UI columns/cards/order or replace actual installed Project 3 acceptance.
+
+After a clear correlated successful response, an exact complete pre-effect snapshot may mean
+pending native visibility. The same complete snapshot must establish both returned identity and the
+exact selected transition before proceeding. The caller sends only once and may retain up to seven
+complete readbacks with waits of 1, 1, 2, 4, 8 and 14 seconds (at most 30 seconds total). Only the existing project timestamp and the
+existing target-item timestamp allowance for initialization are normalized; unrelated facts stay
+strict. Conflicting/partial/error reads, invalid response identities and uncertain sends stop Unknown.
+There is no resend or absence-as-NoSend inference.
+
+A complete exact pre-effect witness may support only waiting without the second identity query.
+Every candidate-confirmed witness still receives the existing final project/principal/capability
+identity recheck on that same data before advancement. Partial pages never become Pending; standard
+prepare, precondition and original-path readback collections keep their full identity barrier.
+
+Observation acquisitions and waits consume the original 500-request/270-second envelope and selected
+planning deadline. The transport exposes remaining time from that original stopwatch; it does not
+start another budget. A wait that cannot fit refuses. Every additional witness stays in the same
+exclusive invocation custody. Exhaustion remains incomplete/readback-only, including when a full
+many-effect journey cannot fit. The inert 77-effect case with one stale read per effect uses 468
+apply requests and 77 virtual seconds; the separate preparation uses four more requests. Its no-lag
+sibling uses 391 apply requests. These counts exclude real HTTP and custody latency and do not prove
+native fit. This source contract does not retroactively repair or reactivate an older installed
+package or original partial invocation.
 
 The closed scope now includes `initialPlanning`: explicit selected issue identities, exact Track
 option ID/name, genuine Roadmap text and an optional selected Status option. Use an empty array when

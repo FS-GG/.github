@@ -19,15 +19,19 @@ module V2Projection =
             Options: Map<string, string>
         }
 
+    /// Private invocation-only enrollment bytes. Never serialize this value into reports or public source.
+    type ProgrammeEnrollment = { NonceHex: string; PayloadBase64: string }
+
     /// Immutable identities copied from an independently reviewed board binding.
     /// BindingVersion 2 retains historical organization pilot controls; version 3 selects one
     /// organization-owned product project and one owner-local repository with one-to-five issues.
     /// Version 4 is the source-only Project 3 successor, schema 2, with one-to-100 exact native issues
     /// and In review. It never falls back to an older binding. Observation-only refresh requires
     /// the exact successor native schema, selected issue identity and current source joins.
-    /// The wire properties are unchanged. Version 3 never selects the organization/legacy target.
+    /// Version 4 alone adds private programmeEnrollment; version 3 keeps its exact wire contract.
     type Binding =
         {
+            ProgrammeEnrollment: ProgrammeEnrollment option
             BindingVersion: int
             ImportRecipeRevision: string
             ImportArtifactSha256: string
@@ -94,6 +98,33 @@ module V2Projection =
 
     /// Validate the reviewed binding without performing IO.
     val validateBinding: binding: Binding -> IoResult<unit>
+
+    /// Decode closed bounded UTF-8 binding JSON (256KiB, depth16, no duplicate keys).
+    /// Version4 requires its private envelope; historical/product shapes reject it. Errors are sanitized.
+    val decodeBinding: json: string -> Result<Binding, string>
+
+    /// Hash exact private bytes with the fixed NUL domain,32-byte nonce and u64 big-endian length.
+    /// Decoded payload is strict canonical Base64/UTF-8 JSON, at most128KiB/depth16 without duplicate keys.
+    val programmeCommitment: value: ProgrammeEnrollment -> IoResult<string>
+
+    /// Validate the complete closed private payload against the selected exact binding; grants no enrollment.
+    val programmeRows: binding: Binding -> IoResult<(string * string * string) list>
+
+    /// Validate only the closed bounded public v3 document and return its digest.
+    /// This offline shape check grants no authentication, enrollment or native authority.
+    val decodeProgrammePublicCommitment: publicJson: string -> IoResult<string>
+
+    /// Authenticate private enrollment against the fixed protected public two-field v3 commitment.
+    /// Only native source acquisition and freshness establish authority; a local digest grants none.
+    val authenticateProgrammeEnrollment: binding: Binding -> publicJson: string -> IoResult<(string * string * string) list>
+
+    /// Pure offline preparation seam. Template is the v4 binding WITHOUT programmeEnrollment.
+    /// Validate payload/template before invoking nonceFactory exactly once; production supplies CSPRNG32.
+    /// Returns private binding/public commitment JSON; caller owns exclusive durable custody and readback.
+    /// Invalid inputs return sanitized errors and never qualify executable bytes or native acceptance.
+    val prepareProgrammeBinding:
+        bindingTemplateJson: string -> payload: byte array -> nonceFactory: (unit -> byte array) -> IoResult<string * string>
+
 
     /// Run one bounded projection pass. Every run first consumes the required authoritative source
     /// verifier, then freshly verifies the exact target and field schema.

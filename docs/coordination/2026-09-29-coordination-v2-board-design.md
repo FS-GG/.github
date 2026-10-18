@@ -12,6 +12,22 @@ cutover remains open; the original finite .1–.6 acceptance and completed roadm
 The [selected window below](#selected-programme-cutover--2026-10-17) is source preparation,
 not installed adoption, board-mutation admission or consumer activation.
 
+**Current accepted boundary — 2026-10-18:** coherent 0.104 publication is accepted through the
+[sole release plan](../roadmaps/utel-release-successor.md). Independent qualification after the maintained developer update verified
+all 82 installed payload files against the retained source-912 candidate, and genuine read-only
+migration preparation passed. A separately selected apply confirmed its schema-option addition and
+one membership, then stopped with its original Unknown when immediate complete readback still showed
+the pre-effect membership state. Later independent readback confirmed those partial effects; the
+original invocation remains readback-only. Restricted original custody stays outside this document.
+
+The bounded visibility correction below joins the selected 0.105 source composition, with actual
+compiler and inert unit/caller qualification; it is not carried by the already published/installed
+0.104 bytes. A qualified successor,
+fresh preparation and separately selected remaining migration are still needed. Final native-ID
+binding, positive installed inspection/refresh/selection, actual UI and coordinated real use remain
+open. Human UI edits can proceed independently when no apply is active and must be observed by fresh
+preparation. No original Unknown, inherited reservation or completed historical outcome is reset.
+
 **Historical design/adoption frontier — 2026-09-29 through 2026-10-10:** organization pilot passed 2026-10-02.
 On 2026-10-03 the exact four-target successor, public installed 0.95.0 closure,
 one-shot import with independent readbacks, zero-mutation refresh/inspection and
@@ -258,8 +274,8 @@ six copied `Generated/Coordination` V1 admission files are not this inspection i
 are outside the selected source window. Reuse the canonical `TouchSet` parser/conflict rules without
 restoring V1 claims, Class/Phase ranking, lease machinery or a compatibility wrapper.
 
-The current prepared source declares coherent 0.104.0; published package inventory remains 0.102.0.
-The accessible developer global CLI is 0.102.0,
+At that starting source window, prepared source declared coherent 0.104.0 while published inventory
+remained 0.102.0. The then-accessible developer global CLI was 0.102.0,
 repository source `6e9be17bacd288ece103b67ecd5842d37a9c8e50`; its 82 installed tool members matched
 the cached package without execution. That observation does not identify the active Project 3
 consumer or authenticate a current feed/channel. Root has selected the existing accessible developer
@@ -281,10 +297,14 @@ installed/no-dispatch consumers remain accepted only at their recorded finite sc
 v3 outcomes and their native issue/PR mappings require a bounded current reconciliation before
 population migration. Preserve active owners, PRs, dependencies and original operation references.
 
-Actual authenticated UI/browser/computer capability is currently unavailable under the local
-workload hold. API metadata can establish native IDs and configuration but cannot satisfy the
-required UI verification of columns, cards, filters and ordering. This blocks presentation acceptance,
-not independent plan/source work. No local CLR, native or browser workload is authorized by this plan.
+Agent browser/computer capability remains unavailable. The user independently completed the
+existing main view, and user confirmation plus authenticated configuration readback accepted that
+finite main-view check on 2026-10-18. Preserve the exact user-selected name `Programme Board`, its
+identity, Board layout, Active delivery/open filter, Status columns and order, no group or automatic
+sort, and legitimate extra card fields. Future migration must freshly observe these edits rather
+than restore an old snapshot. Complete-population and supporting-view UI verification remain later
+acceptance work; no agent-rendered browser claim follows. Runtime workloads require their separately
+selected resource profile; this plan itself grants no execution authority.
 
 ### One current contract and its sources of truth
 
@@ -297,12 +317,49 @@ not independent plan/source work. No local CLR, native or browser workload is au
 | Derived decision | Ready, continue existing work, blocked, needs decision or unknown, with reasons and evidence. The integrator remains accountable; a result grants no execution authority. |
 | Atlas | Reusable decisions and verified lessons with immutable source citations; not another operational ledger. |
 
+The current owning-issue model accepts one complete six-field record in either maintained inline
+or heading form. Duplicate, missing, mixed or unknown field structure withholds the source join;
+fenced examples cannot complete the record. Current deliverable preserves native field text bounded to 16 KiB UTF-8:
+exact trimmed `None` declares no current deliverable, while nonempty prose, artifacts, publication,
+installation or original-operation references remain declared work. Canonical in-scope PR links are
+discovery hints joined to fresh native identity/state/head and complete inventories. Malformed or
+foreign PR-shaped references remain gaps; other links are retained without new provider reads.
+Neither Next action nor arbitrary body history supplies an inferred current PR or owner.
+
+For each non-`None` declaration, the proposed action requires exactly one existing prerequisite with
+reference `current-deliverable`, joined to the fresh native issue/body revision, supplying owner and
+exact slice, attempt and action. A true observation means that owner reconciled the complete current
+work declaration with this action and established no duplication or conflict. It does not mark the
+deliverable done, release an original reservation or authorize an effect. False blocks the action;
+missing, duplicate, stale or mismatched reconciliation withholds the affected selection. Native PR
+inventories, original holds, intake, scope and remaining capacity remain independent requirements.
+Independent source work can proceed while later acceptance remains pending; observation, review and
+qualification still require their actual current native PR/head. Activation retains its separate
+executor. Missing-current-owner legacy records remain item-specific gaps until accountable
+reconciliation; do not manufacture fields or revive retired original-evidence searches.
+
 Enrollment binds the exact project, organization schema, allowed repository scope and selected native
 issue identities. Keep that selected provenance distinct from fresh issue/body, owning-plan source,
 dependency, PR/head/check/review and capacity observations. Ordinary issue edits, closure, PR/check
 transitions and dependency changes must not require republishing enrollment. Scope, membership or
 schema changes do. Changed determining facts invalidate only affected decisions and trigger targeted
 recomputation before dispatch. Native child propagation, manual cards and view filters never enroll work.
+
+Programme enrollment must preserve private identities without reducing the selected cohort. The
+existing fixed protected public manifest carries only a schema and one domain-separated salted
+commitment to a complete private enrollment payload. The private binding retains the random nonce
+and exact payload bytes; the payload binds target, constructor provenance, allowed repositories and
+all selected issue/node/Roadmap rows. The public commitment contains no item identifiers, per-item
+hashes or private-derived metadata. Incidental public references do not authorize disclosure.
+
+Authenticate the bounded private payload against that exact protected public blob before selected
+native issue or plan reads. Recheck public currentness after slow observations and before every
+Observation write or Verified no-op. Keep the existing native/provenance/action gates and all-item
+coverage; mismatch or source unavailability is a global population gap, never an empty cohort.
+Use the maintained offline BoardV2Import pair preparation with one cryptographic nonce only after
+validation, exclusive restrictive output custody and preserved partial failures. Preparation itself
+grants no authority; final protected enrollment, qualified installed bytes and native acceptance
+remain distinct. Product binding3/schema1 stays unchanged, without a programme fallback.
 
 Complete reconciliation exposes selected, historical, deferred, unexpected and unresolved memberships
 separately. Missing pagination or global binding/schema failure blocks new board-derived selection;
@@ -685,8 +742,43 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   on the PR. This accepts source composition and its synthetic complete migration controls;
   actual candidate execution, private installed/native positives, timing, UI and adoption remain open.
 
-  Final stable enrollment uses the existing protected manifest route and the exact selected population
-  and Roadmap strings. Final binding4/schema2 joins that protected population and the qualified package/
+  **Bounded visibility observation source correction (2026-10-18).** A clear correlated mutation
+  response can precede visibility in a complete native snapshot. Treat only the exact pre-effect
+  state, under the existing effect-specific timestamp normalization, as pending visibility. A matching
+  result requires the same complete witness to establish returned native identity and the exact
+  selected transition. Partial reads, conflicts, unrelated drift, malformed/error/null responses or
+  uncertain sends remain Unknown and stop; absence never proves NoSend or permits another mutation.
+
+  The existing caller retains its original intent and sends once. After a clear successful response,
+  it may collect at most seven complete observations with bounded waits of 1, 1, 2, 4, 8 and 14 seconds.
+  Each witness is retained in the same private invocation. Only a complete exact pre-effect witness
+  may omit the redundant second identity query while deciding to wait; this grants no transition or
+  send permission. A candidate-confirmed witness still receives the original final native identity,
+  principal and capability comparison on that same witness. Standard preparation, precondition and
+  readback collection remain strict. Waits and acquisitions share the
+  original 500-request/270-second budget and selected planning deadline; no clock, request counter or
+  operation identity is renewed. Complete first pages remain observation-local. The finite window is
+  best effort: a long visibility delay or many delayed effects can exhaust the original bound and
+  must stop truthfully. It does not guarantee completion of the full population.
+
+  The sanitized retained-lag control covers the complete pre-effect witness followed by delayed
+  membership visibility; sibling controls cover schema, initial values and both view operations,
+  contradictions, invalid responses, deadline and request exhaustion. Both affected test projects
+  compiled under the separately selected bounded source-build profile with zero warnings/errors.
+  Focused inert execution passed 14 unit and 34 caller cases with no failures or skips; no live
+  credential, GitHub, publisher, installer or browser route was exercised.
+  The inert full journey with one stale read per effect completes 77 sends in 468 apply requests and
+  77 virtual seconds; the separate preparation adds four requests. Its no-delay sibling uses 391
+  apply requests. These counters exclude actual HTTP/custody latency and do not prove native fit.
+  Exact required hosted qualification and delivery remain separate gates.
+  This source correction does not change the immutable published 0.104 package or update an installed
+  caller. A genuine qualified successor and separately selected remaining migration are still needed;
+  original partial/Unknown operations remain readback-only. Legitimate human UI edits must be observed
+  by fresh preparation and preserved, rather than blocked to retain an old snapshot.
+
+  Final stable enrollment uses the existing protected public commitment route with the exact selected
+  population and Roadmap strings retained privately. Final binding4/schema2 joins that authenticated
+  private population and the qualified package/
   assembly provenance after actual native option/item/view IDs are known. No draft invented ID is an
   executable binding. Positive installed inspection/refresh/selection, explicit planning reconciliation,
   actual UI verification and coordinated real use still precede current-status retirement. Historical

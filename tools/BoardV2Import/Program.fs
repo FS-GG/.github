@@ -5,7 +5,7 @@ open System.IO
 open System.Text.Json.Nodes
 open System.Text.RegularExpressions
 
-// Offline administrative authority: no transport, effects, durable state or lifecycle reducer.
+// Offline preparation retains local output files; it grants no native operation authority and owns no native lifecycle state.
 let require condition message = if not condition then invalidOp message
 let prop (node: JsonNode) (name: string) = node.[name]
 let str (node: JsonNode) = if isNull node then "" else node.GetValue<string>()
@@ -503,10 +503,20 @@ let existingProduct (requestPath: string) =
     output.["binding"] <- binding
     output
 
-let organizationMain (args: string array) =
-    try
-        require (args.Length = 1 || (args.Length = 2 && args.[1] = "--pilot-plan")) "usage: board-v2-import MANIFEST [--pilot-plan]"
-        let manifest = JsonNode.Parse(File.ReadAllText args.[0])
+let private programmeRead limit (path: string) =
+    let options = FileStreamOptions(Mode = FileMode.Open, Access = FileAccess.Read, Share = FileShare.Read,
+                                    Options = FileOptions.SequentialScan)
+    use stream = new FileStream(path, options)
+    // Length and all reads use this same handle. No path-stat/read-all allocation race;
+    // growth and truncation refuse, including a byte beyond the selected bound.
+    let length = stream.Length
+    require (length > 0L && length <= int64 limit) "programme input bound"
+    let bytes = Array.zeroCreate<byte> (int length)
+    stream.ReadExactly bytes
+    require (stream.ReadByte() = -1 && stream.Length = length) "programme input changed"
+    bytes
+
+let private organizationLegacy (manifest: JsonNode) (args: string array) =
         let items,pilots,created = validate manifest
         let result : JsonNode =
             if args.Length = 2 then pilotPlan manifest :> JsonNode
@@ -522,12 +532,139 @@ let organizationMain (args: string array) =
                 summary :> JsonNode
         printfn "%s" (result.ToJsonString())
         0
-    with error -> eprintfn "board-v2 import refused: %s" error.Message; 2
+
+let organizationMain (args: string array) =
+    let mutable historicalImport = false
+    try
+        require (args.Length = 1 || (args.Length = 2 && args.[1] = "--pilot-plan")) "usage: board-v2-import MANIFEST [--pilot-plan]"
+        let original = System.Text.UTF8Encoding(false, true).GetString(programmeRead (256 * 1024) args.[0])
+        let manifest = JsonNode.Parse original
+        if s manifest "schema" = "fsgg.coordination-board-v2-enrollment/v3" then
+            require (args.Length = 1) "public commitment cannot construct a pilot plan"
+            match FS.GG.Coord.GitHub.V2Projection.decodeProgrammePublicCommitment original with
+            | Error _ -> invalidOp "closed public programme commitment refused"
+            | Ok _ ->
+                // Shape only: no private binding or authenticated protected source is available here.
+                printfn "{\"publicCommitmentValid\":true,\"authenticated\":false,\"executable\":false}"
+                0
+        elif s manifest "schema" = "fsgg.coordination-board-v2-import/v1" then
+            historicalImport <- true
+            organizationLegacy manifest args
+        else
+            invalidOp "unsupported public document"
+    with error ->
+        // Only the explicitly classified historical constructor retains its diagnostic contract.
+        // Current/unknown documents and preclassification failures may contain private input.
+        if historicalImport then eprintfn "board-v2 import refused: %s" error.Message
+        else eprintfn "board-v2 public document refused"
+        2
+
+// Current programme preparation is offline. Enrollment parsing and commitment construction
+// belong to the same maintained API as runtime authentication, not to a second tool decoder.
+let private programmeInputLimit = 256 * 1024
+let private programmePayloadLimit = 128 * 1024
+
+let private programmePath (path: string) =
+    let full = Path.GetFullPath path
+    let mutable current = FileInfo(full) :> FileSystemInfo
+    while not (isNull current) do
+        // Refuse links in the supplied custody path. This is an ordinary local custody
+        // check, not a sandbox against another process replacing parent directories.
+        if current.Exists then
+            require ((current.Attributes &&& FileAttributes.ReparsePoint) = enum<FileAttributes> 0) "programme path refused"
+        current <- match current with
+                   | :? FileInfo as file -> file.Directory :> FileSystemInfo
+                   | :? DirectoryInfo as directory -> directory.Parent :> FileSystemInfo
+                   | _ -> null
+    full
+
+// Same narrow Linux-x64 directory-entry barrier used by the maintained migration CLI.
+// File Flush(true) alone does not make a newly created directory entry durable.
+module private ProgrammeDirectoryNative =
+    [<System.Runtime.InteropServices.DllImport("libc", EntryPoint = "open", SetLastError = true)>]
+    extern int openDirectory(string path, int flags)
+    [<System.Runtime.InteropServices.DllImport("libc", SetLastError = true)>]
+    extern int fsync(int descriptor)
+    [<System.Runtime.InteropServices.DllImport("libc", SetLastError = true)>]
+    extern int close(int descriptor)
+
+let private programmeDirectorySupported () =
+    OperatingSystem.IsLinux()
+    && System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = System.Runtime.InteropServices.Architecture.X64
+
+let private programmeSyncDirectory (path: string) =
+    require (programmeDirectorySupported()) "programme directory durability unavailable"
+    // Linux O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW. No fallback, retry or pair-atomicity claim.
+    let descriptor = ProgrammeDirectoryNative.openDirectory(path, 0x10000 ||| 0x80000 ||| 0x20000)
+    require (descriptor >= 0) "programme directory durability unavailable"
+    let mutable complete = false
+    try
+        complete <- ProgrammeDirectoryNative.fsync descriptor = 0
+    finally
+        if ProgrammeDirectoryNative.close descriptor <> 0 then complete <- false
+    require complete "programme directory durability unavailable"
+
+let private programmeWrite (path: string) (bytes: byte array) =
+    let options = FileStreamOptions(Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None,
+                                    Options = FileOptions.WriteThrough)
+    if not (OperatingSystem.IsWindows()) then
+        options.UnixCreateMode <- UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+    use stream = new FileStream(path, options)
+    stream.Write bytes
+    stream.Flush(true)
+    programmeSyncDirectory (Path.GetDirectoryName path)
+
+let private programmeRetained (path: string) (expected: byte array) =
+    if not (OperatingSystem.IsWindows()) then
+        require (File.GetUnixFileMode(path) = (UnixFileMode.UserRead ||| UnixFileMode.UserWrite)) "programme output custody"
+    let actual = programmeRead programmeInputLimit path
+    require (actual.AsSpan().SequenceEqual(expected.AsSpan())) "programme output readback"
+
+let private programmeMain (args: string array) =
+    // No caught exception text, supplied path, payload, nonce or native identity is printed.
+    // A partially created pair is retained on failure; never delete, retry, reseed or overwrite.
+    try
+        // Both restrictive creation and directory durability must be supported before RNG/outputs.
+        require (programmeDirectorySupported()) "programme private creation unavailable"
+        require (args.Length = 9 && args.[1] = "--binding-template" && args.[3] = "--payload"
+                 && args.[5] = "--private-output" && args.[7] = "--public-output") "programme arguments"
+        let paths = [ args.[2]; args.[4]; args.[6]; args.[8] ] |> List.map programmePath
+        let comparison = if OperatingSystem.IsWindows() then StringComparer.OrdinalIgnoreCase else StringComparer.Ordinal
+        require ((Collections.Generic.HashSet<string>(paths, comparison)).Count = paths.Length) "programme paths overlap"
+        let templatePath, payloadPath, privatePath, publicPath = paths.[0], paths.[1], paths.[2], paths.[3]
+        // Reject existing outputs before nonce generation. CreateNew also protects a collision
+        // arriving after this check. Failed creation retains every original and partial output.
+        for path in [ privatePath; publicPath ] do
+            require (not (File.Exists path || Directory.Exists path)) "programme output exists"
+        let template = programmeRead programmeInputLimit templatePath |> Text.UTF8Encoding(false, true).GetString
+        let payload = programmeRead programmePayloadLimit payloadPath
+        match FS.GG.Coord.GitHub.V2Projection.prepareProgrammeBinding template payload
+                  (fun () -> Security.Cryptography.RandomNumberGenerator.GetBytes(32)) with
+        | Error _ -> invalidOp "programme validation"
+        | Ok (privateJson, publicJson) ->
+            let privateBytes = Text.UTF8Encoding(false, true).GetBytes privateJson
+            let publicBytes = Text.UTF8Encoding(false, true).GetBytes publicJson
+            require (privateBytes.Length > 0 && privateBytes.Length <= programmeInputLimit
+                     && publicBytes.Length > 0 && publicBytes.Length <= programmeInputLimit) "programme output bound"
+            programmeWrite privatePath privateBytes
+            programmeRetained privatePath privateBytes
+            programmeWrite publicPath publicBytes
+            programmeRetained publicPath publicBytes
+            // Independently reread both after the complete pair has been retained.
+            programmeRetained privatePath privateBytes
+            programmeRetained publicPath publicBytes
+            printfn "programme enrollment pair prepared; offline only"
+            0
+    with _ ->
+        eprintfn "board-v2 programme preparation refused"
+        2
 
 [<EntryPoint>]
 let main args =
     try
-        if args.Length = 2 && args.[1] = "--existing-product" then
+        if args.Length > 0 && args.[0] = "prepare-programme" then
+            programmeMain args
+        elif args.Length = 2 && args.[1] = "--existing-product" then
             let result = existingProduct args.[0]
             printfn "%s" (result.ToJsonString())
             0

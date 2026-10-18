@@ -71,27 +71,56 @@ module V2ProjectionSource =
 
     let private readIssue transport issue = readIssueDetails transport issue |> Result.map fst
 
-    // Closed maintained six-field headings; prose remains observation, never authority.
-    let private recordFields (body: string) =
+    // Closed maintained six-field forms. Programme records select one complete form;
+    // prose/fenced examples never supply missing fields or a second declaration.
+    let private recordFields (allowInline: bool) (body: string) =
         let lines = FS.GG.Coord.Markdown.unfenced body |> List.toArray
         let names = Set.ofList [ "Owner"; "Done when"; "Current deliverable"; "Next action"; "Blocked on"; "Acceptance evidence" ]
         let headings =
             lines |> Array.indexed |> Array.choose (fun (index, line) ->
                 let value = line.Trim()
                 if value.StartsWith("##", StringComparison.Ordinal) then Some(index, value) else None)
-        let parsed = headings |> Array.map (fun (_, value) -> if value.StartsWith("## ", StringComparison.Ordinal) then value.Substring(3).Trim() else "")
-        if parsed.Length <> names.Count || Set.ofArray parsed <> names then None
-        else
-            parsed |> Array.mapi (fun index name ->
-                let start, _ = headings[index]
-                let finish = if index + 1 < headings.Length then fst headings[index + 1] else lines.Length
-                name, (lines[(start + 1)..(finish - 1)] |> String.concat "\n" |> _.Trim()))
-            |> Map.ofArray |> Some
+        let inlineFields =
+            lines |> Array.indexed |> Array.choose (fun (index, line) ->
+                let value = line.Trim()
+                names |> Seq.tryPick (fun name ->
+                    let prefix = name + ":"
+                    if value.StartsWith(prefix, StringComparison.Ordinal) then
+                        Some(index, name, value.Substring(prefix.Length).Trim())
+                    else None))
+        let complete (values: string array) = values.Length = names.Count && Set.ofArray values = names
+        if headings.Length > 0 then
+            let parsed = headings |> Array.map (fun (_, value) -> if value.StartsWith("## ", StringComparison.Ordinal) then value.Substring(3).Trim() else "")
+            if not (complete parsed) || (allowInline && inlineFields.Length > 0) then None
+            else
+                parsed |> Array.mapi (fun index name ->
+                    let start, _ = headings[index]
+                    let finish = if index + 1 < headings.Length then fst headings[index + 1] else lines.Length
+                    name, (lines[(start + 1)..(finish - 1)] |> String.concat "\n" |> _.Trim()))
+                |> Map.ofArray |> Some
+        elif allowInline then
+            let parsed = inlineFields |> Array.map (fun (_, name, _) -> name)
+            let unknownLabel =
+                lines |> Array.exists (fun line ->
+                    let value = line.Trim()
+                    let label = System.Text.RegularExpressions.Regex.Match(value, "^([A-Za-z][A-Za-z ]*):(?!//)")
+                    label.Success && not (names.Contains label.Groups[1].Value))
+            if not (complete parsed) || unknownLabel then None
+            else
+                inlineFields |> Array.mapi (fun index (start, name, first) ->
+                    let finish =
+                        if index + 1 < inlineFields.Length then
+                            let next, _, _ = inlineFields[index + 1]
+                            next
+                        else lines.Length
+                    name, (Array.append [| first |] lines[(start + 1)..(finish - 1)] |> String.concat "\n" |> _.Trim()))
+                |> Map.ofArray |> Some
+        else None
 
-    let private ownerField (body: string) =
-        match recordFields body with
+    let private ownerField (binding: Binding) (body: string) =
+        match recordFields (binding.BindingVersion = 4) body with
         | Some fields -> Map.tryFind "Owner" fields |> Option.filter (String.IsNullOrWhiteSpace >> not)
-        | None when body.Contains("##", StringComparison.Ordinal) -> None
+        | None when binding.BindingVersion = 4 || body.Contains("##", StringComparison.Ordinal) -> None
         | None ->
             let values =
                 FS.GG.Coord.Markdown.unfenced body |> List.choose (fun line ->
@@ -100,12 +129,16 @@ module V2ProjectionSource =
             match values with [ owner ] when not (String.IsNullOrWhiteSpace owner) -> Some owner | _ -> None
 
     let private deliverableField (binding: Binding) (body: string) =
-        match recordFields body |> Option.bind (Map.tryFind "Current deliverable") with
-        | None -> [], Some "Native Current deliverable field is missing or malformed; absence of closing references does not establish no existing work"
-        | Some "None" -> [], None
+        match recordFields (binding.BindingVersion = 4) body |> Option.bind (Map.tryFind "Current deliverable") with
+        | None -> None, [], Some "Native Current deliverable field is missing or malformed; absence of closing references does not establish no existing work"
+        | Some "None" -> Some "None", [], None
+        | Some value when binding.BindingVersion = 4 && (String.IsNullOrWhiteSpace value || System.Text.Encoding.UTF8.GetByteCount(value) > 16 * 1024) ->
+            None, [], Some "Native Current deliverable declaration is empty or exceeds the bounded16KiB field"
         | Some value ->
             let urls =
-                System.Text.RegularExpressions.Regex.Matches(value, "https?://[^\\s<>()\\[\\]]+")
+                let options = if binding.BindingVersion = 4 then System.Text.RegularExpressions.RegexOptions.IgnoreCase else System.Text.RegularExpressions.RegexOptions.None
+                let pattern = if binding.BindingVersion = 4 then "[A-Za-z][A-Za-z0-9+.-]*://[^\\s<>()\\[\\]]+" else "https?://[^\\s<>()\\[\\]]+"
+                System.Text.RegularExpressions.Regex.Matches(value, pattern, options)
                 |> Seq.cast<System.Text.RegularExpressions.Match> |> Seq.map _.Value |> Seq.distinct |> Seq.toList
             let canonical (url: string) =
                 let mutable uri = Unchecked.defaultof<Uri>
@@ -120,9 +153,51 @@ module V2ProjectionSource =
                         binding.Repositories |> Seq.tryFind (fun repository -> String.Equals(repository, parts[0] + "/" + parts[1], StringComparison.OrdinalIgnoreCase))
                         |> Option.map (fun repository -> $"https://github.com/{repository}/pull/{number}")
             let normalized = urls |> List.choose canonical |> List.distinct
-            if urls.IsEmpty || (urls |> List.exists (canonical >> Option.isNone)) then
-                [], Some "Native Current deliverable must explicitly say None or contain canonical PR links in selected repositories"
-            else normalized, None
+            if binding.BindingVersion = 4 then
+                let options = System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                let matches (pattern: string) (text: string) =
+                    System.Text.RegularExpressions.Regex.Matches(text, pattern, options)
+                    |> Seq.cast<System.Text.RegularExpressions.Match> |> Seq.map _.Value |> Seq.toList
+                let urlPattern = "[A-Za-z][A-Za-z0-9+.-]*://[^\\s<>()\\[\\]]+"
+                // Classification is a refusal witness only. Decoding/relative syntax never
+                // creates a discovery URL or changes the original canonical identity rule.
+                let githubPullShape (reference: string) =
+                    let withoutScheme = System.Text.RegularExpressions.Regex.Replace(reference.TrimStart('/'), "^[A-Za-z][A-Za-z0-9+.-]*:/*", "")
+                    let slash = withoutScheme.IndexOf('/')
+                    if slash < 0 then false
+                    else
+                        let authority = withoutScheme.Substring(0, slash)
+                        let path = withoutScheme.Substring(slash).Split([| '?'; '#' |]).[0]
+                        let parts = path.Trim('/').Split('/')
+                        let githubAuthority = authority.Contains("github.com", StringComparison.OrdinalIgnoreCase)
+                        let selectedRoute =
+                            parts.Length = 4
+                            && parts[3].Length > 0
+                            && (parts[3] |> Seq.forall (fun character -> character >= '0' && character <= '9'))
+                            && (binding.Repositories |> Set.exists (fun repository -> String.Equals(repository, parts[0] + "/" + parts[1], StringComparison.OrdinalIgnoreCase)))
+                        let pull (part: string) = String.Equals(part, "pull", StringComparison.OrdinalIgnoreCase) || String.Equals(part, "pulls", StringComparison.OrdinalIgnoreCase)
+                        (githubAuthority || selectedRoute)
+                        && ((parts.Length >= 3 && pull parts[2]) || (githubAuthority && parts.Length >= 1 && pull parts[0]))
+                let malformedPull =
+                    matches "[^\\s<>()\\[\\]]+" value |> List.exists (fun token ->
+                        let decoded = try Uri.UnescapeDataString token with _ -> token
+                        let rawCanonical = matches urlPattern token |> List.filter (fun reference -> (canonical reference).IsSome)
+                        let candidates =
+                            matches urlPattern decoded @ matches "(?<!:)//[^\\s<>()\\[\\]]+" decoded @ [ decoded ]
+                        let badReference =
+                            candidates |> List.exists (fun reference ->
+                                githubPullShape reference && (decoded <> token || not (List.contains reference rawCanonical)))
+                        let badBareHost =
+                            matches "(?:www\\.)?github\\.com/[^\\s<>()\\[\\]]+" decoded
+                            |> List.exists (fun reference ->
+                                githubPullShape reference && (decoded <> token || not (List.contains ("https://" + reference) rawCanonical)))
+                        badReference || badBareHost)
+                if malformedPull then
+                    Some value, [], Some "Native Current deliverable contains a malformed or out-of-scope PR-shaped reference"
+                else Some value, normalized, None
+            elif urls.IsEmpty || (urls |> List.exists (canonical >> Option.isNone)) then
+                Some value, [], Some "Native Current deliverable must explicitly say None or contain canonical PR links in selected repositories"
+            else Some value, normalized, None
 
     let private sourceRepository (binding: Binding) =
         if binding.BindingVersion = 3 then Set.minElement binding.Repositories else "FS-GG/.github"
@@ -338,38 +413,12 @@ module V2ProjectionSource =
         | :? InvalidOperationException -> Error(Malformed("reviewed population", "manifest is incomplete or nonexecutable"))
 
     let private programmePopulation (binding: Binding) (text: string) =
-        try
-            use document = JsonDocument.Parse text
-            let root = document.RootElement
-            let closed (names: string list) (value: JsonElement) =
-                let actual = value.EnumerateObject() |> Seq.map _.Name |> Seq.toList
-                if actual.Length <> names.Length || Set.ofList actual <> Set.ofList names then invalidArg "enrollment" "closed schema required"
-            closed [ "schema"; "target"; "binding"; "items" ] root
-            if root.GetProperty("schema").GetString() <> "fsgg.coordination-board-v2-enrollment/v2" then invalidArg "schema" "programme enrollment/v2 required"
-            let target = root.GetProperty "target"
-            closed [ "owner"; "organizationId"; "projectId"; "projectNumber"; "schemaVersion" ] target
-            let admission = root.GetProperty "binding"
-            closed [ "recipeRevision"; "artifactSha256"; "repositories" ] admission
-            let repositories = admission.GetProperty("repositories").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
-            if target.GetProperty("owner").GetString() <> binding.Owner || target.GetProperty("organizationId").GetString() <> binding.OrganizationId
-               || target.GetProperty("projectId").GetString() <> binding.ProjectId || target.GetProperty("projectNumber").GetInt32() <> binding.ProjectNumber
-               || target.GetProperty("schemaVersion").GetInt32() <> binding.SchemaVersion
-               || admission.GetProperty("recipeRevision").GetString() <> binding.ImportRecipeRevision
-               || admission.GetProperty("artifactSha256").GetString() <> binding.ImportArtifactSha256
-               || Set.ofList repositories <> binding.Repositories || repositories.Length <> binding.Repositories.Count then
-                invalidArg "enrollment" "target/provenance/repository mismatch"
-            let rows = root.GetProperty("items").EnumerateArray() |> Seq.map (fun row ->
-                closed [ "issue"; "nodeId"; "roadmap" ] row
-                let issue = parseIssue (row.GetProperty("issue").GetString()) |> Result.defaultWith (Errors.explain >> failwith)
-                let node = row.GetProperty("nodeId").GetString()
-                let roadmap = row.GetProperty("roadmap").GetString()
-                if Map.tryFind node binding.SelectedIssues <> Some $"{issue.Owner}/{issue.Repository}#{issue.Number}" || String.IsNullOrWhiteSpace roadmap then
-                    invalidArg "enrollment" "issue identity/owning plan differs"
-                { Issue = issue; NodeId = node; UpdatedAt = ""; Roadmap = roadmap; Dependencies = [] }) |> Seq.toList
-            if rows.Length <> binding.SelectedIssues.Count || (rows |> List.map _.NodeId |> Set.ofList |> Set.count) <> rows.Length then
-                invalidArg "enrollment" "exact selected population required"
-            Ok rows
-        with error -> Error(Malformed("programme enrollment", error.Message))
+        authenticateProgrammeEnrollment binding text |> Result.bind (fun rows ->
+            rows |> List.fold (fun result (issue, node, roadmap) ->
+                result |> Result.bind (fun accumulated ->
+                    parseIssue issue |> Result.map (fun parsed ->
+                        let row: Selected = { Issue = parsed; NodeId = node; UpdatedAt = ""; Roadmap = roadmap; Dependencies = [] }
+                        accumulated @ [ row ]))) (Ok []))
 
     let private selectedPopulation binding text =
         if binding.BindingVersion = 4 then programmePopulation binding text else population binding text
@@ -377,7 +426,7 @@ module V2ProjectionSource =
     type private SourceCollection =
         { Verification: IoResult<SourceVerification>; Native: NativeObservation option
           Dependencies: NativeObservation list; DependenciesComplete: bool; Plan: NativeObservation option; Owner: string option
-          Deliverables: string list; DeliverableGap: string option }
+          CurrentDeliverable: string option; Deliverables: string list; DeliverableGap: string option }
 
     let private collectSource (transport: IGitHubTransport) (binding: Binding) (row: Selected) =
         let mutable native = None
@@ -385,14 +434,16 @@ module V2ProjectionSource =
         let mutable dependenciesComplete = false
         let mutable plan = None
         let mutable owner = None
+        let mutable currentDeliverable = None
         let mutable deliverables = []
         let mutable deliverableGap = Some "Native issue body was not collected"
         let verification =
             match readIssueDetails transport row.Issue with
             | Error error -> Error error
             | Ok(observation, body) ->
-                owner <- ownerField body
-                let references, gap = deliverableField binding body
+                owner <- ownerField binding body
+                let declaration, references, gap = deliverableField binding body
+                currentDeliverable <- declaration
                 deliverables <- references
                 deliverableGap <- gap
                 native <- Some observation
@@ -413,7 +464,7 @@ module V2ProjectionSource =
                                 plan <- planObservation
                                 let dependencyRevision = dependencies |> List.map (fun dependency -> $"{dependency.NodeId}@{dependency.UpdatedAt}:{dependency.State}") |> List.sort |> String.concat ";"
                                 Ok(Current $"{observation.NodeId}@{observation.UpdatedAt}:{observation.BodySha256};dependencies=complete:{dependencyRevision};plan={planRevision};recipe={binding.RecipeRevision}")
-        { Verification = verification; Native = native; Dependencies = dependencies; DependenciesComplete = dependenciesComplete; Plan = plan; Owner = owner; Deliverables = deliverables; DeliverableGap = deliverableGap }
+        { Verification = verification; Native = native; Dependencies = dependencies; DependenciesComplete = dependenciesComplete; Plan = plan; Owner = owner; CurrentDeliverable = currentDeliverable; Deliverables = deliverables; DeliverableGap = deliverableGap }
 
     let private artifactCheck (binding: Binding) =
         try
@@ -425,6 +476,15 @@ module V2ProjectionSource =
                 if not (String.Equals(actual, binding.ArtifactSha256, StringComparison.OrdinalIgnoreCase)) then Error(Malformed("reviewed executable", "loaded assembly bytes differ from selected artifact SHA-256"))
                 else Ok()
         with :? System.IO.IOException -> Error(Malformed("reviewed executable", "loaded assembly bytes unavailable"))
+
+    let private protectedEnrollmentInputs (binding: Binding) (revision: string) (blob: string) =
+        let source = (if binding.BindingVersion = 3 then sourceRepository binding + ":" + populationPath else populationPath), revision, blob
+        match binding.ProgrammeEnrollment with
+        | Some enrollment when binding.BindingVersion = 4 ->
+            match programmeCommitment enrollment with
+            | Ok digest -> [ source; "programme-enrollment/v3-commitment", revision, digest ]
+            | Error _ -> [ source ]
+        | _ -> [ source ]
 
     let runFixed (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
         let failed error =
@@ -479,7 +539,7 @@ module V2ProjectionSource =
                       MembershipPages = projection |> Option.map (fun report -> report.ProjectReads - (if report.Mutations = 0 then 3 else 4))
                       Projection = projection; Gap = match result with Error error -> Some error | _ -> None
                       LastVerified = projection |> Option.orElse historical })
-                { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision; ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256; NativeDispatch = []; ProtectedInputs = [ (if binding.BindingVersion = 3 then sourceRepository binding + ":" + populationPath else populationPath), protectedRevision, populationBlob ]; Selected = Some selected.Length
+                { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision; ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256; NativeDispatch = []; ProtectedInputs = protectedEnrollmentInputs binding protectedRevision populationBlob; Selected = Some selected.Length
                   Attempted = items.Length; Verified = items |> List.filter (fun item -> item.Health = "Verified") |> List.length
                   Items = items; PopulationGap = None; Cleanup = "No resources, claims or background work created" }
 
@@ -519,7 +579,7 @@ module V2ProjectionSource =
           PullRequest: string option; Head: string option; CustodyReference: string }
     type SelectionContext =
         { Invocation: string; ProjectId: string; SchemaVersion: int; RecipeRevision: string; ArtifactSha256: string
-          PopulationRevision: string; EnrollmentBlob: string; InputSha256: string
+          PopulationRevision: string; EnrollmentBlob: string; EnrollmentCommitment: string; InputSha256: string
           Slices: CurrentSlice list; ImplementationSlots: int option; ReviewSlots: int option; HostedCiSlots: int option
           CapacityMeaning: string; CapacityObservation: AttributedObservation option
           Reservations: Reservation list option; ReservationObservation: AttributedObservation option
@@ -535,7 +595,7 @@ module V2ProjectionSource =
     type InspectionItem =
         { Evidence: ItemReport; ExpectedNodeId: string; SourceCurrentness: string
           Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list; Owner: string option; SourceRevision: string option
-          Deliverables: string list; DeliverableGap: string option; Intake: NativeIntakeObservation }
+          CurrentDeliverable: string option; Deliverables: string list; DeliverableGap: string option; Intake: NativeIntakeObservation }
 
     type InspectionReport =
         { Binding: Binding; Evidence: BatchReport; Items: InspectionItem list
@@ -814,7 +874,7 @@ module V2ProjectionSource =
                           Health = if planningGap.IsSome then "Unknown" elif currentness = "Stale" then "Stale" elif currentness = "Current" && (observed |> Option.exists (fun value -> value.Observation = Some "Verified")) then "Verified" else "Unknown"
                           Reads = calls; MutationAttempts = 0; MembershipPages = observed |> Option.map _.MembershipPages
                           Projection = None; Gap = sourceGap; LastVerified = historical }
-                    { Evidence = evidence; ExpectedNodeId = row.NodeId; SourceCurrentness = currentness; Planning = observed; PlanningGap = planningGap; Discrepancies = discrepancies; Owner = collection.Owner; Deliverables = collection.Deliverables; DeliverableGap = collection.DeliverableGap; Intake = nativeIntake intakeGate intakeObservedAt binding collection.Native
+                    { Evidence = evidence; ExpectedNodeId = row.NodeId; SourceCurrentness = currentness; Planning = observed; PlanningGap = planningGap; Discrepancies = discrepancies; Owner = collection.Owner; CurrentDeliverable = collection.CurrentDeliverable; Deliverables = collection.Deliverables; DeliverableGap = collection.DeliverableGap; Intake = nativeIntake intakeGate intakeObservedAt binding collection.Native
                       SourceRevision = match collection.Verification with Ok(Current revision) -> Some revision | _ -> None })
                 let integration = if binding.BindingVersion = 4 && membershipGap.IsNone then nativeIntegrator reads binding (items |> List.collect _.Deliverables) else emptyNative
                 let items =
@@ -838,7 +898,7 @@ module V2ProjectionSource =
                         let item = { item with Intake = intake }
                         let evidence: ItemReport = { item.Evidence with Reads = item.Evidence.Reads + additionalReads }
                         match barrier.Verification, planning with
-                        | Ok(Current revision), Ok intent when item.SourceRevision = Some revision && barrier.Owner = item.Owner && barrier.Deliverables = item.Deliverables && barrier.DeliverableGap = item.DeliverableGap && item.Planning = Some intent -> { item with Evidence = evidence }
+                        | Ok(Current revision), Ok intent when item.SourceRevision = Some revision && barrier.Owner = item.Owner && barrier.CurrentDeliverable = item.CurrentDeliverable && barrier.Deliverables = item.Deliverables && barrier.DeliverableGap = item.DeliverableGap && item.Planning = Some intent -> { item with Evidence = evidence }
                         | _ -> { item with SourceCurrentness = "Unknown"; Evidence = { evidence with Health = "Unknown"; Gap = Some(Malformed("final source/planning barrier", "issue/dependency/plan or human planning changed/became unavailable; refresh affected selection")) } }) selected items
                 let membershipGap =
                     if binding.BindingVersion <> 4 || membershipGap.IsSome then membershipGap
@@ -847,8 +907,14 @@ module V2ProjectionSource =
                         | Ok final when List.sortBy (fun (value: Membership) -> value.ItemId) final = List.sortBy (fun (value: Membership) -> value.ItemId) members -> None
                         | Ok _ -> Some(Malformed("final membership barrier", "project membership changed; reconcile complete population before selection"))
                         | Error error -> Some error
+                let enrollmentGap =
+                    if binding.BindingVersion <> 4 then membershipGap
+                    else
+                        match readProtectedBlob reads binding binding.PopulationRevision populationPath with
+                        | Ok(text, _, finalBlob) when finalBlob = blob && Result.isOk (programmePopulation binding text) -> membershipGap
+                        | _ -> Some(Malformed("programme enrollment", "final-enrollment-currentness-unavailable-or-changed"))
                 { Binding = binding; Memberships = members; MembershipGap = membershipGap; NativeIntegrator = integration
-                  Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) [ (if binding.BindingVersion = 3 then sourceRepository binding + ":" + populationPath else populationPath), current, blob ] membershipGap; Items = items }
+                  Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) (protectedEnrollmentInputs binding current blob) enrollmentGap; Items = items }
 
     let planningCandidates (report: InspectionReport) (facts: IntegratorFacts) =
         if report.Evidence.Selected.IsNone || report.Evidence.PopulationGap.IsSome then []
@@ -902,7 +968,8 @@ module V2ProjectionSource =
                 && value.ProjectId = report.Binding.ProjectId && value.SchemaVersion = report.Binding.SchemaVersion
                 && value.RecipeRevision = report.Binding.RecipeRevision && value.ArtifactSha256 = report.Binding.ArtifactSha256
                 && value.PopulationRevision = report.Binding.PopulationRevision
-                && (report.Evidence.ProtectedInputs |> List.exists (fun (_, _, blob) -> blob = value.EnrollmentBlob)))
+                && (report.Evidence.ProtectedInputs |> List.exists (fun (path, _, blob) -> path = "docs/coordination/board-v2-import-manifest.json" && blob = value.EnrollmentBlob))
+                && (report.Evidence.ProtectedInputs |> List.exists (fun (path, _, digest) -> path = "programme-enrollment/v3-commitment" && digest = value.EnrollmentCommitment)))
         let proposals: (InspectionItem option * CurrentSlice option * IssueRef) list =
             match context with
             | Some value when not value.Slices.IsEmpty ->
@@ -1014,6 +1081,9 @@ module V2ProjectionSource =
                             candidate.Repository = current.Repository
                             && not (allSlices |> List.exists (fun other -> other.Issue = issue && other.PullRequest = Some candidate.Url)))
                     let prerequisites = current.Prerequisites |> List.filter (fun prerequisite -> prerequisite.Action = action)
+                    let reconciliations = prerequisites |> List.filter (fun prerequisite -> prerequisite.Reference = "current-deliverable")
+                    let declaredWork = item.CurrentDeliverable |> Option.exists (fun declaration -> declaration <> "None")
+                    let reconciliationMissing = (declaredWork && reconciliations.Length <> 1) || reconciliations.Length > 1
                     let unsatisfied = prerequisites |> List.filter (fun prerequisite -> prerequisite.Satisfied = Some false)
                     let unknown = prerequisites |> List.filter (fun prerequisite -> prerequisite.Satisfied.IsNone || String.IsNullOrWhiteSpace prerequisite.SupplyingOwner)
                     let openEdges = item.Evidence.DependencyObservations |> List.filter (fun edge -> edge.State <> "CLOSED")
@@ -1037,6 +1107,8 @@ module V2ProjectionSource =
                     elif item.Intake.Allowed.IsNone || item.Intake.Gap.IsSome || not (fresh item.Intake.ObservedAt) then
                         result "unknown" [ "Native repository policy/current issue-author allowance is missing, changed or expired" ]
                     elif current.IntakeAuthorized = Some false then result "blocked" [ "The current integrator intake decision refuses this action" ]
+                    elif reconciliationMissing then
+                        result "unknown" [ "The complete declared Current deliverable requires exactly one current-deliverable reconciliation for this action; it establishes scoped nonduplication, never completion or execution authority" ]
                     elif not unsatisfied.IsEmpty then result "blocked" (unsatisfied |> List.map (fun prerequisite -> "Unsatisfied action prerequisite: " + prerequisite.Reference))
                     elif not current.PrerequisitesComplete || unclassified || not unknown.IsEmpty || current.IntakeAuthorized.IsNone then
                         result "unknown" [ "Action-specific native and owning-plan prerequisite/intake coverage is incomplete; supplying owner is the integrator" ]
@@ -1044,7 +1116,8 @@ module V2ProjectionSource =
                     elif not repositoryGaps.IsEmpty then result "unknown" (repositoryGaps |> List.map (fun (repository, gap) -> repository + ": " + gap))
                     elif not unreadablePulls.IsEmpty then result "unknown" [ "Relevant in-flight PR identity/head/file scope or review/check evidence is unreadable; no disjointness conclusion is possible" ]
                     elif item.DeliverableGap.IsSome then result "unknown" [ item.DeliverableGap.Value ]
-                    elif current.PullRequest.IsNone && (associatedAll |> List.exists (fun candidate -> candidate.Repository = current.Repository && candidate.State <> "OPEN")) && not (associations |> List.exists (fun candidate -> candidate.Repository = current.Repository)) then
+                    elif current.PullRequest.IsNone && (associatedAll |> List.exists (fun candidate -> candidate.Repository = current.Repository && candidate.State <> "OPEN")) && not (associations |> List.exists (fun candidate -> candidate.Repository = current.Repository))
+                         && not (current.Operation = Implement && declaredWork && reconciliations.Length = 1 && reconciliations.Head.Satisfied = Some true) then
                         result "needs-decision" [ "Only historical closed/merged Current deliverable references remain; reconcile the current action without inferring acceptance" ]
                     elif not unassignedAssociations.IsEmpty then result "needs-decision" [ "Native Current deliverable/closing associations are not mapped unambiguously to declared slices; withhold duplicate work" ]
                     elif current.PullRequest.IsSome && pull.IsNone then result "needs-decision" [ "Declared existing PR is not a current native owning-issue association" ]

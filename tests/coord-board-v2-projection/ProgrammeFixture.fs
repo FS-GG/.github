@@ -14,19 +14,35 @@ module ProgrammeFixture =
     let revision = "2026-10-17T12:00:00Z"
     let project = "PVT_kwDOEYAWY84Bldpa"
     let issue: IssueRef = { Owner = "FS-GG"; Repository = ".github"; Number = 4634 }
+    let enroll (value: Binding) (rows: (string * IssueRef * string) list) : Binding =
+        let payload =
+            JsonSerializer.Serialize(
+                {| schema = "fsgg.coordination-board-v2-enrollment-payload/v1";
+                   target = {| owner = value.Owner; organizationId = value.OrganizationId; projectId = value.ProjectId; projectNumber = value.ProjectNumber; schemaVersion = value.SchemaVersion |};
+                   binding = {| recipeRevision = value.ImportRecipeRevision; artifactSha256 = value.ImportArtifactSha256; repositories = value.Repositories |> Set.toList |};
+                   items = (rows |> List.map (fun (id, issue, roadmap) ->
+                       {| issue = $"{issue.Owner}/{issue.Repository}#{issue.Number}"; nodeId = id; roadmap = roadmap |})) |})
+        { value with ProgrammeEnrollment = Some { NonceHex = String.replicate 64 "1"; PayloadBase64 = Convert.ToBase64String(Text.Encoding.UTF8.GetBytes payload) } }
+
+    let publicEnrollment (value: Binding) =
+        let commitment = value.ProgrammeEnrollment |> Option.get |> programmeCommitment |> Result.defaultWith (Errors.explain >> failwith)
+        JsonSerializer.Serialize({| schema = "fsgg.coordination-board-v2-enrollment/v3"; commitmentSha256 = commitment |})
+
     let binding () : Binding =
         use stream = File.OpenRead typeof<Binding>.Assembly.Location
-        { BindingVersion = 4; SchemaVersion = 2; ImportRecipeRevision = String.replicate 40 "a"; ImportArtifactSha256 = String.replicate 64 "b"
-          SelectedIssues = Map.ofList [ ("I_outcome", "FS-GG/.github#4634") ]; RecipeRevision = String.replicate 40 "c"; PopulationRevision = String.replicate 40 "e"
-          OrganizationId = "O_kgDOEYAWYw"; ArtifactSha256 = SHA256.HashData stream |> Convert.ToHexStringLower
-          OwnerKind = Org; Owner = "FS-GG"; ProjectNumber = 3; ProjectTitle = "Coordination V2"; ProjectId = project
-          Status = { Id = "status"; Options = [ "Backlog"; "Ready"; "In progress"; "In review"; "Blocked"; "Done" ] |> List.map (fun name -> name, name) |> Map.ofList }
-          RoadmapFieldId = "roadmap"; Track = { Id = "track"; Options = Map.ofList [ ("Active delivery", "active"); ("Follow-up", "follow") ] }
-          Observation = { Id = "observation"; Options = Map.ofList [ ("Verified", "verified"); ("Unknown", "unknown"); ("Stale", "stale") ] }
-          Repositories = Set.singleton "FS-GG/.github" }
+        let value: Binding =
+          { ProgrammeEnrollment = None; BindingVersion = 4; SchemaVersion = 2; ImportRecipeRevision = String.replicate 40 "a"; ImportArtifactSha256 = String.replicate 64 "b"
+            SelectedIssues = Map.ofList [ ("I_outcome", "FS-GG/.github#4634") ]; RecipeRevision = String.replicate 40 "c"; PopulationRevision = String.replicate 40 "e"
+            OrganizationId = "O_kgDOEYAWYw"; ArtifactSha256 = SHA256.HashData stream |> Convert.ToHexStringLower
+            OwnerKind = Org; Owner = "FS-GG"; ProjectNumber = 3; ProjectTitle = "Coordination V2"; ProjectId = project
+            Status = { Id = "status"; Options = [ "Backlog"; "Ready"; "In progress"; "In review"; "Blocked"; "Done" ] |> List.map (fun name -> name, name) |> Map.ofList }
+            RoadmapFieldId = "roadmap"; Track = { Id = "track"; Options = Map.ofList [ ("Active delivery", "active"); ("Follow-up", "follow") ] }
+            Observation = { Id = "observation"; Options = Map.ofList [ ("Verified", "verified"); ("Unknown", "unknown"); ("Stale", "stale") ] }
+            Repositories = Set.singleton "FS-GG/.github" }
+        enroll value [ "I_outcome", issue, "docs/coordination/programme.md" ]
 
     let bindingJsonFor (value: Binding) =
-        JsonSerializer.Serialize(
+        let json = JsonSerializer.Serialize(
             {| bindingVersion = value.BindingVersion; schemaVersion = value.SchemaVersion; importRecipeRevision = value.ImportRecipeRevision
                importArtifactSha256 = value.ImportArtifactSha256; selectedIssues = value.SelectedIssues; recipeRevision = value.RecipeRevision
                populationRevision = value.PopulationRevision; organizationId = value.OrganizationId; artifactSha256 = value.ArtifactSha256
@@ -34,6 +50,15 @@ module ProgrammeFixture =
                status = {| id = value.Status.Id; options = value.Status.Options |}; roadmapFieldId = value.RoadmapFieldId
                track = {| id = value.Track.Id; options = value.Track.Options |}; observation = {| id = value.Observation.Id; options = value.Observation.Options |}
                repositories = value.Repositories |> Set.toList |})
+        match value.ProgrammeEnrollment with
+        | None -> json
+        | Some enrollment ->
+            let root = Text.Json.Nodes.JsonNode.Parse json
+            let privateNode = Text.Json.Nodes.JsonObject()
+            privateNode.Add("nonceHex", Text.Json.Nodes.JsonValue.Create enrollment.NonceHex)
+            privateNode.Add("payloadBase64", Text.Json.Nodes.JsonValue.Create enrollment.PayloadBase64)
+            root.AsObject().Add("programmeEnrollment", privateNode)
+            root.ToJsonString()
 
     let bindingJson () = bindingJsonFor (binding ())
 
@@ -41,15 +66,13 @@ module ProgrammeFixture =
     let private wire value = response (JsonSerializer.Serialize ({| data = value |}))
     let private connection (nodes: 'a list) = {| totalCount = List.length nodes; nodes = nodes; pageInfo = {| hasNextPage = false; endCursor = (None: string option) |} |}
     let private blob text = wire ({| repository = {| nameWithOwner = "FS-GG/.github"; ref = {| target = {| oid = head |} |}; object = {| oid = head; text = text |}; current = {| oid = head; text = text |} |} |})
-    let private enrollment () =
-        let value = binding ()
-        JsonSerializer.Serialize(
-            {| schema = "fsgg.coordination-board-v2-enrollment/v2"
-               target = {| owner = value.Owner; organizationId = value.OrganizationId; projectId = project; projectNumber = 3; schemaVersion = 2 |}
-               binding = {| recipeRevision = value.ImportRecipeRevision; artifactSha256 = value.ImportArtifactSha256; repositories = [ "FS-GG/.github" ] |}
-               items = [ {| issue = "FS-GG/.github#4634"; nodeId = "I_outcome"; roadmap = "docs/coordination/programme.md" |} ] |})
+    let private enrollment () = publicEnrollment (binding ())
 
     let ownerBody = "## Owner\n\nworker\n\n## Done when\n\nAccepted outcome\n\n## Current deliverable\n\nhttps://github.com/FS-GG/.github/pull/42\n\n## Next action\n\nCurrent source\n\n## Blocked on\n\nSee owning plan\n\n## Acceptance evidence\n\nNative links"
+    let inlineOwnerBody =
+        [ "Owner"; "Done when"; "Current deliverable"; "Next action"; "Blocked on"; "Acceptance evidence" ]
+        |> List.fold (fun (body: string) name -> body.Replace("## " + name + "\n\n", name + ": ")) ownerBody
+
 
     let private content = {| id = "I_outcome"; number = 4634; repository = {| nameWithOwner = "FS-GG/.github" |} |}
     let private prNode (variables: (string * Var) list) (field: string) (value: 'a) =
@@ -136,13 +159,7 @@ module ProgrammeFixture =
             let result =
                 match request.Body with
                 | Transport.Query(document, _) when document.Contains("currentExpression") && request.Subject.EndsWith("board-v2-import-manifest.json", StringComparison.Ordinal) ->
-                    let enrollment =
-                        {| schema = "fsgg.coordination-board-v2-enrollment/v2";
-                           target = {| owner = selected.Owner; organizationId = selected.OrganizationId; projectId = project; projectNumber = 3; schemaVersion = 2 |};
-                           binding = {| recipeRevision = selected.ImportRecipeRevision; artifactSha256 = selected.ImportArtifactSha256; repositories = selected.Repositories |> Set.toList |};
-                           items = (rows |> List.map (fun (id, issue, roadmap) ->
-                               {| issue = $"{issue.Owner}/{issue.Repository}#{issue.Number}"; nodeId = id; roadmap = roadmap |})) |}
-                    blob (JsonSerializer.Serialize(enrollment))
+                    blob (publicEnrollment selected)
                 | Transport.Query(document, variables) when document.Contains("issue(number:") && document.Contains("updatedAt state") ->
                     let id, issue, _ = current variables |> Option.get
                     let repository = issue.Owner + "/" + issue.Repository
@@ -203,14 +220,18 @@ module ProgrammeFixture =
                 candidate.State = "OPEN" && ((candidate.Issues |> List.contains "FS-GG/.github#4634") || (item.Deliverables |> List.contains candidate.Url)))
         { Invocation = "inert-invocation"; ProjectId = report.Binding.ProjectId; SchemaVersion = report.Binding.SchemaVersion
           RecipeRevision = report.Binding.RecipeRevision; ArtifactSha256 = report.Binding.ArtifactSha256
-          PopulationRevision = report.Binding.PopulationRevision; EnrollmentBlob = blob; InputSha256 = String.replicate 64 "a"
+          PopulationRevision = report.Binding.PopulationRevision; EnrollmentBlob = blob; EnrollmentCommitment = (report.Binding.ProgrammeEnrollment |> Option.get |> programmeCommitment |> Result.defaultWith (Errors.explain >> failwith)); InputSha256 = String.replicate 64 "a"
           Slices =
             [ { Id = "source-slice"; Attempt = "owner-attempt"; Operation = if pull.IsSome then V2ProjectionSource.ObserveExisting else V2ProjectionSource.Implement
                 Issue = issue; AccountableOwner = "worker"; Owner = "worker"; Repository = "FS-GG/.github"; Paths = [ "src/new.fs" ]; Action = V2ProjectionSource.Source
                 Join = { NativeId = native.NodeId; UpdatedAt = native.UpdatedAt; BodySha256 = native.BodySha256; SourceRevision = item.SourceRevision |> Option.defaultValue "missing source revision" }
                 Observation = observation; PullRequest = pull |> Option.map _.Url; PullRequestId = pull |> Option.map _.Id
                 PullRequestUpdatedAt = pull |> Option.map _.UpdatedAt; Head = pull |> Option.map _.Head
-                Prerequisites = []; PrerequisitesComplete = true; IntakeAuthorized = Some true } ]
+                Prerequisites =
+                    (if item.CurrentDeliverable |> Option.exists (fun value -> value <> "None") then
+                        [ { Action = V2ProjectionSource.Source; Reference = "current-deliverable"; Satisfied = Some true; SupplyingOwner = "/root/programme" } ]
+                     else [])
+                PrerequisitesComplete = true; IntakeAuthorized = Some true } ]
           ImplementationSlots = Some 1; ReviewSlots = Some 1; HostedCiSlots = Some 1; CapacityMeaning = "remaining-after-active"
           CapacityObservation = Some observation; Reservations = Some []; ReservationObservation = Some observation
           ObservedAt = observation.ObservedAt; ValidUntil = observation.ValidUntil; Evidence = "inert actual parent caller observation" }
@@ -224,7 +245,7 @@ module ProgrammeFixture =
             {| supplier = value.Supplier; observedAt = value.ObservedAt; validUntil = value.ValidUntil; evidence = value.Evidence |}
         JsonSerializer.Serialize(
             {| schema = "fsgg.coord.board-v2-integrator-observations/1"; invocation = context.Invocation; projectId = context.ProjectId; schemaVersion = context.SchemaVersion
-               recipeRevision = context.RecipeRevision; artifactSha256 = context.ArtifactSha256; populationRevision = context.PopulationRevision; enrollmentBlob = context.EnrollmentBlob
+               recipeRevision = context.RecipeRevision; artifactSha256 = context.ArtifactSha256; populationRevision = context.PopulationRevision; enrollmentBlob = context.EnrollmentBlob; enrollmentCommitmentSha256 = context.EnrollmentCommitment
                observedAt = context.ObservedAt; validUntil = context.ValidUntil; evidence = context.Evidence
                slices = context.Slices |> List.map (fun slice ->
                    {| id = slice.Id; attempt = slice.Attempt; operation = operation slice.Operation
@@ -237,9 +258,9 @@ module ProgrammeFixture =
                       prerequisitesComplete = slice.PrerequisitesComplete; intakeAuthorized = slice.IntakeAuthorized |})
                capacity = context.CapacityObservation |> Option.map (fun observed ->
                    {| meaning = context.CapacityMeaning; implementation = context.ImplementationSlots; review = context.ReviewSlots; hostedCi = context.HostedCiSlots; observation = observation observed |})
-               reservations = context.ReservationObservation |> Option.map (fun observed ->
+               reservations = (context.Reservations, context.ReservationObservation) ||> Option.map2 (fun (items: V2ProjectionSource.Reservation list) (observed: V2ProjectionSource.AttributedObservation) ->
                    {| observation = observation observed
-                      items = context.Reservations |> Option.defaultValue [] |> List.map (fun reservation ->
+                      items = items |> List.map (fun reservation ->
                           {| sliceId = reservation.SliceId; attempt = reservation.Attempt; operation = operation reservation.Operation; owner = reservation.Owner
                              repository = reservation.Repository; paths = reservation.Paths; pullRequest = reservation.PullRequest; head = reservation.Head; custodyReference = reservation.CustodyReference |}) |}) |})
 

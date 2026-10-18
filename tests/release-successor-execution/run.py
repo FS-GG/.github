@@ -100,6 +100,36 @@ class ExecutionTests(unittest.TestCase):
     def advance(self):
         return engine.advance(self.manifest, self.journal, self.admission, self.provider)
 
+    def test_typed_pending_context_never_substitutes_for_fresh_transition(self):
+        effects=engine.ordered_effects(self.manifest)
+        first=engine.full_transition(self.manifest['contentId'],effects,self.journal,self.admission,self.provider)
+        self.assertEqual(first.state,'waiting')
+        self.assertEqual(first.pending.effect,effects[0])
+        self.assertEqual(first.pending.journal,self.journal.state)
+        # A retained descriptor does not authorize a settlement after revocation.
+        self.admission.denied.add(('tag','settle'))
+        with self.assertRaisesRegex(engine.Refused,'settlement admission denied'):
+            engine.full_transition(self.manifest['contentId'],effects,self.journal,self.admission,self.provider)
+        self.assertEqual(self.journal.state.effects,{'tag':'intent'})
+        self.assertEqual(self.provider.calls,['tag'])
+
+    def test_full_transition_refreshes_dispatch_admission_after_slow_preparation(self):
+        def prepare(effect):
+            self.assertEqual(self.journal.state.effects,{'tag':'intent'})
+            self.admission.denied.add((effect.identity,'dispatch'))
+        with self.assertRaisesRegex(engine.Refused,'dispatch admission denied'):
+            engine.full_transition(self.manifest['contentId'],engine.ordered_effects(self.manifest),
+                                  self.journal,self.admission,self.provider,prepare_dispatch=prepare)
+        self.assertEqual(self.provider.calls,[])
+
+    def test_current_transition_exposes_unknown_without_rewriting_intent(self):
+        self.provider.indeterminate.add('tag')
+        value=engine.full_transition(self.manifest['contentId'],engine.ordered_effects(self.manifest),
+                                     self.journal,self.admission,self.provider)
+        self.assertEqual(value.state,'unknown');self.assertEqual(value.pending.effect.identity,'tag')
+        self.assertEqual(self.journal.state.effects,{'tag':'intent'})
+        self.assertEqual(self.provider.calls,['tag'])
+
     def test_every_effect_is_admitted_then_read_back_before_completion(self):
         effects = engine.ordered_effects(self.manifest)
         for effect in effects:

@@ -20,6 +20,7 @@ let private ok body =
 
 let private binding =
     {
+        ProgrammeEnrollment = None
         BindingVersion = 2
         ImportRecipeRevision = String.replicate 40 "e"
         ImportArtifactSha256 = String.replicate 64 "f"
@@ -1021,6 +1022,49 @@ let ``programme missing partial foreign and moved native facts never produce con
         Assert.Equal("unknown", (V2ProjectionSource.selectActions report (Some(selectionContext report)) report.NativeIntegrator.ObservedAt).Head.Decision)
 
 [<Fact>]
+let ``declared work reconciliation is local while independent slices retain ordered source capacity`` () =
+    let other: IssueRef = { Owner = "FS-GG"; Repository = ".github"; Number = 5555 }
+    let rows: (string * IssueRef * string) list =
+        [ ("I_outcome", ProgrammeFixture.issue, "docs/coordination/programme.md");
+          ("I_other_outcome", other, "docs/coordination/programme.md") ]
+    let selected: Binding =
+        { ProgrammeFixture.binding () with SelectedIssues = Map.ofList [ ("I_outcome", "FS-GG/.github#4634"); ("I_other_outcome", "FS-GG/.github#5555") ] }
+        |> fun binding -> ProgrammeFixture.enroll binding rows
+    let emptyBody = ProgrammeFixture.ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", "None")
+    let body = ProgrammeFixture.ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", "Retain original receiver custody while changing independent source")
+    let change (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+        if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
+            response |> Result.map (fun (value: Transport.Response) ->
+                { value with Body = value.Body.Replace(System.Text.Json.JsonSerializer.Serialize emptyBody, System.Text.Json.JsonSerializer.Serialize body) })
+        else response
+    let transport = ProgrammeFixture.populationTransport selected rows change
+    let report = V2ProjectionSource.inspectFixed transport selected None
+    Assert.True(report.Evidence.PopulationGap.IsNone)
+    Assert.All<V2ProjectionSource.InspectionItem>(report.Items, fun item -> Assert.Equal<string option>(Some "Retain original receiver custody while changing independent source", item.CurrentDeliverable))
+    let context = selectionContext report
+    let template = context.Slices.Head
+    let makeSlice (item: V2ProjectionSource.InspectionItem) (id: string) (satisfied: bool option) : V2ProjectionSource.CurrentSlice =
+        let native = item.Evidence.Native.Value
+        { template with
+            Id = id; Attempt = id + "-attempt"; Issue = item.Evidence.Issue; Operation = V2ProjectionSource.Implement;
+            Paths = [ "src/" + id + ".fs" ]; PullRequest = None; PullRequestId = None; PullRequestUpdatedAt = None; Head = None;
+            Join = { NativeId = native.NodeId; UpdatedAt = native.UpdatedAt; BodySha256 = native.BodySha256; SourceRevision = item.SourceRevision.Value };
+            Prerequisites = [ { Action = V2ProjectionSource.Source; Reference = "current-deliverable"; Satisfied = satisfied; SupplyingOwner = "programme-owner" } ] }
+    let unknownItem = report.Items |> List.find (fun item -> item.Evidence.Issue = ProgrammeFixture.issue)
+    let independentItem = report.Items |> List.find (fun item -> item.Evidence.Issue = other)
+    let proposed =
+        { context with ImplementationSlots = Some 2;
+                       Slices = [ makeSlice unknownItem "unknown-work" None;
+                                  makeSlice independentItem "source-one" (Some true);
+                                  makeSlice independentItem "source-two" (Some true) ] }
+    let decisions = V2ProjectionSource.selectActions report (Some proposed) report.NativeIntegrator.ObservedAt
+    Assert.Equal<string list>([ "unknown"; "ready"; "ready" ], decisions |> List.map _.Decision)
+    Assert.Equal<string list>([ "unknown-work"; "source-one"; "source-two" ], decisions |> List.map (fun value -> value.SliceId.Value))
+    Assert.All<V2ProjectionSource.Selection>(decisions, fun value -> Assert.True(value.PullRequest.IsNone))
+    Assert.All<V2ProjectionSource.InspectionItem>(report.Items, fun item -> Assert.Equal<string option>(Some "Blocked", item.Planning.Value.Status))
+    Assert.Empty transport.Mutations
+
+[<Fact>]
 let ``programme selection uses actual slices nonenrolled work and action specific prerequisites`` () =
     let report = programmeSnapshot ProgrammeFixture.unchanged
     let current = report.NativeIntegrator.PullRequests.Head
@@ -1034,9 +1078,9 @@ let ``programme selection uses actual slices nonenrolled work and action specifi
     Assert.Equal("ready", (choose { context with ReviewSlots = Some 0 } report).Decision)
     Assert.Equal("unknown", (choose { context with Slices = [ { context.Slices.Head with PrerequisitesComplete = false } ] } report).Decision)
     let later: V2ProjectionSource.Prerequisite = { Action = V2ProjectionSource.Activation; Reference = "publication still required"; Satisfied = Some false; SupplyingOwner = "publisher" }
-    let source = { context with Slices = [ { context.Slices.Head with Prerequisites = [ later ] } ] }
+    let source = { context with Slices = [ { context.Slices.Head with Prerequisites = later :: context.Slices.Head.Prerequisites } ] }
     Assert.Equal("ready", (choose source report).Decision)
-    let activate = { source with Slices = [ { source.Slices.Head with Action = V2ProjectionSource.Activation } ] }
+    let activate = { source with Slices = [ { source.Slices.Head with Action = V2ProjectionSource.Activation; Prerequisites = source.Slices.Head.Prerequisites |> List.map (fun prerequisite -> if prerequisite.Reference = "current-deliverable" then { prerequisite with Action = V2ProjectionSource.Activation } else prerequisite) } ] }
     Assert.Equal("blocked", (choose activate report).Decision)
     let duplicate = { context with Slices = context.Slices @ context.Slices }
     Assert.Equal("needs-decision", (choose duplicate report).Decision)
@@ -1118,13 +1162,13 @@ let ``actual open native dependency is classified per action without suppressing
     Assert.Equal("unknown", (choose context).Decision)
     for reference in [ "https://github.com/FS-GG/.github/issues/1"; "FS-GG/.github#1" ] do
         let prerequisite: V2ProjectionSource.Prerequisite = { Action = V2ProjectionSource.Activation; Reference = reference; Satisfied = Some false; SupplyingOwner = "publisher" }
-        let classified = { context with Slices = [ { context.Slices.Head with Prerequisites = [ prerequisite ] } ] }
+        let classified = { context with Slices = [ { context.Slices.Head with Prerequisites = prerequisite :: context.Slices.Head.Prerequisites } ] }
         Assert.Equal("ready", (choose classified).Decision)
-        let activation = { classified with Slices = [ { classified.Slices.Head with Action = V2ProjectionSource.Activation } ] }
+        let activation = { classified with Slices = [ { classified.Slices.Head with Action = V2ProjectionSource.Activation; Prerequisites = classified.Slices.Head.Prerequisites |> List.map (fun prerequisite -> if prerequisite.Reference = "current-deliverable" then { prerequisite with Action = V2ProjectionSource.Activation } else prerequisite) } ] }
         Assert.Equal("blocked", (choose activation).Decision)
-        let source = { classified with Slices = [ { classified.Slices.Head with Prerequisites = [ { prerequisite with Action = V2ProjectionSource.Source } ] } ] }
+        let source = { classified with Slices = [ { classified.Slices.Head with Prerequisites = { prerequisite with Action = V2ProjectionSource.Source } :: context.Slices.Head.Prerequisites } ] }
         Assert.Equal("blocked", (choose source).Decision)
-        let mismatched = { classified with Slices = [ { classified.Slices.Head with Prerequisites = [ { prerequisite with Reference = reference + "0" } ] } ] }
+        let mismatched = { classified with Slices = [ { classified.Slices.Head with Prerequisites = { prerequisite with Reference = reference + "0" } :: context.Slices.Head.Prerequisites } ] }
         Assert.Equal("unknown", (choose mismatched).Decision)
         Assert.Equal("unknown", (choose { classified with Slices = [ { classified.Slices.Head with PrerequisitesComplete = false } ] }).Decision)
 
@@ -1298,3 +1342,95 @@ let ``unclassified or inconsistent native gaps never become source permission`` 
         let current = { report with NativeIntegrator = { report.NativeIntegrator with PullRequests = [ pull ] } }
         let selected = V2ProjectionSource.selectActions current (Some context) report.NativeIntegrator.ObservedAt
         Assert.Equal<string>("unknown", selected.Head.Decision)
+
+[<Fact>]
+let ``programme commitment fixed vector binds original bytes nonce domain and length`` () =
+    let nonce = [| 0uy .. 31uy |] |> Convert.ToHexStringLower
+    let enrollment: ProgrammeEnrollment = { NonceHex = nonce; PayloadBase64 = "e30=" }
+    let actual = programmeCommitment enrollment |> Result.defaultWith (Errors.explain >> failwith)
+    Assert.Equal<string>("b806098f0b36b0d63e71511db8af136980af3b8e17fa6da4c8fa86f614688dab", actual)
+    let differentBytes = { enrollment with PayloadBase64 = Convert.ToBase64String(Text.Encoding.UTF8.GetBytes "{ }") }
+    Assert.NotEqual<string>(actual, programmeCommitment differentBytes |> Result.defaultWith (Errors.explain >> failwith))
+    let differentNonce = { enrollment with NonceHex = String.replicate 64 "1" }
+    Assert.NotEqual<string>(actual, programmeCommitment differentNonce |> Result.defaultWith (Errors.explain >> failwith))
+    let wrongDomain = Text.Encoding.ASCII.GetBytes "fsgg.coordination-board-v2-enrollment/v3\\0"
+    let length = Array.zeroCreate<byte> 8
+    Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(length.AsSpan(), 2UL)
+    let wrong = Array.concat [ wrongDomain; [| 0uy .. 31uy |]; length; Text.Encoding.UTF8.GetBytes "{}" ] |> Security.Cryptography.SHA256.HashData |> Convert.ToHexStringLower
+    Assert.NotEqual<string>(actual, wrong)
+
+[<Fact>]
+let ``programme private byte decoder refuses ambiguous excessive or malformed encodings without echo`` () =
+    let sensitive = "synthetic-sensitive-never-public"
+    let encode (text: string) = Text.Encoding.UTF8.GetBytes text |> Convert.ToBase64String
+    let cases: ProgrammeEnrollment list =
+        [ { NonceHex = ""; PayloadBase64 = "e30=" };
+          { NonceHex = String.replicate 64 "A"; PayloadBase64 = "e30=" };
+          { NonceHex = String.replicate 64 "0"; PayloadBase64 = "e30" };
+          { NonceHex = String.replicate 64 "0"; PayloadBase64 = "e30=\n" };
+          { NonceHex = String.replicate 64 "0"; PayloadBase64 = "/w==" };
+          { NonceHex = String.replicate 64 "0"; PayloadBase64 = "77u/e30=" };
+          { NonceHex = String.replicate 64 "0"; PayloadBase64 = encode ("{\"" + sensitive + "\":1,\"" + sensitive + "\":2}") };
+          { NonceHex = String.replicate 64 "0"; PayloadBase64 = encode (String.replicate 17 "[" + "0" + String.replicate 17 "]") };
+          { NonceHex = String.replicate 64 "0"; PayloadBase64 = encode ("{}" + String.replicate 131071 " ") } ]
+    for value in cases do
+        match programmeCommitment value with
+        | Ok _ -> failwith "ambiguous/private byte shape was accepted"
+        | Error error -> Assert.DoesNotContain(sensitive, Errors.explain error)
+
+[<Fact>]
+let ``programme private enrollment requires native protected commitment and exact closed cohort`` () =
+    let selected = ProgrammeFixture.binding ()
+    let publicJson = ProgrammeFixture.publicEnrollment selected
+    let original = selected.ProgrammeEnrollment |> Option.get
+    let payload = Convert.FromBase64String original.PayloadBase64 |> Text.Encoding.UTF8.GetString
+    let rows = authenticateProgrammeEnrollment selected publicJson |> Result.defaultWith (Errors.explain >> failwith)
+    Assert.Single rows |> ignore
+    let changes: string list = [ "target"; "constructor"; "repository"; "issue"; "node"; "roadmap"; "missing"; "duplicate"; "extra" ]
+    for change in changes do
+        let root = Text.Json.Nodes.JsonNode.Parse payload
+        match change with
+        | "target" -> root.["target"].["projectId"] <- Text.Json.Nodes.JsonValue.Create "synthetic-other-project"
+        | "constructor" -> root.["binding"].["artifactSha256"] <- Text.Json.Nodes.JsonValue.Create(String.replicate 64 "a")
+        | "repository" -> root.["binding"].["repositories"].[0] <- Text.Json.Nodes.JsonValue.Create "FS-GG/SyntheticOther"
+        | "issue" -> root.["items"].[0].["issue"] <- Text.Json.Nodes.JsonValue.Create "FS-GG/.github#4635"
+        | "node" -> root.["items"].[0].["nodeId"] <- Text.Json.Nodes.JsonValue.Create "I_synthetic_other"
+        | "roadmap" -> root.["items"].[0].["roadmap"] <- Text.Json.Nodes.JsonValue.Create "docs/other.md"
+        | "missing" -> root.["items"].AsArray().Clear()
+        | "duplicate" -> root.["items"].AsArray().Add(root.["items"].[0].DeepClone())
+        | _ -> root.AsObject().Add("unapproved", Text.Json.Nodes.JsonValue.Create "synthetic-sensitive-never-public")
+        let changed = { selected with ProgrammeEnrollment = Some { original with PayloadBase64 = root.ToJsonString() |> Text.Encoding.UTF8.GetBytes |> Convert.ToBase64String } }
+        Assert.True(Result.isError (authenticateProgrammeEnrollment changed publicJson), change)
+    let invalidPublic: string list =
+        [ "{}";
+          "{\"schema\":\"fsgg.coordination-board-v2-enrollment/v2\",\"target\":{},\"binding\":{},\"items\":[]}";
+          publicJson.Replace("commitmentSha256", "unapproved");
+          publicJson.Replace("\"schema\":", "\"schema\":\"duplicate\",\"schema\":");
+          publicJson.Replace("}", ",\"private\":\"synthetic-sensitive-never-public\"}") ]
+    for invalid in invalidPublic do
+        Assert.True(Result.isError (authenticateProgrammeEnrollment selected invalid))
+    Assert.DoesNotContain(original.NonceHex, publicJson)
+    Assert.DoesNotContain(original.PayloadBase64, publicJson)
+    Assert.DoesNotContain("I_outcome", publicJson)
+
+[<Fact>]
+let ``programme preparation validates before RNG and final binding retains private bytes exactly`` () =
+    let selected = ProgrammeFixture.binding ()
+    let payload = selected.ProgrammeEnrollment |> Option.get |> _.PayloadBase64 |> Convert.FromBase64String
+    let template = Text.Json.Nodes.JsonNode.Parse(ProgrammeFixture.bindingJsonFor selected)
+    template.AsObject().Remove "programmeEnrollment" |> ignore
+    let mutable calls = 0
+    let rng () = calls <- calls + 1; [| 0uy .. 31uy |]
+    Assert.True(Result.isError (prepareProgrammeBinding (template.ToJsonString()) [| 255uy |] rng))
+    Assert.Equal(0, calls)
+    let oversizedTemplate = Text.Json.Nodes.JsonNode.Parse(template.ToJsonString())
+    oversizedTemplate.["roadmapFieldId"] <- Text.Json.Nodes.JsonValue.Create(String.replicate 102400 "r")
+    let maximumPayload = Array.append payload (Array.create (131072 - payload.Length) 32uy)
+    Assert.True(Result.isError (prepareProgrammeBinding (oversizedTemplate.ToJsonString()) maximumPayload rng))
+    Assert.Equal(0, calls)
+    let privateJson, publicJson = prepareProgrammeBinding (template.ToJsonString()) payload rng |> Result.defaultWith (Errors.explain >> failwith)
+    Assert.Equal(1, calls)
+    let actual = decodeBinding privateJson |> Result.defaultWith failwith
+    Assert.Equal<byte>(payload, actual.ProgrammeEnrollment |> Option.get |> _.PayloadBase64 |> Convert.FromBase64String)
+    Assert.True(Result.isOk (authenticateProgrammeEnrollment actual publicJson))
+    Assert.True(Result.isError (decodeBinding (template.ToJsonString())))

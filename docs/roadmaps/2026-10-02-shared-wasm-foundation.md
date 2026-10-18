@@ -15,23 +15,32 @@ coordinates the programme; FS.GG.Game is the selected producer.
 
 ## Current supplier publication and installed scope — 2026-10-18
 
-The accepted published pair and SDK are **0.5.0**, from immutable producer
-P=`80540027623d9b1a8aa7715d0591de48455403b7`, with the independent finite installed qualifier
-Q=`c938e9158542e3a0572b62dd09c01ad01cbb344f`. [Original publication `39073209865/attempt1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39073209865)
-and [release `416092764`](https://github.com/FS-GG/FS.GG.Game/releases/tag/wasm/v0.5.0) retain the exact
-pair, SDK, manifest and transaction. [Original both-feed installed qualification `39076218708/attempt1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39076218708)
-passed at Q, including collection, native artifact upload and direct cleanup. Global descendant
-settlement remains unproved. The [Game owning plan](https://github.com/FS-GG/FS.GG.Game/blob/bc78722f7a62a1ce5f0351d7969a26c307ec4fe7/docs/roadmaps/wasm-shared-01.md#accepted-05-closed-worker-and-installed-qualifier)
-retains the exact publication and finite P-to-Q source/Worker/Core custody joins.
+The accepted published pair and SDK are **0.6.0**, from immutable producer
+P=`8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e`, tree
+`090906c22f0ef0cd3ca453a28ca20ce8686e0753`. [Original publication `39085989107/attempt1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39085989107)
+and [release `416167085`](https://github.com/FS-GG/FS.GG.Game/releases/tag/wasm/v0.6.0)
+were accepted after both-feed and four served-asset readback. Manifest SHA256
+`e40258fe5cf6471c868afe0f6405d482a5a60ccfdb192f8cdb36b36adf08b8ff`, SDK SHA256
+`b06bdd4a75e9f9727f58cdbeb272e42f1c88607f2326152c67feb5dc5aeccd6f` and promotion transaction
+`fa7a48d1b389116b18f00b5ec94dd83e82bfd3fd9e4032fe052eb13eab019119` bind that original.
+The [immutable owning plan at P](https://github.com/FS-GG/FS.GG.Game/blob/8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e/docs/roadmaps/wasm-shared-01.md)
+defines source obligations; the accepted native original establishes publication, rather than
+inferring it from preparation prose.
 
-Game's protected **source 0.6.0** at
-[`bc78722f`](https://github.com/FS-GG/FS.GG.Game/commit/bc78722f7a62a1ce5f0351d7969a26c307ec4fe7)
-is unpublished. Its source preparation and qualification obligations cannot inherit the accepted 0.5
-publication or installed receipt. The shared registry now records source 0.6 separately from published 0.5;
-its earlier 0.5 projection deferral ended after [coherent coordination 0.104 publication](utel-release-successor.md#accepted-104-publication--2026-10-18).
-Historical 0.4/0.3 identities and failures remain intact. Empty registry consumers remain intentional:
-this supplier acceptance does not establish SC2/BAR/FourD product pins, native authority, timing,
-consumer adoption or completion of stages .5–.7.
+Fresh both-feed installed **0.6** qualification is separately accepted through exact qualifier
+Q=`9a98f5da4043ec5d231acca97edfeebba7d4efb2`, from
+[original installed qualification `39091471055/attempt1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39091471055).
+Both575-member eligible artifacts and served org/public package, manifest, SDK and dependency joins
+were independently verified. Runtime, collection and direct cleanup exited0; descendant absence
+remains unproved. The failed stale-collector original `39088631914/attempt1` stays failed.
+Historical accepted installed0.5 producer `80540027623d9b1a8aa7715d0591de48455403b7` and qualifier
+`c938e9158542e3a0572b62dd09c01ad01cbb344f`, original `39076218708/attempt1`, retain their own finite
+scope. Original0.5 publication `39073209865/attempt1`, release `416092764` and all historical0.4/0.3
+identities and failures remain immutable.
+
+The shared registry now records source, published and finite installed0.6. Empty consumers remain
+intentional: producer qualification does not establish SC2/BAR/FourD pins, product timing, native
+or image authority, wholeS1, consumer adoption or completion of stages .5–.7.
 
 ## Inspected source and existing consumers
 

@@ -281,3 +281,86 @@ module V2MigrationTests =
         Assert.Equal<Scope>(scoped, parseScope scopeJson |> get)
         let unknown = scopeJson.Replace("\"initialPlanning\":", "\"authorized\":true,\"initialPlanning\":")
         Assert.True(Result.isError (parseScope unknown))
+
+    [<Fact>]
+    let ``readback observation distinguishes exact pre-effect state from all sibling transitions and drift`` () =
+        let track: PlanningOption = { Id = "synthetic-track-active"; Name = "Active delivery" }
+        let initial: InitialPlanning =
+            { IssueId = scope.SelectedIssues.Head.Id; Track = track; Roadmap = "synthetic roadmap";
+              Status = Some { Id = snapshot.Fields.Head.Options.Head.Id; Name = "Backlog" } }
+        let existing: View =
+            { Id = "synthetic-existing-view"; Name = "synthetic existing"; Layout = "TABLE_LAYOUT"; Filter = "";
+              VisibleFieldIds = [ scope.StatusFieldId ]; UnsupportedConfiguration = "[[\"\"],[],[],[]]" }
+        let desired: DesiredView =
+            { Id = Some existing.Id; Name = existing.Name; Layout = existing.Layout; Filter = "status:Blocked";
+              VisibleFieldIds = existing.VisibleFieldIds }
+        let created: DesiredView =
+            { Id = None; Name = "synthetic new"; Layout = "TABLE_LAYOUT"; Filter = "status:Blocked";
+              VisibleFieldIds = [ scope.StatusFieldId ] }
+        let mutable selected: Scope = { scope with InitialPlanning = [ initial ]; Views = [ desired; created ] }
+        let fields: Field list =
+            snapshot.Fields |> List.map (fun (field: Field) ->
+                if field.Id = scope.TrackFieldId then
+                    { field with Options = [ { Id = track.Id; Name = track.Name; Color = "BLUE"; Description = "synthetic" } ] }
+                else field)
+        let native = Native ({ snapshot with Fields = fields; Views = [ existing ] })
+        use connection = native.Connection()
+        let kinds = System.Collections.Generic.HashSet<string>()
+        let mutable before = collect connection.Reads selected |> get
+        for _ in 1 .. 8 do
+            let prepared = prepare selected before |> get
+            let change = prepared.Changes.Head
+            let response: Transport.Response = connection.Dispatch(prepared, change, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get
+            let after = collect connection.Reads selected |> get
+            let operation, payload, kind =
+                match change with
+                | AddInReview _ -> "updateProjectV2Field", "projectV2Field", "status"
+                | AddMembership _ -> "addProjectV2ItemById", "item", "membership"
+                | InitializePlanningValue _ -> "updateProjectV2ItemFieldValue", "projectV2Item", "initialize"
+                | CreateView _ -> "createProjectV2View", "projectV2View", "create"
+                | UpdateView _ -> "updateProjectV2View", "projectV2View", "update"
+            kinds.Add kind |> ignore
+            use document = JsonDocument.Parse response.Body
+            let returnedId = document.RootElement.GetProperty("data").GetProperty(operation).GetProperty(payload).GetProperty("id").GetString()
+            let stale: Snapshot = { before with UpdatedAt = "2026-10-18T00:32:24Z" }
+            Assert.Equal<ReadbackObservation>(PendingVisibility, observeTransition selected before stale change returnedId |> get)
+            let changedIssues: NativeIssue list = before.Issues |> List.map (fun (issue: NativeIssue) -> { issue with UpdatedAt = "2026-10-18T01:00:00Z" })
+            Assert.True(Result.isError (observeTransition selected before ({ stale with Issues = changedIssues }) change returnedId))
+            Assert.True(Result.isError (observeTransition selected before ({ stale with CanUpdate = false }) change returnedId))
+            Assert.True(Result.isError (observeTransition selected before after change "synthetic-unrelated-returned-id"))
+            match change with
+            | InitializePlanningValue(_, itemId, _, _) ->
+                let items: Item list =
+                    stale.Items |> List.map (fun (item: Item) ->
+                        if item.Id = itemId then { item with UpdatedAt = "2026-10-18T01:00:00Z" } else item)
+                Assert.Equal<ReadbackObservation>(PendingVisibility, observeTransition selected before ({ stale with Items = items }) change returnedId |> get)
+            | _ -> ()
+            match observeTransition selected before after change returnedId |> get with
+            | ObservedEffect resolved -> selected <- resolved
+            | PendingVisibility -> failwith "one complete exact native witness must confirm the correlated effect"
+            before <- after
+        Assert.Equal(5, kinds.Count)
+        Assert.Empty((prepare selected before |> get).Changes)
+        Assert.Equal(8, native.Mutations.Length)
+
+    [<Fact>]
+    let ``migration remaining duration belongs to original composition and is zero after disposal`` () =
+        let native = Native snapshot
+        let connection = native.Connection()
+        let first = connection.RemainingTime
+        Assert.True(first > TimeSpan.Zero && first <= TimeSpan.FromSeconds 270.0)
+        collect connection.Reads scope |> get |> ignore
+        Assert.True(connection.RemainingTime <= first)
+        connection.Dispose()
+        Assert.Equal<TimeSpan>(TimeSpan.Zero, connection.RemainingTime)
+
+    [<Fact>]
+    let ``observation reader refuses expired planning deadline before any actual native acquisition`` () =
+        let native = Native snapshot
+        use connection = native.Connection()
+        let expired = connection.ObservationReads(DateTimeOffset.UtcNow.AddSeconds(-1.0))
+        Assert.True(Result.isError (collect expired scope))
+        Assert.Empty native.Requests
+        Assert.Empty native.Mutations
+        collect connection.Reads scope |> get |> ignore
+        Assert.Equal(2, native.Requests.Length)

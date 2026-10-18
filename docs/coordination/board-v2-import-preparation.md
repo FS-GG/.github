@@ -1,5 +1,15 @@
 # Coordination V2 bounded import and pilot
 
+This document records the historical import/v1 pilot and bounded qualification windows below.
+Their selected counts, field snapshots and “current” references belong to those original windows;
+they are not the final programme-v4 enrollment or a fresh native observation. The current programme
+contract uses the same protected manifest path for a closed two-field public commitment, with the
+complete enrollment retained in the private binding. See the [owning cutover plan](2026-09-29-coordination-v2-board-design.md)
+and [maintained caller contract](../../tests/coord-board-v2-cli-join/INSPECT.md).
+`tools/board-v2-import.schema.json` continues to describe historical import/v1 only. The maintained
+constructor validates current public commitment shape separately; neither public shape validation
+nor offline pair preparation authenticates private enrollment or authorizes native changes.
+
 **COORD-BOARD-V2-01.2 passed on 2026-10-02.** Root created and read back
 [Coordination V2, Project 3](https://github.com/orgs/FS-GG/projects/3), established the four planning
 fields and four filtered views, and applied the three approved existing native issues. Independent

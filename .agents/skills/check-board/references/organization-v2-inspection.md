@@ -46,6 +46,15 @@ Require organization `bindingVersion: 4`, `schemaVersion: 2` and
 adapter/caller provenance and selected protected enrollment revision/blob independently of report
 claims. Historical organization-v2 output and product inspection/1 do not qualify this route.
 Enrollment pins exact native issue identities and plan paths, not their ordinary content revisions.
+Programme enrollment uses the fixed protected public two-field commitment document and a
+restrictive private binding carrying the complete payload plus random nonce. Authenticate all
+selected identities and plan paths without publishing them. Verify the matched
+`enrollmentCommitmentSha256` against public source provenance and supply that same required digest
+in the one-invocation integrator stdin; it is not authority by itself. Never copy private binding,
+payload or nonce into public reports, PRs, fixtures or instruction files. The maintained offline
+BoardV2Import pair constructor prepares files only; protected enrollment and qualified installed
+bytes remain necessary. Use a restrictive existing private directory for version-4 binding and
+exclusive report files, retaining any original partial outputs without automatic retry.
 Read fresh issue ID/update/body, current protected plan, native dependencies, PR/head/files/reviews/
 checks, human planning and complete membership with separate provenance. Changed content does not
 require reenrollment; changed governing population/schema does. LastVerified is history, not freshness.
@@ -74,13 +83,22 @@ considering another. Unselected alternatives are not reservations. Preserve non-
 PRs and every unresolved hold, even when its observation expires or its owner is absent. Self
 exemption requires the exact slice/attempt/operation/PR/head; it never settles the original effect.
 
-Continue the actual unambiguous owner/PR before assigning another implementation. Current deliverable
-links are discovery data, joined directly to native identity/state/head and complete open inventories.
-Historical merged/closed links coexist with current open work; their presence neither creates a
-second active implementation nor proves acceptance. Missing/conflicting owner, multiple active PRs,
-unknown action prerequisites or unsupported native paths withhold the affected action. Broad outcome
-scope alone does not reserve a whole repository; use actual current slice/files and canonical conflict
-rules. Multiple independent slices retain distinct identities/results under one outcome.
+Continue the actual unambiguous owner/PR before assigning another implementation. Read one complete
+six-field inline or heading record; ambiguous, mixed, duplicate or missing fields remain gaps.
+Current deliverable preserves bounded native text. Exact trimmed `None` declares no current work;
+nonempty prose and non-PR references remain declared work. Strict canonical PR references are
+discovery data joined to native identity/state/head and complete open inventories. Other links are
+not fetched; Next action and arbitrary history never supply inferred current associations.
+
+For each non-`None` declaration, require exactly one fresh proposed-action prerequisite with reference
+`current-deliverable`, joined to the native issue/body revision, supplying owner and exact slice and
+attempt. True means the owner reconciled this declaration against that action without duplication
+or conflict; it does not mean done, accepted, a released reservation or execution authority. False
+blocks; missing, duplicate, stale or mismatched evidence withholds the affected action. Native
+inventories, original uncertain holds, intake, scope and remaining capacity remain independent.
+Historical links neither become current nor prove acceptance. Review, qualification and observation
+of existing work retain their actual current native PR/head requirements. Broad outcome scope alone
+does not reserve a whole repository; independent slices retain distinct identities/results.
 
 Ready, continue-existing, blocked, needs-decision and unknown explain the proposed action only.
 Missing later publication/installed/operational acceptance may block activation while independent

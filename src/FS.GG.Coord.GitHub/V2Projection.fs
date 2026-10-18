@@ -4,6 +4,9 @@ module V2Projection =
 
     open System
     open System.Text.Json
+    open System.Text
+    open System.Security.Cryptography
+    open System.Buffers.Binary
     open Errors
     open Transport
     open Board
@@ -14,8 +17,11 @@ module V2Projection =
             Options: Map<string, string>
         }
 
+    type ProgrammeEnrollment = { NonceHex: string; PayloadBase64: string }
+
     type Binding =
         {
+            ProgrammeEnrollment: ProgrammeEnrollment option
             BindingVersion: int
             ImportRecipeRevision: string
             ImportArtifactSha256: string
@@ -116,7 +122,110 @@ module V2Projection =
                 && Int32.TryParse(issue.Substring(prefix.Length), &number) && number > 0
                 && issue = prefix + string number))
 
-    let validateBinding (binding: Binding) =
+    let private strictUtf8 = UTF8Encoding(false, true)
+    let private enrollmentSubject = "programme enrollment"
+    let private enrollmentFailure () = Error(Malformed(enrollmentSubject, "invalid-private-enrollment"))
+    let private closedObject (names: string list) (value: JsonElement) =
+        if value.ValueKind <> JsonValueKind.Object then invalidArg "enrollment" "object-required"
+        let actual = value.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+        if actual.Length <> names.Length || Set.ofList actual <> Set.ofList names then invalidArg "enrollment" "closed-schema-required"
+    let private strictDocument (limit: int) (bytes: byte array) =
+        if bytes.Length = 0 || bytes.Length > limit || (bytes.Length >= 3 && bytes[0] = 239uy && bytes[1] = 187uy && bytes[2] = 191uy) then
+            invalidArg "enrollment" "bounded-utf8-required"
+        strictUtf8.GetString bytes |> ignore
+        let document = JsonDocument.Parse(ReadOnlyMemory<byte>(bytes), JsonDocumentOptions(MaxDepth = 16))
+        try
+            let rec unique (value: JsonElement) =
+                match value.ValueKind with
+                | JsonValueKind.Object ->
+                    let names = Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+                    for entry in value.EnumerateObject() do
+                        if not (names.Add entry.Name) then invalidArg "enrollment" "duplicate-key"
+                        unique entry.Value
+                | JsonValueKind.Array -> for entry in value.EnumerateArray() do unique entry
+                | _ -> ()
+            unique document.RootElement
+            document
+        with _ -> document.Dispose(); reraise()
+    let private privateBytes (value: ProgrammeEnrollment) =
+        if isNull value.NonceHex || value.NonceHex.Length <> 64 || value.NonceHex |> Seq.exists (fun character -> not (Char.IsAsciiHexDigitLower character)) then
+            invalidArg "enrollment" "nonce-required"
+        if isNull value.PayloadBase64 || value.PayloadBase64.Length = 0 || value.PayloadBase64.Length > 174764 then invalidArg "enrollment" "payload-bound"
+        let bytes = Convert.FromBase64String value.PayloadBase64
+        if Convert.ToBase64String bytes <> value.PayloadBase64 then invalidArg "enrollment" "canonical-base64-required"
+        use document = strictDocument 131072 bytes
+        bytes
+
+    let programmeCommitment (value: ProgrammeEnrollment) : IoResult<string> =
+        try
+            let payload = privateBytes value
+            let nonce = Convert.FromHexString value.NonceHex
+            let prefix = Encoding.ASCII.GetBytes "fsgg.coordination-board-v2-enrollment/v3\u0000"
+            let length = Array.zeroCreate<byte> 8
+            BinaryPrimitives.WriteUInt64BigEndian(length.AsSpan(), uint64 payload.Length)
+            let bytes = Array.concat [ prefix; nonce; length; payload ]
+            Ok(Convert.ToHexStringLower(SHA256.HashData bytes))
+        with _ -> enrollmentFailure()
+
+    let private payloadRows (binding: Binding) (bytes: byte array) : IoResult<(string * string * string) list> =
+        try
+            use document = strictDocument 131072 bytes
+            let root = document.RootElement
+            closedObject [ "schema"; "target"; "binding"; "items" ] root
+            if root.GetProperty("schema").GetString() <> "fsgg.coordination-board-v2-enrollment-payload/v1" then invalidArg "enrollment" "schema"
+            let target = root.GetProperty "target"
+            closedObject [ "owner"; "organizationId"; "projectId"; "projectNumber"; "schemaVersion" ] target
+            let admission = root.GetProperty "binding"
+            closedObject [ "recipeRevision"; "artifactSha256"; "repositories" ] admission
+            let repositories = admission.GetProperty("repositories").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+            if target.GetProperty("owner").GetString() <> binding.Owner || target.GetProperty("organizationId").GetString() <> binding.OrganizationId
+               || target.GetProperty("projectId").GetString() <> binding.ProjectId || target.GetProperty("projectNumber").GetInt32() <> binding.ProjectNumber
+               || target.GetProperty("schemaVersion").GetInt32() <> binding.SchemaVersion
+               || admission.GetProperty("recipeRevision").GetString() <> binding.ImportRecipeRevision
+               || admission.GetProperty("artifactSha256").GetString() <> binding.ImportArtifactSha256
+               || repositories.Length <> binding.Repositories.Count || Set.ofList repositories <> binding.Repositories then invalidArg "enrollment" "scope"
+            let rows: (string * string * string) list =
+                root.GetProperty("items").EnumerateArray() |> Seq.map (fun row ->
+                    closedObject [ "issue"; "nodeId"; "roadmap" ] row
+                    let issue = row.GetProperty("issue").GetString()
+                    let node = row.GetProperty("nodeId").GetString()
+                    let roadmap = row.GetProperty("roadmap").GetString()
+                    if String.IsNullOrWhiteSpace node || String.IsNullOrWhiteSpace roadmap || roadmap.Length > 4096
+                       || Map.tryFind node binding.SelectedIssues <> Some issue then invalidArg "enrollment" "row"
+                    issue, node, roadmap) |> Seq.toList
+            if rows.Length <> binding.SelectedIssues.Count || rows.IsEmpty || rows.Length > 100
+               || (rows |> List.map (fun (_, node, _) -> node) |> Set.ofList |> Set.count) <> rows.Length
+               || (rows |> List.map (fun (issue, _, _) -> issue) |> Set.ofList |> Set.count) <> rows.Length then invalidArg "enrollment" "cohort"
+            Ok rows
+        with _ -> enrollmentFailure()
+
+    let programmeRows (binding: Binding) : IoResult<(string * string * string) list> =
+        try
+            match binding.ProgrammeEnrollment with
+            | Some value when binding.BindingVersion = 4 -> privateBytes value |> payloadRows binding
+            | _ -> enrollmentFailure()
+        with _ -> enrollmentFailure()
+
+    let decodeProgrammePublicCommitment (publicJson: string) : IoResult<string> =
+        try
+            use document = strictDocument 1024 (strictUtf8.GetBytes publicJson)
+            let root = document.RootElement
+            closedObject [ "schema"; "commitmentSha256" ] root
+            let expected = root.GetProperty("commitmentSha256").GetString()
+            if root.GetProperty("schema").GetString() <> "fsgg.coordination-board-v2-enrollment/v3"
+               || isNull expected || expected.Length <> 64 || expected |> Seq.exists (fun character -> not (Char.IsAsciiHexDigitLower character)) then invalidArg "enrollment" "public-schema"
+            Ok expected
+        with _ -> enrollmentFailure()
+
+    let authenticateProgrammeEnrollment (binding: Binding) (publicJson: string) : IoResult<(string * string * string) list> =
+        decodeProgrammePublicCommitment publicJson |> Result.bind (fun expected ->
+            match binding.ProgrammeEnrollment with
+            | Some value ->
+                programmeCommitment value |> Result.bind (fun actual ->
+                    if actual <> expected then enrollmentFailure() else programmeRows binding)
+            | None -> enrollmentFailure())
+
+    let private validateBindingCore (binding: Binding) =
         let subject = "the Coordination V2 binding"
         let allFieldIds = [ binding.Status.Id; binding.RoadmapFieldId; binding.Track.Id; binding.Observation.Id ]
 
@@ -174,6 +283,91 @@ module V2Projection =
                 match validateSelect "Track" expectedTrack binding.Track with
                 | Error error -> Error error
                 | Ok() -> validateSelect "Observation" expectedObservation binding.Observation
+
+    let validateBinding (binding: Binding) =
+        validateBindingCore binding |> Result.bind (fun () ->
+            if binding.BindingVersion = 4 then programmeRows binding |> Result.map ignore
+            elif binding.ProgrammeEnrollment.IsSome then enrollmentFailure()
+            else Ok())
+
+    let private text (name: string) (element: JsonElement) = element.GetProperty(name).GetString()
+    let private number (name: string) (element: JsonElement) = element.GetProperty(name).GetInt32()
+    let private closed = closedObject
+
+    let private decodeBindingCore (allowDraft: bool) (json: string) =
+        try
+            if isNull json || json.Length = 0 || json.Length > 262144 then invalidArg "binding" "binding-byte-bound"
+            use document = strictDocument 262144 (strictUtf8.GetBytes json)
+            let root = document.RootElement
+            let version = number "bindingVersion" root
+            if version = 4 && number "schemaVersion" root <> 2 then Error "invalid binding: binding and schema versions disagree"
+            else
+                let fields = [ "bindingVersion"; "importRecipeRevision"; "importArtifactSha256"; "selectedIssues"; "schemaVersion"; "recipeRevision"; "populationRevision"; "organizationId"; "artifactSha256"; "ownerKind"; "owner"; "projectNumber"; "projectTitle"; "projectId"; "status"; "roadmapFieldId"; "track"; "observation"; "repositories" ]
+                closed (if version = 4 && not allowDraft then fields @ [ "programmeEnrollment" ] else fields) root
+                if text "ownerKind" root <> "organization" then invalidArg "ownerKind" "only organization is admitted"
+                let field (name: string) =
+                    let value = root.GetProperty(name)
+                    closed [ "id"; "options" ] value
+                    let options = value.GetProperty("options").EnumerateObject() |> Seq.map (fun item -> item.Name, item.Value.GetString()) |> Seq.toList
+                    if options.Length <> (options |> Map.ofList |> Map.count) then invalidArg "options" "duplicate options"
+                    { Id = text "id" value; Options = Map.ofList options }
+                let repositories = root.GetProperty("repositories").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+                if repositories.Length <> (repositories |> Set.ofList |> Set.count) then invalidArg "repositories" "duplicate repositories"
+                let selected = root.GetProperty("selectedIssues").EnumerateObject() |> Seq.map (fun entry -> entry.Name, entry.Value.GetString()) |> Seq.toList
+                if selected.Length <> (selected |> Map.ofList |> Map.count) then invalidArg "selectedIssues" "duplicate native issue IDs"
+                let binding =
+                    { ProgrammeEnrollment =
+                        (if version = 4 && not allowDraft then
+                            let value = root.GetProperty "programmeEnrollment"
+                            closed [ "nonceHex"; "payloadBase64" ] value
+                            Some { NonceHex = text "nonceHex" value; PayloadBase64 = text "payloadBase64" value }
+                         else None)
+                      BindingVersion = version; ImportRecipeRevision = text "importRecipeRevision" root
+                      ImportArtifactSha256 = text "importArtifactSha256" root
+                      SelectedIssues = Map.ofList selected
+                      SchemaVersion = number "schemaVersion" root; RecipeRevision = text "recipeRevision" root
+                      PopulationRevision = text "populationRevision" root; OrganizationId = text "organizationId" root
+                      ArtifactSha256 = text "artifactSha256" root; OwnerKind = Org; Owner = text "owner" root
+                      ProjectNumber = number "projectNumber" root; ProjectTitle = text "projectTitle" root; ProjectId = text "projectId" root
+                      Status = field "status"; RoadmapFieldId = text "roadmapFieldId" root; Track = field "track"
+                      Observation = field "observation"; Repositories = Set.ofList repositories }
+                // Version 3 uses this same closed wire shape for a selected receiver repository.
+                // Local-only workspaces select no board command; no implicit binding is constructed.
+                (if allowDraft then validateBindingCore binding else validateBinding binding) |> Result.map (fun () -> binding) |> Result.mapError Errors.explain
+        with _ -> Error "invalid binding: unknown, missing or duplicate properties; closed bounded schema or private enrollment refused"
+
+    let decodeBinding (json: string) = decodeBindingCore false json
+
+    let prepareProgrammeBinding (bindingTemplateJson: string) (payload: byte array) (nonceFactory: unit -> byte array) : IoResult<string * string> =
+        try
+            match decodeBindingCore true bindingTemplateJson with
+            | Error _ -> enrollmentFailure()
+            | Ok binding when binding.BindingVersion <> 4 -> enrollmentFailure()
+            | Ok binding ->
+                payloadRows binding payload |> Result.bind (fun _ ->
+                    let encoded = Convert.ToBase64String payload
+                    let privateEnvelope (nonceHex: string) =
+                        let root = System.Text.Json.Nodes.JsonNode.Parse bindingTemplateJson
+                        let privateNode = System.Text.Json.Nodes.JsonObject()
+                        privateNode.Add("nonceHex", System.Text.Json.Nodes.JsonValue.Create nonceHex)
+                        privateNode.Add("payloadBase64", System.Text.Json.Nodes.JsonValue.Create encoded)
+                        root.AsObject().Add("programmeEnrollment", privateNode)
+                        root.ToJsonString()
+                    // Fixed-width internal sizing witness only; never an emitted or admitted nonce.
+                    let sizingWitness = privateEnvelope (String.replicate 64 "0")
+                    match decodeBinding sizingWitness with
+                    | Error _ -> enrollmentFailure()
+                    | Ok _ ->
+                        let nonce = nonceFactory()
+                        if isNull nonce || nonce.Length <> 32 then enrollmentFailure()
+                        else
+                            let enrollment: ProgrammeEnrollment = { NonceHex = Convert.ToHexStringLower nonce; PayloadBase64 = encoded }
+                            programmeCommitment enrollment |> Result.map (fun commitment ->
+                                let publicNode = System.Text.Json.Nodes.JsonObject()
+                                publicNode.Add("schema", System.Text.Json.Nodes.JsonValue.Create "fsgg.coordination-board-v2-enrollment/v3")
+                                publicNode.Add("commitmentSha256", System.Text.Json.Nodes.JsonValue.Create commitment)
+                                privateEnvelope enrollment.NonceHex, publicNode.ToJsonString()))
+        with _ -> enrollmentFailure()
 
     let private sameOptions expected actual = expected = actual
 

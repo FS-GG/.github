@@ -55,7 +55,7 @@ module V2ProjectionSource =
     /// Version 2 retains the organization manifest. Version 3 reads the same import/v1 manifest path
     /// from its sole selected receiver repository, checks its pinned/current main blob and reads only
     /// that repository's canonical docs/native plan. Product metadata never comes from the organization
-    /// manifest. Version 4 uses exact enrollment/v2 identities and current native closure/dependencies/
+    /// manifest. Version 4 authenticates exact private payload identities through the protected enrollment/v3 commitment and current native closure/dependencies/
     /// plan facts. Exact protected enrollment may declare HTTPS GitHub blob URLs in the bound
     /// repositories: docs paths or the maintained programme observation reference. Main resolves to
     /// a fresh native commit/blob each observation; immutable 40-hex plan refs remain pinned.
@@ -106,6 +106,8 @@ module V2ProjectionSource =
         { Supplier: string; ObservedAt: DateTimeOffset; ValidUntil: DateTimeOffset; Evidence: string list }
     type SliceJoin =
         { NativeId: string; UpdatedAt: string; BodySha256: string; SourceRevision: string }
+    /// Non-None declared work requires exactly one proposed-action reference "current-deliverable".
+    /// True reconciles scoped nonduplication under the fresh exact body/plan join, never completion or authority.
     type Prerequisite = { Action: Action; Reference: string; Satisfied: bool option; SupplyingOwner: string }
     type CurrentSlice =
         { Id: string; Attempt: string; Operation: Operation; Issue: IssueRef
@@ -118,7 +120,7 @@ module V2ProjectionSource =
           PullRequest: string option; Head: string option; CustodyReference: string }
     type SelectionContext =
         { Invocation: string; ProjectId: string; SchemaVersion: int; RecipeRevision: string; ArtifactSha256: string
-          PopulationRevision: string; EnrollmentBlob: string; InputSha256: string
+          PopulationRevision: string; EnrollmentBlob: string; EnrollmentCommitment: string; InputSha256: string
           Slices: CurrentSlice list; ImplementationSlots: int option; ReviewSlots: int option; HostedCiSlots: int option
           CapacityMeaning: string; CapacityObservation: AttributedObservation option
           Reservations: Reservation list option; ReservationObservation: AttributedObservation option
@@ -131,10 +133,12 @@ module V2ProjectionSource =
     type NativeIntakeObservation =
         { Admission: BoardIntake.Admission option; Allowed: bool option; ObservedAt: DateTimeOffset; Gap: IoError option }
 
+    /// CurrentDeliverable retains bounded native field text (16KiB UTF-8); exact "None" declares absence.
+    /// Deliverables contains only canonical selected-repository PR discovery hints, joined independently.
     type InspectionItem =
         { Evidence: ItemReport; ExpectedNodeId: string; SourceCurrentness: string
           Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list; Owner: string option; SourceRevision: string option
-          Deliverables: string list; DeliverableGap: string option; Intake: NativeIntakeObservation }
+          CurrentDeliverable: string option; Deliverables: string list; DeliverableGap: string option; Intake: NativeIntakeObservation }
 
     type InspectionReport =
         { Binding: Binding; Evidence: BatchReport; Items: InspectionItem list

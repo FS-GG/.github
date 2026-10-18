@@ -4,7 +4,9 @@ namespace FS.GG.Coord.Cli
 module BoardV2Application =
     open FS.GG.Coord.GitHub
 
-    /// Decode the same closed wire shape for historical organization v2, receiver v3 or source-only programme v4.
+    /// Decode bounded closed historical v2/product v3 shapes and the v4-only private enrollment envelope.
+    /// Binding UTF-8 is at most256KiB/depth16; private decoded payload at most128KiB/depth16.
+    /// Exact original bytes/nonce must match the current protected public commitment before enrollment.
     /// Product mode requires its selected organization-owned project, one repository and native cohort;
     /// no organization default, user-owned execution or legacy board fallback is introduced.
     val parseBinding: json: string -> Result<V2Projection.Binding, string>
@@ -13,7 +15,7 @@ module BoardV2Application =
     /// null explicitly means a missing capacity/reservation observation, never an empty population.
     /// Bounds: 262144 UTF-8 bytes, depth 12, 64 unique slices, 256 reservations, 128 paths or
     /// prerequisites per slice, 16 evidence references per observation and nonnegative counts <=10000.
-    /// Exact project/schema/recipe/artifact/population and enrolled issue identities are mandatory.
+    /// Exact project/schema/recipe/artifact/population, enrollmentCommitmentSha256 and enrolled issue identities are mandatory.
     /// Native issue ID/update/body/source-plan revision and PR ID/update/head are joined after reads.
     /// Original observation/expiry intervals are retained; decoding never renews a supplier fact.
     /// InputSha256 hashes the strict UTF-8 encoding of the received document text, not an authentication token.
@@ -42,6 +44,8 @@ module BoardV2Application =
     /// The injected reader avoids process-global Console changes; input is consumed once and never cached.
     /// No flag leaves the reader untouched. Refresh and product bindings refuse the flag before reading it.
     /// Native queries/permission reads retain the existing shared request/time budget and no-disk intake gate.
+    /// V4 file acquisition is bounded on one opened handle; binding/report parents must be private and
+    /// nonsymlink. Reports are exclusive0600 with the supported directory barrier, never raw payload/nonce.
     /// Missing runtime suppliers and relevant native gaps remain attributed Unknown, without blocking inspection.
     val runWithTransportAndInput:
         transport: Transport.IGitHubTransport -> reader: System.IO.TextReader -> arguments: string list -> int
