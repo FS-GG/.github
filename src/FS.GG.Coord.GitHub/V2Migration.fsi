@@ -70,6 +70,11 @@ module V2Migration =
         | CreateView of DesiredView
         | UpdateView of viewId: string * DesiredView
 
+    /// A complete read proves the exact effect or still shows its exact pre-effect state.
+    type ReadbackObservation =
+        | ObservedEffect of Scope
+        | PendingVisibility
+
     type Prepared =
         { Scope: Scope; Snapshot: Snapshot; Changes: Change list; OwnerActions: string list;
           Digest: string; PreparedPath: string option }
@@ -109,6 +114,14 @@ module V2Migration =
     /// Check one independent readback. Only the selected effect may differ; retained human values,
     /// option identities, unrelated cards/fields/views and determining native issue facts must agree.
     val validateTransition: scope: Scope -> before: Snapshot -> after: Snapshot -> change: Change -> IoResult<unit>
+
+    /// Classify one complete read after a clear correlated native success. An observed effect
+    /// binds its returned identity and exact transition in this same snapshot. Pending visibility
+    /// permits read-only observation of the exact pre-effect state, never another send or NoSend.
+    /// Malformed/partial/uncorrelated responses must not enter this path; the caller retains its
+    /// original evidence and enforces the shared request/time/planning window without renewal.
+    val observeTransition:
+        scope: Scope -> before: Snapshot -> after: Snapshot -> change: Change -> returnedId: string -> IoResult<ReadbackObservation>
 
     /// Stable determining native identity excluding collection time.
     val snapshotDigest: snapshot: Snapshot -> string

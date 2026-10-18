@@ -62,6 +62,10 @@ module V2Migration =
         | CreateView of DesiredView
         | UpdateView of viewId: string * DesiredView
 
+    type ReadbackObservation =
+        | ObservedEffect of Scope
+        | PendingVisibility
+
     type Prepared =
         { Scope: Scope; Snapshot: Snapshot; Changes: Change list; OwnerActions: string list;
           Digest: string; PreparedPath: string option }
@@ -813,6 +817,51 @@ module V2Migration =
                     | _ -> false
             if reconciled then Ok()
             else invalid "readback differs beyond the one exact effect; preserve original intent and stop writes for reconciliation"
+    let observeTransition (scope: Scope) (before: Snapshot) (after: Snapshot) (change: Change) (returnedId: string) : IoResult<ReadbackObservation> =
+        let identityPossible =
+            bounded 256 returnedId
+            && (match change with
+                | AddInReview(fieldId, _, _, _) -> returnedId = fieldId
+                | InitializePlanningValue(_, itemId, _, _) -> returnedId = itemId
+                | UpdateView(viewId, _) -> returnedId = viewId
+                | AddMembership _ -> before.Items |> List.forall (fun (item: Item) -> item.Id <> returnedId)
+                | CreateView _ -> before.Views |> List.forall (fun (view: View) -> view.Id <> returnedId))
+        let observedIdentity =
+            match change with
+            | AddInReview(fieldId, _, _, _) -> Some fieldId
+            | InitializePlanningValue(_, itemId, _, _) -> Some itemId
+            | UpdateView(viewId, _) -> Some viewId
+            | AddMembership issueId ->
+                after.Items |> List.filter (fun (item: Item) -> item.ContentId = issueId)
+                |> function [ item ] -> Some item.Id | _ -> None
+            | CreateView desired ->
+                after.Views |> List.filter (fun (view: View) -> view.Name = desired.Name)
+                |> function [ view ] -> Some view.Id | _ -> None
+        // The only pending state is the exact complete pre-effect observation.
+        // Reuse the already allowed target item timestamp change for initialization;
+        // no issue facts, other item timestamps, values or orthogonal view facts move.
+        let pending =
+            let items: Item list =
+                match change with
+                | InitializePlanningValue(issueId, itemId, _, _) ->
+                    after.Items |> List.map (fun (item: Item) ->
+                        match before.Items |> List.tryFind (fun (original: Item) -> original.Id = itemId && original.ContentId = issueId) with
+                        | Some original when item.Id = itemId && item.ContentId = issueId -> { item with UpdatedAt = original.UpdatedAt }
+                        | _ -> item)
+                | _ -> after.Items
+            let normalized: Snapshot =
+                { after with ObservedAt = before.ObservedAt; UpdatedAt = before.UpdatedAt; Items = items }
+            snapshotTokens normalized = snapshotTokens before
+        prepare scope before |> Result.bind (fun prepared ->
+            if not identityPossible || not (List.contains change prepared.Changes) then
+                invalid "correlated native result identity or original selected effect differs"
+            else
+                match validateTransition scope before after change with
+                | Ok() when observedIdentity = Some returnedId ->
+                    resolveReadback scope before after change |> Result.map ObservedEffect
+                | Ok() -> invalid "independent effect identity differs from correlated native result"
+                | Error _ when pending -> Ok PendingVisibility
+                | Error error -> Error error)
     let snapshotDigest (snapshot: Snapshot) = hash (snapshotTokens snapshot)
     let encodeReadback (scope: Scope) (snapshot: Snapshot) =
         let root =

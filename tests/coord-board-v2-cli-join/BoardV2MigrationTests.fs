@@ -56,6 +56,13 @@ module BoardV2MigrationTests =
         inherit TimeProvider()
         let mutable now = initial
         override _.GetUtcNow() = now
+        override _.CreateTimer(callback: System.Threading.TimerCallback, state: obj, dueTime: TimeSpan, _: TimeSpan) =
+            now <- now + dueTime
+            callback.Invoke state
+            { new System.Threading.ITimer with
+                member _.Change(_: TimeSpan, _: TimeSpan) = false
+                member _.Dispose() = ()
+                member _.DisposeAsync() = System.Threading.Tasks.ValueTask() }
         member _.Advance(duration: TimeSpan) = now <- now + duration
 
     [<Fact>]
@@ -817,3 +824,192 @@ module BoardV2MigrationTests =
             Assert.Single writer.Native.Mutations |> ignore
             Assert.Equal(exactResponse, File.ReadAllText(Path.Combine(path + ".invocation", "001-response.json")))
             Assert.True(File.Exists(Path.Combine(path + ".invocation", "001-native-readback.json")))
+
+    [<Fact>]
+    let ``retained original002 shape waits for exact membership visibility and preserves five prior cards`` () =
+        use fixture = new Fixture()
+        let selected, observed = original002()
+        let fields: Field list =
+            observed.Fields |> List.map (fun (field: Field) ->
+                if field.Id = scope.StatusFieldId then
+                    { field with Options = (field.Options |> List.filter (fun (option: SelectOption) -> option.Name <> "In review")) }
+                else field)
+        fixture.Scope <- { fixture.Scope with SelectedIssues = selected.SelectedIssues }
+        fixture.Native.Snapshot <- { observed with Fields = fields }
+        let code, path = fixture.Prepare "original002-sanitized"
+        Assert.Equal(0, code)
+        fixture.Native.BeforeDispatch <- fun (_: Transport.Request) ->
+            fixture.Native.VisibilityDelay <- (if fixture.Native.Mutations.Length = 2 then 6 else 0)
+        let clock = ManualTime(DateTimeOffset.UtcNow)
+        let started = clock.GetUtcNow()
+        Assert.Equal(0, fixture.RunWithCustody(ignore, clock, fixture.ApplyArguments path))
+        Assert.Equal<TimeSpan>(TimeSpan.FromSeconds 30.0, clock.GetUtcNow() - started)
+        Assert.Equal(18, fixture.Native.Mutations.Length)
+        Assert.Equal(22, fixture.Native.Snapshot.Items.Length)
+        for prior in observed.Items do
+            Assert.Equal<Item>(prior, fixture.Native.Snapshot.Items |> List.find (fun (item: Item) -> item.Id = prior.Id))
+        let directory = path + ".invocation"
+        use before = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "002-precondition.json")))
+        use first = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "002-native-readback.json")))
+        let tokens (document: JsonDocument) : string array =
+            document.RootElement.GetProperty("snapshot").EnumerateArray() |> Seq.map _.GetString() |> Seq.toArray
+        let original, stale = tokens before, tokens first
+        Assert.Equal(436, original.Length)
+        Assert.Equal(436, stale.Length)
+        let differences: int list = [ 0 .. original.Length - 1 ] |> List.filter (fun index -> original.[index] <> stale.[index])
+        Assert.Equal<int list>([ 8 ], differences)
+        for attempt in 2 .. 7 do
+            Assert.True(File.Exists(Path.Combine(directory, "002-visibility-" + attempt.ToString("D3") + "-native-readback.json")))
+        let beforeRepeat = fixture.Native.Mutations.Length
+        let repeatCode, repeatPath = fixture.Prepare "original002-reconciled"
+        Assert.Equal(0, repeatCode)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments repeatPath))
+        Assert.Equal(beforeRepeat, fixture.Native.Mutations.Length)
+        Assert.True(fixture.Native.Requests.Length + fixture.Native.Mutations.Length < 500)
+
+    [<Fact>]
+    let ``all sibling effects wait only for complete pre-effect observations under the original caller`` () =
+        use fixture = new Fixture()
+        let existing: View =
+            { Id = "synthetic-existing-view"; Name = "synthetic existing"; Layout = "TABLE_LAYOUT"; Filter = "";
+              VisibleFieldIds = [ scope.StatusFieldId ]; UnsupportedConfiguration = "[[\"\"],[],[],[]]" }
+        let desiredExisting: DesiredView =
+            { Id = Some existing.Id; Name = existing.Name; Layout = existing.Layout; Filter = "status:Blocked";
+              VisibleFieldIds = existing.VisibleFieldIds }
+        let desiredNew: DesiredView =
+            { Id = None; Name = "synthetic eventual new"; Layout = "TABLE_LAYOUT"; Filter = "status:Blocked";
+              VisibleFieldIds = [ scope.StatusFieldId ] }
+        fixture.Scope <-
+            { fixture.Scope with InitialPlanning = [ declaration "synthetic-issue" "Blocked" ]; Views = [ desiredExisting; desiredNew ] }
+        fixture.Native.Snapshot <- { (planningSchema snapshot) with Views = [ existing ] }
+        let code, path = fixture.Prepare "all-sibling-visibility"
+        Assert.Equal(0, code)
+        fixture.Native.VisibilityDelay <- 1
+        let clock = ManualTime(DateTimeOffset.UtcNow)
+        let started = clock.GetUtcNow()
+        Assert.Equal(0, fixture.RunWithCustody(ignore, clock, fixture.ApplyArguments path))
+        Assert.Equal(8, fixture.Native.Mutations.Length)
+        Assert.Equal<TimeSpan>(TimeSpan.FromSeconds 40.0, clock.GetUtcNow() - started)
+        for sequence in 1 .. 8 do
+            let prefix = Path.Combine(path + ".invocation", sequence.ToString("D3"))
+            Assert.True(File.Exists(prefix + "-response.json"))
+            Assert.True(File.Exists(prefix + "-native-readback.json"))
+            Assert.True(File.Exists(prefix + "-visibility-002-native-readback.json"))
+        Assert.True(fixture.Native.Requests.Length + fixture.Native.Mutations.Length < 500)
+
+    [<Fact>]
+    let ``pending visibility is finite and preserves original intent without replay`` () =
+        use fixture = new Fixture()
+        let code, path = fixture.Prepare "unseen-effect"
+        Assert.Equal(0, code)
+        fixture.Native.VisibilityDelay <- 100
+        let clock = ManualTime(DateTimeOffset.UtcNow)
+        let started = clock.GetUtcNow()
+        Assert.Equal(3, fixture.RunWithCustody(ignore, clock, fixture.ApplyArguments path))
+        Assert.Single fixture.Native.Mutations |> ignore
+        Assert.Equal<TimeSpan>(TimeSpan.FromSeconds 30.0, clock.GetUtcNow() - started)
+        let directory = path + ".invocation"
+        let response = File.ReadAllBytes(Path.Combine(directory, "001-response.json"))
+        Assert.True(File.Exists(Path.Combine(directory, "001-visibility-007-native-readback.json")))
+        Assert.False(File.Exists(Path.Combine(directory, "001-visibility-008-native-readback.json")))
+        use terminal = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "terminal.json")))
+        Assert.Equal<string>("Unknown-visibility-observation-exhausted-original-intent-retained", terminal.RootElement.GetProperty("failureCode").GetString())
+        Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
+        Assert.Single fixture.Native.Mutations |> ignore
+        Assert.Equal<byte>(response, File.ReadAllBytes(Path.Combine(directory, "001-response.json")))
+
+    [<Fact>]
+    let ``pending observations stop on native contradiction partial errors or uncorrelated responses without waiting`` () =
+        let cases: string list = [ "issue"; "principal"; "partial"; "read-error"; "correlation"; "errors"; "null-result"; "wrong-result"; "lost-response" ]
+        for mode in cases do
+            use fixture = new Fixture()
+            let code, path = fixture.Prepare ("pending-refusal-" + mode)
+            Assert.Equal(0, code)
+            fixture.Native.VisibilityDelay <- 1
+            fixture.Native.FailAfterEffect <- (mode = "lost-response")
+            fixture.Native.TransformDispatch <- fun (_: Transport.Request) (response: Transport.Response) ->
+                let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+                let payload = root.["data"].["updateProjectV2Field"]
+                match mode with
+                | "correlation" -> payload.["clientMutationId"] <- System.Text.Json.Nodes.JsonValue.Create "synthetic-wrong-correlation"
+                | "errors" -> root.["errors"] <- System.Text.Json.Nodes.JsonNode.Parse "[{\"message\":\"synthetic partial failure\"}]"
+                | "null-result" -> payload.["projectV2Field"] <- null
+                | "wrong-result" -> payload.["projectV2Field"].["id"] <- System.Text.Json.Nodes.JsonValue.Create "synthetic-wrong-field"
+                | _ -> ()
+                Ok ({ response with Body = root.ToJsonString() })
+            fixture.Native.Transform <- fun (request: Transport.Request) (response: Transport.Response) ->
+                match request.Body with
+                | Transport.Query(document, _) when fixture.Native.Mutations.Length > 0 && document.Contains("fields(first:") ->
+                    if mode = "read-error" then Error(Errors.Transport "synthetic determining read unavailable")
+                    else
+                        let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+                        if mode = "issue" then root.["data"].["issue0"].["updatedAt"] <- System.Text.Json.Nodes.JsonValue.Create "2026-10-18T01:00:00Z"
+                        if mode = "principal" then root.["data"].["viewer"].["login"] <- System.Text.Json.Nodes.JsonValue.Create "synthetic-other-principal"
+                        if mode = "partial" then
+                            let page = root.["data"].["organization"].["projectV2"].["items"].["pageInfo"]
+                            page.["hasNextPage"] <- System.Text.Json.Nodes.JsonValue.Create true
+                            page.["endCursor"] <- null
+                        Ok ({ response with Body = root.ToJsonString() })
+                | _ -> Ok response
+            let clock = ManualTime(DateTimeOffset.UtcNow)
+            let started = clock.GetUtcNow()
+            Assert.Equal(3, fixture.RunWithCustody(ignore, clock, fixture.ApplyArguments path))
+            Assert.Single fixture.Native.Mutations |> ignore
+            Assert.Equal<DateTimeOffset>(started, clock.GetUtcNow())
+            Assert.False(File.Exists(Path.Combine(path + ".invocation", "001-visibility-002-native-readback.json")))
+            Assert.True(File.Exists(Path.Combine(path + ".invocation", (if mode = "lost-response" then "001-error.json" else "001-response.json"))))
+
+    [<Fact>]
+    let ``pending visibility cannot wait past the original planning window or connection window`` () =
+        for mode in [ "planning"; "connection"; "after-wait" ] do
+            use fixture = new Fixture()
+            let code, path = fixture.Prepare ("pending-window-" + mode)
+            Assert.Equal(0, code)
+            fixture.Native.VisibilityDelay <- 100
+            let clock = ManualTime(DateTimeOffset.UtcNow)
+            let started = clock.GetUtcNow()
+            let args = fixture.ApplyArguments path
+            let planningUntil = DateTimeOffset.Parse(args |> List.last, Globalization.CultureInfo.InvariantCulture)
+            if mode = "planning" then clock.Advance(planningUntil - started - TimeSpan.FromSeconds 4.0)
+            use connection = fixture.Native.Connection()
+            let remaining () =
+                if mode = "connection" && not fixture.Native.Mutations.IsEmpty then TimeSpan.FromSeconds 4.0
+                elif mode = "after-wait" && clock.GetUtcNow() > started then TimeSpan.Zero
+                else connection.RemainingTime
+            use bounded =
+                { new V2MigrationTransport.IConnection with
+                    member _.Reads = connection.Reads
+                    member _.ObservationReads(until: DateTimeOffset) = connection.ObservationReads until
+                    member _.RemainingTime = remaining()
+                    member _.Dispatch(prepared: Prepared, change: Change, until: DateTimeOffset) = connection.Dispatch(prepared, change, until)
+                    member _.Dispose() = () }
+            Assert.Equal(3, BoardV2Application.runMigrationWithCustody bounded ignore clock args)
+            Assert.Single fixture.Native.Mutations |> ignore
+            let elapsed = clock.GetUtcNow() - (if mode = "planning" then planningUntil - TimeSpan.FromSeconds 4.0 else started)
+            Assert.Equal<TimeSpan>((if mode = "after-wait" then TimeSpan.FromSeconds 5.0 else TimeSpan.Zero), elapsed)
+            Assert.False(File.Exists(Path.Combine(path + ".invocation", "001-visibility-002-native-readback.json")))
+
+    [<Fact>]
+    let ``pending visibility shares the actual 500 request ceiling and never dispatches again`` () =
+        use fixture = new Fixture()
+        let code, path = fixture.Prepare "pending-request-ceiling"
+        Assert.Equal(0, code)
+        fixture.Native.VisibilityDelay <- 1000
+        let initialReads = fixture.Native.Requests.Length
+        use connection = fixture.Native.Connection()
+        let mutable filled = false
+        let sourceClock = ManualTime(DateTimeOffset.UtcNow)
+        let clock =
+            { new TimeProvider() with
+                override _.GetUtcNow() = sourceClock.GetUtcNow()
+                override _.CreateTimer(callback: System.Threading.TimerCallback, state: obj, dueTime: TimeSpan, period: TimeSpan) =
+                    if not filled then
+                        filled <- true
+                        let request: Transport.Request = fixture.Native.Requests.Head
+                        while fixture.Native.Requests.Length - initialReads + fixture.Native.Mutations.Length < 499 do
+                            connection.Reads.Send request |> get |> ignore
+                    sourceClock.CreateTimer(callback, state, dueTime, period) }
+        Assert.Equal(3, BoardV2Application.runMigrationWithCustody connection ignore clock (fixture.ApplyArguments path))
+        Assert.True filled
+        Assert.Single fixture.Native.Mutations |> ignore
+        Assert.Equal(500, fixture.Native.Requests.Length - initialReads + fixture.Native.Mutations.Length)

@@ -8,6 +8,12 @@ module V2MigrationTransport =
     type IConnection =
         inherit IDisposable
         abstract Reads: Transport.IGitHubTransport
+        /// Remaining duration on the same original 270-second composition clock; zero after disposal.
+        /// Observation waits consume this window and cannot renew it.
+        abstract RemainingTime: TimeSpan
+        /// The same fixed-query reader and original budget, additionally bounded at acquisition
+        /// by the selected apply planning deadline. This neither renews budget nor admits effects.
+        abstract ObservationReads: planningWindowUntil: DateTimeOffset -> Transport.IGitHubTransport
         /// Reconstructs exactly one allowlisted typed effect. No automatic retry or redirect.
         abstract Dispatch: prepared: V2Migration.Prepared * change: V2Migration.Change * planningWindowUntil: DateTimeOffset -> IoResult<Transport.Response>
 
