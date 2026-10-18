@@ -1,11 +1,12 @@
-# Temporary Unified Roadmap driver
+# Programme coordination and retained driver history
 
 
 ## Canonical board coordinator migration — 2026-10-18
 
 The user selected existing `$work-board` as the canonical coordinator, replacing the active
-`$work-programme` workflow. This source migration remains owned by [.github#4641](https://github.com/FS-GG/.github/issues/4641);
-its whole integrated restart/adoption/recovery Done when remains open. Organization current selection
+`$work-programme` workflow. The bounded source delivery is [.github#4677](https://github.com/FS-GG/.github/issues/4677)
+under [.github#4641](https://github.com/FS-GG/.github/issues/4641), whose full integrated
+restart/adoption/recovery Done when remains open. Organization current selection
 uses accepted Project 3 binding4/schema2/inspection2 and the authenticated qualified installed caller;
 products retain their selected V2 binding and provenance. Roadmaps retain strategic scope and actual
 technical acceptance/history without duplicate scheduling, current-status or closure upkeep.
@@ -13,7 +14,7 @@ technical acceptance/history without duplicate scheduling, current-status or clo
 Required source closure includes both skill mirrors and UI/discovery metadata, recovery/routine callers,
 producer registries/manifests, executable package staging and actual product materialization. Canonical
 work-board is normally discoverable; other explicit-only entrypoints retain their policy. Old programme
-paths are compatibility redirects/diagnostic shims, never a second planner. The unchanged organization
+paths are compatibility redirects/diagnostic shims, never a second planner. The canonical organization
 inspection contract is derived into Drivers and checked against its Kit source digest for offline closure.
 External Roadmap field, roadmap-telemetry, persisted schemas/producer IDs and helper command basenames
 stay compatible. Qualified CLI 0.105 accepts the historical observation provenance path; the successor
@@ -22,9 +23,10 @@ binding, enrollment or executing selector. Preserve all 439 inherited and 46 lat
 
 Coherent 0.107 source preparation does not claim publication or installed adoption. Acceptance needs
 independent realistic programme-continuation/product-selection/blocked-lane/old-handoff journeys,
-required CI, exact reviewed/tested/delivered correspondence, later publication and actual selected
-absolute-path/runtime-policy discovery (including project overrides), plus separately qualified caller
-adoption where compiled support changes. Historical evidence below retains its original scope and times.
+required CI and exact reviewed/tested/delivered correspondence. The separate parent outcome additionally
+requires later publication, actual selected absolute-path/runtime-policy discovery (including project
+overrides) and qualified caller adoption where compiled support changes. Historical evidence below
+retains its original scope and times.
 
 The selected source scope also implements explicit outcome/delivery classification, bounded native
 hierarchy and scoped closure reporting through binding5/schema3/inspection3/integrator2. Current qualified
@@ -33,6 +35,12 @@ migration writer adds one Work level field and absent-only explicit classificati
 view identities/orthogonal settings, and never repurposes Status/Track/Roadmap or automatically closes
 parents. Root selects exact native field/classification/view/enrollment effects in a separate admitted
 window; no schema mutation, membership expansion or caller activation is claimed by this plan update.
+
+## Retained roadmap-driver history
+
+The following decisions, technical acceptance obligations and evidence retain their original scope.
+Canonical work-board and the selected V2 binding govern current coordination; historical scheduling,
+manual current-status and closure-projection mechanics below are not a second active planner.
 
 Current open scope: [Unified Roadmap v3](2026-10-07-unified-development-roadmap-v3.md) and the separate
 [games roadmap](2026-10-07-games-development-roadmap.md). Older v2 links in retained packets and

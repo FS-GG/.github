@@ -613,7 +613,7 @@
        journal and spool, with optional counters and explicit unknown attribution.
        CLI, Kit and Drivers move together. Published/installed 0.105 and its qualified
        board binding remain unchanged until separately accepted release/adoption. -->
-  <!-- 0.106.0 -> 0.107.0 (.github#4641): canonical work-board coordinator and dependency-closed
+  <!-- 0.106.0 -> 0.107.0 (.github#4677 under #4641): canonical work-board coordinator and dependency-closed
        recovery entrypoints, with additive compatible plan-path grammar. Source version only;
        publication, installed instruction discovery and executing-caller adoption qualify separately. -->
   <PropertyGroup>

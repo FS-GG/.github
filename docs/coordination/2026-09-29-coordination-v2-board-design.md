@@ -8,6 +8,9 @@ remain the sources of delivery truth.
 
 ## Selected outcome and delivery successor — source boundary
 
+The bounded [source delivery #4677](https://github.com/FS-GG/.github/issues/4677) belongs to
+[outcome #4641](https://github.com/FS-GG/.github/issues/4641); its source closure cannot close the
+parent publication, installed adoption or restart/rollback promises.
 Canonical [work-board](../../.agents/skills/work-board/SKILL.md) now owns the common programme,
 product, recovery and delivery instruction route; historical work-programme entrypoints redirect.
 The selected organization successor is binding5/schema3 with exactly one **Work level** select field
