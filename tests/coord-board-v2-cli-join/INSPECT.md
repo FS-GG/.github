@@ -142,6 +142,21 @@ filter update within the same invocation. Existing human planning values, option
 unrelated views and orthogonal grouping/vertical/sort configuration remain preserved. API metadata
 cannot verify UI columns/cards/order or replace actual installed Project 3 acceptance.
 
+After a clear correlated successful response, an exact complete pre-effect snapshot may mean
+pending native visibility. The same complete snapshot must establish both returned identity and the
+exact selected transition before proceeding. The caller sends only once and may retain up to seven
+complete readbacks with at most six five-second waits. Only the existing project timestamp and the
+existing target-item timestamp allowance for initialization are normalized; unrelated facts stay
+strict. Conflicting/partial/error reads, invalid response identities and uncertain sends stop Unknown.
+There is no resend or absence-as-NoSend inference.
+
+Observation acquisitions and waits consume the original 500-request/270-second envelope and selected
+planning deadline. The transport exposes remaining time from that original stopwatch; it does not
+start another budget. A wait that cannot fit refuses. Every additional witness stays in the same
+exclusive invocation custody. Exhaustion remains incomplete/readback-only, including when a full
+many-effect journey cannot fit. This source contract does not retroactively repair or reactivate
+an older installed package or original partial invocation.
+
 The closed scope now includes `initialPlanning`: explicit selected issue identities, exact Track
 option ID/name, genuine Roadmap text and an optional selected Status option. Use an empty array when
 no initial values are selected. An absent value may be initialized within the selected cooperative

@@ -685,6 +685,31 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   on the PR. This accepts source composition and its synthetic complete migration controls;
   actual candidate execution, private installed/native positives, timing, UI and adoption remain open.
 
+  **Bounded visibility observation source correction (2026-10-18).** A clear correlated mutation
+  response can precede visibility in a complete native snapshot. Treat only the exact pre-effect
+  state, under the existing effect-specific timestamp normalization, as pending visibility. A matching
+  result requires the same complete witness to establish returned native identity and the exact
+  selected transition. Partial reads, conflicts, unrelated drift, malformed/error/null responses or
+  uncertain sends remain Unknown and stop; absence never proves NoSend or permits another mutation.
+
+  The existing caller retains its original intent and sends once. After a clear successful response,
+  it may collect at most seven complete observations, separated by at most six five-second waits.
+  Each observation is retained in the same private invocation. Waits and acquisitions share the
+  original 500-request/270-second budget and selected planning deadline; no clock, request counter or
+  operation identity is renewed. Complete first pages remain observation-local. The finite window is
+  best effort: a long visibility delay or many delayed effects can exhaust the original bound and
+  must stop truthfully. It does not guarantee completion of the full population.
+
+  The sanitized retained-lag control covers the complete pre-effect witness followed by delayed
+  membership visibility; sibling controls cover schema, initial values and both view operations,
+  contradictions, invalid responses, deadline and request exhaustion. Both affected test projects
+  compiled under the separately selected bounded source-build profile with zero warnings/errors.
+  Exact focused suite execution, required hosted qualification and delivery remain separate gates.
+  This source correction does not change the immutable published 0.104 package or update an installed
+  caller. A genuine qualified successor and separately selected remaining migration are still needed;
+  original partial/Unknown operations remain readback-only. Legitimate human UI edits must be observed
+  by fresh preparation and preserved, rather than blocked to retain an old snapshot.
+
   Final stable enrollment uses the existing protected manifest route and the exact selected population
   and Roadmap strings. Final binding4/schema2 joins that protected population and the qualified package/
   assembly provenance after actual native option/item/view IDs are known. No draft invented ID is an
