@@ -39,6 +39,8 @@ class CandidateArtifactTests(unittest.TestCase):
     VERSION = "0.91.3"
     PREVIOUS = "0.91.2"
     SELECTED = False
+    PREVIOUS_SOURCE = PREDECESSOR
+    PREVIOUS_CONTENT = "sha256:" + "c" * 64
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="release-successor-artifact-test-")
         self.addCleanup(self.temporary.cleanup)
@@ -48,9 +50,9 @@ class CandidateArtifactTests(unittest.TestCase):
         for package_id in PACKAGES:
             package(self.candidate / f"{package_id}.{self.VERSION}.nupkg", package_id, self.VERSION)
         predecessor = {
-            "contentId": "sha256:" + "c" * 64,
+            "contentId": self.PREVIOUS_CONTENT,
             "version": self.PREVIOUS,
-            "sourceSha": PREDECESSOR,
+            "sourceSha": self.PREVIOUS_SOURCE,
             "promotedAt": "2026-09-19T00:00:00Z",
         }
         (self.candidate / "previous-stable-channel.json").write_text(json.dumps(predecessor))
@@ -188,6 +190,21 @@ class LiteralSuccessorArtifactTests(CandidateArtifactTests):
             self.artifact["digest"] = "sha256:" + hashlib.sha256(self.archive.read_bytes()).hexdigest()
             with self.subTest(field=field), self.assertRaises(ValueError): self.verify()
         self.assertFalse(self.output.exists())
+
+
+class Current105ArtifactTests(CandidateArtifactTests):
+    VERSION = "0.105.0"
+    PREVIOUS = "0.104.0"
+    PREVIOUS_SOURCE = gate.CURRENT_RELEASE['predecessorSource']
+    PREVIOUS_CONTENT = gate.CURRENT_RELEASE['predecessorContentId']
+
+    def test_current_predecessor_source_is_checked_by_the_actual_artifact_reader(self):
+        path=self.candidate/'previous-stable-channel.json'
+        value=json.loads(path.read_bytes());value['sourceSha']='e'*40
+        path.write_text(json.dumps(value));self.repack()
+        self.artifact['digest']='sha256:'+hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError,'current candidate predecessor identity'):self.verify()
+
 
 
 if __name__ == "__main__":

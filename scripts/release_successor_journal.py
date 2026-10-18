@@ -29,6 +29,13 @@ REF = "refs/heads/fsgg/v2/journal/release/utel-rel-19"
 PATH = "release-state.json"
 SCHEMA = "fsgg.release-successor-journal/1"
 
+# One selected current source composition, independent of frozen original cuts.
+CURRENT_RELEASE = {"version": "0.105.0", "predecessor": "0.104.0",
+    "logicalRef": "refs/heads/fsgg/v2/journal/release/utel-rel-23",
+    "predecessorSource": "912eba8bbd707dabcbc5011d508c479109010b71",
+    "predecessorContentId": "sha256:86a776fe591b5b98bf189fdf2c47148b1b417551c44f091146a1d6ce1acfd987"}
+
+
 
 class Refused(RuntimeError):
     pass
@@ -351,9 +358,10 @@ class ProtectedReleaseJournal:
                 or type(continuation_owner) is not dict):
             raise Refused("continuation journal owner binding differs")
         if type(ordinary_forward) is not bool or (ordinary_forward and
-                (ref != ALLOWED_SUCCESSOR["logicalRef"] or not main_directory or suspension is None or continuation_owner is not None)):
+                (ref != CURRENT_RELEASE["logicalRef"] or not main_directory or suspension is not None or continuation_owner is not None)):
             raise Refused("ordinary immutable binding cache has a different owner or profile")
         self._ordinary_binding_cache = {} if ordinary_forward else None
+        self._ordinary_api = api if ordinary_forward else None
         self.continuation_owner = json.loads(canonical(continuation_owner)) if continuation_owner is not None else None
         self._suspension = suspension
         self._immutable_reader = suspension.objects if suspension is not None else None
@@ -363,6 +371,12 @@ class ProtectedReleaseJournal:
         self._immutable_bytes = 0
 
     def _authorize_release(self, version=None):
+        if self.ref == CURRENT_RELEASE["logicalRef"]:
+            if not self.main_directory or (version is not None and version != CURRENT_RELEASE["version"]):
+                raise Refused("current release journal/version binding differs")
+            return
+        if version == CURRENT_RELEASE["version"]:
+            raise Refused("current release has a different journal identity")
         if self.ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
             if not self.main_directory:
                 raise Refused("sensitive release requires protected-main directory storage")
@@ -626,6 +640,36 @@ class ProtectedReleaseJournal:
         self._observed = Observed(head, current)
         self._lineage_length = length
         return JournalState(current["generation"], current["contentId"], current["effects"])
+
+    def guard_current_intent(self, expected, effect, content_id, source, version):
+        """Fresh send fence on this exact maintained current journal instance.
+
+        Expected bytes describe its own independently read-back intent; they are
+        never an authorization result. A new physical head revalidates history.
+        """
+        observed = self._observed
+        if (self.ref != CURRENT_RELEASE["logicalRef"] or not self.main_directory
+                or self._ordinary_binding_cache is None or self.api is not self._ordinary_api
+                or self.directory != "state/releases/utel-rel-23" or self.continuation_owner is not None
+                or observed is None or expected != (observed.head, canonical(observed.state))
+                or version != CURRENT_RELEASE["version"] or observed.state.get("version") != version
+                or observed.state.get("contentId") != content_id or observed.state.get("sourceSha") != source
+                or observed.state.get("effects", {}).get(effect) != "intent" or "continuation" in observed.state):
+            raise Refused("current provider no longer binds the exact committed intent")
+        def main():
+            value = self.api.get(f"repos/{REPOSITORY}/git/ref/heads/main")
+            obj = value.get("object", {}) if isinstance(value, dict) else {}
+            if (obj.get("type") != "commit" or not isinstance(obj.get("sha"), str)
+                    or not re.fullmatch(r"[0-9a-f]{40}", obj["sha"])):
+                raise Refused("current provider main identity differs")
+            return obj["sha"]
+        physical = main()
+        logical = self._main_head(physical)
+        files = self._main_files(self._main_commit(physical))
+        if logical != expected[0] or files != ((expected[0] + "\n").encode(), expected[1]):
+            raise Refused("current provider no longer binds the exact committed intent")
+        if main() != physical:
+            raise Refused("Authority main moved during current provider fence")
 
     def initialize(self, intent: dict) -> JournalState:
         self._authorize_release(intent.get("version"))

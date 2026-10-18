@@ -1189,32 +1189,23 @@ class LiveProvider:
         self.last_dispatch_diagnostic = None
 
     def _authorize_release(self, effect=None, *, ordinary=False):
+        from release_successor_journal import CURRENT_RELEASE, ProtectedReleaseJournal
+        if ordinary or self.version == CURRENT_RELEASE["version"]:
+            journal = getattr(self, "_ordinary_journal", None)
+            if (not ordinary or self.version != CURRENT_RELEASE["version"]
+                    or self.manifest["descriptor"].get("previousStableVersion") != CURRENT_RELEASE["predecessor"]
+                    or self.logical_ref != CURRENT_RELEASE["logicalRef"]
+                    or not isinstance(journal, ProtectedReleaseJournal) or journal.ref != self.logical_ref
+                    or effect is None):
+                raise Refused("current provider requires its maintained current journal send fence")
+            journal.guard_current_intent(getattr(self, "_ordinary_expected_journal", None),
+                                         effect.identity, self.content_id, self.source, self.version)
+            return
         if self.version in {"0.103.0", "0.104.0"}:
             from release_successor_journal import ReleaseSuspension, SUSPENDED_REF, ALLOWED_SUCCESSOR
             expected = SUSPENDED_REF if self.version == "0.103.0" else ALLOWED_SUCCESSOR["logicalRef"]
             if not isinstance(self.suspension, ReleaseSuspension) or self.logical_ref != expected:
                 raise Refused("direct sensitive provider requires the maintained suspension reader")
-            if ordinary and self.version == "0.104.0":
-                # One fresh sandwich joins immutable suspension and claim-marker
-                # predicates at this sole send boundary. No authorization escapes.
-                physical = self.suspension.main()
-                _, digest = self.suspension._read_at(physical)
-                raw = self.suspension.file(physical, "state/releases/utel-rel-22/release-state.json")
-                state = json.loads(raw) if raw is not None else {}
-                expected = getattr(self, "_ordinary_expected_journal", None)
-                pointer = self.suspension.file(physical, "state/releases/utel-rel-22/release-head.txt")
-                if (not isinstance(expected, tuple) or len(expected) != 2
-                        or raw != expected[1] or pointer != (expected[0] + "\n").encode()
-                        or state.get("contentId") != self.content_id or state.get("sourceSha") != self.source
-                        or state.get("version") != self.version or effect is None
-                        or state.get("effects", {}).get(effect.identity) != "intent"):
-                    raise Refused("ordinary provider no longer binds the exact committed intent")
-                if self.suspension.main() != physical:
-                    raise Refused("Authority main moved during ordinary provider fence")
-                self.suspension.digest = digest
-                if "continuation" in state:
-                    raise Refused("claimed .104 journal cannot enter ordinary provider")
-                return
             self.suspension.authorize(self.logical_ref, self.version)
             if self.version == "0.104.0":
                 from release_successor_journal import ContinuationPermit, _claimed_state
@@ -1662,6 +1653,10 @@ class LiveProvider:
 
     def prepare_ordinary_dispatch(self, effect):
         """Complete slow payload checks before the execution layer's fresh admission."""
+        from release_successor_journal import CURRENT_RELEASE
+        if (self.version != CURRENT_RELEASE["version"] or self.logical_ref != CURRENT_RELEASE["logicalRef"]
+                or self.manifest["descriptor"].get("previousStableVersion") != CURRENT_RELEASE["predecessor"]):
+            raise Refused("ordinary preparation differs from the closed current release")
         if hasattr(self, "_ordinary_prepared"):
             raise Refused("ordinary prepared send was not consumed")
         identity = effect.identity

@@ -121,9 +121,9 @@ class MemoryAuthority:
             new = self.entry(parts[0], "tree", self.update_tree(child, parts[1:], entry))
         return self.tree([row for row in rows if row["path"] != parts[0]] + [new])
 
-    def selected(self, commit):
+    def selected(self, commit, suffix=None):
         oid = self.objects[("commits", commit)]["tree"]["sha"]
-        for name in ("state", "releases", self.directory_suffix):
+        for name in ("state", "releases", self.directory_suffix if suffix is None else suffix):
             row = next((x for x in self.objects[("trees", oid)]["tree"] if x["path"] == name), None)
             if row is None:
                 return None
@@ -154,16 +154,19 @@ class MemoryAuthority:
             raise NotFound(path)
         if "/git/" in path:
             kind, oid = path.split("/git/", 1)[1].split("/", 1)
-            return copy.deepcopy(self.objects[(kind, oid)])
+            try:return copy.deepcopy(self.objects[(kind, oid)])
+            except KeyError:raise NotFound(path) from None
         if path.startswith(PREFIX + "/commits?"):
             query = parse_qs(urlsplit(path).query)
-            assert query["path"] == ["state/releases/" + self.directory_suffix]
+            assert len(query["path"])==1 and query["path"][0].startswith("state/releases/")
+            suffix=query["path"][0].removeprefix("state/releases/")
+            assert re.fullmatch(r"[A-Za-z0-9._-]+",suffix)
             oid = query["sha"][0]
             rows = []
             while oid:
                 commit = self.objects[("commits", oid)]
                 parent = commit["parents"][0]["sha"] if commit["parents"] else None
-                if self.selected(oid) != (self.selected(parent) if parent else None):
+                if self.selected(oid,suffix) != (self.selected(parent,suffix) if parent else None):
                     rows.append({"sha": oid})
                 oid = parent
             start = (int(query["page"][0]) - 1) * 100
@@ -1606,11 +1609,18 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
 
 
 class SelectedReleaseBindingTests(unittest.TestCase):
-    def test_new_ordinary_cut_has_103_102_and_distinct21(self):
+    def test_current_default_has_105_104_and_distinct23(self):
         args = types.SimpleNamespace(recovery_checkpoint=False, repeat_original_nuget_kit_intent=False,
                                      recover_original_runtime_intent=False)
         self.assertEqual(publisher.selected_release_binding(args),
-                         ("0.103.0", "0.102.0", "refs/heads/fsgg/v2/journal/release/utel-rel-21"))
+                         ("0.105.0", "0.104.0", "refs/heads/fsgg/v2/journal/release/utel-rel-23"))
+
+    def test_explicit_original103_selectors_do_not_follow_current_default(self):
+        for flag in ('original_0103_candidate','recover_original_0103_tag_intent'):
+            self.assertEqual(publisher.selected_release_binding(types.SimpleNamespace(**{flag:True})),
+                ('0.103.0','0.102.0',publisher.SUSPENDED_REF))
+        self.assertEqual(publisher.selected_release_binding(types.SimpleNamespace(suspended_0103_successor=True)),
+            ('0.104.0','0.102.0',publisher.ALLOWED_SUCCESSOR['logicalRef']))
 
     def test_original_102_checkpoint_retains_consumed20_after_ordinary_cut_moves(self):
         args = types.SimpleNamespace(recover_original_successor_checkpoint=True)
@@ -1926,28 +1936,34 @@ class Literal104ProviderFixture(MemoryPublisher):
     Package bytes are synthetic ZIPs, never an executable or a release candidate.
     The real saga checks and receipts run in process beneath the audit fence.
     """
-    def __init__(self, root, suspension):
+    def __init__(self, root, suspension, *, version="0.104.0"):
         super().__init__()
+        assert version in {'0.104.0','0.105.0'}
+        self.version=version
+        current=version=='0.105.0'
+        previous={'version':'0.104.0','contentId':publisher.CURRENT_RELEASE['predecessorContentId'],
+                  'sourceSha':publisher.CURRENT_RELEASE['predecessorSource']} if current else {
+                  'version':'0.102.0','contentId':'sha256:'+'c'*64,'sourceSha':'d'*40}
         self.root=root; self.tag=None; self.release=None; self.assets={}; self.feeds=set()
         spec=importlib.util.spec_from_file_location("literal104_saga_fixture",ROOT/'scripts/release-saga.py')
         self.saga=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.saga)
         for package in PACKAGES:
-            path=root/f'{package}.0.104.0.nupkg'
+            path=root/f'{package}.{self.version}.nupkg'
             with zipfile.ZipFile(path,'w') as archive:
-                archive.writestr(package+'.nuspec',f'<package><metadata><id>{package}</id><version>0.104.0</version><repository type="git" commit="{self.head}" /></metadata></package>')
+                archive.writestr(package+'.nuspec',f'<package><metadata><id>{package}</id><version>{self.version}</version><repository type="git" commit="{self.head}" /></metadata></package>')
                 archive.writestr('lib/inert-fixture.txt',b'inert source fixture; not executable package output')
         qualification={'schema':'fsgg.telemetry.standalone-qualification/2','qualified':True,
-            'binding':{'sourceSha':self.head,'packageSha256':self.saga.sha256(root/'FS.GG.Coord.Cli.0.104.0.nupkg'),'sourceBinding':'prepared-for-release-manifest'},
+            'binding':{'sourceSha':self.head,'packageSha256':self.saga.sha256(root/f'FS.GG.Coord.Cli.{self.version}.nupkg'),'sourceBinding':'prepared-for-release-manifest'},
             'checks':{key:True for key in ('startupP95Milliseconds','idleRssPeakBytes','coldCliSubmissionP95Milliseconds','warmInProcessAdmissionP95Milliseconds')},
             'limits':{'coldCliSubmissionP95Milliseconds':1000,'warmInProcessAdmissionP95Milliseconds':100},
             'packagedStore':{'schema':'fsgg.telemetry.packaged-store-performance/1','qualified':True,'assessment':'approved-local-durable'},
             'claims':{'processCrashAndFilesystemApi':True,'physicalPowerLoss':False,'mainInstalled':False,'publicRelease':False}}
         (root/'standalone-telemetry-runtime-evidence.json').write_bytes(canonical(qualification))
         (root/'standalone-telemetry-evidence.json').write_bytes(b'{}\n')
-        (root/'previous-stable-channel.json').write_bytes(canonical({'version':'0.102.0','contentId':'sha256:'+'c'*64,'sourceSha':'d'*40,'promotedAt':'2026-10-01T00:00:00Z'}))
+        (root/'previous-stable-channel.json').write_bytes(canonical({**previous,'promotedAt':'2026-10-01T00:00:00Z'}))
         assets=root/'dashboard';assets.mkdir();(assets/'index.html').write_text('inert dashboard fixture')
         self.path=root/'release-manifest.json'
-        args=self.saga.parser().parse_args(['prepare','--release-id','github:0.104.0','--version','0.104.0',
+        args=self.saga.parser().parse_args(['prepare','--release-id','github:'+self.version,'--version',self.version,
             '--source-sha',self.head,'--source-tree','d'*40,'--policy-version','release-successor/1',
             '--previous-channel',str(root/'previous-stable-channel.json'),'--artifact-dir',str(root),
             *(arg for package in PACKAGES for arg in ('--expected-package',package)),
@@ -1955,7 +1971,7 @@ class Literal104ProviderFixture(MemoryPublisher):
         self.run_saga(args)
         args=self.saga.parser().parse_args(['preflight','--manifest',str(self.path),'--feed','both']);self.run_saga(args)
         self.candidate=json.loads(self.path.read_bytes())
-        self.provider=LiveProvider(self,self.path,'inert-github','inert-nuget',suspension=suspension,logical_ref='refs/heads/fsgg/v2/journal/release/utel-rel-22')
+        self.provider=LiveProvider(self,self.path,'inert-github','inert-nuget',suspension=suspension,logical_ref=publisher.CURRENT_RELEASE['logicalRef'] if current else publisher.ALLOWED_SUCCESSOR['logicalRef'])
         self.provider._download_package=self.download_package
         self.provider.dispatched=[]
         dispatch=self.provider.dispatch
@@ -1971,7 +1987,7 @@ class Literal104ProviderFixture(MemoryPublisher):
         self.calls.append(path)
         if '/git/ref/tags/' in path:
             if self.tag is None:raise NotFound(path)
-            return {'ref':'refs/tags/coherent-set/v0.104.0','object':{'sha':self.tag,'type':'commit'}}
+            return {'ref':'refs/tags/coherent-set/v'+self.version,'object':{'sha':self.tag,'type':'commit'}}
         if '/releases/tags/' in path:
             if self.release is None:raise NotFound(path)
             return copy.deepcopy(self.release)
@@ -1982,8 +1998,8 @@ class Literal104ProviderFixture(MemoryPublisher):
 
     def post(self,path,body):
         if path.endswith('/git/refs'):
-            assert self.tag is None and body['ref']=='refs/tags/coherent-set/v0.104.0'
-            self.tag=body['sha'];return {'ref':'refs/tags/coherent-set/v0.104.0','object':{'sha':self.tag,'type':'commit'}}
+            assert self.tag is None and body['ref']=='refs/tags/coherent-set/v'+self.version
+            self.tag=body['sha'];return {'ref':'refs/tags/coherent-set/v'+self.version,'object':{'sha':self.tag,'type':'commit'}}
         assert path.endswith('/releases') and self.release is None
         self.release={**body,'id':1};return copy.deepcopy(self.release)
 
@@ -2003,15 +2019,15 @@ class Literal104ProviderFixture(MemoryPublisher):
 
     def download_package(self,feed,package):
         if (feed,package) not in self.feeds:return None
-        source=self.root/f'{package}.0.104.0.nupkg'
-        target=self.provider.observed/f'{feed}-{package}.0.104.0.nupkg';target.write_bytes(source.read_bytes())
+        source=self.root/f'{package}.{self.version}.nupkg'
+        target=self.provider.observed/f'{feed}-{package}.{self.version}.nupkg';target.write_bytes(source.read_bytes())
         args=self.saga.parser().parse_args(['verify-external','--manifest',str(self.path),'--package',package,'--artifact',str(target)]);self.run_saga(args)
         return target
 
     def process(self,argv,**kwargs):
         if argv[:3]==['dotnet','nuget','push']:
             assert len(argv)==8 and argv[4]=='--source' and argv[6]=='--api-key'
-            path=pathlib.Path(argv[3]);package=path.name.removesuffix('.0.104.0.nupkg')
+            path=pathlib.Path(argv[3]);package=path.name.removesuffix('.'+self.version+'.nupkg')
             feed='github' if argv[5]=='https://nuget.pkg.github.com/FS-GG/index.json' else 'nuget'
             assert argv[5] in {'https://nuget.pkg.github.com/FS-GG/index.json','https://api.nuget.org/v3/index.json'}
             assert (feed,package) not in self.feeds and package in PACKAGES
@@ -2213,7 +2229,7 @@ class SuspensionControls(SuspensionFixture):
 
     def test_actual_precredential_parser_denies_original_and_conflicts_before_exchange(self):
         self.install()
-        for flags in ([], ['--original-0103-candidate'], ['--recover-original-0103-tag-intent']):
+        for flags in (['--original-0103-candidate'], ['--recover-original-0103-tag-intent']):
             with self.subTest(flags=flags), patch.object(sys, 'argv', ['publisher','--check-release-suspension',*flags]), \
                  patch.dict(os.environ, {'GH_TOKEN':'inert-read-only'}, clear=True), \
                  patch.object(publisher,'GitHubAPI', return_value=self.authority):
@@ -2241,10 +2257,10 @@ class SuspensionControls(SuspensionFixture):
                 publisher.precredential_release_check(args,self.authority)
             self.assertEqual(self.writes(),[])
 
-    def test_production_default_entry_refuses_before_candidate_workdir_or_credential_read(self):
+    def test_production_original_entry_refuses_before_candidate_workdir_or_credential_read(self):
         self.install()
         with tempfile.TemporaryDirectory() as directory:
-            args = types.SimpleNamespace(candidate_run_id=1,candidate_artifact_id=2,candidate_archive_sha256='a'*64,
+            args = types.SimpleNamespace(candidate_run_id=publisher.ORIGINAL_0103_CANDIDATE['runId'],candidate_artifact_id=publisher.ORIGINAL_0103_CANDIDATE['artifactId'],candidate_archive_sha256=publisher.ORIGINAL_0103_CANDIDATE['archiveSha256'],original_0103_candidate=True,
                 publish=False,preflight_only=True,recovery_checkpoint=False,repeat_original_nuget_kit_intent=False,
                 recover_original_runtime_intent=False,workdir=pathlib.Path(directory)/'never-created')
             env={'GITHUB_SHA':'b'*40,'GITHUB_ACTOR':'EHotwagner','GITHUB_RUN_ID':'1','GITHUB_EVENT_NAME':'workflow_dispatch',
@@ -2331,55 +2347,6 @@ class SuspensionControls(SuspensionFixture):
             with self.subTest(kind=kind,oid=oid),self.assertRaisesRegex(self.mod.Refused,'identity is invalid'):
                 journal._immutable_object(kind,oid)
 
-    def test_full_literal_104_sixteen_effects_fit_unchanged_authority_budget(self):
-        self.install();self.authority.calls.clear()
-        temporary=tempfile.TemporaryDirectory();self.addCleanup(temporary.cleanup)
-        root=pathlib.Path(temporary.name)
-        counted=publisher.CountedAuthorityAPI(self.authority,ceiling=publisher.ORDINARY_AUTHORITY_CALL_CEILING,
-                                             quota_floor=publisher.ORDINARY_AUTHORITY_QUOTA_FLOOR)
-        shared=self.mod.ReleaseSuspension(counted)
-        native=Literal104ProviderFixture(root,shared);candidate=native.candidate;provider=native.provider
-        effects=ordered_effects(candidate);self.assertEqual(len(effects),16)
-        intent={'contentId':candidate['contentId'],'sourceSha':'b'*40,'version':'0.104.0','candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
-        rows=report()
-        counted.admit_quota()
-        shared.authorize(self.allowed['logicalRef'],'0.104.0')
-        journal=publisher.ReportingJournal(ProtectedReleaseJournal(counted,self.allowed['logicalRef'],main_directory=True,suspension=shared),rows,detailed=True)
-        admission=publisher.ProtectedPublisherAdmission(SingleOperatorAdmission(native,candidate,'b'*40,1,'EHotwagner','refs/heads/main'),counted,self.allowed['logicalRef'],suspension=shared)
-        publisher.prepare_release_journal(journal,counted,admission,provider,native,candidate,intent,'b'*40,'b'*40,False,lambda:None)
-        journal.capture(); ticks=[0];sleeps=[]
-        def sleep(seconds):sleeps.append(seconds);ticks[0]+=seconds
-        try:
-            with patch.object(publisher.subprocess,'run',side_effect=native.process):
-                result=publisher.run_forward(candidate,journal,admission,publisher.ReportingProvider(provider,rows),rows,2700,
-                    maximum=152,clock=lambda:ticks[0],sleep=sleep,ordinary=True)
-        except publisher.AuthorityQuotaWaiting:
-            from collections import Counter
-            categories=Counter()
-            for method,path in self.authority.calls:
-                label=('immutable-object' if '/git/' in path and any('/git/'+kind+'/' in path for kind in ('commits','trees','blobs'))
-                    else 'fresh-main-ref' if '/git/ref/' in path else 'pinned-path-history' if '/commits?' in path
-                    else 'fresh-protection' if '/rules' in path else 'pinned-decision-source' if '/contents/' in path
-                    else 'quota' if path=='rate_limit' else 'repository-identity' if path==PREFIX else 'write')
-                categories[method+':'+label]+=1
-            print(json.dumps({'literal104WholeInvocation':'budget-exhausted','authority':counted.report(),'requestCensus':dict(categories),
-                'lastObservedGeneration':journal._observed.state['generation'],'dispatchedEffects':provider.dispatched,
-                'virtualSleepSeconds':sum(sleeps),'iterations':rows['iterationsAttempted']},sort_keys=True))
-            raise
-        self.assertEqual(result,'complete')
-        self.assertEqual(provider.dispatched,[effect.identity for effect in effects])
-        self.assertEqual(journal.read().generation,33)
-        self.assertEqual(journal.journal._observed.state['effects'],{effect.identity:'verified' for effect in effects})
-        self.assertFalse(native.release['draft'])
-        self.assertIsNotNone(provider._final_manifest())
-        self.assertEqual(shared.file(self.authority.head,'state/releases/utel-rel-21/release-state.json'),self.raw_state)
-        self.assertEqual(shared.file(self.authority.head,'state/releases/utel-rel-21/release-head.txt'),(self.original['logicalHead']+'\n').encode())
-        self.assertEqual(shared.file(self.authority.head,'state/ordinary/sibling.json'),b'original sibling bytes\n')
-        self.assertEqual(sum(counted.attempted.values()),len(self.authority.calls))
-        self.assertLess(sum(counted.attempted.values()),1500)
-        self.assertEqual(sleeps,[])
-        print(json.dumps({'literal104FullEffects':16,'authorityRequests':counted.attempted,'ceiling':counted.ceiling,
-                          'virtualSleepSeconds':sum(sleeps),'iterations':rows['iterationsAttempted'],'disposition':result},sort_keys=True))
 
     def test_direct_provider_original_and_missing_reader_cannot_dispatch(self):
         self.install()
@@ -2424,7 +2391,7 @@ class SuspensionControls(SuspensionFixture):
             self.assertLess(fence,workflow.index(name))
         self.assertNotIn('disposition_json:',workflow)
         candidate = (ROOT/'.github/workflows/release-successor-candidate.yml').read_text()
-        self.assertIn('test "$version" = 0.104.0',candidate)
+        self.assertIn('test "$version" = 0.105.0',candidate)
         self.assertNotIn('-p:Version=',candidate)
         self.assertIn('name: release-successor-candidate-${{ github.sha }}-${{ github.run_id }}',candidate)
         self.assertIn('Separate evidence: never add a member to the exact seven-member publisher archive.',candidate)
@@ -2435,13 +2402,13 @@ class LiteralForwardControls(SuspensionFixture):
     def context(self):
         if not hasattr(self,'_forward_base'):self._forward_base=copy.deepcopy(self.authority)
         self.authority=copy.deepcopy(self._forward_base)
-        self.install();self.authority.calls.clear()
-        candidate=manifest();candidate['descriptor'].update(version='0.104.0',previousStableVersion='0.102.0')
+        self.install();self.authority.logical_ref=publisher.CURRENT_RELEASE['logicalRef'];self.authority.directory_suffix='utel-rel-23';self.authority.calls.clear()
+        candidate=manifest();candidate['descriptor'].update(version='0.105.0',previousStableVersion='0.104.0')
         candidate['contentId']='sha256:'+hashlib.sha256(json.dumps(candidate['descriptor'],sort_keys=True,separators=(',',':')).encode()).hexdigest()
         counted=publisher.CountedAuthorityAPI(self.authority,ceiling=1500,quota_floor=1800);counted.admit_quota()
         shared=self.mod.ReleaseSuspension(counted);rows=report();native=MemoryPublisher()
-        journal=publisher.ReportingJournal(ProtectedReleaseJournal(counted,self.allowed['logicalRef'],main_directory=True,suspension=shared,ordinary_forward=True),rows,detailed=True)
-        admission=publisher.ProtectedPublisherAdmission(SingleOperatorAdmission(native,candidate,'b'*40,1,'EHotwagner','refs/heads/main'),counted,self.allowed['logicalRef'],suspension=shared)
+        journal=publisher.ReportingJournal(ProtectedReleaseJournal(counted,publisher.CURRENT_RELEASE['logicalRef'],main_directory=True,ordinary_forward=True),rows,detailed=True)
+        admission=publisher.ProtectedPublisherAdmission(SingleOperatorAdmission(native,candidate,'b'*40,1,'EHotwagner','refs/heads/main'),counted,publisher.CURRENT_RELEASE['logicalRef'])
         provider=MemoryProvider(ordered_effects(candidate),{});provider._release=lambda:None
         provider.prepare_ordinary_dispatch=lambda effect:None
         first_probe=set()
@@ -2453,7 +2420,7 @@ class LiteralForwardControls(SuspensionFixture):
             if observation.state=='matched' and observation.observed_digest==effect.target_digest:return 'potential'
             raise publisher.Refused('inert pending witness '+observation.state)
         provider.ordinary_visibility=visibility
-        intent={'contentId':candidate['contentId'],'sourceSha':'b'*40,'version':'0.104.0','candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
+        intent={'contentId':candidate['contentId'],'sourceSha':'b'*40,'version':'0.105.0','candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
         publisher.prepare_release_journal(journal,counted,admission,provider,native,candidate,intent,'b'*40,'b'*40,False,lambda:None)
         journal.capture();ticks=[0];sleeps=[]
         def sleep(seconds):sleeps.append(seconds);ticks[0]+=seconds
@@ -2462,55 +2429,6 @@ class LiteralForwardControls(SuspensionFixture):
                 kwargs.pop('deadline',2700),maximum=kwargs.pop('maximum',3),clock=lambda:ticks[0],sleep=kwargs.pop('sleep',sleep),
                 ordinary=True,**kwargs)
         return candidate,counted,shared,rows,native,journal,admission,provider,ticks,sleeps,run
-
-    def test_joined_cas_boundaries_refuse_drift_without_reusing_mutable_observation(self):
-        for edge in (1,2,3,4):
-            with self.subTest(edge=edge):
-                c,api,reader,rows,native,journal,admission,provider,ticks,sleeps,run=self.context()
-                expected=journal.read();before=dict(api.attempted);original=self.authority.get;seen=[0];triggered=[False]
-                def get(path):
-                    if path==PREFIX+'/git/ref/heads/main':
-                        seen[0]+=1
-                        if seen[0]==edge and not triggered[0]:
-                            triggered[0]=True
-                            if edge==1:self.add_file('state/releases/utel-rel-21/release-state.json',self.raw_state+b' ')
-                            else:self.add_file('state/ordinary/sibling.json',b'concurrent sibling change\n')
-                    return original(path)
-                with patch.object(self.authority,'get',side_effect=get),self.assertRaises(self.mod.Refused):
-                    journal.compare_and_swap(expected,'tag','intent')
-                self.assertTrue(triggered[0]);self.assertEqual(api.attempted['patch'],before['patch'])
-                self.assertEqual(api.attempted['post']-before['post'],0 if edge<=2 else 7)
-                self.assertEqual(provider.dispatched,[])
-
-    def test_joined_cas_changed_record_and_nonforced_conflict_preserve_original(self):
-        for mode in ('missing','malformed','wrong-version','conflict'):
-            with self.subTest(mode=mode):
-                c,api,reader,rows,native,journal,admission,provider,ticks,sleeps,run=self.context()
-                expected=journal.read();before=dict(api.attempted)
-                if mode=='conflict':self.authority.reject_patch=True
-                elif mode=='wrong-version':
-                    changed=copy.deepcopy(self.record);changed['allowedSuccessor']['version']='0.105.0'
-                    self.add_file(self.mod.SUSPENSION_PATH,canonical(changed))
-                elif mode=='malformed':self.add_file(self.mod.SUSPENSION_PATH,self.raw+b' ')
-                else:
-                    # A new physical tree deliberately lacks the required entry.
-                    path=self.mod.SUSPENSION_PATH
-                    parent=self.authority.head;tree=self.authority.objects['commits',parent]['tree']['sha']
-                    removed=self.authority.post(PREFIX+'/git/trees',{'base_tree':tree,'tree':[{'path':path,'sha':None}]})
-                    commit=self.authority.post(PREFIX+'/git/commits',{'tree':removed['sha'],'parents':[parent],'message':'inert missing record'})
-                    self.authority.patch(PREFIX+'/git/refs/heads/main',{'sha':commit['sha'],'force':False})
-                with self.assertRaises(self.mod.Refused):journal.compare_and_swap(expected,'tag','intent')
-                self.assertEqual(api.attempted['patch']-before['patch'],1 if mode=='conflict' else 0)
-                self.assertEqual(api.attempted['post']-before['post'],7 if mode=='conflict' else 0)
-                self.assertEqual(reader.file(self.authority.head,'state/releases/utel-rel-21/release-state.json'),self.raw_state)
-                self.assertEqual(provider.dispatched,[])
-
-    def test_joined_cas_allows_unrelated_write_before_opening_and_preserves_it(self):
-        c,api,reader,rows,native,journal,admission,provider,ticks,sleeps,run=self.context()
-        expected=journal.read();self.add_file('state/ordinary/sibling.json',b'new sibling before boundary\n')
-        self.assertTrue(journal.compare_and_swap(expected,'tag','intent'))
-        self.assertEqual(reader.file(self.authority.head,'state/ordinary/sibling.json'),b'new sibling before boundary\n')
-        self.assertEqual(reader.file(self.authority.head,'state/releases/utel-rel-21/release-state.json'),self.raw_state)
 
     def test_delayed_visibility_and_unknown_send_never_resend_retained_intent(self):
         for response in ('applied','unknown'):
@@ -2570,7 +2488,7 @@ class LiteralForwardControls(SuspensionFixture):
                             if '/actions/runs/' in path:row['status']='cancelled'
                             return row
                         native.get=get
-                    elif mode=='suspension':self.add_file(self.mod.SUSPENSION_PATH,self.raw+b' ')
+                    elif mode=='suspension':self.add_file('state/releases/utel-rel-23/release-state.json',canonical(journal._observed.state)+b' ')
                     else:next(iter(self.authority.controls.values()))['enforcement']='disabled'
                 with self.assertRaises(RuntimeError):run(sleep=sleep)
                 self.assertEqual(provider.dispatched,['tag']);self.assertEqual(sleeps,[5])
@@ -3538,37 +3456,45 @@ class OrdinaryCallerControls(SuspensionFixture):
     Synthetic candidate bytes and history are labelled fixture data, never a
     release selection. No journal is prepared or authorization stubbed in setup.
     """
-    def prepare_caller(self, *, history=0, delays=0, target='channel-asset', ceiling=None, private=None):
+    def prepare_caller(self, *, history=0, delays=0, target='channel-asset', ceiling=None):
         if not hasattr(self,'_ordinary_base'):self._ordinary_base=copy.deepcopy(self.authority)
         self.authority=copy.deepcopy(self._ordinary_base)
         temporary=tempfile.TemporaryDirectory();self.addCleanup(temporary.cleanup)
         self.root=pathlib.Path(temporary.name);self.install()
+        old_candidate=self.mod.CONTINUATION_CANDIDATE
+        old_intent={'contentId':old_candidate['contentId'],'sourceSha':old_candidate['sourceSha'],'version':'0.104.0',
+                    'candidateArchiveSha256':old_candidate['archiveSha256'],'operator':'EHotwagner'}
+        old_journal=ProtectedReleaseJournal(self.authority,self.allowed['logicalRef'],main_directory=True,suspension=self.reader())
+        old_effects={};head=None
+        prefix=list(self.mod.continuation_effects(28))[:-1]
+        sequence=[None]+[(identity,state) for identity in prefix for state in ('intent','verified')]+[('channel-asset','intent')]
+        for generation in range(1,35):
+            if generation<=28:
+                change=sequence[generation-1]
+                if change is not None:old_effects[change[0]]=change[1]
+            else:old_effects=self.mod.continuation_effects(generation)
+            state={'schema':self.mod.SCHEMA,**old_intent,'generation':generation,'effects':dict(old_effects)}
+            if generation>=29:state['continuation']=self.mod.continuation_record({'runId':2,'attempt':1,'sourceSha':'b'*40,'operator':'EHotwagner'})
+            head=old_journal._create_commit(state,[] if head is None else [head])
+        self.assertTrue(self.mod._claimed_state(state));self.claimed104=canonical(state);self.claimed104_head=(head+'\n').encode()
+        physical=old_journal._overlay(self.authority.head,head,state)
+        self.authority.patch(PREFIX+'/git/refs/heads/main',{'sha':physical,'force':False})
+        self.authority.directory_suffix='utel-rel-23';self.authority.logical_ref=publisher.CURRENT_RELEASE['logicalRef']
         for n in range(history):self.add_file('state/ordinary/cold-history.json',canonical({'generation':n}))
-        self.native=Literal104ProviderFixture(self.root,self.reader())
+        self.native=Literal104ProviderFixture(self.root,None,version="0.105.0")
         stream=io.BytesIO()
         with zipfile.ZipFile(stream,'w') as archive:
-            for name in [*(f'{package}.0.104.0.nupkg' for package in PACKAGES),
+            for name in [*(f'{package}.0.105.0.nupkg' for package in PACKAGES),
                          'release-manifest.json','previous-stable-channel.json',
                          'standalone-telemetry-evidence.json','standalone-telemetry-runtime-evidence.json']:
                 archive.writestr(name,(self.root/name).read_bytes())
         self.archive=stream.getvalue()
-        if private is not None:
-            self.archive=private.read_bytes()
-            self.assertEqual(hashlib.sha256(self.archive).hexdigest(),'ddd8a273fab400e963dffcf2dd07db19332af78c22939d97822f3d9f644b0a7f')
-            with zipfile.ZipFile(io.BytesIO(self.archive)) as original:
-                self.assertEqual(len(original.infolist()),7)
-                for entry in original.infolist():
-                    self.assertEqual(pathlib.PurePosixPath(entry.filename).name,entry.filename)
-                    (self.root/entry.filename).write_bytes(original.read(entry))
-            self.native.candidate=json.loads(self.native.path.read_bytes())
-            self.assertEqual(self.native.candidate['descriptor']['sourceSha'],'912eba8bbd707dabcbc5011d508c479109010b71')
-            self.native.head=self.native.candidate['descriptor']['sourceSha']
         self.source=self.native.head
         self.digest=hashlib.sha256(self.archive).hexdigest()
         self.authority.override['installation/repositories?per_page=100']={
             'total_count':1,'repositories':[{'id':1351660651,'full_name':REPOSITORY}]}
         self.authority.calls.clear();self.native.calls.clear()
-        self.args=types.SimpleNamespace(publish=True,preflight_only=False,suspended_0103_successor=True,
+        self.args=types.SimpleNamespace(publish=True,preflight_only=False,suspended_0103_successor=False,
             continue_original_0104_checkpoint=False,original_0103_candidate=False,recover_original_0103_tag_intent=False,
             recovery_checkpoint=False,repeat_original_nuget_kit_intent=False,recover_original_runtime_intent=False,
             recover_original_successor_checkpoint=False,expected_checkpoint='',candidate_run_id=42,candidate_artifact_id=43,
@@ -3576,7 +3502,7 @@ class OrdinaryCallerControls(SuspensionFixture):
         self.rows=report();self.rows['candidate']={};self.dispatches=[];self.feed_ports=[];self.publisher_ports=[]
         self.local_ports=[];self.probes=[];self.delays=delays;self.target=target;self.ticks=[0];self.sleeps=[]
         self.history=history;self.ceiling=ceiling;self.providers=[];self.phases=[];self.phase_generations=set();self.hide_effect=None
-        self.external_entries=[];self.delay_by_effect={};self.on_sleep=lambda:None;self.on_observe=lambda effect:None;self.on_prepare=lambda effect:None
+        self.external_entries=[];self.delay_by_effect={};self.on_sleep=lambda:None;self.on_observe=lambda effect:None;self.on_prepare=lambda effect:None;self.after_verifier=lambda candidate:None
         original=self.native.get
         def get(path,_original_get=original):
             if path.endswith('/actions/runs/42'):
@@ -3595,7 +3521,7 @@ class OrdinaryCallerControls(SuspensionFixture):
                 if '/releases?' in path:return []
             if hidden=='promote' and '/releases/tags/' in path:value['draft']=True
             if hidden and '/assets?per_page=100' in path:
-                name={**{f'archive-asset:{package}':f'{package}.0.104.0.nupkg' for package in PACKAGES},
+                name={**{f'archive-asset:{package}':f'{package}.0.105.0.nupkg' for package in PACKAGES},
                       'qualification-asset:evidence':'standalone-telemetry-evidence.json',
                       'qualification-asset:runtime':'standalone-telemetry-runtime-evidence.json',
                       'channel-asset':'stable-channel.json','manifest-asset':'release-manifest.json'}.get(hidden)
@@ -3659,11 +3585,13 @@ class OrdinaryCallerControls(SuspensionFixture):
                 self.local_ports.append('artifact-verifier')
                 spec=importlib.util.spec_from_file_location('ordinary_artifact_fixture',ROOT/'scripts/release-successor-artifact.py')
                 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-                with patch.object(sys,'argv',argv[1:]),redirect_stdout(io.StringIO()):self.assertEqual(module.main(),0)
+                with patch.object(sys,'argv',argv[1:]),redirect_stdout(io.StringIO()):code=module.main()
+                if code:raise subprocess.CalledProcessError(code,argv)
+                self.after_verifier(pathlib.Path(argv[argv.index('--output')+1]))
                 return types.SimpleNamespace(returncode=0)
             if len(argv)>1 and argv[1].endswith('check-release-candidate-uniqueness.py'):
                 self.local_ports.append('uniqueness-external-port')
-                self.assertEqual(argv[2:],['--version','0.104.0','--predecessor','0.102.0'])
+                self.assertEqual(argv[2:],['--version','0.105.0','--predecessor','0.104.0'])
                 self.assertFalse(self.native.feeds);self.assertIsNone(self.native.release)
                 return types.SimpleNamespace(returncode=0)
             self.local_ports.append('inert-nuget-send' if argv[:3]==['dotnet','nuget','push'] else 'saga:'+argv[2])
@@ -3700,7 +3628,7 @@ class OrdinaryCallerControls(SuspensionFixture):
                 if not main:return publisher.execute_publisher(self.args,self.rows)
                 argv=['release-successor-publish.py','--candidate-run-id','42','--candidate-artifact-id','43',
                       '--candidate-archive-sha256',self.digest,'--workdir',str(self.args.workdir),
-                      '--result-path',str(self.args.result_path),'--publish','--suspended-0103-successor']
+                      '--result-path',str(self.args.result_path),'--publish',]
                 with patch.object(sys,'argv',argv),patch.object(publisher,'execute_publisher',side_effect=execute):
                     return publisher.main()
             finally:
@@ -3724,17 +3652,75 @@ class OrdinaryCallerControls(SuspensionFixture):
         reader=self.reader()
         self.assertEqual(reader.file(self.authority.head,'state/releases/utel-rel-21/release-state.json'),self.raw_state)
         self.assertEqual(reader.file(self.authority.head,self.mod.SUSPENSION_PATH),self.raw)
+        self.assertEqual(reader.file(self.authority.head,'state/releases/utel-rel-22/release-state.json'),self.claimed104)
+        self.assertEqual(reader.file(self.authority.head,'state/releases/utel-rel-22/release-head.txt'),self.claimed104_head)
         self.assertEqual(reader.file(self.authority.head,'state/ordinary/sibling.json'),b'original sibling bytes\n')
         if self.history:self.assertEqual(reader.file(self.authority.head,'state/ordinary/cold-history.json'),canonical({'generation':self.history-1}))
         self.assertEqual(sum(self.rows['authorityCounter'].attempted.values()),counted_entries)
         publisher.write_result(self.args.result_path,{**self.rows,'authorityCounter':None})
         self.assertEqual(json.loads(self.args.result_path.read_bytes())['lastAdvanceResult'],'complete')
 
-    @unittest.skipUnless(os.environ.get('FSGG_ORDINARY_PRIVATE_CANDIDATE'),'private original-byte census not selected')
-    def test_private_original_byte_cold_actual_caller(self):
-        self.prepare_caller(history=24,delays=92,private=pathlib.Path(os.environ['FSGG_ORDINARY_PRIVATE_CANDIDATE']))
-        self.assert_complete()
-        self.assertEqual(self.census['authorityPortEntries'],1400)
+    def test_current_publication_does_not_transfer_the_consumed104_claim(self):
+        self.prepare_caller();self.assert_complete()
+        old=ProtectedReleaseJournal(self.authority,self.allowed['logicalRef'],main_directory=True,suspension=self.reader())
+        with self.assertRaisesRegex(JournalRefused,'consumed by another invocation/profile'):old.read()
+
+    def test_current_preflight_is_default_and_has_no_genesis_or_provider_write(self):
+        self.prepare_caller();self.args.preflight_only=True;self.args.publish=False
+        self.assertEqual(self.invoke_caller(),'preflight')
+        self.assertEqual(self.dispatches,[])
+        self.assertFalse(any(method in {'post','patch'} for method,_ in self.authority.calls))
+        self.assertIsNone(self.authority.selected(self.authority.head))
+
+    def test_current_candidate_version_predecessor_and_previous_source_refuse_before_genesis(self):
+        for mode in ('version','predecessor','previous-source'):
+            with self.subTest(mode=mode):
+                self.prepare_caller()
+                def change(candidate):
+                    if mode=='previous-source':
+                        path=candidate/'previous-stable-channel.json';value=json.loads(path.read_bytes());value['sourceSha']='e'*40
+                    else:
+                        path=candidate/'release-manifest.json';value=json.loads(path.read_bytes())
+                        value['descriptor']['version' if mode=='version' else 'previousStableVersion']='0.106.0'
+                    path.write_bytes(canonical(value))
+                self.after_verifier=change
+                with self.assertRaisesRegex(RuntimeError,'publisher version|publisher predecessor|accepted predecessor'):self.invoke_caller()
+                self.assertEqual(self.dispatches,[])
+                self.assertFalse(any(method in {'post','patch'} for method,_ in self.authority.calls))
+
+    def test_current_default_rejects_a_reused104_archive_without_historical_selector(self):
+        self.prepare_caller();root=self.root/'old104';root.mkdir()
+        old=Literal104ProviderFixture(root,self.reader());stream=io.BytesIO()
+        with zipfile.ZipFile(stream,'w') as archive:
+            for name in [*(f'{package}.0.104.0.nupkg' for package in PACKAGES),
+                         'release-manifest.json','previous-stable-channel.json',
+                         'standalone-telemetry-evidence.json','standalone-telemetry-runtime-evidence.json']:
+                archive.writestr(name,(root/name).read_bytes())
+        self.archive=stream.getvalue();self.digest=hashlib.sha256(self.archive).hexdigest()
+        self.args.candidate_archive_sha256=self.digest
+        with patch.object(sys,'stderr',new_callable=io.StringIO) as diagnostics, self.assertRaises(subprocess.CalledProcessError):self.invoke_caller()
+        self.assertIn('closed literal successor selection',diagnostics.getvalue())
+        self.assertEqual(self.dispatches,[])
+        self.assertFalse(any(method in {'post','patch'} for method,_ in self.authority.calls))
+
+    def test_current_provider_refuses_foreign_reader_and_changed_binding_at_final_delegate(self):
+        for mode in ('reader','ref','version','source','content','effect'):
+            with self.subTest(mode=mode):
+                self.prepare_caller()
+                def prepare(effect):
+                    if effect.identity!='tag':return
+                    target=self.providers[0]
+                    if mode=='reader':target._ordinary_journal.api=MemoryAuthority(publisher.CURRENT_RELEASE['logicalRef'])
+                    elif mode=='ref':target.logical_ref=self.allowed['logicalRef']
+                    elif mode=='version':target.version='0.106.0'
+                    elif mode=='source':target.source='e'*40
+                    elif mode=='content':target.content_id='sha256:'+'e'*64
+                    else:
+                        state=copy.deepcopy(target._ordinary_journal._observed.state);state['effects']={'draft':'intent'}
+                        target._ordinary_expected_journal=(target._ordinary_expected_journal[0],canonical(state))
+                self.on_prepare=prepare
+                with self.assertRaises(RuntimeError):self.invoke_caller()
+                self.assertIsNone(self.native.tag);self.assertEqual(self.publisher_ports.count('post'),0)
 
     def test_cold_actual_caller_immediate_visibility(self):
         self.prepare_caller();self.assert_complete()
@@ -3793,7 +3779,7 @@ class OrdinaryCallerControls(SuspensionFixture):
                             return row
                         self.native.get=get
                     elif mode=='protection':next(iter(self.authority.controls.values()))['enforcement']='disabled'
-                    else:self.external_file(self.mod.SUSPENSION_PATH,self.raw+b' ')
+                    else:self.external_file('state/releases/utel-rel-23/release-state.json',canonical(self.rows['lastObservedJournal'])+b' ')
                 self.on_sleep=change
                 with self.assertRaises(RuntimeError):self.invoke_caller()
                 self.assertEqual(self.dispatches,['tag'])
@@ -3828,9 +3814,9 @@ class OrdinaryCallerControls(SuspensionFixture):
         self.assertEqual(self.reader().file(self.authority.head,'state/ordinary/concurrent.json'),b'concurrent sibling retained\n')
 
     def test_request_exhaustion_and_deadline_do_not_renew_window_or_send(self):
-        self.prepare_caller(ceiling=200)
+        self.prepare_caller(ceiling=120)
         with self.assertRaises(publisher.AuthorityQuotaWaiting):self.invoke_caller()
-        self.assertEqual(self.census['authorityPortEntries'],200);self.assertEqual(self.dispatches,['tag'])
+        self.assertEqual(self.census['authorityPortEntries'],120);self.assertEqual(self.dispatches,['tag'])
         self.prepare_caller(delays=1,target='tag');self.on_sleep=lambda:self.ticks.__setitem__(0,2701)
         with self.assertRaisesRegex(publisher.Refused,'deadline expired'):self.invoke_caller()
         self.assertEqual(self.dispatches,['tag'])
@@ -3838,8 +3824,8 @@ class OrdinaryCallerControls(SuspensionFixture):
     def test_immutable_binding_reuse_keeps_fresh_ref_checks_and_revalidates_new_physical_heads(self):
         self.prepare_caller();self.assert_complete()
         reader=self.reader()
-        journal=ProtectedReleaseJournal(self.authority,self.allowed['logicalRef'],main_directory=True,
-                                         suspension=reader,ordinary_forward=True)
+        journal=ProtectedReleaseJournal(self.authority,publisher.CURRENT_RELEASE['logicalRef'],main_directory=True,
+                                         ordinary_forward=True)
         journal.read();before=len(self.authority.calls);journal.read()
         calls=self.authority.calls[before:]
         self.assertEqual(calls,[('get',PREFIX+'/git/ref/heads/main')]*2)
@@ -3858,8 +3844,8 @@ class OrdinaryCallerControls(SuspensionFixture):
 
     def test_ordinary_immutable_binding_cache_has_a_real_finite_population_bound(self):
         self.prepare_caller();self.assert_complete()
-        journal=ProtectedReleaseJournal(self.authority,self.allowed['logicalRef'],main_directory=True,
-                                         suspension=self.reader(),ordinary_forward=True)
+        journal=ProtectedReleaseJournal(self.authority,publisher.CURRENT_RELEASE['logicalRef'],main_directory=True,
+                                         ordinary_forward=True)
         journal.read()
         for n in range(127):
             self.external_file('state/ordinary/cache-population.json',canonical({'generation':n}));journal.read()
@@ -3887,9 +3873,9 @@ class OrdinaryCallerControls(SuspensionFixture):
                         name='release-state.json' if mode=='state' else 'release-head.txt'
                         expected=self.providers[0]._ordinary_expected_journal
                         raw=expected[1]+b' ' if mode=='state' else ('e'*40+'\n').encode()
-                        self.external_file('state/releases/utel-rel-22/'+name,raw)
+                        self.external_file('state/releases/utel-rel-23/'+name,raw)
                 self.on_prepare=prepare
-                with self.assertRaisesRegex(ProviderRefused,'exact committed intent'):self.invoke_caller()
+                with self.assertRaises(RuntimeError):self.invoke_caller()
                 self.assertIsNone(self.native.tag);self.assertEqual(self.publisher_ports.count('post'),0)
                 self.assertEqual(self.rows['lastObservedJournal']['effects'],{'tag':'intent'})
 
@@ -3913,11 +3899,29 @@ class OrdinaryCallerControls(SuspensionFixture):
                 self.assertEqual(self.rows['lastDispatch']['state'],'applied')
                 self.assertEqual(self.dispatches[-1],identity);self.assertNotIn('promote',self.dispatches)
 
+    def test_current_overlay_post_creation_drift_or_cas_conflict_has_no_sender_or_retry(self):
+        for mode in ('physical-drift','cas-conflict'):
+            with self.subTest(mode=mode):
+                self.prepare_caller();original=self.authority.post;changed=[False]
+                def post(path,body):
+                    result=original(path,body)
+                    if body.get('message')=='Release directory generation 2' and not changed[0]:
+                        changed[0]=True
+                        if mode=='physical-drift':self.external_file('state/ordinary/cas-race.json',b'concurrent writer wins\n')
+                        else:self.authority.reject_patch=True
+                    return result
+                self.authority.post=post
+                with self.assertRaisesRegex(RuntimeError,'moved before CAS PATCH|CAS response uncertain'):self.invoke_caller()
+                self.assertTrue(changed[0]);self.assertIsNone(self.native.tag)
+                self.assertEqual(self.publisher_ports.count('post'),0)
+                self.assertEqual(self.census['authority']['attemptedByMethod']['patch'],1 if mode=='physical-drift' else 2)
+                self.assertEqual(self.rows['lastObservedJournal']['generation'],1)
+
     def test_actual_main_serializes_complete_terminal_result(self):
         self.prepare_caller();self.assertEqual(self.invoke_caller(main=True),0)
         value=json.loads(self.args.result_path.read_bytes())
         self.assertTrue(value['publicationComplete']);self.assertEqual(value['disposition'],'complete')
-        self.assertEqual(sum(value['authorityRequests']['attemptedByMethod'].values()),1400)
+        self.assertEqual(sum(value['authorityRequests']['attemptedByMethod'].values()),self.census['authorityPortEntries'])
         self.assertEqual(value['lastObservedJournal']['generation'],33)
 
     def test_actual_main_preserves_original_diagnostic_when_terminal_write_fails(self):

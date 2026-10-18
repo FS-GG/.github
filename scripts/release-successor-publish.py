@@ -24,16 +24,16 @@ import zipfile
 from release_successor_admission import SingleOperatorAdmission, publisher_context_authorized
 from release_successor_execution import Refused, advance, ordered_effects, full_transition
 from release_successor_journal import (ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical,
-    ReleaseSuspension, ALLOWED_SUCCESSOR, SUSPENDED_REF, SUSPENSION_PATH, strict_suspension,
+    ReleaseSuspension, ALLOWED_SUCCESSOR, CURRENT_RELEASE, SUSPENDED_REF, SUSPENSION_PATH, strict_suspension,
     SUSPENSION_SCHEMA, SUSPENDED_ORIGINAL, SUSPENSION_DECISION)
 from release_successor_provider import (GitHubAPI, MetadataRequestBudget, INSTALL_METADATA_REQUEST_CEILING, LiveProvider, NotFound, sanitized_dispatch_diagnostic,
                                        VerifiedOriginalTagTransport, approved_original_tag_transport,
                                        AUTH_PROTOCOL, AUTH_PROFILE, decode_auth_frame, validate_auth_binding, validate_auth_payload)
 
 REPOSITORY = "FS-GG/.github"
-SUCCESSOR_VERSION = "0.103.0"
-SUCCESSOR_PREDECESSOR = "0.102.0"
-SUCCESSOR_REF = "refs/heads/fsgg/v2/journal/release/utel-rel-21"
+SUCCESSOR_VERSION = CURRENT_RELEASE["version"]
+SUCCESSOR_PREDECESSOR = CURRENT_RELEASE["predecessor"]
+SUCCESSOR_REF = CURRENT_RELEASE["logicalRef"]
 ORIGINAL_SUCCESSOR_VERSION = "0.102.0"
 ORIGINAL_SUCCESSOR_PREDECESSOR = "0.101.0"
 ORIGINAL_SUCCESSOR_REF = "refs/heads/fsgg/v2/journal/release/utel-rel-20"
@@ -319,6 +319,8 @@ def selected_release_binding(args):
             "recover_original_0103_tag_intent", "recover_original_successor_checkpoint", "recovery_checkpoint",
             "repeat_original_nuget_kit_intent", "recover_original_runtime_intent")), "literal .104 profile conflicts")
         return (ALLOWED_SUCCESSOR["version"], ALLOWED_SUCCESSOR["predecessor"], ALLOWED_SUCCESSOR["logicalRef"])
+    if getattr(args, "original_0103_candidate", False) or getattr(args, "recover_original_0103_tag_intent", False):
+        return ("0.103.0", "0.102.0", SUSPENDED_REF)
     if getattr(args, "recover_original_successor_checkpoint", False):
         return (ORIGINAL_SUCCESSOR_VERSION, ORIGINAL_SUCCESSOR_PREDECESSOR, ORIGINAL_SUCCESSOR_REF)
     historical = any(getattr(args, flag, False) for flag in
@@ -461,8 +463,8 @@ def validate_original_0103_request(args):
         require((args.candidate_run_id, args.candidate_artifact_id, args.candidate_archive_sha256) ==
                 (fixed["runId"], fixed["artifactId"], fixed["archiveSha256"]),
                 "original .103 requested candidate differs")
-        require(selected_release_binding(args) == (fixed["version"], fixed["predecessor"], SUCCESSOR_REF)
-                and SUCCESSOR_REF == "refs/heads/fsgg/v2/journal/release/utel-rel-21",
+        require(selected_release_binding(args) == (fixed["version"], fixed["predecessor"], SUSPENDED_REF)
+                and SUSPENDED_REF == "refs/heads/fsgg/v2/journal/release/utel-rel-21",
                 "original .103 release binding differs")
     return selected
 
@@ -575,7 +577,7 @@ def validate_original_0103_seam(selection, manifest, intent, candidate_source, p
     require(type(selection) is VerifiedOriginal0103 and selection.publisher_sha == publisher_sha,
             "original .103 journal selection is not verified")
     validate_original_0103_manifest(manifest)
-    require(candidate_source == fixed["sourceSha"] and journal_ref == SUCCESSOR_REF
+    require(candidate_source == fixed["sourceSha"] and journal_ref == SUSPENDED_REF
             and journal_ref == "refs/heads/fsgg/v2/journal/release/utel-rel-21"
             and intent == {"contentId": fixed["contentId"], "sourceSha": fixed["sourceSha"],
                            "version": fixed["version"], "candidateArchiveSha256": fixed["archiveSha256"],
@@ -955,7 +957,7 @@ def authenticate_original_tag_result(api):
                 "contentId": ORIGINAL_0103_CANDIDATE["contentId"], "sourceSha": ORIGINAL_0103_CANDIDATE["sourceSha"],
                 "version": "0.103.0"}
             and value.get("disposition") == "checkpoint" and value.get("publicationComplete") is False
-            and value.get("failure") is None and value.get("journalRef") == SUCCESSOR_REF
+            and value.get("failure") is None and value.get("journalRef") == SUSPENDED_REF
             and value.get("lastDispatch") == {"attempted": True, "effect": "tag", "state": "unknown"}
             and value.get("lastObservedJournal", {}).get("generation") == 2
             and value["lastObservedJournal"].get("effects") == {"tag": "intent"}
@@ -972,7 +974,7 @@ def validate_original_tag_state(manifest, journal):
     validate_original_0103_manifest(manifest)
     observed = journal._observed
     fixed = ORIGINAL_0103_TAG_CHECKPOINT
-    require(journal.ref == SUCCESSOR_REF and journal.main_directory and observed is not None
+    require(journal.ref == SUSPENDED_REF and journal.main_directory and observed is not None
             and observed.head == fixed["logicalHead"] and observed.state["generation"] == 2
             and observed.state["effects"] == {"tag": "intent"}
             and observed.state["contentId"] == manifest["contentId"]
@@ -1297,8 +1299,13 @@ def run_forward(manifest, journal, admission, provider, report, deadline, *, max
     counted.api = RuntimeDeadlineAuthority(counted.api, deadline, clock)
     effects = ordered_effects(manifest)
     if ordinary:
+        require(journal.ref == CURRENT_RELEASE["logicalRef"]
+                and manifest["descriptor"].get("version") == CURRENT_RELEASE["version"]
+                and manifest["descriptor"].get("previousStableVersion") == CURRENT_RELEASE["predecessor"],
+                "current ordinary release binding differs")
         target = provider.provider if isinstance(provider, ReportingProvider) else provider
         target._ordinary_mode = True
+        target._ordinary_journal = journal.journal
         target._ordinary_deadline_check = lambda: require(clock() < deadline, "ordinary deadline expired before provider send")
     def prepare_ordinary(effect):
         observed = journal.journal._observed
@@ -1996,6 +2003,14 @@ def execute_publisher(args, report):
     manifest_bytes = manifest_path.read_bytes()
     manifest = json.loads(manifest_bytes)
     require(manifest["descriptor"]["version"] == version, "publisher version differs")
+    if selected_ref == CURRENT_RELEASE["logicalRef"]:
+        require(manifest["descriptor"].get("previousStableVersion") == predecessor, "publisher predecessor differs")
+        previous = json.loads((candidate / "previous-stable-channel.json").read_bytes())
+        require(previous.get("version") == CURRENT_RELEASE["predecessor"]
+                and previous.get("sourceSha") == CURRENT_RELEASE["predecessorSource"]
+                and previous.get("contentId") == CURRENT_RELEASE["predecessorContentId"]
+                and manifest["descriptor"].get("previousStableContentId") == CURRENT_RELEASE["predecessorContentId"],
+                "current accepted predecessor identity differs")
     if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery:
         require(candidate_source == RECOVERY_CANDIDATE["sourceSha"]
                 and manifest["contentId"] == RECOVERY_CANDIDATE["contentId"],
@@ -2012,7 +2027,7 @@ def execute_publisher(args, report):
     report["lastSuccessfulStage"] = "candidate-authentication"
     publisher_admission = SingleOperatorAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
     provider = LiveProvider(api, manifest_path, github_token, nuget_key)
-    if not continuation and not any((args.recovery_checkpoint, args.repeat_original_nuget_kit_intent, runtime_recovery, successor_checkpoint)):
+    if selected_ref == CURRENT_RELEASE["logicalRef"]:
         provider._ordinary_mode = True
     runtime_proof = None
     if runtime_recovery:
@@ -2056,7 +2071,7 @@ def execute_publisher(args, report):
     journal = ProtectedReleaseJournal(ledger_api, ref=selected_ref, main_directory=True, suspension=suspension,
                                       continuation_owner=execution if continuation else None,
                                       ordinary_forward=not continuation and not historical_recovery and not successor_checkpoint
-                                          and selected_ref == ALLOWED_SUCCESSOR["logicalRef"])
+                                          and selected_ref == CURRENT_RELEASE["logicalRef"])
     journal = ReportingJournal(journal, report, detailed=not historical_recovery)
     provider = ReportingProvider(provider, report)
     admission = ProtectedPublisherAdmission(publisher_admission, ledger_api, selected_ref, suspension=suspension)
@@ -2137,7 +2152,7 @@ def execute_publisher(args, report):
                     for name, digest in member_digests.items()), "authenticated ordinary candidate members changed")
     return run_forward(manifest, journal, admission, provider, report, forward_deadline,
                        maximum=RECOVERY_ADVANCES if successor_checkpoint else len(ordered_effects(manifest)) * 2 + 120,
-                       ordinary=not successor_checkpoint, candidate_check=candidate_check)
+                       ordinary=selected_ref == CURRENT_RELEASE["logicalRef"], candidate_check=candidate_check)
 
 
 def diagnostic(report, message, phase):
