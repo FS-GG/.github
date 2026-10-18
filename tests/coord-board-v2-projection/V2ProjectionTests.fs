@@ -1022,6 +1022,49 @@ let ``programme missing partial foreign and moved native facts never produce con
         Assert.Equal("unknown", (V2ProjectionSource.selectActions report (Some(selectionContext report)) report.NativeIntegrator.ObservedAt).Head.Decision)
 
 [<Fact>]
+let ``declared work reconciliation is local while independent slices retain ordered source capacity`` () =
+    let other: IssueRef = { Owner = "FS-GG"; Repository = ".github"; Number = 5555 }
+    let rows: (string * IssueRef * string) list =
+        [ ("I_outcome", ProgrammeFixture.issue, "docs/coordination/programme.md");
+          ("I_other_outcome", other, "docs/coordination/programme.md") ]
+    let selected: Binding =
+        { ProgrammeFixture.binding () with SelectedIssues = Map.ofList [ ("I_outcome", "FS-GG/.github#4634"); ("I_other_outcome", "FS-GG/.github#5555") ] }
+        |> fun binding -> ProgrammeFixture.enroll binding rows
+    let emptyBody = ProgrammeFixture.ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", "None")
+    let body = ProgrammeFixture.ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", "Retain original receiver custody while changing independent source")
+    let change (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+        if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then
+            response |> Result.map (fun (value: Transport.Response) ->
+                { value with Body = value.Body.Replace(System.Text.Json.JsonSerializer.Serialize emptyBody, System.Text.Json.JsonSerializer.Serialize body) })
+        else response
+    let transport = ProgrammeFixture.populationTransport selected rows change
+    let report = V2ProjectionSource.inspectFixed transport selected None
+    Assert.True(report.Evidence.PopulationGap.IsNone)
+    Assert.All<V2ProjectionSource.InspectionItem>(report.Items, fun item -> Assert.Equal<string option>(Some "Retain original receiver custody while changing independent source", item.CurrentDeliverable))
+    let context = selectionContext report
+    let template = context.Slices.Head
+    let makeSlice (item: V2ProjectionSource.InspectionItem) (id: string) (satisfied: bool option) : V2ProjectionSource.CurrentSlice =
+        let native = item.Evidence.Native.Value
+        { template with
+            Id = id; Attempt = id + "-attempt"; Issue = item.Evidence.Issue; Operation = V2ProjectionSource.Implement;
+            Paths = [ "src/" + id + ".fs" ]; PullRequest = None; PullRequestId = None; PullRequestUpdatedAt = None; Head = None;
+            Join = { NativeId = native.NodeId; UpdatedAt = native.UpdatedAt; BodySha256 = native.BodySha256; SourceRevision = item.SourceRevision.Value };
+            Prerequisites = [ { Action = V2ProjectionSource.Source; Reference = "current-deliverable"; Satisfied = satisfied; SupplyingOwner = "programme-owner" } ] }
+    let unknownItem = report.Items |> List.find (fun item -> item.Evidence.Issue = ProgrammeFixture.issue)
+    let independentItem = report.Items |> List.find (fun item -> item.Evidence.Issue = other)
+    let proposed =
+        { context with ImplementationSlots = Some 2;
+                       Slices = [ makeSlice unknownItem "unknown-work" None;
+                                  makeSlice independentItem "source-one" (Some true);
+                                  makeSlice independentItem "source-two" (Some true) ] }
+    let decisions = V2ProjectionSource.selectActions report (Some proposed) report.NativeIntegrator.ObservedAt
+    Assert.Equal<string list>([ "unknown"; "ready"; "ready" ], decisions |> List.map _.Decision)
+    Assert.Equal<string list>([ "unknown-work"; "source-one"; "source-two" ], decisions |> List.map (fun value -> value.SliceId.Value))
+    Assert.All<V2ProjectionSource.Selection>(decisions, fun value -> Assert.True(value.PullRequest.IsNone))
+    Assert.All<V2ProjectionSource.InspectionItem>(report.Items, fun item -> Assert.Equal<string option>(Some "Blocked", item.Planning.Value.Status))
+    Assert.Empty transport.Mutations
+
+[<Fact>]
 let ``programme selection uses actual slices nonenrolled work and action specific prerequisites`` () =
     let report = programmeSnapshot ProgrammeFixture.unchanged
     let current = report.NativeIntegrator.PullRequests.Head
@@ -1035,9 +1078,9 @@ let ``programme selection uses actual slices nonenrolled work and action specifi
     Assert.Equal("ready", (choose { context with ReviewSlots = Some 0 } report).Decision)
     Assert.Equal("unknown", (choose { context with Slices = [ { context.Slices.Head with PrerequisitesComplete = false } ] } report).Decision)
     let later: V2ProjectionSource.Prerequisite = { Action = V2ProjectionSource.Activation; Reference = "publication still required"; Satisfied = Some false; SupplyingOwner = "publisher" }
-    let source = { context with Slices = [ { context.Slices.Head with Prerequisites = [ later ] } ] }
+    let source = { context with Slices = [ { context.Slices.Head with Prerequisites = later :: context.Slices.Head.Prerequisites } ] }
     Assert.Equal("ready", (choose source report).Decision)
-    let activate = { source with Slices = [ { source.Slices.Head with Action = V2ProjectionSource.Activation } ] }
+    let activate = { source with Slices = [ { source.Slices.Head with Action = V2ProjectionSource.Activation; Prerequisites = source.Slices.Head.Prerequisites |> List.map (fun prerequisite -> if prerequisite.Reference = "current-deliverable" then { prerequisite with Action = V2ProjectionSource.Activation } else prerequisite) } ] }
     Assert.Equal("blocked", (choose activate report).Decision)
     let duplicate = { context with Slices = context.Slices @ context.Slices }
     Assert.Equal("needs-decision", (choose duplicate report).Decision)
@@ -1119,13 +1162,13 @@ let ``actual open native dependency is classified per action without suppressing
     Assert.Equal("unknown", (choose context).Decision)
     for reference in [ "https://github.com/FS-GG/.github/issues/1"; "FS-GG/.github#1" ] do
         let prerequisite: V2ProjectionSource.Prerequisite = { Action = V2ProjectionSource.Activation; Reference = reference; Satisfied = Some false; SupplyingOwner = "publisher" }
-        let classified = { context with Slices = [ { context.Slices.Head with Prerequisites = [ prerequisite ] } ] }
+        let classified = { context with Slices = [ { context.Slices.Head with Prerequisites = prerequisite :: context.Slices.Head.Prerequisites } ] }
         Assert.Equal("ready", (choose classified).Decision)
-        let activation = { classified with Slices = [ { classified.Slices.Head with Action = V2ProjectionSource.Activation } ] }
+        let activation = { classified with Slices = [ { classified.Slices.Head with Action = V2ProjectionSource.Activation; Prerequisites = classified.Slices.Head.Prerequisites |> List.map (fun prerequisite -> if prerequisite.Reference = "current-deliverable" then { prerequisite with Action = V2ProjectionSource.Activation } else prerequisite) } ] }
         Assert.Equal("blocked", (choose activation).Decision)
-        let source = { classified with Slices = [ { classified.Slices.Head with Prerequisites = [ { prerequisite with Action = V2ProjectionSource.Source } ] } ] }
+        let source = { classified with Slices = [ { classified.Slices.Head with Prerequisites = { prerequisite with Action = V2ProjectionSource.Source } :: context.Slices.Head.Prerequisites } ] }
         Assert.Equal("blocked", (choose source).Decision)
-        let mismatched = { classified with Slices = [ { classified.Slices.Head with Prerequisites = [ { prerequisite with Reference = reference + "0" } ] } ] }
+        let mismatched = { classified with Slices = [ { classified.Slices.Head with Prerequisites = { prerequisite with Reference = reference + "0" } :: context.Slices.Head.Prerequisites } ] }
         Assert.Equal("unknown", (choose mismatched).Decision)
         Assert.Equal("unknown", (choose { classified with Slices = [ { classified.Slices.Head with PrerequisitesComplete = false } ] }).Decision)
 

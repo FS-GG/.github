@@ -69,6 +69,10 @@ module ProgrammeFixture =
     let private enrollment () = publicEnrollment (binding ())
 
     let ownerBody = "## Owner\n\nworker\n\n## Done when\n\nAccepted outcome\n\n## Current deliverable\n\nhttps://github.com/FS-GG/.github/pull/42\n\n## Next action\n\nCurrent source\n\n## Blocked on\n\nSee owning plan\n\n## Acceptance evidence\n\nNative links"
+    let inlineOwnerBody =
+        [ "Owner"; "Done when"; "Current deliverable"; "Next action"; "Blocked on"; "Acceptance evidence" ]
+        |> List.fold (fun (body: string) name -> body.Replace("## " + name + "\n\n", name + ": ")) ownerBody
+
 
     let private content = {| id = "I_outcome"; number = 4634; repository = {| nameWithOwner = "FS-GG/.github" |} |}
     let private prNode (variables: (string * Var) list) (field: string) (value: 'a) =
@@ -223,7 +227,11 @@ module ProgrammeFixture =
                 Join = { NativeId = native.NodeId; UpdatedAt = native.UpdatedAt; BodySha256 = native.BodySha256; SourceRevision = item.SourceRevision |> Option.defaultValue "missing source revision" }
                 Observation = observation; PullRequest = pull |> Option.map _.Url; PullRequestId = pull |> Option.map _.Id
                 PullRequestUpdatedAt = pull |> Option.map _.UpdatedAt; Head = pull |> Option.map _.Head
-                Prerequisites = []; PrerequisitesComplete = true; IntakeAuthorized = Some true } ]
+                Prerequisites =
+                    (if item.CurrentDeliverable |> Option.exists (fun value -> value <> "None") then
+                        [ { Action = V2ProjectionSource.Source; Reference = "current-deliverable"; Satisfied = Some true; SupplyingOwner = "/root/programme" } ]
+                     else [])
+                PrerequisitesComplete = true; IntakeAuthorized = Some true } ]
           ImplementationSlots = Some 1; ReviewSlots = Some 1; HostedCiSlots = Some 1; CapacityMeaning = "remaining-after-active"
           CapacityObservation = Some observation; Reservations = Some []; ReservationObservation = Some observation
           ObservedAt = observation.ObservedAt; ValidUntil = observation.ValidUntil; Evidence = "inert actual parent caller observation" }
@@ -250,9 +258,9 @@ module ProgrammeFixture =
                       prerequisitesComplete = slice.PrerequisitesComplete; intakeAuthorized = slice.IntakeAuthorized |})
                capacity = context.CapacityObservation |> Option.map (fun observed ->
                    {| meaning = context.CapacityMeaning; implementation = context.ImplementationSlots; review = context.ReviewSlots; hostedCi = context.HostedCiSlots; observation = observation observed |})
-               reservations = context.ReservationObservation |> Option.map (fun observed ->
+               reservations = (context.Reservations, context.ReservationObservation) ||> Option.map2 (fun (items: V2ProjectionSource.Reservation list) (observed: V2ProjectionSource.AttributedObservation) ->
                    {| observation = observation observed
-                      items = context.Reservations |> Option.defaultValue [] |> List.map (fun reservation ->
+                      items = items |> List.map (fun reservation ->
                           {| sliceId = reservation.SliceId; attempt = reservation.Attempt; operation = operation reservation.Operation; owner = reservation.Owner
                              repository = reservation.Repository; paths = reservation.Paths; pullRequest = reservation.PullRequest; head = reservation.Head; custodyReference = reservation.CustodyReference |}) |}) |})
 

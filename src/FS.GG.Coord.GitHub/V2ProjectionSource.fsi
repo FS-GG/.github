@@ -106,6 +106,8 @@ module V2ProjectionSource =
         { Supplier: string; ObservedAt: DateTimeOffset; ValidUntil: DateTimeOffset; Evidence: string list }
     type SliceJoin =
         { NativeId: string; UpdatedAt: string; BodySha256: string; SourceRevision: string }
+    /// Non-None declared work requires exactly one proposed-action reference "current-deliverable".
+    /// True reconciles scoped nonduplication under the fresh exact body/plan join, never completion or authority.
     type Prerequisite = { Action: Action; Reference: string; Satisfied: bool option; SupplyingOwner: string }
     type CurrentSlice =
         { Id: string; Attempt: string; Operation: Operation; Issue: IssueRef
@@ -131,10 +133,12 @@ module V2ProjectionSource =
     type NativeIntakeObservation =
         { Admission: BoardIntake.Admission option; Allowed: bool option; ObservedAt: DateTimeOffset; Gap: IoError option }
 
+    /// CurrentDeliverable retains bounded native field text (16KiB UTF-8); exact "None" declares absence.
+    /// Deliverables contains only canonical selected-repository PR discovery hints, joined independently.
     type InspectionItem =
         { Evidence: ItemReport; ExpectedNodeId: string; SourceCurrentness: string
           Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list; Owner: string option; SourceRevision: string option
-          Deliverables: string list; DeliverableGap: string option; Intake: NativeIntakeObservation }
+          CurrentDeliverable: string option; Deliverables: string list; DeliverableGap: string option; Intake: NativeIntakeObservation }
 
     type InspectionReport =
         { Binding: Binding; Evidence: BatchReport; Items: InspectionItem list
