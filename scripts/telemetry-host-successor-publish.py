@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish the exact Host 0.6.0 candidate through fresh admitted effects."""
+"""Publish the exact Host 0.7.0 candidate through fresh admitted effects."""
 
 from __future__ import annotations
 
@@ -13,13 +13,13 @@ import time
 
 from release_successor_execution import Refused, advance_effects
 from release_successor_journal import ProtectedReleaseJournal, REPOSITORY as JOURNAL_REPOSITORY
-from release_successor_provider import GitHubAPI, NotFound
-from telemetry_host_successor_admission import HostAdmission, ordinary_route, validate_failed_original
+from release_successor_provider import GitHubAPI, NotFound, sanitized_dispatch_diagnostic
+from telemetry_host_successor_admission import HostAdmission, ordinary_route
 from telemetry_host_successor_execution import effects
 from telemetry_host_successor_provider import HostProvider
 
 REPOSITORY = "FS-GG/.github"
-REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-12"
+REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-13"
 
 
 def require(ok: bool, detail: str) -> None:
@@ -27,18 +27,34 @@ def require(ok: bool, detail: str) -> None:
         raise Refused(detail)
 
 
+def emit_dispatch_diagnostic(provider) -> None:
+    """Consume a best-effort safe diagnostic once; never change effect semantics."""
+    try:
+        pending = getattr(provider, "last_dispatch_diagnostic", None)
+        provider.last_dispatch_diagnostic = None
+        value = sanitized_dispatch_diagnostic(pending)
+        if value is not None:
+            print("Host successor dispatch diagnostic: " + json.dumps(value, sort_keys=True, separators=(",", ":")), flush=True)
+    except BaseException:
+        try:
+            print("Host successor dispatch diagnostic unavailable", flush=True)
+        except BaseException:
+            pass
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate-run-id", required=True, type=int)
     parser.add_argument("--candidate-artifact-id", required=True, type=int)
     parser.add_argument("--candidate-archive-sha256", required=True)
-    parser.add_argument("--continue-failed-original", action="store_true")
+    parser.add_argument("--continue-failed-original", action="store_true", help="Retired Host 0.6 flag; current Host 0.7 refuses it")
     parser.add_argument("--workdir", required=True, type=pathlib.Path)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--preflight-only", action="store_true")
     mode.add_argument("--publish", action="store_true")
     args = parser.parse_args()
     try:
+        require(not args.continue_failed_original, "Host 0.6 failed-original continuation is retired; current Host 0.7 requires a new exact-source candidate")
         publisher_sha = os.environ["GITHUB_SHA"]
         operator = os.environ["GITHUB_ACTOR"]
         run_id = int(os.environ["GITHUB_RUN_ID"])
@@ -61,6 +77,7 @@ def main() -> int:
         require(artifact.get("id") == args.candidate_artifact_id, "candidate artifact API identity differs")
         candidate_source = run.get("head_sha")
         require(isinstance(candidate_source, str) and len(candidate_source) == 40, "candidate source malformed")
+        require(candidate_source == publisher_sha, "current Host 0.7 publication requires exact current main candidate")
         require(artifact.get("digest") == "sha256:" + args.candidate_archive_sha256, "artifact digest differs")
         artifact_json = args.workdir / "artifact.json"
         run_json = args.workdir / "run.json"
@@ -80,19 +97,14 @@ def main() -> int:
         content_id, ordered = effects(manifest)
         admission = HostAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
         provider = HostProvider(api, manifest_path, github_token, nuget_key)
-        intent = {"contentId": content_id, "sourceSha": candidate_source, "version": "0.6.0",
+        intent = {"contentId": content_id, "sourceSha": candidate_source, "version": "0.7.0",
                   "candidateArchiveSha256": args.candidate_archive_sha256, "operator": operator}
         ledger_api = GitHubAPI(ledger_token)
         route = ordinary_route()
         admission = route.ProtectedPublisherAdmission(admission, ledger_api, REF)
         journal = ProtectedReleaseJournal(ledger_api, REF, main_directory=True)
-        if args.continue_failed_original:
-            validate_failed_original(api, manifest, publisher_sha, args.candidate_run_id,
-                                     args.candidate_artifact_id, args.candidate_archive_sha256)
         fresh, physical = route.classify_journal_destination(ledger_api, REF)
         if fresh:
-            require(candidate_source == publisher_sha or args.continue_failed_original,
-                    "fresh Host publication requires exact current main candidate")
             require(admission.authorize(content_id, "journal", "intent", content_id), "Host journal admission denied")
             for effect in ordered:
                 observation = provider.observe(effect)
@@ -108,13 +120,11 @@ def main() -> int:
             journal.read()
             require(route.authority_main(ledger_api) == physical, "Authority main moved during Host recovery")
             require(not args.preflight_only, "preflight requires unused Host journal and version")
-            if candidate_source != publisher_sha and not args.continue_failed_original:
-                comparison = api.get(f"repos/{REPOSITORY}/compare/{candidate_source}...{publisher_sha}")
-                require(comparison.get("status") == "ahead", "recovery publisher does not descend from candidate")
         journal.validate_intent(intent)
         deadline = time.monotonic() + 45 * 60
         for _ in range(len(ordered) * 2 + 120):
             result = advance_effects(content_id, ordered, journal, admission, provider)
+            emit_dispatch_diagnostic(provider)
             print(f"Host successor effect state: {result}", flush=True)
             if result == "complete":
                 return 0

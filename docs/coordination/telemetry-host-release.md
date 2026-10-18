@@ -2,57 +2,73 @@
 
 ## Current source frontier — 2026-10-18
 
-Prospective Host **0.6.0** bundles the current Store14 implementation and accepts partial
-`provider-usage-observation/1` facts through the existing authenticated generic receipt route.
-The [Host package](../../src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj),
-[HTTP receipt controls](../../tests/FS.GG.Telemetry.Tests/HostPassiveReceiptTests.fs) and
-[closed candidate verifier](../../scripts/telemetry-host-successor-artifact.py) bind the new source
-profile. The envelope and receipt ABI remain unchanged. Passive facts retain authenticated owner
-checks, corrections and canonical-only attribution; they do not become qualified item totals.
+Prospective independently versioned Host **0.7.0** uses the current Store14 implementation
+and unchanged authenticated passive-receipt ABI. It is a new source, package, candidate and
+release profile, with `telemetry-host/v0.7.0` and logical journal13 at
+`state/releases/utel-host-rel-13`. It requires a newly built genuine candidate on the exact
+current publisher source. It cannot consume or relabel the retained0.6 candidate. The current
+publisher explicitly refuses the retired `continue_failed_original` flag and source inequality.
 
-The installed-browser fixture keeps a strict one-receipt default for historical profiles. The current
-Store14 producer-correction profile explicitly requires two applied receipts and zero rejected receipts,
-with both applied SQLite rows checked before and after backup/restore. The earlier one-receipt assertion
-failed on that current profile; passing the other package stages did not qualify the installed browser.
-The genuine candidate subsequently passed hosted browser and installed-package qualification.
-The corrective publisher source still requires its own hosted checks and admitted native qualification.
+The [Host project](../../src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj),
+[closed candidate verifier](../../scripts/telemetry-host-successor-artifact.py),
+[effect identities](../../scripts/telemetry_host_successor_execution.py) and
+[publisher](../../scripts/telemetry-host-successor-publish.py) bind the new coordinates together.
+Passive observations retain authenticated owner checks, corrections, partial population and
+canonical-only attribution; qualified item totals exclude them. The generic historical manifest
+reader retains0.4 schema10..12 and0.5/0.6 schema14 profiles; the current candidate/publisher accepts0.7 only.
 
-The fixed 0.6 release rails use Store14 and logical `utel-host-rel-12`. Source and
-installed-package qualification passed before authentic [candidate39135954294](https://github.com/FS-GG/.github/actions/runs/39135954294).
-The [first publisher39137010941](https://github.com/FS-GG/.github/actions/runs/39137010941)
-failed at journal-ref creation with HTTP422. Its precise provider response body and created
-immutable-object identities were not retained. Current native policy independently confirms that
-the legacy journal namespace forbids creation and update; that observation does not recover the
-original422 response. Earlier preflight established reads and effect absence, not writer-route compatibility.
+Before genesis and each effect, the existing native predicate checks Authority main-writer,
+integrity and retired journal fencing. The selected directory is classified through bounded
+canonical Git trees; inaccessible, malformed, missing-parent and changed-main states cannot mean
+fresh absence. Existing protected-main nonforced compare/exchange preserves unrelated directories,
+including old journal12. Native caller admission requires the current main source, first attempt,
+expected operator and an in-progress dispatch; a terminal old caller cannot authorize future effects.
+The unchanged workflow concurrency group serializes this route. These gates do not claim zero other writers.
 
-The corrective source uses the existing protected-main directory route at
-`state/releases/utel-host-rel-12`, retaining the same logical journal and candidate. The existing
-native Authority main-writer/integrity and retired-namespace predicate runs before genesis and
-each effect admission. Bounded tree classification distinguishes selected-directory absence from
-missing parent/object, malformed, inaccessible or changed-main state. Main overlays preserve unrelated directories.
+The eight ordered effects remain tag, draft release, two feeds, three release assets and promotion.
+Promotion keeps `make_latest=false` and touches no coherent CLI channel. A late0.6 tag cannot satisfy
+0.7 coordinates or restart the terminal old caller's later stages. An uncertain0.7 send retains its
+intent and polls readback without resend. A new coordinate does not reconcile an earlier Unknown.
+Future native admission must freshly qualify source/currentness, competing executions, current
+protection/writer compatibility, absence of both journal locations and all tag/release/feed destinations,
+and its actual operating window. Source observations do not reserve destinations or prove write success.
 
-Default fresh-source equality remains unchanged. The explicit default-false `continue_failed_original`
-input admits only original failed run39137010941/attempt1, candidate39135954294 and artifact12140420062,
-with its fixed raw archive digest, content identity and package digest. Native original failure,
-ancestry and complete nontruncated source trees are checked. Only the finite reviewed publisher,
-control, owning-plan and Atlas carrier paths may differ; all other package inputs remain identical.
-Existing Atlas records cannot change or disappear. No new candidate, repack, reset, journal identity,
-policy bypass or publication follows from the source repair. Unknown original object reachability
-remains unknown. The preflight remains read-only; any later publication needs separate native selection.
+Dispatch failure reporting now reuses the common closed safe projection for status, request ID,
+rate metadata and allowlisted response classes. It excludes raw HTTP bodies, arguments and credentials,
+clears stale observation diagnostics and emits each captured dispatch diagnostic once. Reporting failure
+cannot change the effect outcome. This improves future diagnostics; it cannot recover an earlier cause.
 
-Pipeline preflight reuses the existing actual Host pure runner, now including the production caller,
-real disposable Git overlay, policy mutations and actual workflow flag shell. Static binding plus
-inert provider controls are proportionate for this input/route change; no custom model, new job,
-permission or timeout is added. Hosted required checks remain separate qualification obligations.
-Published [Host0.5.0](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.5.0),
-its original source and journal11, and every earlier release remain immutable. This source
-changes no coherent CLI/Kit/Drivers publication or active CLI selector.
+The existing pure runner exercises the actual current publisher with inert providers and a disposable
+Git Authority: new journal13/eight effects, old12 byte preservation, terminal-caller refusal, old candidate
+and continuation refusal, late old-tag irrelevance, policy drift and Unknown polling with one send.
+Secret and malformed-diagnostic controls exercise the actual provider and caller. Existing early HTTP,
+schema/native-output assertions and full package/installed-browser qualification remain required with
+unchanged job caps. Static/caller preflight reuses those controls; no workflow, permission, clock budget
+or custom model is added. Current0.7 compiled, candidate, publication and receiver adoption gates remain pending.
 
-Host candidate qualification, authenticated publication, downloaded installation and service
-adoption require separate admission and readback. Existing TLS and bearer API capability does
-not establish an actual receiver endpoint, trust, enrollment, storage or readiness. Home owns
-stable receiver metadata; local producer capture remains useful without receiver credentials.
-The historical release and adoption sections below retain their original scopes.
+### Retained0.6 evidence
+
+[Source PR4675](https://github.com/FS-GG/.github/pull/4675) delivered Store14 passive ingestion;
+its full hosted/installed-browser qualification and genuine [candidate39135954294](https://github.com/FS-GG/.github/actions/runs/39135954294)
+passed. [Publisher39137010941](https://github.com/FS-GG/.github/actions/runs/39137010941)
+failed HTTP422 creating a retired legacy ref. Its precise response body and created immutable-object
+identities remain Unknown. [Corrective source PR4676](https://github.com/FS-GG/.github/pull/4676)
+selected the existing protected-main route while retaining that exact candidate.
+
+Corrected [preflight39139925555](https://github.com/FS-GG/.github/actions/runs/39139925555) passed.
+The separately admitted [publisher39140168695](https://github.com/FS-GG/.github/actions/runs/39140168695)
+then exhausted136 waiting transitions. Journal12 retains generation2/tag intent and the original0.6
+source/content/archive tuple. The underlying tag HTTP cause was not retained; a workflow-permission
+explanation is an inference, not a recovered response. Other seven stages were not reached by source
+ordering. Current404 visibility is not a no-send or zero-effects proof. No retry, reset or new tag
+transport follows from0.7 preparation. App cleanup logged revocation; independent invalidity and NuGet
+key revocation/expiry remain unproved. Original state, candidate and package bytes remain unchanged.
+
+Published [Host0.5.0](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.5.0) and all historical
+artifacts/journals remain immutable. Coherent published CLI0.106 and active installed0.105 remain separate.
+No service installation, TLS/trust change, enrollment, native provider capture or Home durability follows
+from this source. Home owns final endpoint/reference, service custody and receiver adoption. Existing
+TLS/bearer capability does not establish readiness. Historical sections below retain their original scopes.
 
 `FS.GG.Telemetry.Host` is an optional, independently versioned .NET tool. The
 next candidate is `0.2.1`, carrying the protected native capture provenance

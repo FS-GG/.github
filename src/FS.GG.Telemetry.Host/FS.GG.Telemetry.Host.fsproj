@@ -12,7 +12,7 @@
     <!-- Independent one-package release line. This literal deliberately does not resolve from
          FsggCoherentSetVersion, which belongs only to Kit, Drivers and Coord.Cli. -->
     <FsggCoherentSetVersion />
-    <Version>0.6.0</Version>
+    <Version>0.7.0</Version>
     <PackageId>FS.GG.Telemetry.Host</PackageId>
     <AssemblyName>FS.GG.Telemetry.Host</AssemblyName>
     <IsPackable>true</IsPackable>
@@ -27,7 +27,7 @@
     <RepositoryUrl>https://github.com/FS-GG/.github</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/FS-GG/.github/tree/main/src/FS.GG.Telemetry.Host</PackageProjectUrl>
-    <PackageReleaseNotes>0.6.0 — Accept partial native provider response observations through authenticated generic receipt ingestion. Bundle current Store14 with canonical-only passive facts, owner-bound corrections and unchanged qualified item totals. Store14-only profile; no migration, installed receiver or durability acceptance follows from source preparation. Published Host0.4 and0.5 artifacts remain immutable.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.7.0 — Independent prospective exact-source Host release with Store14 and the unchanged partial native-usage receipt ABI. Safe dispatch diagnostics retain uncertainty without replay. Host0.6 candidate and journal12/tag intent remain separate retained history; this source neither completes that publication nor qualifies receiver installation or durability. Published Host0.4 and0.5 artifacts remain immutable.</PackageReleaseNotes>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../FS.GG.Coord.Cli/SkillTelemetryReaders.fsi" Link="SkillTelemetryReaders.fsi" />
