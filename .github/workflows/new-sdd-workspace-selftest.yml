@@ -103,6 +103,26 @@ jobs:
             --reference:scripts/NewSddWorkspace/bin/Release/net10.0/FS.GG.Coord.Core.dll \
             --exec tests/new-sdd-workspace/product-board.fsx
 
+      - name: Qualify Creator 0.17 normal-source package closure
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          package_dir="$RUNNER_TEMP/creator017-source-qualification"
+          mkdir "$package_dir"
+          dotnet pack scripts/NewSddWorkspace/NewSddWorkspace.fsproj -c Release --no-build \
+            -p:RepositoryCommit="$SOURCE_SHA" -o "$package_dir"
+          package="$package_dir/FS.GG.NewSddWorkspace.0.17.0.nupkg"
+          manifest="$package_dir/manifest.json"
+          python3 scripts/new-sdd-workspace-release.py prepare --package "$package" \
+            --source-sha "$SOURCE_SHA" --version 0.17.0 \
+            --tag new-sdd-workspace/v0.17.0 --output "$manifest"
+          python3 scripts/new-sdd-workspace-release.py verify --manifest "$manifest" --package "$package"
+          python3 tests/new-sdd-workspace-successor/run.py \
+            --board-package "$package" --source-sha "$SOURCE_SHA" --release-manifest "$manifest" \
+            > "$package_dir/package-evidence.json"
+
       - name: Qualify Wizard successor identity, effect ordering and legacy seals
         run: |
           set -euo pipefail
