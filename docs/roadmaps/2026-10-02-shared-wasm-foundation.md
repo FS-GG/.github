@@ -13,6 +13,26 @@ indexes this part as WASM-SHARED-01. Its
 separates source extraction, publication and installed adoption. The `.github` roadmap owner
 coordinates the programme; FS.GG.Game is the selected producer.
 
+## Current supplier publication and installed scope — 2026-10-18
+
+The accepted published pair and SDK are **0.5.0**, from immutable producer
+P=`80540027623d9b1a8aa7715d0591de48455403b7`, with the independent finite installed qualifier
+Q=`c938e9158542e3a0572b62dd09c01ad01cbb344f`. [Original publication `39073209865/attempt1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39073209865)
+and [release `416092764`](https://github.com/FS-GG/FS.GG.Game/releases/tag/wasm/v0.5.0) retain the exact
+pair, SDK, manifest and transaction. [Original both-feed installed qualification `39076218708/attempt1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39076218708)
+passed at Q, including collection, native artifact upload and direct cleanup. Global descendant
+settlement remains unproved. The [Game owning plan](https://github.com/FS-GG/FS.GG.Game/blob/bc78722f7a62a1ce5f0351d7969a26c307ec4fe7/docs/roadmaps/wasm-shared-01.md#accepted-05-closed-worker-and-installed-qualifier)
+retains the exact publication and finite P-to-Q source/Worker/Core custody joins.
+
+Game's protected **source 0.6.0** at
+[`bc78722f`](https://github.com/FS-GG/FS.GG.Game/commit/bc78722f7a62a1ce5f0351d7969a26c307ec4fe7)
+is unpublished. Its source preparation and qualification obligations cannot inherit the accepted 0.5
+publication or installed receipt. The shared registry now records source 0.6 separately from published 0.5;
+its earlier 0.5 projection deferral ended after [coherent coordination 0.104 publication](utel-release-successor.md#accepted-104-publication--2026-10-18).
+Historical 0.4/0.3 identities and failures remain intact. Empty registry consumers remain intentional:
+this supplier acceptance does not establish SC2/BAR/FourD product pins, native authority, timing,
+consumer adoption or completion of stages .5–.7.
+
 ## Inspected source and existing consumers
 
 | Consumer | Inspected protected source | Current implementation |

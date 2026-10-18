@@ -2,6 +2,42 @@
 
 Owner: `FS-GG/.github` release and telemetry producer. Main/SystemAdmin owns installed-host adoption. This item is a separate, additive publication route; it does not reopen the accepted GS2-08.9 legacy routes or authorize `OpenV2`.
 
+## Accepted .104 publication — 2026-10-18
+
+Root accepted the original [continuation `39080633461/attempt1`](https://github.com/FS-GG/.github/actions/runs/39080633461)
+and released the shared source hold. [Release `416097241`](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.104.0)
+is promoted/latest with all sixteen effects verified in journal22 generation34. This completes the
+selected coherent publication of `FS.GG.Coord.Cli`, `FS.GG.Kit` and `FS.GG.Drivers` **0.104.0** on both feeds.
+
+The immutable candidate remains [source `912eba8b`](https://github.com/FS-GG/.github/commit/912eba8bbd707dabcbc5011d508c479109010b71),
+run `39072586985`, artifact `12115444808`, archive SHA256
+`ddd8a273fab400e963dffcf2dd07db19332af78c22939d97822f3d9f644b0a7f` and content
+`sha256:86a776fe591b5b98bf189fdf2c47148b1b417551c44f091146a1d6ce1acfd987`.
+[Executor `5a2d13d0`](https://github.com/FS-GG/.github/commit/5a2d13d0c539f8a06b0a80c530ba507dc34bc75b)
+is the release controller, not a replacement package source. The one-use continuation claimed
+original generation28, uploaded only the frozen channel and manifest bytes, and promoted the same
+release; it did not repack or repush packages. Original publisher `39073648848/attempt1` remains an
+incomplete checkpoint. No replay or new invocation follows from the consumed claim.
+
+Independent original-data review verified final logical head
+`726c9254149e459f17d863534ea568f4d2624ded`, state SHA256
+`8d62f3858bc8d992ac3e211407bbf501a602fdbdfdeadff2f35f2a25a92fb590`, the exact seven release
+assets and the frozen channel/manifest readbacks. The original candidate and both-feed payload
+identities remain unchanged. All six native parent-to-overlay comparisons changed only journal22's
+two files and preserved concurrent ordinary records, original .103 state and the installed suspension.
+Actual new Authority consumption was **639/750** (`591 GET`, `42 POST`, `6 PATCH`), cumulative
+**2139/2250** with the original exhausted 1500. The separate 602 publisher attempts are not a global
+request count or a new provider cap. The controller took 355.139 seconds within its 900-second inner
+window; the native job took 426 seconds under the existing 60-minute hard limit. These observations
+establish fit of this invocation only. Post-mint/checkout cleanup succeeded and token revocation was
+recorded; no separate remote-erasure or descendant-settlement proof is inferred.
+
+Registry publication/tag now name **0.104.0**. The earlier registry deferral below is historical:
+the accepted publication releases that hold and permits the deferred Game 0.5 inventory reconciliation.
+Game's immutable published producer and installed qualifier stay distinct from its newer unpublished
+0.6 source. Installed-host update, private-caller acceptance, Project3 migration/UI and consumer adoption
+remain separate. Original **.103 Unknown**, the 439 holds and every inherited reservation remain unresolved.
+
 ## Selected current source scope — 2026-10-16
 
 The [user direction](https://github.com/FS-GG/.github/issues/4517#issuecomment-6218097145)
