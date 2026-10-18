@@ -1056,6 +1056,8 @@ module BoardV2MigrationTests =
     let ``actual successor CLI creates one Work level and initializes only explicit absent delivery intent`` () =
         use fixture = new Fixture()
         fixture.Native.Snapshot <- planningSchema fixture.Native.Snapshot
+        let originalFields = fixture.Native.Snapshot.Fields
+        let originalStatus = originalFields |> List.find (fun field -> field.Id = scope.StatusFieldId)
         let oldView: View =
             { Id = "synthetic-retained-view"; Name = "Selected deliveries"; Layout = "TABLE_LAYOUT";
               Filter = "old-filter"; VisibleFieldIds = [ scope.StatusFieldId; scope.RoadmapFieldId ]; UnsupportedConfiguration = "[[],[],[]]" }
@@ -1080,7 +1082,38 @@ module BoardV2MigrationTests =
         Assert.Equal("synthetic-explicit-delivery-filter", updated.Filter)
         Assert.Equal(oldView.Layout, updated.Layout)
         Assert.Equal<string>(oldView.VisibleFieldIds, updated.VisibleFieldIds)
-        Assert.Equal(4, fixture.Native.Mutations.Length) // field, membership, absent classification, selected view
+        // The fixture also lacks the existing route's In review schema option. Its fifth effect
+        // adds that exact option; it must neither initialize Status nor alter retained descriptors.
+        let operations =
+            fixture.Native.Mutations |> List.map (fun request ->
+                let json = match request.Body with Transport.Json json -> json | _ -> failwith "expected native JSON mutation"
+                use document = JsonDocument.Parse json
+                let query = document.RootElement.GetProperty("query").GetString()
+                let input = document.RootElement.GetProperty("variables").GetProperty("input")
+                let operation =
+                    [ "createProjectV2Field"; "updateProjectV2Field"; "addProjectV2ItemById";
+                      "updateProjectV2ItemFieldValue"; "updateProjectV2View" ]
+                    |> List.filter (fun name -> query.Contains(name + "(")) |> Assert.Single
+                match operation with
+                | "updateProjectV2Field" -> Assert.Equal(scope.StatusFieldId, input.GetProperty("fieldId").GetString())
+                | "addProjectV2ItemById" -> Assert.Equal("synthetic-issue", input.GetProperty("contentId").GetString())
+                | "updateProjectV2ItemFieldValue" ->
+                    Assert.Equal(field.Id, input.GetProperty("fieldId").GetString())
+                    Assert.Equal(card.Id, input.GetProperty("itemId").GetString())
+                | "updateProjectV2View" -> Assert.Equal(oldView.Id, input.GetProperty("viewId").GetString())
+                | _ -> Assert.Equal("Work level", input.GetProperty("name").GetString())
+                operation)
+        Assert.Equal<string>([ "createProjectV2Field"; "updateProjectV2Field"; "addProjectV2ItemById";
+                               "updateProjectV2ItemFieldValue"; "updateProjectV2View" ], operations)
+        let retainedStatus = fixture.Native.Snapshot.Fields |> List.find (fun value -> value.Id = scope.StatusFieldId)
+        Assert.Equal<SelectOption>(originalStatus.Options, retainedStatus.Options |> List.take originalStatus.Options.Length)
+        let added = retainedStatus.Options |> List.skip originalStatus.Options.Length |> Assert.Single
+        Assert.Equal("In review", added.Name)
+        Assert.Equal(scope.InReviewColor, added.Color)
+        Assert.Equal(scope.InReviewDescription, added.Description)
+        Assert.Equal<Field>(originalFields |> List.filter (fun value -> value.Id <> scope.StatusFieldId),
+                            fixture.Native.Snapshot.Fields |> List.filter (fun value -> value.Id <> scope.StatusFieldId && value.Id <> field.Id))
+        Assert.Equal(5, fixture.Native.Mutations.Length)
         let mutations = fixture.Native.Mutations.Length
         // A new bounded invocation must explicitly select the independently read-back field identity.
         fixture.Scope <- { fixture.Scope with WorkLevel = fixture.Scope.WorkLevel |> Option.map (fun plan -> { plan with FieldId = Some field.Id }) }
