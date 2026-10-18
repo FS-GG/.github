@@ -38,6 +38,25 @@ Game's immutable published producer and installed qualifier stay distinct from i
 0.6 source. Installed-host update, private-caller acceptance, Project3 migration/UI and consumer adoption
 remain separate. Original **.103 Unknown**, the 439 holds and every inherited reservation remain unresolved.
 
+### Canonical tool pin correction after durable closure
+
+The first post-merge [engine-pin-coherence run `39083274110`](https://github.com/FS-GG/.github/actions/runs/39083274110)
+after [PR #4661](https://github.com/FS-GG/.github/pull/4661) failed because
+`dist/dotnet/.config/dotnet-tools.json` still pinned `fs.gg.coord.cli` **0.102.0** while
+nuget.org resolved the accepted **0.104.0** release. The canonical pin now selects published
+0.104.0; this is neither a source-next version bump nor an installed-host update. Other tool
+pins, including `fs.gg.coordination.cli` 0.1.7, remain unchanged. Historical .102 predecessor
+bindings, snapshots and original-operation evidence retain their original versions.
+
+The earlier registry/publication reconciliation omitted this separate authoritative scalar.
+Its pre-merge checks validated generated registry projections and synthetic checker fixtures;
+they did not establish live canonical-pin/feed equality. The existing live main-branch gate
+caught the omission after merge. Release closure must census the canonical tool manifest as
+well as registry source/published fields, then compare it with the accepted resolvable release.
+Offline fixtures establish checker behavior only. The canonical manifest is not distributed
+to receivers; receiver pins and installed-host adoption require their own update/readback.
+The live gate and its failure remain intact.
+
 ## Selected current source scope — 2026-10-16
 
 The [user direction](https://github.com/FS-GG/.github/issues/4517#issuecomment-6218097145)
