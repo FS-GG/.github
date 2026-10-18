@@ -327,7 +327,7 @@ class ProtectedReleaseJournal:
     _MAX_IMMUTABLE_BYTES = 16 * 1024 * 1024
     _MAX_IMMUTABLE_OBJECT_BYTES = 1024 * 1024
 
-    def __init__(self, api: GitAPI, ref: str = REF, *, main_directory: bool = False, suspension=None, continuation_owner=None):
+    def __init__(self, api: GitAPI, ref: str = REF, *, main_directory: bool = False, suspension=None, continuation_owner=None, ordinary_forward=False):
         if type(main_directory) is not bool:
             raise Refused("main-directory selection must be explicit boolean")
         if not ref.startswith("refs/heads/fsgg/v2/journal/release/"):
@@ -350,6 +350,10 @@ class ProtectedReleaseJournal:
         if continuation_owner is not None and (ref != ALLOWED_SUCCESSOR["logicalRef"] or not main_directory
                 or type(continuation_owner) is not dict):
             raise Refused("continuation journal owner binding differs")
+        if type(ordinary_forward) is not bool or (ordinary_forward and
+                (ref != ALLOWED_SUCCESSOR["logicalRef"] or not main_directory or suspension is None or continuation_owner is not None)):
+            raise Refused("ordinary immutable binding cache has a different owner or profile")
+        self._ordinary_binding_cache = {} if ordinary_forward else None
         self.continuation_owner = json.loads(canonical(continuation_owner)) if continuation_owner is not None else None
         self._suspension = suspension
         self._immutable_reader = suspension.objects if suspension is not None else None
@@ -470,6 +474,11 @@ class ProtectedReleaseJournal:
         if files is None:
             raise Refused("main journal directory is absent")
         selected, _ = self._main_binding(files)
+        cache = self._ordinary_binding_cache
+        if cache is not None and physical in cache:
+            if cache[physical] != selected:
+                raise Refused("immutable physical binding contradicts its validated history")
+            return selected
         changes = []
         complete = False
         # Native, pinned path history excludes unrelated main traffic. Two pages
@@ -515,6 +524,10 @@ class ProtectedReleaseJournal:
                 if index == len(changes) - 1:
                     raise Refused("main journal path history truncated prior bindings")
             expected_files = prior_files
+        if cache is not None:
+            if len(cache) >= 128:
+                raise Refused("ordinary immutable physical binding cache exceeds its bound")
+            cache[physical] = selected
         return selected
 
     def _overlay(self, physical: str, logical: str, state: dict) -> str:

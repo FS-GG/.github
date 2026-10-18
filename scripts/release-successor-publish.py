@@ -22,7 +22,7 @@ import time
 import zipfile
 
 from release_successor_admission import SingleOperatorAdmission, publisher_context_authorized
-from release_successor_execution import Refused, advance, ordered_effects
+from release_successor_execution import Refused, advance, ordered_effects, full_transition
 from release_successor_journal import (ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical,
     ReleaseSuspension, ALLOWED_SUCCESSOR, SUSPENDED_REF, SUSPENSION_PATH, strict_suspension,
     SUSPENSION_SCHEMA, SUSPENDED_ORIGINAL, SUSPENSION_DECISION)
@@ -752,6 +752,7 @@ AUTHORITY_QUOTA_FLOOR = 4500
 RECOVERY_ADVANCES = 4
 ORDINARY_AUTHORITY_CALL_CEILING = 1500
 ORDINARY_AUTHORITY_QUOTA_FLOOR = 1800
+ORDINARY_VISIBILITY_PROBES = 135
 SUCCESSOR_CHECKPOINT_PROFILE = "utel-rel-20/original-bounded-forward/1"
 SUCCESSOR_CHECKPOINT_CANDIDATE = {
     "runId": 38128101680, "artifactId": 11698335858,
@@ -1280,46 +1281,95 @@ def validate_successor_checkpoint(manifest, journal, expected):
 
 
 def run_forward(manifest, journal, admission, provider, report, deadline, *, maximum=RECOVERY_ADVANCES,
-                clock=time.monotonic, sleep=time.sleep, continue_literal_successor=False):
-    """Bounded original observation; only the selected literal .104 waits in place."""
-    require(type(continue_literal_successor) is bool, "literal successor observation selection differs")
-    if continue_literal_successor:
-        require(journal.ref == ALLOWED_SUCCESSOR["logicalRef"]
-                and manifest["descriptor"].get("version") == ALLOWED_SUCCESSOR["version"]
-                and manifest["descriptor"].get("previousStableVersion") == ALLOWED_SUCCESSOR["predecessor"],
-                "literal successor observation binding differs")
+                clock=time.monotonic, sleep=time.sleep, ordinary=False, candidate_check=lambda: None):
+    """Full transitions separated from finite pending-only observations.
+
+    `ordinary` is selected by the maintained current caller, never workflow input.
+    Historical recovery callers retain their original stop-at-wait semantics.
+    """
+    require(type(ordinary) is bool, "ordinary observation selection differs")
     require(type(maximum) is int and 0 < maximum <= 152, "forward advance bound differs")
     require(clock() < deadline, "publication observation deadline expired; reconcile before another run")
-    # Reuse the qualified admission and dependent Git mutation deadline fences.
-    admission = RuntimeDeadlineAdmission(admission, deadline, clock)
+    admission = RuntimeDeadlineAdmission(admission, deadline, clock,
+                                         candidate_check=candidate_check if ordinary else None)
     counted = journal.journal.api
     require(isinstance(counted, CountedAuthorityAPI), "forward Authority counter is unavailable")
     counted.api = RuntimeDeadlineAuthority(counted.api, deadline, clock)
+    effects = ordered_effects(manifest)
+    if ordinary:
+        target = provider.provider if isinstance(provider, ReportingProvider) else provider
+        target._ordinary_mode = True
+        target._ordinary_deadline_check = lambda: require(clock() < deadline, "ordinary deadline expired before provider send")
+    def prepare_ordinary(effect):
+        observed = journal.journal._observed
+        require(observed is not None and observed.state["contentId"] == manifest["contentId"]
+                and observed.state["effects"].get(effect.identity) == "intent",
+                "ordinary dispatch has no independently read-back committed intent")
+        target._ordinary_expected_journal = (observed.head, canonical(observed.state))
+        provider.prepare_ordinary_dispatch(effect)
+    probes = 0
     for index in range(maximum):
         require(clock() < deadline, "publication observation deadline expired; reconcile before another run")
         report["iterationsAttempted"] = index + 1
         report["stage"] = "advance"
-        result = advance(manifest, journal, admission, provider)
+        if ordinary:
+            result = full_transition(manifest["contentId"], effects, journal, admission, provider,
+                                     prepare_dispatch=prepare_ordinary)
+            pending = result.pending
+            result = result.state
+        else:
+            result = advance(manifest, journal, admission, provider)
+            pending = None
         report["lastAdvanceResult"] = result
         report["lastSuccessfulStage"] = "advance"
-        require(result in {"verified", "waiting", "complete"}, "unexpected forward advance result")
+        require(result in {"verified", "waiting", "complete", "unknown"}, "unexpected forward advance result")
         require(clock() < deadline, "publication observation deadline expired; reconcile before another run")
         if result in {"verified", "complete"}:
             report.pop("pendingReason", None)
         if result == "complete":
+            if ordinary:
+                # Provider prefix verification may be slow. Bind final journal
+                # and candidate again, then finish with fresh native admission.
+                current = journal.read()
+                require(current.content_id == manifest["contentId"] and
+                        current.effects == {effect.identity: "verified" for effect in effects},
+                        "final journal no longer binds the complete candidate")
+                require(admission.authorize(manifest["contentId"], effects[-1].identity, "settle", effects[-1].request_digest),
+                        "final publication admission denied")
             return "complete"
+        if result == "unknown":
+            report["pendingReason"] = "sender outcome Unknown; retained intent requires independent reconciliation"
+            return "checkpoint"
         if result == "waiting":
             report["pendingReason"] = "exact retained intent awaits independent provider observation"
-            if not continue_literal_successor:
+            if not ordinary:
                 return "checkpoint"
+            require(pending is not None, "pending effect observation context is unavailable")
+            report["pendingEffect"] = {"identity": pending.effect.identity, "generation": pending.journal.generation}
             if index + 1 >= maximum:
-                report["pendingReason"] = "original finite advance window exhausted; retained intent remains incomplete"
+                report["pendingReason"] = "original finite transition window exhausted; retained intent remains incomplete"
                 return "checkpoint"
-            if deadline - clock() <= 5:
-                report["pendingReason"] = "original observation deadline has no next five-second interval; retained intent remains incomplete"
-                return "checkpoint"
-            sleep(5)  # Existing recovery interval; no new intent or send occurs here.
-    report["pendingReason"] = "admitted finite advance window exhausted"
+            while True:
+                if probes >= ORDINARY_VISIBILITY_PROBES:
+                    report["pendingReason"] = "finite pending visibility probe window exhausted"
+                    return "checkpoint"
+                require(clock() < deadline, "publication observation deadline expired; reconcile before another run")
+                probes += 1
+                report["visibilityProbes"] = probes
+                report["stage"] = "pending-observation"
+                visible = provider.ordinary_visibility(pending.effect)
+                require(clock() < deadline, "publication observation deadline expired during pending observation")
+                require(visible in {"absent", "potential"}, "pending observation is not a validated visibility witness")
+                if visible == "potential":
+                    break  # No authority retained: the next full transition rereads everything.
+                if probes >= ORDINARY_VISIBILITY_PROBES:
+                    report["pendingReason"] = "finite pending visibility probe window exhausted"
+                    return "checkpoint"
+                if deadline - clock() <= 5:
+                    report["pendingReason"] = "original deadline has no next five-second observation interval"
+                    return "checkpoint"
+                sleep(5)
+    report["pendingReason"] = "admitted finite transition window exhausted"
     return "checkpoint"
 
 def write_result(path, report):
@@ -1733,11 +1783,14 @@ class RuntimeRecoveryProvider(ReportingProvider):
 
 class RuntimeDeadlineAdmission:
     """Keep composite admission and refuse expiry both sides of its reads."""
-    def __init__(self, admission, deadline, clock):
+    def __init__(self, admission, deadline, clock, *, candidate_check=None):
         self.admission, self.deadline, self.clock = admission, deadline, clock
+        self.candidate_check = candidate_check
 
     def authorize(self, *args):
         require(self.clock() < self.deadline, "runtime recovery deadline expired before admission")
+        if self.candidate_check is not None:
+            self.candidate_check()
         result = self.admission.authorize(*args)
         require(self.clock() < self.deadline, "runtime recovery deadline expired during admission")
         return result
@@ -1878,8 +1931,17 @@ def execute_publisher(args, report):
         continuation_ledger.admit_quota()
         precredential_release_check(args, continuation_ledger)
         continuation_phase(report, "startup", continuation_ledger)
-    elif selected_ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
+    elif selected_ref == SUSPENDED_REF:
+        # Preserve original/default refusal before reading publication credentials.
         precredential_release_check(args, GitHubAPI(os.environ["GH_TOKEN"]))
+    elif not any((args.recovery_checkpoint, args.repeat_original_nuget_kit_intent, runtime_recovery, successor_checkpoint)):
+        continuation_ledger = CountedAuthorityAPI(
+            RuntimeDeadlineAuthority(GitHubAPI(os.environ["ORDINARY_LEDGER_TOKEN"]), forward_deadline, time.monotonic),
+            ceiling=ORDINARY_AUTHORITY_CALL_CEILING, quota_floor=ORDINARY_AUTHORITY_QUOTA_FLOOR)
+        report["authorityCounter"] = continuation_ledger
+        continuation_ledger.admit_quota()
+        if selected_ref in {SUSPENDED_REF, ALLOWED_SUCCESSOR["logicalRef"]}:
+            precredential_release_check(args, continuation_ledger)
     require(not args.workdir.exists(), "candidate workdir already exists")
     args.workdir.mkdir(parents=True)
 
@@ -1950,6 +2012,8 @@ def execute_publisher(args, report):
     report["lastSuccessfulStage"] = "candidate-authentication"
     publisher_admission = SingleOperatorAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
     provider = LiveProvider(api, manifest_path, github_token, nuget_key)
+    if not continuation and not any((args.recovery_checkpoint, args.repeat_original_nuget_kit_intent, runtime_recovery, successor_checkpoint)):
+        provider._ordinary_mode = True
     runtime_proof = None
     if runtime_recovery:
         report["stage"] = "runtime-original-refusal-authentication"
@@ -1963,10 +2027,10 @@ def execute_publisher(args, report):
         "candidateArchiveSha256": args.candidate_archive_sha256,
         "operator": operator,
     }
-    ledger_api = continuation_ledger if continuation else GitHubAPI(ledger_token)
+    ledger_api = continuation_ledger if continuation_ledger is not None else GitHubAPI(ledger_token)
     historical_recovery = args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery
     # Ordinary budget is independently calibrated; it was not enforced by old runs.
-    if not historical_recovery and not continuation:
+    if not historical_recovery and not continuation and continuation_ledger is None:
         ledger_api = CountedAuthorityAPI(ledger_api, ceiling=ORDINARY_AUTHORITY_CALL_CEILING,
                                          quota_floor=ORDINARY_AUTHORITY_QUOTA_FLOOR)
         report["authorityCounter"] = ledger_api
@@ -1990,7 +2054,9 @@ def execute_publisher(args, report):
     provider.logical_ref = selected_ref
     execution = {"runId": run_id, "attempt": 1, "sourceSha": publisher_sha, "operator": operator}
     journal = ProtectedReleaseJournal(ledger_api, ref=selected_ref, main_directory=True, suspension=suspension,
-                                      continuation_owner=execution if continuation else None)
+                                      continuation_owner=execution if continuation else None,
+                                      ordinary_forward=not continuation and not historical_recovery and not successor_checkpoint
+                                          and selected_ref == ALLOWED_SUCCESSOR["logicalRef"])
     journal = ReportingJournal(journal, report, detailed=not historical_recovery)
     provider = ReportingProvider(provider, report)
     admission = ProtectedPublisherAdmission(publisher_admission, ledger_api, selected_ref, suspension=suspension)
@@ -2058,9 +2124,20 @@ def execute_publisher(args, report):
             args.result_path.with_name(args.result_path.stem + "-kit-repeat-attempt.json"))
     if args.recovery_checkpoint:
         return run_recovery_checkpoint(manifest, journal, admission, provider, report, deadline)
+    with zipfile.ZipFile(archive) as original:
+        member_digests = {entry.filename: hashlib.sha256(original.read(entry)).hexdigest()
+                          for entry in original.infolist() if entry.filename != "release-manifest.json"}
+    def candidate_check():
+        require(hashlib.sha256(archive.read_bytes()).hexdigest() == args.candidate_archive_sha256,
+                "authenticated ordinary candidate archive changed")
+        current = json.loads(manifest_path.read_bytes())
+        require(current.get("descriptor") == manifest["descriptor"] and current.get("contentId") == manifest["contentId"],
+                "authenticated ordinary candidate descriptor changed")
+        require(all(not (candidate/name).is_symlink() and hashlib.sha256((candidate/name).read_bytes()).hexdigest() == digest
+                    for name, digest in member_digests.items()), "authenticated ordinary candidate members changed")
     return run_forward(manifest, journal, admission, provider, report, forward_deadline,
                        maximum=RECOVERY_ADVANCES if successor_checkpoint else len(ordered_effects(manifest)) * 2 + 120,
-                       continue_literal_successor=bool(getattr(args, "suspended_0103_successor", False)))
+                       ordinary=not successor_checkpoint, candidate_check=candidate_check)
 
 
 def diagnostic(report, message, phase):

@@ -47,6 +47,20 @@ class JournalState:
     effects: dict[str, str]  # pending (omitted), intent, verified
 
 
+@dataclass(frozen=True)
+class PendingObservation:
+    # Observation context only. A later transition always rereads the journal,
+    # verifies the whole prefix and obtains fresh admission before any mutation.
+    effect: Effect
+    journal: JournalState
+
+
+@dataclass(frozen=True)
+class Transition:
+    state: str
+    pending: PendingObservation | None = None
+
+
 class Journal(Protocol):
     def read(self) -> JournalState: ...
 
@@ -139,6 +153,12 @@ def advance(manifest: dict, journal: Journal, admission: Admission, provider: Pr
 
 def advance_effects(content_id: str, effects: tuple[Effect, ...], journal: Journal, admission: Admission, provider: Provider) -> str:
     """Apply the same admitted, readback-first policy to an exact ordered effect set."""
+    result = full_transition(content_id, effects, journal, admission, provider)
+    return "waiting" if result.state == "unknown" else result.state
+
+
+def full_transition(content_id: str, effects: tuple[Effect, ...], journal: Journal, admission: Admission, provider: Provider, *, prepare_dispatch=None) -> Transition:
+    """One full-prefix transition, never a cached authorization for polling."""
     current = journal.read()
     if current.content_id != content_id or current.generation < 1:
         raise Refused("protected journal does not bind the release candidate")
@@ -164,19 +184,21 @@ def advance_effects(content_id: str, effects: tuple[Effect, ...], journal: Journ
         if state == "intent":
             if observation.state == "absent":
                 # A 404 after a send is not proof of no effect on an eventually indexed feed.
-                return "waiting"
+                return Transition("waiting", PendingObservation(effect, current))
             if not admission.authorize(content_id, effect.identity, "settle", effect.request_digest):
                 raise Refused(f"{effect.identity}: settlement admission denied")
             if not journal.compare_and_swap(current, effect.identity, "verified"):
                 raise Refused(f"{effect.identity}: journal settlement CAS conflict")
-            return "verified"
+            return Transition("verified")
         if observation.state != "absent":
             raise Refused(f"{effect.identity}: preexisting effect outside the admitted operation")
         if not admission.authorize(content_id, effect.identity, "intent", effect.request_digest):
             raise Refused(f"{effect.identity}: intent admission denied")
         if not journal.compare_and_swap(current, effect.identity, "intent"):
             raise Refused(f"{effect.identity}: journal intent CAS conflict")
-        # Re-read authority at the remote boundary; preparation-time admission is insufficient.
+        if prepare_dispatch is not None:
+            prepare_dispatch(effect)
+        # Re-read authority after all potentially slow preparation at the remote boundary.
         if not admission.authorize(content_id, effect.identity, "dispatch", effect.request_digest):
             raise Refused(f"{effect.identity}: dispatch admission denied")
         outcome = provider.dispatch(effect)
@@ -186,5 +208,7 @@ def advance_effects(content_id: str, effects: tuple[Effect, ...], journal: Journ
             raise Refused(f"{effect.identity}: provider refused the write")
         # Even a success response is not completion. A later independently observed
         # advance must read back; an admitted caller may wait within its original window.
-        return "waiting"
-    return "complete"
+        return Transition("unknown" if outcome.state == "unknown" else "waiting",
+                          PendingObservation(effect, JournalState(current.generation + 1, content_id,
+                              {**current.effects, effect.identity: "intent"})))
+    return Transition("complete")

@@ -1188,12 +1188,33 @@ class LiveProvider:
         self._runtime_send_consumed = False
         self.last_dispatch_diagnostic = None
 
-    def _authorize_release(self, effect=None):
+    def _authorize_release(self, effect=None, *, ordinary=False):
         if self.version in {"0.103.0", "0.104.0"}:
             from release_successor_journal import ReleaseSuspension, SUSPENDED_REF, ALLOWED_SUCCESSOR
             expected = SUSPENDED_REF if self.version == "0.103.0" else ALLOWED_SUCCESSOR["logicalRef"]
             if not isinstance(self.suspension, ReleaseSuspension) or self.logical_ref != expected:
                 raise Refused("direct sensitive provider requires the maintained suspension reader")
+            if ordinary and self.version == "0.104.0":
+                # One fresh sandwich joins immutable suspension and claim-marker
+                # predicates at this sole send boundary. No authorization escapes.
+                physical = self.suspension.main()
+                _, digest = self.suspension._read_at(physical)
+                raw = self.suspension.file(physical, "state/releases/utel-rel-22/release-state.json")
+                state = json.loads(raw) if raw is not None else {}
+                expected = getattr(self, "_ordinary_expected_journal", None)
+                pointer = self.suspension.file(physical, "state/releases/utel-rel-22/release-head.txt")
+                if (not isinstance(expected, tuple) or len(expected) != 2
+                        or raw != expected[1] or pointer != (expected[0] + "\n").encode()
+                        or state.get("contentId") != self.content_id or state.get("sourceSha") != self.source
+                        or state.get("version") != self.version or effect is None
+                        or state.get("effects", {}).get(effect.identity) != "intent"):
+                    raise Refused("ordinary provider no longer binds the exact committed intent")
+                if self.suspension.main() != physical:
+                    raise Refused("Authority main moved during ordinary provider fence")
+                self.suspension.digest = digest
+                if "continuation" in state:
+                    raise Refused("claimed .104 journal cannot enter ordinary provider")
+                return
             self.suspension.authorize(self.logical_ref, self.version)
             if self.version == "0.104.0":
                 from release_successor_journal import ContinuationPermit, _claimed_state
@@ -1215,6 +1236,9 @@ class LiveProvider:
                     raise Refused("owned continuation claim disappeared before provider send")
 
     def _release(self) -> dict | None:
+        if getattr(self, "_ordinary_mode", False):
+            witness = self._ordinary_release_witness()
+            return witness["release"] if witness is not None else None
         try:
             return self.api.get(f"repos/{REPOSITORY}/releases/tags/{self.tag}")
         except NotFound:
@@ -1335,6 +1359,11 @@ class LiveProvider:
         return Dispatch("applied")
 
     def _asset(self, name: str) -> bytes | None:
+        if getattr(self, "_ordinary_mode", False):
+            witness = self._ordinary_release_witness()
+            if witness is None: return None
+            matches = [row for row in witness["assets"] if row["name"] == name]
+            return self.api.download_asset(matches[0]["id"]) if matches else None
         release = self._release()
         if release is None:
             return None
@@ -1424,6 +1453,10 @@ class LiveProvider:
                 tag = self.api.get(f"repos/{REPOSITORY}/git/ref/tags/{self.tag}")
             except NotFound:
                 return Observation("absent")
+            if getattr(self, "_ordinary_mode", False) and (
+                    not isinstance(tag, dict) or tag.get("ref") != f"refs/tags/{self.tag}"
+                    or tag.get("object", {}).get("type") != "commit"):
+                raise Refused("ordinary semantic tag binding is malformed")
             actual = tag.get("object", {}).get("sha")
             return Observation("matched" if actual == self.source else "mismatched", actual)
         if identity == "draft":
@@ -1542,6 +1575,108 @@ class LiveProvider:
             raise Refused("continuation prepared payload changed")
         return path
 
+    def _ordinary_release_witness(self):
+        """One selected release and complete bounded asset population, or absence."""
+        try:
+            release = self.api.get(f"repos/{REPOSITORY}/releases/tags/{self.tag}")
+        except NotFound:
+            matches = []; ids = set()
+            for page in range(1, 11):
+                rows = self.api.get(f"repos/{REPOSITORY}/releases?per_page=100&page={page}")
+                if not isinstance(rows, list) or len(rows) > 100:
+                    raise Refused("ordinary draft lookup population is malformed")
+                for row in rows:
+                    if (not isinstance(row, dict) or type(row.get("id")) is not int or row["id"] <= 0
+                            or not isinstance(row.get("tag_name"), str) or row["id"] in ids):
+                        raise Refused("ordinary draft lookup identity is malformed or duplicate")
+                    ids.add(row["id"])
+                    if row["tag_name"] == self.tag: matches.append(row)
+                if len(rows) < 100: break
+            else:
+                raise Refused("ordinary draft lookup exceeds complete population bound")
+            if len(matches) > 1: raise Refused("ordinary successor release is ambiguous")
+            if not matches: return None
+            release = matches[0]
+        if (not isinstance(release, dict) or type(release.get("id")) is not int or release["id"] <= 0
+                or release.get("tag_name") != self.tag or release.get("target_commitish") != self.source
+                or release.get("body") != self.marker or type(release.get("draft")) is not bool
+                or release.get("prerelease") is not False):
+            raise Refused("ordinary release witness does not bind exact candidate")
+        rows = self.api.get(f"repos/{REPOSITORY}/releases/{release['id']}/assets?per_page=100")
+        allowed = [*(f"{package}.{self.version}.nupkg" for package in PACKAGES),
+                   "standalone-telemetry-evidence.json", "standalone-telemetry-runtime-evidence.json",
+                   "stable-channel.json", "release-manifest.json"]
+        if (not isinstance(rows, list) or len(rows) > 7
+                or any(not isinstance(row, dict) or type(row.get("id")) is not int or row["id"] <= 0
+                       or row.get("name") not in allowed or row.get("state") != "uploaded"
+                       or type(row.get("size")) is not int or row["size"] < 0 for row in rows)
+                or len({row["id"] for row in rows}) != len(rows)
+                or len({row["name"] for row in rows}) != len(rows)):
+            raise Refused("ordinary complete asset population is malformed or duplicate")
+        return {"release": release, "assets": rows, "names": {row["name"] for row in rows}, "allowed": allowed}
+
+    def ordinary_visibility(self, effect):
+        """Read-only hint for this pending effect; never payload or effect authority."""
+        identity = effect.identity
+        if identity == "tag":
+            try: value = self.api.get(f"repos/{REPOSITORY}/git/ref/tags/{self.tag}")
+            except NotFound: return "absent"
+            if (not isinstance(value, dict) or value.get("ref") != f"refs/tags/{self.tag}"
+                    or value.get("object", {}).get("type") != "commit"
+                    or value["object"].get("sha") != self.source):
+                raise Refused("ordinary tag witness does not bind candidate")
+            return "potential"
+        if identity.startswith(("github:", "nuget:")):
+            observation = self.observe(effect)  # Conservative authenticated package validation.
+            if observation.state == "absent": return "absent"
+            if observation.state == "matched" and observation.observed_digest == effect.target_digest: return "potential"
+            raise Refused("ordinary pending package witness is unknown or mismatched")
+        witness = self._ordinary_release_witness()
+        if witness is None:
+            if identity == "draft": return "absent"
+            raise Refused("ordinary pending effect lost its verified release")
+        names = witness["names"]; allowed = witness["allowed"]
+        if identity == "draft":
+            if names or witness["release"]["draft"] is not True:
+                raise Refused("ordinary pending draft has unexpected assets or promotion")
+            return "potential"
+        if identity == "promote":
+            if names != set(allowed): raise Refused("ordinary promotion population is incomplete")
+            return "absent" if witness["release"]["draft"] else "potential"
+        if identity.startswith("archive-asset:"): name = f"{identity.split(':', 1)[1]}.{self.version}.nupkg"
+        else:
+            name = {"qualification-asset:evidence": allowed[3], "qualification-asset:runtime": allowed[4],
+                    "channel-asset": allowed[5], "manifest-asset": allowed[6]}.get(identity)
+        if name not in allowed: raise Refused("ordinary visibility effect is unknown")
+        index = allowed.index(name)
+        if (not set(allowed[:index]) <= names or not names <= set(allowed[:index + 1])
+                or witness["release"]["draft"] is not True):
+            raise Refused("ordinary pending asset population is incomplete or out of order")
+        return "potential" if name in names else "absent"
+
+    def prepare_ordinary_dispatch(self, effect):
+        """Complete slow payload checks before the execution layer's fresh admission."""
+        if hasattr(self, "_ordinary_prepared"):
+            raise Refused("ordinary prepared send was not consumed")
+        identity = effect.identity
+        release = None; path = None; digest = None
+        if identity in {"channel-asset", "manifest-asset"}:
+            prepared = getattr(self, "_ordinary_asset_bytes", {})
+            if identity in prepared: raise Refused("ordinary payload cannot be regenerated after one send")
+            path = self._prepare_channel_asset() if identity == "channel-asset" else self._prepare_manifest_asset()
+            raw = path.read_bytes()
+            if not raw or len(raw) > 1048576 or path.is_symlink(): raise Refused("ordinary generated payload exceeds custody bound")
+            digest = hashlib.sha256(raw).hexdigest()
+            self._ordinary_asset_bytes = {**prepared, identity: (path, raw)}
+        if identity not in {"tag", "draft"} and not identity.startswith(("github:", "nuget:")):
+            witness = self._ordinary_release_witness()
+            if witness is None or witness["release"]["draft"] is not True:
+                raise Refused("ordinary send has no exact draft release")
+            release = witness["release"]
+            if identity == "promote" and self._final_manifest() is None:
+                raise Refused("ordinary promotion requires complete semantic manifest")
+        self._ordinary_prepared = (identity, release, path, digest)
+
     def continuation_visibility(self, effect):
         """Absence only from one validated witness, never matched payload proof."""
         witness = self.continuation_release_witness()
@@ -1574,7 +1709,13 @@ class LiveProvider:
                 "names": sorted(row["name"] for row in rows)}
 
     def dispatch(self, effect: Effect) -> Dispatch:
-        self._authorize_release(effect)
+        ordinary = self.__dict__.pop("_ordinary_prepared", None)
+        if ordinary is not None and ordinary[0] != effect.identity:
+            raise Refused("ordinary prepared effect differs")
+        self._authorize_release(effect, ordinary=ordinary is not None)
+        if ordinary is not None:
+            check = getattr(self, "_ordinary_deadline_check", None)
+            if check is not None: check()
         identity = effect.identity
         self.last_dispatch_diagnostic = None
         if isinstance(self.api, GitHubAPI):
@@ -1612,33 +1753,37 @@ class LiveProvider:
                     }.get(identity)
                     if name is None:
                         raise Refused("unknown qualification asset")
-                release = self._release()
+                release = ordinary[1] if ordinary is not None else self._release()
                 if release is None or not release.get("draft"):
                     raise Refused("draft release is unavailable")
                 self.api.upload_asset(release["id"], name, self.root / name)
             elif identity == "channel-asset":
-                output = self._continuation_asset_path(effect) if getattr(self, "_continuation_permit", None) is not None else self._prepare_channel_asset()
-                release = self._release()
+                output = ordinary[2] if ordinary is not None else self._continuation_asset_path(effect) if getattr(self, "_continuation_permit", None) is not None else self._prepare_channel_asset()
+                release = ordinary[1] if ordinary is not None else self._release()
                 if release is None or not release.get("draft"):
                     raise Refused("draft release is unavailable")
-                if getattr(self, "_continuation_permit", None) is not None:
+                if ordinary is not None:
+                    self.api.upload_asset(release["id"], output.name, output, ordinary[3])
+                elif getattr(self, "_continuation_permit", None) is not None:
                     digest = hashlib.sha256(self._continuation_assets[effect.identity][1]).hexdigest()
                     self.api.upload_asset(release["id"], output.name, output, digest)
                 else:
                     self.api.upload_asset(release["id"], output.name, output)
             elif identity == "manifest-asset":
-                output = self._continuation_asset_path(effect) if getattr(self, "_continuation_permit", None) is not None else self._prepare_manifest_asset()
-                release = self._release()
+                output = ordinary[2] if ordinary is not None else self._continuation_asset_path(effect) if getattr(self, "_continuation_permit", None) is not None else self._prepare_manifest_asset()
+                release = ordinary[1] if ordinary is not None else self._release()
                 if release is None or not release.get("draft"):
                     raise Refused("draft release is unavailable")
-                if getattr(self, "_continuation_permit", None) is not None:
+                if ordinary is not None:
+                    self.api.upload_asset(release["id"], "release-manifest.json", output, ordinary[3])
+                elif getattr(self, "_continuation_permit", None) is not None:
                     digest = hashlib.sha256(self._continuation_assets[effect.identity][1]).hexdigest()
                     self.api.upload_asset(release["id"], "release-manifest.json", output, digest)
                 else:
                     self.api.upload_asset(release["id"], "release-manifest.json", output)
             elif identity == "promote":
-                release = self._release()
-                if release is None or not release.get("draft") or self._final_manifest() is None:
+                release = ordinary[1] if ordinary is not None else self._release()
+                if release is None or not release.get("draft") or (ordinary is None and self._final_manifest() is None):
                     raise Refused("complete draft release is unavailable")
                 self.api.patch(f"repos/{REPOSITORY}/releases/{release['id']}", {"draft": False, "make_latest": "true"})
             else:
