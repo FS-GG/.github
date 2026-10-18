@@ -62,8 +62,15 @@ capture-configured/receiver-unverified. Default activation and later credential/
 unchanged. Local-store capture-only is unsupported in this first profile. One canonical association
 spool/state root owns the producer; undeclared same-principal cloned roots cannot be detected offline,
 so cloning, migration or reinitialization still requires original state/fence reconciliation. Receiver
-admission refuses cross-owner changes, and later numeric producer cursors wait behind uncertain or
-durable-but-not-applied predecessors. Unsupported/rejected receiver data stays pending.
+admission refuses cross-owner changes. A complete bounded census retains each structural
+scope/source/generation's earliest pending head; numeric successors wait behind uncertain or
+durable-but-not-applied predecessors. Independent eligible heads and ordinary traffic rotate through
+the existing sixteen-envelope quantum with one private advisory cursor of at most 256 bytes. The
+cursor advances under the configuration lock immediately before each actual head attempt. Expired
+shared deadline/cancellation stops new attempts, and canceled lookup cannot Submit. Missing/invalid
+cursor state resets deterministic order; crashes affect order only, not queued bytes, receipts or
+authority. No fixed elapsed-time or eight-pass service guarantee follows. Exact-source tests and
+review remain required. Unsupported/rejected receiver data stays pending.
 
 The existing Core, CLI and Telemetry test suites and maintained `coord-engine`, `coord-core` and
 semantic skill-quality workflows qualify this source. Source inclusion is not a passed test result;
