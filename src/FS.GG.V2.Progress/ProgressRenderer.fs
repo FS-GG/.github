@@ -326,7 +326,20 @@ module ProgressRenderer =
                     let raw name = closure |> Option.bind (fun value -> text value name)
                     let complete = hierarchy |> Option.bind (fun value -> optional value "complete") |> Option.exists (fun value -> value.GetBoolean())
                     let gap = hierarchy |> Option.bind (fun value -> text value "gap")
-                    let gap = if work.IsNone then Some "Work level/hierarchy unavailable in this selected report" else gap
+                    let relationshipShape = hierarchy |> Option.exists (fun value ->
+                        let parentPresent = value.TryGetProperty("parent") |> fst
+                        parentPresent && (optional value "children" |> Option.isSome)
+                        && (text value "observedAt" |> Option.exists (String.IsNullOrWhiteSpace >> not)))
+                    let gap =
+                        if work.IsNone then Some "Work level/hierarchy unavailable in this selected report"
+                        elif not relationshipShape then Some "Direct relationship metadata is incomplete in this selected report"
+                        else gap
+                    let children = hierarchy |> Option.bind (fun value -> optional value "children")
+                                   |> Option.map (fun values ->
+                                       if values.GetArrayLength() > 500 then invalidArg "inspection" "direct children exceed read bound"
+                                       let children = values.EnumerateArray() |> Seq.map identities |> Seq.toList
+                                       if List.distinct children |> List.length <> children.Length then invalidArg "inspection" "duplicate direct child"
+                                       children) |> Option.defaultValue []
                     let date = raw "closedAt" |> Option.map (fun value ->
                         let date = DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
                         if date.Offset <> TimeSpan.Zero then invalidArg "inspection" "completion time must use UTC"
@@ -336,8 +349,7 @@ module ProgressRenderer =
                       NativeState = optional item "native" |> Option.bind (fun value -> text value "state")
                       StateReason = raw "stateReason"; ClosedAt = date
                       Parent = hierarchy |> Option.bind (fun value -> optional value "parent") |> Option.map identities
-                      Children = hierarchy |> Option.bind (fun value -> optional value "children")
-                                 |> Option.map (fun values -> values.EnumerateArray() |> Seq.map identities |> Seq.toList) |> Option.defaultValue []
+                      Children = children
                       HierarchyComplete = complete && gap.IsNone; HierarchyGap = gap
                       ObservedAt = hierarchy |> Option.bind (fun value -> text value "observedAt") |> Option.map (fun value ->
                           let observed = DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)

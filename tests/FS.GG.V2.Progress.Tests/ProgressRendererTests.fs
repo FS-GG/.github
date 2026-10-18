@@ -672,14 +672,15 @@ module ProgressRendererTests =
     let ``inspection progress keeps scoped native delivery completion apart from open outcome promise`` () =
         let json = """{"schema":"fsgg.coord.board-v2-inspection/3","items":[
           {"issue":{"owner":"FS-GG","repository":".github","number":41},"native":{"state":"OPEN"},"planning":{"status":"Blocked"},
-           "workItem":{"workLevel":"Outcome","hierarchy":{"parent":null,"children":[{"issue":{"owner":"FS-GG","repository":".github","number":42},"nodeId":"child"}],"complete":true,"gap":null},
+           "workItem":{"workLevel":"Outcome","hierarchy":{"parent":null,"children":[{"issue":{"owner":"FS-GG","repository":".github","number":42},"nodeId":"child"}],"complete":true,"gap":null,"observedAt":"2026-09-30T08:00:00Z"},
              "closure":{"stateReason":null,"closedAt":null,"doneWhen":"Source and installed restart promise","blockedOn":"Installed restart witness from receiver owner","acceptanceEvidence":"Source PR accepted; installed pending","acceptance":"Unverified"}}},
           {"issue":{"owner":"FS-GG","repository":".github","number":42},"native":{"state":"CLOSED"},"planning":{"status":"Done"},
-           "workItem":{"workLevel":"Delivery","hierarchy":{"parent":{"issue":{"owner":"FS-GG","repository":".github","number":41},"nodeId":"parent"},"children":[],"complete":true,"gap":null},
+           "workItem":{"workLevel":"Delivery","hierarchy":{"parent":{"issue":{"owner":"FS-GG","repository":".github","number":41},"nodeId":"parent"},"children":[],"complete":true,"gap":null,"observedAt":"2026-09-30T08:00:00Z"},
              "closure":{"stateReason":"COMPLETED","closedAt":"2026-09-30T08:00:00Z","doneWhen":"Source routing closure","blockedOn":"None","acceptanceEvidence":"Reviewed exact source merged","acceptance":"Unverified"}}}]}"""
         let rows = ProgressRenderer.boardItemsFromInspection json |> Result.defaultWith failwith
         Assert.Equal(2, rows.Length)
         Assert.Equal("Outcome", rows.Head.WorkLevel)
+        Assert.True(rows.Head.HierarchyComplete)
         Assert.Equal(Some "OPEN", rows.Head.NativeState)
         Assert.Equal(Some "FS-GG/.github#41", rows.Tail.Head.Parent)
         let text = render { baseline with BoardItems = rows }
@@ -699,5 +700,9 @@ module ProgressRendererTests =
         Assert.True rows.Head.HierarchyGap.IsSome
         Assert.Equal("Unverified", rows.Head.Acceptance)
         Assert.True(Result.isError(ProgressRenderer.boardItemsFromInspection "{\"schema\":\"other\",\"items\":[]}"))
+        let partial = """{"schema":"fsgg.coord.board-v2-inspection/3","items":[{"issue":{"owner":"FS-GG","repository":".github","number":42},"workItem":{"workLevel":"Delivery","hierarchy":{"complete":true,"parent":null},"closure":{}}}]}"""
+        let partialRows = ProgressRenderer.boardItemsFromInspection partial |> Result.defaultWith failwith
+        Assert.False(partialRows.Head.HierarchyComplete)
+        Assert.True(partialRows.Head.HierarchyGap.IsSome)
         let forged = { rows.Head with Acceptance = "Accepted" }
         Assert.True(Result.isError(ProgressRenderer.derive { baseline with BoardItems = [ forged ] }))
