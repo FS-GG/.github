@@ -76,7 +76,11 @@ PY
   ok "installed production host reaches authenticated readiness"
   python3 - "$WORK/envelope.json" <<'PY'
 import json,pathlib,sys
-payload={'schema':'fsgg.telemetry.ingest/1','ingestId':'package-batch','sourceIdentity':'package-source','generation':'g1','cursor':'1','eventCount':1,'events':[{'kind':'item','identity':'package-item','itemId':'package-item','revision':1}]}
+thread='22222222-2222-2222-2222-222222222222'; turn='33333333-3333-3333-3333-333333333333'
+import hashlib
+identity='passive-'+hashlib.sha256(('codex-rollout/1\x1f'+thread+'\x1f'+turn+'\x1fpackage-response').encode()).hexdigest()
+fact={'kind':'provider-usage-observation/1','identity':identity,'itemId':None,'revision':1,'threadId':thread,'turnId':turn,'responseId':'package-response','provider':None,'model':None,'effort':None,'input':10,'cachedInput':None,'cacheWriteInput':3,'output':2,'reasoning':None,'total':12,'sourceInstance':'a'*64,'sourceGeneration':'source-g1','sourceDigest':'b'*64,'position':1,'capturedAt':'2026-10-18T12:00:00Z','occurredAt':None,'provenance':'codex-local-rollout/1','populationCoverage':'partial','inventoryCoverage':'unknown','terminalCoverage':'unknown','attributionCoverage':'unknown'}
+payload={'schema':'fsgg.telemetry.ingest/1','ingestId':'package-batch','sourceIdentity':'package-source','generation':'g1','cursor':'1','eventCount':2,'events':[{'kind':'item','identity':'package-item','itemId':'package-item','revision':1},fact]}
 envelope={'schema':'fsgg.telemetry.envelope/1','workspaceId':'package-workspace','producerId':'package-producer','streamId':'runtime','batchId':'package-batch','payload':payload}
 pathlib.Path(sys.argv[1]).write_text(json.dumps(envelope,separators=(',',':'))+'\n')
 PY
@@ -112,6 +116,43 @@ PY
   done
   ok "restarted host exposes the applied receipt"
 
+  python3 - "$WORK/envelope.json" "$WORK/passive-correction.json" <<'PY_PASSIVE'
+import json,pathlib,sys
+value=json.load(open(sys.argv[1])); value['batchId']='package-passive-correction'
+payload=value['payload']; payload['ingestId']=value['batchId']; payload['cursor']='2'; payload['eventCount']=1
+fact=payload['events'][1]; fact.update(revision=2,input=20,total=22,sourceDigest='c'*64,position=2)
+payload['events']=[fact]
+pathlib.Path(sys.argv[2]).write_text(json.dumps(value,separators=(',',':'))+'\n')
+PY_PASSIVE
+  code="$(curl --silent --show-error --cacert "$tls/server.crt" -H "Authorization: Bearer $producer_secret" -H 'Content-Type: application/json' --data-binary "@$WORK/passive-correction.json" --output "$WORK/correction-submit.json" --write-out '%{http_code}' "$base/v1/batches")"
+  case "$code" in 200|202) ;; *) bad "installed host accepts passive correction" "HTTP $code"; kill "$pid" 2>/dev/null || true; return ;; esac
+  for attempt in {1..50}; do
+    code="$(curl --silent --show-error --cacert "$tls/server.crt" -H "Authorization: Bearer $producer_secret" --output "$WORK/correction-receipt.json" --write-out '%{http_code}' "$base/v1/receipts/package-passive-correction")"
+    if [ "$code" = 200 ] && python3 - "$WORK/correction-receipt.json" <<'PY_PASSIVE'
+import json,sys
+value=json.load(open(sys.argv[1])); assert value['status']=='applied' and value['code'] is None and value['batchId']=='package-passive-correction'
+PY_PASSIVE
+    then break; fi
+    [ "$attempt" -lt 50 ] || { bad "installed passive correction applies" "HTTP $code"; kill "$pid" 2>/dev/null || true; return; }
+    sleep 0.1
+  done
+  assert_passive_state() {
+    python3 - "$1/telemetry.sqlite3" <<'PY_PASSIVE'
+import json,sqlite3,sys
+with sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True) as db:
+    rows=db.execute("SELECT canonical FROM ingest_facts WHERE kind='provider-usage-observation/1'").fetchall()
+    assert len(rows)==1; fact=json.loads(rows[0][0])
+    assert fact['revision']==2 and fact['input']==20 and fact['total']==22 and fact['cacheWriteInput']==3
+    assert fact['cachedInput'] is None and fact['reasoning'] is None and fact['itemId'] is None and fact['model'] is None and 'cost' not in fact
+    assert fact['populationCoverage']=='partial' and fact['attributionCoverage']=='unknown'
+    assert db.execute("SELECT count(*) FROM corrections WHERE kind='provider-usage-observation/1'").fetchone()[0]==1
+    for table in ('usage_observations','runtime_turn_usage','budget_dirty_items'):
+        assert db.execute('SELECT count(*) FROM '+table).fetchone()[0]==0,table
+    assert db.execute('SELECT count(*) FROM items').fetchone()[0]==1
+PY_PASSIVE
+  }
+  assert_passive_state "$store" && ok "installed HTTPS passive correction stays canonical-only with absent counters unknown" || bad "installed HTTPS passive projection and item totals"
+
   local browser_spki
   browser_spki="$(openssl x509 -in "$tls/server.crt" -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | openssl base64)"
   (cd "$ROOT/tests/FS.GG.Telemetry.Browser.Tests" && FSGG_BROWSER_BASE_URL="$base" FSGG_BROWSER_PRINCIPAL_ID=package-browser FSGG_BROWSER_ACCESS_KEY="$browser_key" FSGG_BROWSER_KNOWN_WORKSPACE=package-workspace FSGG_BROWSER_UNAVAILABLE_WORKSPACE=outside-workspace FSGG_BROWSER_CERTIFICATE_SPKI="$browser_spki" npm run test:browser) >"$WORK/browser.out" 2>"$WORK/browser.err" \
@@ -146,6 +187,13 @@ PY
   [ "$code" = 200 ] && cmp -s "$WORK/applied-receipt.json" "$WORK/restored-receipt.json" && ok "restored host retains the exact applied receipt" || bad "restored host retains the exact applied receipt" "HTTP $code"
   node "$ROOT/tests/standalone-telemetry-host-package/installed-browser.js" "$ROOT/tests/FS.GG.Telemetry.Browser.Tests/node_modules/playwright" "$restored_base" package-browser "$browser_key" package-workspace package-item "$browser_spki" >"$WORK/restored-browser.out" 2>"$WORK/restored-browser.err" \
     && ok "restored browser snapshot retains the native package item" || bad "restored browser snapshot retains the native package item" "$(tail -10 "$WORK/restored-browser.err")"
+  if assert_passive_state "$restored_root/package-workspace"; then
+    # shellcheck disable=SC2034 # consumed by the package evidence writer
+    HOST_PASSIVE_RECEIPT_QUALIFIED=true
+    ok "restored host preserves exact passive correction outside item totals"
+  else
+    bad "restored passive state changed"
+  fi
   kill -TERM "$pid"; rc=0; wait "$pid" || rc=$?
   [ "$rc" -eq 0 ] && ok "restored installed host shuts down cleanly" || bad "restored installed host shuts down cleanly" "rc=$rc"
 }

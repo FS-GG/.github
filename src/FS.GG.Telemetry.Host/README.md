@@ -19,10 +19,16 @@ Browser access keys and producer credentials are separate principals. Secrets
 belong in private files referenced by configuration; do not place them in
 arguments, URLs, logs, package contents, or source control.
 
-Version `0.1.1` is independently released under tag
-`telemetry-host/v0.1.1`. It is not part of the Kit, Drivers, and coordination CLI
-coherent release set. Source delivery does not mean the package has been
-published or activated on Main.
+Prospective version `0.6.0` bundles Store14 and accepts partial native response
+observations through the existing authenticated generic receipt API. Its manifest
+selects Store14 only; no schema migration is implied. Item attribution, inventory,
+terminal coverage and absent counters remain unknown. Passive observations stay
+outside qualified item totals.
+
+Host is independently released under `telemetry-host/v<VERSION>`, separate from
+the Kit, Drivers and coordination CLI coherent set. Published Host `0.5.0` remains
+unchanged. Source delivery does not establish a new publication, installed service,
+TLS trust, client enrollment or receiver durability.
 
 ## Read an inactive preparation
 
