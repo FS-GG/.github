@@ -108,6 +108,12 @@ The focused controls require hosted CI; no local CLR/native/browser workload was
 
 ## Bounded migration source contract
 
+The accepted 0.104 package and installed-byte qualification remain tied to their original candidate.
+The visibility correction described here is later source; source builds and inert caller tests do
+not update that installation or grant another apply. Original partial/Unknown invocations retain
+readback-only custody. A genuine qualified successor and fresh selected preparation precede any
+remaining mutation; supported human UI edits are legitimate new facts for that preparation.
+
 The packaged `board-v2` route also prepares the selected .10 migration. This source is not an
 installed candidate or a live-operation grant. The accountable owner separately selects the exact
 operation after installed qualification; native principal/capability establishes permission only.

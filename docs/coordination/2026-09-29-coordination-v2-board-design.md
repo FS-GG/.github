@@ -12,6 +12,21 @@ cutover remains open; the original finite .1–.6 acceptance and completed roadm
 The [selected window below](#selected-programme-cutover--2026-10-17) is source preparation,
 not installed adoption, board-mutation admission or consumer activation.
 
+**Current accepted boundary — 2026-10-18:** coherent 0.104 publication is accepted through the
+[sole release plan](../roadmaps/utel-release-successor.md). The maintained developer update verified
+all 82 installed payload files against the retained source-912 candidate, and genuine read-only
+migration preparation passed. A separately selected apply confirmed its schema-option addition and
+one membership, then stopped with its original Unknown when immediate complete readback still showed
+the pre-effect membership state. Later independent readback confirmed those partial effects; the
+original invocation remains readback-only. Restricted original custody stays outside this document.
+
+The bounded visibility correction below is new source, with actual compiler and inert unit/caller
+qualification; it is not carried by the already published/installed 0.104 bytes. A qualified successor,
+fresh preparation and separately selected remaining migration are still needed. Final native-ID
+binding, positive installed inspection/refresh/selection, actual UI and coordinated real use remain
+open. Human UI edits can proceed independently when no apply is active and must be observed by fresh
+preparation. No original Unknown, inherited reservation or completed historical outcome is reset.
+
 **Historical design/adoption frontier — 2026-09-29 through 2026-10-10:** organization pilot passed 2026-10-02.
 On 2026-10-03 the exact four-target successor, public installed 0.95.0 closure,
 one-shot import with independent readbacks, zero-mutation refresh/inspection and
