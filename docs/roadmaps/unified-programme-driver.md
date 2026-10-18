@@ -36,6 +36,21 @@ view identities/orthogonal settings, and never repurposes Status/Track/Roadmap o
 parents. Root selects exact native field/classification/view/enrollment effects in a separate admitted
 window; no schema mutation, membership expansion or caller activation is claimed by this plan update.
 
+### Independent Creator source closure
+
+Creator **0.17.0** packages the canonical product driver cohort from the normal coherent **0.107.0**
+eleven-project source graph. It has its own candidate, package and publisher with journal017;
+coherent107 publication does not publish Creator. Published Creator016 and its frozen099 dependency
+helper remain immutable, as do historical013 recovery identities. Product scope retains its selected
+binding3/schema1 behavior; new organization hierarchy grammar is not silently applied to products.
+
+The ordinary existing Creator selftest runs the actual ProductBoard FSI materializer, checks the whole
+delivered driver cohort in both mirrors, then packs the tool and validates built-versus-packed dependency
+bytes and release-manifest correspondence. Source-only offline qualification exercises programme
+continuation, explicit product selection, blocked scope, old handoff and completed source with remaining
+parent obligations. Current-package publication, installed absolute-path discovery, native product
+creation and restart/adoption remain separate acceptance gates under the owning outcome.
+
 ## Retained roadmap-driver history
 
 The following decisions, technical acceptance obligations and evidence retain their original scope.

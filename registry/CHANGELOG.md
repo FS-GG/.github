@@ -1,5 +1,13 @@
 # Registry changelog
 
+## 2026-10-18 — canonical coordinator and independent Creator source (#4677)
+
+Advance only source declarations to coherent coordination0.107 and Creator0.17. Canonical work-board,
+explicit organization outcome/delivery source grammar and complete product driver packaging are
+source-qualified separately from publication, native migration/enrollment/views and installed discovery.
+Published coordination0.106, Creator0.16, active caller0.105 and original uncertain operations remain unchanged.
+
+
 Reverse-chronological log of changes to [`dependencies.yml`](dependencies.yml), plus FS.GG.Kit
 republishes that change the fleet materialized by [`repos.yml`](repos.yml) without changing a
 dependency row — the FS-GG cross-repo contract & dependency registry. Its human projection is
