@@ -43,9 +43,11 @@ fi
 TMP_ROOT="$(mktemp -d)"
 SERVERS_TO_KILL=()
 cleanup() {
-  for pid in "${SERVERS_TO_KILL[@]}"; do kill "$pid" 2>/dev/null; done
-  for pid in "${SERVERS_TO_KILL[@]}"; do wait "$pid" 2>/dev/null; done
-  rm -rf "$TMP_ROOT"
+  local status=$? pid
+  for pid in "${SERVERS_TO_KILL[@]}"; do kill "$pid" 2>/dev/null || :; done
+  for pid in "${SERVERS_TO_KILL[@]}"; do wait "$pid" 2>/dev/null || :; done
+  rm -rf "$TMP_ROOT" || { [ "$status" -ne 0 ] || status=1; }
+  return "$status"
 }
 trap cleanup EXIT
 
