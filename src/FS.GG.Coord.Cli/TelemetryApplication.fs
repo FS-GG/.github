@@ -127,6 +127,8 @@ module TelemetryApplication =
             shape [ "--store-root"; "--item" ] [] args
         | "telemetry" :: "store" :: "export" :: args ->
             shape [ "--store-root"; "--item"; "--output" ] [ "--public" ] args
+        | "telemetry" :: "passive" :: "capture" :: args -> shape [ "--config"; "--repository"; "--input" ] [] args
+        | "telemetry" :: "passive" :: "report" :: args -> shape [ "--config"; "--repository" ] [] args
         | "telemetry" :: "workspace" :: action :: args when action = "status" || action = "binding" || action = "drain" ->
             shape [ "--config"; "--repository"; "--binding-digest" ] [] args
         | "telemetry" :: "workspace" :: "submit" :: args ->
@@ -144,7 +146,7 @@ module TelemetryApplication =
                     "--credential-reference"
                     "--spool-root"
                 ]
-                []
+                (if action = "activate-remote" then [ "--capture-only" ] else [])
                 args
         | "telemetry" :: "workspace" :: "associate-repository" :: args ->
             shape [ "--config"; "--workspace"; "--repository"; "--remove-repository" ] [] args
@@ -1057,6 +1059,41 @@ module TelemetryApplication =
         with ex ->
             fail "roadmap unit revision" [ ex.Message ]
 
+    let private passive action args =
+        match option "--repository" args with
+        | None -> fail "telemetry passive" [ "--repository is required" ]
+        | Some repository ->
+            let config = option "--config" args
+            match WorkspaceTelemetryApplication.passiveProducer config (Some repository) with
+            | Error errors -> fail "telemetry passive" errors
+            | Ok(root, scope, binding) ->
+                let owner = scope.Workspace + ":" + scope.Producer + ":" + scope.Stream + ":" + binding
+                let completed =
+                    if action = "report" then SkillTelemetryAdapter.reportPassive root owner scope.Stream
+                    else
+                        try
+                            let path = option "--input" args |> Option.defaultWith (fun () -> invalidOp "--input is required")
+                            let bytes = WorkspaceTelemetryApplication.readPassiveSelection path |> Result.defaultWith (fun _ -> invalidOp "passive selection unavailable")
+                            use document = JsonDocument.Parse bytes
+                            let selection = document.RootElement
+                            let fields = selection.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+                            if fields.Length <> 3 || Set.ofList fields <> Set.ofList [ "schema"; "codexHome"; "sources" ]
+                               || selection.GetProperty("schema").GetString() <> "fsgg.telemetry.passive-selection/1" then
+                                invalidOp "passive source selection has an unsupported shape"
+                            let home = selection.GetProperty("codexHome").GetString()
+                            if not (Path.IsPathFullyQualified home) then invalidOp "passive source root must be absolute"
+                            let paths = selection.GetProperty("sources").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+                            SkillTelemetryAdapter.capturePassive root owner scope.Stream home paths
+                                (WorkspaceTelemetryApplication.tryEnqueueBound config (Some repository) (Some scope.Producer) (Some binding))
+                        with _ ->
+                            { SkillTelemetryAdapter.CommandResult.ExitCode = 1; Stdout = Array.empty
+                              Stderr = Encoding.UTF8.GetBytes "fsgg passive telemetry: source selection unavailable or invalid\n" }
+                use stdout = Console.OpenStandardOutput()
+                use stderr = Console.OpenStandardError()
+                stdout.Write(completed.Stdout, 0, completed.Stdout.Length)
+                stderr.Write(completed.Stderr, 0, completed.Stderr.Length)
+                completed.ExitCode
+
     let tryRun argv =
         match argv with
         | "telemetry" :: "dashboard" :: "publisher-event" :: args ->
@@ -1086,6 +1123,9 @@ module TelemetryApplication =
                     args
                     (TelemetryDashboardApplication.run "serve")
             )
+        | "telemetry" :: "passive" :: action :: args when action = "capture" || action = "report" ->
+            let valueOptions = if action = "capture" then [ "--config"; "--repository"; "--input" ] else [ "--config"; "--repository" ]
+            Some(validated "telemetry passive" valueOptions [] args (passive action))
         | "telemetry" :: "workspace" :: action :: args -> Some(WorkspaceTelemetryApplication.run action args)
         | "telemetry" :: "ci" :: action :: args -> Some(TelemetryCiApplication.run action args)
         | "telemetry" :: "budget" :: action :: args ->

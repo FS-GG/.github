@@ -452,3 +452,47 @@ module TelemetryStoreTests =
         Assert.True(TelemetryStore.validateCiSuiteGraph "UTEL-06.3" mutated changed |> Result.isError)
         Assert.True(TelemetryStore.validateCiSuiteGraph "UTEL-06.3" { seal with SuiteCount = 2L } facts |> Result.isError)
         Assert.True(TelemetryStore.validateCiSuiteGraph "UTEL-06.3" { seal with FirstSweepDigest = String('e', 64) } facts |> Result.isError)
+    let private passiveEvent () =
+        let thread = "11111111-1111-1111-1111-111111111111"
+        let turn = "22222222-2222-2222-2222-222222222222"
+        let identity = "passive-" + CanonicalJson.sha256(bytes ("codex-rollout/1\u001f" + thread + "\u001f" + turn + "\u001fresponse-a"))
+        System.Text.Json.Nodes.JsonNode.Parse(
+            $"""{{"kind":"provider-usage-observation/1","identity":"{identity}","itemId":null,"revision":1,"threadId":"{thread}","turnId":"{turn}","responseId":"response-a","provider":null,"model":null,"effort":null,"input":10,"cachedInput":9,"cacheWriteInput":8,"output":5,"reasoning":2,"total":15,"sourceInstance":"{String('a',64)}","sourceGeneration":"source-1","sourceDigest":"{String('b',64)}","position":0,"capturedAt":"2026-10-18T07:00:00Z","occurredAt":null,"provenance":"codex-local-rollout/1","populationCoverage":"partial","attributionCoverage":"unknown","inventoryCoverage":"unknown","terminalCoverage":"unknown"}}""")
+
+    [<Fact>]
+    let ``passive response is partial unassigned and preserves independent cache counters`` () =
+        let event = passiveEvent ()
+        let parsed = TelemetryStore.parseBatch(causalBatch (event.ToJsonString())) |> Result.defaultWith (sprintf "%A" >> failwith)
+        let fact = List.exactlyOne parsed.Facts
+        Assert.Equal(None, fact.ItemId)
+        match fact.Payload with
+        | TelemetryStore.PassiveProviderUsage value ->
+            Assert.Equal(Some 10L, value.Input)
+            Assert.Equal(Some 9L, value.CachedInput)
+            Assert.Equal(Some 8L, value.CacheWriteInput)
+            Assert.Equal(None, value.Model)
+            Assert.Equal(None, value.OccurredAt)
+        | _ -> Assert.Fail("passive counters impersonated another accounting kind")
+        event["input"] <- null
+        event["cachedInput"] <- null
+        event["cacheWriteInput"] <- null
+        Assert.True(TelemetryStore.parseBatch(causalBatch (event.ToJsonString())) |> Result.isOk)
+
+    [<Fact>]
+    let ``passive parser refuses manufactured attribution completeness and invalid dimensions`` () =
+        let reject name (value: System.Text.Json.Nodes.JsonNode) =
+            let event = passiveEvent ()
+            event[name] <- value
+            Assert.True(TelemetryStore.parseBatch(causalBatch (event.ToJsonString())) |> Result.isError, name)
+        for name in [ "populationCoverage"; "attributionCoverage"; "inventoryCoverage"; "terminalCoverage" ] do
+            reject name (System.Text.Json.Nodes.JsonValue.Create "complete")
+        reject "itemId" (System.Text.Json.Nodes.JsonValue.Create "UTEL-06")
+        reject "provenance" (System.Text.Json.Nodes.JsonValue.Create "openai-responses/1")
+        reject "identity" (System.Text.Json.Nodes.JsonValue.Create "invented")
+        reject "revision" (System.Text.Json.Nodes.JsonValue.Create 0)
+        reject "cachedInput" (System.Text.Json.Nodes.JsonValue.Create 11)
+        reject "cacheWriteInput" (System.Text.Json.Nodes.JsonValue.Create 11)
+        reject "reasoning" (System.Text.Json.Nodes.JsonValue.Create 6)
+        reject "total" (System.Text.Json.Nodes.JsonValue.Create 16)
+        reject "input" (System.Text.Json.Nodes.JsonValue.Create -1)
+        reject "cost" (System.Text.Json.Nodes.JsonValue.Create 1)

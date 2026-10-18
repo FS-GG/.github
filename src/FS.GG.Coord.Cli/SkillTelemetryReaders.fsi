@@ -5,6 +5,7 @@ open System.Text.Json
 
 module internal SkillPrivateDurability =
     val syncDirectory: string -> unit
+    val withLock: string -> (unit -> 'a) -> 'a
 
 module SkillTelemetryReaders =
     type Coverage =
@@ -67,6 +68,39 @@ module SkillTelemetryReaders =
             producer: string ->
                 Result<string, ReaderError>
 
+    type ObservedCounters =
+        { Input: int64 option
+          CachedInput: int64 option
+          CacheWriteInput: int64 option
+          Output: int64 option
+          Reasoning: int64 option
+          Total: int64 option }
+
+    type PassiveNativeRecord =
+        { ThreadId: Guid
+          TurnId: Guid
+          ResponseId: string
+          Usage: ObservedCounters
+          Provider: string option
+          Model: string option
+          Effort: string option
+          OccurredAt: string option
+          SourceDigest: string
+          Position: int64 }
+
+    type PassiveCursor =
+        { SourceInstance: string
+          Generation: string
+          Offset: int64
+          AnchorDigest: string
+          SkippingOversized: bool }
+
+    type PassiveScan =
+        { Records: PassiveNativeRecord list
+          Cursor: PassiveCursor
+          ScannedBytes: int
+          Diagnostics: string list }
+
     type NativeCounters =
         {
             Input: int64
@@ -117,6 +151,18 @@ module SkillTelemetryReaders =
         }
 
     module NativeUsage =
+        [<Literal>]
+        val PassiveMaximumFiles: int = 8
+        [<Literal>]
+        val PassiveMaximumScanBytes: int = 4194304
+        [<Literal>]
+        val PassiveMaximumObservations: int = 64
+
+        val passiveIdentity: thread: Guid -> turn: Guid -> response: string -> string
+        val scanPassive:
+            codexHome: string -> path: string -> prior: PassiveCursor option -> maximumBytes: int -> maximumRecords: int ->
+                Result<PassiveScan, ReaderError>
+
         val coverageForParent: Guid option -> Coverage
 
         val collect:

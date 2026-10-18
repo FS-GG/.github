@@ -304,6 +304,27 @@ module TelemetryStore =
         |> Encoding.UTF8.GetBytes
         |> CanonicalJson.sha256
 
+    /// A partial local response observation; never programme or terminal accounting.
+    type PassiveUsageObservation =
+        { ThreadId: string
+          TurnId: string
+          ResponseId: string
+          Provider: string option
+          Model: string option
+          Effort: string option
+          Input: int64 option
+          CachedInput: int64 option
+          CacheWriteInput: int64 option
+          Output: int64 option
+          Reasoning: int64 option
+          Total: int64 option
+          SourceInstance: string
+          SourceGeneration: string
+          SourceDigest: string
+          Position: int64
+          CapturedAt: string
+          OccurredAt: string option }
+
     type Payload =
         | CiSuitePage of CiSuitePageProof
         | CiSuiteSeal of CiSuiteSealProof
@@ -352,6 +373,7 @@ module TelemetryStore =
             turnSequence: int64 option *
             processId: int64 *
             phase: string
+        | PassiveProviderUsage of observation: PassiveUsageObservation
         | RuntimeProviderObservation of observation: ProviderObservation
         | RuntimeResponseUsage of usage: ResponseUsage
         | RuntimeTurnUsage of
@@ -1536,6 +1558,47 @@ module TelemetryStore =
                     })
 
             match kind with
+            | "provider-usage-observation/1" ->
+                try
+                    let get result = Result.defaultWith invalidOp result
+                    let text name = requiredBoundedText label 200 node name |> get
+                    let optional name = optionalText label node name |> get
+                    let count name = optionalInt label node name |> get
+                    let thread, turn, response = text "threadId", text "turnId", text "responseId"
+                    let guid (value: string) = match Guid.TryParseExact(value, "D") with true, parsed -> parsed <> Guid.Empty && parsed.ToString("D") = value | _ -> false
+                    let input, cached, cacheWrite = count "input", count "cachedInput", count "cacheWriteInput"
+                    let output, reasoning, total = count "output", count "reasoning", count "total"
+                    let subset part whole = match part, whole with Some p, Some w -> p <= w | _ -> true
+                    let digest name =
+                        let value = text name
+                        if not (Regex.IsMatch(value, "^[0-9a-f]{64}$")) then invalidOp "passive source digest is invalid"
+                        value
+                    let profile name =
+                        let value = optional name
+                        if value |> Option.exists (fun v -> v.Length > 200 || (v |> Seq.exists Char.IsControl)) then invalidOp "passive profile is invalid"
+                        value
+                    let expected = "passive-" + CanonicalJson.sha256(Encoding.UTF8.GetBytes("codex-rollout/1\u001f" + thread + "\u001f" + turn + "\u001f" + response))
+                    if itemId.IsSome || identity <> expected || revision < 1L || not (guid thread && guid turn)
+                       || (response |> Seq.exists Char.IsControl)
+                       || not (subset cached input && subset cacheWrite input && subset reasoning output)
+                       || (match input, output, total with Some i, Some o, Some t -> i > Int64.MaxValue - o || i + o <> t | _ -> false)
+                       || ([input; cached; cacheWrite; output; reasoning; total] |> List.forall Option.isNone)
+                       || text "populationCoverage" <> "partial" || text "attributionCoverage" <> "unknown"
+                       || text "inventoryCoverage" <> "unknown" || text "terminalCoverage" <> "unknown"
+                       || text "provenance" <> "codex-local-rollout/1" then
+                        invalidOp "passive observation must preserve native identity and unknown attribution/population"
+                    let observation =
+                        { ThreadId = thread; TurnId = turn; ResponseId = response
+                          Provider = profile "provider"; Model = profile "model"; Effort = profile "effort"
+                          Input = input; CachedInput = cached; CacheWriteInput = cacheWrite; Output = output; Reasoning = reasoning; Total = total
+                          SourceInstance = digest "sourceInstance"; SourceGeneration = text "sourceGeneration"; SourceDigest = digest "sourceDigest"
+                          Position = requiredInt label node "position" |> get
+                          CapturedAt = requiredTimestamp label node "capturedAt" |> get
+                          OccurredAt = optionalTimestamp label node "occurredAt" |> get }
+                    make [ "threadId"; "turnId"; "responseId"; "provider"; "model"; "effort"; "input"; "cachedInput"; "cacheWriteInput"
+                           "output"; "reasoning"; "total"; "sourceInstance"; "sourceGeneration"; "sourceDigest"; "position"; "capturedAt"; "occurredAt"
+                           "populationCoverage"; "attributionCoverage"; "inventoryCoverage"; "terminalCoverage"; "provenance" ] (PassiveProviderUsage observation)
+                with :? InvalidOperationException as error -> Error error.Message
             | "ci-suite-page/1" ->
                 parseSuitePage label node
                 |> Result.bind (CiSuitePage >> make [ "scope"; "resourceKind"; "suiteId"; "page"; "nativeCount"; "nativeTotal"; "nextPage";

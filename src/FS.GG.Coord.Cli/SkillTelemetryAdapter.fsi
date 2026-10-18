@@ -25,5 +25,12 @@ module SkillTelemetryAdapter =
 
     val internal writePrivateBytes: directory: string -> name: string -> bytes: byte array -> string
 
+    /// Bounded partial local usage; enqueue is the existing immutable spool seam, never a remote call.
+    val capturePassive:
+        root: string -> owner: string -> sourceIdentity: string -> codexHome: string -> paths: string list ->
+        enqueue: (byte array -> Result<string, string list>) -> CommandResult
+
+    val reportPassive: root: string -> owner: string -> sourceIdentity: string -> CommandResult
+
     val run: SkillTelemetryReaders.HostConfig option -> TelemetryCommand -> CommandResult
     val acceptsStateSchema: string -> bool
