@@ -347,6 +347,13 @@ resolved diagnostics for semantic review. After two failures of the same class, 
 expression or generation path and make one coherent repair before another qualification. A cheap parse
 check must inspect diagnostics as well as exit status and never replaces compilation or required tests.
 
+Early in the existing edit/compile/focused-test loop, verify that the maintained runner actually invokes
+the changed assertion and reports its result. Compilation, discovery or an uncalled fixture is not
+execution evidence. Exercise the negative control through that same runner: the intended invariant
+violation must fail, and a swallowed exception, ignored result or earlier setup failure must not make
+the control appear effective. Use the admitted execution profile; repair missing test wiring before
+full qualification rather than adding a separate runner or review layer.
+
 Record observed capacity, live and unknown reservations, storage evidence and the first workload peaks
 in the existing owner artifact before increasing local concurrency. Follow the
 [capacity window and assembled test candidate](references/context.md#capacity-window-and-assembled-test-candidate)
@@ -443,6 +450,13 @@ The designated integrator (parent or delegated lane owner) admits remote PRs thr
 `tools/pr-lane-admission.py`: stable campaign/chain, exact pushed head and prepared title/body. Keep one open PR per chain and at most two managed PRs per repository,
 including other campaigns. The lock covers participating local callers only. Read the live check queue;
 prepare locally when CI limits progress and repair existing PRs. One integrator owns shared-file joins.
+
+Before costly qualification, that integrator assembles compatible source, version, Atlas and closure
+edits for the selected delivery and reconciles the current base. Coordinate disjoint reporting or
+closure merges with the owner before its final base reconciliation, or defer them until delivery when
+needed to avoid invalidating that qualification. Do not freeze unrelated main-branch work by default
+or wait for unready unrelated edits. A changed final candidate still needs its applicable required
+checks and coherent validation; batching does not authorize publication or other protected effects.
 
 For hosted waits use `tools/routine-delivery.py --watch-checks --watch-seconds N` with repo, PR and exact head
 (N 1–600). Retain raw records privately; consume material changes or terminal/deadline summaries. Unchanged
