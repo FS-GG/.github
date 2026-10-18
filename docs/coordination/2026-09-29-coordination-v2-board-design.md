@@ -693,8 +693,12 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   uncertain sends remain Unknown and stop; absence never proves NoSend or permits another mutation.
 
   The existing caller retains its original intent and sends once. After a clear successful response,
-  it may collect at most seven complete observations, separated by at most six five-second waits.
-  Each observation is retained in the same private invocation. Waits and acquisitions share the
+  it may collect at most seven complete observations with bounded waits of 1, 1, 2, 4, 8 and 14 seconds.
+  Each witness is retained in the same private invocation. Only a complete exact pre-effect witness
+  may omit the redundant second identity query while deciding to wait; this grants no transition or
+  send permission. A candidate-confirmed witness still receives the original final native identity,
+  principal and capability comparison on that same witness. Standard preparation, precondition and
+  readback collection remain strict. Waits and acquisitions share the
   original 500-request/270-second budget and selected planning deadline; no clock, request counter or
   operation identity is renewed. Complete first pages remain observation-local. The finite window is
   best effort: a long visibility delay or many delayed effects can exhaust the original bound and
@@ -704,7 +708,10 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   membership visibility; sibling controls cover schema, initial values and both view operations,
   contradictions, invalid responses, deadline and request exhaustion. Both affected test projects
   compiled under the separately selected bounded source-build profile with zero warnings/errors.
-  Exact focused suite execution, required hosted qualification and delivery remain separate gates.
+  The inert full journey with one stale read per effect completes 77 sends in 468 apply requests and
+  77 virtual seconds; the separate preparation adds four requests. Its no-delay sibling uses 391
+  apply requests. These counters exclude actual HTTP/custody latency and do not prove native fit.
+  Exact required hosted qualification and delivery remain separate gates.
   This source correction does not change the immutable published 0.104 package or update an installed
   caller. A genuine qualified successor and separately selected remaining migration are still needed;
   original partial/Unknown operations remain readback-only. Legitimate human UI edits must be observed
