@@ -32,12 +32,38 @@ selection or fallback. Programme refresh uses the existing Observation-only writ
 schema/native/source checks. An installed old Project 3 schema still refuses before
 mutation; source support does not authorize schema migration or live board changes.
 
-The fixed manifest path holds `fsgg.coordination-board-v2-enrollment/v2`: a closed
-`target` (owner, organizationId, projectId, projectNumber, schemaVersion), closed
-`binding` (recipeRevision, artifactSha256, repositories), and exact selected `items`
-(issue, nodeId, roadmap). No issue revision, open state or empty-dependency snapshot
-belongs to enrollment. The pinned enrollment blob must still match protected main;
-selected plan paths are stable while their current protected-main blobs are observed.
+The fixed protected manifest path holds only the closed two-field public
+`fsgg.coordination-board-v2-enrollment/v3` document: `schema` and
+`commitmentSha256`. Programme identity and Roadmap values remain in the private
+binding's closed `programmeEnrollment` pair (`nonceHex`, `payloadBase64`). The nonce
+contains 32 random bytes; canonical padded Base64 carries the exact UTF-8 private
+payload, without a BOM. Its closed payload/v1 binds `target`, constructor `binding`
+and the entire selected `items` cohort (issue, nodeId, roadmap). No issue revision,
+open state or empty-dependency snapshot belongs to enrollment.
+
+The commitment hashes the ASCII domain `fsgg.coordination-board-v2-enrollment/v3`,
+one NUL byte, the decoded nonce, an unsigned eight-byte big-endian payload length
+and the original payload bytes. It never hashes reserialized JSON. Runtime verifies
+the exact protected public blob and private digest before selected issue/plan reads,
+then rechecks public currentness after inspection and before refresh writes or a
+Verified no-op. Missing, changed or mismatched enrollment withholds population selection.
+The report joins public source provenance and the matched commitment; it excludes
+private payload and nonce. Selected plan paths remain stable while their current
+protected-main blobs are observed.
+
+Binding acquisition is bounded to 256 KiB on the same opened handle before allocation;
+the private payload is bounded to 128 KiB and JSON depth to 16. Duplicate, unknown or
+missing fields, invalid UTF-8, noncanonical Base64, wrong scope/provenance and incomplete
+cohorts refuse. Product-v3 input remains unchanged and rejects `programmeEnrollment`;
+there is no raw-public programme fallback.
+
+The maintained offline `BoardV2Import prepare-programme` command accepts a reviewed
+binding template and complete private payload, validates before generating one random
+nonce, and retains exclusive restrictive private/public output files with flush and
+readback checks. Partial outputs remain original evidence; collisions do not overwrite,
+reseed or retry. Its outputs are preparation only. A reviewed protected public commit
+and qualified installed executable are still required for admission. Never put private
+inputs, nonce or binding in a public checkout, fixture, artifact or PR.
 
 Inspection/v2 adds complete membership reconciliation and actual repository-wide open
 PR inventories, including non-enrolled work, native closing-issue associations, head,
@@ -103,7 +129,7 @@ writes only Observation and does not consume the selection overlay or runtime ca
 Concurrent human Status/Track/Roadmap values survive. Original .103 uncertainty remains held;
 use the sole release plan and evaluated source/registry for the selected successor. Installed
 qualification, migration, UI and actual consumer cutover remain owner-gated.
-The focused controls require hosted CI; no local CLR/native/browser workload was run.
+Focused source builds and inert caller tests are separately bounded; required hosted CI remains. Neither is native installed or browser acceptance.
 
 
 ## Bounded migration source contract

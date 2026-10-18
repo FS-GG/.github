@@ -320,6 +320,22 @@ transitions and dependency changes must not require republishing enrollment. Sco
 schema changes do. Changed determining facts invalidate only affected decisions and trigger targeted
 recomputation before dispatch. Native child propagation, manual cards and view filters never enroll work.
 
+Programme enrollment must preserve private identities without reducing the selected cohort. The
+existing fixed protected public manifest carries only a schema and one domain-separated salted
+commitment to a complete private enrollment payload. The private binding retains the random nonce
+and exact payload bytes; the payload binds target, constructor provenance, allowed repositories and
+all selected issue/node/Roadmap rows. The public commitment contains no item identifiers, per-item
+hashes or private-derived metadata. Incidental public references do not authorize disclosure.
+
+Authenticate the bounded private payload against that exact protected public blob before selected
+native issue or plan reads. Recheck public currentness after slow observations and before every
+Observation write or Verified no-op. Keep the existing native/provenance/action gates and all-item
+coverage; mismatch or source unavailability is a global population gap, never an empty cohort.
+Use the maintained offline BoardV2Import pair preparation with one cryptographic nonce only after
+validation, exclusive restrictive output custody and preserved partial failures. Preparation itself
+grants no authority; final protected enrollment, qualified installed bytes and native acceptance
+remain distinct. Product binding3/schema1 stays unchanged, without a programme fallback.
+
 Complete reconciliation exposes selected, historical, deferred, unexpected and unresolved memberships
 separately. Missing pagination or global binding/schema failure blocks new board-derived selection;
 item-specific failure prevents conclusions about that item. Neither becomes an empty/Ready result.
@@ -735,8 +751,9 @@ qualification are explicit gates if shared behavior changes. Source merge suppli
   original partial/Unknown operations remain readback-only. Legitimate human UI edits must be observed
   by fresh preparation and preserved, rather than blocked to retain an old snapshot.
 
-  Final stable enrollment uses the existing protected manifest route and the exact selected population
-  and Roadmap strings. Final binding4/schema2 joins that protected population and the qualified package/
+  Final stable enrollment uses the existing protected public commitment route with the exact selected
+  population and Roadmap strings retained privately. Final binding4/schema2 joins that authenticated
+  private population and the qualified package/
   assembly provenance after actual native option/item/view IDs are known. No draft invented ID is an
   executable binding. Positive installed inspection/refresh/selection, explicit planning reconciliation,
   actual UI verification and coordinated real use still precede current-status retirement. Historical

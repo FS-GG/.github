@@ -1791,3 +1791,14 @@ it selects the highest stable package only when the promoted coherent manifest a
 by side, checks the version and updates its symlink. Independent surrounding qualification must still
 verify every expected payload byte and intended caller behavior. Source delivery does not update the
 current 0.104 installation or qualify remaining Project3 effects, final binding, UI or real-use acceptance.
+
+
+The same prospective 0.105 source composition also closes programme enrollment privacy before native
+candidate qualification. The existing protected public enrollment path contains a salted whole-payload
+commitment; the complete cohort and nonce remain in the private binding. The maintained offline
+constructor produces a bounded, restrictive pair, without native calls or enrollment authority.
+Runtime authenticates the pair before selected reads and rechecks protected currentness after slow
+observations and before Observation mutation/no-op. Product3 remains separate. Real private offline
+preparation checks input composition only; it does not qualify a package, protected commitment,
+installed caller or remaining migration. Preserve original PR4663 qualification evidence separately
+from the changed-source hosted obligations; do not repack the accepted 0.104 artifact.
