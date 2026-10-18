@@ -127,9 +127,9 @@ type Telemetry = {
     Readiness: Status
     HealthObservation: AuthenticatedHealthObservation option
     WorkspaceObservation: ConfiguredWorkspaceObservation option
-    Pending: int
-    PendingUnacknowledged: int
-    UnacknowledgedLossy: bool
+    Pending: int option
+    PendingUnacknowledged: int option
+    UnacknowledgedLossy: bool option
     Capture: CaptureClaim
 }
 
@@ -596,7 +596,8 @@ module ProgressRenderer =
         require (not (isNull telemetry.WorkspaceId)
                  && Regex.IsMatch(telemetry.WorkspaceId, "\\A[A-Za-z0-9._-]+\\z", RegexOptions.CultureInvariant))
             "telemetry workspace must be a plain identifier"
-        require (telemetry.Pending >= 0 && telemetry.PendingUnacknowledged >= 0)
+        require ((telemetry.Pending |> Option.forall (fun value -> value >= 0))
+                 && (telemetry.PendingUnacknowledged |> Option.forall (fun value -> value >= 0)))
             "telemetry queue counts must be nonnegative"
         telemetry.HealthObservation |> Option.iter (fun health ->
             requireUtc "health observation" health.ObservedAt
@@ -607,9 +608,9 @@ module ProgressRenderer =
             require (workspace.ObservedAt <= snapshot.AsOf) "workspace observation exceeds report time"
             requireText "workspace evidence ID" workspace.EvidenceId
             require (workspace.WorkspaceId = telemetry.WorkspaceId) "workspace observation ID disagrees with telemetry workspace"
-            require (workspace.Pending = telemetry.Pending
-                     && workspace.PendingUnacknowledged = telemetry.PendingUnacknowledged
-                     && workspace.UnacknowledgedLossy = telemetry.UnacknowledgedLossy)
+            require (Some workspace.Pending = telemetry.Pending
+                     && Some workspace.PendingUnacknowledged = telemetry.PendingUnacknowledged
+                     && Some workspace.UnacknowledgedLossy = telemetry.UnacknowledgedLossy)
                 "workspace observation queue disagrees with telemetry queue")
         if telemetry.Readiness = ActiveHealthy then
             require (match telemetry.HealthObservation, telemetry.WorkspaceObservation with
@@ -624,8 +625,8 @@ module ProgressRenderer =
             telemetry.WorkspaceObservation |> Option.iter (fun workspace ->
                 require (snapshot.AsOf - workspace.ObservedAt <= maxTelemetryObservationAge)
                     "healthy telemetry requires fresh configured workspace observation")
-            require (telemetry.Pending = 0 && telemetry.PendingUnacknowledged = 0
-                     && not telemetry.UnacknowledgedLossy)
+            require (telemetry.Pending = Some 0 && telemetry.PendingUnacknowledged = Some 0
+                     && telemetry.UnacknowledgedLossy = Some false)
                 "healthy telemetry readiness conflicts with queue status"
         match telemetry.Capture with
         | NoAcceptedCaptureClaim -> ()
@@ -888,7 +889,10 @@ module ProgressRenderer =
             $"- Workspace: `{escape snapshot.Telemetry.WorkspaceId}`"
             $"- Authenticated health observation: {healthText}"
             $"- Configured workspace observation: {workspaceText}"
-            $"- Current queue: pending={snapshot.Telemetry.Pending}, pending unacknowledged={snapshot.Telemetry.PendingUnacknowledged}, unacknowledged lossy={string snapshot.Telemetry.UnacknowledgedLossy |> _.ToLowerInvariant()}"
+            (match snapshot.Telemetry.WorkspaceObservation with
+             | Some value ->
+                 $"- Current queue: pending={value.Pending}, pending unacknowledged={value.PendingUnacknowledged}, unacknowledged lossy={string value.UnacknowledgedLossy |> _.ToLowerInvariant()}"
+             | None -> "- Current queue: Unknown — no receiver workspace observation; delivery unknown")
             $"- End-to-end capture acceptance: {captureText}"
             ""
             "## CLI status and token usage"

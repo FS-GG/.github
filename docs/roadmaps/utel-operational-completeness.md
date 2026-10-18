@@ -12,12 +12,40 @@ SQLite store without agents hand-authoring observations. UTEL-02/03A/04A/05A sou
 release `0.87.0` from `bffc370933ec4f35af2af4acf5f72b5888844365`; the host, Coordination, SDD and
 named S.I.R receiver have adopted it, and the supported repository-owned scope is operationally qualified.
 
+## Passive observation decision — 2026-10-18
+
+Local capture and reporting proceed independently of receiver readiness, protected host-policy
+inspection and stronger authority-service qualification. Capture, attribution and delivery remain
+separate: tokens may be observed while programme attribution is Unknown and delivery is pending.
+The selected persistent receiver is the existing dedicated Home service; its installation owner
+retains access, supervision, storage and application-consistent backup/restore qualification.
+Receiver access restoration and local source work proceed independently. No credential or private
+topology belongs in this public record.
+
+The first source window decouples the existing `scripts/v2-progress` diagnostic collector and F#
+adapter, represents missing remote queue facts as Unknown and retains strict healthy/capture claims.
+Bounded local samples survive unavailable receiver state; incomplete histories, missing baselines and
+young sessions withhold period totals without inventing zero usage. This supersedes the historical
+no-session-scan restriction below only for authorized bounded local observation. It does not establish
+historical attribution, backfill, durable delivery or complete programme coverage. Existing published
+and original-effect acceptance records keep their original scope.
+
+The next concrete window reuses `SkillTelemetryReaders.NativeUsage` parsing and existing
+adapter/journal/spool/cursor mechanisms for modern response/turn records, including unassigned partial
+observations and corrections. The first legacy-counter diagnostic does not close that provider-capture
+outcome. No new collector framework, store, OTEL/key configuration or stronger service dependency is
+introduced. Existing uncertain publications remain under their original identities; capture observations
+supply no execution authority or reservation release. Required exact-source checks and operational
+receiver restart/restore readbacks remain distinct gates.
+
 ## Capability boundary
 
 Instrument real repository-owned launch, dispatch, provider, check and delivery boundaries once. Guidance alone
 is not collection. At the original 0.87.0 baseline, built-in `collaboration.spawn_agent` was unsupported because
 there was no interceptable admission/final-usage hook; that platform population remained incomplete, never zero.
-There is no historical session discovery, transcript scan, backfill or upload. Activation is prospective only.
+At that original baseline there was no historical session discovery, transcript scan, backfill or upload.
+The bounded passive-observation decision above supersedes that scan restriction at its declared scope;
+complete historical attribution remains unavailable. Activation remains prospective.
 One host-local SQLite writer/inbox and read-only snapshots remain the storage boundary; this plan adds no
 permanent service, network database or scheduler, and telemetry never becomes delivery authority.
 

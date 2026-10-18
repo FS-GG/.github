@@ -50,7 +50,7 @@ module ProgressRendererTests =
                 Pending = 0; PendingUnacknowledged = 0; UnacknowledgedLossy = false
                 ObservedAt = at.AddMinutes(-1.0); EvidenceId = "workspace-status-1"
             }
-            Pending = 0; PendingUnacknowledged = 0; UnacknowledgedLossy = false
+            Pending = Some 0; PendingUnacknowledged = Some 0; UnacknowledgedLossy = Some false
             Capture = NoAcceptedCaptureClaim
         }
         CliStatus = None
@@ -645,3 +645,24 @@ module ProgressRendererTests =
         let markdown = render { baseline with Telemetry = telemetry }
         Assert.Contains("- Telemetry readiness: 🟢 Active/Healthy", markdown)
         Assert.Contains("- End-to-end capture acceptance: 🟡 Pending", markdown)
+
+    [<Fact>]
+    let ``offline local diagnostics keep receiver queue unknown and capture pending`` () =
+        let baseline = baseSnapshot ()
+        let local = { teamWindow () with Sessions = (teamWindow ()).Sessions |> List.map (fun session -> { session with CollectorVerified = false }) }
+        let snapshot =
+            { baseline with
+                PeriodUsage = LocalCounterDiagnostic local
+                Telemetry = { baseline.Telemetry with Readiness = Pending; HealthObservation = None
+                                                      WorkspaceObservation = None; Pending = None
+                                                      PendingUnacknowledged = None; UnacknowledgedLossy = None } }
+        let markdown = render snapshot
+        Assert.Contains("Telemetry readiness: 🟡 Pending", markdown)
+        Assert.Contains("Current queue: Unknown", markdown)
+        Assert.DoesNotContain("pending=0", markdown)
+        Assert.Contains("local JSONL diagnostic only", markdown)
+        Assert.Contains("no end-to-end capture acceptance claimed", markdown)
+        refuses "healthy telemetry requires authenticated health and configured workspace observations"
+            { snapshot with Telemetry = { snapshot.Telemetry with Readiness = ActiveHealthy } }
+        refuses "workspace observation queue disagrees with telemetry queue"
+            { baseline with Telemetry = { baseline.Telemetry with Pending = None } }

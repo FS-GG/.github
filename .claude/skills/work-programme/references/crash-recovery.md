@@ -21,6 +21,20 @@ not implementation, a new feature plan or permission to replay operations. A con
 the requested scope; missing history cannot expand it. Existing plans and effect-specific admission still
 govern. Do not wait for a human to write a replacement handoff when independent facts are available.
 
+## Selected unavailable-history boundary
+
+The parent's [forward-recovery decision](../SKILL.md#forward-recovery-after-unavailable-evidence--2026-10-18)
+closes the unavailable historical evidence-search task. Stop its searches and repeated requests;
+retain surviving original records, historical Unknown outcomes and distinct unreleased 439 inherited
+reservations/46 later records. The discovery and complete-inventory instructions below apply to
+available/current relevant facts, not reconstruction of unavailable history. A concrete fresh operation
+requires current relevant ownership, remaining capacity and demonstrated separation of generation,
+writable state, operation identity and output destinations; shared destinations require fencing or
+idempotency against old-actor interference. Missing history cannot be reported as empty relevant
+coverage, and unresolved relevant conflicts still block the affected operation. Unrelated historical
+Unknowns do not globally block independently admitted fresh work. Preserve original journals/custody;
+no second recovery ledger, implicit release or new-ID retry of an uncertain effect is permitted.
+
 ## Find surviving references
 
 Resolve the owning `.github` repository and affected repositories from their existing remotes and workspace
