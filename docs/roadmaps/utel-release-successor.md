@@ -50,8 +50,10 @@ recorded; no separate remote-erasure or descendant-settlement proof is inferred.
 
 Registry publication/tag now name **0.104.0**. The earlier registry deferral below is historical:
 the accepted publication releases that hold and permits the deferred Game 0.5 inventory reconciliation.
-Game's separately accepted 0.6 publication is now projected in the same source delivery; its last
-accepted installed qualifier remains the immutable 0.5 profile. Neither transfers to Coordination
+Game's separately accepted 0.6 publication is projected. Its accepted finite installed qualifier is
+[`9a98f5da`](https://github.com/FS-GG/FS.GG.Game/blob/9a98f5da4043ec5d231acca97edfeebba7d4efb2/.github/workflows/wasm-installed-org.yml),
+qualified by [original run `39091471055`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39091471055)
+against the unchanged 0.6 producer `8a5e63ba`. The earlier accepted 0.5 qualifier remains historical. Neither milestone transfers to Coordination
 installed-host, private-caller, Project3 migration/UI or consumer acceptance. Original **.103 Unknown**, the 439 holds and every inherited reservation remain unresolved.
 
 ### Canonical tool pin correction after durable closure
