@@ -353,7 +353,7 @@ module V2Migration =
                         { Project = project; Fields = node.GetProperty("fields").Clone();
                           Items = node.GetProperty("items").Clone(); Views = node.GetProperty("views").Clone(); Issues = issues }))))
 
-    let collect (transport: IGitHubTransport) (scope: Scope) : IoResult<Snapshot> =
+    let private collectComplete (confirmIdentity: bool) (transport: IGitHubTransport) (scope: Scope) : IoResult<Snapshot> =
         let observedAt = DateTimeOffset.UtcNow
         match validateScope scope with
         | Error error -> Error error
@@ -380,9 +380,16 @@ module V2Migration =
                                 |> Result.map (fun values -> { item with Values = values })) |> sequence
                             |> Result.bind (fun items ->
                                 collectViews (Some first.Views) transport initial.ProjectId |> Result.bind (fun views ->
-                                    project transport observedAt |> Result.bind (fun final ->
-                                        if final <> initial then invalid "project/principal changed during complete snapshot collection"
-                                        else Ok ({ initial with Fields = fields; Items = items; Views = views; Issues = first.Issues })))))))
+                                    let snapshot: Snapshot =
+                                        { initial with Fields = fields; Items = items; Views = views; Issues = first.Issues }
+                                    if not confirmIdentity then Ok snapshot
+                                    else
+                                        project transport observedAt |> Result.bind (fun final ->
+                                            if final <> initial then invalid "project/principal changed during complete snapshot collection"
+                                            else Ok snapshot))))))
+
+    let collect (transport: IGitHubTransport) (scope: Scope) : IoResult<Snapshot> =
+        collectComplete true transport scope
 
     let private desiredTokens (view: DesiredView) =
         [ view.Id |> Option.defaultValue ""; view.Name; view.Layout; view.Filter;
@@ -862,6 +869,18 @@ module V2Migration =
                 | Ok() -> invalid "independent effect identity differs from correlated native result"
                 | Error _ when pending -> Ok PendingVisibility
                 | Error error -> Error error)
+    let collectEffectReadback (transport: IGitHubTransport) (scope: Scope) (before: Snapshot) (change: Change) (returnedId: string) : IoResult<Snapshot> =
+        collectComplete false transport scope |> Result.bind (fun snapshot ->
+            match observeTransition scope before snapshot change returnedId with
+            | Ok PendingVisibility -> Ok snapshot
+            | _ ->
+                // Only a complete exact pre-effect witness may omit this redundant read.
+                // Any candidate settlement or contradiction keeps the strict final identity barrier.
+                project transport snapshot.ObservedAt |> Result.bind (fun final ->
+                    let initial: Snapshot = { snapshot with Fields = []; Items = []; Views = []; Issues = [] }
+                    if final <> initial then invalid "project/principal changed during complete snapshot collection"
+                    else Ok snapshot))
+
     let snapshotDigest (snapshot: Snapshot) = hash (snapshotTokens snapshot)
     let encodeReadback (scope: Scope) (snapshot: Snapshot) =
         let root =

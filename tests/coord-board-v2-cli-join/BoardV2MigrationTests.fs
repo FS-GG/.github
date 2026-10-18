@@ -356,8 +356,10 @@ module BoardV2MigrationTests =
         Assert.True(File.Exists(path + ".invocation/002-native-readback.json"))
         Assert.False(File.Exists(path + ".invocation/003-intent.json"))
 
-    [<Fact>]
-    let ``actual twenty-issue twenty-two-item eight-view planning journey stays below unchanged request cap`` () =
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``actual twenty-issue twenty-two-item eight-view planning journey stays below unchanged request cap`` (oneReadLag: bool) =
         use fixture = new Fixture()
         let selected: SelectedIssue list =
             [ 1 .. 20 ] |> List.map (fun index ->
@@ -405,7 +407,14 @@ module BoardV2MigrationTests =
         fixture.Scope <- { fixture.Scope with SelectedIssues = selected; InitialPlanning = initial; Views = existing @ created }
         let code, path = fixture.Prepare "full-synthetic-journey"
         Assert.Equal(0, code)
-        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        fixture.Native.VisibilityDelay <- (if oneReadLag then 1 else 0)
+        let clock = ManualTime(DateTimeOffset.UtcNow)
+        let started = clock.GetUtcNow()
+        let outcome = fixture.RunWithCustody(ignore, clock, fixture.ApplyArguments path)
+        printfn "full77 oneReadLag=%b outcome=%d mutations=%d totalRequestsIncludingPrepare=%d virtualWait=%O; excludes HTTP/custody latency" oneReadLag outcome fixture.Native.Mutations.Length (fixture.Native.Requests.Length + fixture.Native.Mutations.Length) (clock.GetUtcNow() - started)
+        Assert.True((outcome = 0), sprintf "outcome=%d; mutations=%d; requests=%d; virtualElapsed=%O; excludes HTTP/custody latency" outcome fixture.Native.Mutations.Length (fixture.Native.Requests.Length + fixture.Native.Mutations.Length) (clock.GetUtcNow() - started))
+        Assert.Equal<TimeSpan>(TimeSpan.FromSeconds(if oneReadLag then 77.0 else 0.0), clock.GetUtcNow() - started)
+        Assert.Equal((if oneReadLag then 472 else 395), fixture.Native.Requests.Length + fixture.Native.Mutations.Length)
         Assert.Equal(77, fixture.Native.Mutations.Length)
         Assert.Equal(22, fixture.Native.Snapshot.Items.Length)
         Assert.Equal(8, fixture.Native.Snapshot.Views.Length)
@@ -414,6 +423,7 @@ module BoardV2MigrationTests =
         for retained in originalItems do Assert.Contains<Item>(retained, fixture.Native.Snapshot.Items)
         Assert.Equal(62, fixture.Native.Snapshot.Items |> List.sumBy (fun (item: Item) -> item.Values.Length))
         let before = fixture.Native.Mutations.Length
+        fixture.Native.VisibilityDelay <- 0
         let repeatCode, repeatPath = fixture.Prepare "full-synthetic-repeat"
         Assert.Equal(0, repeatCode)
         Assert.Equal(0, fixture.Run(fixture.ApplyArguments repeatPath))
@@ -889,7 +899,7 @@ module BoardV2MigrationTests =
         let started = clock.GetUtcNow()
         Assert.Equal(0, fixture.RunWithCustody(ignore, clock, fixture.ApplyArguments path))
         Assert.Equal(8, fixture.Native.Mutations.Length)
-        Assert.Equal<TimeSpan>(TimeSpan.FromSeconds 40.0, clock.GetUtcNow() - started)
+        Assert.Equal<TimeSpan>(TimeSpan.FromSeconds 8.0, clock.GetUtcNow() - started)
         for sequence in 1 .. 8 do
             let prefix = Path.Combine(path + ".invocation", sequence.ToString("D3"))
             Assert.True(File.Exists(prefix + "-response.json"))
@@ -960,6 +970,34 @@ module BoardV2MigrationTests =
             Assert.True(File.Exists(Path.Combine(path + ".invocation", (if mode = "lost-response" then "001-error.json" else "001-response.json"))))
 
     [<Fact>]
+    let ``candidate-confirmed visibility still checks final native identity before settlement`` () =
+        for mode in [ "principal"; "project"; "capability"; "unavailable" ] do
+            use fixture = new Fixture()
+            let code, path = fixture.Prepare ("confirmed-final-identity-" + mode)
+            Assert.Equal(0, code)
+            fixture.Native.VisibilityDelay <- 1
+            let mutable finalReads = 0
+            fixture.Native.Transform <- fun (request: Transport.Request) (response: Transport.Response) ->
+                match request.Body with
+                | Transport.Query(document, _) when fixture.Native.Mutations.Length > 0 && document.Contains("viewer{id login}") && not (document.Contains("fields(first:")) ->
+                    finalReads <- finalReads + 1
+                    if mode = "unavailable" then Error(Errors.Transport "synthetic final identity unavailable")
+                    else
+                        let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+                        if mode = "principal" then root.["data"].["viewer"].["login"] <- System.Text.Json.Nodes.JsonValue.Create "synthetic-changed-principal"
+                        if mode = "project" then root.["data"].["organization"].["projectV2"].["updatedAt"] <- System.Text.Json.Nodes.JsonValue.Create "2026-10-18T01:00:00Z"
+                        if mode = "capability" then root.["data"].["organization"].["projectV2"].["viewerCanUpdate"] <- System.Text.Json.Nodes.JsonValue.Create false
+                        Ok ({ response with Body = root.ToJsonString() })
+                | _ -> Ok response
+            let clock = ManualTime(DateTimeOffset.UtcNow)
+            let started = clock.GetUtcNow()
+            Assert.Equal(3, fixture.RunWithCustody(ignore, clock, fixture.ApplyArguments path))
+            Assert.Single fixture.Native.Mutations |> ignore
+            Assert.Equal(1, finalReads)
+            Assert.Equal<TimeSpan>(TimeSpan.FromSeconds 1.0, clock.GetUtcNow() - started)
+            Assert.False(File.Exists(Path.Combine(path + ".invocation", "002-intent.json")))
+
+    [<Fact>]
     let ``pending visibility cannot wait past the original planning window or connection window`` () =
         for mode in [ "planning"; "connection"; "after-wait" ] do
             use fixture = new Fixture()
@@ -970,10 +1008,10 @@ module BoardV2MigrationTests =
             let started = clock.GetUtcNow()
             let args = fixture.ApplyArguments path
             let planningUntil = DateTimeOffset.Parse(args |> List.last, Globalization.CultureInfo.InvariantCulture)
-            if mode = "planning" then clock.Advance(planningUntil - started - TimeSpan.FromSeconds 4.0)
+            if mode = "planning" then clock.Advance(planningUntil - started - TimeSpan.FromSeconds 0.5)
             use connection = fixture.Native.Connection()
             let remaining () =
-                if mode = "connection" && not fixture.Native.Mutations.IsEmpty then TimeSpan.FromSeconds 4.0
+                if mode = "connection" && not fixture.Native.Mutations.IsEmpty then TimeSpan.FromSeconds 0.5
                 elif mode = "after-wait" && clock.GetUtcNow() > started then TimeSpan.Zero
                 else connection.RemainingTime
             use bounded =
@@ -985,8 +1023,8 @@ module BoardV2MigrationTests =
                     member _.Dispose() = () }
             Assert.Equal(3, BoardV2Application.runMigrationWithCustody bounded ignore clock args)
             Assert.Single fixture.Native.Mutations |> ignore
-            let elapsed = clock.GetUtcNow() - (if mode = "planning" then planningUntil - TimeSpan.FromSeconds 4.0 else started)
-            Assert.Equal<TimeSpan>((if mode = "after-wait" then TimeSpan.FromSeconds 5.0 else TimeSpan.Zero), elapsed)
+            let elapsed = clock.GetUtcNow() - (if mode = "planning" then planningUntil - TimeSpan.FromSeconds 0.5 else started)
+            Assert.Equal<TimeSpan>((if mode = "after-wait" then TimeSpan.FromSeconds 1.0 else TimeSpan.Zero), elapsed)
             Assert.False(File.Exists(Path.Combine(path + ".invocation", "001-visibility-002-native-readback.json")))
 
     [<Fact>]

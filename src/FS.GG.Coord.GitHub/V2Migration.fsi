@@ -123,6 +123,12 @@ module V2Migration =
     val observeTransition:
         scope: Scope -> before: Snapshot -> after: Snapshot -> change: Change -> returnedId: string -> IoResult<ReadbackObservation>
 
+    /// Collect a complete read after clear correlated success. Only an exact pre-effect witness
+    /// may support read-only waiting without a second identity query. Every candidate settlement
+    /// retains the final native identity barrier on this same snapshot; ordinary collect is unchanged.
+    val collectEffectReadback:
+        transport: IGitHubTransport -> scope: Scope -> before: Snapshot -> change: Change -> returnedId: string -> IoResult<Snapshot>
+
     /// Stable determining native identity excluding collection time.
     val snapshotDigest: snapshot: Snapshot -> string
 

@@ -597,7 +597,12 @@ module BoardV2Application =
                                                                 let rec observe (attempt: int) : Result<V2Migration.Prepared, string> =
                                                                     if clock.GetUtcNow() >= admission.WindowUntil || connection.RemainingTime <= TimeSpan.Zero then Error "Unknown-after-possible-send-observation-window-expired"
                                                                     else
-                                                                        match V2Migration.collect (connection.ObservationReads admission.WindowUntil) current.Scope with
+                                                                        let observationReads = connection.ObservationReads admission.WindowUntil
+                                                                        let observation =
+                                                                            match accepted with
+                                                                            | Ok returnedId -> V2Migration.collectEffectReadback observationReads current.Scope current.Snapshot change returnedId
+                                                                            | Error _ -> V2Migration.collect observationReads current.Scope
+                                                                        match observation with
                                                                         | Error _ -> Error "Unknown-after-possible-send-readback-unavailable"
                                                                         | Ok snapshot ->
                                                                             let observationPrefix =
@@ -622,7 +627,7 @@ module BoardV2Application =
                                                                                         | Ok after when after.Scope = resolved -> Ok after
                                                                                         | _ -> Error "Unknown-original-outcome-retained-readback-only"
                                                                                     | Ok V2Migration.PendingVisibility when attempt < 7 ->
-                                                                                        let delay = TimeSpan.FromSeconds 5.0
+                                                                                        let delay = TimeSpan.FromSeconds([| 1.0; 1.0; 2.0; 4.0; 8.0; 14.0 |].[attempt - 1])
                                                                                         if min (admission.WindowUntil - clock.GetUtcNow()) connection.RemainingTime <= delay then
                                                                                             Error "Unknown-after-possible-send-observation-window-expired"
                                                                                         else
