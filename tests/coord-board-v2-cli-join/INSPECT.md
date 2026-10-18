@@ -109,8 +109,21 @@ names, fresh timestamps and the exact input digest do not authenticate its autho
 The accountable parent verifies genuine supplier observations through its existing
 work-programme authority; missing suppliers remain Unknown. Native Current deliverable
 links are discovery hints, directly joined to native PR identity/state/head and complete
-open inventories, including non-enrolled work. Merged historical links remain evidence
-and do not compete with one unambiguous current open PR or establish outcome acceptance.
+open inventories, including non-enrolled work. The maintained issue model requires one complete,
+unambiguous six-field record, expressed as six headings or six inline fields; duplicate, missing,
+mixed or unknown field structure refuses. Preserve the bounded Current deliverable declaration:
+exact trimmed `None` declares absence; nonempty prose and non-PR references remain declared work.
+PR-shaped references retain strict canonical validation and native joins. Non-PR links are not
+fetched, and Next action or arbitrary history never supplies a current PR association.
+
+Each non-`None` declaration requires exactly one proposed-action prerequisite whose reference is
+`current-deliverable`, with the existing fresh issue/body, slice, attempt, owner and evidence joins.
+True means scoped reconciliation of current work against that action, not acceptance or release of
+original holds. False blocks; missing, duplicate, stale or mismatched evidence withholds the affected
+selection. Native inventories and reservations remain independent. Historical PRs cannot become
+current through this observation; review, qualification and existing-work observation still require
+their actual native PR/head. Independent source work may proceed when later acceptance is pending.
+
 Native repository-policy/issue-author allowance reuses `BoardIntake.Gate` without disk
 cache reads or writes, remains separate from parent operation authority, and is bound
 to the exact current native issue ID/revision. All reads share the existing request/time

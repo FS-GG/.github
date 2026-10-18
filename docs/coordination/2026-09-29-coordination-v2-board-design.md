@@ -313,6 +313,27 @@ not independent plan/source work. No local CLR, native or browser workload is au
 | Derived decision | Ready, continue existing work, blocked, needs decision or unknown, with reasons and evidence. The integrator remains accountable; a result grants no execution authority. |
 | Atlas | Reusable decisions and verified lessons with immutable source citations; not another operational ledger. |
 
+The current owning-issue model accepts one complete six-field record in either maintained inline
+or heading form. Duplicate, missing, mixed or unknown field structure withholds the source join;
+fenced examples cannot complete the record. Current deliverable preserves bounded native field text:
+exact trimmed `None` declares no current deliverable, while nonempty prose, artifacts, publication,
+installation or original-operation references remain declared work. Canonical in-scope PR links are
+discovery hints joined to fresh native identity/state/head and complete inventories. Malformed or
+foreign PR-shaped references remain gaps; other links are retained without new provider reads.
+Neither Next action nor arbitrary body history supplies an inferred current PR or owner.
+
+For each non-`None` declaration, the proposed action requires exactly one existing prerequisite with
+reference `current-deliverable`, joined to the fresh native issue/body revision, supplying owner and
+exact slice, attempt and action. A true observation means that owner reconciled the complete current
+work declaration with this action and established no duplication or conflict. It does not mark the
+deliverable done, release an original reservation or authorize an effect. False blocks the action;
+missing, duplicate, stale or mismatched reconciliation withholds the affected selection. Native PR
+inventories, original holds, intake, scope and remaining capacity remain independent requirements.
+Independent source work can proceed while later acceptance remains pending; observation, review and
+qualification still require their actual current native PR/head. Activation retains its separate
+executor. Missing-current-owner legacy records remain item-specific gaps until accountable
+reconciliation; do not manufacture fields or revive retired original-evidence searches.
+
 Enrollment binds the exact project, organization schema, allowed repository scope and selected native
 issue identities. Keep that selected provenance distinct from fresh issue/body, owning-plan source,
 dependency, PR/head/check/review and capacity observations. Ordinary issue edits, closure, PR/check

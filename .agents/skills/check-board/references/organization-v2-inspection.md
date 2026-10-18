@@ -83,13 +83,22 @@ considering another. Unselected alternatives are not reservations. Preserve non-
 PRs and every unresolved hold, even when its observation expires or its owner is absent. Self
 exemption requires the exact slice/attempt/operation/PR/head; it never settles the original effect.
 
-Continue the actual unambiguous owner/PR before assigning another implementation. Current deliverable
-links are discovery data, joined directly to native identity/state/head and complete open inventories.
-Historical merged/closed links coexist with current open work; their presence neither creates a
-second active implementation nor proves acceptance. Missing/conflicting owner, multiple active PRs,
-unknown action prerequisites or unsupported native paths withhold the affected action. Broad outcome
-scope alone does not reserve a whole repository; use actual current slice/files and canonical conflict
-rules. Multiple independent slices retain distinct identities/results under one outcome.
+Continue the actual unambiguous owner/PR before assigning another implementation. Read one complete
+six-field inline or heading record; ambiguous, mixed, duplicate or missing fields remain gaps.
+Current deliverable preserves bounded native text. Exact trimmed `None` declares no current work;
+nonempty prose and non-PR references remain declared work. Strict canonical PR references are
+discovery data joined to native identity/state/head and complete open inventories. Other links are
+not fetched; Next action and arbitrary history never supply inferred current associations.
+
+For each non-`None` declaration, require exactly one fresh proposed-action prerequisite with reference
+`current-deliverable`, joined to the native issue/body revision, supplying owner and exact slice and
+attempt. True means the owner reconciled this declaration against that action without duplication
+or conflict; it does not mean done, accepted, a released reservation or execution authority. False
+blocks; missing, duplicate, stale or mismatched evidence withholds the affected action. Native
+inventories, original uncertain holds, intake, scope and remaining capacity remain independent.
+Historical links neither become current nor prove acceptance. Review, qualification and observation
+of existing work retain their actual current native PR/head requirements. Broad outcome scope alone
+does not reserve a whole repository; independent slices retain distinct identities/results.
 
 Ready, continue-existing, blocked, needs-decision and unknown explain the proposed action only.
 Missing later publication/installed/operational acceptance may block activation while independent
