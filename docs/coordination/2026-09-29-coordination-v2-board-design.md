@@ -42,21 +42,52 @@ added membership and all six Status IDs/order remain preserved. The accepted mai
 **Programme Board**, with its original identity and eight ordered visible fields, including the
 legitimate Status and Sub-issues progress fields; supporting-view/full-population UI acceptance is separate.
 
-The protected enrollment document now prepares the closed public `enrollment/v3` commitment only.
-All twenty exact issue identities and plan paths remain in the existing restricted constructor-produced
-payload. Native final IDs match the private binding's existing fields/options; the unchanged payload,
-nonce and commitment are retained. Updating the outer binding to the actual 0.105 source/adapter does
-not require another nonce. Its protected population revision is not fabricated: the prospective
-private binding remains unadmitted until this source is reviewed/delivered and its actual protected
-revision/blob are authenticated. No private identity or payload is admitted to the public manifest.
+The protected enrollment document contains only the closed public `enrollment/v3` commitment.
+The final binding authenticates protected revision `0deb7f2281422366e65c4d7f2ad5612216d271f3`
+and blob `7345444edeb7f6c60b31825995f5406fcea19422`; the complete twenty-row population,
+original nonce and binding remain restricted. Ordinary issue and owning-plan revisions are read
+freshly without changing enrollment. No private population or binding is published here.
 
-Positive installed inspection/Observation refresh/action selection, fresh attributed integrator facts,
-remaining human UI and coordinated real use still precede consumer activation and retirement of manual
-v3 current-status maintenance. Pinned-source instruction loading is separate from package installation;
-the root's user-owned reporting edits remain untouched. Product binding-v3/schema1 behavior is unchanged.
-The old 0.104 two-effect original and later stopped partial invocation retain their original Unknown
-and readback-only custody. The 0.103 Unknown, consumed claims, inherited reservations and completed
-historical outcomes are not reset or transferred.
+### Accepted installed real-use qualification — 2026-10-18
+
+Root accepted the original installed 0.105 invocations against that final binding:
+
+- The positive inspection read all twenty enrolled outcomes with current source and complete
+  membership and relevant repository coverage. It selected necessary ordinary documentation work.
+- The separate original continuation inspection matched the actual owner, declaration and exact
+  head of that same work in [PR4665](https://github.com/FS-GG/.github/pull/4665). Normal required
+  delivery then merged the reviewed documentation at `146223657786bbb7250762a4e8e4137ae47f70c0`.
+  This delivered the selected slice without closing its broad owning outcome.
+- A new original inspection matched the existing SC2 activation proposal and returned **Blocked**
+  for the genuine unmet root-owned native resource, conflict and input admission prerequisite.
+  It read all twenty outcomes with no determining gaps and made zero mutations. No SC2 native
+  attempt existed or was launched; the inspection did not admit that action.
+- A separately admitted original Observation refresh made seventeen attempted and acknowledged
+  HTTP 200 writes, with seventeen matching independent changed-value readbacks and three fresh
+  source-verified no-ops. All twenty selected Observation values were Verified. Complete independent
+  before/after reads preserved all twenty-two memberships, schema, eight views, human scalar fields
+  and unselected Observation values.
+
+The blocked inspection completed in 151.96 seconds and the refresh in 109.15 seconds, both exit 0
+within their original bounds, with no profile failure. Original PIDs were absent and owned groups
+empty; hard containment and escaped-descendant absence remain unproved. The refresh's independent
+collection completed at 07:05:04 UTC within its original budget. Its initial comparison and seventeen
+cursor-only differences remain preserved: after complete connection and identity checks, excluding
+only completed field-value connection cursors confirmed unchanged non-Observation values. Typed native
+response hashes and request identities are retained; raw response preimages are unavailable. The
+canonical snapshot does not establish absence of arbitrary underlying label, assignee or linked-PR
+changes. Original reports and accountable acceptance remain in restricted custody.
+
+These are accepted submilestones, not programme cutover. Actual rendered verification of the five
+supporting views and coordinated adoption by programme, board-driver, recovery and progress consumers
+remain open. The existing main Programme Board presentation is already accepted. Actual loaded
+instruction identities must be verified; package installation alone does not load them. Manual v3
+current-status upkeep remains unretired, and the six user-owned reporting edits remain untouched.
+Observation Verified describes read health, not readiness, delivery or whole-outcome acceptance.
+Product binding-v3/schema1 behavior is unchanged. The old 0.104 two-effect original and later stopped
+partial invocation retain Unknown/readback-only custody. The original 0.103 Unknown, all 439 inherited
+reservations, the forty-six prior original operation records and later original results remain distinct;
+none is released or replayed by these qualifications or this source update.
 
 **Historical design/adoption frontier — 2026-09-29 through 2026-10-10:** organization pilot passed 2026-10-02.
 On 2026-10-03 the exact four-target successor, public installed 0.95.0 closure,
