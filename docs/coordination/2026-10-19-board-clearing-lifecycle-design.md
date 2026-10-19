@@ -256,6 +256,17 @@ preservation claims to whichever fields a convenient collector happens to decode
 reported output forms and their refused/partial variants in focused fixtures; this is reader reuse,
 not a new packet schema, ledger or central workflow service.
 
+The maintained interpretation now lives in
+[`board_v2_native_results.py`](../../scripts/board_v2_native_results.py), consumed through the
+existing command helper's opt-in qualifier. It distinguishes genuine unchanged preparation reports,
+original migration custody readback and product/organization inspections. Decoded observations grant
+no provenance, authority, admission or retry permission. Root demonstrated the bounded existing-value
+route on [SDD #928](https://github.com/FS-GG/FS.GG.SDD/issues/928): exact adjacent native preimages
+and options, one item-edit from Delivery to Outcome, then independent complete reported preservation.
+A conflicting preimage refuses before send. This uses the existing native API without extending the
+absent-only writer or its grammar. The cooperative window is not server CAS; opaque system-field
+contents and hidden native fields remain unproved. The full original promise stays open.
+
 ## Current Outcome decomposition
 
 This table is a design map derived from the complete 2026-10-19 native census and owning acceptance.
