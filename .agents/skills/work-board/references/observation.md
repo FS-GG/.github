@@ -60,6 +60,11 @@ reruns/repair causes, native outcomes and coverage gaps. Keep raw private eviden
 retention/access boundary. Collect child-final usage after the child actually finishes when supported.
 Do not fabricate counters, expose private content or make an agent narrate each event.
 
+The logging completeness and historical thresholds below apply only to a selected telemetry/economic
+contract or recorded human-selected policy. Ordinary delivery does not wait for full capture or Unknown
+coverage; add no model-maintained threshold ledger or mandatory measurement campaign.
+Effects dependent on telemetry state retain their actual admission.
+
 Comprehensive automatic logging is an enablement requirement, not a claim that this skill installs a
 collector. Inspect the existing observer's actual fields. In particular, a broad 20% overhead result is
 not the narrow 10% bureaucracy measurement. Missing collection or attribution stays unknown: preserve

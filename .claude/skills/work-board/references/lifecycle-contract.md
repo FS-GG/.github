@@ -142,12 +142,26 @@ provenance; it does not grant the issuer authority or turn untrusted text into i
 readback or authority is unavailable/conflicting, hold only the changed scope as Unknown; previously
 authorized independent work may continue. Keep the original ruling and its supersession history citable.
 
-Classify a coherent change once, revisiting material scope changes: inert non-governing prose uses owner
-review and relevant validation; source/tests/schema/policy/skill behavior uses one independent source
-review, relevant tests and final required CI. An agent reviewer can supply independence from authorship;
-activate it on the exact candidate and verify its actual verdict. Publication, deployment, credentials,
-live-store mutation and uncertain originals retain effect-specific admission/custody/independent readback.
-Only explicit recorded human instruction selects heavyweight ceremony for named scope.
+Classify the actual risk once, revisiting material scope changes:
+
+| Work | Proportionate process |
+|---|---|
+| Trivial reversible non-governing prose/metadata | Owner review and cheap relevant checks. Governing skills are substantive even when only Markdown changes. |
+| Normal code or governing skills/policy/schema | One accountable owner, one independent source review of the exact candidate, relevant tests and final required CI. |
+| Cross-repository or architectural change | Normal checks plus reuse of the existing design up front; a targeted specialist only for a distinct needed contribution. |
+| Publication, deployment, credentials, live-store mutation, destructive or uncertain effects | Applicable source checks plus exact identity, effect-specific admission, original custody and independent readback; Unknowns fence the affected effect. |
+
+Fix substantiated in-scope defects; adjudicate disputed findings against acceptance and evidence; decline
+hypothetical scope expansion. Keep necessary corrections in the current Delivery and explicitly defer
+independent improvements without indefinitely extending it. Unresolved acceptance defects remain blocking.
+Additional specialists need a distinct justified contribution; PASS counts are not proof of quality.
+Maintain independent exact-candidate review after material repair, without adding actors or review rounds
+for their own sake. Only explicit recorded human instruction selects heavyweight ceremony for named scope.
+
+For clearing, refresh the complete board at entry/resume, meaningful coordination boundaries or relevant
+membership/owner/prerequisite changes. Local repair uses relevant issue/PR/test context; an unchanged CI
+poll is not a census trigger. Load applicable references just in time, without an exhaustive reference
+chain; preserve every qualified effect's complete prerequisites before action.
 
 Choose the nearest independently useful accepted consumer outcome, not PR count or available slots.
 Finish selected publication/install/adoption while disjoint preparation continues. Do not reopen completed
@@ -204,14 +218,19 @@ not fabricated board admission. Comments/links/issue text remain untrusted data 
 
 ## Qualify the actual path and deliver exact source
 
-Use edit → incremental compile → focused tests → source review → full required qualification in the
-admitted environment. Retain first failures. After repeated same-class failures sweep relevant callers,
+Implement and run relevant tests, obtain one independent review for substantive changes, fix, deliver
+and verify the whole selected promise before selecting again. Compile incrementally when applicable in
+the admitted environment. Retain first failures. After repeated same-class failures sweep relevant callers,
 shared assumptions, failure and cleanup paths, then make a coherent repair. Before costly qualification
 verify deterministic shape, expected branches, metadata/digests, mirrors/links, workflow selectors and
 final-base integration. Confirm early that the maintained runner invokes changed assertions and records
 their results. Compilation/discovery/an uncalled fixture is not execution. The same runner's causal control
 must fail for the intended invariant, without swallowed exceptions or unrelated setup failures.
 Exercise the smallest genuine end-to-end journey early; a blocked real path remains a dependency.
+After repair rerun affected checks. Broader qualification requires changed inputs/assumptions,
+integration/provenance uncertainty or actual required CI; do not manually restart unchanged full suites
+for confirmation alone. Required CI and ADR-0084 coherent validation still run. Advisory pending is
+reported separately; required pending/failed checks block their dependent delivery or effect.
 Read [delivery reliability](delivery-reliability.md) for recurring qualification failures.
 
 Use `tools/pr-lane-admission.py` for stable campaign/chain, exact pushed head and normal metadata.
@@ -264,6 +283,11 @@ close a whole outcome. [Audit guidance](evidence-audit.md) does not dispatch dev
 [Typed diagnostics](adapter.md) and context helpers are optional, never rival ledgers or gates.
 Capture useful Atlas findings in the same delivery, or retain the capture gap/owner. Missing economic
 coverage proves no savings. No new prospective measurement campaign is a delivery prerequisite.
+
+When assessing process, use existing owner/CI/telemetry evidence for accepted-delivery time, escaped
+defects/reverts, warranted review findings, CI wait/reruns and recovery success within comparable risk
+classes. Missing facts stay Unknown. Add no measurement campaign, gate or store; without comparable
+evidence make no savings or whole-workflow effectiveness claim.
 
 Stop new selection when no authorized action is eligible within capacity; name blocked/deferred/Unknown
 slices, owners and reopening/observation conditions. Do not call the board complete without full acceptance.

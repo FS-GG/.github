@@ -75,13 +75,15 @@ board-derived selection still requires the actual native cohort and classificati
    Atlas pointers and current native issues, owners, PRs, dirty worktrees, pending requests, original
    operations and relevant resource holds. Continue an unambiguous existing owner/branch/PR before
    creating another lane. Instruction loading is not executable adoption.
-2. **Reconcile All items.** Read complete unfiltered membership, including missing Status/Work level,
+2. **Reconcile All items at coordination boundaries.** At entry/resume, a meaningful coordination
+   boundary or relevant native fact change, read complete unfiltered membership, including missing Status/Work level,
    unexpected and unenrolled cards, and reconcile any outstanding intake in the selected scope.
    Investigate each card's native issue, full promise, owning plan, actual delivery and dependencies.
    Missing metadata is work to triage. Each unfinished intake has an accountable intake owner, concrete
    next action and reconsideration event in its existing issue. Do not demand a complete organization
    census to repair one explicitly assigned issue; a requested board-clearing pass does require its
-   selected complete population.
+   selected complete population. Within an admitted Delivery, local repair refreshes relevant context;
+   neither an edit nor an unchanged CI poll requires a new full census.
 3. **Shape the next useful work.** Deduplicate and reuse current Deliveries/PRs; decompose broad Outcomes
    as described below. Classify deliberately and enroll only through the protected selected route.
    Reconcile stale blockers from producer evidence, not closure labels alone. Scope unresolved intake
@@ -348,6 +350,38 @@ shared assumptions/callers and make one coherent repair; do not make an arbitrar
 automatic park or replacement trigger. Scope or effect-authority changes still require their actual
 reconciliation. Inert prose retains proportionate owner validation; governing skill/code/schema changes
 retain independent exact-source review and the repository's required checks.
+
+The default is understand → bounded Delivery → implement/relevant tests → one independent review for
+substantive change → fix → deliver → verify the whole promise → select again. Trivial reversible
+non-governing prose/metadata uses owner review and cheap checks; normal code and governing skills retain
+one owner, one independent exact-source review, relevant tests and required CI. Cross-repository or
+architectural work reuses its design up front and adds specialists only for distinct necessary input.
+Publication, destructive and uncertain effects retain exact identity, admission, original custody and
+independent readback. Meaningful children are useful results, never implementation or review steps.
+
+Review converges on substantiated in-scope defects and evidence-based dispute decisions. Necessary
+corrections stay in the current Delivery; hypothetical expansion is declined and independent improvements
+are explicitly deferred. More specialists or PASS verdicts are not quality evidence. After repair rerun
+affected checks; broader qualification follows changed inputs/assumptions, integration/provenance or actual
+required CI. Preserve ADR-0084 coherent validation and native gates; advisory pending remains separate from
+required blocking checks. Do not manually restart unchanged full suites just for confirmation. Context is
+loaded for the affected action, not through an exhaustive reference chain.
+
+Assess these choices from existing owner/CI/telemetry evidence: accepted-delivery time, escaped defects/
+reverts, warranted review findings, CI wait/reruns and recovery success within comparable risk classes.
+Missing observations stay Unknown; no new campaign, gate, store or savings claim follows.
+
+Optional rationale: [OpenAI's instruction guidance](https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra)
+supports short contextual routes with a mixed-model caveat; [Atlassian's oversight guidance](https://www.atlassian.com/software/jira/guides/agentic-engineering/human-in-the-loop)
+connects oversight to ownership and risk. [Infobip's phased workflow](https://arxiv.org/html/2608.30701v1)
+reuses project research/planning while identifying workflow measurement as unresolved.
+[Adversarial Review](https://arxiv.org/html/2608.18167v1) documents speculative review scope expansion;
+[Anthropic's source-control experience](https://www.anthropic.com/engineering/redesigning-source-control)
+describes contextual tradeoffs, whose post-merge testing policy is not adopted here.
+[ReviewBench](https://github.blog/ai-and-ml/reviewbench-an-open-benchmark-for-ai-code-review/) evaluates
+valid findings, severity and precision/recall rather than PASS/comment counts. These sources support
+individual choices, not controlled validation of this combined workflow, a state-of-the-art ranking or
+transferable benefit estimates. They add no mandatory reading or research phase.
 
 Before delegation compare expected useful contribution with coordination cost, actual runtime permission,
 owner/PR/touch-set conflicts, output/cache/state overlap and remaining model, CPU, memory, storage,

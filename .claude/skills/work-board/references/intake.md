@@ -56,8 +56,9 @@ Separately qualified legacy PRODUCT behavior keeps its explicit product-only con
 Read every current Outcome's full original promise and owning plan during a clearing shaping pass.
 Identify accepted scope, residual independently useful results, shared prerequisites, suppliers and the
 next executable window. Reuse existing children/PRs. Materialize only the next useful bounded Delivery;
-leave uncertain later work as an outline in its parent/plan. Do not create a card per paragraph,
-completed milestone, test or checkpoint. A source-only Delivery must be independently useful and retain
+leave uncertain later work as an outline in its parent/plan. Children represent independently useful
+results, never implementation/review/test steps. Do not create a card per paragraph, completed milestone,
+test or checkpoint. A source-only Delivery must be independently useful and retain
 its dependent installed/recovery/publication acceptance in the parent.
 
 Native hierarchy expresses decomposition; prerequisites express real sequencing. Shared prerequisites

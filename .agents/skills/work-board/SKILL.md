@@ -7,24 +7,26 @@ description: Continuously clear authorized organization or selected product work
 
 Use [$atlas](../atlas/SKILL.md) first. Resolve organization Project 3 versus the explicitly configured
 product scope; a filter is neither membership nor authority. Read the
-[lifecycle contract](references/lifecycle-contract.md) for selected caller/binding, recovery, resource,
-qualification and effect boundaries before acting. Its qualified organization and PRODUCT contracts
-remain distinct. Instruction loading never activates a new executable, binding or enrollment.
+[lifecycle contract](references/lifecycle-contract.md) for the applicable caller/binding, recovery,
+qualification and effect rules; load further references just in time for the affected action.
+Qualified organization and PRODUCT contracts remain distinct. Instruction loading activates no executable, binding or enrollment.
 
 ## Continuous clearing loop
 
-1. Recover current native issues, full owning-plan acceptance, owners, PRs/heads, dirty worktrees,
+1. Understand the whole promise. Recover current native issues, full owning-plan acceptance, owners, PRs/heads, dirty worktrees,
    pending replies, original effects and relevant known/Unknown reservations. Continue the existing
    unambiguous owner/branch/PR/attempt before creating another lane.
-2. Reconcile complete unfiltered All items, including cards missing Status, Work level or enrollment.
-   Use [intake and decomposition](references/intake.md) for requests, duplicates and broad Outcomes.
-   Every unfinished intake retains an owner, next action and reconsideration event in its existing issue.
+2. For clearing, reconcile complete unfiltered All items at entry/resume, meaningful coordination boundaries
+   or relevant native fact changes, including cards missing Status, Work level or enrollment.
+   Use [intake and decomposition](references/intake.md); unfinished intake retains its owner, next action and reconsideration event.
+   Local repair refreshes relevant context, not the full census.
 3. Compare eligible Deliveries against full acceptance, real prerequisites, explicit user priority and
    remaining-after-active capacity. Prefer finishing owned acceptance and useful prerequisites; reconsider
    older deferred work and explain material repeated bypasses. Do not let new easy fixes starve product work.
    An Outcome is never an implementation assignment; linked but unenrolled Deliveries stay unschedulable.
-4. Execute one admitted Delivery through [$pnext-item](https://github.com/FS-GG/.github/blob/main/.agents/skills/pnext-item/SKILL.md). The same owner carries
-   implementation, repair, review response, exact-head CI, merge and its applicable consumer acceptance.
+4. Execute one bounded admitted Delivery through [$pnext-item](https://github.com/FS-GG/.github/blob/main/.agents/skills/pnext-item/SKILL.md). The same owner carries
+   implementation/relevant tests, one independent review for substantive changes, repair, delivery and whole-promise verification.
+   Apply the lifecycle contract's risk rules and preserve exact-head required CI and native gates.
    Selected technical plans use [$work-roadmap](../work-roadmap/SKILL.md) as an adapter to that executor.
 5. After delivery, changed blockers and the start of a hosted wait, reconsider suppliers, intake and
    useful disjoint preparation/review/evidence work. Account actual runtime, machine, integrator and
