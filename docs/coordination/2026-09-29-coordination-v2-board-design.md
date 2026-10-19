@@ -2053,3 +2053,16 @@ stdout SHA256cc3a43dcc7a809ddac48e70d2df01e3fec61df37e04b3f9c137d9a3c91efc689.
 Independent review identified that the old conflict control targeted newly captured work-board-best;
 using uncaptured Atlas resolved that fixture contamination, and exact474dde7d review passed.
 The full real SDD path remains a separate acceptance gate.
+
+The full revised source019 real Rendering/SDD2.2 path then exited0 in114.36seconds,
+including coordination installation and initialization handoff. Original stdout SHA256
+b169e464d9a1c3132f0a927d0d22bf4ab048436c95139c9318ad42cf07ee38b7.
+Independent file readback verified806 instruction leaves across both mirrors against selected
+immutable Kit10864d9e,16 expected skills, the exact selected product3 binding and all42 active/
+original driver preimage joins. This uses the compiled source019 binary, not a public019 package.
+Doctor reports a real non-blocking drift warning:34 added published instruction references are
+undeclared in SDD's original driver inventory; there are no missing skeleton artifacts and CLI2.2
+meets the provider's2.1 minimum. Initialization remains pending; no doctor-coherent or initialized
+receipt is claimed, and no SDD reseeding replaced the selected instruction closure. Preserve this
+interop limitation in installed receiver qualification. It does not waive the later public019
+candidate, publication, catalog discovery, product-native read or retained preservation gates.

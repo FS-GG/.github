@@ -38,7 +38,7 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
-- **2026-10-19** — Creator019 source preparation: adopt only exact provenance-verified work-roadmap entrypoints from the same successful fresh SDD scaffold; retained owner conflicts remain strict. Preserve actual public018 refusal and unchanged genuine108 closure; independent019 publication and installed full receivers remain pending.
+- **2026-10-19** — Creator019 source preparation: adopt the closed42-leaf provenance-verified instruction closure from the same successful fresh SDD scaffold; retained owner conflicts remain strict. Preserve actual public018 refusal and unchanged genuine108 closure; independent019 publication and installed full receivers remain pending.
 
 - **2026-10-19** — — `creator018-publication-20261019` (#4682, #4641): accept original candidate39246748238 and publisher39247623510/a1, all eight effects across17 validated generations, promoted release417234489 at f704a3e6. Reconcile only Creator018 published inventory/tag. Both feeds match producer payloadc71e3d51, with signed NuGet archive bytes distinguished. Public installation verifies88 Creator files and81 exact shared108 dependencies; full product/native/restart acceptance remains separate. Current selector108 is observed, while its original change owner/operation remains Unknown under Host/Main request6267051676. Preserve original operations and439/46Unknown holds.
 

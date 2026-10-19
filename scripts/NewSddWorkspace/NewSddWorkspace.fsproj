@@ -20,7 +20,7 @@
     <!-- Independent Creator successor: the canonical work-board materializer is packaged here.
          Coherent 0.108 does not publish this tool; its own candidate and publisher qualify each independent successor. -->
     <Version>0.19.0</Version>
-    <PackageReleaseNotes>0.19.0: adopt exact provenance-verified work-roadmap entrypoints from this invocation's successful fresh SDD scaffold. Retained workspaces and owner edits remain strict; coordination 0.108 dependency bytes are unchanged.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.19.0: adopt the closed42-leaf provenance-verified instruction closure from this invocation's successful fresh SDD scaffold. Retained workspaces and owner edits remain strict; coordination 0.108 dependency bytes are unchanged.</PackageReleaseNotes>
     <AssemblyName>new-sdd-workspace</AssemblyName>
 
     <Description>FS.GG workspace scaffolder — composes a selectable Standard or Typed SDD lifecycle, a runnable provider workspace, and an optional Governance overlay in one command, with a rich Spectre.Console progress UI. Orchestrates existing published machinery; no FS.GG.Templates checkout required.</Description>
