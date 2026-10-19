@@ -1,5 +1,7 @@
 # Registry changelog
 
+- **2026-10-19** — genuine coherent108 publication and Creator018 dependency pin (Programme/root; #4682, #4641): promoted release417149016 retains the original candidate and journal26; same-candidate forward39238215850 completed all16effects/final33 after the original failure and visibility checkpoint. All seven original release assets and fresh public NuGet payloads match. Reconcile only coordination published108 pins; Creator018 remains unpublished, with the real promoted108 dependency closure selected for separate staged qualification. Installed/native/product/restart acceptance remains separate.
+
 ## 2026-10-18 — accepted independent Host0.7 publication
 
 Advance only the Host published version/tag to0.7 after original39148437514/a1 completed journal13

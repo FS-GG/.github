@@ -283,6 +283,39 @@ New source, actual publication/install, product fresh/upgrade journeys, programm
 restart/rollback remain separate acceptance steps. Root owns the Atlas capture and original private
 evidence custody gap until those findings and artifacts are durably delivered.
 
+### Genuine108 publication and inactive SDK verification — 2026-10-19
+
+Root independently accepted coherent108 publication at2026-10-19T10:56:28Z. Candidate39233536189
+and original artifact12178009778 retain source `f984a3619129c5e9ab68e1291fd080ef77ef9337` and
+content `sha256:36d93d38dff7a00a7781eb313191918a5c847288d7f743b878351eb0e800429e`.
+Original publisher39235248295 stopped on a malformed/duplicate draft census; forward39235800776
+settled that original draft and stopped at its135-probe Kit visibility checkpoint. Both remain evidence.
+After independent full-prefix and public Kit readback, fresh bounded forward39238215850 completed the
+same journal26 at generation33 with all16effects verified. No settled package or draft was resent.
+
+Terminal result12180757856 has original archive SHA256
+`89d02a6c1483b80df624fc3062a3c65b2e39eca64f20db156fdea2674eaa92a7`.
+Independent full33-generation validation passed. Promoted public release417149016 and its fixed tag
+match the source; all seven downloaded assets match their native digests and original candidate bytes
+where applicable. Fresh public NuGet packages share all three original payload digests; signed archive
+bytes differ. All396 packaged skill files across16 skills match both source mirrors, including canonical
+work-board. Static correspondence is separate from runtime instruction discovery.
+
+The inactive public SDK108 installation independently matches all82 tool members and its generated
+shim entrypoint. Its loaded-adapter candidate SHA256 is
+`393bf4e7e2a3fbeea3f7b5d15f23e246769e6baea0bca45e76e585fbeb8ef1e5`.
+The old107 selector was preserved through installation and the subsequent real inspection3.
+That inspection exited0 in175.22seconds within the unchanged500-request/270-second limits: all22
+sources Current,25 complete memberships, no determining population/membership/planning/repository
+gaps and zero mutations. Health is21Verified/oneUnknown for the preserved unset Observation.
+The original private report has SHA256
+`27ea714480b75b1bcc1ef2973fa244e2adbd7caed29aaa816ccc8d15e32e9fff`.
+No action/runtime/capacity/reservation suppliers were fabricated; selection remains explicitly Partial.
+Runtime discovery, Creator018 staged compatibility/publication, product journeys, programme continuation
+and restart/rollback remain separate gates. The real Creator pin now names promoted CLI asset655984570 and manifest
+asset656002184; it preserves all81 dependency members and285 declared producer inputs. No future
+hash or rebuilt dependency substitute is selected.
+
 ### Retained qualification evidence custody — 2026-10-19
 
 Host receipt6263680429 and root independent MATCH6263940374 accept the second finite
