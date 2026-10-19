@@ -370,7 +370,7 @@ try
         File.Delete freshProvenance
         File.WriteAllText(freshProvenance, generatedProvenance)
         File.Delete aliasTarget
-    let expectedAdoptionRefusals = if OperatingSystem.IsWindows() then 52 else 56
+    let expectedAdoptionRefusals = if OperatingSystem.IsWindows() then 68 else 72
     if adoptionRefusals <> expectedAdoptionRefusals then
         failwithf "fresh provenance refusal inventory incomplete: %d / %d" adoptionRefusals expectedAdoptionRefusals
     printfn "Fresh generated provenance controls passed: %d actual refusals; eight active hashes/original provenance and rollback checked." adoptionRefusals
@@ -424,7 +424,7 @@ try
         ProductBoard.apply freshRoot ancestorPlan |> refuseDriver "driver ancestor symlink after preview"
         Directory.Delete driverDirectory
         Directory.Move(heldDirectory, driverDirectory)
-    let expectedDriverRefusals = if OperatingSystem.IsWindows() then 59 else 77
+    let expectedDriverRefusals = if OperatingSystem.IsWindows() then 77 else 99
     if driverRefusals <> expectedDriverRefusals then
         failwithf "fresh driver refusal inventory incomplete: %d / %d" driverRefusals expectedDriverRefusals
     printfn "Fresh generated driver controls passed: %d actual refusals, eight planned/replaced mirrors, rollback and exact repeat checked below." driverRefusals
