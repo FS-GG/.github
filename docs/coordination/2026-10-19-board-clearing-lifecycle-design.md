@@ -706,6 +706,15 @@ acceptance; the amended enrollment points only that Outcome to this already acce
 with all37 identities, original22 rows and human planning values preserved. Offline construction and
 review do not substitute for actual installed full-cohort and attributed continuation acceptance.
 
+Native retirement distinguishes supersession from completed implementation:2130,2960,2695,3228,
+3070 and2774 are closed not_planned with original promises/history preserved;2874,2843,2844 and2852
+are completed against their selected accepted contracts. Recovery indexes2691/2703/3227 and genuine
+compatibility/receipt remainders remain owned. Existing compiled135-test receipts and retained PE/PDB
+source checksums also bind the nonenrolled-PR guard to reviewed072/delivered0d: disjoint work is ready,
+then an overlapping path is blocked without requiring a claim owner. This is compiled selected-path
+conformance, not a manufactured production PR, new action admission or legacy standalone-API receipt.
+Reusing that actual evidence avoids another unchanged qualification run.
+
 The owning issues #4701/#4712 retain final native qualification, accepted closure and current operation
 facts. These source/publication/receiver/custody observations neither close those issues by themselves
 nor claim fleet adoption, whole-board completion, actual restart or measured savings. All439 inherited
