@@ -136,6 +136,36 @@ partial invocation retain Unknown/readback-only custody. The original 0.103 Unkn
 reservations, the forty-six prior original operation records and later original results remain distinct;
 none is released or replayed by these qualifications or this source update.
 
+### Successor recovery frontier — 2026-10-19
+
+The accepted binding4 cutover below remains valid at its declared scope. Successor delivery
+[#4682](https://github.com/FS-GG/.github/issues/4682) retains the full installation/discovery,
+outcome/delivery migration, programme/product continuation, old-handoff recovery and restart/rollback
+promise. Coherent107 publication from `75ab98dd` is accepted: original candidate39166997205/a1 and
+same-candidate forward publisher39170373582/a1 completed all16 effects/final33 and promoted
+[release416724931](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.107.0).
+The canonical dist tool pin and registry now reconcile that accepted publication; this changes no
+installed selector or native project state.
+
+Fresh read-only recovery compared all82 active107 tool payload files with that promoted archive,
+and all359 packaged skill files with both repository mirrors. The shim target marker resolves to
+the107 entrypoint. This is static byte/path evidence, not an executing-caller or runtime-catalog
+qualification; selector change timing remains Unknown. Direct native preparation reads found25items,
+16fields and eight complete views, with the accepted six Status options and no Work level field.
+These reads establish preparation facts, not authenticated enrollment or board-derived selection.
+
+The original Creator017 candidate/archive, promoted release/tag and all17 journal generations/eight
+verified effects now match independent readback. Its fresh public NuGet producer payload also matches;
+the fresh local GitHub Packages payload read returned403, so fresh local two-feed payload
+re-download acceptance remains incomplete. Subsequent authenticated hosted feed-coherence
+[39212372585](https://github.com/FS-GG/.github/actions/runs/39212372585) independently read017 as
+the newest version on both feeds. Combined with the original matched payload journal and promoted
+release416751979, this admits published registry scalars017; it does not repair local reader capability
+or qualify installed adoption. No publisher replay followed. The current private binding/custody pointer remains unavailable; the
+local public enrollment commitment cannot replace its private payload/nonce. Keep successor native
+writes and activation held until those exact inputs and fresh effect-specific admission are supplied.
+All historical Unknown effects,439 inherited reservations and46 later originals remain preserved.
+
 ### Operational programme cutover acceptance — 2026-10-18
 
 [PR4669](https://github.com/FS-GG/.github/pull/4669) delivered the coordinated repo-native consumer

@@ -38,6 +38,18 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-10-19** — `coord-engine`: reconcile accepted coherent107 publication and canonical pin (github; #4682):
+
+Record the already accepted coherent107 publication from source75ab98dd and release416724931,
+original candidate39166997205/a1 and same-candidate forward publisher39170373582/a1 (all16/final33).
+Advance the canonical dotnet Coord.Cli pin from106 to107 and regenerate registry projections.
+This source pin is not receiver installation or runtime qualification. Reconcile Creator017 published
+scalars after authenticated hosted feed39212372585 sees017 on both feeds and the promoted release
+manifest/journal match the original source and producer payload. The local package-reader403 remains
+a capability gap; no publisher was replayed. Binding4 remains accepted; current private
+binding/custody, actual discovered caller, successor migration and restart/rollback remain open.
+Preserve all original uncertain operations and reservations.
+
 - **2026-10-18** — `telemetry-host-source-070-independent` (github; #4638): Prepare independently versioned Host0.7 source, new exact-source candidate/tag/feed/journal13 and existing Store14 receipt ABI. Preserve retained0.6 candidate/journal12 generation2 tag-intent Unknown and all prior artifacts; published Host0.5 and coherent CLI0.106/installed0.105 stay unchanged. Safe dispatch diagnostics do not recover old causes or authorize replay. Compilation, publication and receiver adoption remain separate gates.
 
 - **2026-10-18** — **Coherent 0.106 publication acceptance:** reconcile coord-engine published 0.106.0, coherent-set/v0.106.0 and the source-distributed tool manifest after candidate 39124245029 and separately admitted forward operation 39130246438 completed journal24 generation 33 with all 16 effects. Preserve original publisher 39127872315 as an incomplete visibility checkpoint; no Drivers package resend or repack occurred. Both feeds match original normalized payloads, with signed NuGet raw archives distinguished and protected hosted provenance for the independently inaccessible org feed. Active installed 0.105 selector/binding and Host published 0.5.0 remain unchanged; prospective Host 0.6 and receiver/fleet adoption are separate.
