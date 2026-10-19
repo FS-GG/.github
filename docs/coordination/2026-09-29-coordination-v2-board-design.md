@@ -341,7 +341,7 @@ The original local public SDK installation exited0. Collector return-shape/membe
 reconciled against that settled installation without reinstalling it. All88 installed Creator tool files,
 all82 installed coordination108 files and the full81 shared pinned dependency members match their public
 originals. Each tool keeps its own command settings, outside that shared81-member pin.
-The actual public Creator help command passed. Both consumers load adapter SHA256
+The actual public Creator help command passed. Both installed consumers carry adapter SHA256
 `393bf4e7e2a3fbeea3f7b5d15f23e246769e6baea0bca45e76e585fbeb8ef1e5`.
 Full public SDD/product journeys, programme continuation and executed bounded restart/rollback remain open.
 
