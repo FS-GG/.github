@@ -170,6 +170,39 @@ restart/rollback target remain open under #4682/#4641. Atlas ID
 verify actual custody before relying on its pointer. Public Atlas stores navigation and limits,
 never the private payload, nonce, journals or runtime assets.
 
+### Host-custodied replacement baseline — 2026-10-19
+
+[Home response6262407846](https://github.com/FS-GG/.github/issues/4516#issuecomment-6262407846)
+identifies the lost-directory boundary: the programme directory was outside the container's persistent
+mount. Source worktree survival did not establish private custody. The existing host-owned restricted
+support directory is `~eugen/.local/state/v3-storage/session-recovery-20261019/`, on host-local ext4,
+and is not mounted into the client. The telemetry spool remains dedicated to telemetry. No new mount,
+volume, credentials or infrastructure is selected.
+
+Programme/root has prepared distinct new binding4/schema2 and binding5/schema3 pairs once through
+the maintained constructor. Each explicitly selects the same22 current issues: the previously reviewed
+21 plus existing installed-coordinator delivery #4682. Three other visible memberships remain
+unenrolled. The17Outcome/fiveDelivery metadata does not make malformed delivery contracts schedulable.
+The constructor at9772af87 and its exact artifact remain separate from the independently authenticated
+published107 adapter at75ab98dd. Fresh verification matched all82 installed CLI payload members to the
+published release archive. This establishes package correspondence, not caller acceptance.
+
+The private inputs/original pairs are staged at
+`~/.local/share/fs-gg-private/programme-custody-20261019-0756/`, outside the telemetry spool. This local
+path alone is not durable. [Custody request6262490866](https://github.com/FS-GG/.github/issues/4516#issuecomment-6262490866)
+selects one bounded5526-byte private archive, an exclusive host-owned0600 copy and a separate private
+restore/readback path. Host-local retention and actual restored bytes must be independently accepted
+before protected enrollment is used. The public manifest in this candidate contains only the new
+binding4 commitment; binding5 remains a separate later selection. No native board write is repeated.
+
+Keep both original pair generations and lost-operation uncertainty distinct. The new binding4 must
+pass the actual installed reader against its exact protected revision before becoming an executable
+restart/rollback baseline. Only then may the separately protected binding5 commitment and actual
+inspection3/integrator2 caller be qualified. UI/product/continuation acceptance and a bounded real
+rollback remain open; offline pairs and a host copy cannot satisfy them. Recovery retrieves Atlas ID
+`github/programme-binding-custody-recovery`, verifies the host receipt and restored private manifest,
+and retains all original439/46Unknown reservations and unreconciled native operation identities.
+
 ### Accepted installed real-use qualification — 2026-10-18
 
 Root accepted the original installed 0.105 invocations against that final binding:
