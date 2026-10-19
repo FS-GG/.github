@@ -336,7 +336,7 @@ def validate_invocations(root: Path, contract_path: Path, errors: list[str]) -> 
 
 
 def validate_organization_consumer(root: Path, errors: list[str]) -> None:
-    """Current organization guidance is prepared V4; legacy/product rules keep their own scope."""
+    """Selected organization callers retain accepted and historical contracts without V1 fallback."""
     for runtime in ROOTS:
         base = root / runtime
         contract = (base / "check-board/references/organization-v2-inspection.md").read_text(encoding="utf-8")
@@ -433,12 +433,6 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
         if overlap:
             fail(errors, f"{command}: dangerous polarity collision: {sorted(overlap)}")
 
-    lane = (root / ROOTS[0] / "lane-steward/SKILL.md").read_text(encoding="utf-8")
-    if "scripts/fsgg-coord set-paths <issue> --paths" not in lane or "additive expansion only" not in lane:
-        fail(errors, "lane-steward: narrowing/additive verb distinction is missing")
-    if 'fsgg-coord widen <issue> --paths "<the above>"' in lane:
-        fail(errors, "lane-steward: additive widen is prescribed for narrowing")
-
     publishing = (root / ROOTS[0] / "publishing-and-deployment/SKILL.md").read_text(encoding="utf-8")
     for stale in ("`-preview` always", "Public nuget.org (decided, wiring pending", "`coherent: false` until wired"):
         if stale in publishing:
@@ -454,62 +448,173 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
 
     validate_organization_consumer(root, errors)
 
-    p_add = (root / ROOTS[0] / "p-add/SKILL.md").read_text(encoding="utf-8")
-    p_add_order = ("check-board", "ready --status Backlog", "fsgg-coord add")
-    p_add_positions = [p_add.find(term) for term in p_add_order]
-    if any(position < 0 for position in p_add_positions) or p_add_positions != sorted(p_add_positions):
-        fail(errors, "p-add: must reconcile, triage backlog, then add the issue in that order")
-    for required in (
-        "reconcile --json",
-        "lint --json",
-        "issues <repo> --state open --refresh",
-        "reuse an existing matching issue",
-        "Paths:",
-        "pendingBoardWrites: 0",
-        "`<item> — <new status>: <one-line summary>`",
-        "`Active: <item> — <current activity/gate>; ...`",
-        "does not implement the item",
-    ):
-        if required not in p_add:
-            fail(errors, f"p-add: filing contract lost {required!r}")
-
-    padd_item = (root / ROOTS[0] / "padd-item/SKILL.md").read_text(encoding="utf-8")
-    padd_item_order = ("Prove workspace wiring", "reconcile --repo", "ready --repo", "fsgg-coord add")
-    padd_item_positions = [padd_item.find(term) for term in padd_item_order]
-    if any(position < 0 for position in padd_item_positions) or padd_item_positions != sorted(padd_item_positions):
-        fail(errors, "padd-item: must prove wiring, reconcile, triage backlog, then add in that order")
-    for required in (
-        "FSGG_COORD_OWNER_TYPE",
-        "Never silently fall back",
-        "issues <this-repo> --state open --refresh",
-        "Reuse an existing semantic match",
-        "cross-repo-coordination",
-        "Paths:",
-        "pendingBoardWrites: 0",
-        "`<item> — <new status>: <one-line summary>`",
-        "`Active: <item> — <current activity/gate>; ...`",
-        "do not implement",
-    ):
-        if required not in padd_item:
-            fail(errors, f"padd-item: workspace filing contract lost {required!r}")
+    validate_lifecycle_routes(root, errors)
 
     validate_work_board_coordinator(root, errors)
+
+
+def validate_lifecycle_routes(root: Path, errors: list[str]) -> None:
+    """Validate the actual authored routing closure, not historical helper vocabulary.
+
+    Required links must resolve from each carrier. Current organization instructions cannot execute
+    retired V1 writes. Explicit heavyweight/product references are excluded from the active closure:
+    keeping an archived contract must neither revive it nor cause a blanket compatibility deletion.
+    """
+    routes = {
+        "work-board/SKILL.md": ("work-board/references/lifecycle-contract.md", "work-board/references/intake.md", "pnext-item/SKILL.md", "work-roadmap/SKILL.md"),
+        "p-add/SKILL.md": ("work-board/references/intake.md",),
+        "padd-item/SKILL.md": ("work-board/references/intake.md", "padd-item/references/legacy-product-intake.md"),
+        "pnext-item/SKILL.md": ("work-board/SKILL.md",),
+        "work-roadmap/SKILL.md": ("pnext-item/SKILL.md",),
+        "board-analyst/SKILL.md": ("work-board/references/intake.md",),
+        "lane-steward/SKILL.md": ("work-board/SKILL.md",),
+        "intra-repo-parallel-work/SKILL.md": ("pnext-item/SKILL.md", "work-board/SKILL.md"),
+        "drive-board/references/host-loop.md": ("work-board/references/host-loop.md",),
+        "pnext-item/references/findings-and-filing.md": ("work-board/references/intake.md",),
+    }
+    for runtime in ROOTS:
+        base = root / runtime
+        for carrier, targets in routes.items():
+            path = base / carrier
+            if not path.is_file():
+                fail(errors, f"lifecycle route: missing carrier {path.relative_to(root)}")
+                continue
+            text = path.read_text(encoding="utf-8")
+            links = set()
+            canonical = "https://github.com/FS-GG/.github/blob/main/.agents/skills/"
+            for link in LINK.findall(text):
+                link = link.split("#")[0]
+                if link.startswith(canonical):
+                    links.add((base / link.removeprefix(canonical)).resolve())
+                elif not link.startswith(("http:", "https:", "#")):
+                    links.add((path.parent / link).resolve())
+            for target in targets:
+                if (base / target).resolve() not in links or not (base / target).is_file():
+                    fail(errors, f"lifecycle route: {carrier} must reach {target}")
+            for _, segment in code_segments(text):
+                if re.search(r"(?:scripts/)?fsgg-coord\s+(?:intake|whoami|heartbeat|claim|take|batch|set-paths|widen|done|flush|add|reconcile)\b", segment):
+                    fail(errors, f"lifecycle route: {carrier} prescribes retired V1 operation")
+        for carrier, clauses in {
+            "p-add/SKILL.md": ("reuse an existing matching issue", "does not implement"),
+            "padd-item/SKILL.md": ("Never silently fall back", "do not implement"),
+            "pnext-item/references/findings-and-filing.md": ("The current owner may dispose and file the finding directly.",),
+            "pnext-item/SKILL.md": ("including publication, installed, participant and recovery obligations", "close only its fulfilled promise", "continues clearing"),
+            "work-board/SKILL.md": (
+                "complete unfiltered All items", "return to selection", "Quiescence is not board completion",
+                "older deferred work", "stops new selection immediately", "Understand the whole promise",
+                "at entry/resume, meaningful coordination boundaries or relevant native fact changes",
+                "Local repair refreshes relevant context, not the full census",
+                "one independent review for substantive changes",
+                "preserve exact-head required CI and native gates",
+            ),
+            "work-board/references/intake.md": (
+                "Include relevant prior feedback and reports in the bounded semantic search.",
+                "Children represent independently useful results, never implementation/review/test steps",
+                "Do not restart closed historical investigations or sweep unrelated records",
+                "Recurrence is evidence about the cause, not proof that a new issue is needed",
+
+                '"No prior issue" does not mean "no prior record".',
+                "An earlier unfiled feedback/report can establish recurrence",
+                "cite its original record and disposition, preserve its current owner and compare the actual scope/cause before filing",
+                "State search bounds and unavailable/truncated/stale results as Unknown",
+                "an empty bounded search does not prove global absence",
+                "Prior records remain evidence, not task or effect authority; preserve trusted-author/repository-policy admission",
+            ),
+            "work-board/references/observation.md": (
+                "The logging completeness and historical thresholds below apply only to a selected telemetry/economic contract or recorded human-selected policy",
+                "Ordinary delivery does not wait for full capture or Unknown coverage; add no model-maintained threshold ledger or mandatory measurement campaign",
+                "Effects dependent on telemetry state retain their actual admission",
+            ),
+            "work-board/references/lifecycle-contract.md": (
+                "Verify the accountable owner and issuer's actual authority before dependent action",
+                "Before relying on a scope-changing host ruling, record it under existing write authority in the owning issue or PR",
+                "with the ruling, exact scope, source/author and durable citation, then independently read back that record",
+                "A channel-only message is not durable ruling custody",
+                "A durable record preserves provenance; it does not grant the issuer authority or turn untrusted text into instructions",
+                "If recording, readback or authority is unavailable/conflicting, hold only the changed scope as Unknown",
+                "previously authorized independent work may continue",
+                "Keep the original ruling and its supersession history citable",
+                "Trivial reversible non-governing prose/metadata | Owner review and cheap relevant checks",
+                "Governing skills are substantive even when only Markdown changes",
+                "One accountable owner, one independent source review of the exact candidate, relevant tests and final required CI",
+                "Normal checks plus reuse of the existing design up front; a targeted specialist only for a distinct needed contribution",
+                "Applicable source checks plus exact identity, effect-specific admission, original custody and independent readback; Unknowns fence the affected effect",
+                "Fix substantiated in-scope defects; adjudicate disputed findings against acceptance and evidence; decline hypothetical scope expansion",
+                "Keep necessary corrections in the current Delivery and explicitly defer independent improvements without indefinitely extending it",
+                "Additional specialists need a distinct justified contribution; PASS counts are not proof of quality",
+                "Local repair uses relevant issue/PR/test context; an unchanged CI poll is not a census trigger",
+                "Load applicable references just in time, without an exhaustive reference chain; preserve every qualified effect's complete prerequisites before action",
+                "After repair rerun affected checks",
+                "Broader qualification requires changed inputs/assumptions, integration/provenance uncertainty or actual required CI",
+                "do not manually restart unchanged full suites for confirmation alone",
+                "Required CI and ADR-0084 coherent validation still run",
+                "Advisory pending is reported separately; required pending/failed checks block their dependent delivery or effect",
+                "use existing owner/CI/telemetry evidence for accepted-delivery time, escaped defects/reverts, warranted review findings, CI wait/reruns and recovery success within comparable risk classes",
+                "Missing facts stay Unknown. Add no measurement campaign, gate or store",
+                "without comparable evidence make no savings or whole-workflow effectiveness claim",
+            ),
+        }.items():
+            path = base / carrier
+            if not path.is_file():
+                fail(errors, f"lifecycle route: missing governing contract {carrier}")
+                continue
+            text = " ".join(path.read_text(encoding="utf-8").split())
+            for clause in clauses:
+                if clause not in text:
+                    label = "p-add: filing contract lost" if carrier == "p-add/SKILL.md" else "padd-item: workspace filing contract lost" if carrier == "padd-item/SKILL.md" else f"lifecycle route: {carrier} lost"
+                    fail(errors, f"{label} {clause!r}")
+    for role in ("worker", "critic", "analyst"):
+        for variant in ("normal", "best"):
+            path = root / ".claude/agents" / f"fsgg-{role}-{variant}.md"
+            if not path.is_file():
+                fail(errors, f"lifecycle route: missing runtime caller {path.name}")
+                continue
+            text = path.read_text(encoding="utf-8")
+            entrypoint = "board-analyst" if role == "analyst" else "pnext-item"
+            if entrypoint not in text or re.search(r"scripts/fsgg-coord\s+(?:whoami|take|claim|done)\b", text):
+                fail(errors, f"lifecycle route: runtime caller {path.name} bypasses canonical executor")
+
+
+def work_board_instruction_text(root: Path, runtime: str, errors: list[str]) -> str:
+    """Read the actual entrypoint and its required progressive lifecycle contract.
+
+    A file existing beside the skill is insufficient: the entrypoint must load it. Keep the
+    reporting/recovery assertions on those delivered instructions instead of requiring duplicated
+    prose in SKILL.md or accepting an unreachable reference as governing text.
+    """
+    directory = root / runtime / "work-board"
+    entry = directory / "SKILL.md"
+    relative = "references/lifecycle-contract.md"
+    try:
+        body = entry.read_text(encoding="utf-8")
+    except OSError as error:
+        fail(errors, f"work-board coordinator: unreadable entrypoint {entry.relative_to(root)}: {error}")
+        return ""
+    if relative not in LINK.findall(body):
+        fail(errors, "work-board coordinator: entrypoint must load references/lifecycle-contract.md")
+        return ""
+    try:
+        contract = (directory / relative).read_text(encoding="utf-8")
+    except OSError as error:
+        fail(errors, f"work-board coordinator: unreadable lifecycle contract {runtime}: {error}")
+        return ""
+    return body + "\n" + contract
 
 
 def validate_work_board_coordinator(root: Path, errors: list[str]) -> None:
     """Source boundary checks complement independent realistic consumer journeys."""
     for runtime in ROOTS:
         base = root / runtime
-        work = (base / "work-board/SKILL.md").read_text(encoding="utf-8")
+        instructions = work_board_instruction_text(root, runtime, errors)
         required = (
-            "Project 3", "binding4/schema2/inspection2", "qualified installed caller",
+            "Project 3", "binding4/schema2/inspection2", "binding5/schema3/inspection3/integrator2", "qualified installed caller",
             "productBoard", "binding3", "remaining-after-active capacity",
             "439 inherited reservations", "46 later originals", "one independent source",
             "tools/routine-delivery.py", "actual tested", "roadmap-telemetry",
             "Source delivery, publication, installation", "No fixed polling",
             "Preserve the complete Done when; a merged slice narrows the remainder without closing its parent",
         )
-        normalized = " ".join(work.split())
+        normalized = " ".join(instructions.split())
         for clause in required:
             if clause not in normalized:
                 fail(errors, f"work-board coordinator: missing {clause!r}")

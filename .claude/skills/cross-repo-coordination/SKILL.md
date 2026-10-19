@@ -28,9 +28,10 @@ separate action-specific meaning. No organization `fsgg.coord.intake/v1` transac
 Phase, claim or done-stamp is required or authorized by this route. Project membership changes need
 their own admitted enrollment route. Issue-author permission does not grant parent operation authority.
 
-The .9/.11 successor is prepared only under the
-[organization contract](../check-board/references/organization-v2-inspection.md); no installed or live
-consumer activation follows. Product contracts and explicitly historical protocol evidence retain
+Use [canonical intake](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/intake.md) for new requests. Resolve the actual
+qualified caller and selected binding under the
+[organization contract](../check-board/references/organization-v2-inspection.md). Accepted organization
+cutover and retained preparation/history have distinct scopes; instruction edits do not activate callers. Product contracts and explicitly historical protocol evidence retain
 their scoped meaning, without becoming a fallback for unavailable V2 facts.
 
 Finish by verifying the receiving issue/PR, board state, registry state, and any consumer update against

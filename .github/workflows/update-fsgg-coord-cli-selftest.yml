@@ -6,6 +6,7 @@ on:
       - ".github/workflows/update-fsgg-coord-cli-selftest.yml"
       - "scripts/update-fsgg-coord-cli"
       - "scripts/update_fsgg_coord_cli.py"
+      - "scripts/board_v2_native_results.py"
       - "tests/update-fsgg-coord-cli/**"
   push:
     branches: [main]
@@ -13,6 +14,7 @@ on:
       - ".github/workflows/update-fsgg-coord-cli-selftest.yml"
       - "scripts/update-fsgg-coord-cli"
       - "scripts/update_fsgg_coord_cli.py"
+      - "scripts/board_v2_native_results.py"
       - "tests/update-fsgg-coord-cli/**"
 
 permissions:

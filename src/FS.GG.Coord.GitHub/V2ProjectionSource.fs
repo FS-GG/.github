@@ -979,10 +979,9 @@ module V2ProjectionSource =
                             WorkItem = item.WorkItem |> Option.map (fun facts -> {facts with Complete = false; Sha256 = None; Gap = Some gap})
                             Evidence = {item.Evidence with Health = "Unknown"; Gap = Some(Malformed("native hierarchy consistency", gap))} })
 
-    let inspectFixed (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
+    let private inspectWithAcquisition batched (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
         let reads = inspectionReads transport binding
         let intakeObservedAt = DateTimeOffset.UtcNow
-        let intakeGate = BoardIntake.Gate(reads, persistCache = false)
         let metadata (items: ItemReport list) (selected: int option) (protectedInputs: (string * string * string) list) (gap: IoError option) : BatchReport =
             { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision
               ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256
@@ -1001,11 +1000,14 @@ module V2ProjectionSource =
             | Ok(selected, current, blob) ->
                 let membership = if isProgrammeBinding binding then readMemberships reads binding else Ok []
                 let members, membershipGap = match membership with Ok values -> values, None | Error error -> [], Some error
-                let items: InspectionItem list = selected |> List.map (fun (row: Selected) ->
+                let acquirePhase evaluate = if batched && isProgrammeBinding binding then V2InspectionAcquisition.run reads evaluate else evaluate reads
+                let items: InspectionItem list = acquirePhase (fun phase ->
+                  let intakeGate = BoardIntake.Gate(phase, persistCache = false)
+                  selected |> List.map (fun (row: Selected) ->
                     let mutable calls = 0
                     let counted =
                         { new IGitHubTransport with
-                            member _.Send request = calls <- calls + 1; reads.Send request
+                            member _.Send request = calls <- calls + 1; phase.Send request
                             member _.SendMutation _ = Error(Malformed("read-only V2 inspection", "mutation is unavailable"))
                             member _.RetryMutation _ = Error(Malformed("read-only V2 inspection", "durable replay is unavailable")) }
                     let collection = collectSource counted binding row
@@ -1035,15 +1037,15 @@ module V2ProjectionSource =
                           Reads = calls; MutationAttempts = 0; MembershipPages = observed |> Option.map _.MembershipPages
                           Projection = None; Gap = sourceGap; LastVerified = historical }
                     { Evidence = evidence; ExpectedNodeId = row.NodeId; SourceCurrentness = currentness; Planning = observed; PlanningGap = planningGap; Discrepancies = discrepancies; Owner = collection.Owner; CurrentDeliverable = collection.CurrentDeliverable; Deliverables = collection.Deliverables; DeliverableGap = collection.DeliverableGap; Intake = nativeIntake intakeGate intakeObservedAt binding collection.Native; WorkItem = workItem
-                      SourceRevision = match collection.Verification with Ok(Current revision) -> Some revision | _ -> None })
+                      SourceRevision = match collection.Verification with Ok(Current revision) -> Some revision | _ -> None }))
                 let integration = if isProgrammeBinding binding && membershipGap.IsNone then nativeIntegrator reads binding (items |> List.collect _.Deliverables) else emptyNative
                 let items =
                     if not (isProgrammeBinding binding) then items
-                    else List.map2 (fun (row: Selected) (item: InspectionItem) ->
+                    else acquirePhase (fun phase -> List.map2 (fun (row: Selected) (item: InspectionItem) ->
                         let mutable additionalReads = 0
                         let counted =
                             { new IGitHubTransport with
-                                member _.Send request = additionalReads <- additionalReads + 1; reads.Send request
+                                member _.Send request = additionalReads <- additionalReads + 1; phase.Send request
                                 member _.SendMutation _ = Error(Malformed("final inspection barrier", "mutation is unavailable"))
                                 member _.RetryMutation _ = Error(Malformed("final inspection barrier", "replay is unavailable")) }
                         let barrier = collectSource counted binding row
@@ -1065,7 +1067,7 @@ module V2ProjectionSource =
                         let evidence: ItemReport = { item.Evidence with Reads = item.Evidence.Reads + additionalReads }
                         match barrier.Verification, planning with
                         | Ok(Current revision), Ok intent when stableWorkItem && item.SourceRevision = Some revision && barrier.Owner = item.Owner && barrier.CurrentDeliverable = item.CurrentDeliverable && barrier.Deliverables = item.Deliverables && barrier.DeliverableGap = item.DeliverableGap && item.Planning = Some intent -> { item with Evidence = evidence }
-                        | _ -> { item with SourceCurrentness = "Unknown"; Evidence = { evidence with Health = "Unknown"; Gap = Some(Malformed("final source/planning barrier", "issue/dependency/plan or human planning changed/became unavailable; refresh affected selection")) } }) selected items
+                        | _ -> { item with SourceCurrentness = "Unknown"; Evidence = { evidence with Health = "Unknown"; Gap = Some(Malformed("final source/planning barrier", "issue/dependency/plan or human planning changed/became unavailable; refresh affected selection")) } }) selected items)
                 let membershipGap =
                     if not (isProgrammeBinding binding) || membershipGap.IsSome then membershipGap
                     else
@@ -1082,6 +1084,11 @@ module V2ProjectionSource =
                 let items = if binding.BindingVersion = 5 then reconcileHierarchy items else items
                 { Binding = binding; Memberships = members; MembershipGap = membershipGap; NativeIntegrator = integration
                   Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) (protectedEnrollmentInputs binding current blob) enrollmentGap; Items = items }
+
+    let inspectFixed transport binding previous = inspectWithAcquisition true transport binding previous
+
+    // Independent qualification control for the preserved pre-batching determining reads.
+    let internal inspectUnbatched transport binding previous = inspectWithAcquisition false transport binding previous
 
     let planningCandidates (report: InspectionReport) (facts: IntegratorFacts) =
         if report.Evidence.Selected.IsNone || report.Evidence.PopulationGap.IsSome then []

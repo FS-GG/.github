@@ -293,3 +293,52 @@ is unreaped, bounded reap and read-only absence checks. Unsupported/lost custody
 refuses; escaped process trees are not qualified. The original candidate profile, predecessor/feed/tag
 gates, 45-minute workflow cap and exact seven-member publisher artifact remain unchanged. Candidate
 execution still needs separately selected admission, exact inputs and actual budget qualification.
+
+## Interpreting original native qualification results
+
+The existing bounded command helper exposes `qualify_board_v2_result` in
+[`scripts/update_fsgg_coord_cli.py`](../../scripts/update_fsgg_coord_cli.py). Its pure
+[decoder](../../scripts/board_v2_native_results.py) reads original results; it does not
+launch commands, write native state, grant effect authority or retry a failed operation.
+The installer's fixed public-package command remains unchanged.
+
+Pass the original command record, including raw stdout, terminal exit and both EOF
+observations. `kind="inspection"` reads the exact `source_path` report file and requires
+an explicit expected binding: `bindingVersion`, `schemaVersion`, `projectId` and the
+complete `selectedIssues` map. Product binding3/inspection1, historical organization4/
+inspection2 and organization5/inspection3 retain their separate shapes. `Observed`
+means the result decoded; each report's Unknown evidence and advisory-only decisions
+remain unchanged.
+
+For `kind="migration-prepare"`, pass the original `--report-file` as `source_path`,
+the exact `expected_scope` sent and its `expected_source_revision`. This read-only
+qualification requires empty stdout and `changes: []`; the returned `value.snapshot`
+contains every reported field, item, view and selected native issue. A conflicting or
+nonempty preparation supplies no transition permission. The ordinary `ownerActions`
+warnings remain retained. No migration apply, invocation marker or journal is needed
+merely to qualify this fresh snapshot.
+
+For `kind="migration-readback"`, pass `prepared_path` and one exact original
+`source_path` under its `.invocation/readback-<32hex>.json` custody directory. The command
+intentionally emits no JSON stdout. The decoder reads that file and the invocation's
+original `prepared.json`, checks their schema/scope association and preserves byte-hash
+references. An optional `expected_sha256` pins either selected output's original bytes.
+These references identify bytes; they do not independently authenticate an installed
+executable or recompute the native preparation/readback digest.
+
+`decode_field_value` distinguishes the actual text and single-select unions.
+`require_preimage` refuses changed facts; compare the complete initial and adjacent
+`value.snapshot` values to retain native scalar identity/revision changes even when the
+human value is unchanged. After an independently
+admitted native transition, `verify_field_transition` compares the complete before/
+after reported snapshots, permits only the selected scalar value and its enclosing
+native timestamps to change, and checks all other reported values and identities.
+Opaque system-field contents and hidden native fields remain unproved. These readers
+provide no server-side compare-and-swap; the actual owner still needs a fresh adjacent
+preimage, current options and a bounded cooperative planning window before sending.
+
+A missing, partial, invalid, mismatched or lost command/result remains `Unknown` with
+its available original references. Reconcile that original identity through read-only
+observation; a decoder failure never licenses resend. Focused controls run through the
+existing command helper in `tests/update-fsgg-coord-cli/test_update.py`, reached by the
+existing installer self-test workflow, including its decoder-source path trigger.

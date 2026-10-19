@@ -1,6 +1,6 @@
 # Organization scope
 
-Use Project 3 and the exact protected enrollment with binding4/schema2/inspection2, authenticated
+Use Project 3 and the exact protected enrollment with binding5/schema3/inspection3/integrator2, authenticated
 qualified installed caller and the [organization inspection contract](organization-v2-inspection.md).
 The accepted cutover in the owning V2 plan supersedes historical preparation-only wording.
 Require current native issue/body/owner/plan/Current deliverable/PR/head and dependency joins.
@@ -23,8 +23,8 @@ pre-entry selector was not retained, preserve its change timing and unchanged-st
 
 ## Selected outcome/delivery successor
 
-The selected source successor uses binding5/schema3 with exact Work level Outcome/Delivery identities,
+The accepted organization successor uses binding5/schema3 with exact Work level Outcome/Delivery identities,
 inspection/3 and integrator/2 hierarchy-digest joins. It is not active merely because these instructions
-were loaded. Current accepted binding4/schema2/inspection2 and product binding3/schema1 remain unchanged
-until their own successor is qualified. Follow canonical work-board's outcome/delivery and closure
+were loaded. Retained binding4/schema2/inspection2 and product binding3/schema1 keep their actual qualified
+contracts; each executing caller and binding must be resolved independently. Follow canonical work-board's outcome/delivery and closure
 boundary; no linked-child authority, inherited parent block or legacy automatic parent climb applies.

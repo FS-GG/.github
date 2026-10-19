@@ -37,6 +37,7 @@ spec.loader.exec_module(quality)
 errors = []
 quality.validate_organization_consumer(ROOT, errors)
 quality.validate_work_board_coordinator(ROOT, errors)
+quality.validate_lifecycle_routes(ROOT, errors)
 require(not errors, "; ".join(errors))
 for variant, parent in (("work-board-normal", "work-board"), ("work-board-best", "work-board"),
                         ("drive-board-normal", "drive-board"), ("drive-board-best", "drive-board")):
@@ -65,7 +66,10 @@ for phrase in (
     "native merge boundary",
     "adopt that branch, and continue the same PR; never open a second PR",
     "Multiple or ambiguous candidate PRs refuse routine admission",
-    "best-effort,\n   asynchronous observations and cannot invalidate the merge",
+    "best-effort, asynchronous observations and cannot invalidate the merge",
+    "close only its fulfilled promise",
+    "including publication, installed, participant and recovery obligations",
+    "continues clearing",
 ):
     require(" ".join(phrase.split()) in pnext_normalized, f"pnext-item lost routine owner contract {phrase!r}")
 

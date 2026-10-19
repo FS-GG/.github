@@ -403,7 +403,7 @@ Classify each coherent change once, revisiting only a material scope change:
 
 For source review, independence means separation from implementation authorship. An authorized
 fresh subagent can supply that review where the platform permits it; a second human collaborator
-is not a universal requirement. Use the [governing review rule](../../.agents/skills/work-board/SKILL.md#qualify-the-actual-path-and-deliver-exact-source)
+is not a universal requirement. Use the [governing review rule](../../.agents/skills/work-board/references/lifecycle-contract.md#qualify-the-actual-path-and-deliver-exact-source)
 for exact-source review and reuse of accepted author-run Home source tests. Required CI, credential
 separation and operational trust-boundary readback remain distinct obligations.
 

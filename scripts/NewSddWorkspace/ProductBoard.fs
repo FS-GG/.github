@@ -69,6 +69,7 @@ module ProductBoard =
               for leaf in
                   [ "padd-item/SKILL.md";
                     "padd-item/agents/openai.yaml";
+                    "padd-item/references/legacy-product-intake.md";
                     "work-board-best/SKILL.md";
                     "work-board-best/agents/openai.yaml";
                     "work-board-normal/SKILL.md";
@@ -79,6 +80,8 @@ module ProductBoard =
                     "work-board/references/deep-detail.md";
                     "work-board/references/feedback-contract.md";
                     "work-board/references/host-loop.md";
+                    "work-board/references/intake.md";
+                    "work-board/references/lifecycle-contract.md";
                     "work-board/references/workspace-scope.md";
                     "work-roadmap/SKILL.md";
                     "work-roadmap/agents/openai.yaml";

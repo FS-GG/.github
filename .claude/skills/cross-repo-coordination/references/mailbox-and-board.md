@@ -11,9 +11,10 @@ missing evidence/decision and supplying owner, with the existing request channel
 next deadline. Read changed replies at session start/resume, the agreed deadline or a relevant event;
 a failed/partial read keeps the hold. No fixed unchanged comments or duplicate status ledger is needed.
 
-Read the [organization contract](../../check-board/references/organization-v2-inspection.md). Its
-.9/.11 successor is source preparation only. Enrollment/schema/view changes need the separately
-admitted .10 route and final authenticated native IDs. Read-only inspection and Observation-only
+Read the [organization contract](../../check-board/references/organization-v2-inspection.md). Resolve its actual qualified installed caller and selected binding. The accepted organization
+binding5 baseline and historical binding4 preparation retain separate scope; instruction edits activate
+neither an older caller nor a wider enrollment. Enrollment/schema/view changes need their separately
+admitted typed route and final authenticated native IDs. Read-only inspection and Observation-only
 refresh cannot perform those changes or alter human Status/Track/Roadmap. Do not call org V1 intake,
 add/set-field/child, claim/done, flush/replay or Class/Phase/severity machinery as this programme route.
 Uncertain effects stay with their original owner; message or expiry does not authorize replay.

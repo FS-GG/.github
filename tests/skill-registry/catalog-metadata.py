@@ -7,6 +7,7 @@ import importlib.machinery
 import importlib.util
 import json
 import pathlib
+import re
 import shutil
 import tempfile
 
@@ -120,11 +121,16 @@ with tempfile.TemporaryDirectory(prefix="skill-catalog-") as raw:
 print("catalog metadata boundaries: ok")
 
 
+quality_spec = importlib.util.spec_from_file_location("skill_quality", REPO / "scripts/check-skill-quality.py")
+quality = importlib.util.module_from_spec(quality_spec)
+quality_spec.loader.exec_module(quality)
+
+
 def assert_live_status_contract(skill_name: str) -> None:
-    paths = [REPO / root / skill_name / "SKILL.md" for root in module.SKILL_ROOTS]
-    bodies = [path.read_bytes() for path in paths]
-    assert len(set(bodies)) == 1, f"{skill_name} must remain byte-identical across all skill roots"
-    text = " ".join(bodies[0].decode().split())
+    sources = ("SKILL.md", "references/lifecycle-contract.md")
+    for relative in sources:
+        bodies = [(REPO / runtime / skill_name / relative).read_bytes() for runtime in module.SKILL_ROOTS]
+        assert len(set(bodies)) == 1, f"{skill_name}/{relative} must remain byte-identical across all skill roots"
     required = (
         "Update on deliverables, changed blockers, decisions or changed promised times, plus one daily active summary.",
         "Use existing owning/native evidence",
@@ -133,20 +139,55 @@ def assert_live_status_contract(skill_name: str) -> None:
         "Project 3 or the selected product board supplies current planning",
     )
     def valid(candidate):
-        return all(fragment in candidate for fragment in required) and "driver --events --cursor" not in candidate
-    assert valid(text), f"{skill_name} lost its scoped owning/native reporting contract"
-    for fragment in required:
-        assert not valid(text.replace(fragment, "")), f"missing reporting clause accepted: {fragment}"
-    assert not valid(text + " Run driver --events --cursor current.json --text."), "V1 event authority returned"
+        normalized = " ".join(candidate.split())
+        return all(fragment in normalized for fragment in required) and "driver --events --cursor" not in normalized
+    for runtime in module.SKILL_ROOTS:
+        errors = []
+        text = quality.work_board_instruction_text(REPO, runtime, errors)
+        assert not errors, errors
+        assert valid(text), f"{skill_name} lost its scoped owning/native reporting contract"
+        # Mutate actual on-disk carriers and resolve them through the production reader. A
+        # correctly preserved reference cannot rescue a missing entry link or an absent target.
+        with tempfile.TemporaryDirectory(prefix="work-board-reporting-") as raw:
+            root = pathlib.Path(raw)
+            directory = root / runtime / skill_name
+            originals = {relative: (REPO / runtime / skill_name / relative).read_text() for relative in sources}
+            def restore():
+                for relative, body in originals.items():
+                    path = directory / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(body)
+            def read():
+                errors = []
+                text = quality.work_board_instruction_text(root, runtime, errors)
+                return text, errors
+            restore()
+            assert valid(read()[0]) and not read()[1]
+            for fragment in required:
+                pattern = r"\s+".join(re.escape(word) for word in fragment.split())
+                for relative, body in originals.items():
+                    (directory / relative).write_text(re.sub(pattern, "", body))
+                candidate, errors = read()
+                assert not errors, errors
+                assert not valid(candidate), f"missing reporting clause accepted: {fragment}"
+                restore()
+            for relative in sources:
+                path = directory / relative
+                path.write_text(path.read_text() + "\nRun driver --events --cursor current.json --text.\n")
+                assert not valid(read()[0]), f"V1 event authority returned in {relative}"
+                restore()
+            entry = directory / "SKILL.md"
+            entry.write_text(originals["SKILL.md"].replace("references/lifecycle-contract.md", "references/unused-contract.md"))
+            assert read()[1], "unreachable reporting reference accepted"
+            restore()
+            (directory / "references/lifecycle-contract.md").unlink()
+            assert read()[1], "missing reporting reference accepted"
 
 
-# Organization and selected product use the same canonical reporting boundary.
-# The legacy read-only report utility remains optional, not a scheduler/required workload.
+# Organization and selected product load the same reporting boundary through the real
+# progressive entrypoint. Optional read-only reporting remains separate from scheduling.
 assert_live_status_contract("work-board")
 
-quality_spec = importlib.util.spec_from_file_location("skill_quality", REPO / "scripts/check-skill-quality.py")
-quality = importlib.util.module_from_spec(quality_spec)
-quality_spec.loader.exec_module(quality)
 org_errors = []
 quality.validate_organization_consumer(REPO, org_errors)
 assert not org_errors, org_errors
@@ -192,7 +233,7 @@ def assert_performance_first_contract() -> None:
     assert not missing, f"performance-first worker contract lost required behavior: {missing}"
 
     for driver in ("work-board", "work-roadmap"):
-        relative = "references/heavyweight-roadmap.md" if driver == "work-roadmap" else "SKILL.md"
+        relative = "references/heavyweight-roadmap.md" if driver == "work-roadmap" else "references/lifecycle-contract.md"
         driver_paths = mirrored_skill_files(driver, relative)
         driver_bodies = [path.read_bytes() for path in driver_paths]
         assert len(set(driver_bodies)) == 1, (
@@ -209,10 +250,20 @@ def assert_performance_first_contract() -> None:
                 assert path.read_bytes() == reference_bodies[0], "driver-local performance gate lost canonical obligations"
         text = " ".join(driver_bodies[0].decode().split())
         if driver == "work-board":
-            assert "[work-roadmap](../work-roadmap/SKILL.md)" in text
-            assert "Interactive/game implementation loads the" in text
-            assert "[performance-first planning gate](../work-roadmap/references/performance-first.md) before implementation begins" in text
-            assert "does not select a product lane or restart profiling" in text
+            for runtime in module.SKILL_ROOTS:
+                errors = []
+                text = " ".join(quality.work_board_instruction_text(REPO, runtime, errors).split())
+                assert not errors, errors
+                carriers = [REPO / runtime / driver / path for path in ("SKILL.md", relative)]
+                targets = {(carrier.parent / target).resolve() for carrier in carriers
+                           for target in quality.LINK.findall(carrier.read_text())
+                           if not target.startswith(("https:", "http:", "#"))}
+                assert (REPO / runtime / "work-roadmap/SKILL.md").resolve() in targets
+                assert (REPO / runtime / "work-roadmap/references/performance-first.md").resolve() in targets
+                assert ("Interactive/game implementation loads the "
+                        "[performance-first planning gate](../../work-roadmap/references/performance-first.md) "
+                        "before implementation begins") in text
+                assert "does not select a product lane or restart profiling" in text
             continue
         assert "During worker setup, interactive/game work must explicitly invoke" in text
         assert "`pnext-item` performance-first planning gate" in text

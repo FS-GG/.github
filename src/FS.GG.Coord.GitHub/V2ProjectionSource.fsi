@@ -168,6 +168,9 @@ module V2ProjectionSource =
     val createInspectionTransport: binding: Binding -> token: string -> IoResult<IGitHubTransport * System.IDisposable>
     /// Reuse admitted source collection and exact planning readers. Never calls runOneShot or any writer.
     val inspectFixed: transport: IGitHubTransport -> binding: Binding -> previous: BatchReport option -> InspectionReport
+    /// Internal causal qualification control; never selected by a production caller.
+    val internal inspectUnbatched: transport: IGitHubTransport -> binding: Binding -> previous: BatchReport option -> InspectionReport
+
     /// Deterministic display of selected human intent and known/unknown evidence. No scheduling decision.
     val planningCandidates: report: InspectionReport -> facts: IntegratorFacts -> PlanningCandidate list
 

@@ -1,6 +1,19 @@
 # Organization Coordination V2 inspection
 
-## Prepared successor; adoption remains held
+## Select the actual accepted caller
+
+Accepted organization planning uses binding5/schema3/inspection3/integrator2 and the protected exact
+enrollment qualified by its owning V2 plan. Refresh the installed executable, selected binding/cohort
+and current native facts before use; reading this contract does not update consumers. Read the
+[Outcome/Delivery contract](#outcomedelivery-successor-source-contract--2026-10-18) for its closed joins.
+Product binding3 and retained binding4 use their own qualified contracts. No source merge, publication
+or healthy report alone proves installed adoption, selection authority or native acceptance.
+
+## Historical binding4 preparation and its adoption gates
+
+This section preserves the original binding4 contract and gates as evidence. The accepted cutover
+supersedes its preparation-only operational status. It cannot withhold an already accepted binding5
+caller or activate an older/unqualified caller. Follow only the actual selected qualified scope.
 
 This is .9/.11 consumer source preparation for the
 [selected programme cutover](https://github.com/FS-GG/.github/blob/main/docs/coordination/2026-09-29-coordination-v2-board-design.md#selected-programme-cutover--2026-10-17).

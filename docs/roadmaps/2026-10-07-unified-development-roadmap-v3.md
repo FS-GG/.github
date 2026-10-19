@@ -297,6 +297,12 @@ Only canonical work-board and current native/owning facts determine concrete act
 
 ## 2. Open work and owning plans
 
+The user-selected [BOARD-LIFECYCLE-01 design](../coordination/2026-10-19-board-clearing-lifecycle-design.md)
+and [owning outcome #4701](https://github.com/FS-GG/.github/issues/4701) unify the next board/process
+redesign, active skill retirement and meaningful decomposition of the current large Outcomes.
+Its deliveries retain source, installed and native acceptance separately. This scope does not reopen
+accepted migrations or authorize implementation of every product outcome it helps shape.
+
 This catalogue preserves strategic outcome scope and owning-plan navigation. Root accepted the
 actual coordinated programme, board-driver, recovery and progress instruction loads and decided
 operational cutover at **2026-10-18 07:42:17.703507 UTC**, effective upon protected delivery in the

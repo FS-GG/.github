@@ -130,6 +130,7 @@ try
     let generatedLeaves =
         [ "padd-item/SKILL.md";
           "padd-item/agents/openai.yaml";
+          "padd-item/references/legacy-product-intake.md";
           "work-board-best/SKILL.md";
           "work-board-best/agents/openai.yaml";
           "work-board-normal/SKILL.md";
@@ -140,6 +141,8 @@ try
           "work-board/references/deep-detail.md";
           "work-board/references/feedback-contract.md";
           "work-board/references/host-loop.md";
+          "work-board/references/intake.md";
+          "work-board/references/lifecycle-contract.md";
           "work-board/references/workspace-scope.md";
           "work-roadmap/SKILL.md";
           "work-roadmap/agents/openai.yaml";
@@ -397,10 +400,10 @@ try
         File.Delete freshProvenance
         File.WriteAllText(freshProvenance, generatedProvenance)
         File.Delete aliasTarget
-    let expectedAdoptionRefusals = if OperatingSystem.IsWindows() then 340 else 344
+    let expectedAdoptionRefusals = if OperatingSystem.IsWindows() then 388 else 392
     if adoptionRefusals <> expectedAdoptionRefusals then
         failwithf "fresh provenance refusal inventory incomplete: %d / %d" adoptionRefusals expectedAdoptionRefusals
-    printfn "Fresh generated provenance controls passed: %d actual refusals; 42 active hashes/original provenance and rollback checked." adoptionRefusals
+    printfn "Fresh generated provenance controls passed: %d actual refusals; 48 active hashes/original provenance and rollback checked." adoptionRefusals
     let staleFresh = prepareFresh fetch |> pass
     File.AppendAllText(freshTools, " ")
     ProductBoard.apply freshRoot staleFresh |> refuse "fresh generated preimage changed after plan"
@@ -451,10 +454,10 @@ try
         ProductBoard.apply freshRoot ancestorPlan |> refuseDriver "driver ancestor symlink after preview"
         Directory.Delete driverDirectory
         Directory.Move(heldDirectory, driverDirectory)
-    let expectedDriverRefusals = if OperatingSystem.IsWindows() then 383 else 473
+    let expectedDriverRefusals = if OperatingSystem.IsWindows() then 437 else 539
     if driverRefusals <> expectedDriverRefusals then
         failwithf "fresh driver refusal inventory incomplete: %d / %d" driverRefusals expectedDriverRefusals
-    printfn "Fresh generated driver controls passed: %d actual refusals, 42 planned/replaced mirrors, rollback and exact repeat checked below." driverRefusals
+    printfn "Fresh generated driver controls passed: %d actual refusals, 48 planned/replaced mirrors, rollback and exact repeat checked below." driverRefusals
     ProductBoard.apply freshRoot (prepareFresh fetch |> pass) |> pass
     if driverPaths |> List.exists (fun relative -> File.ReadAllText(Path.Combine(freshRoot, relative)) <> content) then
         failwith "fresh driver installation omitted a selected mirror"
@@ -472,7 +475,7 @@ try
            || records.Length <> 1 || records.Head.["beforeSha256"].GetValue<string>() <> sha oldDriver
            || records.Head.["afterSha256"].GetValue<string>() <> sha content then
             failwith "fresh driver active provenance or adoption history differs from installed bytes"
-    if adoption.["drivers"].AsArray().Count <> 42 then failwith "adoption history broadened beyond selected42 leaves"
+    if adoption.["drivers"].AsArray().Count <> 48 then failwith "adoption history broadened beyond selected48 leaves"
     ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuse "applied adoption cannot be recaptured as original scaffold"
     let installedTools = JsonNode.Parse(File.ReadAllText freshTools)
     if installedTools.["tools"].["fs.gg.coord.cli"].["version"].GetValue<string>() <> pin

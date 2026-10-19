@@ -15,6 +15,6 @@ thread. Resolve its accountable owner before treating it as new work. If a separ
 its verdict never dispatches, claims, merges or grants operation authority. Otherwise the current
 owner applies the existing evidence/materiality and deduplication boundary. Do not strand a known
 finding with no owner, scan all comments on every cycle, create duplicate issues or launch a worker
-merely to fill capacity. Missing analyst availability is not a source-delivery gate. Preserve the
-finder's existing no-analyst route for independently selected work; old wave/slot assumptions do not
+merely to fill capacity. Missing analyst availability is not a source-delivery gate. The current owner may dispose and file directly through [canonical intake](intake.md);
+analyst availability never requires a packet or second filing actor. Old wave/slot assumptions do not
 apply to this coordinator.

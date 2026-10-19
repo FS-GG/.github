@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -85,18 +86,52 @@ class FsharpSkillCallerTests(unittest.TestCase):
         for relative in (
             "skills/work-roadmap/SKILL.md",
             "skills/work-board/SKILL.md",
-            "skills/work-board/SKILL.md",
+            "skills/work-board/references/lifecycle-contract.md",
+            "skills/work-roadmap/references/runtime-observation.md",
             "skills/pipeline-preflight/SKILL.md",
             "skills/pipeline-preflight/references/examples.md",
         ):
             agents = (ROOT / ".agents" / relative).read_bytes()
             claude = (ROOT / ".claude" / relative).read_bytes()
             self.assertEqual(agents, claude, relative)
-        selected = "fsgg-coord-engine skill roadmap-telemetry"
-        for skill in ("work-roadmap", "work-board"):
-            text = (ROOT / ".agents/skills" / skill / "SKILL.md").read_text(encoding="utf-8")
-            self.assertIn(selected, text)
-            self.assertNotIn("work-roadmap/scripts/roadmap-telemetry.py", text)
+        routes = {
+            "work-roadmap": "references/runtime-observation.md",
+            "work-board": "references/lifecycle-contract.md",
+        }
+        contents = {
+            f"{skill}/{relative}": (ROOT / ".agents/skills" / skill / relative).read_text(encoding="utf-8")
+            for skill, reference in routes.items()
+            for relative in ("SKILL.md", reference)
+        }
+
+        def validate_routes(bodies):
+            for skill, reference in routes.items():
+                entry = bodies[f"{skill}/SKILL.md"]
+                self.assertIn(reference, re.findall(r"\[[^\]]+\]\(([^)]+)\)", entry),
+                              f"{skill} cannot reach its compiled-helper contract")
+                path = f"{skill}/{reference}"
+                self.assertIn(path, bodies, f"unreadable compiled-helper contract: {path}")
+                contract = bodies[path]
+                self.assertIn("fsgg-coord-engine skill roadmap-telemetry", contract, path)
+                self.assertNotIn("work-roadmap/scripts/roadmap-telemetry.py", entry + contract)
+
+        validate_routes(contents)
+        for skill, reference in routes.items():
+            entry, target = f"{skill}/SKILL.md", f"{skill}/{reference}"
+            for relative, old, replacement in (
+                (entry, reference, "references/missing.md"),
+                (target, "fsgg-coord-engine skill roadmap-telemetry", "python retired-helper.py"),
+                (target, "", "work-roadmap/scripts/roadmap-telemetry.py\n"),
+            ):
+                mutant = dict(contents)
+                mutant[relative] = (replacement + mutant[relative] if not old else
+                                    mutant[relative].replace(old, replacement))
+                with self.subTest(skill=skill, mutation=(old, replacement)), self.assertRaises(AssertionError):
+                    validate_routes(mutant)
+            mutant = dict(contents)
+            del mutant[target]
+            with self.subTest(skill=skill, mutation="missing contract"), self.assertRaises(AssertionError):
+                validate_routes(mutant)
         preflight = (ROOT / ".agents/skills/pipeline-preflight/SKILL.md").read_text(encoding="utf-8")
         examples = (ROOT / ".agents/skills/pipeline-preflight/references/examples.md").read_text(encoding="utf-8")
         self.assertIn("fsgg-coord-engine skill preflight assess", preflight)

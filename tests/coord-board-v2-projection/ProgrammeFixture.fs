@@ -88,8 +88,68 @@ module ProgrammeFixture =
                   ("repository", box {| nameWithOwner = "FS-GG/.github" |}); (field, box value) ])
         wire ({| node = fields |})
 
+    // Wire-level batching adapter for inert fixtures. It expands each actual aliased
+    // request into the existing independent native routes, preserving their fault injection.
+    // The outer Recorder still counts one provider request, not these semantic subqueries.
+    let private recorder (route: Fake.Route) =
+        let dispatch (request: Transport.Request) =
+            match request.Body with
+            | Query(document, variables) when request.Subject = "bounded complete-cohort inspection batch" ->
+                let capture = Environment.GetEnvironmentVariable "FSGG_TEST_NATIVE_QUERY_CAPTURE"
+                if not (String.IsNullOrWhiteSpace capture) then
+                    lock (box typeof<Binding>) (fun () -> File.AppendAllText(capture, JsonSerializer.Serialize(document) + Environment.NewLine))
+                let matches = Text.RegularExpressions.Regex.Matches(document, @"(?<![\w$])b(\d+)_([A-Za-z_]\w*)\s*:") |> Seq.cast<Text.RegularExpressions.Match> |> Seq.toList
+                let roots = matches |> List.mapi (fun index matched ->
+                    let finish = if index + 1 < matches.Length then matches[index + 1].Index else document.LastIndexOf('}')
+                    int matched.Groups[1].Value, matched.Groups[2].Value, document.Substring(matched.Index + matched.Length, finish - matched.Index - matched.Length))
+                let data = Text.Json.Nodes.JsonObject()
+                let errors = Text.Json.Nodes.JsonArray()
+                for index, fields in roots |> List.groupBy (fun (index, _, _) -> index) do
+                    let prefix = $"b{index}_"
+                    let rename (text: string) = text.Replace("$" + prefix, "$")
+                    let declarations = Text.RegularExpressions.Regex.Matches(document.Substring(0, document.IndexOf('{')), @"\$" + prefix + @"[A-Za-z_]\w*\s*:\s*[A-Za-z_]\w*!?") |> Seq.cast<Text.RegularExpressions.Match> |> Seq.map (fun matched -> rename matched.Value) |> String.concat ","
+                    let selection = fields |> List.map (fun (_, name, value) ->
+                        // An original root alias has a different schema field name.
+                        if value.TrimStart().StartsWith(name, StringComparison.Ordinal) then value else name + ":" + value) |> String.concat " " |> rename
+                    let ownVariables = variables |> List.choose (fun (name, value) -> if name.StartsWith(prefix, StringComparison.Ordinal) then Some(name.Substring(prefix.Length), value) else None)
+                    let text name = ownVariables |> List.tryPick (function actual, VString value when actual = name -> Some value | _ -> None) |> Option.defaultValue ""
+                    let number = ownVariables |> List.tryPick (function "number", VNumber value -> Some(int value) | _ -> None) |> Option.defaultValue 0
+                    let subject =
+                        if selection.Contains("issueCreationPolicy") then text "owner" + "/" + text "name" + " repository policy"
+                        elif selection.Contains("author{") || selection.Contains("author {") then text "owner" + "/" + text "name" + "#" + string number + " intake identity"
+                        elif selection.Contains("subIssues(") then "selected native work hierarchy"
+                        elif selection.Contains("workLevel:") then "selected work classification"
+                        elif ownVariables |> List.exists (fun (name, _) -> name = "projectOwner") then "bound V2 successor planning memberships"
+                        elif selection.Contains("currentExpression") then "protected recipe " + String.replicate 40 "e" + ":" + (text "currentExpression").Substring(5)
+                        elif selection.Contains("object(expression:") || selection.Contains("qualifiedName:") then "enrolled native owning plan"
+                        elif selection.Contains("updatedAt state") then text "owner" + "/" + text "repo" + "#" + string number + " native observation"
+                        elif selection.Contains("status: fieldValueByName") then "bound V2 planning fields"
+                        else "synthetic native query"
+                    let operation = if selection.Contains("author{") || selection.Contains("author {") then "query IntakeIdentity" else "query"
+                    let query = operation + (if declarations = "" then "" else "(" + declarations + ")") + "{" + selection + "}"
+                    let original = { request with Body = Query(query, ownVariables); Subject = subject }
+                    match route original with
+                    | Error error -> errors.Add(JsonSerializer.SerializeToNode {| message = Errors.explain error; path = [prefix + (fields.Head |> fun (_, name, _) -> name)] |})
+                    | Ok response ->
+                        let root = Text.Json.Nodes.JsonNode.Parse response.Body
+                        if not (isNull root.["data"]) then
+                            for _, name, _ in fields do
+                                if not (isNull root.["data"].[name]) then data.[prefix + name] <- root.["data"].[name].DeepClone()
+                        if not (isNull root.["errors"]) then
+                            for error in root.["errors"].AsArray() do
+                                let copy = error.DeepClone()
+                                if not (isNull copy.["path"]) && copy.["path"].AsArray().Count > 0 then
+                                    copy.["path"].[0] <- Text.Json.Nodes.JsonValue.Create(prefix + copy.["path"].[0].GetValue<string>())
+                                errors.Add copy
+                let root = Text.Json.Nodes.JsonObject()
+                root["data"] <- data
+                if errors.Count > 0 then root["errors"] <- errors
+                response (root.ToJsonString())
+            | _ -> route request
+        Fake.Recorder dispatch
+
     let transport (change: Transport.Request -> Errors.IoResult<Transport.Response> -> Errors.IoResult<Transport.Response>) =
-        Fake.Recorder(fun request ->
+        recorder(fun request ->
             let result =
                 match request.Body with
                 | Query(document, _) when document.Contains("currentExpression") ->
@@ -302,7 +362,7 @@ module ProgrammeFixture =
     /// Actual fixed reader over inert complete native connections, with one extra unenrolled child.
     let successorTransportFor (selected: Binding) (rows: (string * IssueRef * string) list) (level: string option) change =
         let original = populationTransport selected rows unchanged
-        Fake.Recorder(fun request ->
+        recorder(fun request ->
             let result =
                 match request.Body with
                 | Query(_, variables) when request.Subject = "bound V2 successor planning memberships" ->

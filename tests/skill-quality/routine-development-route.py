@@ -46,10 +46,6 @@ for operation in ("publish", "deploy", "credential-change", "destructive-effect"
 agent_skill = (ROOT / ".agents/skills/work-roadmap/SKILL.md").read_bytes()
 claude_skill = (ROOT / ".claude/skills/work-roadmap/SKILL.md").read_bytes()
 require(agent_skill == claude_skill, "Claude/Codex work-roadmap twins differ")
-skill = agent_skill.decode()
-for phrase in ("work-board", "not a scheduling ledger", "single native PR", "independent",
-               "ADR-0084", "content/semantic classifier first", "dependent acceptance or activation"):
-    require(" ".join(phrase.split()) in " ".join(skill.split()), f"work-roadmap omitted {phrase!r}")
 
 # Conditional branches remain reachable without eagerly loading their complete contracts.
 ROUTES = {
@@ -95,6 +91,85 @@ contents = {
     for name, references in ROUTES.items()
     for relative in ("SKILL.md", *(f"references/{r}" for r in references))
 }
+# The roadmap is an adapter: validate its reachable owner contract rather than
+# requiring a second copy of the routine protocol in the adapter body.
+ROUTINE_OWNER_LINK = "https://github.com/FS-GG/.github/blob/main/.agents/skills/pnext-item/SKILL.md"
+ROUTINE_CONTRACTS = {
+    "work-roadmap/SKILL.md": (
+        "not a scheduling ledger", "Execute the already assigned slice through",
+        "complete plan/issue acceptance, existing owner, attempt, worktree and PR",
+        "ADR-0084", "content/semantic classifier first", "dependent acceptance or activation",
+    ),
+    "pnext-item/SKILL.md": (
+        "one accountable owner at a time and one continuous PR",
+        "adopt that branch, and continue the same PR; never open a second PR",
+        "Multiple or ambiguous candidate PRs refuse routine admission",
+        "one independent source review of the exact candidate, relevant tests and final required CI",
+        "A moved head must be reviewed and rebound",
+        "Only a recorded explicit human instruction selects heavyweight process for named scope",
+        "absence or ambiguity stays routine",
+        "A live claim, inherited strict state, protected operation/path, policy or modeled change, or GS2 registration is not a heavyweight trigger",
+        "After the exact-head required checks pass, use the repository's native merge boundary",
+        "Invalid or unknown technical or operation authorization blocks the affected effect",
+        "The routine route ends here",
+    ),
+}
+
+
+def validate_routine_owner(contents: dict[str, str]) -> None:
+    adapter = contents["work-roadmap/SKILL.md"]
+    require(ROUTINE_OWNER_LINK in LINK.findall(adapter),
+            "work-roadmap cannot reach the canonical pnext-item owner contract")
+    for relative, obligations in ROUTINE_CONTRACTS.items():
+        require(relative in contents, f"unreadable routine owner contract: {relative}")
+        normalized = " ".join(contents[relative].split())
+        for obligation in obligations:
+            require(obligation in normalized, f"{relative} lost routine obligation {obligation!r}")
+    owner = contents["pnext-item/SKILL.md"]
+    require(0 <= owner.find("The routine route ends here") < owner.find("references/strict-item-lifecycle.md"),
+            "routine owner no longer stops before the explicitly selected heavy protocol")
+
+
+validate_routine_owner(contents)
+# Remove each actual obligation or dispatch edge, including the target body. A
+# keyword elsewhere in the adapter cannot stand in for the delegated contract.
+for relative, obligations in ROUTINE_CONTRACTS.items():
+    for obligation in obligations:
+        mutated = dict(contents)
+        normalized = " ".join(mutated[relative].split())
+        mutated[relative] = normalized.replace(obligation, "removed-routine-obligation")
+        try:
+            validate_routine_owner(mutated)
+        except SystemExit:
+            pass
+        else:
+            raise SystemExit(f"routine obligation mutation survived: {relative}: {obligation}")
+mutated = dict(contents)
+mutated["pnext-item/SKILL.md"] = "references/strict-item-lifecycle.md\n" + mutated["pnext-item/SKILL.md"]
+try:
+    validate_routine_owner(mutated)
+except SystemExit:
+    pass
+else:
+    raise SystemExit("heavy protocol before routine stop passed")
+for replacement in ("https://example.invalid/pnext-item/SKILL.md", "pnext-item"):
+    mutated = dict(contents)
+    mutated["work-roadmap/SKILL.md"] = mutated["work-roadmap/SKILL.md"].replace(ROUTINE_OWNER_LINK, replacement)
+    try:
+        validate_routine_owner(mutated)
+    except SystemExit:
+        pass
+    else:
+        raise SystemExit("unreachable delegated routine owner passed")
+mutated = dict(contents)
+del mutated["pnext-item/SKILL.md"]
+try:
+    validate_routine_owner(mutated)
+except SystemExit:
+    pass
+else:
+    raise SystemExit("missing delegated routine owner passed")
+
 validate_routes(contents)
 for relative, body in contents.items():
     require(body == (ROOT / ".claude/skills" / relative).read_text(),

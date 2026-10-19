@@ -67,7 +67,7 @@ receiver state, partial files, and worker or
 process status against available live evidence. Keep observed results separate
 from worker reports and proposals. Missing temporary evidence remains unknown;
 do not reconstruct results or repeat a consumed operation to fill that gap.
-Apply the selected [forward-recovery boundary](../work-board/SKILL.md#recover-ownership-and-unavailable-history):
+Apply the selected [forward-recovery boundary](../work-board/references/lifecycle-contract.md#recover-ownership-and-unavailable-history):
 the unavailable historical evidence-search task is closed as unavailable; stop repeated searches and
 requests. Preserve all known original records, 439 inherited reservations, 46 later original records
 and unproved outcomes Unknown, without release or replay. For a genuinely fresh operation, reconcile

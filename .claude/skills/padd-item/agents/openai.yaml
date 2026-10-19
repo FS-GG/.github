@@ -1,7 +1,7 @@
 interface:
   display_name: "PAdd Item"
-  short_description: "File clean work on this workspace board"
-  default_prompt: "Use $padd-item to clean and triage this workspace board, then file the described item in the current repository."
+  short_description: "Add or reuse work for the configured product"
+  default_prompt: "Use $padd-item to deduplicate and file this request for the explicitly configured product through canonical intake, reporting any pending effects."
 
 policy:
   allow_implicit_invocation: false

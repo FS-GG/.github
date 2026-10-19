@@ -619,8 +619,11 @@
   <!-- 0.107.0 -> 0.108.0 (.github#4682 under #4641): bounded successor planning reads
        preserve the full cohort and fresh final barriers within the unchanged request ceiling.
        Prospective source only; publication and installed qualification remain separate. -->
+  <!-- 0.108.0 -> 0.109.0 (#4701 / #4702): continuous board clearing, native intake,
+       complete Delivery acceptance and bounded full-cohort acquisition. Source preparation only;
+       published108, installed pins and original operation custody remain unchanged. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.108.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.109.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

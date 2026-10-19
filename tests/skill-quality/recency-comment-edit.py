@@ -65,20 +65,22 @@ from pathlib import Path
 import yaml
 
 # The one canonical statement of the hazard. Byte-identical in every `.claude/agents/*.md`, and
-# nowhere else. Changing a byte of it here means changing it in all four definitions in the same
+# nowhere else. Changing a byte of it here means changing it in all six definitions in the same
 # commit — that coupling is the point.
 CANONICAL = """- **Never edit a comment by recency — always by explicit comment id.** `gh pr comment --edit-last`
   edits the last comment made by the **authenticating account**, not the last one made by you, and
   every agent in an FS-GG fan-out — host, implementers, and critics alike — authenticates as the
-  *same* account. Your minted `FSGG_WORKER` id separates claims; GitHub knows nothing about it and it
-  separates nothing here. Measured on PR #2663: a worker rebinding its own `fsgg:delivery-obligation`
+  *same* account. A worker identity, when applicable, does not distinguish GitHub comment authors.
+  Measured on PR #2663: a worker rebinding its own `fsgg:delivery-obligation`
   declaration to a new head with `--edit-last` overwrote an independent critic's 18879-code-point
   findings comment with its own 2451-code-point declaration, and the `fsgg:review-decision/v2` record
   the whole review contract treats as sole authority survived only because it happened not to be that
   account's most recent comment at that instant (`.github#2666`). To rebind or amend **your own**
-  comment, find it by its marker and amend that exact id through the verified file route —
-  `scripts/fsgg-coord comment amend <target-ref> <item-ref> <id> <owned-body-file>` — or delete it and post
-  a replacement. Editing by recency is never safe here."""
+  comment, find it by its marker, verify ownership and target, then amend that exact id through the
+  admitted native route with a verified body file and independent readback. The legacy
+  `scripts/fsgg-coord comment amend <target-ref> <item-ref> <id> <owned-body-file>` route applies only
+  within its explicitly qualified PRODUCT contract. Delete and replace only when authorized.
+  Editing by recency is never safe here."""
 
 # `--edit-last`, `--edit_last`, `edit-last`, `editlast`. The leading `\b` keeps `credit-last` and
 # friends out; the trailing one keeps `edit-lastly` out.

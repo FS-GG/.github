@@ -1,7 +1,7 @@
 interface:
   display_name: "Work Roadmap"
-  short_description: "Complete a markdown roadmap milestone by milestone"
-  default_prompt: "Use $work-roadmap to complete a markdown roadmap milestone by milestone."
+  short_description: "Execute a selected technical plan through PNext"
+  default_prompt: "Use $work-roadmap to execute this selected technical plan slice through pnext-item and return accepted scope and remaining gates to work-board."
 
 policy:
   allow_implicit_invocation: false

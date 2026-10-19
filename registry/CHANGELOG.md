@@ -1,5 +1,24 @@
 # Registry changelog
 
+## 2026-10-19 — independent Creator020 source qualification (#4701)
+
+Advance only Creator source to0.20.0 for its closed48-leaf materialization allowlist. Its distinct source
+qualification binding covers normal coherent109 builds and separately retained genuine published108
+dependency bytes; the producer pin is unchanged. Published019, consumed019 publisher/effect attestation
+and historical recovery remain intact. The new candidate is source-only and cannot pass the019 publisher.
+A separately admitted/reviewed020 publisher, actual package qualification and installed fresh/retained
+receiver acceptance remain required; no future109 dependency artifact identity is invented.
+
+## 2026-10-19 — board lifecycle coherent109 source preparation (#4701)
+
+Advance only the shared CLI/Kit/Drivers source scalar and coord-engine source version to0.109.0.
+Canonical clearing/intake/Delivery acceptance and bounded full-cohort acquisition change receiver-visible
+behavior, requiring a minor successor rather than repacking published108. The closed ordinary rail
+selects predecessor108 atf984a361 and prospective journal27; fresh authenticated collision, candidate,
+publication and installed qualification remain pending. Published108 metadata, installed pins, Creator019
+dependency bytes, consumed journals and historical recovery/workflows remain unchanged. Creator
+materialization48-leaf source requires its independently versioned/qualified successor before publication.
+
 ## 2026-10-18 — accepted independent Host0.7 publication
 
 Advance only the Host published version/tag to0.7 after original39148437514/a1 completed journal13
@@ -37,6 +56,8 @@ review M4). The typed validator (`fsgg-sdd registry validate`) never saw that co
 no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
+
+- **2026-10-19** — Unify board clearing and intake around work-board and pnext-item, retire contradictory active organization routes, and preserve scoped product compatibility and recovery custody.
 
 - **2026-10-19** — Require work-board to seek useful independent work at entry/resume and material transitions, compare ownership/prerequisites/touch-sets/shared outputs, admit real remaining capacity, preserve serial limits and retain one owner/integrator. Keep the delivered unfiltered intake triage and existing permission/enrollment safeguards. (work-board-parallel-opportunities)
 

@@ -6,6 +6,11 @@ for the named item. Routine delivery ends in the entry skill.
 This reference is the strict protocol. Its concurrency authority is
 [intra-repo-parallel-work](../../intra-repo-parallel-work/SKILL.md).
 
+This reference applies only to explicitly human-selected heavyweight scope within its actual technical
+and effect authority. Its retained legacy command/claim examples are not an organization V2 live opt-in
+or fallback. Selecting ceremony cannot activate organization V1 intake/claim/done/status writes; the
+canonical selected caller, native effect admission and complete acceptance remain binding.
+
 ## Lifecycle ledger
 
 Create the append-only ledger on the canonical issue before the first claim and keep it through verified

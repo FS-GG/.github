@@ -1,52 +1,9 @@
 #!/usr/bin/env python3
-"""Fail closed when the board host loops stop dispatching the analyst (.github#2675).
+"""Keep findings owned while analysis stays optional and wrappers inherit canonical guidance.
 
-`.github#2584` landed the `board-analyst` role and codified it on two of the three sides it needs.
-`pnext-item/references/findings-and-filing.md` tells a finder that where an analyst is available it
-**does not file** — it posts an `fsgg:finding-packet` comment and moves on. `board-analyst/SKILL.md`
-specifies what the role does once invoked, from the callee's view, opening "Whichever route dispatches
-you". Nothing on the host side dispatched it: over `origin/main` at `cbc7bfd3`, every file under
-`skills/{drive-board,work-board,p-add,padd-item,check-board,lane-steward}` searched for
-`board-analyst|fsgg-analyst|analyst` returned ZERO matches.
-
-That is worse than the state before the role existed, not merely incomplete. Before, a finding that
-cleared the finder's bar became a row a scheduler could see; after, the same finding becomes a comment
-with no reader and no owner. It went unnoticed because a human host adjudicated by hand throughout the
-session that built it, so the loop appeared to work end to end.
-
-Four legs, all fail-closed:
-
-1. DISPATCH STEP PRESENT. Every canonical board host-loop reference — `drive-board` and `work-board`,
-   under every declared skill root — carries `CANONICAL` exactly once and byte-identically. That is
-   where the existing critic-dispatch contract lives, so the two dispatch rules sit together and a
-   reader of either reaches both. Pinning the exact bytes is what stops the step being diluted into a
-   suggestion, which is the failure `review-round-contract.py` documents for the review contract.
-
-2. NOT RESTATED INTO THE ROUTED VARIANTS. The `-best`/`-normal` variants change MODEL ROUTING ONLY and
-   inherit their canonical parent's protocol wholesale; restating protocol into them is the drift
-   `.github#485` names. So no file under a variant directory may name the analyst vocabulary at all —
-   not the canonical block, and not a reworded near-copy of it. The variant set is DERIVED by globbing
-   `<board>-*`, so a future `-turbo` route is covered the day it is added rather than the day someone
-   remembers this gate.
-
-3. THE NO-ANALYST BRANCH SURVIVES. `findings-and-filing.md` ships in the coordination kit to seven
-   receivers and NO receiver carries a `board-analyst`: it is `scope: operator` with the never-true
-   predicate, so it materializes nowhere and resolves only in an operator checkout. That makes the
-   finder-files branch the whole design for every repository except this one. This leg asserts both
-   halves — the branch text is still in the shipped file, and the registry still says the analyst
-   reaches no receiver — because either one silently flipping strands every kit consumer. The file is
-   read, never written: it is kit source under an operator-gated release, and this row does not
-   republish it.
-
-4. NON-VACUITY AND TRIGGER. This gate's subject is source text, so it can pass because it examined
-   nothing (`.github#2551`, and the zero-file gate `.github#2510` filed). `self_test` runs the real
-   detectors over synthetic documents, in this process, before any tree is trusted; every declared
-   root must resolve, hold markdown, and actually yield the boards; and every scanned root plus this
-   file's own directory must appear under BOTH `pull_request` and `push` in the workflow, DERIVED from
-   what is scanned rather than hardcoded. A gate that does not run when its own subject changes is
-   epic #266's fail-open class.
-
-Usage: analyst-dispatch.py [--root DIR]
+The historical filename remains a maintained caller. Canonical work-board owns finding disposition;
+drive-board redirects to it, receivers can file through their current owner, and routed wrappers add
+no protocol. This source guard neither dispatches nor establishes native effect authority.
 """
 
 from __future__ import annotations
@@ -58,21 +15,9 @@ from pathlib import Path
 
 import yaml
 
-# The one canonical statement of the dispatch step. Byte-identical in every canonical board host-loop,
-# and in no other authored file. Changing a byte of it here means changing it in all four host-loops in
-# the same commit — that coupling is the point, and it is what keeps `drive-board`'s loop and
-# `work-board`'s from drifting into two different answers to the same question.
-CANONICAL = """**Keep an owner for reported finding packets.** Canonical work-board owns coordination.
-When an existing owner reports an evidence-backed distinct finding or a known `fsgg:finding-packet`
-needs disposition, retain that finding and its source identity in the existing owning issue/native
-thread. Resolve its accountable owner before treating it as new work. If a separately authorized
-`board-analyst` is available and useful, send only the bounded relevant finding for adjudication;
-its verdict never dispatches, claims, merges or grants operation authority. Otherwise the current
-owner applies the existing evidence/materiality and deduplication boundary. Do not strand a known
-finding with no owner, scan all comments on every cycle, create duplicate issues or launch a worker
-merely to fill capacity. Missing analyst availability is not a source-delivery gate. Preserve the
-finder's existing no-analyst route for independently selected work; old wave/slot assumptions do not
-apply to this coordinator."""
+# Pin the retained owned-finding safeguard once in each runtime's canonical host. Compatibility
+# hosts must link to it instead of duplicating it; wrappers must inherit rather than restate it.
+CANONICAL = '**Keep an owner for reported finding packets.** Canonical work-board owns coordination.\nWhen an existing owner reports an evidence-backed distinct finding or a known `fsgg:finding-packet`\nneeds disposition, retain that finding and its source identity in the existing owning issue/native\nthread. Resolve its accountable owner before treating it as new work. If a separately authorized\n`board-analyst` is available and useful, send only the bounded relevant finding for adjudication;\nits verdict never dispatches, claims, merges or grants operation authority. Otherwise the current\nowner applies the existing evidence/materiality and deduplication boundary. Do not strand a known\nfinding with no owner, scan all comments on every cycle, create duplicate issues or launch a worker\nmerely to fill capacity. Missing analyst availability is not a source-delivery gate. The current owner may dispose and file directly through [canonical intake](intake.md);\nanalyst availability never requires a packet or second filing actor. Old wave/slot assumptions do not\napply to this coordinator.'
 
 # The vocabulary that makes prose ABOUT analyst dispatch. Leg 2 forbids all of it inside a routed
 # variant: the canonical block names every one of these, so a variant that pasted the block reds, and so
@@ -84,15 +29,14 @@ SKILL_ROOT_DECLARATION = ".agent-skill-roots"
 BOARDS = ("drive-board", "work-board")
 HOST_LOOP = "references/host-loop.md"
 
-# Leg 3. The finder-side contract every kit receiver reads, and the sentence that carries its
-# no-analyst branch. Read-only here: this is kit source under an operator-gated release (.github#2648).
+# Every receiver retains direct accountable-owner disposition, whether an optional analyst exists
+# or not. Keep the deliberately operator-only distribution boundary independently visible.
 FINDER_CONTRACT = "pnext-item/references/findings-and-filing.md"
-NO_ANALYST_BRANCH = (
-    "**Where no analyst is available**, the finder files — and applies the same three tests to itself,"
-)
+NO_ANALYST_BRANCH = "**The current owner may dispose and file the finding directly.**"
+
 REGISTRY = "registry/skills.yml"
-# `materializes-when` is ADR-0017's never-true literal, quoted in YAML. If this ever became `always`,
-# `board-analyst` would start reaching receivers and the branch above would become dead prose there.
+# `materializes-when` is ADR-0017's never-true literal. Broadening the operator payload requires
+# separate receiver review; it never removes the current owner's direct filing route.
 ANALYST_NEVER_MATERIALIZES = re.compile(
     r"id:\s*board-analyst\s*,.*?materializes-when:\s*\"false\"", re.DOTALL
 )
@@ -219,7 +163,7 @@ def check_finder_contract(root: Path, roots: list[Path]) -> int:
         text = path.read_text(encoding="utf-8")
         require(
             NO_ANALYST_BRANCH in text,
-            f"{relative} no longer carries its no-analyst branch verbatim. That branch is the whole "
+            f"{relative} no longer carries its current-owner branch verbatim. That branch is the whole "
             "design for every repository except this one: `board-analyst` is `scope: operator` and "
             "reaches no kit receiver, so without it a receiver-side finder is told to post a packet "
             "that nothing in its tree will ever read (.github#2675)",
@@ -231,8 +175,8 @@ def check_finder_contract(root: Path, roots: list[Path]) -> int:
     require(
         bool(ANALYST_NEVER_MATERIALIZES.search(registry.read_text(encoding="utf-8"))),
         f"{REGISTRY} no longer declares `board-analyst` with `materializes-when: \"false\"`. The "
-        "no-analyst branch asserted above is correct only while the analyst materializes nowhere; if "
-        "it now reaches receivers, the finder-side contract needs re-deciding, not this gate's green",
+        "operator-only distribution is part of this selected payload; changing receiver materialization "
+        "needs its own review, while direct accountable-owner disposition remains available",
     )
     return carriers
 
@@ -264,7 +208,12 @@ def main(argv: list[str]) -> int:
             )
             here += 1
             scanned += 1
-            occurrences = carries(host_loop.read_text(encoding="utf-8"))
+            host_text = host_loop.read_text(encoding="utf-8")
+            if board == "drive-board":
+                require("../../work-board/references/host-loop.md" in host_text and carries(host_text) == 0,
+                        f"{relative} must redirect to the canonical host without duplicating its procedure")
+                host_text = (scan_root / "work-board" / HOST_LOOP).read_text(encoding="utf-8")
+            occurrences = carries(host_text)
             require(
                 occurrences == 1,
                 f"{relative} carries the canonical analyst-dispatch step {occurrences} time(s), not "
@@ -342,8 +291,8 @@ def main(argv: list[str]) -> int:
     # paths — so a green resting on a blind sweep is legible in a log.
     print(
         f"analyst-dispatch: {len(dispatchers)} board host loop(s) across {len(roots)} root(s) carry the "
-        f"canonical dispatch step verbatim, {len(variants)} routed variant(s) restate none of it, "
-        f"{contracts} finder contract(s) keep the no-analyst branch an analyst reaches no receiver to "
+        f"canonical owned-finding guidance or redirect, {len(variants)} routed variant(s) restate none of it, "
+        f"{contracts} finder contract(s) keep the direct-owner branch with no analyst required to "
         f"override, {scanned} file(s) were read, and {len(required)} trigger path(s) keep CI reaching "
         "all of it"
     )
