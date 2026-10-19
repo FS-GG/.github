@@ -232,8 +232,9 @@ After protected delivery, retain the original5 pair and qualify the exact final 
 through installed inspection3 before claiming successor caller acceptance.
 
 The new4 pair is an executable reader baseline, not an executed rollback. Real bounded restart/
-rollback must restore its protected commitment through ordinary source delivery, use its exact retained
-private pair and qualify the reader again; separately restore/requalify5 afterward. Preserve native
+rollback must restore its protected commitment through ordinary source delivery, derive a new exclusive runtime
+binding at that protected revision while retaining the original nonce/payload, and qualify the reader
+again; separately restore/requalify5 afterward. Preserve native
 human planning, existing Work level/view effects and every uncertain original throughout. UI/product/
 continuation and parent acceptance remain open. Recovery uses Atlas ID
 `github/programme-binding-custody-recovery`, the exact host-retention receipt and private manifest;
