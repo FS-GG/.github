@@ -168,3 +168,33 @@ let ``phase reuse never suppresses protected plan policy or permission final bar
         Assert.Equal(2, readsOfFact)
         if mode = "plan" then Assert.Equal("Unknown", result.Items.Head.SourceCurrentness)
         else Assert.True(result.Items.Head.Intake.Allowed.IsNone)
+
+[<Fact>]
+let ``unattributable batch errors refuse every request even when all data is present`` () =
+    for path in ["missing"; "null"; "[]"; "[\"not_a_generated_alias\"]"; "[\"b99_repository\"]"; "[null]"; "[7]"; "{}"; "\"b0_repository\""; "[\"b0_repository\",{}]"; "[\"b0_repository\",-1]"] do
+        let pathProperty = if path = "missing" then "" else ",\"path\":" + path
+        let payload = "{\"data\":{\"b0_repository\":{\"issue\":{\"id\":\"I_1\"}},\"b1_repository\":{\"issue\":{\"id\":\"I_2\"}}},\"errors\":[{\"message\":\"unattributable native failure\"" + pathProperty + "}]}"
+        let transport = Fake.Recorder(fun _ -> response payload)
+        let result = V2InspectionAcquisition.run transport (fun phase ->
+            [1;2] |> List.map (fun number -> GraphQl.read phase (request number) (fun data -> Ok(data.GetProperty("repository").GetProperty("issue").GetProperty("id").GetString()))))
+        Assert.All(result, fun value -> Assert.True(Result.isError value, "error path=" + path))
+        Assert.Equal(1, transport.GraphQlCalls)
+
+[<Fact>]
+let ``one character variable and root alias retain their exact GraphQL names`` () =
+    let mutable actual = ""
+    let transport = Fake.Recorder(fun sent ->
+        match sent.Body with
+        | Query(document, variables) ->
+            actual <- document
+            Assert.Equal<string>(["b0_n"; "b1_n"], variables |> List.map fst)
+        | _ -> failwith "query expected"
+        response """{"data":{"b0_a":{"id":"I_1"},"b1_a":{"id":"I_2"}}}""")
+    let custom number = { request number with Body = Query("query($n:ID!){a:node(id:$n){... on Issue{id}}}", ["n", VId $"I_{number}"]) }
+    let results = V2InspectionAcquisition.run transport (fun phase ->
+        [1;2] |> List.map (fun number -> GraphQl.read phase (custom number) (fun data -> Ok(data.GetProperty("a").GetProperty("id").GetString()))))
+    Assert.Contains("$b0_n:ID!", actual)
+    Assert.Contains("b0_a:node(id:$b0_n)", actual)
+    Assert.Contains("b1_a:node(id:$b1_n)", actual)
+    Assert.Equal(Ok "I_1", results[0])
+    Assert.Equal(Ok "I_2", results[1])

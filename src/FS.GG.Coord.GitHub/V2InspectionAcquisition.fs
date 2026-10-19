@@ -15,9 +15,10 @@ module internal V2InspectionAcquisition =
     // fragments and quoted strings; prefix variables and *root response names* independently.
     let private compose index (request: Request) =
         match request.Body with
-        | Query(document, variables) when request.Method = "POST" && request.Path = "graphql" && request.Budget = GraphQl ->
+        | Query(document, variables) when request.Method = "POST" && request.Path = "graphql" && request.Budget = GraphQl
+                                               && not (document.Contains("\"\"\"", StringComparison.Ordinal)) ->
             let prefix = $"b{index}_"
-            let renamed = Regex.Replace(document, @"""(?:\\.|[^""\\])*""|\$([A-Za-z_].[A-Za-z0-9_]*)", MatchEvaluator(fun matched ->
+            let renamed = Regex.Replace(document, @"""(?:\\.|[^""\\])*""|\$([A-Za-z_][A-Za-z0-9_]*)", MatchEvaluator(fun matched ->
                 if matched.Value.StartsWith("\"", StringComparison.Ordinal) then matched.Value
                 else "$" + prefix + matched.Groups[1].Value))
             let opening = renamed.IndexOf '{'
@@ -45,7 +46,7 @@ module internal V2InspectionAcquisition =
                     elif character = '"' then
                         quoted <- true; output.Append character |> ignore; position <- position + 1
                     elif depth = 0 && arguments = 0 && (Char.IsLetter character || character = '_') then
-                        let finish = Regex.Match(selection.Substring(position), "^[A-Za-z_].[A-Za-z0-9_]*").Length + position
+                        let finish = Regex.Match(selection.Substring(position), "^[A-Za-z_][A-Za-z0-9_]*").Length + position
                         let original = selection.Substring(position, finish - position)
                         let mutable next = finish
                         while next < selection.Length && Char.IsWhiteSpace selection.[next] do next <- next + 1
@@ -55,7 +56,7 @@ module internal V2InspectionAcquisition =
                         if next < selection.Length && selection.[next] = ':' then
                             position <- next + 1
                             while position < selection.Length && Char.IsWhiteSpace selection.[position] do position <- position + 1
-                            let length = Regex.Match(selection.Substring(position), "^[A-Za-z_].[A-Za-z0-9_]*").Length
+                            let length = Regex.Match(selection.Substring(position), "^[A-Za-z_][A-Za-z0-9_]*").Length
                             output.Append(selection.Substring(position, length)) |> ignore
                             position <- position + length
                         else
@@ -84,6 +85,7 @@ module internal V2InspectionAcquisition =
                 let document = "query" + (if declarations = "" then "" else "(" + declarations + ")") + "{" + selection + "}"
                 let request = { requests.Head with Body = Query(document, variables); Subject = "bounded complete-cohort inspection batch" }
                 let response = transport.Send request
+                let batchAliases = parts |> List.collect (fun (_, _, _, aliases) -> aliases |> List.map fst) |> Set.ofList
                 List.map2 (fun (original: Request) (_, _, _, (aliases: (string * string) list)) ->
                     let result = response |> Result.bind (fun value ->
                         try
@@ -95,9 +97,26 @@ module internal V2InspectionAcquisition =
                             if not (isNull root.["errors"]) then
                                 for error in root.["errors"].AsArray() do
                                     let path = error.["path"]
-                                    // An unpathed failure affects the whole operation. Pathed failures
-                                    // remain scoped to the original request; never accept partial data.
-                                    if isNull path || path.AsArray().Count = 0 || (aliases |> List.exists (fun (alias, _) -> (path.[0]).GetValue<string>() = alias)) then
+                                    // Only a well-formed path rooted in a known alias can attribute a
+                                    // failure. Missing/malformed/unknown paths affect the whole batch.
+                                    let validSegment (segment: JsonNode) =
+                                        match segment with
+                                        | :? JsonValue as value ->
+                                            match value.TryGetValue<string>() with
+                                            | true, name -> not (String.IsNullOrWhiteSpace name)
+                                            | _ -> match value.TryGetValue<int>() with true, index -> index >= 0 | _ -> false
+                                        | _ -> false
+                                    let knownRoot =
+                                        match path with
+                                        | :? JsonArray as segments when segments.Count > 0 && (segments |> Seq.forall validSegment) ->
+                                            match segments.[0] with
+                                            | :? JsonValue as first ->
+                                                match first.TryGetValue<string>() with
+                                                | true, alias when batchAliases.Contains alias -> Some alias
+                                                | _ -> None
+                                            | _ -> None
+                                        | _ -> None
+                                    if knownRoot.IsNone || (aliases |> List.exists (fun (alias, _) -> knownRoot = Some alias)) then
                                         errors.Add(error.DeepClone())
                             let decoded = JsonObject()
                             decoded.["data"] <- data
