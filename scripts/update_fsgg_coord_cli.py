@@ -293,6 +293,25 @@ def command(argv, environment, workspace, kind, deadline, outcome):
     return record
 
 
+def qualify_board_v2_result(record, **selected):
+    """Read an original board qualification result; never dispatch or retry a command.
+
+    This opt-in pure consumer does not change the installer's fixed execution path.
+    A failed/lost decode remains Unknown and retains original custody references.
+    """
+    import importlib.util
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "board_v2_native_results", Path(__file__).with_name("board_v2_native_results.py"))
+        decoder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(decoder)
+        return decoder.qualify(record, **selected)
+    except (ImportError, OSError, SyntaxError):
+        return {"state": "Unknown", "value": None,
+                "originals": [{"path": str(selected["source_path"]), "sha256": None}] if selected.get("source_path") else [],
+                "gap": "maintained-result-decoder-unavailable"}
+
+
 def execute(args):
     outcome = {"schema": "fsgg.coord.host-install/1", "version": VERSION, "sourceSha": SOURCE,
                "publicArchiveSha256": ARCHIVE_SHA, "payloadId": PAYLOAD_ID,

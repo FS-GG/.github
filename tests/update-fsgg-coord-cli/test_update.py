@@ -372,5 +372,170 @@ if EXTRA:
         self.assertEqual(update.selector_snapshot(self.link), self.before)
 
 
+
+class BoardNativeResultsTests(unittest.TestCase):
+    """Synthetic native facts through the existing command/result consumer; no native IO."""
+    DATE = "2026-10-19T12:00:00Z"
+
+    def setUp(self):
+        import runpy
+        self.decoder = runpy.run_path(str(ROOT / "scripts/board_v2_native_results.py"))
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+
+    def run_original(self, stdout=b"", code=0):
+        import time
+        outcome = {"commands": [], "additionalErrors": []}
+        try:
+            record = update.command([sys.executable, "-c", "import sys;sys.stdout.buffer.write(" + repr(stdout) + ");sys.exit(" + str(code) + ")"],
+                                    os.environ.copy(), self.root, "native-result", time.monotonic() + 5, outcome)
+        except update.Refusal:
+            record = outcome["commands"][0]
+        return record
+
+    def snapshot(self, option="delivery", name="Delivery"):
+        def value(field, kind, **properties):
+            pairs = [part for key, value in properties.items() for part in (key, json.dumps(value))]
+            return [field, field, kind, json.dumps(pairs)]
+        values = value("level", "ProjectV2ItemFieldSingleSelectValue", id="native-level", updatedAt=self.DATE, optionId=option, name=name)
+        values += value("roadmap", "ProjectV2ItemFieldTextValue", id="native-roadmap", updatedAt=self.DATE, text="docs/promise.md")
+        values += value("repository", "ProjectV2ItemFieldRepositoryValue")
+        return ["actor", "owner", "organization", "project", "Board", "3", "True", "True", self.DATE,
+                "3", "level", "Work level", "SINGLE_SELECT", "2", "delivery", "Delivery", "BLUE", "", "outcome", "Outcome", "GREEN", "",
+                "roadmap", "Roadmap", "TEXT", "0", "repository", "Repository", "REPOSITORY", "0",
+                "1", "item", "issue", "Issue", "Synthetic/Repo", "1", self.DATE, "False", "3", *values,
+                "1", "view", "All items", "TABLE_LAYOUT", "", "", "2", "level", "roadmap",
+                "1", "issue", "Synthetic/Repo", "1", self.DATE, "OPEN"]
+
+    def custody(self):
+        prepared_path = self.root / "prepared.json"
+        invocation = Path(str(prepared_path) + ".invocation")
+        invocation.mkdir()
+        scope = {key: "synthetic" for key in "sourceRevision artifactSha256 cliArtifactSha256 principalId principalLogin statusFieldId roadmapFieldId trackFieldId observationFieldId inReviewColor inReviewDescription".split()}
+        scope.update(sourceRevision="a" * 40, artifactSha256="a" * 64, cliArtifactSha256="b" * 64, principalId="actor", principalLogin="owner", selectedIssues=[{"id": "issue", "repository": "Synthetic/Repo", "number": 1, "slice": "selected"}], views=[], initialPlanning=[])
+        original = dict(schema="fs.gg.board-v2.migration-prepare/1", preparedPath=str(prepared_path), observedAt=self.DATE,
+                        scope=scope, snapshot=self.snapshot(), changes=[], ownerActions=[], digest="a" * 64)
+        prepared_path.write_text(json.dumps(original))
+        (invocation / "prepared.json").write_text(json.dumps(original))
+        readback = dict(schema="fs.gg.board-v2.migration-readback/1", observedAt=self.DATE, scope=scope,
+                        snapshot=self.snapshot("outcome", "Outcome"), snapshotDigest="b" * 64,
+                        admission="readback-only; original outcome and uncertainty retained")
+        readback_path = invocation / ("readback-" + "c" * 32 + ".json")
+        readback_path.write_text(json.dumps(readback))
+        return prepared_path, readback_path
+
+    def test_migration_file_not_stdout_and_complete_reported_preservation(self):
+        prepared, readback = self.custody()
+        record = self.run_original()
+        observed = update.qualify_board_v2_result(record, kind="migration-readback", source_path=readback, prepared_path=prepared)
+        self.assertEqual(observed["state"], "Observed", observed)
+        facts = observed["value"]
+        expected = {"kind": "ProjectV2ItemFieldSingleSelectValue", "fieldId": "level", "optionId": "delivery", "name": "Delivery"}
+        desired = {**expected, "optionId": "outcome", "name": "Outcome"}
+        proof = self.decoder["verify_field_transition"](facts["before"], facts["after"], "item", "level", expected, desired)
+        self.assertEqual((proof["fields"], proof["views"], proof["memberships"]), (3, 1, 1))
+        self.assertIn("hidden native fields remain unproved", proof["coverage"])
+        self.assertEqual(len(observed["originals"]), 2)
+        wrong_stdout = update.qualify_board_v2_result(self.run_original(b"{}"), kind="migration-readback", source_path=readback, prepared_path=prepared)
+        self.assertEqual(wrong_stdout["state"], "Unknown")
+        self.assertEqual(record["stdout"], b"")
+
+    def test_prepare_snapshot_is_exact_unchanged_readonly_scope_and_file_not_stdout(self):
+        prepared, _ = self.custody()
+        original = json.loads(prepared.read_text())
+        record = self.run_original()
+        selected = dict(kind="migration-prepare", source_path=prepared, expected_source_revision="a" * 40, expected_scope=original["scope"])
+        observed = update.qualify_board_v2_result(record, **selected)
+        self.assertEqual(observed["state"], "Observed", observed)
+        self.assertEqual(len(observed["value"]["snapshot"]["items"]), 1)
+        self.assertEqual(update.qualify_board_v2_result(self.run_original(prepared.read_bytes()), **selected)["state"], "Unknown")
+        for key, changed in (("changes", [["initialize-planning-value/1"]]), ("ownerActions", [7]), ("preparedPath", str(self.root / "another.json"))):
+            prepared.write_text(json.dumps({**original, key: changed}))
+            self.assertEqual(update.qualify_board_v2_result(record, **selected)["state"], "Unknown")
+        prepared.write_text(json.dumps(original))
+        self.assertEqual(update.qualify_board_v2_result(record, **{**selected, "expected_source_revision": "b" * 40})["state"], "Unknown")
+        self.assertEqual(update.qualify_board_v2_result(record, **{**selected, "expected_scope": {}})["state"], "Unknown")
+        prepared.write_text(json.dumps({**original, "snapshot": original["snapshot"][:-1]}))
+        self.assertEqual(update.qualify_board_v2_result(record, **selected)["state"], "Unknown")
+
+    def test_wrong_union_changed_preimage_and_unrelated_changes_refuse(self):
+        decode = self.decoder["decode_field_value"]
+        text_value = {"__typename": "ProjectV2ItemFieldTextValue", "field": {"id": "field"}, "text": "Owning plan"}
+        select_value = {"__typename": "ProjectV2ItemFieldSingleSelectValue", "field": {"id": "field"}, "optionId": "outcome", "name": "Outcome"}
+        self.assertEqual(decode(text_value, "field")["text"], "Owning plan")
+        self.assertEqual(decode({**text_value, "text": ""}, "field")["text"], "")
+        self.assertEqual(decode(select_value, "field")["name"], "Outcome")
+        wrong = dict(select_value, __typename="ProjectV2ItemFieldTextValue")
+        with self.assertRaises(self.decoder["Unknown"]): decode(wrong, "field")
+        with self.assertRaises(self.decoder["Unknown"]): self.decoder["require_preimage"](decode(select_value, "field"), decode(text_value, "field"))
+        before = self.decoder["decode_snapshot"](self.snapshot())
+        import copy
+        adjacent = copy.deepcopy(before)
+        adjacent["items"]["item"]["values"]["level"]["properties"]["updatedAt"] = "2026-10-19T12:01:00Z"
+        with self.assertRaises(self.decoder["Unknown"]): self.decoder["require_preimage"](adjacent, before)
+        after = self.decoder["decode_snapshot"](self.snapshot("outcome", "Outcome"))
+        after["items"]["item"]["values"]["repository"]["tokens"][3] = "changed opaque field"
+        expected = {"kind": "ProjectV2ItemFieldSingleSelectValue", "fieldId": "level", "optionId": "delivery", "name": "Delivery"}
+        with self.assertRaises(self.decoder["Unknown"]):
+            self.decoder["verify_field_transition"](before, after, "item", "level", expected, {**expected, "optionId": "outcome", "name": "Outcome"})
+
+    def test_missing_partial_invalid_or_lost_original_stays_unknown_without_resend(self):
+        prepared, readback = self.custody()
+        record = self.run_original()
+        for payload in (b"", b"{}", b"{", b'{"schema":"one","schema":"two"}', b'\xff\xfe{}', b'\xef\xbb\xbf{}'):
+            readback.write_bytes(payload)
+            with patch.object(update.subprocess, "Popen", side_effect=AssertionError("decoder must not resend")):
+                result = update.qualify_board_v2_result(record, kind="migration-readback", source_path=readback, prepared_path=prepared)
+            self.assertEqual(result["state"], "Unknown")
+        readback.unlink()
+        self.assertEqual(update.qualify_board_v2_result(record, kind="migration-readback", source_path=readback, prepared_path=prepared)["state"], "Unknown")
+        self.assertEqual(update.qualify_board_v2_result({**record, "terminal": False}, kind="migration-readback", source_path=readback, prepared_path=prepared)["state"], "Unknown")
+        self.assertEqual(update.qualify_board_v2_result(self.run_original(code=3), kind="migration-readback", source_path=readback, prepared_path=prepared)["state"], "Unknown")
+        self.assertEqual(list(self.root.glob("native-result.stdout")), [self.root / "native-result.stdout"])
+
+    def test_missing_maintained_decoder_is_unknown_without_dispatch(self):
+        record = self.run_original()
+        with patch("importlib.util.spec_from_file_location", side_effect=FileNotFoundError("missing decoder")), \
+             patch.object(update.subprocess, "Popen", side_effect=AssertionError("decoder must not resend")):
+            result = update.qualify_board_v2_result(record, kind="migration-prepare", source_path=self.root / "original.json")
+        self.assertEqual(result["state"], "Unknown")
+        self.assertEqual(result["gap"], "maintained-result-decoder-unavailable")
+        self.assertEqual(result["originals"][0]["path"], str(self.root / "original.json"))
+
+    def test_partial_snapshot_unknown_union_and_trailing_tokens_refuse(self):
+        for tokens in (self.snapshot()[:-1], self.snapshot() + ["extra"], ["bad-count"],
+                       [value.replace("ProjectV2ItemFieldTextValue", "FutureValue") for value in self.snapshot()]):
+            with self.assertRaises(self.decoder["Unknown"]): self.decoder["decode_snapshot"](tokens)
+
+    def inspection(self, version):
+        schema, binding_schema = {3: (1, 1), 5: (3, 3)}[version]
+        report = {key: None for key in self.decoder["INSPECTION_COMMON"]}
+        report.update(schema=f"fsgg.coord.board-v2-inspection/{schema}", bindingVersion=version, schemaVersion=binding_schema,
+                      projectId="project", selectedIssues={"issue": "Synthetic/Repo#1"}, selected=1, attempted=1, mutationAttempts=0)
+        item = {key: None for key in self.decoder["INSPECTION_ITEM"]}
+        item.update(issue={"owner": "Synthetic", "repository": "Repo", "number": 1}, expectedNodeId="issue", mutationAttempts=0, dependencyObservations=[], dependencyReadComplete=False, sourceCurrentness="Unknown")
+        if version == 5:
+            report.update({key: None for key in self.decoder["INSPECTION_PROGRAMME"]})
+            report["memberships"] = [dict(itemId="item", contentId="issue", kind="Issue", issue=item["issue"], enrolled=True, discrepancy=None)]
+            item.update(sourceRevision=None, accountableOwner=None, currentDeliverable=None, nativeIntake=None, workItem=None)
+        report["items"] = [item]
+        expected = {key: report[key] for key in ("bindingVersion", "schemaVersion", "projectId", "selectedIssues")}
+        return report, expected
+
+    def test_product3_and_org5_actual_report_families_and_cross_shape_refusal(self):
+        record = self.run_original()
+        for version in (3, 5):
+            report, expected = self.inspection(version)
+            path = self.root / "inspection.json"
+            path.write_text(json.dumps(report))
+            observed = update.qualify_board_v2_result(record, kind="inspection", source_path=path, expected_binding=expected)
+            self.assertEqual(observed["state"], "Observed", observed)
+            self.assertEqual(observed["value"]["family"], "product3" if version == 3 else "organization5")
+            for change in ({"schema": "fsgg.coord.board-v2-inspection/2"}, {"attempted": 0}, {"mutationAttempts": 1}, {"unknown": True}):
+                path.write_text(json.dumps({**report, **change}))
+                self.assertEqual(update.qualify_board_v2_result(record, kind="inspection", source_path=path, expected_binding=expected)["state"], "Unknown")
+
+
 if __name__ == "__main__":
     unittest.main()
