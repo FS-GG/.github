@@ -1942,3 +1942,29 @@ workspace, historical check-board/pnext routes and fleet/remote workflows remain
 Each selected consumer can adopt independently; this finite closure does not assert global retirement
 or adoption of existing production checkouts. Earlier pending-public-adoption statements record their
 historical stage and are superseded only for this scope.
+
+### Native continuation accepted; bounded reader rollback preparation — 2026-10-19
+
+Actual installed108 inspection against protected f704a3e6 and existing PR4694 at
+5dec67ea completed in182.73seconds within the unchanged500-request/270-second budget.
+All22 sources are Current;25 memberships and all hierarchies are complete, with zero mutation
+attempts. The original report SHA256 is
+6eeda19f5a8edbdc0bdaa5bb98e64d8383492669384e66c9d8c19e3faf4dd3f6.
+A single ephemeral integrator2 input selected the existing #4682 Delivery as
+`continue-existing`; the parent #4641 Outcome control remained `needs-decision`.
+This is continuation of the exact owner/attempt/native PR/head, with no new resource demand
+or dispatch authority. Capacity/reservation suppliers remain missing, not empty.
+All439 inherited and46 later Unknown holds and the unavailable original native-operation
+journals remain unchanged. PR4694 then delivered10864d9e with reviewed/tested/delivered
+tree9d4683f114482a61e9331da4369cd526db95fdce.
+
+This bounded rollback preparation restores only the original host-custodied binding4 public
+commitment from protected041a60cb. It does not change source schema, membership, issues,
+Status, Track, Roadmap, Work level, views, private nonce/payload or constructors.
+After normal protected delivery, Root must derive an exclusive runtime4 binding at the new
+protected revision and invoke the accepted installed107 reader by its absolute path.
+The existing managed hourly global selector is not part of this scoped caller selection.
+The rollback has not yet executed; do not treat this source preparation as reader acceptance.
+Restore the original5 commitment through a separate normal delivery and requalify108 afterward.
+Full public SDD/product receivers, actual bounded handoff restart and parent acceptance remain
+separate. The accepted visual UI pass and finite Host custody restore are retained.
