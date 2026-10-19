@@ -34,6 +34,8 @@ bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | 
 # must build outside the caller checkout; downstream fixtures use only this output.
 WORK=""
 BUILD_ROOT_OWNED=0
+PUBLISHED_CENSUS_READY=0
+HTTP_PID=""
 if [ -n "${FSGG_CREATOR_SOURCE_ARTIFACTS:-}" ]; then
   BUILD_ROOT="$FSGG_CREATOR_SOURCE_ARTIFACTS"
   [ ! -e "$BUILD_ROOT" ] || { echo "::error::Creator fixture requires a fresh artifacts root"; exit 1; }
@@ -42,8 +44,38 @@ else
   BUILD_ROOT_OWNED=1
 fi
 cleanup() {
-  [ -z "$WORK" ] || rm -rf "$WORK"
-  [ "$BUILD_ROOT_OWNED" -eq 0 ] || rm -rf "$BUILD_ROOT"
+  local status=$?
+  trap - EXIT
+  if [ -n "$HTTP_PID" ]; then
+    kill "$HTTP_PID" 2>/dev/null || true
+    wait "$HTTP_PID" 2>/dev/null || true
+  fi
+  if [ "$PUBLISHED_CENSUS_READY" -eq 1 ]; then
+    # Include every fixture and compiled mutant, and collect state on early failure.
+    # Preserve the first failure while refusing a later producer/caller mutation.
+    local preservation=0
+    python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_PRODUCER_SOURCE" --output "$BUILD_ROOT/producer-fixture-final.json" || preservation=1
+    python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_CALLER_ROOT" --output "$BUILD_ROOT/active-fixture-final.json" || preservation=1
+    cmp "$BUILD_ROOT/producer-before.json" "$BUILD_ROOT/producer-fixture-final.json" || preservation=1
+    cmp "$BUILD_ROOT/active-before.json" "$BUILD_ROOT/active-fixture-final.json" || preservation=1
+    python3 "$REPO_ROOT/scripts/creator-current-coord-dependencies.py" verify-layout \
+      --producer-source "$FSGG_CREATOR_PRODUCER_SOURCE" --dependencies "$FSGG_CREATOR_DEPENDENCIES" || preservation=1
+    if [ "$preservation" -ne 0 ]; then
+      echo "::error::published Creator fixture changed producer/caller state or dependency layout" >&2
+      [ "$status" -ne 0 ] || status=1
+    fi
+  fi
+  local cleanup_failed=0
+  if [ -n "$WORK" ] && ! rm -rf "$WORK"; then
+    echo "::error::Creator fixture work cleanup failed" >&2
+    cleanup_failed=1
+  fi
+  if [ "$BUILD_ROOT_OWNED" -eq 1 ] && ! rm -rf "$BUILD_ROOT"; then
+    echo "::error::Creator fixture artifact cleanup failed" >&2
+    cleanup_failed=1
+  fi
+  if [ "$cleanup_failed" -ne 0 ] && [ "$status" -eq 0 ]; then status=1; fi
+  exit "$status"
 }
 trap cleanup EXIT
 python3 - "$REPO_ROOT" "$BUILD_ROOT" <<'PY_BOUND'
@@ -55,6 +87,9 @@ if not output.is_absolute() or output.is_symlink() or output.resolve().is_relati
 PY_BOUND
 [ "$BUILD_ROOT_OWNED" -eq 1 ] || mkdir -m 700 "$BUILD_ROOT"
 python3 -B "$HERE/test-build-artifact-state.py"
+if [ -z "${FSGG_MUTATION_CHILD:-}" ]; then
+  python3 -B "$HERE/test-mutation-isolation.py"
+fi
 python3 -B "$HERE/build-artifact-state.py" --output "$BUILD_ROOT/caller-before.json"
 MODE="${FSGG_CREATOR_DEPENDENCY_MODE:-source-only}"
 case "$MODE" in
@@ -81,15 +116,16 @@ PY_ISOLATION
     python3 "$REPO_ROOT/scripts/creator-current-coord-dependencies.py" verify-layout \
       --producer-source "$FSGG_CREATOR_PRODUCER_SOURCE" --dependencies "$FSGG_CREATOR_DEPENDENCIES"
     DLL="$REPO_ROOT/scripts/NewSddWorkspace/bin/Release/net10.0/new-sdd-workspace.dll"
-    # Restore metadata in these disposable checkouts before freezing producer state.
-    # Compile and pack then consume only the already staged implementation bodies.
-    dotnet restore "$PROJ" --nologo -v quiet -m:1 -nr:false \
+    # Freeze the producer and caller before restore, then preserve them through
+    # the whole fixture. Restore only Creator metadata; child mutants do the same.
+    python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_PRODUCER_SOURCE" --output "$BUILD_ROOT/producer-before.json"
+    python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_CALLER_ROOT" --output "$BUILD_ROOT/active-before.json"
+    PUBLISHED_CENSUS_READY=1
+    dotnet restore "$PROJ" --no-dependencies --nologo -v quiet -m:1 -nr:false \
       -p:FsggCurrentCoordDependencies=true -p:BuildProjectReferences=false \
       -p:CompileUsingReferenceAssemblies=false \
       "-p:FsggFrozenCoordSource=$FSGG_CREATOR_PRODUCER_SOURCE" \
       "-p:FsggFrozenCoordDependencies=$FSGG_CREATOR_DEPENDENCIES" 1>&2
-    python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_PRODUCER_SOURCE" --output "$BUILD_ROOT/producer-before.json"
-    python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_CALLER_ROOT" --output "$BUILD_ROOT/active-before.json"
     ;;
   *) echo "::error::unknown Creator dependency mode"; exit 1 ;;
 esac
@@ -630,7 +666,7 @@ pathlib.Path(port_file).write_text(str(server.server_port))
 server.serve_forever()
 PY
 HTTP_PID=$!
-trap 'kill "$HTTP_PID" 2>/dev/null || true; rm -rf "$WORK"' EXIT
+# The initial cleanup trap owns this server and the final whole-fixture census.
 while [ ! -s "$PORT_FILE" ]; do sleep 0.05; done
 RAW_BASE="http://127.0.0.1:$(cat "$PORT_FILE")"
 STUB_DIR="$WORK/stub-bin"
