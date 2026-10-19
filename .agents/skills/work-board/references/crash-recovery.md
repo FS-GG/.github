@@ -19,7 +19,7 @@ govern. Do not wait for a human to write a replacement handoff when independent 
 
 ## Selected unavailable-history boundary
 
-The parent's [forward-recovery decision](../SKILL.md#recover-ownership-and-unavailable-history)
+The parent's [forward-recovery decision](lifecycle-contract.md#recover-ownership-and-unavailable-history)
 closes the unavailable historical evidence-search task. Stop its searches and repeated requests;
 retain surviving original records, historical Unknown outcomes and distinct unreleased 439 inherited
 reservations/46 later records. The discovery and complete-inventory instructions below apply to

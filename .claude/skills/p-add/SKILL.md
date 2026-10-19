@@ -1,6 +1,6 @@
 ---
 name: p-add
-description: Add or reuse an organization work request through canonical native intake; filing does not select implementation.
+description: Add or reuse an organization work request through canonical native intake; filing and enrollment do not select implementation work.
 ---
 
 # Organization intake

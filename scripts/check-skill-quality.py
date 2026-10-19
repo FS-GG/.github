@@ -518,11 +518,37 @@ def validate_lifecycle_routes(root: Path, errors: list[str]) -> None:
                 fail(errors, f"lifecycle route: runtime caller {path.name} bypasses canonical executor")
 
 
+def work_board_instruction_text(root: Path, runtime: str, errors: list[str]) -> str:
+    """Read the actual entrypoint and its required progressive lifecycle contract.
+
+    A file existing beside the skill is insufficient: the entrypoint must load it. Keep the
+    reporting/recovery assertions on those delivered instructions instead of requiring duplicated
+    prose in SKILL.md or accepting an unreachable reference as governing text.
+    """
+    directory = root / runtime / "work-board"
+    entry = directory / "SKILL.md"
+    relative = "references/lifecycle-contract.md"
+    try:
+        body = entry.read_text(encoding="utf-8")
+    except OSError as error:
+        fail(errors, f"work-board coordinator: unreadable entrypoint {entry.relative_to(root)}: {error}")
+        return ""
+    if relative not in LINK.findall(body):
+        fail(errors, "work-board coordinator: entrypoint must load references/lifecycle-contract.md")
+        return ""
+    try:
+        contract = (directory / relative).read_text(encoding="utf-8")
+    except OSError as error:
+        fail(errors, f"work-board coordinator: unreadable lifecycle contract {runtime}: {error}")
+        return ""
+    return body + "\n" + contract
+
+
 def validate_work_board_coordinator(root: Path, errors: list[str]) -> None:
     """Source boundary checks complement independent realistic consumer journeys."""
     for runtime in ROOTS:
         base = root / runtime
-        work = (base / "work-board/SKILL.md").read_text(encoding="utf-8")
+        instructions = work_board_instruction_text(root, runtime, errors)
         required = (
             "Project 3", "binding4/schema2/inspection2", "binding5/schema3/inspection3/integrator2", "qualified installed caller",
             "productBoard", "binding3", "remaining-after-active capacity",
@@ -531,7 +557,7 @@ def validate_work_board_coordinator(root: Path, errors: list[str]) -> None:
             "Source delivery, publication, installation", "No fixed polling",
             "Preserve the complete Done when; a merged slice narrows the remainder without closing its parent",
         )
-        normalized = " ".join((work + "\n" + (base / "work-board/references/lifecycle-contract.md").read_text(encoding="utf-8")).split())
+        normalized = " ".join(instructions.split())
         for clause in required:
             if clause not in normalized:
                 fail(errors, f"work-board coordinator: missing {clause!r}")

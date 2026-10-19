@@ -19,7 +19,7 @@ Use the implementation route selected by the skill. Bootstrap is recovery, not f
 
 ## Selected unavailable-history boundary
 
-Follow the parent's [forward-recovery decision](../SKILL.md#recover-ownership-and-unavailable-history).
+Follow the parent's [forward-recovery decision](lifecycle-contract.md#recover-ownership-and-unavailable-history).
 The historical evidence-search task is closed as unavailable. Do not reopen its searches or repeated
 requests to satisfy complete-inventory wording below. Preserve known original records, 439 inherited
 reservations and 46 later records, with historical outcomes Unknown and holds unreleased. Recover
