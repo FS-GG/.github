@@ -2066,3 +2066,28 @@ meets the provider's2.1 minimum. Initialization remains pending; no doctor-coher
 receipt is claimed, and no SDD reseeding replaced the selected instruction closure. Preserve this
 interop limitation in installed receiver qualification. It does not waive the later public019
 candidate, publication, catalog discovery, product-native read or retained preservation gates.
+
+### Original5 reader restoration and bounded Host-restored process restart — 2026-10-19
+
+PR4696 delivered12ecb5ba with exact reviewed/tested/delivered tree
+4fe5aca108244b1d9216ea42d5c43cfa5d687ad8. A new process retrieved stable Atlas ID
+`github/programme-binding-custody-recovery` (d8448993), verified its immutable citation hashes,
+verified the independently restored Host archive's original digest and parsed its original5 pair.
+Only the authenticated runtime recipe/artifact/population axes changed; original constructor,
+nonce and payload stayed intact. Actual installed108 at protected12ecb5ba then exited0 in185.93s:
+22Current,25memberships, complete hierarchies, no population/membership gaps and zero mutations
+within unchanged500requests/270seconds. Original report SHA256
+14b2a1c3a7d4a9e8d539587dc1200a7360046342ea2db93200178234cad4b1b5.
+Native issue records, human planning and Work level exactly match the pre-rollback108 read;
+hierarchy content also matches after excluding only its new observedAt timestamp. This joins
+the executed protected4/107 rollback and protected5/108 restoration with a bounded process restart
+using the original Host-restored private pair. No global selector rollback, actual client replacement,
+disk loss or unavailable historical operation reconstruction is inferred; no view write was attempted.
+
+Preserve the earlier independent108 restoration attempt: it stopped at the original deadline with
+20Current/twoUnknown final barriers and zero mutations, so it was not accepted. Its collector used
+a misnamed cache variable; the new operation corrected the exclusive cache setup while keeping
+all22 issues and the same budget.318 GraphQL calls were recorded for the failure versus331 for
+the prior accepted baseline; no causal cache/performance guarantee is inferred from the correction.
+All439 inherited and46 later Unknown holds remain unreleased and missing original journals stay
+missing. Full public019 product receiver/installed discovery gates and parent acceptance remain open.
