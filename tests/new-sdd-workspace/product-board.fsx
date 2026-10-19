@@ -127,9 +127,34 @@ try
     let kit = [ "check-board"; "cross-repo-coordination"; "initialize-sdd-workspace"; "intra-repo-parallel-work"; "pnext-item" ]
     let drivers = [ "atlas"; "work-roadmap"; "work-board"; "work-board-normal"; "work-board-best"; "padd-item"; "continue-from-handoff"; "stop-with-handoff"; "routine-decisions"; "agent-handoff"; "work-programme" ]
     let content = "fixture consumer\n"
+    let generatedLeaves =
+        [ "padd-item/SKILL.md";
+          "padd-item/agents/openai.yaml";
+          "work-board-best/SKILL.md";
+          "work-board-best/agents/openai.yaml";
+          "work-board-normal/SKILL.md";
+          "work-board-normal/agents/openai.yaml";
+          "work-board/SKILL.md";
+          "work-board/agents/openai.yaml";
+          "work-board/references/backlog-triage.md";
+          "work-board/references/deep-detail.md";
+          "work-board/references/feedback-contract.md";
+          "work-board/references/host-loop.md";
+          "work-board/references/workspace-scope.md";
+          "work-roadmap/SKILL.md";
+          "work-roadmap/agents/openai.yaml";
+          "work-roadmap/references/critique-contract.md";
+          "work-roadmap/references/deep-detail.md";
+          "work-roadmap/references/feedback-contract.md";
+          "work-roadmap/references/host-loop.md";
+          "work-roadmap/references/lifecycle-log.md";
+          "work-roadmap/references/roadmap-ledger.md" ]
     let manifest ids =
         let rows = ids |> List.map (fun id ->
-            let leaves = if id = "work-board" then [ "SKILL.md"; "references/workspace-scope.md" ] else [ "SKILL.md" ]
+            let declared = generatedLeaves |> List.choose (fun path ->
+                let prefix = id + "/"
+                if path.StartsWith(prefix, StringComparison.Ordinal) then Some(path.Substring(prefix.Length)) else None)
+            let leaves = if declared.IsEmpty then [ "SKILL.md" ] else declared
             let files = leaves |> List.map (fun path -> sprintf "{\"path\":\"%s\",\"sha256\":\"%s\",\"executable\":false}" path (digest (Text.Encoding.UTF8.GetBytes content)))
             sprintf "{\"id\":\"%s\",\"scope\":\"driver\",\"files\":[%s]}" id (String.concat "," files))
         "{\"schemaVersion\":2,\"skills\":[" + String.concat "," rows + "]}"
@@ -168,7 +193,7 @@ try
     // Synthetic old/new bodies exercise the real compiled snapshot and replacement boundaries.
     let driverPaths =
         [ for mirror in [ ".agents/skills"; ".claude/skills" ] do
-              for leaf in [ "work-board/SKILL.md"; "work-board/references/workspace-scope.md"; "padd-item/SKILL.md" ] do
+              for leaf in generatedLeaves do
                   yield mirror + "/" + leaf ]
     let oldDriver = "synthetic SDD-generated predecessor driver\n"
     for relative in driverPaths do
@@ -181,6 +206,22 @@ try
         """{"schemaVersion":1,"generator":{"id":"FS.GG.SDD.Artifacts"},"sddOwnedPaths":[{"path":".config/dotnet-tools.json","owner":"sdd"}],"driverPaths":["""
         + String.concat "," driverRows + "]}"
     File.WriteAllText(freshTools, generated)
+    File.WriteAllText(freshProvenance, generatedProvenance)
+    // Older successful scaffolds retain only the six required predecessor leaves.
+    let roadmapPaths = driverPaths |> List.filter (fun path ->
+        not ([ "work-board/SKILL.md"; "work-board/references/workspace-scope.md"; "padd-item/SKILL.md" ]
+             |> List.exists (fun leaf -> path = ".agents/skills/" + leaf || path = ".claude/skills/" + leaf)))
+    for relative in roadmapPaths do File.Delete(Path.Combine(freshRoot, relative))
+    let legacyProvenance = JsonNode.Parse(generatedProvenance)
+    let legacyRows = legacyProvenance.["driverPaths"].AsArray()
+    for index in [ legacyRows.Count - 1 .. -1 .. 0 ] do
+        if roadmapPaths |> List.contains (legacyRows.[index].["path"].GetValue<string>()) then legacyRows.RemoveAt index
+    File.WriteAllText(freshProvenance, legacyProvenance.ToJsonString())
+    ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> pass |> ignore
+    // A present roadmap file cannot gain authority without exact driver provenance.
+    File.WriteAllText(Path.Combine(freshRoot, roadmapPaths.Head), oldDriver)
+    ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuse "unowned generated roadmap"
+    for relative in roadmapPaths do File.WriteAllText(Path.Combine(freshRoot, relative), oldDriver)
     File.WriteAllText(freshProvenance, generatedProvenance)
     if ProductBoard.captureFreshScaffoldTarget freshRoot |> Option.isSome then failwith "existing owner directory gained fresh authority"
     ProductBoard.prepare freshRoot "acme/app" (String.replicate 40 "a") binding fetch |> refuse "preexisting/retained generated-looking owner pin"
@@ -286,7 +327,7 @@ try
             fetch name) |> refuseDriver "generated driver edited during producer fetch"
         File.WriteAllText(path, oldDriver)
     // A non-selected driver-like file remains authored even during a fresh invocation.
-    let otherDriver = Path.Combine(freshRoot, ".agents/skills/work-board-best/SKILL.md")
+    let otherDriver = Path.Combine(freshRoot, ".agents/skills/atlas/SKILL.md")
     Directory.CreateDirectory(Path.GetDirectoryName otherDriver) |> ignore
     File.WriteAllText(otherDriver, "owner authored")
     prepareFresh fetch |> refuseDriver "fresh authority does not cover arbitrary driver files"
@@ -356,10 +397,10 @@ try
         File.Delete freshProvenance
         File.WriteAllText(freshProvenance, generatedProvenance)
         File.Delete aliasTarget
-    let expectedAdoptionRefusals = if OperatingSystem.IsWindows() then 52 else 56
+    let expectedAdoptionRefusals = if OperatingSystem.IsWindows() then 340 else 344
     if adoptionRefusals <> expectedAdoptionRefusals then
         failwithf "fresh provenance refusal inventory incomplete: %d / %d" adoptionRefusals expectedAdoptionRefusals
-    printfn "Fresh generated provenance controls passed: %d actual refusals; six active hashes/original provenance and rollback checked." adoptionRefusals
+    printfn "Fresh generated provenance controls passed: %d actual refusals; 42 active hashes/original provenance and rollback checked." adoptionRefusals
     let staleFresh = prepareFresh fetch |> pass
     File.AppendAllText(freshTools, " ")
     ProductBoard.apply freshRoot staleFresh |> refuse "fresh generated preimage changed after plan"
@@ -410,10 +451,10 @@ try
         ProductBoard.apply freshRoot ancestorPlan |> refuseDriver "driver ancestor symlink after preview"
         Directory.Delete driverDirectory
         Directory.Move(heldDirectory, driverDirectory)
-    let expectedDriverRefusals = if OperatingSystem.IsWindows() then 59 else 77
+    let expectedDriverRefusals = if OperatingSystem.IsWindows() then 383 else 473
     if driverRefusals <> expectedDriverRefusals then
         failwithf "fresh driver refusal inventory incomplete: %d / %d" driverRefusals expectedDriverRefusals
-    printfn "Fresh generated driver controls passed: %d actual refusals, six planned/replaced mirrors, rollback and exact repeat checked below." driverRefusals
+    printfn "Fresh generated driver controls passed: %d actual refusals, 42 planned/replaced mirrors, rollback and exact repeat checked below." driverRefusals
     ProductBoard.apply freshRoot (prepareFresh fetch |> pass) |> pass
     if driverPaths |> List.exists (fun relative -> File.ReadAllText(Path.Combine(freshRoot, relative)) <> content) then
         failwith "fresh driver installation omitted a selected mirror"
@@ -431,7 +472,7 @@ try
            || records.Length <> 1 || records.Head.["beforeSha256"].GetValue<string>() <> sha oldDriver
            || records.Head.["afterSha256"].GetValue<string>() <> sha content then
             failwith "fresh driver active provenance or adoption history differs from installed bytes"
-    if adoption.["drivers"].AsArray().Count <> 6 then failwith "adoption history broadened beyond selected six leaves"
+    if adoption.["drivers"].AsArray().Count <> 42 then failwith "adoption history broadened beyond selected42 leaves"
     ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuse "applied adoption cannot be recaptured as original scaffold"
     let installedTools = JsonNode.Parse(File.ReadAllText freshTools)
     if installedTools.["tools"].["fs.gg.coord.cli"].["version"].GetValue<string>() <> pin

@@ -89,8 +89,8 @@ route = next(row for row in report["routes"] if row["path"] == WIZARD_SUCCESSOR)
 assert route["sha256"] == digest(ROOT / WIZARD_SUCCESSOR)
 assert route["disposition"] == "exact-source-protected-journal-successor-only"
 amendment = route["successorAmendment"]
-assert amendment["unit"] == "CBC-01" and amendment["version"] == "0.18.0"
-assert amendment["operationAcceptance"] == "Source only; no108/018 candidate, pin, journal initialization, protected preflight, publication, installation or native adoption acceptance."
+assert amendment["unit"] == "CBC-05-REPAIR019" and amendment["version"] == "0.19.0"
+assert amendment["operationAcceptance"] == "Source only; no019 candidate, journal initialization, protected preflight, publication, installation or native adoption acceptance."
 history = next(row for row in report["historicalRouteAttestations"]
                if row["acceptedSource"] == amendment["previousAcceptedSource"])
 assert history["status"] == "non-current-history"
@@ -100,7 +100,9 @@ for key in ("forwardRecoveryAmendment", "capabilityLoss", "historicalCapabilityL
 proof = route["bindingIsolationProof"]
 creator017_predecessor = next(row for row in report["historicalRouteAttestations"]
                              if row["acceptedSource"] == proof["creator017ProfileAmendment"]["previousAcceptedSource"])
-assert history["route"]["bindingIsolationProof"]["currentBinding"] == "CURRENT_017"
+assert history["route"]["bindingIsolationProof"]["currentBinding"] == "CURRENT_018"
+creator018_predecessor = next(row for row in report["historicalRouteAttestations"]
+                             if row["acceptedSource"] == proof["creator018ProfileAmendment"]["previousAcceptedSource"])
 for name, expected in proof["currentRecoveryJobSha256"].items():
     raw_workflow = (ROOT / WIZARD_SUCCESSOR).read_text()
     start = raw_workflow.index("  " + name + ":\n")
@@ -177,14 +179,14 @@ CURRENT_PIN_PREFLIGHT_STEP = """      - name: Refuse absent promoted dependency 
 
 def verify_creator018_publish_job(job, amendment):
     assert amendment["unit"] == "CBC-01"
-    assert amendment["currentBinding"] == proof["currentBinding"] == "CURRENT_018"
+    assert amendment["currentBinding"] == "CURRENT_018"
     assert amendment["retainedBindings"] == ["CURRENT_017", "CURRENT_016", "HISTORICAL_013"]
     assert amendment["coherentSourceVersion"] == "0.108.0"
     assert amendment["freshLogicalJournal"] == "board-v2-product-creator-018"
     assert amendment["dependencyMode"] == "published-dependency"
     assert amendment["realPinPresent"] is False and amendment["oldEffectGrantRenewed"] is False
-    assert amendment["previousAcceptedSource"] == history["acceptedSource"]
-    assert amendment["previousSuccessorWorkflowSha256"] == history["route"]["sha256"]
+    assert amendment["previousAcceptedSource"] == creator018_predecessor["acceptedSource"]
+    assert amendment["previousSuccessorWorkflowSha256"] == creator018_predecessor["route"]["sha256"]
     assert amendment["previousPublishJobSourceSha256"] == proof["creator017ProfileAmendment"]["currentPublishJobSourceSha256"]
     assert hashlib.sha256(job.encode()).hexdigest() == amendment["currentPublishJobSourceSha256"]
     assert job.count(CURRENT_PIN_PREFLIGHT_STEP) == 1
@@ -197,6 +199,30 @@ def verify_creator018_publish_job(job, amendment):
         retained = retained.replace(current, previous, 1)
     assert hashlib.sha256(retained.encode()).hexdigest() == amendment["previousPublishJobSourceSha256"]
     verify_creator017_publish_job(retained, proof["creator017ProfileAmendment"])
+
+CREATOR019_SUMMARY_STEP = CREATOR_SUMMARY_STEP.replace("creator016-", "creator019-")
+
+def verify_creator019_publish_job(job, amendment):
+    assert amendment["unit"] == "CBC-05-REPAIR019"
+    assert amendment["currentBinding"] == proof["currentBinding"] == "CURRENT_019"
+    assert amendment["retainedBindings"] == ["CURRENT_018", "CURRENT_017", "CURRENT_016", "HISTORICAL_013"]
+    assert amendment["coherentSourceVersion"] == "0.108.0"
+    assert amendment["freshLogicalJournal"] == "board-v2-product-creator-019"
+    assert amendment["dependencyMode"] == "published-dependency"
+    assert amendment["realPinPresent"] is True and amendment["oldEffectGrantRenewed"] is False
+    assert amendment["operationAcceptance"] == "Source only; no019 candidate, journal initialization, protected preflight, publication, installation or native adoption acceptance."
+    assert amendment["previousAcceptedSource"] == history["acceptedSource"] == "f704a3e6e6b9b0149fe5b8e39b4fefb5d42cddb1"
+    assert amendment["previousSuccessorWorkflowSha256"] == history["route"]["sha256"]
+    assert amendment["previousPublishJobSourceSha256"] == proof["creator018ProfileAmendment"]["currentPublishJobSourceSha256"]
+    assert hashlib.sha256(job.encode()).hexdigest() == amendment["currentPublishJobSourceSha256"]
+    retained = job
+    for current, previous in (("new-sdd-workspace-019-publisher", "new-sdd-workspace-018-publisher"),
+                              ("creator019-publication-summary-", "creator018-publication-summary-"),
+                              ("creator019-publication-summary.json", "creator018-publication-summary.json")):
+        assert retained.count(current) == 1
+        retained = retained.replace(current, previous, 1)
+    assert hashlib.sha256(retained.encode()).hexdigest() == amendment["previousPublishJobSourceSha256"]
+    verify_creator018_publish_job(retained, proof["creator018ProfileAmendment"])
 
 def verify_diagnostic_job(source):
     global_permissions = source.split("\npermissions:\n", 1)[1].split("\nconcurrency:\n", 1)[0]
@@ -225,7 +251,7 @@ def verify_diagnostic_job(source):
     assert "python3 scripts/new_sdd_workspace_promote_recovery.py \\\n              --post-completion-readback \"$RECOVERY_BINDING\"" in job
     for name, expected in proof["postCompletionReadbackAmendment"]["currentJobSourceSha256"].items():
         if name == "publish":
-            verify_creator018_publish_job(jobs[name], proof["creator018ProfileAmendment"])
+            verify_creator019_publish_job(jobs[name], proof["creator019ProfileAmendment"])
         else:
             assert hashlib.sha256(jobs[name].encode()).hexdigest() == expected, name
 
@@ -248,11 +274,11 @@ verify_diagnostic_job(raw_workflow)
 # changes still fail the reconstructed historical seal, rather than being
 # excused by a new current hash. Recovery jobs retain their original full seals.
 publish_job = workflow_jobs(raw_workflow)["publish"]
-summary_amendment = proof["creator018ProfileAmendment"]
+summary_amendment = proof["creator019ProfileAmendment"]
 publish_mutations = (
     ("        if: always()", "        if: success()"),
     ("          retention-days: 7", "          retention-days: 8"),
-    ("creator018-publication-summary.json", "unbounded-directory/"),
+    ("creator019-publication-summary.json", "unbounded-directory/"),
     ("inputs.promotion_recovery == 'off'", "true"),
     ("creator-current-coord-dependencies.py preflight", "creator-frozen-coord-dependencies.py preflight"),
     ("          persist-credentials: false", "          persist-credentials: true"),
@@ -262,14 +288,14 @@ for original, changed in publish_mutations:
     mutant = publish_job.replace(original, changed, 1)
     repinned = {**summary_amendment, "currentPublishJobSourceSha256": hashlib.sha256(mutant.encode()).hexdigest()}
     try:
-        verify_creator018_publish_job(mutant, repinned)
+        verify_creator019_publish_job(mutant, repinned)
     except AssertionError:
         pass
     else:
         raise AssertionError("repinned Creator ordinary-job mutant accepted: " + original)
-for mutant in (publish_job.replace(CREATOR018_SUMMARY_STEP, "", 1), publish_job + CREATOR018_SUMMARY_STEP):
+for mutant in (publish_job.replace(CREATOR019_SUMMARY_STEP, "", 1), publish_job + CREATOR019_SUMMARY_STEP):
     try:
-        verify_creator018_publish_job(mutant, {**summary_amendment, "currentPublishJobSourceSha256": hashlib.sha256(mutant.encode()).hexdigest()})
+        verify_creator019_publish_job(mutant, {**summary_amendment, "currentPublishJobSourceSha256": hashlib.sha256(mutant.encode()).hexdigest()})
     except AssertionError:
         pass
     else:
@@ -282,7 +308,7 @@ for job_name in ("recovery-diagnostic", "recovery-complete"):
         pass
     else:
         raise AssertionError("historical recovery-job drift accepted: " + job_name)
-print(f"Creator018 current preflight/profile and retained017/016 summary seals: {len(publish_mutations) + 4} repinned job/summary and recovery mutants refused")
+print(f"Creator019 current profile and retained018/017/016 summary seals: {len(publish_mutations) + 4} repinned job/summary and recovery mutants refused")
 diagnostic = workflow_jobs(raw_workflow)["recovery-diagnostic"]
 permission_mutations = (
     ("      contents: write", "      contents: read"),
@@ -428,7 +454,7 @@ for function, keyword, count in (("effects", "binding", 3), ("WizardAdmission", 
     assert len(selected) == count
     assert all(any(arg.arg == keyword and isinstance(arg.value, ast.Name) and arg.value.id == "HISTORICAL_013"
                    for arg in call.keywords) for call in selected)
-assert "self.release_binding is not CURRENT_018" in admission
+assert "self.release_binding is not CURRENT_019" in admission
 assert "self.release_binding is not HISTORICAL_013" in admission
 execution = (ROOT / "scripts/new_sdd_workspace_successor_execution.py").read_text()
 assert 'CURRENT_014 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.14.0", "new-sdd-workspace/v0.14.0")' in execution
@@ -437,7 +463,8 @@ assert 'CURRENT_016 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.16.0", "new-sdd
 assert 'HISTORICAL_013 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.13.0", "new-sdd-workspace/v0.13.0")' in execution
 assert 'CURRENT_017 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.17.0", "new-sdd-workspace/v0.17.0")' in execution
 assert 'CURRENT_018 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.18.0", "new-sdd-workspace/v0.18.0")' in execution
-assert "binding is not CURRENT_018 and binding is not CURRENT_017 and binding is not CURRENT_016 and binding is not HISTORICAL_013" in execution
+assert 'CURRENT_019 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.19.0", "new-sdd-workspace/v0.19.0")' in execution
+assert "binding is not CURRENT_019 and binding is not CURRENT_017 and binding is not CURRENT_016 and binding is not HISTORICAL_013" in execution
 
 with tempfile.TemporaryDirectory(prefix="gs2-08-9-release-seal.") as temporary:
     work = pathlib.Path(temporary)

@@ -1994,3 +1994,111 @@ Actual public018 full Rendering SDD creation independently refused the generated
 entrypoint as authored; no owner file was deleted. Root is preparing separately versioned019
 with exact fresh-generated provenance authority, leaving018 publication immutable. Full public
 product receivers and bounded handoff restart remain open.
+
+### Actual public018 full SDD receiver refusal — 2026-10-19
+
+Actual public Creator018 and SDD2.2, immutable Templates f5fbd06e/rendering0.32.1 and
+coordination Kit10864d9e reached a successful fresh Rendering SDD scaffold. Coordination
+then refused the generated `.claude/skills/work-roadmap/SKILL.md` as an owner-authored
+conflict. The original completed attempt exited1; stdout SHA256
+d65843b6b1322ecbf4ccbbd4b4323991d12bb1563f1a15ed9100e5bb3948a569.
+An earlier independent attempt exceeded its collector's32KiB output bound and was interrupted;
+its partial target and output are retained separately. Neither is receiver acceptance.
+
+SDD2.2 provenance uniquely marks both work-roadmap entrypoints as driver-owned with exact
+preimage hashes, but018 captures only six predecessor driver leaves. Prospective019 adds
+only these two optional entrypoints to the bounded fresh-only snapshot. Present files or
+provenance rows require unique driver ownership, exact hashes, bytes/modes and no symlink
+ancestors; missing, duplicate, authored or edited entries refuse. Older scaffolds without
+either entrypoint remain supported. Apply retains original provenance/adoption history and
+rechecks all captured bytes/modes. Retained targets and retrofit never gain fresh authority.
+The81-member genuine108 dependency closure stays unchanged;019 source, candidate, independent
+publication, installed runtime receivers and native product inspections require separate gates.
+Published018 remains immutable. Work-board remains the standard coordination entrypoint;
+the accepted visual UI pass does not require repetition.
+
+Prospective019 parser qualification against the original staged108 dependency closure passed
+82 assertions and three compiled mutants in72.23seconds. Separate compiled ProductBoard
+qualification passed72 Linux provenance and99 driver refusals, eight-mirror replacement,
+original provenance preservation, rollback and exact repeat; older absent-roadmap and present
+unowned-roadmap controls also passed. Its original stdout digest is
+875d9a51f502af597f0b45806455695779e9172055147f5c7d4163e62b060e3d.
+Independent static review caught the initially stale six-leaf refusal inventory guards; corrected
+Windows/Unix expectations68/72 and77/99 then received exact-head PASS atb7bab4b2.
+The176 inert release controls passed separately. An earlier local setup refused shared-cache
+FSharp.Core hash validation before compilation; a fresh isolated NuGet cache resolved that setup
+failure without changing the locked dependency. The original refusal is retained. These are
+source/staged qualifications, not public019 publication or installed receiver acceptance.
+
+The subsequent actual source019/SDD2.2 check at289d9c59 exited1 at the next generated
+roadmap reference (`references/deep-detail.md`); original stdout digest
+797293f41682976161edcb3fd5b0259c01346bf155ebb0430d351decfc7def5c.
+This supersedes the earlier two-entrypoint repair scope; it is not runtime acceptance.
+A complete inventory of the real unchanged scaffold provenance identifies42 instruction leaves
+across both mirrors: padd-item, work-board, work-board-best, work-board-normal and work-roadmap.
+The revised closed allowlist captures six required predecessor leaves and up to36 optional
+present or declared instruction leaves. Every captured leaf requires unique driver ownership,
+exact recorded hash, bytes/mode and safe ancestors; all must also occur exactly once in the
+verified selected published payload before installation. Undeclared owner files do not gain
+authority, retained targets remain strict, and non-instruction scaffold tooling is excluded.
+This replaces repeated first-conflict fixes with the complete observed instruction closure.
+Historical eight-leaf qualification remains evidence only for its original source. The revised
+42-leaf qualification and real SDD path must pass before publication.
+
+The revised42-leaf staged source474dde7d passed82 parser assertions and three compiled
+mutants in86.47seconds. Separate actual compiled ProductBoard qualification passed344 Linux
+provenance refusals and473 driver refusals,42-leaf replacement, original provenance, rollback,
+exact repeat, six-leaf legacy absence and an uncaptured Atlas owner-file conflict. Original
+stdout SHA256cc3a43dcc7a809ddac48e70d2df01e3fec61df37e04b3f9c137d9a3c91efc689.
+Independent review identified that the old conflict control targeted newly captured work-board-best;
+using uncaptured Atlas resolved that fixture contamination, and exact474dde7d review passed.
+The full real SDD path remains a separate acceptance gate.
+
+The full revised source019 real Rendering/SDD2.2 path then exited0 in114.36seconds,
+including coordination installation and initialization handoff. Original stdout SHA256
+b169e464d9a1c3132f0a927d0d22bf4ab048436c95139c9318ad42cf07ee38b7.
+Independent file readback verified806 instruction leaves across both mirrors against selected
+immutable Kit10864d9e,16 expected skills, the exact selected product3 binding and all42 active/
+original driver preimage joins. This uses the compiled source019 binary, not a public019 package.
+Doctor reports a real non-blocking drift warning:34 added published instruction references are
+undeclared in SDD's original driver inventory; there are no missing skeleton artifacts and CLI2.2
+meets the provider's2.1 minimum. Initialization remains pending; no doctor-coherent or initialized
+receipt is claimed, and no SDD reseeding replaced the selected instruction closure. Preserve this
+interop limitation in installed receiver qualification. It does not waive the later public019
+candidate, publication, catalog discovery, product-native read or retained preservation gates.
+
+### Original5 reader restoration and bounded Host-restored process restart — 2026-10-19
+
+PR4696 delivered12ecb5ba with exact reviewed/tested/delivered tree
+4fe5aca108244b1d9216ea42d5c43cfa5d687ad8. A new process retrieved stable Atlas ID
+`github/programme-binding-custody-recovery` (d8448993), verified its immutable citation hashes,
+verified the independently restored Host archive's original digest and parsed its original5 pair.
+Only the authenticated runtime recipe/artifact/population axes changed; original constructor,
+nonce and payload stayed intact. Actual installed108 at protected12ecb5ba then exited0 in185.93s:
+22Current,25memberships, complete hierarchies, no population/membership gaps and zero mutations
+within unchanged500requests/270seconds. Original report SHA256
+14b2a1c3a7d4a9e8d539587dc1200a7360046342ea2db93200178234cad4b1b5.
+Native issue records, human planning and Work level exactly match the pre-rollback108 read;
+hierarchy content also matches after excluding only its new observedAt timestamp. This joins
+the executed protected4/107 rollback and protected5/108 restoration with a bounded process restart
+using the original Host-restored private pair. No global selector rollback, actual client replacement,
+disk loss or unavailable historical operation reconstruction is inferred; no view write was attempted.
+
+Preserve the earlier independent108 restoration attempt: it stopped at the original deadline with
+20Current/twoUnknown final barriers and zero mutations, so it was not accepted. Its collector used
+a misnamed cache variable; the new operation corrected the exclusive cache setup while keeping
+all22 issues and the same budget.318 GraphQL calls were recorded for the failure versus331 for
+the prior accepted baseline; no causal cache/performance guarantee is inferred from the correction.
+All439 inherited and46 later Unknown holds remain unreleased and missing original journals stay
+missing. Full public019 product receiver/installed discovery gates and parent acceptance remain open.
+
+Hosted Creator qualification at the earlier4697 headead59ce7 (run39256618555) failed its
+release-effect seal because the separately versioned019 workflow had not yet received its own
+route attestation. The original hosted failure is retained. The new amendment preserves the
+entire accepted018 route at immutablef704a3e6 as non-current history and records019's exact
+workflow/current binding/fresh journal. Normalizing only ordinary job/summary identity labels
+must reconstruct the018 publish job byte-for-byte; its recursive018/017/016 proof remains.
+Historical013 recovery jobs and permission/effect boundaries stay sealed. Current019 does not
+renew018 effect authority. The full offline release-effect suite passes, including10 repinned
+job/summary/recovery mutants,14 permission/role mutants,7 transport/effect mutants and18 paged
+ancestry production-guard mutants. Fresh exact-head hosted qualification is still required.

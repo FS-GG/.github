@@ -63,10 +63,31 @@ module ProductBoard =
     type FreshScaffoldTarget = private FreshScaffoldTarget of string
     type GeneratedToolManifest = private GeneratedToolManifest of string * byte array * UnixFileMode option * (string * byte array * UnixFileMode option) list * (byte array * UnixFileMode option)
 
-    // Only the demonstrated SDD driver defaults may be adopted by this fresh-only authority.
+    // Only this closed, demonstrated SDD instruction closure may be adopted by this fresh-only authority.
     let private generatedDriverPaths =
         [ for root in [ ".agents/skills"; ".claude/skills" ] do
-              for leaf in [ "work-board/SKILL.md"; "work-board/references/workspace-scope.md"; "padd-item/SKILL.md" ] do
+              for leaf in
+                  [ "padd-item/SKILL.md";
+                    "padd-item/agents/openai.yaml";
+                    "work-board-best/SKILL.md";
+                    "work-board-best/agents/openai.yaml";
+                    "work-board-normal/SKILL.md";
+                    "work-board-normal/agents/openai.yaml";
+                    "work-board/SKILL.md";
+                    "work-board/agents/openai.yaml";
+                    "work-board/references/backlog-triage.md";
+                    "work-board/references/deep-detail.md";
+                    "work-board/references/feedback-contract.md";
+                    "work-board/references/host-loop.md";
+                    "work-board/references/workspace-scope.md";
+                    "work-roadmap/SKILL.md";
+                    "work-roadmap/agents/openai.yaml";
+                    "work-roadmap/references/critique-contract.md";
+                    "work-roadmap/references/deep-detail.md";
+                    "work-roadmap/references/feedback-contract.md";
+                    "work-roadmap/references/host-loop.md";
+                    "work-roadmap/references/lifecycle-log.md";
+                    "work-roadmap/references/roadmap-ledger.md" ] do
                   yield root + "/" + leaf ]
 
     let captureFreshScaffoldTarget (target: string) =
@@ -122,7 +143,14 @@ module ProductBoard =
             if String.IsNullOrWhiteSpace(tool.["version"].GetValue<string>()) || tool.["commands"].AsArray().Count = 0 then
                 invalidOp "generated coordination default is malformed"
             let drivers =
-                generatedDriverPaths |> List.map (fun relative ->
+                generatedDriverPaths
+                |> List.filter (fun relative ->
+                    ([ "work-board/SKILL.md"; "work-board/references/workspace-scope.md"; "padd-item/SKILL.md" ]
+                     |> List.exists (fun leaf -> relative = ".agents/skills/" + leaf || relative = ".claude/skills/" + leaf))
+                    || File.Exists(Path.Combine(target, relative))
+                    || (provenance.["driverPaths"].AsArray()
+                        |> Seq.exists (fun row -> row.["path"].GetValue<string>() = relative)))
+                |> List.map (fun relative ->
                     let rows = provenance.["driverPaths"].AsArray()
                                |> Seq.filter (fun row -> row.["path"].GetValue<string>() = relative) |> Seq.toList
                     if rows.Length <> 1 || rows.Head.["owner"].GetValue<string>() <> "driver" then
@@ -338,7 +366,7 @@ module ProductBoard =
     let prepare target repository kitRevision bindingJson fetch =
         prepareWithGeneratedManifest None target repository kitRevision bindingJson fetch
 
-    /// Only the opaque, unchanged fresh scaffold manifest and six driver preimages grant replacement.
+    /// Only the opaque, unchanged fresh scaffold manifest and bounded driver preimages grant replacement.
     let prepareGenerated snapshot target repository kitRevision bindingJson fetch =
         prepareWithGeneratedManifest (Some snapshot) target repository kitRevision bindingJson fetch
 

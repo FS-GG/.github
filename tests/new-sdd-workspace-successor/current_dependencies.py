@@ -23,7 +23,7 @@ class CurrentDependencies(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = pathlib.Path(self.temporary.name)
-        self.package = self.root / 'FS.GG.NewSddWorkspace.0.18.0.nupkg'
+        self.package = self.root / 'FS.GG.NewSddWorkspace.0.19.0.nupkg'
         self.members = {name: b'explicit synthetic unexecutable member ' + name.encode() for name in (
             'FS.GG.Coord.GitHub.dll', 'fsgg-coord-engine.dll', 'fsgg-coord-engine.deps.json',
             'fsgg-coord-engine.runtimeconfig.json', 'FS.GG.Coord.Core.dll', 'runtimes/linux-x64/native/test.so')}
@@ -52,7 +52,7 @@ class CurrentDependencies(unittest.TestCase):
         self.deps['libraries']['FS.GG.Coord.Cli/0.108.0'] = self.deps['libraries'].pop('fsgg-coord-engine/0.108.0')
         rows = self.deps['targets'][framework]
         rows['FS.GG.Coord.Cli/0.108.0'] = rows.pop('fsgg-coord-engine/0.108.0')
-        rows['new-sdd-workspace/0.18.0'] = {'dependencies': {'FS.GG.Coord.Cli': '0.108.0'}}
+        rows['new-sdd-workspace/0.19.0'] = {'dependencies': {'FS.GG.Coord.Cli': '0.108.0'}}
         self.write()
 
     def write(self, members=None, deps=None, extra=None):
@@ -83,7 +83,7 @@ class CurrentDependencies(unittest.TestCase):
 
     def test_source_only_evidence_and_old_pins_refuse(self):
         evidence = self.evidence()
-        manifest = {'sourceSha': 'a' * 40, 'version': '0.18.0', 'archiveSha256': evidence['archiveSha256']}
+        manifest = {'sourceSha': 'a' * 40, 'version': '0.19.0', 'archiveSha256': evidence['archiveSha256']}
         CURRENT['verify_evidence'](evidence, self.package, manifest, self.pin)
         for field, value in [('mode', 'source-only'), ('sourceSha', 'c' * 40), ('fixturesPassed', False),
                              ('dependencyMembers', {}), ('dependencyPinSha256', '0' * 64), ('unknown', True)]:
@@ -151,7 +151,7 @@ class CurrentDependencies(unittest.TestCase):
         verifier = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(verifier)
         evidence = self.evidence()
-        manifest = {'sourceSha': 'a' * 40, 'version': '0.18.0', 'archiveSha256': evidence['archiveSha256']}
+        manifest = {'sourceSha': 'a' * 40, 'version': '0.19.0', 'archiveSha256': evidence['archiveSha256']}
         run = {'id': 1, 'path': verifier.WORKFLOW, 'head_sha': 'a' * 40, 'head_branch': 'main',
                'event': 'workflow_dispatch', 'conclusion': 'success', 'run_attempt': 1,
                'repository': {'id': verifier.REPOSITORY_ID}}
@@ -223,7 +223,7 @@ class CurrentDependencies(unittest.TestCase):
         provider.assert_not_called()
         journal.assert_not_called()
         self.assertFalse((self.root / 'uncreated').exists())
-        summary = json.loads((self.root / 'creator018-publication-summary.json').read_text())
+        summary = json.loads((self.root / 'creator019-publication-summary.json').read_text())
         self.assertFalse(summary['preflightPassed'])
         self.assertFalse(summary['journalMutationMayHaveOccurred'])
         self.assertEqual(summary['firstCause']['kind'], 'ValueError')
