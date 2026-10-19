@@ -38,6 +38,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-10-19** — Make stop/save use existing issue and Atlas restart pointers when complete; preserve only missing recovery state and require a handoff PR only for a necessary repository save. Align continuation and both skill mirrors/UI metadata; retain shutdown, original-effect custody and fresh native admission safeguards. (optional-stop-recovery-handoff)
+
 - **2026-10-19** — Record genuine Creator019 publication at protectedcc1d3c12: original39262367871/a1,55iterations/all8/final17, stable release417342100, original/public assets and fresh NuGet payload independently matched. Flip only its published package/tag metadata to019; public SDK88/shared81/help qualified, full product/runtime/native acceptance remains separate.
 
 - **2026-10-19** — Creator019 source preparation: adopt the closed42-leaf provenance-verified instruction closure from the same successful fresh SDD scaffold; retained owner conflicts remain strict. Preserve actual public018 refusal and unchanged genuine108 closure; independent019 publication and installed full receivers remain pending.
