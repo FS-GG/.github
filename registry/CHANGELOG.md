@@ -38,6 +38,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-10-19** — — `coord-engine` / `new-sdd-workspace`: coherent108-source-creator018-fence (github; #4682/#4641, PR4692): prepare source108 bounded full-cohort successor planning reads and independent Creator018 reuse of exact future promoted108 dependencies. Keep published coordination107/Creator017 pins unchanged; current018 pin remains absent until actual108 publication. Retain strict physical identity, historical publications/Unknown holds and separate source, installed, native and restart qualification. User visual UI check passed; no native write replay.
+
 - **2026-10-19** — `coord-engine`: reconcile accepted coherent107 publication and canonical pin (github; #4682):
 
 Record the already accepted coherent107 publication from source75ab98dd and release416724931,

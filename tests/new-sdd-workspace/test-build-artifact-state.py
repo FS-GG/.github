@@ -34,6 +34,19 @@ class CallerArtifactState(unittest.TestCase):
             os.utime(target, ns=(info.st_atime_ns, info.st_mtime_ns))
             self.assertNotEqual(first, state.capture(root, None))
 
+    def test_declared_transitive_and_creator_artifacts_are_preserved(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for project in ("src/FS.GG.Telemetry.Contracts", "scripts/NewSddWorkspace"):
+                directory = root / project
+                directory.mkdir(parents=True)
+                (directory / "fixture.fsproj").write_text("<Project />")
+                first = state.capture(root, None)
+                target = directory / "obj/project.assets.json"
+                target.parent.mkdir()
+                target.write_bytes(b"synthetic restore metadata")
+                self.assertNotEqual(first, state.capture(root, None))
+
     def test_selected_caller_change_is_detected_without_execution(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

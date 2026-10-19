@@ -699,8 +699,8 @@ wf "$RBP/.github/workflows/w.yml" '      - "src/A/**"
 expect "property-valued Include cannot become a literal graph edge" \
   3 "requires MSBuild evaluation" "$RBP"
 
-# The frozen Creator route is a closed immutable external closure, not an arbitrary property
-# graph. Cover the ordinary local reference; every altered selector/guard stays no-verdict.
+# The retained and current Creator routes use closed external selectors, not arbitrary
+# property evaluation. Current release readiness is independent of static local coverage.
 RBF="$(root "$WORK/cover-closed-frozen-creator")"
 mkdir -p "$RBF/scripts/NewSddWorkspace"
 cp "$REPO_ROOT/scripts/NewSddWorkspace/NewSddWorkspace.fsproj" "$RBF/scripts/NewSddWorkspace/"
@@ -709,8 +709,18 @@ proj "$RBF" "src/FS.GG.Coord.Cli"
 wf "$RBF/.github/workflows/w.yml" '      - "scripts/NewSddWorkspace/**"
       - "src/FS.GG.Coord.Cli/**"' '      - "scripts/NewSddWorkspace/**"
       - "src/FS.GG.Coord.Cli/**"'
-expect "closed frozen Creator route retains ordinary local closure" 0 "ok:" "$RBF"
-for mutation in root condition ordinary parent pair error-continue content-child build copy verify pin malformed-pin; do
+expect "closed current Creator route retains ordinary local closure without future pin" 0 "ok:" "$RBF"
+# The original single-Exec recognizer remains usable by historical source fixtures.
+RBFH="$WORK/closed-historical-creator";cp -R "$RBF" "$RBFH"
+python3 - "$RBFH/scripts/NewSddWorkspace/NewSddWorkspace.fsproj" <<'PYHISTORICAL'
+import sys,xml.etree.ElementTree as ET
+path=sys.argv[1];tree=ET.parse(path);target=next(t for t in tree.getroot().findall('Target') if t.get('Name')=='VerifyFrozenCoordDependencies')
+retained=target[0];retained.attrib.pop('Condition')
+for child in list(target)[1:]:target.remove(child)
+tree.write(path,encoding='unicode')
+PYHISTORICAL
+expect "closed historical single-selector Creator route retains ordinary local closure" 0 "ok:" "$RBFH"
+for mutation in root condition ordinary parent pair error-continue content-child build copy verify current-verify current-condition retained-condition duplicate-selector pin malformed-pin; do
   RBFC="$WORK/closed-frozen-$mutation"
   cp -R "$RBF" "$RBFC"
   python3 - "$RBFC" "$mutation" <<'PYCONTROL'
@@ -731,6 +741,11 @@ elif mode=='content-child':ET.SubElement(next(n for g in project.findall('ItemGr
 elif mode=='build':next(project.iter('BuildProjectReferences')).text='true'
 elif mode=='copy':next(project.iter('_GetChildProjectCopyToOutputDirectoryItems')).text='true'
 elif mode=='verify':next(t for t in project.findall('Target') if t.get('Name')=='VerifyFrozenCoordDependencies')[0].set('Command','echo unverified')
+elif mode=='current-verify':next(t for t in project.findall('Target') if t.get('Name')=='VerifyFrozenCoordDependencies')[1].set('Command','echo unverified')
+elif mode=='current-condition':next(t for t in project.findall('Target') if t.get('Name')=='VerifyFrozenCoordDependencies')[1].set('Condition',"'$(FsggCurrentCoordDependencies)' != 'true'")
+elif mode=='retained-condition':next(t for t in project.findall('Target') if t.get('Name')=='VerifyFrozenCoordDependencies')[0].attrib.pop('Condition')
+elif mode=='duplicate-selector':
+ target=next(t for t in project.findall('Target') if t.get('Name')=='VerifyFrozenCoordDependencies');ET.SubElement(target,'Exec',target[1].attrib)
 elif mode=='malformed-pin':
  pin=root/'scripts/creator-frozen-coord-dependencies.json';value=json.loads(pin.read_text());value['projects']=list(value['projects']);pin.write_text(json.dumps(value))
 elif mode=='pin':

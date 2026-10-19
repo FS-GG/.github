@@ -56,21 +56,68 @@ PY_BOUND
 [ "$BUILD_ROOT_OWNED" -eq 1 ] || mkdir -m 700 "$BUILD_ROOT"
 python3 -B "$HERE/test-build-artifact-state.py"
 python3 -B "$HERE/build-artifact-state.py" --output "$BUILD_ROOT/caller-before.json"
-echo "new-sdd-workspace parse fixture — building the CLI (Release, isolated project outputs)…"
+MODE="${FSGG_CREATOR_DEPENDENCY_MODE:-source-only}"
+case "$MODE" in
+  source-only)
+    echo "Creator source-only qualification (not release evidence)" >&2
+    DLL="$BUILD_ROOT/bin/NewSddWorkspace/release/new-sdd-workspace.dll"
+    ;;
+  published-dependency)
+    : "${FSGG_CREATOR_PRODUCER_SOURCE:?isolated producer checkout required}"
+    : "${FSGG_CREATOR_DEPENDENCIES:?verified staged dependency directory required}"
+    : "${FSGG_CREATOR_CALLER_ROOT:?active caller root required}"
+    python3 - "$REPO_ROOT" "$FSGG_CREATOR_PRODUCER_SOURCE" "$FSGG_CREATOR_CALLER_ROOT" <<'PY_ISOLATION'
+import pathlib, sys
+creator, producer, caller = map(pathlib.Path, sys.argv[1:])
+roots = [creator, producer, caller]
+if any(not p.is_absolute() or not p.is_dir() or any(parent.is_symlink() for parent in (p, *p.parents)) for p in roots):
+    raise SystemExit('Creator, producer and active caller require unlinked absolute checkout roots')
+canonical = [p.resolve(strict=True) for p in roots]
+if roots != canonical or any(a == b or a.is_relative_to(b) for i, a in enumerate(canonical) for j, b in enumerate(canonical) if i != j):
+    raise SystemExit('Creator, producer and active caller must be canonical distinct isolated checkout roots')
+if any(p.exists() for p in (creator / 'scripts/NewSddWorkspace/bin', creator / 'scripts/NewSddWorkspace/obj')):
+    raise SystemExit('Published mode refuses stale Creator output')
+PY_ISOLATION
+    python3 "$REPO_ROOT/scripts/creator-current-coord-dependencies.py" verify-layout \
+      --producer-source "$FSGG_CREATOR_PRODUCER_SOURCE" --dependencies "$FSGG_CREATOR_DEPENDENCIES"
+    DLL="$REPO_ROOT/scripts/NewSddWorkspace/bin/Release/net10.0/new-sdd-workspace.dll"
+    # Restore metadata in these disposable checkouts before freezing producer state.
+    # Compile and pack then consume only the already staged implementation bodies.
+    dotnet restore "$PROJ" --nologo -v quiet -m:1 -nr:false \
+      -p:FsggCurrentCoordDependencies=true -p:BuildProjectReferences=false \
+      -p:CompileUsingReferenceAssemblies=false \
+      "-p:FsggFrozenCoordSource=$FSGG_CREATOR_PRODUCER_SOURCE" \
+      "-p:FsggFrozenCoordDependencies=$FSGG_CREATOR_DEPENDENCIES" 1>&2
+    python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_PRODUCER_SOURCE" --output "$BUILD_ROOT/producer-before.json"
+    python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_CALLER_ROOT" --output "$BUILD_ROOT/active-before.json"
+    ;;
+  *) echo "::error::unknown Creator dependency mode"; exit 1 ;;
+esac
 build_rc=0
-dotnet build "$PROJ" -c Release --artifacts-path "$BUILD_ROOT" --nologo -v quiet \
-  -m:1 -nr:false -p:UseSharedCompilation=false 1>&2 || build_rc=$?
-python3 -B "$HERE/build-artifact-state.py" --output "$BUILD_ROOT/caller-after.json"
-if ! cmp -s "$BUILD_ROOT/caller-before.json" "$BUILD_ROOT/caller-after.json"; then
-  echo "::error::Creator fixture changed caller workspace artifacts or selected installed entry" >&2
-  [ "$build_rc" -ne 0 ] || build_rc=1
+if [ "$MODE" = published-dependency ]; then
+  dotnet build "$PROJ" -c Release --no-restore --nologo -v quiet \
+    -p:FsggCurrentCoordDependencies=true -p:BuildProjectReferences=false \
+    -p:CompileUsingReferenceAssemblies=false \
+    "-p:FsggFrozenCoordSource=$FSGG_CREATOR_PRODUCER_SOURCE" \
+    "-p:FsggFrozenCoordDependencies=$FSGG_CREATOR_DEPENDENCIES" \
+    -m:1 -nr:false -p:UseSharedCompilation=false 1>&2 || build_rc=$?
+else
+  dotnet build "$PROJ" -c Release --artifacts-path "$BUILD_ROOT" --nologo -v quiet \
+    -m:1 -nr:false -p:UseSharedCompilation=false 1>&2 || build_rc=$?
+fi
+if [ "$MODE" = published-dependency ]; then
+  python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_PRODUCER_SOURCE" --output "$BUILD_ROOT/producer-after.json"
+  python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_CALLER_ROOT" --output "$BUILD_ROOT/active-after.json"
+  cmp "$BUILD_ROOT/producer-before.json" "$BUILD_ROOT/producer-after.json" || build_rc=1
+  cmp "$BUILD_ROOT/active-before.json" "$BUILD_ROOT/active-after.json" || build_rc=1
+  python3 "$REPO_ROOT/scripts/creator-current-coord-dependencies.py" verify-layout \
+    --producer-source "$FSGG_CREATOR_PRODUCER_SOURCE" --dependencies "$FSGG_CREATOR_DEPENDENCIES"
+else
+  python3 -B "$HERE/build-artifact-state.py" --output "$BUILD_ROOT/caller-after.json"
+  cmp "$BUILD_ROOT/caller-before.json" "$BUILD_ROOT/caller-after.json" || build_rc=1
 fi
 [ "$build_rc" -eq 0 ] || exit "$build_rc"
-echo "PASS  isolated Creator build preserved workspace artifacts and selected caller identity"
-
-# Exact fresh output wins; never search a stale source bin/publish tree.
-DLL="$BUILD_ROOT/bin/NewSddWorkspace/release/new-sdd-workspace.dll"
-[ -f "$DLL" ] || { echo "::error::missing freshly built Creator DLL in isolated artifacts"; exit 1; }
+[ -f "$DLL" ] || { echo "::error::missing freshly built Creator DLL"; exit 1; }
 echo "new-sdd-workspace parse fixture — dll='$DLL'"
 
 # Exercise the wizard's pure decision boundary directly. The normal interactive path intentionally

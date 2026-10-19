@@ -240,6 +240,49 @@ continuation and parent acceptance remain open. Recovery uses Atlas ID
 `github/programme-binding-custody-recovery`, the exact host-retention receipt and private manifest;
 a public commitment or volatile staging path alone cannot recover private bytes.
 
+### Successor reader and Creator qualification findings — 2026-10-19
+
+The user confirmed that the visual UI check has passed. Root accepts that scoped human evidence
+separately from API metadata and installed caller qualification; no repeat visual check is required.
+The full #4682 and #4641 promises remain unchanged.
+
+After PR4691 protected the separately retained binding5 commitment at
+`a0e392c873246a1184f94befd87485525fdf87ed`, actual installed107 inspection3 selected the full22-item
+cohort but reached its unchanged500-request ceiling after187.79seconds. Eighteen sources were Current
+and four Unknown; final enrollment and membership barriers failed closed with zero mutations.
+This is an actual qualification failure, not successor acceptance. Preserve the private original
+report and pairs; reducing enrollment or raising the500-request/270-second limits is not selected.
+
+The source repair combines membership and planning acquisition only for binding5. It preserves
+fresh schema and final barriers, complete membership pagination, owner/content identities and bound
+field/option checks, without cross-item caching. Binding4, product binding3 and writer behavior retain
+their existing paths. All125 projection and75 CLI integration tests passed. The same22-item CLI
+regression against unchanged old source fails with exit3 and exactly500 sends at the determining
+request ceiling; its setup/build succeeds. Independent bounded reader review passed. These are source
+and synthetic transport results, not a published or installed108 qualification.
+
+Fresh public Creator017 installation matches all89 release tool members, but its actual fresh
+Rendering invocation refuses the published107 adapter before creating the target. Creator's adapter
+SHA256 is `8fb92b182d9f862700a52cb047dc16791fe06772db99afdf19e833add02d1c36`;
+published CLI107 uses `7ab6270814383cdb96e06f06aab3feb592aae8000c551464df0edd78d29d9887`.
+Rebuilding a nominally matching F# graph does not establish physical identity. Keep the strict hash
+check, original failure, immutable017 publication and Creator016/frozen099 history.
+
+The bounded material replan selects coherent108 publication first, followed by prospective Creator018
+reuse of the exact promoted108 dependency closure. Normal source qualification may compile the108
+source graph, but018 candidate/publication must refuse before costly build/effects until a real
+promoted108 dependency pin is delivered. No future digest, rebuilt adapter substitute or017 replay is
+admitted. Package evidence must be parsed and independently matched to all shared dependency bytes.
+Pipeline preflight reuses the maintained static workflow-order, artifact-body and fake-provider
+controls, with a bounded local warm target below60seconds. They must prove missing/invalid pins stop
+before SDK/credential launch and source-only evidence cannot enter publication. The publication state
+machine and historical seals remain unchanged, so a new custom model would duplicate existing controls;
+none is selected. No measured runner-minute saving is claimed.
+
+New source, actual publication/install, product fresh/upgrade journeys, programme continuation and real
+restart/rollback remain separate acceptance steps. Root owns the Atlas capture and original private
+evidence custody gap until those findings and artifacts are durably delivered.
+
 ### Accepted installed real-use qualification — 2026-10-18
 
 Root accepted the original installed 0.105 invocations against that final binding:

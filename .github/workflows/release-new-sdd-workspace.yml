@@ -1,9 +1,9 @@
 name: release-new-sdd-workspace
-run-name: ${{ inputs.promotion_recovery != 'off' && format('Wizard 0.13 recovery {0} {1} {2}', inputs.promotion_recovery, inputs.recovery_correlation, inputs.recovery_binding_sha256) || format('Wizard 0.17 successor {0}', inputs.candidate_run_id) }}
+run-name: ${{ inputs.promotion_recovery != 'off' && format('Wizard 0.13 recovery {0} {1} {2}', inputs.promotion_recovery, inputs.recovery_correlation, inputs.recovery_binding_sha256) || format('Wizard 0.18 successor {0}', inputs.candidate_run_id) }}
 
 # TSDD-KNOWLEDGE-01.4: retain the existing NuGet Trusted Publishing filename.
 # GS2-08.9's no-effect seal is superseded only for this exact-source, protected-
-# main-directory Creator 0.17.0 successor. Default publication remains false.
+# main-directory Creator 0.18.0 successor. Default publication remains false.
 # App mint and explicitly selected NuGet login are separately admitted credential effects.
 on:
   workflow_dispatch:
@@ -67,7 +67,7 @@ concurrency:
 
 jobs:
   publish:
-    name: new-sdd-workspace-017-publisher
+    name: new-sdd-workspace-018-publisher
     if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.promotion_recovery == 'off'
     runs-on: ubuntu-latest
     environment: release-successor
@@ -78,6 +78,8 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Refuse absent promoted dependency pin before credentials or effects
+        run: python3 scripts/creator-current-coord-dependencies.py preflight
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
@@ -137,8 +139,8 @@ jobs:
         timeout-minutes: 2
         uses: actions/upload-artifact@v7
         with:
-          name: creator017-publication-summary-${{ github.run_id }}
-          path: ${{ runner.temp }}/creator017-publication-summary.json
+          name: creator018-publication-summary-${{ github.run_id }}
+          path: ${{ runner.temp }}/creator018-publication-summary.json
           if-no-files-found: error
           retention-days: 7
 

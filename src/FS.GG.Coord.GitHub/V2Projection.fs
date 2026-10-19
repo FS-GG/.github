@@ -539,7 +539,7 @@ module V2Projection =
         { ItemId: string; Status: string option; Roadmap: string option; Track: string option
           Observation: string option; MembershipPages: int }
 
-    let readPlanning (transport: IGitHubTransport) (binding: Binding) (request: Request) =
+    let private readPlanningLegacy (transport: IGitHubTransport) (binding: Binding) (request: Request) =
         let admitted = validateBinding binding |> Result.bind (fun () ->
             if request.Issue.Number <= 0 || not (binding.Repositories.Contains $"{request.Issue.Owner}/{request.Issue.Repository}") || Map.tryFind request.ExpectedNodeId binding.SelectedIssues <> Some $"{request.Issue.Owner}/{request.Issue.Repository}#{request.Issue.Number}" then
                 Error(Malformed("bound V2 planning fields", "request is outside the explicitly selected native cohort"))
@@ -578,6 +578,93 @@ module V2Projection =
                                     select "status" binding.Status |> Result.bind (fun status -> roadmap |> Result.bind (fun roadmap ->
                                         select "track" binding.Track |> Result.bind (fun track -> select "observation" binding.Observation |> Result.map (fun observation ->
                                             { ItemId = itemId; Status = status; Roadmap = roadmap; Track = track; Observation = observation; MembershipPages = pages }))))))))))
+
+    // Read the successor's membership and planning values together. Each invocation still
+    // reads the exact schema, and every membership page independently joins the owner and
+    // native issue. No response is cached across items or across the final barrier.
+    let private readSuccessorPlanning (transport: IGitHubTransport) (binding: Binding) (request: Request) =
+        let subject = "bound V2 successor planning memberships"
+        let invalid detail = Error(Malformed(subject, detail))
+        validateBinding binding |> Result.bind (fun () ->
+            if request.Issue.Number <= 0 || not (binding.Repositories.Contains $"{request.Issue.Owner}/{request.Issue.Repository}")
+               || Map.tryFind request.ExpectedNodeId binding.SelectedIssues <> Some $"{request.Issue.Owner}/{request.Issue.Repository}#{request.Issue.Number}" then
+                invalid "request is outside the explicitly selected native cohort"
+            else
+                let expected: ExactProject = { Owner = binding.Owner; Number = binding.ProjectNumber; Title = binding.ProjectTitle; Id = binding.ProjectId }
+                bootstrapExactProject transport expected |> Result.bind (fun board ->
+                    verifyFieldSchema binding board |> Result.bind (fun () ->
+                        let document = "query($projectOwner:String!,$owner:String!,$repo:String!,$number:Int!,$after:String){organization(login:$projectOwner){id login} repository(owner:$owner,name:$repo){nameWithOwner issue(number:$number){id number projectItems(first:50,after:$after){totalCount pageInfo{hasNextPage endCursor} nodes{id project{id} content{... on Issue{id number repository{nameWithOwner}}} status:fieldValueByName(name:\"Status\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}} roadmap:fieldValueByName(name:\"Roadmap\"){__typename ... on ProjectV2ItemFieldTextValue{text field{... on ProjectV2Field{id}}}} track:fieldValueByName(name:\"Track\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}} observation:fieldValueByName(name:\"Observation\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}}}}}} rateLimit{cost remaining}}"
+                        let mutable pages = 0
+                        let fetch after =
+                            let variables =
+                                [ "projectOwner", VString binding.Owner; "owner", VString request.Issue.Owner
+                                  "repo", VString request.Issue.Repository; "number", VNumber(double request.Issue.Number) ]
+                                @ (after |> Option.map (fun cursor -> [ "after", VString cursor ]) |> Option.defaultValue [])
+                            GraphQl.read transport (graphRequest document variables subject) (fun data ->
+                                try
+                                    let organization = data.GetProperty "organization"
+                                    let repository = data.GetProperty "repository"
+                                    let native = repository.GetProperty "issue"
+                                    let repo = $"{request.Issue.Owner}/{request.Issue.Repository}"
+                                    if organization.GetProperty("id").GetString() <> binding.OrganizationId
+                                       || organization.GetProperty("login").GetString() <> binding.Owner
+                                       || repository.GetProperty("nameWithOwner").GetString() <> repo
+                                       || native.GetProperty("id").GetString() <> request.ExpectedNodeId
+                                       || native.GetProperty("number").GetInt32() <> request.Issue.Number then
+                                        invalid "immutable owner or native issue identity differs"
+                                    else
+                                        let decode (node: JsonElement) =
+                                            let itemId = node.GetProperty("id").GetString()
+                                            let projectId = node.GetProperty("project").GetProperty("id").GetString()
+                                            let content = node.GetProperty "content"
+                                            if not (nonBlank itemId) || not (nonBlank projectId)
+                                               || content.GetProperty("id").GetString() <> request.ExpectedNodeId
+                                               || content.GetProperty("number").GetInt32() <> request.Issue.Number
+                                               || content.GetProperty("repository").GetProperty("nameWithOwner").GetString() <> repo then
+                                                invalid "membership content identity differs"
+                                            else Ok(itemId, projectId, node.Clone())
+                                        let connection = native.GetProperty "projectItems"
+                                        if connection.GetProperty("totalCount").GetInt32() < 0 || connection.GetProperty("nodes").GetArrayLength() > 50 then
+                                            invalid "membership count/window is invalid"
+                                        else
+                                            GraphQl.page subject "native issue project memberships" (fun (id, _, _) -> id) decode connection
+                                            |> Result.map (fun page -> pages <- pages + 1; page)
+                                with
+                                | :? Collections.Generic.KeyNotFoundException
+                                | :? InvalidOperationException -> invalid "unreadable native membership identity")
+                        GraphQl.drain subject "native issue project memberships" { MaxPages = 10; MaxItems = 500 } fetch
+                        |> Result.bind (fun memberships ->
+                            match memberships |> List.filter (fun (_, projectId, _) -> projectId = binding.ProjectId) with
+                            | [ (itemId, _, node) ] ->
+                                try
+                                    let select (alias: string) (field: SelectFieldBinding) =
+                                        let value = node.GetProperty alias
+                                        if value.ValueKind = JsonValueKind.Null then Ok None
+                                        else
+                                            let name = value.GetProperty("name").GetString()
+                                            if value.GetProperty("__typename").GetString() <> "ProjectV2ItemFieldSingleSelectValue"
+                                               || value.GetProperty("field").GetProperty("id").GetString() <> field.Id
+                                               || Map.tryFind name field.Options <> Some(value.GetProperty("optionId").GetString()) then
+                                                invalid "single-select field/value differs from bound schema"
+                                            else Ok(Some name)
+                                    let roadmap =
+                                        let value = node.GetProperty "roadmap"
+                                        if value.ValueKind = JsonValueKind.Null then Ok None
+                                        elif value.GetProperty("__typename").GetString() <> "ProjectV2ItemFieldTextValue"
+                                             || value.GetProperty("field").GetProperty("id").GetString() <> binding.RoadmapFieldId then
+                                            invalid "Roadmap field identity/type differs"
+                                        else Ok(Some(value.GetProperty("text").GetString()))
+                                    select "status" binding.Status |> Result.bind (fun status -> roadmap |> Result.bind (fun roadmap ->
+                                        select "track" binding.Track |> Result.bind (fun track -> select "observation" binding.Observation |> Result.map (fun observation ->
+                                            { ItemId = itemId; Status = status; Roadmap = roadmap; Track = track; Observation = observation; MembershipPages = pages }))))
+                                with
+                                | :? Collections.Generic.KeyNotFoundException
+                                | :? InvalidOperationException -> invalid "unreadable bound planning fields"
+                            | _ -> invalid "expected exactly one membership in the bound project"))))
+
+    let readPlanning (transport: IGitHubTransport) (binding: Binding) (request: Request) =
+        if binding.BindingVersion = 5 then readSuccessorPlanning transport binding request
+        else readPlanningLegacy transport binding request
 
     let private repositoryAllowed (binding: Binding) (issue: IssueRef) =
         let candidate = $"%s{issue.Owner}/%s{issue.Repository}"
