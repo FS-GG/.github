@@ -1900,7 +1900,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "319271d0103479b0275418b488884502828b4986d3c7ed63f41064b93c7bae96",
-      "tree-sha256": "c2254886b6f62e461404c5dce5f2535a8194e6cb2d483a2a5872ba38b3f30387",
+      "tree-sha256": "2c5fd796b92a04edf20ee5197b2649a21df0b0b5477c9dab85cd2f452bb7db22",
       "files": [
         {
           "path": "SKILL.md",
@@ -1969,12 +1969,12 @@
         },
         {
           "path": "references/intake.md",
-          "sha256": "d0231339e0588c802f5d950ee1ffa0504b2d7c286bcd1c22ab4adbdd173153a2",
+          "sha256": "f5922f332278dbafc8fc074cfe0c8b4f0d836bfee4f1a5ca9aa0b294ff59cd5c",
           "executable": false
         },
         {
           "path": "references/lifecycle-contract.md",
-          "sha256": "ca0a71573abf8fa2ad84cc3eb26ac27f87f5a5de45a687e76a8f7646ff4a237a",
+          "sha256": "879c7cc105d8b8c5744d272e51ab8e8dac969ec88ae5d8dc3f4b2c25f5c31ba1",
           "executable": false
         },
         {
