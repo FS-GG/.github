@@ -1,28 +1,28 @@
 ---
 name: intra-repo-parallel-work
-description: Use when multiple workers must operate concurrently inside one FS-GG repository. Coordinate minted identities, claim locks, isolated worktrees, disjoint touch-sets, leases, and overlap messages.
+description: Coordinate authorized concurrent workers with isolated worktrees, clear owners, disjoint touch-sets and overlap handling.
 ---
 
-# Intra-repo parallel work (FS-GG)
+# Parallel work in one repository
 
-Parallel work is safe only while identity, claim, worktree, touch-set, and lease remain aligned.
+Use [work-board](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/SKILL.md) for scope, capacity and selected operations and
+[pnext-item](../pnext-item/SKILL.md) for each admitted Delivery. Delegation must be authorized by the
+runtime and useful; this skill does not require spawning workers.
 
-## Required invariants
+Keep one accountable owner and isolated worktree/branch per coherent Delivery, with explicit actual
+touch-set and one integrator for shared surfaces. Continue existing owners/PRs/attempts; do not create
+a second assignment or demand reservation for the same work. Before launch reconcile active demand,
+known/Unknown reservations, CPU/memory, hosted capacity and shared outputs. Free slots do not admit work.
 
-1. Mint one unique `FSGG_WORKER` per worker; never key ownership on the shared GitHub account.
-2. Claim through `take`/`claim` and proceed only when its receipt converges.
-3. Use one fresh worktree and `item/<number>-*` branch per claim.
-4. Edit only the declared `Paths:` touch-set. Widen before editing; stop if the widened set overlaps.
-5. Heartbeat live work. A lease is not broken until the typed reaper collects it.
-6. Use `say`, `inbox`, and coordination rooms for overlap; do not communicate through shared files.
-7. Merge through the verified green gate, satisfy post-merge obligations, stamp done, then release/clean.
+Communicate overlap through the [active worker channel](https://github.com/FS-GG/.github/blob/main/docs/coordination/worker-channels.md).
+Pause the affected edits when scope grows or conflicts; have owners/integrator reconcile the touch-set
+before proceeding. Do not overwrite another worker's files or infer release from silence/lease expiry.
+An expired original operation or killed parent retains its custody and Unknown effects until observed.
+Same-owner repair, independent exact-candidate review and normal delivery do not require routine worker
+minting, claims, heartbeat/done stamps, packets or phase chains.
 
-The scheduler, touch-set grammar, claim order, liveness, and messaging facts are generated from the
-typed core in [protocol-facts](references/protocol-facts.md). Load
-[worktrees-and-overlap](references/worktrees-and-overlap.md) when creating workers, changing paths, or
-handling contention.
-For extended rationale, lease/CAS failure modes, and historical edge cases, load
-[deep detail](references/deep-detail.md).
-
-For the end-to-end worker loop use [pnext-item](../pnext-item/SKILL.md). For cross-repository
-dependencies use [cross-repo-coordination](../cross-repo-coordination/SKILL.md).
+Only explicitly selected heavyweight scope or a separately qualified legacy PRODUCT route loads
+[legacy protocol facts](references/protocol-facts.md), [worktrees and overlap](references/worktrees-and-overlap.md)
+and [deep detail](references/deep-detail.md) within that original authority. Those contracts preserve
+substantive locks/custody already present; they do not activate organization V1 operations or change the
+default route. Use [cross-repo coordination](../cross-repo-coordination/SKILL.md) for shared suppliers.

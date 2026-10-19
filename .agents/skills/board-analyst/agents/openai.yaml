@@ -1,4 +1,4 @@
 interface:
   display_name: "Board Analyst"
-  short_description: "Adjudicate findings and read the board for churn"
-  default_prompt: "Use $board-analyst to decide which findings become rows and to measure board churn."
+  short_description: "Provide optional filing and churn analysis"
+  default_prompt: "Use $board-analyst for optional evidence-based finding disposition, semantic deduplication or a bounded board churn reading."

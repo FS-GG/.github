@@ -91,6 +91,7 @@
     <Compile Include="V2Projection.fs" />
     <Compile Include="V2ObservationTransport.fsi" />
     <Compile Include="V2ObservationTransport.fs" />
+    <Compile Include="V2InspectionAcquisition.fs" />
     <Compile Include="V2ProjectionSource.fsi" />
     <Compile Include="V2ProjectionSource.fs" />
     <Compile Include="V2Migration.fsi" />
@@ -111,4 +112,7 @@
     <PackageReference Include="FSharp.Core" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="coord-board-v2-projection" />
+  </ItemGroup>
 </Project>

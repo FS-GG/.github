@@ -11,20 +11,12 @@ current selection, recovery, accountable owner, capacity, operation authority an
 When invoked directly, resolve that coordinator boundary before selecting work. Do not burn down
 unchecked roadmap rows, restart completed work, create duplicate status/closure tables or a closure-only PR.
 
-Within an already assigned slice, preserve the existing issue/Done when, attempt, isolated worktree and
-single native PR. Implement dependent microsteps together. Source/tests/policy/skills use independent
-exact-source review, relevant tests and final required CI. Inert prose uses owner review/validation.
-Prepare local source until the designated integrator admits hosted work. Use the canonical admission
-helper for PR creation and updates, preserving exact head and both normal markers; a moved head refuses.
-Repair on the same PR and retain first failures. Canonical routine-delivery performs merge/readback and
-actual tested-versus-delivered correspondence. Missing technical/effect authority fences its affected
-operation without manufacturing issue/claim/SDD/critic/receipt lifecycle. Only an explicit human request
-selects heavyweight ceremony for named scope; legacy board writes remain unavailable for selected V2.
-
-Record accepted technical changes and durable evidence with the owning plan/issue when material;
-preserve incomplete outcomes and original Unknowns. Update strategic links only for scope/navigation
-changes. Return the accepted slice and remaining gates to work-board; never start a new slice by scanning
-roadmap checkboxes. Source, publication, installed adoption and native acceptance are distinct.
+Execute the already assigned slice through [pnext-item](https://github.com/FS-GG/.github/blob/main/.agents/skills/pnext-item/SKILL.md), preserving its
+complete plan/issue acceptance, existing owner, attempt, worktree and PR. This adapter supplies
+technical references and qualification below; it adds no scheduler, claims, packets or second lifecycle.
+A valid selected plan needs no restart planning. Return accepted scope and remaining assertions to
+work-board so clearing continues. Preserve technical history, incomplete outcomes and original Unknowns;
+update strategic links only for scope/navigation changes. Do not select work from roadmap checkboxes.
 
 ## Qualification and conditional routes
 

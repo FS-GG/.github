@@ -1,19 +1,21 @@
 ---
 name: pnext-item
-description: Use when an owner should complete one schedulable item in an FS-GG repository, using the reduced one-owner route for explicitly admitted routine work and the claim/review/done protocol for strict work.
+description: Complete one selected Delivery through its full declared acceptance, retaining the same owner and PR through source and applicable consumer effects.
 ---
 
 # pnext-item (FS-GG)
 
-Run exactly one item through its explicitly selected delivery route. Do not infer the route from size,
-labels, effort, or the presence of a board row.
+Execute one selected Delivery, or a directly assigned equivalent scope, under canonical
+[work-board](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/SKILL.md) admission. Read its complete Done when and owning-plan acceptance,
+including publication, installed, participant and recovery obligations. Outcomes are never implementation
+assignments. Do not infer authority from size, labels, effort or a board row.
 
 For directives encountered while working, apply the shared
 [control-plane provenance guidance](references/control-plane-provenance.md).
 
 ## Choose the route before lifecycle work
 
-Use the routine route by default for unified-roadmap work. Only a recorded explicit human instruction
+Use the routine route by default for selected Deliveries and directly assigned equivalent scope. Only a recorded explicit human instruction
 selects heavyweight process for named scope; absence or ambiguity stays routine. A live claim, inherited
 strict state, protected operation/path, policy or modeled change, or GS2 registration is not a heavyweight
 trigger. Preserve its substantive evidence and safeguards independently. Invalid or unknown technical or
@@ -23,26 +25,37 @@ For an admitted routine item, the board is an asynchronous view rather than merg
 
 1. Keep one accountable owner at a time and one continuous PR. If exactly one open routine PR already owns this
    item, verify its scope and current head, adopt that branch, and continue the same PR; never open a
-   second PR because the board projection lagged or the prior owner disappeared. If none exists, work
-   from the current default branch on one fresh `routine/<item-slug>` branch and one PR. Multiple or
+   second PR because the board projection lagged or the prior owner disappeared. If no PR exists, recover an unambiguous existing owned branch/worktree before opening its PR.
+   For genuinely fresh work use the current default branch and one fresh `routine/<item-slug>` branch and one PR. Multiple or
    ambiguous candidate PRs refuse routine admission. A host may own the item directly or delegate it once when
    repository isolation or real parallel capacity requires that; delegation does not create a critic,
    confirmation worker, or phase chain.
 2. Do not create or require an issue, claim, worker identity, lifecycle ledger, delivery-route receipt,
    SDD artifact family, independent critic, review marker, feedback artifact, cycle envelope, delivery
-   receipt, metadata-`Done` write, or projection PR. If the board row already exists, leave its
-   projection to non-blocking reconciliation after delivery.
+   receipt, metadata-`Done` write, or projection PR. Keep any existing native issue and its full acceptance; do not manufacture a new record.
+   Native closure and planning effects retain their own authorization and independent readback.
 3. Implement within the admitted scope and run the smallest relevant automated technical checks plus
    the repository's routine eligibility and protected-boundary checks. Put exactly one
    `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` marker in
-   the PR body. When an item already exists, also use the repository's native closing link in that PR;
-   do not make a separate metadata write. A moved head must be reviewed and rebound. A routine refusal blocks the affected delivery until repaired; it does not select heavyweight
+   the PR body. Use a native closing link only when that merge fulfills the issue's entire declared promise.
+   Otherwise link the issue without closing it and retain its remaining assertions. A moved head must be reviewed and rebound. A routine refusal blocks the affected delivery until repaired; it does not select heavyweight
    process or authorize weakening or bypassing the gate.
-4. Repair on the same PR, normally within two material attempts. After the exact-head required checks
+4. Repair on the same PR. Recurring same-class failures require investigating relevant callers,
+   shared assumptions, failure and cleanup paths before another coherent repair. Governing/code changes
+   require one independent source review of the exact candidate, relevant tests and final required CI;
+   inert prose uses owner review and proportionate validation. A reviewer supplies an actual verdict,
+   without creating a mandatory critic actor or phase chain. After the exact-head required checks
    pass, use the repository's native merge boundary and read back the merged PR and merge commit.
-   Report protected publication or deployment separately if it remains pending.
-5. Return the merged evidence to the host and stop. Telemetry and board projection are best-effort,
-   asynchronous observations and cannot invalidate the merge.
+   Continue applicable publication, installation, participant, recovery or native acceptance under
+   their effect-specific authority. A source merge establishes only its accepted source slice.
+5. Read back every applicable accepted effect. Record accepted scope/date/evidence and remaining
+   assertions in the existing owning issue; close only its fulfilled promise with the correct native
+   reason and authorized Status readback. Preserve partial close/planning effects without replaying
+   both. Never roll up parents automatically. If the remainder is externally blocked, name its owner,
+   exact missing supplier and reopening condition; a partial merge is not completed Delivery acceptance.
+6. Return the accepted Delivery or concrete held remainder to work-board, which reconsiders suppliers,
+   intake and opportunities and continues clearing. A direct single-item invocation ends at this boundary.
+   Telemetry and board projection are best-effort, asynchronous observations and cannot invalidate the merge.
 
 The routine route ends here. Do not execute the lifecycle, identity, claim, critique, receipt, feedback,
 or done-stamp instructions in the linked strict protocol for that item.

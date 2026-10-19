@@ -13,6 +13,7 @@
     <Compile Include="ProgrammeFixture.fs" />
     <Compile Include="MigrationFixture.fs" />
     <Compile Include="V2ProjectionTests.fs" />
+    <Compile Include="V2InspectionAcquisitionTests.fs" />
     <Compile Include="V2ObservationTransportTests.fs" />
     <Compile Include="V2MigrationTests.fs" />
   </ItemGroup>

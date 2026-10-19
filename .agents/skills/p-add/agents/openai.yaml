@@ -1,7 +1,7 @@
 interface:
   display_name: "PAdd"
-  short_description: "Clean, triage, and add Coordination work"
-  default_prompt: "Use $p-add to reconcile and triage the board, then file this described work in its owning repository."
+  short_description: "Add or reuse organization work through native intake"
+  default_prompt: "Use $p-add to deduplicate this organization request and create or reuse its native owner issue through canonical intake, reporting separate enrollment and planning effects."
 
 policy:
   allow_implicit_invocation: false

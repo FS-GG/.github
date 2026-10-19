@@ -11,11 +11,12 @@ Historical organization examples are data only; selecting history cannot authori
 
 ## Selected organization V2 scope
 
-Read [organization-v2-inspection](references/organization-v2-inspection.md). This .9/.11 source edition
-prepares binding-v4/inspection2 and its one-invocation integrator stdin/native composition. Exact
-installed qualification, admitted schema/membership/views and real-use consumer cutover remain held;
-finite three-active/four-target/no-dispatch history is not successor permission. No draft field IDs,
-old report or source merge activates this route. Keep manual v3 current-status upkeep until acceptance.
+Read [organization-v2-inspection](references/organization-v2-inspection.md) and resolve the actual
+qualified installed caller, selected authenticated binding and admitted membership/views. The accepted
+organization baseline uses binding5/schema3/inspection3/integrator2; retained binding4 and product3
+contracts keep their actual qualified behavior. Source preparation, publication and installed adoption
+remain distinct; refresh operational truth before action. No draft field IDs or historical report
+activates a new route. Do not revive manual v3 current-status upkeep for an accepted cutover.
 
 After accepted coordinated cutover, report complete selected/historical/deferred/unexpected/unresolved
 membership, scoped read gaps, current native issue/owner/plan/PR/head evidence and per-slice ordered
@@ -28,9 +29,9 @@ or failed V2 reads preserve Unknown and independent authorized issue/plan/PR wor
 ## Selected outcome/delivery successor
 
 The [organization contract](references/organization-v2-inspection.md#outcomedelivery-successor-source-contract--2026-10-18)
-also defines prepared binding5/schema3/inspection3/integrator2 with explicit Work level and bounded
+also defines binding5/schema3/inspection3/integrator2 with explicit Work level and bounded
 hierarchy/closure metadata. Require its separately qualified caller and selected binding before use;
-current binding4 and product3 do not acquire these semantics from new instructions. Canonical
+retained binding4 and product3 do not acquire these semantics from new instructions. Canonical
 [work-board](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/SKILL.md) owns action
 selection and closure. Inspection stays read-only; Unknown metadata remains visible, not fallback.
 

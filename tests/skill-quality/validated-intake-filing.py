@@ -1,29 +1,27 @@
 #!/usr/bin/env python3
-"""Reject skill recipes that bypass the validated intake transaction (.github#2736).
+"""Validate canonical native filing routes and retained qualified legacy-product transactions.
 
-The filing contract has two independent halves:
-
-1. Filing-capable skills show a complete ``fsgg.coord.intake/v1`` draft and prescribe
-   ``intake validate`` followed by ``intake apply``.
-2. No shell recipe creates an issue directly. A genuinely necessary escape hatch must carry an
-   adjacent ``fsgg:intake-break-glass: <conditions>`` comment, so an exception is accountable and
-   searchable rather than inferred from a historical explanation.
-
-Both declared runtime roots are scanned. The negative fixture at the bottom deliberately injects a
-direct creation recipe and proves the same detector rejects it.
+V2 creation, membership and enrollment are separate effects. Legacy PRODUCT recipes retain ordered
+validate/apply rather than becoming an organization fallback. Causal controls use the production
+lifecycle route validator and the legacy command detector, not a parallel filing implementation.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import re
 import sys
 from pathlib import Path
 
 
 SKILL_ROOTS = (Path(".claude/skills"), Path(".agents/skills"))
-SCOPED_SKILLS = ("p-add", "padd-item", "check-board", "cross-repo-coordination", "pnext-item")
-FILING_SKILLS = ("p-add", "padd-item", "cross-repo-coordination", "pnext-item")
+SCOPED_SKILLS = ("work-board", "p-add", "padd-item", "check-board", "cross-repo-coordination", "pnext-item")
+LEGACY_RECIPES = (
+    "padd-item/references/legacy-product-intake.md",
+    "pnext-item/references/deep-detail.md",
+    "cross-repo-coordination/references/deep-detail.md",
+)
 ISSUE_CREATE = re.compile(r"\bgh\s+issue\s+create\b")
 API_CALL = re.compile(r"\bgh\s+api\b(?P<args>[^\n;]*)")
 COMMAND_GH = re.compile(r"(?:^|\||\$\()\s*(?:command\s+)?gh\s+(?:issue\s+create|api)\b")
@@ -98,35 +96,31 @@ def audit(root: Path) -> list[str]:
                 errors.append(f"scoped skill is unreadable: {skill.relative_to(root)}")
                 continue
             for path in sorted(skill.rglob("*.md")):
+                # The one native intake route supports ordinary authenticated GitHub issue effects.
+                # Other recipes must route there; qualified legacy recipes keep validate/apply.
+                if path == resolved / "work-board/references/intake.md":
+                    continue
                 for line, command in direct_creations(path.read_text(encoding="utf-8")):
                     errors.append(
                         f"{path.relative_to(root)}:{line}: direct issue creation bypasses "
-                        f"`intake validate` + `intake apply`: {command}"
+                        f"canonical native intake or qualified legacy validate/apply: {command}"
                     )
 
-        for name in FILING_SKILLS:
-            skill = resolved / name
-            if not skill.is_dir():
+        for recipe in LEGACY_RECIPES:
+            path = resolved / recipe
+            if not path.is_file():
+                errors.append(f"legacy filing recipe missing: {path.relative_to(root)}")
                 continue
-            combined = "\n".join(
-                path.read_text(encoding="utf-8") for path in sorted(skill.rglob("*.md"))
-            )
-            for required in (
-                "fsgg.coord.intake/v1",
-                "scripts/fsgg-coord intake validate",
-                "scripts/fsgg-coord intake apply",
-            ):
-                if required not in combined:
-                    errors.append(
-                        f"{skill.relative_to(root)}: filing contract does not prescribe `{required}`"
-                    )
+            combined = path.read_text(encoding="utf-8")
             actions = intake_actions(combined)
             if not valid_validate_apply_order(actions):
                 rendered = " -> ".join(actions) if actions else "no executable intake commands"
-                errors.append(
-                    f"{skill.relative_to(root)}: executable intake recipes must pair `validate` "
-                    f"before `apply`; observed {rendered}"
-                )
+                errors.append(f"{path.relative_to(root)}: executable legacy intake must pair validate before apply; observed {rendered}")
+
+    spec = importlib.util.spec_from_file_location("skill_quality", root / "scripts/check-skill-quality.py")
+    quality = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(quality)
+    quality.validate_lifecycle_routes(root, errors)
 
     workflow = root / WORKFLOW
     if not workflow.is_file():
@@ -180,7 +174,7 @@ def main() -> int:
             print(f"validated-intake-filing: {error}", file=sys.stderr)
         return 1
     print(
-        "validated-intake-filing: OK — validated filing prescribed; command-wrapped bypass and "
+        "validated-intake-filing: OK — canonical native routing and legacy PRODUCT order verified; command-wrapped bypass and "
         "inverted validate/apply order rejected"
     )
     return 0

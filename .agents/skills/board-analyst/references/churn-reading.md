@@ -18,7 +18,7 @@ That is the whole input for parts 1 and 2. It is REST and ETag-revalidated — a
 it returns every issue with `created_at`, `closed_at`, `state` and `title`, which is enough to derive
 the window arithmetic locally with `jq` or `python3`. **Do not reach for a board `scan` here** — it
 answers a scheduling question, not a churn question, and that is the whole reason on its own. The
-single `scan` this role is allowed is the lane check after filing.
+historical post-filing lane scan is not a current requirement; canonical work-board owns action admission.
 
 Cost is the secondary consideration, and it is **not the constant this paragraph used to assert**. It
 said a scan costs "on the order of 1,900 REST requests of an hourly 5,000" — unsourced, and roughly

@@ -81,13 +81,18 @@ module SkillProgressiveDisclosureTests =
         Assert.Contains("contract-changes", body "cross-repo-coordination")
         Assert.Contains("coherent-releases", body "cross-repo-coordination")
         let coordinator = body "work-board"
+        Assert.Contains("references/lifecycle-contract.md", coordinator)
+        Assert.Contains("references/intake.md", coordinator)
+        Assert.Contains(".agents/skills/pnext-item/SKILL.md", coordinator)
+        let contract =
+            File.ReadAllText(Path.Combine(skillPath ".claude" "work-board", "references", "lifecycle-contract.md"))
         for route in
-            [ "references/org-scope.md"
-              "references/workspace-scope.md"
-              "references/bootstrap.md"
-              "references/delivery-reliability.md"
-              "references/observation.md" ] do
-            Assert.Contains(route, coordinator)
+            [ "org-scope.md"
+              "workspace-scope.md"
+              "bootstrap.md"
+              "delivery-reliability.md"
+              "observation.md" ] do
+            Assert.Contains(route, contract)
         Assert.Contains("../work-board/SKILL.md", body "drive-board")
         Assert.DoesNotContain("$work-programme", coordinator)
         Assert.Contains("feedback-contract", body "work-roadmap")

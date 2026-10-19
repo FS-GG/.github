@@ -4,11 +4,11 @@
     {
       "id": "check-board",
       "supplied-by": ".claude/skills/check-board",
-      "tree-sha256": "0e30cb7a5b15db2e92de1be9992b26ce225a715c67f387c269528ac1e613e731",
+      "tree-sha256": "c03cf17d21d450b39d17e8aab3b4bfbef8f9747c118e312d4280fb17d6b1085e",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "5e3b4695ea75b71e5d82772c0477372ca9fc9c8674d5b342ae67a5a3dad12c00",
+          "sha256": "f34cb94d1f600e7cbae8cb9f8730bbdc1e02c9e54f2fc7a3c6a04ce090f3aee0",
           "executable": false
         },
         {
@@ -33,7 +33,7 @@
         },
         {
           "path": "references/organization-v2-inspection.md",
-          "sha256": "e73eeb49cf87c9612778bbea011f45ccb7056b557c17d015944faa50e624443a",
+          "sha256": "9bb92ca96a7c82afe74267a1f5be233133fcfece157ba229c96f95df0c3b0d4d",
           "executable": false
         },
         {
@@ -46,11 +46,11 @@
     {
       "id": "cross-repo-coordination",
       "supplied-by": ".claude/skills/cross-repo-coordination",
-      "tree-sha256": "8d2733b2b65c005d3136d1557c96f71025cd6a92e18e420dfc031804db0094cf",
+      "tree-sha256": "6e5421070bb0f90b7060856d51f5758a544d9903f90c499943f59ff71bccfb08",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "dbe7191249a1007be0f66c71845e42635ade344955b149c76e81591be32afa4b",
+          "sha256": "ef09573ed99cd3a83edc674438e8f7d76ac31f925c2e24c41c3962796beaaa0a",
           "executable": false
         },
         {
@@ -70,12 +70,12 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "c5b2430d782a85117d7e82dc17a97187221f6e2d303fe784f068ab2924bfb0ed",
+          "sha256": "10f7c857876489b427ae402e0e1f203400d507021a847d916a43bf86a1aa73a5",
           "executable": false
         },
         {
           "path": "references/mailbox-and-board.md",
-          "sha256": "07ab1dab958d8e5d38487a3cf4b5ae59ffabaa2251873cf8918475d5f69b5b01",
+          "sha256": "ea853a204a91e74465283efad0dc17f9678052a49d28b11c97d38cb6e337ad75",
           "executable": false
         }
       ]
@@ -100,11 +100,11 @@
     {
       "id": "intra-repo-parallel-work",
       "supplied-by": ".claude/skills/intra-repo-parallel-work",
-      "tree-sha256": "307b71bda594bc3adf329dcfba06ac90bd994b4a65938eff483f0382b8708cf8",
+      "tree-sha256": "5a1f9f66563a2358d5dff1a6e97388a3c86dd38f924272e011f3dea9714defc5",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "7bee25b83b422cf0654178a741de4e90a424c24931ae119004843c5fc74b784f",
+          "sha256": "0d68e9ea6fca8fdb438e0199661d4787b432cf8d5d52fe5d153e4400d7d24852",
           "executable": false
         },
         {
@@ -132,16 +132,16 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "2f3aca612d7442a349a8be42dbc4d81fc91d9f5fad2641d868643de6f855340b",
+      "tree-sha256": "2fa332a40efcc5b1980a9cf4af69cd2fc83137a82ee7208093d3e35bf5d28a58",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "94a62651edf281792a20f3846fd7822d4eca78ebf3f593925bdc1347b025f26d",
+          "sha256": "4906af6ed0b22ab8e2fc95372cc9a4221e63c73d3ca35fc6c4e5683f607977e5",
           "executable": false
         },
         {
           "path": "agents/openai.yaml",
-          "sha256": "4386e592dec3f185120a1495204cdd15679d9a72ca18852d9819fa029fadeda3",
+          "sha256": "9b83eff80c2fd3d1afc9feaf050dfb404a992cd58f081fff5072c6a9c9996d3e",
           "executable": false
         },
         {
@@ -161,7 +161,7 @@
         },
         {
           "path": "references/findings-and-filing.md",
-          "sha256": "47057a7c0a43f2220c26d18b2f7a9ed3ed898c5f266d2254a4b42c1b459d4689",
+          "sha256": "3a092b373f2248f30297bdc690f2a53daee9a1def58d15e80bee039799c03cdf",
           "executable": false
         },
         {
@@ -191,7 +191,7 @@
         },
         {
           "path": "references/strict-item-lifecycle.md",
-          "sha256": "6964564e0783243746094a1dbb61c46ca0372053915591dd56562b123f9df9c4",
+          "sha256": "2f1925af272c488e1a9fc7c35ff71869e2a7b5afd00b38ccd274642722bc9ec4",
           "executable": false
         }
       ]

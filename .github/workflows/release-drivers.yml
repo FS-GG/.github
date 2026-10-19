@@ -241,6 +241,9 @@ jobs:
               <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-roadmap/SKILL.md')" Text="restored package has no work-roadmap SKILL.md at $(FsggDriversContentDir)" />
               <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-roadmap/references/feedback-contract.md')" Text="restored package has no work-roadmap feedback contract at $(FsggDriversContentDir)" />
               <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-board/references/feedback-contract.md')" Text="restored package has no work-board feedback contract at $(FsggDriversContentDir)" />
+              <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-board/references/lifecycle-contract.md')" Text="restored package has no canonical board lifecycle contract" />
+              <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-board/references/intake.md')" Text="restored package has no canonical board intake instructions" />
+              <Error Condition="!Exists('$(FsggDriversContentDir)/skills/padd-item/references/legacy-product-intake.md')" Text="restored package has no fenced product intake compatibility instructions" />
               <Error Condition="$([System.String]::Copy($([System.IO.File]::ReadAllText('$(FsggDriversContentDir)/skills/work-board/references/feedback-contract.md'))).Contains('scripts/fsgg-coord telemetry feedback validate')) != 'True'" Text="restored work-board contract does not call the compiled feedback validator" />
               <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-board-normal/SKILL.md')" Text="restored package has no work-board-normal SKILL.md at $(FsggDriversContentDir)" />
               <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-board-best/SKILL.md')" Text="restored package has no work-board-best SKILL.md at $(FsggDriversContentDir)" />

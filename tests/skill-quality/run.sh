@@ -118,6 +118,7 @@ for relative, content, expected in (
 assert not check(), check()
 print("PASS prepared organization source contract and 17 negative controls; full Protocol/CLR NOT RUN")
 PY_ORG
+python3 -B "$ROOT/tests/skill-quality/board-lifecycle.py"
 python3 "$ROOT/scripts/check-skill-quality.py" --root "$WORK/tree" --links-only
 skill_byte_state >"$WORK/skill-bytes.after"
 if ! cmp -s "$WORK/skill-bytes.before" "$WORK/skill-bytes.after"; then
@@ -443,7 +444,7 @@ from pathlib import Path
 
 root = Path(sys.argv[1])
 for runtime in (".claude", ".agents"):
-    path = root / runtime / "skills/work-board/SKILL.md"
+    path = root / runtime / "skills/work-board/references/lifecycle-contract.md"
     old = "Preserve the complete Done when; a merged slice narrows the\nremainder without closing its parent"
     assert old in path.read_text(), "canonical parent-boundary fixture preimage missing"
     path.write_text(path.read_text().replace(old, "A merged slice completes its parent"))
@@ -1063,33 +1064,23 @@ PY
 expect_recency_rejection "the gate no longer triggers on its own source" \
   "does not list 'tests/skill-quality/**' under pull_request.paths"
 
-# --- .github#2675: the board host loops must dispatch the analyst they told finders to feed --------
-#
-# `.github#2584` routed finders to post `fsgg:finding-packet` comments INSTEAD of filing, and codified
-# the analyst's own behaviour once invoked — but no host step collected the packets, so every finding
-# became a comment with no reader. These are the committed inversions: each is a real mutation of a
-# seeded tree, run through the gate's own entry point, and each fails a DIFFERENT leg.
-
-# The defect verbatim, and the exact state `main` was in before this row: a host loop that owns critic
-# dispatch and says nothing about the analyst.
+# Canonical owned finding guidance remains reachable through compatibility hosts.
 seed_agents
-python3 - "$WORK/tree" <<'PY'
+python3 - "$WORK/tree" <<'PY_ANALYST'
 import importlib.util
 import sys
 from pathlib import Path
-
 root = Path(sys.argv[1])
 spec = importlib.util.spec_from_file_location("gate", root / "tests/skill-quality/analyst-dispatch.py")
 gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
-path = root / ".claude/skills/drive-board/references/host-loop.md"
+path = root / ".claude/skills/work-board/references/host-loop.md"
 text = path.read_text()
-if text.count(gate.CANONICAL) != 1:
-    raise SystemExit("fixture: drive-board host-loop must carry exactly one canonical dispatch step")
+assert text.count(gate.CANONICAL) == 1
 path.write_text(text.replace(gate.CANONICAL, "", 1))
-PY
-expect_analyst_rejection "a host loop that never collects finding packets is rejected" \
-  ".claude/skills/drive-board/references/host-loop.md carries the canonical analyst-dispatch step 0 time(s)"
+PY_ANALYST
+expect_analyst_rejection "canonical host cannot strand already reported findings" \
+  "carries the canonical analyst-dispatch step 0 time(s)"
 
 # Criterion 2 of the row, and `.github#485`'s drift: the routed variants change MODEL ROUTING ONLY.
 # A variant that grows its own copy of the protocol is how the two stop agreeing. Note the mutation
@@ -1121,7 +1112,7 @@ if gate.NO_ANALYST_BRANCH not in text:
 path.write_text(text.replace(gate.NO_ANALYST_BRANCH, "**Where no analyst is available**, stop and ask.", 1))
 PY
 expect_analyst_rejection "deleting the no-analyst branch every kit receiver reads is rejected" \
-  "no longer carries its no-analyst branch verbatim"
+  "no longer carries its current-owner branch verbatim"
 
 # The other half of criterion 5, and the one prose alone cannot hold: the branch above is CORRECT only
 # while the analyst materializes nowhere. Flip the predicate and receivers start resolving an analyst

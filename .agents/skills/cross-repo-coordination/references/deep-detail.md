@@ -4,8 +4,8 @@
 ## Current organization boundary
 
 Organization requests follow [mailbox and board](mailbox-and-board.md) and the
-[prepared V2 contract](../../check-board/references/organization-v2-inspection.md). This is .9/.11
-source preparation, not a consumer switch or live mutation. The V1 intake/Class/severity/Phase,
+[selected V2 contract](../../check-board/references/organization-v2-inspection.md). Resolve the actual qualified installed caller and selected binding; accepted organization cutover
+supersedes historical preparation-only status. Loading this reference is not a consumer switch or live mutation. The V1 intake/Class/severity/Phase,
 board field/hierarchy setup and done-stamp sections below are retained historical mechanics only.
 They do not govern current organization work, even by opting into an old scope, and cannot be used
 as a V2 fallback. Human planning and action-specific acceptance replace automatic merged/claim→Done.
