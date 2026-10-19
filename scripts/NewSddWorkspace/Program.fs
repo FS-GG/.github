@@ -2730,16 +2730,18 @@ let private parseRetrofit (argv: string list) : Result<RetrofitOptions, string> 
 
 /// Resolve selected V2 bytes before any creator effects. All transport here is immutable raw
 /// producer content; no adapter/installed execution or GitHub resource operation is performed.
-let private prepareProductBoard generatedManifest authority scaffoldSucceeded target repository bindingPath kitRef =
+let private prepareProductBoard generatedManifest retained authority scaffoldSucceeded target repository bindingPath kitRef =
     match repository, bindingPath, kitRef with
     | Some repo, Some path, Some revision ->
         try
             ProductBoard.validateOrigin authority scaffoldSucceeded target repo
                 (runProcessIn (Some target) false "git")
             |> function Ok() -> () | Error error -> invalidOp error
-            let fetch relative = fetchText (sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" revision relative)
+            let fetchRevision selectedRevision relative = fetchText (sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" selectedRevision relative)
+            let fetch = fetchRevision revision
             match generatedManifest with
             | Some snapshot -> ProductBoard.prepareGenerated snapshot target repo revision (File.ReadAllText path) fetch
+            | None when retained -> ProductBoard.prepareRetained target repo revision (File.ReadAllText path) fetchRevision
             | None -> ProductBoard.prepare target repo revision (File.ReadAllText path) fetch
         with error -> Error error.Message
     | _ -> Error "V2 integration requires --repo, --board-binding and --board-kit-ref together"
@@ -2747,7 +2749,7 @@ let private prepareProductBoard generatedManifest authority scaffoldSucceeded ta
 let private wireCoordination generatedManifest authority kitRef (opts: Options) =
     if opts.BoardBinding.IsNone && opts.BoardKitRef.IsNone then wireLegacyCoordination kitRef opts
     else
-        prepareProductBoard generatedManifest authority true opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef
+        prepareProductBoard generatedManifest false authority true opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef
         |> Result.bind (ProductBoard.apply opts.Target)
         |> function Ok() -> Succeeded | Error error -> Failed error
 
@@ -3032,7 +3034,7 @@ let private run (opts: Options) : int =
         elif opts.BoardBinding.IsSome || opts.BoardKitRef.IsSome then
             if not opts.Coordinate || opts.BoardOwner <> "FS-GG" || opts.BoardTitle <> "Coordination" || opts.ChoreLocks.IsSome || opts.PublicBoard.IsSome || not (List.isEmpty opts.TrustedWriters) then
                 Error "V2 binding cannot be combined with legacy coordination/access options"
-            else prepareProductBoard None authority false opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef |> Result.map ignore
+            else prepareProductBoard None false authority false opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef |> Result.map ignore
         else Ok()
     if Result.isError governancePreflight then
         let error = governancePreflight |> function Error message -> message | Ok _ -> ""
@@ -3500,7 +3502,7 @@ let private runRetrofit (opts: RetrofitOptions) : int =
             AnsiConsole.MarkupLine "[red]product V2 refused:[/] legacy chore-lock wiring is incompatible"
             2
         else
-            match prepareProductBoard None (ProductBoard.captureOriginAuthority opts.Target) false opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef with
+            match prepareProductBoard None true (ProductBoard.captureOriginAuthority opts.Target) false opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef with
             | Error error ->
                 AnsiConsole.MarkupLine(sprintf "[red]%s[/]" (Markup.Escape error))
                 2

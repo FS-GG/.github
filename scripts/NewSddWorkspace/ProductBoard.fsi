@@ -15,9 +15,14 @@ module ProductBoard =
           Executable: bool
           BeforeMode: UnixFileMode option }
 
-    /// Preview of one exact repository/project and its complete local change set. No board
-    /// membership or planning mutation is represented by this value.
-    type Plan = { Repository: string; ProjectId: string; Changes: FileChange list }
+    /// Preview of one exact repository/project, local changes and retained ownership preimages.
+    /// Preimages also guard unchanged producer-owned leaves without rewriting their timestamps.
+    /// No board membership or planning mutation is represented by this value.
+    type Plan =
+        { Repository: string
+          ProjectId: string
+          Changes: FileChange list
+          Preimages: (string * byte array * UnixFileMode option) list }
 
     /// Decode closed Binding v3 through the canonical decoder and require the selected repository
     /// and exact loaded adapter DLL digest. Organization and unsupported owner bindings refuse.
@@ -62,6 +67,13 @@ module ProductBoard =
         target: string -> repository: string -> kitRevision: string -> bindingJson: string ->
         fetch: (string -> Result<string, string>) -> Result<Plan, string>
 
+    /// Explicit retained retrofit authenticates the accepted immutable predecessor manifests and
+    /// original selected108 binding before replacing producer-owned instructions. Preserve the
+    /// original provenance, tool pins and owner files; recheck the whole authenticated preimage.
+    val prepareRetained:
+        target: string -> repository: string -> kitRevision: string -> bindingJson: string ->
+        fetchRevision: (string -> string -> Result<string, string>) -> Result<Plan, string>
+
     /// Fresh-only replacement requires the opaque, unchanged manifest and driver snapshot. Other tool entries
     /// and atomic preimages are preserved. Captured active driver hashes are updated with the verified
     /// replacement bytes while original provenance and before/after hashes remain recorded.
@@ -70,7 +82,8 @@ module ProductBoard =
         snapshot: GeneratedToolManifest -> target: string -> repository: string -> kitRevision: string ->
         bindingJson: string -> fetch: (string -> Result<string, string>) -> Result<Plan, string>
 
-    /// Recheck every preimage before local installation. Retain modes and restore prior file bytes
-    /// on failure; incomplete rollback is reported explicitly. An empty plan performs no writes.
+    /// Recheck every preimage before local installation. Retain modes and restore bytes, modes
+    /// and modification times on failure; incomplete rollback is reported explicitly.
+    /// An empty plan performs no writes.
     /// This operation neither invokes the adapter nor creates resources or changes board fields.
     val apply: target: string -> plan: Plan -> Result<unit, string>
