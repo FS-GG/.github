@@ -66,6 +66,69 @@ class CurrentDependencies(unittest.TestCase):
     def evidence(self):
         return CURRENT['evidence'](self.package, 'a' * 40, self.pin, fixtures_passed=True)
 
+    def test_source020_uses_exact108_without_broadening_consumed019(self):
+        from creator_source_qualification import SOURCE_020
+        from new_sdd_workspace_successor_execution import effects, ReleaseBinding
+        from new_sdd_workspace_successor_admission import WizardAdmission
+        from release_successor_execution import Refused
+        deps = json.loads(json.dumps(self.deps))
+        for target in deps['targets'].values():
+            target['new-sdd-workspace/0.20.0'] = target.pop('new-sdd-workspace/0.19.0')
+        own_metadata = {'FS.GG.NewSddWorkspace.nuspec':
+                        b'<package><metadata><id>FS.GG.NewSddWorkspace</id><version>0.20.0</version>'
+                        b'<repository commit="' + b'a' * 40 + b'"/></metadata></package>'}
+        self.write(deps=deps, extra=own_metadata)
+        original_pin = json.dumps(self.pin, sort_keys=True)
+        evidence = CURRENT['evidence'](self.package, 'a' * 40, self.pin,
+                                      fixtures_passed=True, source_binding=SOURCE_020)
+        self.assertEqual(evidence['version'], '0.20.0')
+        self.assertEqual(evidence['coherentVersion'], '0.108.0')
+        self.assertEqual(evidence['dependencyMembers'], self.pin['members'])
+        self.assertEqual(evidence['publishedDependencySourceSha'], self.pin['sourceSha'])
+        self.assertEqual(json.dumps(self.pin, sort_keys=True), original_pin)
+        self.assertIs(evidence['sourceQualificationOnly'], True)
+        self.assertIs(evidence['releaseEligible'], False)
+        manifest = {'sourceSha': 'a' * 40, 'version': '0.20.0',
+                    'archiveSha256': evidence['archiveSha256']}
+        CURRENT['verify_evidence'](evidence, self.package, manifest, self.pin,
+                                   source_binding=SOURCE_020)
+        with self.assertRaisesRegex(ValueError, 'metadata'):
+            CURRENT['verify_evidence'](evidence, self.package, manifest, self.pin)
+        with self.assertRaisesRegex(ValueError, 'compiled fixtures'):
+            CURRENT['evidence'](self.package, 'a' * 40, self.pin,
+                                fixtures_passed=False, source_binding=SOURCE_020)
+        self.write(deps=deps, extra={'FS.GG.NewSddWorkspace.nuspec':
+                                    own_metadata['FS.GG.NewSddWorkspace.nuspec'].replace(b'0.20.0', b'0.19.0')})
+        with self.assertRaisesRegex(ValueError, 'package/source identity'):
+            CURRENT['evidence'](self.package, 'a' * 40, self.pin,
+                                fixtures_passed=True, source_binding=SOURCE_020)
+        self.write(deps=deps, extra=own_metadata)
+        with self.assertRaisesRegex(ValueError, 'package/source identity'):
+            CURRENT['evidence'](self.package, 'c' * 40, self.pin,
+                                fixtures_passed=True, source_binding=SOURCE_020)
+        forged = ReleaseBinding(SOURCE_020.package, SOURCE_020.version, SOURCE_020.tag)
+        with self.assertRaisesRegex(ValueError, 'unknown Creator source'):
+            CURRENT['package_members'](self.package, self.pin, source_binding=forged)
+        mutated = dict(self.members)
+        mutated['FS.GG.Coord.GitHub.dll'] += b' deliberately changed original dependency'
+        self.write(members=mutated, deps=deps, extra=own_metadata)
+        with self.assertRaisesRegex(ValueError, 'changed published dependency'):
+            CURRENT['package_members'](self.package, self.pin, source_binding=SOURCE_020)
+        proposed = {'schema': 'fsgg.new-sdd-workspace-release/1',
+                    'packageId': SOURCE_020.package, 'version': SOURCE_020.version,
+                    'tag': SOURCE_020.tag, 'sourceSha': 'a' * 40,
+                    'archiveSha256': 'b' * 64, 'producerPayloadSha256': 'sha256:' + 'c' * 64}
+        class NoNativeReads:
+            def get(self, path):
+                raise AssertionError('source qualification cannot read effect authority')
+        with self.assertRaisesRegex(Refused, 'unknown Wizard release binding'):
+            effects(proposed, binding=SOURCE_020)
+        with self.assertRaisesRegex(Refused, 'unknown Wizard release binding'):
+            WizardAdmission(NoNativeReads(), proposed, 'a' * 40, 1,
+                            'EHotwagner', 'refs/heads/main', release_binding=SOURCE_020)
+        with self.assertRaisesRegex(Refused, 'exact Wizard 0.19.0'):
+            effects(proposed)
+
     def test_complete_exact_closure_and_mutations(self):
         self.assertEqual(CURRENT['package_members'](self.package, self.pin), self.pin['members'])
         for name in self.members:

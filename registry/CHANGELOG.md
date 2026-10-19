@@ -1,5 +1,14 @@
 # Registry changelog
 
+## 2026-10-19 — independent Creator020 source qualification (#4701)
+
+Advance only Creator source to0.20.0 for its closed48-leaf materialization allowlist. Its distinct source
+qualification binding covers normal coherent109 builds and separately retained genuine published108
+dependency bytes; the producer pin is unchanged. Published019, consumed019 publisher/effect attestation
+and historical recovery remain intact. The new candidate is source-only and cannot pass the019 publisher.
+A separately admitted/reviewed020 publisher, actual package qualification and installed fresh/retained
+receiver acceptance remain required; no future109 dependency artifact identity is invented.
+
 ## 2026-10-19 — board lifecycle coherent109 source preparation (#4701)
 
 Advance only the shared CLI/Kit/Drivers source scalar and coord-engine source version to0.109.0.

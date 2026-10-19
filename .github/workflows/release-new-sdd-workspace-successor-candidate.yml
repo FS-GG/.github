@@ -1,6 +1,7 @@
 name: release-new-sdd-workspace-successor-candidate
 
-# Creator019 release has no source-build fallback. Missing promoted108 pin refuses.
+# Creator020 source qualification reuses genuine promoted108 dependency bytes.
+# No020 publisher is activated; the consumed019 effect route remains bound to its original profile.
 on:
   workflow_dispatch:
 permissions:
@@ -11,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   candidate:
-    name: new-sdd-workspace-019-candidate
+    name: new-sdd-workspace-020-source-candidate
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -38,21 +39,21 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
           version="$(dotnet msbuild scripts/NewSddWorkspace/NewSddWorkspace.fsproj -getProperty:Version | tr -d '[:space:]')"
-          test "$version" = 0.19.0
-          test -z "$(git ls-remote --tags origin refs/tags/new-sdd-workspace/v0.19.0)"
+          test "$version" = 0.20.0
+          test -z "$(git ls-remote --tags origin refs/tags/new-sdd-workspace/v0.20.0)"
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
-            https://api.nuget.org/v3-flatcontainer/fs.gg.newsddworkspace/0.19.0/fs.gg.newsddworkspace.0.19.0.nupkg)"
+            https://api.nuget.org/v3-flatcontainer/fs.gg.newsddworkspace/0.20.0/fs.gg.newsddworkspace.0.20.0.nupkg)"
           test "$response" = 404
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
             -u "$GITHUB_ACTOR:$GITHUB_TOKEN" \
-            https://nuget.pkg.github.com/FS-GG/download/fs.gg.newsddworkspace/0.19.0/fs.gg.newsddworkspace.0.19.0.nupkg)"
+            https://nuget.pkg.github.com/FS-GG/download/fs.gg.newsddworkspace/0.20.0/fs.gg.newsddworkspace.0.20.0.nupkg)"
           test "$response" = 404
       - name: Refuse mismatched Creator profiles before costly graph qualification
         run: python3 tests/new-sdd-workspace-successor/run.py
       - name: Acquire verified promoted originals into fresh isolated checkouts
         run: |
           set -euo pipefail
-          work="$RUNNER_TEMP/creator019-published-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          work="$RUNNER_TEMP/creator020-published-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           test ! -e "$work"
           mkdir -m 700 "$work"
           git clone --no-hardlinks --no-checkout "$GITHUB_WORKSPACE" "$work/creator"
@@ -85,12 +86,12 @@ jobs:
             -p:CompileUsingReferenceAssemblies=false \
             -p:FsggFrozenCoordSource="$work/producer" -p:FsggFrozenCoordDependencies="$work/dependencies" \
             -p:RepositoryCommit="$GITHUB_SHA" -o "$GITHUB_WORKSPACE/artifacts/new-sdd-workspace"
-          package=artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.19.0.nupkg
+          package=artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.20.0.nupkg
           manifest=artifacts/new-sdd-workspace/manifest.json
           python3 scripts/new-sdd-workspace-release.py prepare --package "$package" \
-            --source-sha "$GITHUB_SHA" --version 0.19.0 --tag new-sdd-workspace/v0.19.0 --output "$manifest"
+            --source-sha "$GITHUB_SHA" --version 0.20.0 --tag new-sdd-workspace/v0.20.0 --output "$manifest"
           python3 scripts/new-sdd-workspace-release.py verify --manifest "$manifest" --package "$package"
-          python3 tests/new-sdd-workspace-successor/run.py --board-package "$package" \
+          python3 tests/new-sdd-workspace-successor/run.py --source-qualification-020 --board-package "$package" \
             --source-sha "$GITHUB_SHA" --release-manifest "$manifest" \
             --published-coord-dependencies "$work/dependencies" --published-coord-source "$work/producer" \
             --creator-source "$work/creator" > artifacts/new-sdd-workspace/package-evidence.json
@@ -100,7 +101,7 @@ jobs:
         with:
           name: new-sdd-workspace-successor-candidate-${{ github.sha }}-${{ github.run_id }}
           path: |
-            artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.19.0.nupkg
+            artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.20.0.nupkg
             artifacts/new-sdd-workspace/manifest.json
             artifacts/new-sdd-workspace/package-evidence.json
           if-no-files-found: error

@@ -1940,3 +1940,21 @@ published as consumed019. The genuine108 dependency pin and complete original bi
 unchanged; a new Creator source/qualification binding must demonstrate its exact dependency match.
 No future109 asset/member/source pin may be invented before genuine promotion. Coherent109
 publication alone does not publish Creator or establish fresh/retained receiver acceptance.
+
+
+### Independent Creator020 source qualification — 2026-10-19
+
+The lifecycle48-leaf allowlist changes Creator source and selects its own source version0.20.0.
+The normal-source selftest binds the actual coherent109 build graph. Its separate read-only candidate
+qualifies the same Creator020 against the genuine immutable promoted108 dependency closure already
+pinned in `creator-current-coord-dependencies.json`. This pin authenticates producer source, release,
+archive and every dependency member independently of Creator's own version; no109 artifact is needed
+for an allowlist-only Creator change, and no future artifact identity is invented.
+
+`SOURCE_020` is a closed source-qualification binding, excluded from the existing effect/admission
+bindings. Its published-dependency evidence explicitly remains source qualification only and not
+release eligible. The consumed019 publisher, artifact reader, current effect attestation and recovery
+profiles are unchanged; a020 candidate cannot be published through019. An independently reviewed
+bounded020 publisher successor and fresh effect admission remain required before publication, followed
+by actual installed fresh/retained Rendering and selected Game receiver acceptance. Source package
+qualification does not establish those later effects or widen the product binding.
