@@ -555,9 +555,22 @@ def frozen_creator_reference(root: str, rel: str, project: ET.ElementTree, refer
     verify = [t for t in xml.findall("Target") if t.get("Name") == "VerifyFrozenCoordDependencies"]
     command = 'python3 "$(MSBuildThisFileDirectory)../creator-frozen-coord-dependencies.py" verify-layout --producer-source "$(FsggFrozenCoordSource)" --dependencies "$(FsggFrozenCoordDependencies)"'
     if (len(verify) != 1 or verify[0].attrib != {"Name": "VerifyFrozenCoordDependencies", "BeforeTargets": "PrepareForBuild", "Condition": scope}
-            or len(list(verify[0])) != 1 or verify[0][0].tag != "Exec" or verify[0][0].attrib != {"Command": command}):
+            or any(child.tag != "Exec" or list(child) for child in verify[0])):
         return False
-    # The external recipe remains explicit source input, never a guessed property target.
+    historical = [{"Command": command}]
+    current = [
+        {"Condition": "'$(FsggCurrentCoordDependencies)' != 'true'", "Command": command},
+        {"Condition": "'$(FsggCurrentCoordDependencies)' == 'true'",
+         "Command": command.replace("creator-frozen-coord-dependencies.py", "creator-current-coord-dependencies.py")},
+    ]
+    # These are the only two supported selectors: the retained single frozen route,
+    # or the paired retained/current route. Both keep the same ordinary local graph
+    # and no-producer-build/copy guards. Unknown conditions/helpers remain no-verdict.
+    # A genuine current pin is deliberately not required by this static source graph:
+    # the current adapter refuses its absent pin at the release boundary independently.
+    if [child.attrib for child in verify[0]] not in (historical, current):
+        return False
+    # Authenticate the retained recipe only; its fixed census is not a current108 census.
     pin_path = os.path.join(root, "scripts", "creator-frozen-coord-dependencies.json")
     try:
         with open(pin_path, encoding="utf-8") as source:

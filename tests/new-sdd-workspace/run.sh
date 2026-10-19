@@ -61,7 +61,6 @@ case "$MODE" in
   source-only)
     echo "Creator source-only qualification (not release evidence)" >&2
     DLL="$BUILD_ROOT/bin/NewSddWorkspace/release/new-sdd-workspace.dll"
-    build_args=(--artifacts-path "$BUILD_ROOT")
     ;;
   published-dependency)
     : "${FSGG_CREATOR_PRODUCER_SOURCE:?isolated producer checkout required}"
@@ -71,30 +70,41 @@ case "$MODE" in
 import pathlib, sys
 creator, producer, caller = map(pathlib.Path, sys.argv[1:])
 roots = [creator, producer, caller]
-if any(not p.is_absolute() or not p.is_dir() or p.is_symlink() for p in roots) or any(a == b or a.is_relative_to(b) for a in roots for b in roots if a is not b):
-    raise SystemExit('Creator, producer and active caller must be distinct isolated checkout roots')
+if any(not p.is_absolute() or not p.is_dir() or any(parent.is_symlink() for parent in (p, *p.parents)) for p in roots):
+    raise SystemExit('Creator, producer and active caller require unlinked absolute checkout roots')
+canonical = [p.resolve(strict=True) for p in roots]
+if roots != canonical or any(a == b or a.is_relative_to(b) for i, a in enumerate(canonical) for j, b in enumerate(canonical) if i != j):
+    raise SystemExit('Creator, producer and active caller must be canonical distinct isolated checkout roots')
 if any(p.exists() for p in (creator / 'scripts/NewSddWorkspace/bin', creator / 'scripts/NewSddWorkspace/obj')):
     raise SystemExit('Published mode refuses stale Creator output')
 PY_ISOLATION
     python3 "$REPO_ROOT/scripts/creator-current-coord-dependencies.py" verify-layout \
       --producer-source "$FSGG_CREATOR_PRODUCER_SOURCE" --dependencies "$FSGG_CREATOR_DEPENDENCIES"
     DLL="$REPO_ROOT/scripts/NewSddWorkspace/bin/Release/net10.0/new-sdd-workspace.dll"
-    build_args=(-p:FsggCurrentCoordDependencies=true -p:BuildProjectReferences=false
-      -p:CompileUsingReferenceAssemblies=false
-      "-p:FsggFrozenCoordSource=$FSGG_CREATOR_PRODUCER_SOURCE"
-      "-p:FsggFrozenCoordDependencies=$FSGG_CREATOR_DEPENDENCIES")
     # Restore metadata in these disposable checkouts before freezing producer state.
     # Compile and pack then consume only the already staged implementation bodies.
-    dotnet restore "$PROJ" "${build_args[@]}" --nologo -v quiet -m:1 -nr:false 1>&2
+    dotnet restore "$PROJ" --nologo -v quiet -m:1 -nr:false \
+      -p:FsggCurrentCoordDependencies=true -p:BuildProjectReferences=false \
+      -p:CompileUsingReferenceAssemblies=false \
+      "-p:FsggFrozenCoordSource=$FSGG_CREATOR_PRODUCER_SOURCE" \
+      "-p:FsggFrozenCoordDependencies=$FSGG_CREATOR_DEPENDENCIES" 1>&2
     python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_PRODUCER_SOURCE" --output "$BUILD_ROOT/producer-before.json"
     python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_CALLER_ROOT" --output "$BUILD_ROOT/active-before.json"
-    build_args+=(--no-restore)
     ;;
   *) echo "::error::unknown Creator dependency mode"; exit 1 ;;
 esac
 build_rc=0
-dotnet build "$PROJ" -c Release --nologo -v quiet "${build_args[@]}" \
-  -m:1 -nr:false -p:UseSharedCompilation=false 1>&2 || build_rc=$?
+if [ "$MODE" = published-dependency ]; then
+  dotnet build "$PROJ" -c Release --no-restore --nologo -v quiet \
+    -p:FsggCurrentCoordDependencies=true -p:BuildProjectReferences=false \
+    -p:CompileUsingReferenceAssemblies=false \
+    "-p:FsggFrozenCoordSource=$FSGG_CREATOR_PRODUCER_SOURCE" \
+    "-p:FsggFrozenCoordDependencies=$FSGG_CREATOR_DEPENDENCIES" \
+    -m:1 -nr:false -p:UseSharedCompilation=false 1>&2 || build_rc=$?
+else
+  dotnet build "$PROJ" -c Release --artifacts-path "$BUILD_ROOT" --nologo -v quiet \
+    -m:1 -nr:false -p:UseSharedCompilation=false 1>&2 || build_rc=$?
+fi
 if [ "$MODE" = published-dependency ]; then
   python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_PRODUCER_SOURCE" --output "$BUILD_ROOT/producer-after.json"
   python3 -B "$HERE/build-artifact-state.py" --root "$FSGG_CREATOR_CALLER_ROOT" --output "$BUILD_ROOT/active-after.json"

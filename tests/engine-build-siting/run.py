@@ -48,6 +48,7 @@ VERDICT (the scan examined nothing, or the matcher failed its own corpus) — wh
 
 from __future__ import annotations
 
+import hashlib
 import re
 import subprocess
 import sys
@@ -148,7 +149,8 @@ DECLARED_SITES: dict[str, str | None] = {
         "builds only the standalone inactive-reader console with FSharp.Core; "
         "no project references or coordination-engine tier-2a output path"
     ),
-    # Creator017's normal graph references Coord.Cli: enforce its actual redirect.
+    # Creator018's normal graph requires an explicit redirect. Its published mode
+    # has a separate closed, tested no-producer-build/isolation contract below.
     "tests/new-sdd-workspace/run.sh": None,
 }
 
@@ -384,6 +386,73 @@ def is_redirected(cmd: str) -> bool:
     return any(f in cmd for f in REDIRECT_FLAGS)
 
 
+# A generic BuildProjectReferences=false flag is not a redirect. Only Creator's
+# exact published mode is admitted: fresh separate creator/producer/caller roots,
+# original staged dependency verification, producer builds disabled and before/after
+# producer/caller census. The conventional producer bin layout must remain intact;
+# an ArtifactsPath/OutputPath global would change MSBuild GetTargetPath resolution.
+# Seal the complete setup/build/census prefix as well as the two explicit commands.
+# This is a closed source-shape check, not a filename exemption or shell evaluator;
+# any prefix change requires reviewing/resealing that contract and its mutants.
+CREATOR_PREFIX_END = "# Exercise the wizard's pure decision boundary directly."
+CREATOR_PREFIX_SHA256 = "789f38f25a055cfa4498bb2ba0b52cd68f3a701c7301f6980164a18dadb531a9"
+CREATOR_PUBLISHED_COMMAND = ('dotnet build "$PROJ" -c Release --no-restore --nologo -v quiet '
+    '-p:FsggCurrentCoordDependencies=true -p:BuildProjectReferences=false '
+    '-p:CompileUsingReferenceAssemblies=false '
+    '"-p:FsggFrozenCoordSource=$FSGG_CREATOR_PRODUCER_SOURCE" '
+    '"-p:FsggFrozenCoordDependencies=$FSGG_CREATOR_DEPENDENCIES" '
+    '-m:1 -nr:false -p:UseSharedCompilation=false 1')
+CREATOR_SOURCE_COMMAND = ('dotnet build "$PROJ" -c Release --artifacts-path "$BUILD_ROOT" '
+    '--nologo -v quiet -m:1 -nr:false -p:UseSharedCompilation=false 1')
+
+
+def normalized_command(command: str) -> str:
+    return " ".join(command.replace("\\\n", " ").split())
+
+
+def isolated_creator_build(text: str, command: str) -> bool:
+    if text.count(CREATOR_PREFIX_END) != 1:
+        return False
+    prefix = text.split(CREATOR_PREFIX_END, 1)[0]
+    if hashlib.sha256(prefix.encode()).hexdigest() != CREATOR_PREFIX_SHA256:
+        return False
+    builds = [normalized_command(cmd) for cmd in invocations(text) if is_candidate(cmd)]
+    return (builds == [CREATOR_PUBLISHED_COMMAND, CREATOR_SOURCE_COMMAND]
+            and normalized_command(command) == CREATOR_PUBLISHED_COMMAND)
+
+
+def creator_siting_controls(text: str) -> list[str]:
+    problems = []
+    builds = [cmd for cmd in invocations(text) if is_candidate(cmd)]
+    if len(builds) != 2 or not isolated_creator_build(text, builds[0]) or not is_redirected(builds[1]):
+        return ["Creator source/published build contract changed or lost its literal source redirect"]
+    mutations = (
+        ('--artifacts-path "$BUILD_ROOT"', ''),
+        ('-p:BuildProjectReferences=false', '-p:BuildProjectReferences=true'),
+        ('-p:CompileUsingReferenceAssemblies=false', '-p:CompileUsingReferenceAssemblies=true'),
+        ('a == b or a.is_relative_to(b)', 'False'),
+        ('roots != canonical', 'False'),
+        ('any(parent.is_symlink() for parent in (p, *p.parents))', 'False'),
+        ('p.resolve(strict=True)', 'p'),
+        ("if any(p.exists() for p in", "if False and any(p.exists() for p in"),
+        ('verify-layout', 'preflight'),
+        ('cmp "$BUILD_ROOT/producer-before.json" "$BUILD_ROOT/producer-after.json"', 'true'),
+        ('cmp "$BUILD_ROOT/active-before.json" "$BUILD_ROOT/active-after.json"', 'true'),
+        ('if [ "$MODE" = published-dependency ]; then', 'if true; then'),
+        ('--no-restore', ''),
+    )
+    for original, changed in mutations:
+        if original not in text:
+            problems.append("Creator siting mutation preimage missing: " + original)
+        elif isolated_creator_build(text.replace(original, changed), builds[0]):
+            problems.append("Creator siting mutant admitted: " + original)
+    if isolated_creator_build(builds[0], builds[0]):
+        problems.append("Creator unguarded published command admitted")
+    if isolated_creator_build(text + '\ndotnet build "$PROJ" -c Release\n', builds[0]):
+        problems.append("Creator additional unredirected build admitted")
+    return problems
+
+
 # ---------------------------------------------------------------------------------------------------
 # THE SELF-TEST CORPUS — mechanism 2. Spellings that MUST be seen and lookalikes that MUST NOT, every
 # one drawn from a real line in this repo, from a shape that broke a draft of this matcher, or from the
@@ -500,6 +569,8 @@ def standalone_progress_project(xml: str) -> bool:
 
 def main() -> int:
     corpus = selftest()
+    creator_source = (REPO / "tests/new-sdd-workspace/run.sh").read_text()
+    corpus.extend(creator_siting_controls(creator_source))
     if corpus:
         print("::error::engine-build-siting: NO VERDICT — the matcher failed its own corpus, so an", file=sys.stderr)
         print("  empty finding list would mean nothing. Repair the matcher before trusting a green.", file=sys.stderr)
@@ -591,7 +662,9 @@ def main() -> int:
         reason = DECLARED_SITES[rel]
         if reason is not None:
             continue
-        unredirected = [c for c in discovered[rel] if not is_redirected(c)]
+        unredirected = [c for c in discovered[rel] if not is_redirected(c)
+                        and not (rel == "tests/new-sdd-workspace/run.sh"
+                                 and isolated_creator_build(creator_source, c))]
         if unredirected:
             findings.append(
                 f"{rel}: declared as building OUT OF TREE, but an invocation carries no redirect flag\n"
@@ -614,7 +687,10 @@ def main() -> int:
         f"{len(MUST_MATCH)} must-match / {len(MUST_NOT_MATCH)} must-not-match all held."
     )
     for rel, reason in sorted(DECLARED_SITES.items()):
-        print(f"  {rel}: {'out of tree (redirect verified)' if reason is None else reason}")
+        if reason is None:
+            reason = ("source redirect and closed Creator-only published-mode isolation verified"
+                      if rel == "tests/new-sdd-workspace/run.sh" else "out of tree (redirect verified)")
+        print(f"  {rel}: {reason}")
     return 0
 
 
