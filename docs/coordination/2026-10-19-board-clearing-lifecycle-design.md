@@ -664,3 +664,60 @@ A wider removal of published helper schemas or independently qualified legacy-pr
 actual consumer migration evidence; until then retain the compatibility surface while retiring the old
 organization workflow. Root captures the accepted design and delivery in Atlas and keeps #4701 as the durable
 native owning-issue navigation.
+
+## Selected publication, receiver and recovery acceptance — 2026-10-19
+
+Coherent109 was published from immutable source `0d85830e7329a2718ee57ff0f1a16e6c751a469c`
+through original continuation39317658813 (all16effects, generation33). Independent readback matched
+the original release417623644, seven assets and all three public package payloads. Creator020 was
+published independently from `699f60851288f5f817b98856bdd3d220cf27dd09` through39322122652
+(all8effects, generation17), retaining original publisher39313339320 and its genuine108 dependencies.
+The unchanged-controller descendant publisher does not replace the original candidate source.
+Original failed attempts and the quota-floor refusal remain separate accepted history.
+
+The actual public020 SDK installation matched88 package members and81 genuine108 dependencies.
+Both fresh Rendering/app and Game/game receivers, and preserving upgrades of both retained019
+receivers, matched854 instruction leaves,48 active generated paths and16 runtime-discovered skills.
+Their42 original adoption records and complete original provenance remain preserved. Initialization
+remains pending; instruction adoption/read qualification does not establish product readiness. Each retained
+upgrade changed only its89 previewed destinations, preserved the owner witness and configuration,
+repeated as a no-op, and refused wrong-family, repository and artifact inputs. An initial acceptance
+parser rejected the actual CLI panel/wrapped summary before apply; its repair resumed the original
+unchanged preimages rather than replacing the receiver. One actual materialized instruction-line
+mutation caused the runtime/source identity comparison to refuse specifically work-board; exact
+bytes, permissions, timestamps and the full receiver census were restored afterward.
+
+Fresh Rendering and retained Game also passed genuine product board reads through their installed
+workspace wrappers with invocation-local verified108 PATH, one current selected issue each, zero
+mutations and unchanged receiver trees. These observations do not qualify a default global selector.
+The wrapper resolves global/PATH tooling ahead of its local manifest: an installed workspace pin
+alone is insufficient caller isolation. A separate container maintenance path installed and selected109
+while the named host updater timer remained suspended. Its retained log/timing and current bytes
+explain the managed route; the exact last caller PID and cause of Root's earlier SDK timeout remain
+unproved. Current109 physical82-member/version qualification does not relabel that original timed-out
+SDK operation successful or recover its missing cleanup receipt. No repeated109 installation was used.
+
+The bounded Host archive copy/restore proves finite private custody and byte equality, including the
+37-member pair and stable owning issue/Atlas pointers. It does not prove client replacement, disk-loss
+recovery or off-machine backup. An actual restored-pair read exposed two input defects: a seventh-looking
+prose label in the parent body and an enrollment plan URL outside the installed reader's supported
+organization grammar. Preserve those refusals. The body repair retains all six fields and original
+acceptance; the amended enrollment points only that Outcome to this already accepted immutable design,
+with all37 identities, original22 rows and human planning values preserved. Offline construction and
+review do not substitute for actual installed full-cohort and attributed continuation acceptance.
+
+Native retirement distinguishes supersession from completed implementation:2130,2960,2695,3228,
+3070 and2774 are closed not_planned with original promises/history preserved;2874,2843,2844 and2852
+are completed against their selected accepted contracts. Recovery indexes2691/2703/3227 and genuine
+compatibility/receipt remainders remain owned. Existing compiled135-test receipts and retained PE/PDB
+source checksums also bind the nonenrolled-PR guard to reviewed072/delivered0d: disjoint work is ready,
+then an overlapping path is blocked without requiring a claim owner. This is compiled selected-path
+conformance, not a manufactured production PR, new action admission or legacy standalone-API receipt.
+Reusing that actual evidence avoids another unchanged qualification run.
+
+The owning issues #4701/#4712 retain final native qualification, accepted closure and current operation
+facts. These source/publication/receiver/custody observations neither close those issues by themselves
+nor claim fleet adoption, whole-board completion, actual restart or measured savings. All439 inherited
+and46 later Unknown originals remain distinct and unreleased; closed unavailable historical searches
+stay closed. Reusable knowledge is superseded explicitly under the existing Atlas IDs
+`contract/new-sdd-workspace` and `github/programme-binding-custody-recovery`.

@@ -191,11 +191,15 @@ def decode_inspection(report, expected_binding):
         closed(issue, {"owner", "repository", "number"})
         text(issue["owner"]); text(issue["repository"])
         require(type(issue["number"]) is int and issue["number"] > 0, "inspection-issue-number")
-    def native_shape(native):
+    def native_shape(native, allow_empty_body=False):
         if native is None: return
         closed(native, {"issue", "nodeId", "updatedAt", "state", "url", "bodySha256"})
         issue_shape(native["issue"]); timestamp(native["updatedAt"]); text(native["nodeId"])
-        require(native["state"] in ("OPEN", "CLOSED") and re.fullmatch(r"[0-9a-f]{64}", native["bodySha256"]) is not None, "inspection-native-observation-shape")
+        # readBlockedBy reports native identity/revision/state without reading a body.
+        digest = native["bodySha256"]
+        body_shape_valid = isinstance(digest, str) and (re.fullmatch(r"[0-9a-f]{64}", digest) is not None
+                                                    or (allow_empty_body and digest == ""))
+        require(native["state"] in ("OPEN", "CLOSED") and body_shape_valid, "inspection-native-observation-shape")
     seen = set()
     for item in report["items"]:
         closed(item, INSPECTION_ITEM | ({"sourceRevision", "accountableOwner", "currentDeliverable", "nativeIntake"} if binding != 3 else set()) | ({"workItem"} if binding == 5 else set()))
@@ -203,7 +207,7 @@ def decode_inspection(report, expected_binding):
         native_shape(item["native"]); native_shape(item["planObservation"])
         require(isinstance(item["dependencyObservations"], list) and type(item["dependencyReadComplete"]) is bool
                 and item["sourceCurrentness"] in ("Current", "Stale", "Unknown"), "inspection-source-facts-shape")
-        for dependency in item["dependencyObservations"]: native_shape(dependency)
+        for dependency in item["dependencyObservations"]: native_shape(dependency, allow_empty_body=True)
         if binding != 3:
             if item["currentDeliverable"] is not None:
                 closed(item["currentDeliverable"], {"provenance", "declaration", "references", "gap", "reconciliationRequired"})
