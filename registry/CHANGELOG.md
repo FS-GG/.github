@@ -1,5 +1,15 @@
 # Registry changelog
 
+## 2026-10-19 — board lifecycle coherent109 source preparation (#4701)
+
+Advance only the shared CLI/Kit/Drivers source scalar and coord-engine source version to0.109.0.
+Canonical clearing/intake/Delivery acceptance and bounded full-cohort acquisition change receiver-visible
+behavior, requiring a minor successor rather than repacking published108. The closed ordinary rail
+selects predecessor108 atf984a361 and prospective journal27; fresh authenticated collision, candidate,
+publication and installed qualification remain pending. Published108 metadata, installed pins, Creator019
+dependency bytes, consumed journals and historical recovery/workflows remain unchanged. Creator
+materialization48-leaf source requires its independently versioned/qualified successor before publication.
+
 ## 2026-10-18 — accepted independent Host0.7 publication
 
 Advance only the Host published version/tag to0.7 after original39148437514/a1 completed journal13

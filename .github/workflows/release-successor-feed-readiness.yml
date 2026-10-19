@@ -1,6 +1,6 @@
 name: release-successor-feed-readiness
 
-# Informational freshness observation for a prospective 0.108.0 coherent set.
+# Informational freshness observation for a prospective 0.109.0 coherent set.
 # This does not select a release, qualify source bytes, or authorize publication.
 on:
   workflow_dispatch:
@@ -35,10 +35,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
           python3 tests/release-successor-candidate/run.py
-      - name: Observe both feeds for 0.108.0 against published 0.107.0
+      - name: Observe both feeds for 0.109.0 against published 0.108.0
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python3 scripts/check-release-candidate-uniqueness.py \
-            --version 0.108.0 --predecessor 0.107.0
+            --version 0.109.0 --predecessor 0.108.0
