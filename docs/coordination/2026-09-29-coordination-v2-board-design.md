@@ -1994,3 +1994,25 @@ Actual public018 full Rendering SDD creation independently refused the generated
 entrypoint as authored; no owner file was deleted. Root is preparing separately versioned019
 with exact fresh-generated provenance authority, leaving018 publication immutable. Full public
 product receivers and bounded handoff restart remain open.
+
+### Actual public018 full SDD receiver refusal — 2026-10-19
+
+Actual public Creator018 and SDD2.2, immutable Templates f5fbd06e/rendering0.32.1 and
+coordination Kit10864d9e reached a successful fresh Rendering SDD scaffold. Coordination
+then refused the generated `.claude/skills/work-roadmap/SKILL.md` as an owner-authored
+conflict. The original completed attempt exited1; stdout SHA256
+d65843b6b1322ecbf4ccbbd4b4323991d12bb1563f1a15ed9100e5bb3948a569.
+An earlier independent attempt exceeded its collector's32KiB output bound and was interrupted;
+its partial target and output are retained separately. Neither is receiver acceptance.
+
+SDD2.2 provenance uniquely marks both work-roadmap entrypoints as driver-owned with exact
+preimage hashes, but018 captures only six predecessor driver leaves. Prospective019 adds
+only these two optional entrypoints to the bounded fresh-only snapshot. Present files or
+provenance rows require unique driver ownership, exact hashes, bytes/modes and no symlink
+ancestors; missing, duplicate, authored or edited entries refuse. Older scaffolds without
+either entrypoint remain supported. Apply retains original provenance/adoption history and
+rechecks all captured bytes/modes. Retained targets and retrofit never gain fresh authority.
+The81-member genuine108 dependency closure stays unchanged;019 source, candidate, independent
+publication, installed runtime receivers and native product inspections require separate gates.
+Published018 remains immutable. Work-board remains the standard coordination entrypoint;
+the accepted visual UI pass does not require repetition.

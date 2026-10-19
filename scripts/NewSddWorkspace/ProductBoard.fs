@@ -66,7 +66,7 @@ module ProductBoard =
     // Only the demonstrated SDD driver defaults may be adopted by this fresh-only authority.
     let private generatedDriverPaths =
         [ for root in [ ".agents/skills"; ".claude/skills" ] do
-              for leaf in [ "work-board/SKILL.md"; "work-board/references/workspace-scope.md"; "padd-item/SKILL.md" ] do
+              for leaf in [ "work-board/SKILL.md"; "work-board/references/workspace-scope.md"; "padd-item/SKILL.md"; "work-roadmap/SKILL.md" ] do
                   yield root + "/" + leaf ]
 
     let captureFreshScaffoldTarget (target: string) =
@@ -122,7 +122,13 @@ module ProductBoard =
             if String.IsNullOrWhiteSpace(tool.["version"].GetValue<string>()) || tool.["commands"].AsArray().Count = 0 then
                 invalidOp "generated coordination default is malformed"
             let drivers =
-                generatedDriverPaths |> List.map (fun relative ->
+                generatedDriverPaths
+                |> List.filter (fun relative ->
+                    not (relative.EndsWith("/work-roadmap/SKILL.md", StringComparison.Ordinal))
+                    || File.Exists(Path.Combine(target, relative))
+                    || (provenance.["driverPaths"].AsArray()
+                        |> Seq.exists (fun row -> row.["path"].GetValue<string>() = relative)))
+                |> List.map (fun relative ->
                     let rows = provenance.["driverPaths"].AsArray()
                                |> Seq.filter (fun row -> row.["path"].GetValue<string>() = relative) |> Seq.toList
                     if rows.Length <> 1 || rows.Head.["owner"].GetValue<string>() <> "driver" then
@@ -338,7 +344,7 @@ module ProductBoard =
     let prepare target repository kitRevision bindingJson fetch =
         prepareWithGeneratedManifest None target repository kitRevision bindingJson fetch
 
-    /// Only the opaque, unchanged fresh scaffold manifest and six driver preimages grant replacement.
+    /// Only the opaque, unchanged fresh scaffold manifest and bounded driver preimages grant replacement.
     let prepareGenerated snapshot target repository kitRevision bindingJson fetch =
         prepareWithGeneratedManifest (Some snapshot) target repository kitRevision bindingJson fetch
 

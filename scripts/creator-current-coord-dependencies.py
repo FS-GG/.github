@@ -74,7 +74,7 @@ def validate_pin(pin):
 def load_pin(root=ROOT):
     """Only the fixed protected-source path; no caller-provided provenance path."""
     path = root / PIN_PATH
-    require(path.exists(), 'Creator 0.18 release fenced: genuine promoted 0.108 dependency pin absent')
+    require(path.exists(), 'Creator 0.19 release fenced: genuine promoted 0.108 dependency pin absent')
     return validate_pin(read_json(regular(path)))
 
 
@@ -203,9 +203,9 @@ def package_members(package, pin):
         cli = 'FS.GG.Coord.Cli/0.108.0'
         require(deps.get('libraries', {}).get(cli, {}).get('type') == 'project'
                 and deps.get('targets') and all(
-                    target.get('new-sdd-workspace/0.18.0', {}).get('dependencies', {}).get('FS.GG.Coord.Cli') == '0.108.0'
+                    target.get('new-sdd-workspace/0.19.0', {}).get('dependencies', {}).get('FS.GG.Coord.Cli') == '0.108.0'
                     and 'fsgg-coord-engine.dll' in target.get(cli, {}).get('runtime', {})
-                    for target in deps['targets'].values()), 'Creator 0.18 dependency metadata differs')
+                    for target in deps['targets'].values()), 'Creator 0.19 dependency metadata differs')
         # This member already passed the complete original-byte comparison above.
         producer = read_json(archive.read(PREFIX + 'fsgg-coord-engine.deps.json'))
         dependency_metadata(deps, producer, pin)
@@ -215,7 +215,7 @@ def package_members(package, pin):
 def evidence(package, source_sha, pin, *, fixtures_passed):
     require(fixtures_passed is True, 'published dependency compiled fixtures not accepted')
     members = package_members(package, pin)
-    return {'schema': SCHEMA, 'mode': MODE, 'version': '0.18.0', 'sourceSha': source_sha,
+    return {'schema': SCHEMA, 'mode': MODE, 'version': '0.19.0', 'sourceSha': source_sha,
             'publishedDependencySourceSha': pin['sourceSha'], 'coherentVersion': pin['version'],
             'dependencyPinSha256': pin_digest(pin), 'producerArchiveSha256': pin['archiveSha256'],
             'promotedManifestSha256': pin['promotedManifestSha256'],
@@ -227,7 +227,7 @@ def verify_evidence(body, package, manifest, pin):
     require(isinstance(body, dict), 'published dependency evidence body missing')
     expected = evidence(package, manifest['sourceSha'], pin, fixtures_passed=True)
     require(body == expected, 'published dependency evidence body differs or is source-only')
-    require(manifest.get('version') == '0.18.0' and manifest.get('archiveSha256') == expected['archiveSha256'],
+    require(manifest.get('version') == '0.19.0' and manifest.get('archiveSha256') == expected['archiveSha256'],
             'Creator manifest/package dependency join differs')
     return expected
 
