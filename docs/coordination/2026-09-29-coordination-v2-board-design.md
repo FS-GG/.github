@@ -1968,3 +1968,29 @@ The rollback has not yet executed; do not treat this source preparation as reade
 Restore the original5 commitment through a separate normal delivery and requalify108 afterward.
 Full public SDD/product receivers, actual bounded handoff restart and parent acceptance remain
 separate. The accepted visual UI pass and finite Host custody restore are retained.
+
+### Executed original4 rollback; original5 restoration preparation — 2026-10-19
+
+PR4695 delivered750cd0b3 with exact reviewed/tested/delivered tree
+c652d4e4eef8b52e710f4b907b41ecf2b93679fb. The actual installed107 reader
+then qualified the original host-custodied4 pair at that protected population revision,
+changing only populationRevision and retaining its constructor, nonce and payload.
+All82 installed tool members matched the retained public107 package before invocation.
+The reader exited0 in176.86seconds within unchanged500requests/270seconds:22Current,
+25memberships, no population/membership gaps, zero mutations. Original report SHA256
+e103a468fd63cc0ca55ccf057a8657045acc1c86561548eca9014cd3e07512ac.
+Every selected native issue record and human planning value exactly matched the pre-rollback
+actual108 report6eeda19f. No Status, Track, Roadmap or Observation change occurred.
+This executes the bounded protected commitment/caller rollback, not a global selector rollback,
+actual client replacement, disk loss or broader host durability qualification.
+The private wrapper's generic state label `scaffolded` is a collector naming error; original
+argv/exit/report prove only the reader operation, with independent acceptance retained.
+
+This source restores the exact original5 public commitment from10864d9e. Actual108 at the
+new protected revision must be requalified after delivery; source restoration alone is not
+reader acceptance. All485 Unknown holds and unavailable original operation journals remain
+unchanged. Host custody, accepted UI and parent acceptance boundaries remain as above.
+Actual public018 full Rendering SDD creation independently refused the generated roadmap
+entrypoint as authored; no owner file was deleted. Root is preparing separately versioned019
+with exact fresh-generated provenance authority, leaving018 publication immutable. Full public
+product receivers and bounded handoff restart remain open.
