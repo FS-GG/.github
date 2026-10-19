@@ -1,4 +1,4 @@
 interface:
   display_name: "Continue From Handoff"
   short_description: "Recover owners and resume authorized V2 work"
-  default_prompt: "Use $continue-from-handoff to resume the latest saved handoff and advance its authorized scope through canonical work-board."
+  default_prompt: "Use $continue-from-handoff to resume from durable issue/Atlas pointers and any needed recovery handoff, then advance the authorized scope through canonical work-board."

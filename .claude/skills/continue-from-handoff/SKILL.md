@@ -1,6 +1,6 @@
 ---
 name: continue-from-handoff
-description: "Resume authorized FS-GG work from the newest saved handoff, reconcile current native state and original effects through canonical work-board."
+description: "Resume authorized FS-GG work from durable issue/Atlas pointers and any needed recovery handoff through canonical work-board."
 ---
 
 # Continue From Handoff
@@ -8,7 +8,7 @@ description: "Resume authorized FS-GG work from the newest saved handoff, reconc
 Resume the saved authorized scope through canonical work-board to its actual acceptance outcomes.
 Creating, editing, or inspecting this skill does not start programme execution.
 
-Retrieve Atlas IDs named by the handoff using [$atlas](../atlas/SKILL.md); reconcile
+Retrieve Atlas IDs named by the restart pointer or handoff using [$atlas](../atlas/SKILL.md); reconcile
 supersession/conflicts and verify citations/live facts. Keep missing knowledge explicit.
 
 ## Resolve strategic scope
@@ -44,7 +44,12 @@ that repository, not the operating system's `/docs` directory. Preserve dirty
 checkouts and interrupted worktrees; fetching current default-branch refs does
 not authorize resetting, cleaning, or overwriting them.
 
-List Markdown handoffs locally and on the current protected default branch.
+Start with the supplied restart pointer, current owning issues/native board and Atlas IDs. A stop
+may need no separate report when these records already cover recovery. Do not require a timestamped
+file or reread an old report merely because it is the newest file. Use historical reports only to
+recover missing obligations, original operation identities or local/private recovery pointers.
+
+When a report is needed, list Markdown handoffs locally and on the current protected default branch.
 Select the newest by its recorded UTC timestamp, not filesystem modification
 time. Accept existing `YYYY-MM-DD-HHMM` and new `YYYY-MM-DD-HHMMSS` filenames;
 use a document's explicit UTC timestamp for other names and the full path to
@@ -54,10 +59,10 @@ work: identify it as unmerged and verify its claims. The delegated recovery owne
 report fully once and returns its path, timestamp, source revision and compact decision view; the parent
 expands only unresolved decisions or its own safeguards. When delegation is unavailable, the parent
 performs this recovery within the same bounds and reports that fallback. If none exists,
-record the missing handoff and recover from the canonical roadmap and live work
-rather than waiting for human input.
+recover the missing facts from current owning/native records and strategic plan navigation
+without treating the absence of an optional report as a blocker.
 
-Reconcile its open PRs, current heads/checks, merged trees, publication and
+Reconcile the recovered open PRs, current heads/checks, merged trees, publication and
 receiver state, partial files, and worker or
 process status against available live evidence. Keep observed results separate
 from worker reports and proposals. Missing temporary evidence remains unknown;

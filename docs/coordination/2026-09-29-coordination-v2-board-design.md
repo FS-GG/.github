@@ -2170,7 +2170,7 @@ The actual full SDD path retains the34-reference undeclared-driver-inventory war
 pending initialization marker. No missing skeleton artifact or doctor-coherent/initialized
 receipt is claimed. The alternative fable-game provider probe remains an independently retained
 pre-target Governance refusal and is outside this selected Rendering game-profile acceptance.
-Literal product-local `bash scripts/fsgg-coord board-v2 inspect` now qualifies both original
+Literal product-local `bash scripts/fsgg-coord board-v2 inspect --binding-file .fsgg/board-v2-binding.json --report-file NEW_PRIVATE_PATH` now qualifies both original
 product3 bindings through the actual default installed108 selector, with all82 public tool members
 verified before each run. Each report selects one Current issue with complete dependency and
 single-page selected membership reads, preserved native/body/updatedAt/planning joins and zero

@@ -1,6 +1,6 @@
 ---
 name: stop-with-handoff
-description: "On session save, stop FS-GG workers, write a timestamped restartable handoff, land it by normal PR, end programme tasks."
+description: "On session stop/save, retire owned work and preserve missing recovery state; use durable issue and Atlas pointers when sufficient."
 ---
 
 # Stop With Handoff
@@ -9,7 +9,7 @@ Stop programme execution immediately and preserve enough verified state for a
 later [$continue-from-handoff](../continue-from-handoff/SKILL.md) invocation.
 Creating, editing, or inspecting this skill does not stop another task.
 
-Include delivered Atlas IDs and any unfinished capture gap/owner in the saved report;
+Include delivered Atlas IDs and any unfinished capture gap/owner in the restart pointer;
 follow [$atlas](../atlas/SKILL.md) without restarting capture work after shutdown.
 
 ## Stop execution before saving
@@ -33,75 +33,70 @@ the real completed, failed, or cancelled outcome; reconcile available usage.
 Keep coverage gaps explicit. Mark an existing programme goal paused when the
 runtime supports it. A stop request does not mean the roadmap is complete.
 
-## Save a restartable handoff
+## Reconcile durable state and save only recovery gaps
 
-For .9/.11 source preparation, retain the
-[organization consumer boundary](../work-board/references/organization-v2-inspection.md) in recovery
-and handoff. The organization Project 3 cutover is accepted; old pre-cutover directions are history. Source delivery
-still does not adopt a new executable/caller or change binding/selector. Do not restore manual status upkeep.
-After accepted cutover, preserve final binding/enrollment, exact outcome/slice/attempt and owner,
-existing Current deliverable/native PR/head, issue/body/current-plan revisions, pending requests and
-all original/uncertain reservations. Fresh-read determining native/action/intake/runtime facts through
-the existing integrator before resuming an operation; a saved inspection or stdin digest supplies no
-authority or renewed freshness. Missing facts keep scoped Unknowns without duplicate implementation
-or V1 fallback. Hand off original unresolved effects; never settle or retry them from board status.
+Use the board, existing owning issues and native PR/operation evidence for scope, ownership,
+accepted progress, blockers and next actions. Use Atlas for curated knowledge and stable retrieval
+pointers. Reconcile changed facts there within existing authority; do not duplicate them in a
+session report or create another current-status ledger. A stop does not authorize new enrollment,
+planning-field changes or retries of uncertain effects.
 
+Preserve the accepted Project 3 cutover and each selected product's qualified binding/caller scope.
+Source delivery still does not adopt a new executable/caller or change a binding/selector. Do not
+revive V1 fallback or manual status upkeep. Keep exact
+outcome/slice/attempt and owner, existing PR/head, issue/body/plan revisions, pending requests and
+original/uncertain reservations. A successor refreshes determining native/action/intake/runtime facts
+through canonical work-board before resuming. Saved inspections and stdin digests renew no authority;
+missing facts stay scoped Unknown. Never settle or retry original effects from board status.
 
-Resolve the owning FS-GG `.github` repository. `/docs/handoffs` means its
-repo-relative `docs/handoffs` directory; create that directory if absent.
-Use `YYYY-MM-DD-HHMMSS-unified-roadmap-handoff.md` with current UTC time. Never
-overwrite an earlier report; add a suffix if an exact name already exists.
-Read the latest handoff and current authoritative state to retain unresolved
-obligations without copying stale claims.
+Check whether durable records and evidence pointers cover the restart. Recovery gaps can include:
 
-Write the smallest complete report containing:
+- branch/worktree locations, dirty or interrupted files and unpublished source;
+- running jobs, actual process identities, cleanup outcomes and external work that remains Unknown;
+- original consumed/uncertain operations, partial evidence, expired admission and retry constraints;
+- private evidence access paths/digests and pending reply channels, identities and deadlines;
+- scope or authorization constraints and the next safe action that are absent from the owning issue.
 
-- Stop timestamp, original programme objective, latest user priorities and
-  authorization, paused/incomplete status, and canonical
-  [v3 roadmap](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md),
-  [games roadmap](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-10-07-games-development-roadmap.md) and skill links.
-  Preserve older v2 references as archive lineage, not current scheduling authority.
-- Verified progress with exact source revisions, PRs, native runs, publication
-  and receiver results; distinguish source delivery from installed behavior.
-- Each lane's owner, working/waiting/stopped state, next concrete action, and
-  the acceptance signal or dependency that unlocks it.
-- Branch/worktree locations, dirty or interrupted files, open PR/check state,
-  pending source and qualification, and independent parallel
-  opportunities for the successor.
-- Failures, unresolved causes, actual attempt outcomes, operation consumption,
-  cleanup status, immutable evidence access paths/digests, expired admission,
-  and the constraints needed to avoid unsafe or duplicate retries.
-- A short ordered restart plan and the remaining gates to actual completion.
+If nothing is missing, return a restart pointer to the owning issue(s), relevant Atlas IDs and any
+original operation evidence. No new handoff file, commit or PR is required. Old timestamped reports
+remain history; a successor need not read one merely because it is the newest file.
 
-Apply [agent-handoff](../agent-handoff/SKILL.md) for evidence and writing quality.
-If the optional `$technical-writer` skill is available, apply it; its absence does not block this route.
-Otherwise use concise evidence-grounded prose directly; no optional skill path is a package dependency.
-Keep credentials, raw telemetry, private payloads and unnecessary personal
-identifiers out of the committed report. Private evidence paths can identify
-where authorized successors should inspect it; do not copy their contents.
+If a gap remains, preserve only that missing recovery information, with links to established facts.
+Use an existing appropriate durable record when it can safely hold the information. When a separate
+report is needed, resolve the owning FS-GG `.github` repository and write repo-relative
+`docs/handoffs/YYYY-MM-DD-HHMMSS-unified-roadmap-handoff.md` using current UTC time. Create the
+directory if absent; never overwrite an earlier report. Read earlier reports only as needed to retain
+unresolved obligations. Include the stop timestamp, unresolved state and owners, evidence pointers,
+Atlas capture gaps and the short ordered restart action; do not copy the board or accepted history.
 
-## Land the save and end the session
+Apply [agent-handoff](../agent-handoff/SKILL.md) for evidence and writing quality. Use the optional
+`$technical-writer` skill when available; its absence does not block saving. Keep credentials, raw telemetry,
+private payloads and unnecessary personal identifiers out of public records. A private evidence path
+can identify where an authorized successor should inspect; it does not prove persistent custody.
 
-Invocation authorizes the handoff-only commit, push, PR and merge, unless the
-user explicitly asks for a local-only save. Use an isolated branch/worktree
+## Deliver any required save and end the session
+
+When a recovery gap requires a repository change, invocation authorizes only that save's commit,
+push, PR and merge, unless the user explicitly asks for a local-only save. Use an isolated branch/worktree
 from current protected main when the working checkout contains unrelated work.
 Preserve that work. Validate Markdown links and `git diff --check`; retain the
 normal native required checks and branch protection.
 
 For programme PR admission and delivery, use the existing
 [work-board](../work-board/SKILL.md) controls without restarting
-its implementation loop. Use one handoff PR, existing campaign identity, exact
+its implementation loop. Use at most one save PR, the existing campaign identity, exact
 head, and both normal PR markers. Read the live PR queue; do not bypass its cap
 or merge unrelated feature work merely to make room for the save. If admission,
 credentials, checks or infrastructure prevent landing, preserve the local
 file and any pushed branch, state the exact remaining boundary, and stop rather
 than resuming roadmap work. Do not call a pending PR merged.
 
-After merge, read back the saved file and full merged tree. Return the session
-checkout to updated main when safe; otherwise preserve its branch and dirty
+If a save PR was needed and merged, read back the saved file and full merged tree. Return any
+checkout moved solely for that save to updated main when safe; otherwise preserve its branch and dirty
 state and report why it was retained. Do not reset, clean, or overwrite unrelated
 work to return to main. The save itself is
 the only new work allowed after shutdown, apart from necessary cleanup and its
 native delivery checks. Do not select a next item or continue monitoring feature
-lanes. End with the saved path/link, PR and merge status, and any unresolved
-running job or cleanup. State that programme execution is paused and stop.
+lanes. End with one durable restart pointer: owning issue links, Atlas IDs and any gap-report path,
+plus PR/merge status only when a save PR was needed. State any unresolved running job or cleanup,
+that programme execution is paused, and that no background monitoring is implied. Stop.

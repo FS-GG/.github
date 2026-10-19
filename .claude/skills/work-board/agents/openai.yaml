@@ -1,7 +1,7 @@
 interface:
   display_name: "Work Board"
   short_description: "Coordinate organization and product V2 development"
-  default_prompt: "Use $work-board to recover owners and advance authorized organization or selected product V2 work."
+  default_prompt: "Use $work-board to triage all selected board items, recover existing owners, seek useful parallel work within actual capacity, and advance authorized organization or product V2 work."
 
 policy:
   allow_implicit_invocation: true

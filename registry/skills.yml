@@ -348,15 +348,15 @@ skills:
   - { id: work-roadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: 100e44fa2082e933daaf6e55ec12a3b553414b172130f30fd9bb45e8e71347b3, materializes-when: "always" }
   # Canonical coordinator recovery/routine closure (.github#4641); old programme is a redirect only.
   - { id: agent-handoff, scope: driver, owner: .github, source: .github/.claude/skills/agent-handoff/SKILL.md, sha256: 72fb44aaa4b5a4ee5b38e0cd07c7b4e9a7b0d2baf17b835dbe20eaaf046fd133, materializes-when: always }
-  - { id: continue-from-handoff, scope: driver, owner: .github, source: .github/.claude/skills/continue-from-handoff/SKILL.md, sha256: bbb80a6508c54afc3b2e7b108594bd74fa113eb233966450e5ae00515ef0be78, materializes-when: always }
+  - { id: continue-from-handoff, scope: driver, owner: .github, source: .github/.claude/skills/continue-from-handoff/SKILL.md, sha256: f84257c43e6d6aa28bd5f3275c12172abb299c3d192376870fe5679934a6b4fb, materializes-when: always }
   - { id: routine-decisions, scope: driver, owner: .github, source: .github/.claude/skills/routine-decisions/SKILL.md, sha256: 7e7aa6e73d158b9bab2f69c873da502180951289c728669d3bae0620698592f4, materializes-when: always }
-  - { id: stop-with-handoff, scope: driver, owner: .github, source: .github/.claude/skills/stop-with-handoff/SKILL.md, sha256: bdb28edee20aea7052de08e16afa66ebdd554707b8e3d5e4da22d50b91d84d38, materializes-when: always }
+  - { id: stop-with-handoff, scope: driver, owner: .github, source: .github/.claude/skills/stop-with-handoff/SKILL.md, sha256: 0405c82818f7640c23e675813eb5b8c876c03e1c05a94da288131b6246edae05, materializes-when: always }
   - { id: work-programme, scope: driver, owner: .github, source: .github/.claude/skills/work-programme/SKILL.md, sha256: 6c2dea9125b8438cc9227f66f85dcc0da3240308606d5165ebdb9f7e0cd0f497, materializes-when: always }
 
   # work-board — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: 142a5fcc00106ce2cdfc3b309b35ef9b52dbc9223a72f2a6f2ed7dd8c628d85d, materializes-when: always }
+  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: 03863fef0f543be34164549f9cd1ffbde8650f0e15454b6a4af0b694b25e020e, materializes-when: always }
   # padd-item — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.

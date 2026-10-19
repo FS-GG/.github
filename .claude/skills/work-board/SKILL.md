@@ -1,6 +1,6 @@
 ---
 name: work-board
-description: "Coordinate authorized organization or selected product V2 work through recovery, ownership, actual capacity, qualification and native delivery."
+description: "Coordinate authorized organization or selected product V2 work through intake triage, recovery, useful parallelism, qualification and native delivery."
 ---
 
 # Work Board
@@ -158,6 +158,24 @@ Execute an explicitly selected technical plan through [work-roadmap](../work-roa
 including its applicable qualification routes. Interactive/game implementation loads the
 [performance-first planning gate](../work-roadmap/references/performance-first.md) before implementation begins.
 This preserves the selected product contract; it does not select a product lane or restart profiling.
+
+## Seek useful parallel work
+
+At entry/resume and after a delivery, changed blocker or start of a hosted wait, actively look for
+independent work that advances the selected scope. Compare prerequisites, existing owners/PRs,
+touch-sets and shared outputs across eligible Deliveries. Look for disjoint source preparation,
+review or evidence collection while another lane waits. A blocked parent or busy sibling does not
+by itself exclude independent work; action-specific prerequisites and admission still apply.
+
+Use actual remaining worker, CPU/memory, integrator and hosted-CI capacity after active demand and
+known/Unknown reservations. Free agent slots are not resource capacity. Admit each chosen operation
+before launch, preserve serial expensive-run limits and keep one integrator for shared surfaces.
+Delegate only when the runtime permits it, ownership/isolation is clear and the expected contribution
+exceeds coordination cost. Continue an existing owner/attempt instead of creating a duplicate lane.
+
+When useful parallelism is unavailable, continue the eligible serial work and state the determining
+capacity, dependency or overlap constraint with its reopening condition. Do not split work merely to
+fill slots, weaken acceptance, create reporting-only workers or add another scheduling ledger.
 
 ## Admit actual resources and effects
 

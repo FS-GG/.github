@@ -5,7 +5,7 @@
       "id": "atlas",
       "scope": "driver",
       "sha256": "c18e56fcc56abf80903e2fc6829cd94b44f42947724a26318ebcbf1ac5e1b35b",
-      "tree-sha256": "ac0923053f19d6975b1619743a21cfbb88674794a46804fbf2ec42b38233b3cc",
+      "tree-sha256": "5c8a148b65c86726241bbc88b1ba85de2d00bc0e98626c6fe3a25a6aa06560d3",
       "files": [
         {
           "path": "SKILL.md",
@@ -24,7 +24,7 @@
         },
         {
           "path": "assets/seed/catalog.json",
-          "sha256": "1983d0372b55a21631bd301afa102e8e5882855508df62f954435f5b2df34607",
+          "sha256": "08d795883c341a1934b5da09f010109fc01e0c38f37a99937c4aa85828f5f43b",
           "executable": false
         },
         {
@@ -433,6 +433,11 @@
           "executable": false
         },
         {
+          "path": "assets/seed/records/4d86a2764c55b5c5f675fddad8850ce4ceab160ac5c164a299fc098899d31aa9.json",
+          "sha256": "4d86a2764c55b5c5f675fddad8850ce4ceab160ac5c164a299fc098899d31aa9",
+          "executable": false
+        },
+        {
           "path": "assets/seed/records/4da0a5be70e8af9c39623deac83822749482187f6a0fc3d186dcfddaa7111576.json",
           "sha256": "4da0a5be70e8af9c39623deac83822749482187f6a0fc3d186dcfddaa7111576",
           "executable": false
@@ -575,6 +580,11 @@
         {
           "path": "assets/seed/records/65d5b7eff9d03761c8206218159bb34883c09052d6a1959d040f711a881b4d4f.json",
           "sha256": "65d5b7eff9d03761c8206218159bb34883c09052d6a1959d040f711a881b4d4f",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/66d414618d4283838bddb6b9fd4b5221c280a7f6a715b622143d3bea76bfe1f6.json",
+          "sha256": "66d414618d4283838bddb6b9fd4b5221c280a7f6a715b622143d3bea76bfe1f6",
           "executable": false
         },
         {
@@ -1714,17 +1724,17 @@
     {
       "id": "continue-from-handoff",
       "scope": "driver",
-      "sha256": "bbb80a6508c54afc3b2e7b108594bd74fa113eb233966450e5ae00515ef0be78",
-      "tree-sha256": "65cdcf648e8df9a608f07889abe3ac49cb6d8f49d2f6273cf5e7425f0dff6d2e",
+      "sha256": "f84257c43e6d6aa28bd5f3275c12172abb299c3d192376870fe5679934a6b4fb",
+      "tree-sha256": "03ba0e05c633c105a204fa52233c5b99a1f10648fabe07b796faef6f4bd37f8d",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "bbb80a6508c54afc3b2e7b108594bd74fa113eb233966450e5ae00515ef0be78",
+          "sha256": "f84257c43e6d6aa28bd5f3275c12172abb299c3d192376870fe5679934a6b4fb",
           "executable": false
         },
         {
           "path": "agents/openai.yaml",
-          "sha256": "bb68ad356c582a073066e21dab074ded0b90375052c261af3780987ceb3821d6",
+          "sha256": "1ee02ef887a5dff0bf3035d6a33be7a872e180a1b7a861d1edc95543c251c6c5",
           "executable": false
         }
       ],
@@ -1734,17 +1744,17 @@
     {
       "id": "stop-with-handoff",
       "scope": "driver",
-      "sha256": "bdb28edee20aea7052de08e16afa66ebdd554707b8e3d5e4da22d50b91d84d38",
-      "tree-sha256": "92e03bb8a4c29a3fbedc76c7d3b7df6ea8e2f565b2d474d96f1b4437e79fec86",
+      "sha256": "0405c82818f7640c23e675813eb5b8c876c03e1c05a94da288131b6246edae05",
+      "tree-sha256": "d64922e1d8f6be8bcd4ecae525881a61563ddd26eef369a0e4ad43c5ce1dd490",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "bdb28edee20aea7052de08e16afa66ebdd554707b8e3d5e4da22d50b91d84d38",
+          "sha256": "0405c82818f7640c23e675813eb5b8c876c03e1c05a94da288131b6246edae05",
           "executable": false
         },
         {
           "path": "agents/openai.yaml",
-          "sha256": "455a73992d659b3fe94578543d05d1d95fffaa5e6323391b295b9d6eb6ec0848",
+          "sha256": "d930ff8b7f0899119293b64eb2aafbb87c042f6cfd2defb9cc6c0705fe2e29d2",
           "executable": false
         }
       ],
@@ -1864,17 +1874,17 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "142a5fcc00106ce2cdfc3b309b35ef9b52dbc9223a72f2a6f2ed7dd8c628d85d",
-      "tree-sha256": "8e1f16cb1535593db47eec791d71d9e154045d8930d2319dcf99ebcd6cea6a2d",
+      "sha256": "03863fef0f543be34164549f9cd1ffbde8650f0e15454b6a4af0b694b25e020e",
+      "tree-sha256": "1663c86418420759194a2b90e6e20528baec79d503ec2a5da7fe7112fa442444",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "142a5fcc00106ce2cdfc3b309b35ef9b52dbc9223a72f2a6f2ed7dd8c628d85d",
+          "sha256": "03863fef0f543be34164549f9cd1ffbde8650f0e15454b6a4af0b694b25e020e",
           "executable": false
         },
         {
           "path": "agents/openai.yaml",
-          "sha256": "8f302917d3b47a7daf867dc8de51e24e92f3bfc7d9121a6fca72c089da7ddc79",
+          "sha256": "2dd68d24798feb2ad3f3a67d2c32a896e4a06b4e60e8c860b6eeebeb526cf701",
           "executable": false
         },
         {
