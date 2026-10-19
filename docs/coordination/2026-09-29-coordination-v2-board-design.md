@@ -2091,3 +2091,14 @@ all22 issues and the same budget.318 GraphQL calls were recorded for the failure
 the prior accepted baseline; no causal cache/performance guarantee is inferred from the correction.
 All439 inherited and46 later Unknown holds remain unreleased and missing original journals stay
 missing. Full public019 product receiver/installed discovery gates and parent acceptance remain open.
+
+Hosted Creator qualification at the earlier4697 headead59ce7 (run39256618555) failed its
+release-effect seal because the separately versioned019 workflow had not yet received its own
+route attestation. The original hosted failure is retained. The new amendment preserves the
+entire accepted018 route at immutablef704a3e6 as non-current history and records019's exact
+workflow/current binding/fresh journal. Normalizing only ordinary job/summary identity labels
+must reconstruct the018 publish job byte-for-byte; its recursive018/017/016 proof remains.
+Historical013 recovery jobs and permission/effect boundaries stay sealed. Current019 does not
+renew018 effect authority. The full offline release-effect suite passes, including10 repinned
+job/summary/recovery mutants,14 permission/role mutants,7 transport/effect mutants and18 paged
+ancestry production-guard mutants. Fresh exact-head hosted qualification is still required.
