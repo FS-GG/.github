@@ -273,6 +273,12 @@ reuse of the exact promoted108 dependency closure. Normal source qualification m
 source graph, but018 candidate/publication must refuse before costly build/effects until a real
 promoted108 dependency pin is delivered. No future digest, rebuilt adapter substitute or017 replay is
 admitted. Package evidence must be parsed and independently matched to all shared dependency bytes.
+Pipeline preflight reuses the maintained static workflow-order, artifact-body and fake-provider
+controls, with a bounded local warm target below60seconds. They must prove missing/invalid pins stop
+before SDK/credential launch and source-only evidence cannot enter publication. The publication state
+machine and historical seals remain unchanged, so a new custom model would duplicate existing controls;
+none is selected. No measured runner-minute saving is claimed.
+
 New source, actual publication/install, product fresh/upgrade journeys, programme continuation and real
 restart/rollback remain separate acceptance steps. Root owns the Atlas capture and original private
 evidence custody gap until those findings and artifacts are durably delivered.
