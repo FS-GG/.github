@@ -2044,3 +2044,12 @@ authority, retained targets remain strict, and non-instruction scaffold tooling 
 This replaces repeated first-conflict fixes with the complete observed instruction closure.
 Historical eight-leaf qualification remains evidence only for its original source. The revised
 42-leaf qualification and real SDD path must pass before publication.
+
+The revised42-leaf staged source474dde7d passed82 parser assertions and three compiled
+mutants in86.47seconds. Separate actual compiled ProductBoard qualification passed344 Linux
+provenance refusals and473 driver refusals,42-leaf replacement, original provenance, rollback,
+exact repeat, six-leaf legacy absence and an uncaptured Atlas owner-file conflict. Original
+stdout SHA256cc3a43dcc7a809ddac48e70d2df01e3fec61df37e04b3f9c137d9a3c91efc689.
+Independent review identified that the old conflict control targeted newly captured work-board-best;
+using uncaptured Atlas resolved that fixture contamination, and exact474dde7d review passed.
+The full real SDD path remains a separate acceptance gate.
