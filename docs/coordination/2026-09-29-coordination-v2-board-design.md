@@ -126,6 +126,16 @@ then verify actual files and protected commitments on every recovery. Do not rel
 session directory as the sole surviving copy. Future authorized replacement generations retain their
 original outputs rather than overwriting an uncertain partial pair.
 
+Fresh preparation has retained one validated offline binding4/schema2 pair using the maintained
+constructor at protected9772af87 and independently reviewed private inputs. The selected new cohort
+contains21 current native issues with explicit governing Roadmap values; four other visible members
+remain unenrolled. This is new selection, without an equality claim against the lost twenty-row
+cohort. Only the closed public commitment is delivered in the protected manifest. The original private
+pair remains in the restrictive directory above. After this commitment lands, create the final runtime
+binding against its exact protected revision while preserving the original nonce/payload and prepared
+output; authenticate it through the actual installed caller before any board-derived selection.
+No native field, membership, planning or Observation write was performed by offline preparation.
+
 Before activation, establish the new exact qualified caller/binding baseline and its bounded
 restart/rollback route. The lost original binding cannot serve as an executable rollback target;
 its historical acceptance remains recorded above. The selected binding5/schema3 successor still
