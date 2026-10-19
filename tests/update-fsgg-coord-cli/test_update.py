@@ -523,6 +523,34 @@ class BoardNativeResultsTests(unittest.TestCase):
         expected = {key: report[key] for key in ("bindingVersion", "schemaVersion", "projectId", "selectedIssues")}
         return report, expected
 
+    def test_state_only_dependency_observation_accepts_actual_producer_shape(self):
+        report, expected = self.inspection(5)
+        dependency = {"issue": {"owner": "Synthetic", "repository": "Dependency", "number": 2},
+                      "nodeId": "dependency", "updatedAt": self.DATE, "state": "OPEN",
+                      "url": "https://github.com/Synthetic/Dependency/issues/2", "bodySha256": ""}
+        report["items"][0]["dependencyObservations"] = [dependency]
+        observed = self.decoder["decode_inspection"](report, expected)
+        self.assertEqual(observed["report"]["items"][0]["dependencyObservations"], [dependency])
+        self.assertEqual(dependency["bodySha256"], "")  # Never fabricate a body observation.
+
+    def test_issue_and_plan_body_hashes_remain_required(self):
+        for role in ("native", "planObservation"):
+            report, expected = self.inspection(5)
+            report["items"][0][role] = {"issue": {"owner": "Synthetic", "repository": "Repo", "number": 1},
+                                       "nodeId": "issue", "updatedAt": self.DATE, "state": "OPEN",
+                                       "url": "https://github.com/Synthetic/Repo/issues/1", "bodySha256": ""}
+            with self.subTest(role=role), self.assertRaisesRegex(self.decoder["Unknown"], "inspection-native-observation-shape"):
+                self.decoder["decode_inspection"](report, expected)
+
+    def test_nonempty_malformed_dependency_body_hash_remains_unknown(self):
+        for digest in ("not-a-body-hash", "a" * 63, "a" * 65, "A" * 64):
+            report, expected = self.inspection(5)
+            report["items"][0]["dependencyObservations"] = [{"issue": {"owner": "Synthetic", "repository": "Dependency", "number": 2},
+                "nodeId": "dependency", "updatedAt": self.DATE, "state": "CLOSED",
+                "url": "https://github.com/Synthetic/Dependency/issues/2", "bodySha256": digest}]
+            with self.subTest(digest=digest), self.assertRaisesRegex(self.decoder["Unknown"], "inspection-native-observation-shape"):
+                self.decoder["decode_inspection"](report, expected)
+
     def test_product3_and_org5_actual_report_families_and_cross_shape_refusal(self):
         record = self.run_original()
         for version in (3, 5):
