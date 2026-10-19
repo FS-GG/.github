@@ -316,6 +316,31 @@ and restart/rollback remain separate gates. The real Creator pin now names promo
 asset656002184; it preserves all81 dependency members and285 declared producer inputs. No future
 hash or rebuilt dependency substitute is selected.
 
+### Creator018 staged package qualification — 2026-10-19
+
+The genuine108 pin is prepared from promoted originals, not a compiler rebuild. Actual staged
+Creator-only qualification at06048c07395abaaec89896de0fc42ed488132e9b passed82 assertions and all
+three compiled mutation controls in72.93seconds. Whole-fixture cleanup preserved the producer and
+active caller through every child; no producer metadata preparation or relaxed preservation was needed.
+The no-build pack used that same output and also preserved the producer/caller census.
+
+Package verification exposed a real checker defect: it assumed every internal project version was
+0.108.0, while the genuine producer records its nine internal projects at1.0.0. The corrected checker
+reads the already hash-verified original CLI dependency document, compares exact shared libraries,
+edges and runtime assets, and permits only the SDK's explicit entry-project name/reference-name
+translation and current FileVersion annotation. All81 original dependency byte checks remain intact.
+The same unmodified prototype package passes;176 inert controls cover wrong identities, edges,
+assets, aliases and the existing same-size byte-predicate mutant. Original refusals remain retained,
+including the first evidence collection invoked from the deliberately unpinned protected checkout.
+
+An isolated local SDK installation matches all88 prototype tool members. Its actual packaged
+ProductBoard API, selected real product3 binding and immutable published-source content reached797
+prepared/materialized local changes, preserved an owner file and returned a zero-change repeat.
+This minimal package-level journey used real verified Git source content, not synthetic fetch fixtures;
+it is not a complete SDD scaffold, the public018 CLI, native product adoption or runtime discovery.
+The original failed017 target remains absent. Independent source review passed fac62069/treeef46079e;
+final exact-head review and required CI still precede normal delivery and genuine018 candidate/publication.
+
 ### Retained qualification evidence custody — 2026-10-19
 
 Host receipt6263680429 and root independent MATCH6263940374 accept the second finite
