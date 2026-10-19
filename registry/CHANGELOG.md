@@ -1,5 +1,15 @@
 # Registry changelog
 
+## 2026-10-19 — board lifecycle publications accepted (#4701/#4712)
+
+Publish coherent109 from original0d85830e through39317658813: all16effects/final33,
+release417623644 and all7native assets independently matched. Publish Creator020 from
+original699f6085 through39322122652: all8effects/final17 and release417678688 matched.
+Both feeds match each original normalized producer payload; public NuGet signature bytes differ.
+Original candidates, partial effects and failed/refused runs remain retained. Creator020 keeps its
+genuine108 dependency pin. These published-version records leave installed receiver, full37native
+and continuation/recovery acceptance with #4712; they do not activate a fleet or repack either release.
+
 ## 2026-10-19 — independent Creator020 source qualification (#4701)
 
 Advance only Creator source to0.20.0 for its closed48-leaf materialization allowlist. Its distinct source
