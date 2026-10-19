@@ -1,6 +1,6 @@
 ---
 name: work-board
-description: "Coordinate authorized organization or selected product V2 work through recovery, ownership, actual capacity, qualification and native delivery."
+description: "Coordinate authorized organization or selected product V2 work through intake triage, recovery, useful parallelism, qualification and native delivery."
 ---
 
 # Work Board
@@ -94,6 +94,21 @@ native consumer acceptance remain separate required joins before activating this
 
 ## Recover ownership and unavailable history
 
+During board clearing, reconcile unfiltered All items at entry and resume, including cards without
+Status, Work level or enrollment. Missing metadata triggers intake triage; it never excludes a visible
+card from the pass. Reconcile each such card against its native issue, complete acceptance, owner,
+plan, prerequisites and existing delivery evidence. Record the disposition in the existing owning
+issue: accepted scoped completion, eligible work, a concrete blocker/supplier, or an attributed Unknown.
+For unfinished work, name the intake owner, next action and event that triggers reconsideration.
+Do not call the clearing pass complete while these cards remain untriaged.
+
+Triage is separate from scheduling. Initialize missing planning/classification only through the
+admitted native route, preserving existing human values. A completed source card's Done applies only
+to its accepted source promise. An unfinished card needs its actual implementation owner and protected
+enrollment before action selection; neither metadata repair nor a child link enrolls it or grants Ready.
+Revisit blocked and unenrolled intake on its determining event or the next clearing pass. Keep gaps
+visible through existing issue/board fields, without another intake queue, ledger or status table.
+
 At entry/resume reconcile owners, isolated worktrees/dirty files, native open PRs/heads/checks, original
 operations and relevant reservations. Continue one unambiguous existing owner and PR before replacing it.
 Missing/conflicting ownership fences the affected scope. Read [bootstrap](references/bootstrap.md) for
@@ -143,6 +158,24 @@ Execute an explicitly selected technical plan through [work-roadmap](../work-roa
 including its applicable qualification routes. Interactive/game implementation loads the
 [performance-first planning gate](../work-roadmap/references/performance-first.md) before implementation begins.
 This preserves the selected product contract; it does not select a product lane or restart profiling.
+
+## Seek useful parallel work
+
+At entry/resume and after a delivery, changed blocker or start of a hosted wait, actively look for
+independent work that advances the selected scope. Compare prerequisites, existing owners/PRs,
+touch-sets and shared outputs across eligible Deliveries. Look for disjoint source preparation,
+review or evidence collection while another lane waits. A blocked parent or busy sibling does not
+by itself exclude independent work; action-specific prerequisites and admission still apply.
+
+Use actual remaining worker, CPU/memory, integrator and hosted-CI capacity after active demand and
+known/Unknown reservations. Free agent slots are not resource capacity. Admit each chosen operation
+before launch, preserve serial expensive-run limits and keep one integrator for shared surfaces.
+Delegate only when the runtime permits it, ownership/isolation is clear and the expected contribution
+exceeds coordination cost. Continue an existing owner/attempt instead of creating a duplicate lane.
+
+When useful parallelism is unavailable, continue the eligible serial work and state the determining
+capacity, dependency or overlap constraint with its reopening condition. Do not split work merely to
+fill slots, weaken acceptance, create reporting-only workers or add another scheduling ledger.
 
 ## Admit actual resources and effects
 

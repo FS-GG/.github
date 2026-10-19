@@ -661,3 +661,60 @@ this document or from a producer merge.
 Design delivery means this proposal and its roadmap joins are merged. Source completion means the
 selected .2–.4 implementation and tests are accepted. Operational adoption requires .5–.6's disposition;
 measured context or cost benefit requires adequate observed evidence. Each claim keeps its own boundary.
+
+## Ordinary operation/restart qualification and intake correction — 2026-10-19
+
+The finite process Coordination V2 window under delivery4682 supplies the remaining scoped
+functional .4–.6 joins. Its source/publication/installed/native evidence is retained in the
+[owning V2 plan](../coordination/2026-09-29-coordination-v2-board-design.md#genuine019-selected-full-sdd-receivers-and-preservation--2026-10-19)
+and [delivered adoption PR4698](https://github.com/FS-GG/.github/pull/4698). This is an actual
+necessary ordinary delivery window, not a new benchmark or replay of lost work.
+
+For .4, the same accountable owner carried source repairs and superseded native heads through
+independent review and final checks. Original publisher failures retained their journals; admitted
+forward observation/settlement completed the same release without package resend. The actual4698
+bounded watcher ended at its deadline before checks settled; fresh canonical native reconciliation
+subsequently admitted delivery. The watcher supplied no apply authority and its incomplete record
+remains retained. Existing source correspondence controls supplement these native observations.
+The actual protected4/installed107 rollback, separate original5 restoration and fresh108 process
+using independently restored Host custody establish the bounded restart/rollback join. Original
+identities and all439 inherited plus46later Unknown holds remain intact and unreleased.
+
+For .5, genuine108 and019 publication, isolated physical installations, selected full public
+Rendering and newly retained Game(Rendering game-profile) receivers, actual instruction discovery,
+preserving retrofit and positive/refusal native reads supply functional quality and lineage joins.
+The restored108 process read22Current/25memberships in185.93seconds with zero mutations; the
+original270-second refusal remains failed. Public receiver operations completed in approximately
+134 and109seconds; these observations are durations, not coordination-effort or token estimates.
+Native usage, comparable whole-family cost, parent-churn baseline and statistical savings remain
+unavailable or inconclusive. No80% or30% benefit, complete LEARN result or new measurement gate follows.
+
+For .6, the qualified selected callers and actual discovered canonical work-board instructions,
+retained old-contract compatibility and executed rollback route support bounded adoption. The
+ROUTINEV3 replacements above retire mandatory packets, typed returns, reducer projections and fixed
+polling; optional historical helpers need no new live reenactment. Earlier paragraphs describing
+pending integrated acceptance retain their historical scope and are superseded for this finite window.
+Actual client replacement, disk-loss/off-machine recovery, fleet-wide legacy upgrades and release of
+unavailable original reservations remain outside this acceptance. One independent acceptance review
+confirmed this mapping without repeating unchanged operations or tests. Native parent completion
+still requires its accountable owner's separate reconciliation; child closure never performs it.
+
+The continuation initially omitted intake triage for visible unenrolled cards lacking Status. The
+user exposed that omission; it is retained as a failed clearing step, not an absence of underlying
+work or a need for another coordinator. Fresh complete Project3 readback found25members and three
+such cards. Existing accepted SOURCE deliveries4677 and4681 were closed/completed; SDD935 remained
+open with missing accepted producer-contract evidence from SDD928. Programme/root recorded935's
+intake ownership, exact supplier and reopening event on its existing issue, preserving its complete
+original acceptance. A separately prepared actual108 invocation initialized exactly12 absent
+planning/classification values on those three existing cards: two Done/Active delivery and one
+Blocked/Follow-up, with genuine owning links and explicit Delivery classification. Separate original-
+custody readback and full-snapshot comparison preserve all17fields/eightviews/25memberships and every
+unrelated planning/native value; only selected additions and permitted timestamps differ. No membership,
+protected enrollment, view, Observation or implementation dispatch changed. They remain unenrolled;
+935 requires producer evidence, an implementation owner and separately admitted enrollment before
+selection. Blocked intake is reconsidered on its determining event or the next clearing pass.
+
+Canonical work-board now explicitly includes missing-Status/classification/enrollment cards in
+unfiltered intake and records their disposition in existing owning issues. This repairs the omission
+without adding an intake queue, Ready fallback or retrospective cards. Source guidance delivery and
+any later installed consumer update remain distinct; no fleet adoption is inferred from this edit.
