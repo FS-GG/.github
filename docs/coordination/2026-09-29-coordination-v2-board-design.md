@@ -142,6 +142,34 @@ its historical acceptance remains recorded above. The selected binding5/schema3 
 requires its separate field/classification/enrollment/views and programme/product/recovery acceptance.
 Neither pointer loss nor this replacement decision closes those promises or selects a legacy board.
 
+### Replacement custody gap after native migration — 2026-10-19
+
+At the next recovery, the replacement private directory recorded above was absent while the
+protected source and isolated source worktrees survived. Independent review confirmed that no
+alternate exact binding or apply-journal location was retained. Earlier preparation verdicts and
+reported completion digests do not recover private bytes or establish original terminal effects.
+The public commitment delivered by [PR4688](https://github.com/FS-GG/.github/pull/4688) remains
+protected; its missing private pair cannot authenticate a caller or serve as an executable rollback.
+The earlier directory statement records the prior custody observation, not current availability.
+
+Fresh complete native reads found 25 memberships and 17 fields, including Work level with exactly
+Outcome and Delivery: 17 Outcomes, five Deliveries and three unclassified members. All eight view
+records were readable. Programme Board filters Outcomes; Active delivery filters Deliveries excluding
+Done; Blocked and Completed retain their status filters; All items is unfiltered. These five views
+expose Work level. The other three views retain no visible Work level column. This establishes
+current metadata only: missing original snapshots prevent an exact preservation comparison, and
+API reads cannot establish UI acceptance, original invocation completion or reservation release.
+
+Programme/root retains the reported field/classification/planning and five-view operations as
+unreconciled originals. Do not repeat their writes or manufacture replacement journals. Further
+read-only native reconciliation can establish current facts independently. A new private enrollment
+pair must be explicitly selected from current scope and kept distinct from lost pairs; preparation
+never settles earlier effects. Installed successor acceptance, durable private custody and an actual
+restart/rollback target remain open under #4682/#4641. Atlas ID
+`github/programme-binding-custody-recovery` carries this changed recovery boundary; retrieve it and
+verify actual custody before relying on its pointer. Public Atlas stores navigation and limits,
+never the private payload, nonce, journals or runtime assets.
+
 ### Accepted installed real-use qualification — 2026-10-18
 
 Root accepted the original installed 0.105 invocations against that final binding:
