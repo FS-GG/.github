@@ -316,6 +316,40 @@ and restart/rollback remain separate gates. The real Creator pin now names promo
 asset656002184; it preserves all81 dependency members and285 declared producer inputs. No future
 hash or rebuilt dependency substitute is selected.
 
+### Creator018 genuine candidate and runtime discovery — 2026-10-19
+
+[PR4693](https://github.com/FS-GG/.github/pull/4693) delivered protected source
+`f704a3e6e6b9b0149fe5b8e39b4fefb5d42cddb1`; its independently reviewed, tested and delivered
+tree is `a49de2efa86000fde7bb0fd8b06dd07f451e62d9`. The final hosted source fixture passed82
+assertions and three compiled mutants. The changelog placement failure and stale-event eligibility
+refusal are retained; the corrected candidate passed its required checks through normal delivery.
+
+The genuine first-attempt [Creator018 candidate39246748238](https://github.com/FS-GG/.github/actions/runs/39246748238)
+passed176 controls,82 fixture assertions and three compiled mutants using the original promoted108
+dependencies. Root independently authenticated original artifact12182823900, raw ZIP SHA256
+`fdfe1d8e2f50c0316204792057269c2990bee2821ead6061c134a94e36efd91b`, its exact three-member
+shape and complete81-member dependency evidence. Package SHA256 is
+`41ef9c76fa3facf639448b3fc4a46a2acbdd43026ae4ee4ca1976e603d2659fa`; the local prototype
+remains a separate artifact and is never substituted for this candidate.
+
+The actual installed Codex app-server discovered all16 repository skills in the isolated prototype
+materialization through its closed `skills/list` request with `cwds` and `forceReload`. Every discovered
+repository skill was enabled and matched the immutable published source; `work-board` was present,
+no catalog errors were returned and the owned app-server exited0. Earlier incomplete catalog attempts
+remain historical. This qualifies actual prototype instruction discovery, separate from public018
+workspace discovery and complete SDD/scaffolder adoption. Actual installed SDD CLI preflight reports2.2.0.
+
+The original [non-publishing preflight39247245445](https://github.com/FS-GG/.github/actions/runs/39247245445)
+passed with18 Authority GETs, zero POST/PATCH and no journal mutation. Root authenticated original
+summary artifact12183549878, raw ZIP SHA256
+`2c4b66bdf6286f098ae85a4eaaac56ced25f10592ee11145ea82c8e3b52dd6e9`, and independently read
+fresh journal/release coordinates. Local GitHub Packages reads return403; the authenticated hosted
+preflight supplies that package read. The separately admitted original
+[publisher39247623510](https://github.com/FS-GG/.github/actions/runs/39247623510) remains pending.
+Its full eight-generation snapshot verifies tag, draft and GitHub package with NuGet at intent;
+no package resend or publication acceptance follows from that snapshot. Protected source and active107
+selector remain fixed through the original publication window.
+
 ### Creator018 staged package qualification — 2026-10-19
 
 The genuine108 pin is prepared from promoted originals, not a compiler rebuild. Actual staged
