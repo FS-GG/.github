@@ -2102,3 +2102,98 @@ Historical013 recovery jobs and permission/effect boundaries stay sealed. Curren
 renew018 effect authority. The full offline release-effect suite passes, including10 repinned
 job/summary/recovery mutants,14 permission/role mutants,7 transport/effect mutants and18 paged
 ancestry production-guard mutants. Fresh exact-head hosted qualification is still required.
+
+### Genuine019 publication and installed physical closure accepted — 2026-10-19
+
+PR4697 normally deliveredcc1d3c12c1ed7e7128012063d7ab478c7198b523 at13:33:32UTC
+with identical reviewed/tested/delivered tree7f0cb3494ce1b8dc3f7c7ff62f78064eee507a47.
+Full hosted source39259814829/a1 passed82 parser assertions/three mutants,344provenance/
+473driver controls,176 inert controls and the complete release-effect seals.
+
+Genuine candidate39261332494/a1, original artifact12190337780/rawZIP
+5934d46449b2bc0b263071b2a69e7149c44758cf87b45af9d8575b48a612528a, independently
+verifies the exact source and all81 original108 dependency members. Package raw23185bf6/
+normalized payloadec013fa8 and canonical manifest content9eb7568b remain fixed.
+Original preflight39261995952/a1 passed with18GET attempts, zeroPOST/PATCH and no journal
+mutation, from fresh Authority quota5000/floor4500. Original publish39262367871/a1 then
+completed55 bounded iterations, all17 validated generations/all8effectsVerified and promoted
+stable release417342100/tag new-sdd-workspace/v0.19.0 at13:58:39UTC. No forward publisher,
+package resend, new candidate or historical018 replay occurred.
+
+Root independently accepted publication at14:05:44UTC after complete original journal, tag,
+three native asset digest/size and fresh public NuGet readbacks. Original terminal summary
+artifact12192561286/rawZIP1461d3511bc210f38cc4873ab2ce53d564888f412044b44cf7da423c6258bbbd
+matches this source/candidate/publication. Fresh signed NuGet3c815073 matches all93original
+common members plus its signature and normalized payload on both feed observations. Root's
+independent GitHub feed download returned403; original authenticated hosted verification and
+public feed journal supply that scoped feed evidence. This is not an independent Root GitHub
+feed download claim. Original collector415 used the wrong Accept header for an Actions ZIP;
+read-only reconciliation corrected it and the publish-mode preflightPassed=false interpretation,
+retaining original bytes and without replaying publication or SDK installation.
+
+Actual public019 SDK installation to its isolated versioned directory exited0; all88 tool
+members and81 shared original dependencies match the fresh public archive/installed108 closure.
+Actual public help passes, loaded-path materialization remains separately qualified by the
+full product journeys. Generated shim digest29f0fe2860ed8689efa7a625dd5ada4cfb9d7d9c28599eefb80cce48a9c56000;
+adapter393bf4e7 remains exact108. Global coordination and Creator selectors were unchanged
+through this installation. Full public receiver, runtime catalog and literal native product gates
+remain open; the accepted visual UI pass and scoped executed rollback/restoration/restart remain.
+
+
+### Genuine019 selected full SDD receivers and preservation — 2026-10-19
+
+The actual public019 executable completed clean Rendering app and selected Game product
+(Rendering `game` profile) SDD creation using public SDD2.2, immutable Templates
+f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc and Kitcc1d3c12. The original operations
+ran14:06:13–14:08:27UTC and14:11:41–14:13:31UTC respectively; both exited0 with
+complete stdout/stderr and direct child reaped. These are separate from earlier source-only
+receivers and the retained failed018/two-leaf019 attempts.
+
+Each public receiver independently matches820 mirrored published instruction leaves across
+16selected skills, all42 original/active generated-driver preimage joins, original product3
+binding, coordination108/SDD2.2 tool pins and selected V2 settings. Actual owned Codex
+app-server discovery reports50Rendering/65Game repository skills; all16expected coordination
+skills, including canonical work-board and Atlas, are enabled and match immutable Kitcc1.
+Both catalog reads have zero errors and their owned server exits0. No arbitrary total-skill
+count or discovery of unrelated skills is inferred.
+
+Actual public retrofit preview/apply/repeat passes on each same target. Rendering is an exact
+zero-change path. The newly retained Game fixture deliberately removes one delivered Atlas
+reference, previews exactly one addition, restores its original bytes and repeats as a no-op.
+Every other file's bytes/mode/mtime, original provenance and Root-owned preservation witness
+remain exact. Wrong product, wrong repository and changed adapter-digest previews each refuse
+with exit2 on both fixtures and leave the complete target tree unchanged. Only local canonical
+origin configuration was added; no remote resource, membership or access-policy mutation occurred.
+This qualifies explicit new fixtures, not blanket upgrade of production legacy workspaces.
+
+The actual full SDD path retains the34-reference undeclared-driver-inventory warning and
+pending initialization marker. No missing skeleton artifact or doctor-coherent/initialized
+receipt is claimed. The alternative fable-game provider probe remains an independently retained
+pre-target Governance refusal and is outside this selected Rendering game-profile acceptance.
+Literal product-local `bash scripts/fsgg-coord board-v2 inspect` now qualifies both original
+product3 bindings through the actual default installed108 selector, with all82 public tool members
+verified before each run. Each report selects one Current issue with complete dependency and
+single-page selected membership reads, preserved native/body/updatedAt/planning joins and zero
+mutations. Independent fresh REST readback matches the original native report. Rendering retains
+Blocked/Observation Unknown; Game retains Backlog/Observation Verified. Neither healthy reads
+nor an existing Verified observation grants dispatch, source/publication/native acceptance or capacity.
+
+Controlled older distinct protected enrollment manifests and actual denied-authentication reads
+refuse on each fixture, keep determining coverage Unknown and perform zero mutations. Each
+full receiver tree remains unchanged through the positive and refusal reads. Rendering positive
+report SHA2567d3fd5e1 and Game eae8aa7f remain original private evidence. Initial positive-report
+collection incorrectly expected organization binding5 membership fields in product3/schema1;
+read-only reconciliation accepts the already successful original read without re-execution. The
+first Rendering stale control selected an ancestor containing the same manifest, correctly read
+Current and is retained as an ineffective negative control. A separately identified real older,
+different manifest supplies the meaningful refusal control; no native timestamp or receipt was
+fabricated. Original failures and reports remain unchanged.
+
+This completes the selected genuine public019 fresh Rendering and newly retained Game
+(Rendering game-profile) receiver/preservation/catalog/product-read slice. It does not initialize
+these qualification fixtures, upgrade production legacy checkouts, grant new product membership,
+change product Observation or close the parent outcome. Accepted visual UI, bounded installed
+organization continuation and protected rollback/restoration/process restart remain separate
+previously accepted joins. All439 inherited and46later reservation holds and missing original
+journals stay distinctly Unknown/unreleased. Parent execution/benefit and actual client replacement
+or disk-loss recovery assertions remain open.
