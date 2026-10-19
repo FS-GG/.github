@@ -1,1 +1,4 @@
-{"schema":"fsgg.coordination-board-v2-enrollment/v3","commitmentSha256":"629fc68432f36c4ec49e1745412df4d87396f8630bc485548e9b72f1ee52b277"}
+{
+  "schema": "fsgg.coordination-board-v2-enrollment/v3",
+  "commitmentSha256": "06757b7c40cbaf0a75753204621d5ccda965146e7d03df12f03784713d814a12"
+}
