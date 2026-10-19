@@ -327,7 +327,7 @@ try
             fetch name) |> refuseDriver "generated driver edited during producer fetch"
         File.WriteAllText(path, oldDriver)
     // A non-selected driver-like file remains authored even during a fresh invocation.
-    let otherDriver = Path.Combine(freshRoot, ".agents/skills/work-board-best/SKILL.md")
+    let otherDriver = Path.Combine(freshRoot, ".agents/skills/atlas/SKILL.md")
     Directory.CreateDirectory(Path.GetDirectoryName otherDriver) |> ignore
     File.WriteAllText(otherDriver, "owner authored")
     prepareFresh fetch |> refuseDriver "fresh authority does not cover arbitrary driver files"
