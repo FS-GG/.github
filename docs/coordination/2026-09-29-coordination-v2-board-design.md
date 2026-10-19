@@ -156,8 +156,12 @@ These reads establish preparation facts, not authenticated enrollment or board-d
 
 The original Creator017 candidate/archive, promoted release/tag and all17 journal generations/eight
 verified effects now match independent readback. Its fresh public NuGet producer payload also matches;
-the fresh GitHub Packages read returned403, so both-feed fresh acceptance remains incomplete.
-No publisher replay followed. The current private binding/custody pointer remains unavailable; the
+the fresh local GitHub Packages payload read returned403, so fresh local two-feed payload
+re-download acceptance remains incomplete. Subsequent authenticated hosted feed-coherence
+[39212372585](https://github.com/FS-GG/.github/actions/runs/39212372585) independently read017 as
+the newest version on both feeds. Combined with the original matched payload journal and promoted
+release416751979, this admits published registry scalars017; it does not repair local reader capability
+or qualify installed adoption. No publisher replay followed. The current private binding/custody pointer remains unavailable; the
 local public enrollment commitment cannot replace its private payload/nonce. Keep successor native
 writes and activation held until those exact inputs and fresh effect-specific admission are supplied.
 All historical Unknown effects,439 inherited reservations and46 later originals remain preserved.
