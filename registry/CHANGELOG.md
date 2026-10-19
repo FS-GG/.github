@@ -43,9 +43,10 @@ no gate behaviour changes — this is purely how humans record the log.
 Record the already accepted coherent107 publication from source75ab98dd and release416724931,
 original candidate39166997205/a1 and same-candidate forward publisher39170373582/a1 (all16/final33).
 Advance the canonical dotnet Coord.Cli pin from106 to107 and regenerate registry projections.
-This source pin is not receiver installation or runtime qualification. Creator017 remains separately
-held: its original complete17-generation journal/candidate/release and fresh public NuGet payload
-match, but the fresh GitHub Packages reader returned403. Binding4 remains accepted; current private
+This source pin is not receiver installation or runtime qualification. Reconcile Creator017 published
+scalars after authenticated hosted feed39212372585 sees017 on both feeds and the promoted release
+manifest/journal match the original source and producer payload. The local package-reader403 remains
+a capability gap; no publisher was replayed. Binding4 remains accepted; current private
 binding/custody, actual discovered caller, successor migration and restart/rollback remain open.
 Preserve all original uncertain operations and reservations.
 
