@@ -222,7 +222,7 @@ class SuccessorRailBindingTests(unittest.TestCase):
         self.assertIn('test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"', workflow)
         self.assertIn("python3 tests/release-successor-candidate/run.py", workflow)
         self.assertIn("python3 scripts/check-release-candidate-uniqueness.py", workflow)
-        self.assertIn("--version 0.107.0 --predecessor 0.106.0", workflow)
+        self.assertIn("--version 0.108.0 --predecessor 0.107.0", workflow)
         for forbidden in (
             "packages: write", "contents: write", "id-token:", "environment:", "secrets.",
             "release-successor-publish.py", "release-saga.py", "dotnet pack",
@@ -233,21 +233,21 @@ class SuccessorRailBindingTests(unittest.TestCase):
 
     def test_candidate_binds_the_next_version_and_exact_predecessor(self) -> None:
         workflow = (ROOT / ".github/workflows/release-successor-candidate.yml").read_text()
-        self.assertIn('test "$version" = 0.107.0', workflow)
-        self.assertIn("gh release download coherent-set/v0.106.0", workflow)
-        self.assertIn("--tag-source 2e42faaa994367b9f50be87439e8fd973ad21501", workflow)
-        self.assertEqual(workflow.count("--predecessor 0.106.0"), 2)
-        self.assertIn("--release-tag coherent-set/v0.106.0", workflow)
+        self.assertIn('test "$version" = 0.108.0', workflow)
+        self.assertIn("gh release download coherent-set/v0.107.0", workflow)
+        self.assertIn("--tag-source 75ab98dd28b1a818cc3986d595bf21e0fe691ec6", workflow)
+        self.assertEqual(workflow.count("--predecessor 0.107.0"), 2)
+        self.assertIn("--release-tag coherent-set/v0.107.0", workflow)
         for namespace in ("coherent-set", "kit", "drivers", "coord-engine"):
-            self.assertIn(f"refs/tags/{namespace}/v0.107.0", workflow)
+            self.assertIn(f"refs/tags/{namespace}/v0.108.0", workflow)
         for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
             self.assertEqual(workflow.count(f"dotnet pack src/{project}/"), 1)
         initial=workflow.split('      - name: Verify the stable predecessor and unused package version',1)[1].split('      - name: Test the telemetry producer',1)[0]
         retention=workflow.split('      - name: Refuse a changed main or newly occupied version before retention',1)[1].split('      - uses: actions/upload-artifact',1)[0]
-        self.assertIn('releases/tags/coherent-set/v0.107.0',initial)
+        self.assertIn('releases/tags/coherent-set/v0.108.0',initial)
         self.assertIn('git ls-remote',initial)
         self.assertIn('refs/heads/main',retention)
-        self.assertIn('--predecessor 0.106.0',retention)
+        self.assertIn('--predecessor 0.107.0',retention)
         self.assertNotIn('releases/tags/',retention)
         self.assertNotIn('refs/tags/',retention)
         self.assertIn('timeout-minutes: 45',workflow)

@@ -69,6 +69,62 @@ let ``invalid loaded artifact and unknown flags perform no transport calls or re
     finally Directory.Delete(directory, true)
 
 [<Fact>]
+let ``successor actual CLI reconciles twenty two items before its unchanged request ceiling`` () =
+    let repositories = [| ".github"; "FS.GG.Rendering"; "FS.GG.Game"; "FS.GG.Audio"; "FS.GG.Net"; "FS.GG.SDD" |]
+    let rows =
+        [ for index in 0 .. 21 ->
+            let issue: IssueRef = { Owner = "FS-GG"; Repository = repositories[index % repositories.Length]; Number = 6000 + index }
+            "I_cohort_" + string index, issue, "docs/coordination/programme.md" ]
+    let selected =
+        ProgrammeFixture.enroll
+            { ProgrammeFixture.successorBinding () with
+                SelectedIssues = rows |> List.map (fun (id, issue, _) -> id, $"{issue.Owner}/{issue.Repository}#{issue.Number}") |> Map.ofList
+                Repositories = repositories |> Array.map (fun name -> "FS-GG/" + name) |> Set.ofArray } rows
+    let change (request: Transport.Request) result =
+        result |> Result.map (fun (response: Transport.Response) ->
+            let root = Text.Json.Nodes.JsonNode.Parse response.Body
+            if request.Subject = "complete V2 project memberships" then
+                let connection = root.["data"].["node"].["items"]
+                for index in 0 .. 2 do
+                    connection.["nodes"].AsArray().Add(JsonSerializer.SerializeToNode
+                        {| id = "PVTI_unselected_" + string index
+                           content = {| __typename = "Issue"; id = "I_unselected_" + string index
+                                        number = 8000 + index; repository = {| nameWithOwner = "FS-GG/.github" |} |} |})
+                connection.["totalCount"] <- Text.Json.Nodes.JsonValue.Create 25
+            elif request.Subject = "selected work classification" then
+                let item = match request.Body with Query(_, variables) -> variables |> List.pick (function "itemId", VId value -> Some value | _ -> None) | _ -> failwith "expected query"
+                let index = rows |> List.findIndex (fun (id, _, _) -> item = "synthetic-member-" + id)
+                let level, option = if index < 17 then "Outcome", "outcome-option" else "Delivery", "delivery-option"
+                root.["data"].["node"].["workLevel"].["name"] <- Text.Json.Nodes.JsonValue.Create level
+                root.["data"].["node"].["workLevel"].["optionId"] <- Text.Json.Nodes.JsonValue.Create option
+            { response with Body = root.ToJsonString() })
+    let reads = ProgrammeFixture.successorTransportFor selected rows (Some "Delivery") change
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-cohort-budget-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+    try
+        let input, output = Path.Combine(directory, "binding.json"), Path.Combine(directory, "report.json")
+        File.WriteAllText(input, ProgrammeFixture.bindingJsonFor selected)
+        let code = BoardV2Application.runWithTransport reads ["inspect"; "--binding-file"; input; "--report-file"; output]
+        use report = JsonDocument.Parse(File.ReadAllText output)
+        let root = report.RootElement
+        let sends = reads.GraphQlCalls + reads.RestCalls
+        let populationGap, membershipGap = root.GetProperty("populationGap").ToString(), root.GetProperty("membershipGap").ToString()
+        Assert.True((code = 0), $"exit={code}; sends={sends}; populationGap={populationGap}; membershipGap={membershipGap}")
+        Assert.InRange(sends, 1, 499)
+        Assert.Equal(22, root.GetProperty("selected").GetInt32())
+        Assert.Equal(25, root.GetProperty("memberships").GetArrayLength())
+        Assert.Equal(3, root.GetProperty("memberships").EnumerateArray() |> Seq.filter (fun item -> not (item.GetProperty("enrolled").GetBoolean())) |> Seq.length)
+        let items = root.GetProperty("items").EnumerateArray() |> Seq.toList
+        Assert.Equal(22, items.Length)
+        Assert.All(items, fun item ->
+            Assert.Equal("Current", item.GetProperty("sourceCurrentness").GetString())
+            Assert.True(item.GetProperty("workItem").GetProperty("hierarchy").GetProperty("complete").GetBoolean()))
+        Assert.Equal(17, items |> List.filter (fun item -> item.GetProperty("workItem").GetProperty("workLevel").GetString() = "Outcome") |> List.length)
+        Assert.Equal(0, root.GetProperty("mutationAttempts").GetInt32())
+        Assert.Empty reads.Mutations
+    finally Directory.Delete(directory, true)
+
+[<Fact>]
 let ``report history roundtrip strips current authority while retaining last verification`` () =
     let issue = { Owner = "FS-GG"; Repository = ".github"; Number = 2963 }
     let projection =

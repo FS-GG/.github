@@ -616,8 +616,11 @@
   <!-- 0.106.0 -> 0.107.0 (.github#4677 under #4641): canonical work-board coordinator and dependency-closed
        recovery entrypoints, with additive compatible plan-path grammar. Source version only;
        publication, installed instruction discovery and executing-caller adoption qualify separately. -->
+  <!-- 0.107.0 -> 0.108.0 (.github#4682 under #4641): bounded successor planning reads
+       preserve the full cohort and fresh final barriers within the unchanged request ceiling.
+       Prospective source only; publication and installed qualification remain separate. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.107.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.108.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

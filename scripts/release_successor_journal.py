@@ -30,11 +30,11 @@ PATH = "release-state.json"
 SCHEMA = "fsgg.release-successor-journal/1"
 
 # One selected current source composition, independent of frozen original cuts.
-CURRENT_RELEASE = {"version": "0.107.0", "predecessor": "0.106.0",
-    "logicalRef": "refs/heads/fsgg/v2/journal/release/utel-rel-25",
-    "directory": "state/releases/utel-rel-25",
-    "predecessorSource": "2e42faaa994367b9f50be87439e8fd973ad21501",
-    "predecessorContentId": "sha256:351a435c1f162f3ff8ca8e6722d58b34b193b44744a6a207f9bb57f015f8204d"}
+CURRENT_RELEASE = {"version": "0.108.0", "predecessor": "0.107.0",
+    "logicalRef": "refs/heads/fsgg/v2/journal/release/utel-rel-26",
+    "directory": "state/releases/utel-rel-26",
+    "predecessorSource": "75ab98dd28b1a818cc3986d595bf21e0fe691ec6",
+    "predecessorContentId": "sha256:c193dbf487f643a8b78300b568e4bfd09f8c56086ce96dc52865e219e8f98c9b"}
 
 
 

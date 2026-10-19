@@ -1584,9 +1584,10 @@ let ``done and completed parent discrepancies never use child count as acceptanc
                     issue.["stateReason"] <- System.Text.Json.Nodes.JsonValue.Create "COMPLETED"
                     issue.["closedAt"] <- System.Text.Json.Nodes.JsonValue.Create "2026-10-17T12:00:00Z"
                 {value with Body = root.ToJsonString()}
-            elif request.Subject = "bound V2 planning fields" then
-                root.["data"].["node"].["status"].["name"] <- System.Text.Json.Nodes.JsonValue.Create "Done"
-                root.["data"].["node"].["status"].["optionId"] <- System.Text.Json.Nodes.JsonValue.Create "Done"
+            elif request.Subject = "bound V2 successor planning memberships" then
+                let status = root.["data"].["repository"].["issue"].["projectItems"].["nodes"].[0].["status"]
+                status.["name"] <- System.Text.Json.Nodes.JsonValue.Create "Done"
+                status.["optionId"] <- System.Text.Json.Nodes.JsonValue.Create "Done"
                 {value with Body = root.ToJsonString()}
             else value)
     let reads = ProgrammeFixture.successorTransport selected (Some "Outcome") change
@@ -1744,3 +1745,87 @@ let ``selected hierarchy joins exact issue and node pairs while independent deli
         Assert.Equal("ready", result.Head.Decision)
         Assert.Equal(independent, result.Head.Issue)
         Assert.Empty reads.Mutations
+
+let private successorPlanningPages mode =
+    let selected = ProgrammeFixture.successorBinding ()
+    let change (request: Transport.Request) result =
+        if request.Subject <> "bound V2 successor planning memberships" then result
+        else result |> Result.map (fun (response: Transport.Response) ->
+            let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+            let page = root.["data"].["repository"].["issue"].["projectItems"]
+            let target = page.["nodes"].[0]
+            let after = match request.Body with Query(_, variables) -> variables |> List.exists (function "after", _ -> true | _ -> false) | _ -> false
+            let paginated = mode = "pages" || mode = "owner-on-page-two"
+            if paginated then
+                page.["totalCount"] <- System.Text.Json.Nodes.JsonValue.Create 2
+                page.["pageInfo"].["hasNextPage"] <- System.Text.Json.Nodes.JsonValue.Create(not after)
+                page.["pageInfo"].["endCursor"] <- System.Text.Json.Nodes.JsonValue.Create(if after then "last" else "next")
+                if not after then
+                    target.["id"] <- System.Text.Json.Nodes.JsonValue.Create "PVTI_other"
+                    target.["project"].["id"] <- System.Text.Json.Nodes.JsonValue.Create "PVT_other"
+                    for field in ["status"; "track"; "roadmap"; "observation"] do target.AsObject().Remove field |> ignore
+                elif mode = "owner-on-page-two" then
+                    root.["data"].["organization"].["id"] <- System.Text.Json.Nodes.JsonValue.Create "O_wrong"
+            match mode with
+            | "duplicate-target" ->
+                let duplicate = target.DeepClone()
+                duplicate.["id"] <- System.Text.Json.Nodes.JsonValue.Create "PVTI_duplicate"
+                page.["nodes"].AsArray().Add duplicate
+                page.["totalCount"] <- System.Text.Json.Nodes.JsonValue.Create 2
+            | "partial-page" -> page.["pageInfo"].["hasNextPage"] <- System.Text.Json.Nodes.JsonValue.Create true
+            | "field-id" -> target.["status"].["field"].["id"] <- System.Text.Json.Nodes.JsonValue.Create "wrong"
+            | "field-type" -> target.["track"].["__typename"] <- System.Text.Json.Nodes.JsonValue.Create "ProjectV2ItemFieldTextValue"
+            | "option-id" -> target.["observation"].["optionId"] <- System.Text.Json.Nodes.JsonValue.Create "wrong"
+            | "missing-field" -> target.AsObject().Remove "roadmap" |> ignore
+            | "content-id" -> target.["content"].["id"] <- System.Text.Json.Nodes.JsonValue.Create "I_wrong"
+            | _ -> ()
+            { response with Body = root.ToJsonString() })
+    selected, ProgrammeFixture.successorTransport selected (Some "Delivery") change
+
+[<Fact>]
+let ``successor planning drains membership pages and ignores other project planning values`` () =
+    let selected, reads = successorPlanningPages "pages"
+    match readPlanning reads selected {Issue = ProgrammeFixture.issue; ExpectedNodeId = "I_outcome"} with
+    | Error error -> failwith (Errors.explain error)
+    | Ok planning ->
+        Assert.Equal(2, planning.MembershipPages)
+        Assert.Equal("synthetic-member-I_outcome", planning.ItemId)
+        Assert.Equal(Some "Blocked", planning.Status)
+        Assert.Equal(Some "Unknown", planning.Observation)
+    Assert.Empty reads.Mutations
+
+[<Theory>]
+[<InlineData("owner-on-page-two")>]
+[<InlineData("duplicate-target")>]
+[<InlineData("partial-page")>]
+[<InlineData("field-id")>]
+[<InlineData("field-type")>]
+[<InlineData("option-id")>]
+[<InlineData("missing-field")>]
+[<InlineData("content-id")>]
+let ``successor planning refuses incomplete or conflicting native facts`` mode =
+    let selected, reads = successorPlanningPages mode
+    Assert.True(Result.isError(readPlanning reads selected {Issue = ProgrammeFixture.issue; ExpectedNodeId = "I_outcome"}), mode)
+    Assert.Empty reads.Mutations
+
+[<Fact>]
+let ``successor planning changes at the final barrier remain Unknown`` () =
+    let selected = ProgrammeFixture.successorBinding ()
+    let mutable planningReads = 0
+    let change (request: Transport.Request) result =
+        if request.Subject <> "bound V2 successor planning memberships" then result
+        else
+            planningReads <- planningReads + 1
+            if planningReads = 1 then result
+            else result |> Result.map (fun (response: Transport.Response) ->
+                let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+                let track = root.["data"].["repository"].["issue"].["projectItems"].["nodes"].[0].["track"]
+                track.["name"] <- System.Text.Json.Nodes.JsonValue.Create "Follow-up"
+                track.["optionId"] <- System.Text.Json.Nodes.JsonValue.Create "follow"
+                { response with Body = root.ToJsonString() })
+    let reads = ProgrammeFixture.successorTransport selected (Some "Delivery") change
+    let report = V2ProjectionSource.inspectFixed reads selected None
+    Assert.Equal(2, planningReads)
+    Assert.Equal("Unknown", report.Items.Head.SourceCurrentness)
+    Assert.Equal("Unknown", report.Items.Head.Evidence.Health)
+    Assert.Empty reads.Mutations

@@ -305,6 +305,21 @@ module ProgrammeFixture =
         Fake.Recorder(fun request ->
             let result =
                 match request.Body with
+                | Query(_, variables) when request.Subject = "bound V2 successor planning memberships" ->
+                    let number = variables |> List.pick (function "number", VNumber value -> Some(int value) | _ -> None)
+                    let repository = variables |> List.pick (function "repo", VString value -> Some value | _ -> None)
+                    let id, issue, roadmap = rows |> List.find (fun (_, issue, _) -> issue.Number = number && issue.Repository = repository)
+                    let repository = issue.Owner + "/" + issue.Repository
+                    let select fieldId name option =
+                        {| __typename = "ProjectV2ItemFieldSingleSelectValue"; name = name; optionId = option; field = {| id = fieldId |} |}
+                    let memberItem =
+                        {| id = "synthetic-member-" + id; project = {| id = project |}
+                           content = {| id = id; number = issue.Number; repository = {| nameWithOwner = repository |} |}
+                           status = select "status" "Blocked" "Blocked"; track = select "track" "Active delivery" "active"
+                           observation = select "observation" "Unknown" "unknown"
+                           roadmap = {| __typename = "ProjectV2ItemFieldTextValue"; text = roadmap; field = {| id = "roadmap" |} |} |}
+                    wire {| organization = {| id = selected.OrganizationId; login = selected.Owner |}
+                            repository = {| nameWithOwner = repository; issue = {| id = id; number = number; projectItems = connection [ memberItem ] |} |} |}
                 | Query(_, variables) when request.Subject = "selected work classification" ->
                     let itemId = variables |> List.pick (function "itemId", VId id -> Some id | _ -> None)
                     let id, _, _ = rows |> List.find (fun (id, _, _) -> itemId = "synthetic-member-" + id)
@@ -314,11 +329,14 @@ module ProgrammeFixture =
                 | Query(_, variables) when request.Subject = "selected native work hierarchy" ->
                     let number = variables |> List.pick (function "number", VNumber number -> Some(int number) | _ -> None)
                     let id, selectedIssue, _ = rows |> List.find (fun (_, issue, _) -> issue.Number = number)
-                    let child = {| id = "I_unselected-child"; number = 9999; state = "OPEN"; stateReason = (None: string option); closedAt = (None: string option); repository = {| nameWithOwner = "FS-GG/.github" |} |}
+                    let child = {| id = if rows.Length = 1 then "I_unselected-child" else "I_unselected-child-" + id
+                                   number = if rows.Length = 1 then 9999 else 10000 + selectedIssue.Number
+                                   state = "OPEN"; stateReason = (None: string option); closedAt = (None: string option); repository = {| nameWithOwner = "FS-GG/.github" |} |}
                     let parent = {| id = "I_parent"; number = 9998; repository = {| nameWithOwner = "FS-GG/.github" |} |}
-                    wire {| repository = {| nameWithOwner = "FS-GG/.github"; issue =
+                    let repository = selectedIssue.Owner + "/" + selectedIssue.Repository
+                    wire {| repository = {| nameWithOwner = repository; issue =
                                 {| id = id; number = selectedIssue.Number; updatedAt = revision; state = "OPEN"; stateReason = (None: string option); closedAt = (None: string option)
-                                   body = ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", "None"); repository = {| nameWithOwner = "FS-GG/.github" |}
+                                   body = ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", "None"); repository = {| nameWithOwner = repository |}
                                    parent = parent; subIssues = connection [child] |} |} |}
                 | Query(document, _) when document.Contains("projectV2(number:") ->
                     (original :> IGitHubTransport).Send request |> Result.map (fun response ->

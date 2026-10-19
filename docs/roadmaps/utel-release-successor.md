@@ -1888,3 +1888,21 @@ The offline import preflight remains the existing linear locked-restore/validate
 closure and build configuration. Existing static path-coherence controls are proportionate; no
 new model, gate, credential route or measured CI savings is claimed. The private real-input
 preparation and native qualification remain separate from synthetic/public fixtures.
+
+### Prospective coherent108 operating window — 2026-10-19
+
+Owning delivery [#4682](https://github.com/FS-GG/.github/issues/4682), under #4641, selects source108
+for the full-cohort successor read-budget repair. Published107 at
+`75ab98dd28b1a818cc3986d595bf21e0fe691ec6`, release416724931, remains immutable; its promoted content ID
+is `sha256:c193dbf487f643a8b78300b568e4bfd09f8c56086ce96dc52865e219e8f98c9b`.
+The prospective current composition uses a distinct `utel-rel-26` logical journal and
+`state/releases/utel-rel-26` directory, predecessor107 and the existing unchanged finite resource and
+sixteen-effect publication rules. Completed utel-rel-25/107 and historical selectors stay original.
+This source selection grants no operation, creates no journal and authorizes no replay. Qualify and
+merge the exact source, then authenticate a fresh candidate and native preflight before publication.
+
+Creator018 remains independently versioned and release-fenced until real promoted108 artifacts supply
+its exact current dependency pin. Neither source108 nor normal Creator source compilation establishes
+that pin, package evidence, installed adoption or native successor acceptance. Preserve the actual107
+inspection ceiling failure and Creator017 adapter mismatch in the owning plan; do not narrow the22-item
+cohort, increase operation bounds or weaken physical artifact identity to obtain acceptance.
