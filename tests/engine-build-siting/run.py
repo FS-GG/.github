@@ -391,11 +391,11 @@ def is_redirected(cmd: str) -> bool:
 # original staged dependency verification, producer builds disabled and before/after
 # producer/caller census. The conventional producer bin layout must remain intact;
 # an ArtifactsPath/OutputPath global would change MSBuild GetTargetPath resolution.
-# Seal the complete setup/build/census prefix as well as the two explicit commands.
+# Seal the complete fixture as well as the two explicit commands. Late cleanup/trap
+# changes must not silently bypass the whole-fixture producer/caller census.
 # This is a closed source-shape check, not a filename exemption or shell evaluator;
-# any prefix change requires reviewing/resealing that contract and its mutants.
-CREATOR_PREFIX_END = "# Exercise the wizard's pure decision boundary directly."
-CREATOR_PREFIX_SHA256 = "789f38f25a055cfa4498bb2ba0b52cd68f3a701c7301f6980164a18dadb531a9"
+# any fixture change requires reviewing/resealing that contract and its mutants.
+CREATOR_FIXTURE_SHA256 = "6d685452d06472b6ba7c6f0c1e8ff41ee42d8d8b6ad4be6acf694b23212f91a7"
 CREATOR_PUBLISHED_COMMAND = ('dotnet build "$PROJ" -c Release --no-restore --nologo -v quiet '
     '-p:FsggCurrentCoordDependencies=true -p:BuildProjectReferences=false '
     '-p:CompileUsingReferenceAssemblies=false '
@@ -411,10 +411,7 @@ def normalized_command(command: str) -> str:
 
 
 def isolated_creator_build(text: str, command: str) -> bool:
-    if text.count(CREATOR_PREFIX_END) != 1:
-        return False
-    prefix = text.split(CREATOR_PREFIX_END, 1)[0]
-    if hashlib.sha256(prefix.encode()).hexdigest() != CREATOR_PREFIX_SHA256:
+    if hashlib.sha256(text.encode()).hexdigest() != CREATOR_FIXTURE_SHA256:
         return False
     builds = [normalized_command(cmd) for cmd in invocations(text) if is_candidate(cmd)]
     return (builds == [CREATOR_PUBLISHED_COMMAND, CREATOR_SOURCE_COMMAND]
@@ -440,6 +437,11 @@ def creator_siting_controls(text: str) -> list[str]:
         ('cmp "$BUILD_ROOT/active-before.json" "$BUILD_ROOT/active-after.json"', 'true'),
         ('if [ "$MODE" = published-dependency ]; then', 'if true; then'),
         ('--no-restore', ''),
+        ('--no-dependencies', ''),
+        ('PUBLISHED_CENSUS_READY=1', 'PUBLISHED_CENSUS_READY=0'),
+        ('cmp "$BUILD_ROOT/producer-before.json" "$BUILD_ROOT/producer-fixture-final.json"', 'true'),
+        ('cmp "$BUILD_ROOT/active-before.json" "$BUILD_ROOT/active-fixture-final.json"', 'true'),
+        ('trap cleanup EXIT', 'trap : EXIT'),
     )
     for original, changed in mutations:
         if original not in text:
@@ -450,6 +452,8 @@ def creator_siting_controls(text: str) -> list[str]:
         problems.append("Creator unguarded published command admitted")
     if isolated_creator_build(text + '\ndotnet build "$PROJ" -c Release\n', builds[0]):
         problems.append("Creator additional unredirected build admitted")
+    if isolated_creator_build(text + '\ntrap : EXIT\n', builds[0]):
+        problems.append("Creator later EXIT trap override admitted")
     return problems
 
 

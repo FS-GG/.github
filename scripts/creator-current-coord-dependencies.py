@@ -125,6 +125,61 @@ def pin_digest(pin):
     return digest(json.dumps(pin, sort_keys=True, separators=(',', ':')).encode())
 
 
+def dependency_metadata(deps, producer, pin):
+    """Join metadata to the hash-verified producer, including its internal versions.
+
+    SDK deps names the entry project by assembly name and a project reference by
+    project name. This one root translation does not rewrite either document.
+    Internal libraries retain their producer identities (currently 1.0.0).
+    """
+    source_root, reference_root = 'fsgg-coord-engine/0.108.0', 'FS.GG.Coord.Cli/0.108.0'
+    source_libraries, libraries = producer.get('libraries'), deps.get('libraries')
+    source_targets, targets = producer.get('targets'), deps.get('targets')
+    require(all(isinstance(value, dict) for value in (source_libraries, libraries, source_targets, targets))
+            and source_targets and set(source_targets) == set(targets), 'published dependency metadata targets differ')
+    projects = {pathlib.PurePosixPath(path).stem: assembly for path, assembly in pin['projects'].items()
+                if assembly != 'new-sdd-workspace'}
+    project_keys = set()
+    for project, assembly in projects.items():
+        name = 'fsgg-coord-engine' if project == 'FS.GG.Coord.Cli' else project
+        found = [key for key, value in source_libraries.items()
+                 if key.partition('/')[0] == name and isinstance(value, dict) and value.get('type') == 'project']
+        require(len(found) == 1, 'published dependency project metadata missing: ' + project)
+        project_keys.add(found[0])
+        require(all(isinstance(rows, dict) and isinstance(rows.get(found[0]), dict)
+                    and set(rows[found[0]].get('runtime', {})) == {assembly + '.dll'}
+                    for rows in source_targets.values()), 'published project runtime metadata differs: ' + project)
+    require(source_root in project_keys and project_keys == {
+        key for key, value in source_libraries.items() if isinstance(value, dict) and value.get('type') == 'project'
+    }, 'published dependency project population differs')
+    translated = {key: reference_root if key == source_root else key for key in source_libraries}
+    for key, expected in source_libraries.items():
+        selected = translated[key]
+        require(libraries.get(selected) == expected, 'published dependency library metadata differs: ' + selected)
+        require({entry for entry in libraries if entry.partition('/')[0] == selected.partition('/')[0]} == {selected},
+                'alternate published dependency metadata identity: ' + selected)
+        for framework, rows in source_targets.items():
+            require(isinstance(rows, dict) and isinstance(targets[framework], dict)
+                    and isinstance(rows.get(key), dict) and isinstance(targets[framework].get(selected), dict),
+                    'published dependency target metadata missing: ' + selected)
+            actual = targets[framework][selected]
+            if key == source_root:
+                # The SDK may annotate the referenced current entry assembly's
+                # default FileVersion. All dependency edges remain exact.
+                require(actual.get('runtime') in ({'fsgg-coord-engine.dll': {}},
+                        {'fsgg-coord-engine.dll': {'fileVersion': '0.0.0.0'}}),
+                        'published entry runtime metadata differs')
+                actual = {**actual, 'runtime': {'fsgg-coord-engine.dll': {}}}
+            require(actual == rows[key], 'published dependency target metadata differs: ' + selected)
+    for framework, rows in source_targets.items():
+        owned_runtime = {pathlib.PurePosixPath(asset).name: translated[key]
+                         for key, value in rows.items() for asset in value.get('runtime', {})}
+        for key, value in targets[framework].items():
+            require(isinstance(value, dict), 'malformed dependency target metadata')
+            require(all(owned_runtime.get(pathlib.PurePosixPath(asset).name, key) == key
+                        for asset in value.get('runtime', {})), 'published runtime metadata shadow')
+
+
 def package_members(package, pin):
     """Recompute every producer member and reject alternate DLL shadowing."""
     validate_pin(pin)
@@ -151,21 +206,9 @@ def package_members(package, pin):
                     target.get('new-sdd-workspace/0.18.0', {}).get('dependencies', {}).get('FS.GG.Coord.Cli') == '0.108.0'
                     and 'fsgg-coord-engine.dll' in target.get(cli, {}).get('runtime', {})
                     for target in deps['targets'].values()), 'Creator 0.18 dependency metadata differs')
-        selected = {pathlib.PurePosixPath(path).stem: assembly for path, assembly in pin['projects'].items()
-                    if assembly != 'new-sdd-workspace'}
-        for name, assembly in selected.items():
-            key = name + '/0.108.0'
-            require(deps.get('libraries', {}).get(key, {}).get('type') == 'project'
-                    and all(assembly + '.dll' in target.get(key, {}).get('runtime', {})
-                            for target in deps['targets'].values()), 'missing coherent dependency metadata: ' + name)
-        for library in deps.get('libraries', {}):
-            name, _, version = library.partition('/')
-            if name in selected:
-                require(version == '0.108.0', 'mixed coherent dependency metadata')
-        for target in deps['targets'].values():
-            for library in target.values():
-                require(all(version == '0.108.0' for name, version in library.get('dependencies', {}).items()
-                            if name in selected), 'mixed coherent dependency edge')
+        # This member already passed the complete original-byte comparison above.
+        producer = read_json(archive.read(PREFIX + 'fsgg-coord-engine.deps.json'))
+        dependency_metadata(deps, producer, pin)
     return dict(pin['members'])
 
 

@@ -283,6 +283,79 @@ New source, actual publication/install, product fresh/upgrade journeys, programm
 restart/rollback remain separate acceptance steps. Root owns the Atlas capture and original private
 evidence custody gap until those findings and artifacts are durably delivered.
 
+### Genuine108 publication and inactive SDK verification — 2026-10-19
+
+Root independently accepted coherent108 publication at2026-10-19T10:56:28Z. Candidate39233536189
+and original artifact12178009778 retain source `f984a3619129c5e9ab68e1291fd080ef77ef9337` and
+content `sha256:36d93d38dff7a00a7781eb313191918a5c847288d7f743b878351eb0e800429e`.
+Original publisher39235248295 stopped on a malformed/duplicate draft census; forward39235800776
+settled that original draft and stopped at its135-probe Kit visibility checkpoint. Both remain evidence.
+After independent full-prefix and public Kit readback, fresh bounded forward39238215850 completed the
+same journal26 at generation33 with all16effects verified. No settled package or draft was resent.
+
+Terminal result12180757856 has original archive SHA256
+`89d02a6c1483b80df624fc3062a3c65b2e39eca64f20db156fdea2674eaa92a7`.
+Independent full33-generation validation passed. Promoted public release417149016 and its fixed tag
+match the source; all seven downloaded assets match their native digests and original candidate bytes
+where applicable. Fresh public NuGet packages share all three original payload digests; signed archive
+bytes differ. All396 packaged skill files across16 skills match both source mirrors, including canonical
+work-board. Static correspondence is separate from runtime instruction discovery.
+
+The inactive public SDK108 installation independently matches all82 tool members and its generated
+shim entrypoint. Its loaded-adapter candidate SHA256 is
+`393bf4e7e2a3fbeea3f7b5d15f23e246769e6baea0bca45e76e585fbeb8ef1e5`.
+The old107 selector was preserved through installation and the subsequent real inspection3.
+That inspection exited0 in175.22seconds within the unchanged500-request/270-second limits: all22
+sources Current,25 complete memberships, no determining population/membership/planning/repository
+gaps and zero mutations. Health is21Verified/oneUnknown for the preserved unset Observation.
+The original private report has SHA256
+`27ea714480b75b1bcc1ef2973fa244e2adbd7caed29aaa816ccc8d15e32e9fff`.
+No action/runtime/capacity/reservation suppliers were fabricated; selection remains explicitly Partial.
+Runtime discovery, Creator018 staged compatibility/publication, product journeys, programme continuation
+and restart/rollback remain separate gates. The real Creator pin now names promoted CLI asset655984570 and manifest
+asset656002184; it preserves all81 dependency members and285 declared producer inputs. No future
+hash or rebuilt dependency substitute is selected.
+
+### Creator018 staged package qualification — 2026-10-19
+
+The genuine108 pin is prepared from promoted originals, not a compiler rebuild. Actual staged
+Creator-only qualification at06048c07395abaaec89896de0fc42ed488132e9b passed82 assertions and all
+three compiled mutation controls in72.93seconds. Whole-fixture cleanup preserved the producer and
+active caller through every child; no producer metadata preparation or relaxed preservation was needed.
+The no-build pack used that same output and also preserved the producer/caller census.
+
+Package verification exposed a real checker defect: it assumed every internal project version was
+0.108.0, while the genuine producer records its nine internal projects at1.0.0. The corrected checker
+reads the already hash-verified original CLI dependency document, compares exact shared libraries,
+edges and runtime assets, and permits only the SDK's explicit entry-project name/reference-name
+translation and current FileVersion annotation. All81 original dependency byte checks remain intact.
+The same unmodified prototype package passes;176 inert controls cover wrong identities, edges,
+assets, aliases and the existing same-size byte-predicate mutant. Original refusals remain retained,
+including the first evidence collection invoked from the deliberately unpinned protected checkout.
+
+An isolated local SDK installation matches all88 prototype tool members. Its actual packaged
+ProductBoard API, selected real product3 binding and immutable published-source content reached797
+prepared/materialized local changes, preserved an owner file and returned a zero-change repeat.
+This minimal package-level journey used real verified Git source content, not synthetic fetch fixtures;
+it is not a complete SDD scaffold, the public018 CLI, native product adoption or runtime discovery.
+The original failed017 target remains absent. Independent source review passed fac62069/treeef46079e;
+final exact-head review and required CI still precede normal delivery and genuine018 candidate/publication.
+
+### Retained qualification evidence custody — 2026-10-19
+
+Host receipt6263680429 and root independent MATCH6263940374 accept the second finite
+archive copy and restore. The original89,850-byte archive contains18 regular0600 members with
+one closed manifest; root independently checked the raw archive and every declared member after
+restoring to a new restrictive client path. Host retains that archive and its proof alongside the
+original binding-pair archive until explicit root disposition. No Host response is pending.
+
+Recover through Atlas ID `github/programme-binding-custody-recovery`, reconcile the original
+4516 receipts and4682 owner, and use the existing private custody boundary. Client staging remains
+volatile. This acceptance proves the finite copy/restore, not actual client replacement, host-disk
+loss, power-loss behavior or off-machine backup. It does not settle the original lost journals,
+reported25+5 native effects, or439 inherited/46 later Unknown holds. The archived local Creator
+run remains its original partial qualification; later hosted source qualification is separate.
+
 ### Accepted installed real-use qualification — 2026-10-18
 
 Root accepted the original installed 0.105 invocations against that final binding:
