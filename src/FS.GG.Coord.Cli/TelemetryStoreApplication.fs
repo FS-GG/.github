@@ -7939,7 +7939,7 @@ ORDER BY f.identity LIMIT 257;
             }
             itemId
 
-    /// Workspace-authorized current passive facts, sharing the item snapshot transaction.
+    // Workspace-authorized current passive facts, sharing the item snapshot transaction.
     let scopedDashboardSnapshotWithPassive path assessment workspaceId itemId =
         dashboardSnapshotBound false true path assessment (Some(workspaceId, ignore)) ignore itemId None
 
