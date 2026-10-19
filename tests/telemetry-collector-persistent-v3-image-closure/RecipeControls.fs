@@ -102,6 +102,11 @@ let run (selection:Selection) (trusted:TrustedNativeSelection) (prepared:byte ar
     returned.Arguments[0]<-"mutated-consumer-copy"
     validate "run-c4" c4
     require(CommandRecipe.identity c4<>CommandRecipe.identity full) "target not bound into recipe identity"
-    cliControls selection trusted c4
-    cliControls selection trusted full
     printfn "PASS actual command producer/parser: C4/full counts, canonical closed bytes, argv/env/cwd/nonce/target/input joins, cleanup ceilings and copied command arrays"
+
+// The linked-source composition executable has its own entrypoint. Only the
+// real CLI test executable may select and launch the producer assembly here.
+let runCli (selection:Selection) (trusted:TrustedNativeSelection) prepared=
+    for target in ["run-c4";"run-inactive"] do
+        let program=CommandRecipe.prepare selection trusted prepared (String('c',64)) target "/recipe/parent.oci.tar" "/recipe/work" "/recipe/evidence" (String('a',32)) (String('b',32)) 32
+        cliControls selection trusted program

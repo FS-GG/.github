@@ -200,13 +200,16 @@ let trustedNative={Schema="fsgg.telemetry.trusted-native-selection/1";Acquisitio
 let contractRefs=[|{Role="host";Path="host.json";Sha256=hostManifestSha};{Role="manager";Path="manager.json";Sha256=managerManifestSha};{Role="native";Path="native.json";Sha256=nativeManifestSha};{Role="runtime";Path="runtime.json";Sha256=runtimeManifestSha}|]
 let contractSelection={selected with IdentityClass="production-contract-test";AcquisitionRoot=contractRoot;ManifestRoot=contractManifestRoot;RoleManifests=contractRefs;NativeInventoryPath="native-inventory.json";NativeInventorySha256=nativeInventorySha;HostSourceRevision=String('a',40);HostArchiveSha256=hostRow.Sha256;HostPayloadSha256=hostPayload;HostManifestSha256=hostManifestSha;ManagerSourceRevision=String('b',40);ManagerSourceTree=String('c',40);ManagerManifestSha256=managerManifestSha;RuntimeImageDigest="sha256:"+h '5';RuntimeTreeSha256=runtimeManifestSha;NativeElfSha256=codexRow.Sha256;NativeProfileSha256=nativeManifestSha;ReaderProfileSha256=readerRow.Sha256;CanonicalVerifierSha256=verifierRow.Sha256;InventorySha256=inventory contractRows;Files=contractRows}
 let prepareContract value=ImageClosure.prepareWithTrustedNative (Some trustedNative) value
-if Environment.GetEnvironmentVariable "PERSISTENT_V3_RECIPE_CLI_CONTROLS_ONLY" = "1" then
-  try OciTests.withInactiveInputs contractSelection trustedNative "run-inactive" (fun _ _ _ _->())
-  finally
+let recipeCliOnly=Environment.GetEnvironmentVariable "PERSISTENT_V3_RECIPE_CLI_CONTROLS_ONLY" = "1"
+try
+  OciTests.withInactiveInputs contractSelection trustedNative "run-inactive" (fun inputs _ _ _->RecipeControls.runCli inputs.Selection inputs.Trusted inputs.Prepared)
+finally
+  if recipeCliOnly then
     Directory.Delete(root,true)
     Directory.Delete(manifestRoot,true)
     Directory.Delete(contractRoot,true)
     Directory.Delete(contractManifestRoot,true)
+if recipeCliOnly then
   printfn "PASS focused actual recipe CLI source controls; inactive fixture and native custody NOT_RUN"
   Environment.Exit 0
 OciTests.run selected prepared trustedNative
