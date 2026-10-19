@@ -2029,3 +2029,18 @@ The176 inert release controls passed separately. An earlier local setup refused 
 FSharp.Core hash validation before compilation; a fresh isolated NuGet cache resolved that setup
 failure without changing the locked dependency. The original refusal is retained. These are
 source/staged qualifications, not public019 publication or installed receiver acceptance.
+
+The subsequent actual source019/SDD2.2 check at289d9c59 exited1 at the next generated
+roadmap reference (`references/deep-detail.md`); original stdout digest
+797293f41682976161edcb3fd5b0259c01346bf155ebb0430d351decfc7def5c.
+This supersedes the earlier two-entrypoint repair scope; it is not runtime acceptance.
+A complete inventory of the real unchanged scaffold provenance identifies42 instruction leaves
+across both mirrors: padd-item, work-board, work-board-best, work-board-normal and work-roadmap.
+The revised closed allowlist captures six required predecessor leaves and up to36 optional
+present or declared instruction leaves. Every captured leaf requires unique driver ownership,
+exact recorded hash, bytes/mode and safe ancestors; all must also occur exactly once in the
+verified selected published payload before installation. Undeclared owner files do not gain
+authority, retained targets remain strict, and non-instruction scaffold tooling is excluded.
+This replaces repeated first-conflict fixes with the complete observed instruction closure.
+Historical eight-leaf qualification remains evidence only for its original source. The revised
+42-leaf qualification and real SDD path must pass before publication.

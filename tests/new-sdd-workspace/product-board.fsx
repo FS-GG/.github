@@ -168,7 +168,28 @@ try
     // Synthetic old/new bodies exercise the real compiled snapshot and replacement boundaries.
     let driverPaths =
         [ for mirror in [ ".agents/skills"; ".claude/skills" ] do
-              for leaf in [ "work-board/SKILL.md"; "work-board/references/workspace-scope.md"; "padd-item/SKILL.md"; "work-roadmap/SKILL.md" ] do
+              for leaf in
+                  [ "padd-item/SKILL.md";
+                    "padd-item/agents/openai.yaml";
+                    "work-board-best/SKILL.md";
+                    "work-board-best/agents/openai.yaml";
+                    "work-board-normal/SKILL.md";
+                    "work-board-normal/agents/openai.yaml";
+                    "work-board/SKILL.md";
+                    "work-board/agents/openai.yaml";
+                    "work-board/references/backlog-triage.md";
+                    "work-board/references/deep-detail.md";
+                    "work-board/references/feedback-contract.md";
+                    "work-board/references/host-loop.md";
+                    "work-board/references/workspace-scope.md";
+                    "work-roadmap/SKILL.md";
+                    "work-roadmap/agents/openai.yaml";
+                    "work-roadmap/references/critique-contract.md";
+                    "work-roadmap/references/deep-detail.md";
+                    "work-roadmap/references/feedback-contract.md";
+                    "work-roadmap/references/host-loop.md";
+                    "work-roadmap/references/lifecycle-log.md";
+                    "work-roadmap/references/roadmap-ledger.md" ] do
                   yield mirror + "/" + leaf ]
     let oldDriver = "synthetic SDD-generated predecessor driver\n"
     for relative in driverPaths do
@@ -182,13 +203,15 @@ try
         + String.concat "," driverRows + "]}"
     File.WriteAllText(freshTools, generated)
     File.WriteAllText(freshProvenance, generatedProvenance)
-    // Older successful scaffolds omit the optional roadmap entrypoints entirely.
-    let roadmapPaths = driverPaths |> List.filter (fun path -> path.Contains("/work-roadmap/"))
+    // Older successful scaffolds retain only the six required predecessor leaves.
+    let roadmapPaths = driverPaths |> List.filter (fun path ->
+        not ([ "work-board/SKILL.md"; "work-board/references/workspace-scope.md"; "padd-item/SKILL.md" ]
+             |> List.exists (fun leaf -> path = ".agents/skills/" + leaf || path = ".claude/skills/" + leaf)))
     for relative in roadmapPaths do File.Delete(Path.Combine(freshRoot, relative))
     let legacyProvenance = JsonNode.Parse(generatedProvenance)
     let legacyRows = legacyProvenance.["driverPaths"].AsArray()
     for index in [ legacyRows.Count - 1 .. -1 .. 0 ] do
-        if legacyRows.[index].["path"].GetValue<string>().Contains("/work-roadmap/") then legacyRows.RemoveAt index
+        if roadmapPaths |> List.contains (legacyRows.[index].["path"].GetValue<string>()) then legacyRows.RemoveAt index
     File.WriteAllText(freshProvenance, legacyProvenance.ToJsonString())
     ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> pass |> ignore
     // A present roadmap file cannot gain authority without exact driver provenance.
@@ -370,10 +393,10 @@ try
         File.Delete freshProvenance
         File.WriteAllText(freshProvenance, generatedProvenance)
         File.Delete aliasTarget
-    let expectedAdoptionRefusals = if OperatingSystem.IsWindows() then 68 else 72
+    let expectedAdoptionRefusals = if OperatingSystem.IsWindows() then 340 else 344
     if adoptionRefusals <> expectedAdoptionRefusals then
         failwithf "fresh provenance refusal inventory incomplete: %d / %d" adoptionRefusals expectedAdoptionRefusals
-    printfn "Fresh generated provenance controls passed: %d actual refusals; eight active hashes/original provenance and rollback checked." adoptionRefusals
+    printfn "Fresh generated provenance controls passed: %d actual refusals; 42 active hashes/original provenance and rollback checked." adoptionRefusals
     let staleFresh = prepareFresh fetch |> pass
     File.AppendAllText(freshTools, " ")
     ProductBoard.apply freshRoot staleFresh |> refuse "fresh generated preimage changed after plan"
@@ -424,10 +447,10 @@ try
         ProductBoard.apply freshRoot ancestorPlan |> refuseDriver "driver ancestor symlink after preview"
         Directory.Delete driverDirectory
         Directory.Move(heldDirectory, driverDirectory)
-    let expectedDriverRefusals = if OperatingSystem.IsWindows() then 77 else 99
+    let expectedDriverRefusals = if OperatingSystem.IsWindows() then 383 else 473
     if driverRefusals <> expectedDriverRefusals then
         failwithf "fresh driver refusal inventory incomplete: %d / %d" driverRefusals expectedDriverRefusals
-    printfn "Fresh generated driver controls passed: %d actual refusals, eight planned/replaced mirrors, rollback and exact repeat checked below." driverRefusals
+    printfn "Fresh generated driver controls passed: %d actual refusals, 42 planned/replaced mirrors, rollback and exact repeat checked below." driverRefusals
     ProductBoard.apply freshRoot (prepareFresh fetch |> pass) |> pass
     if driverPaths |> List.exists (fun relative -> File.ReadAllText(Path.Combine(freshRoot, relative)) <> content) then
         failwith "fresh driver installation omitted a selected mirror"
@@ -445,7 +468,7 @@ try
            || records.Length <> 1 || records.Head.["beforeSha256"].GetValue<string>() <> sha oldDriver
            || records.Head.["afterSha256"].GetValue<string>() <> sha content then
             failwith "fresh driver active provenance or adoption history differs from installed bytes"
-    if adoption.["drivers"].AsArray().Count <> 8 then failwith "adoption history broadened beyond selected eight leaves"
+    if adoption.["drivers"].AsArray().Count <> 42 then failwith "adoption history broadened beyond selected42 leaves"
     ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuse "applied adoption cannot be recaptured as original scaffold"
     let installedTools = JsonNode.Parse(File.ReadAllText freshTools)
     if installedTools.["tools"].["fs.gg.coord.cli"].["version"].GetValue<string>() <> pin

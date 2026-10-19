@@ -32,13 +32,13 @@ module ProductBoard =
     /// Opaque authority captured only for a target absent before invocation effects.
     type FreshScaffoldTarget
 
-    /// Exact successful SDD-owned manifest, original provenance and bounded driver preimages.
+    /// Exact successful SDD-owned manifest, original provenance and closed42-leaf driver preimages.
     /// Callers cannot construct this fresh-only authority.
     type GeneratedToolManifest
 
     val captureFreshScaffoldTarget: target: string -> FreshScaffoldTarget option
 
-    /// Capture manifest bytes/mode and six required, plus present work-roadmap, uniquely driver-owned leaves immediately after
+    /// Capture manifest bytes/mode and six required and up to36 optional uniquely driver-owned instruction leaves immediately after
     /// this successful fresh scaffold. Capture original provenance bytes/mode, require recorded
     /// hashes and refuse symbolic link ancestors or an already adopted scaffold.
     val captureGeneratedToolManifest:
