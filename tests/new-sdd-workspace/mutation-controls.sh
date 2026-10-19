@@ -7,17 +7,21 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
-SUBJECT="$REPO_ROOT/scripts/NewSddWorkspace/Program.fs"
+SOURCE_SUBJECT="$REPO_ROOT/scripts/NewSddWorkspace/Program.fs"
+SUBJECT="$SOURCE_SUBJECT"
+MODE="${FSGG_CREATOR_DEPENDENCY_MODE:-source-only}"
+MUTANT_INDEX=0
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/new-sdd-workspace-mutations.XXXXXX")"
 BACKUP="$WORK/Program.fs"
-cp -p "$SUBJECT" "$BACKUP"
+cp -p "$SOURCE_SUBJECT" "$BACKUP"
 ORIGINAL_SHA="$(sha256sum "$BACKUP" | cut -d' ' -f1)"
 
 # Preserve exact bytes but refresh mtime: otherwise MSBuild can consider the just-built mutated DLL
 # newer than the restored source and let the next control execute stale mutated output.
-restore() { cp "$BACKUP" "$SUBJECT"; }
+restore() { if [ -n "$SUBJECT" ] && [ -f "$SUBJECT" ]; then cp "$BACKUP" "$SUBJECT"; fi; }
 cleanup() { restore; rm -rf "$WORK"; }
 trap cleanup EXIT
+[ "$MODE" != published-dependency ] || SUBJECT=""
 
 mutate_exactly_once() {
   local old="$1" new="$2"
@@ -37,11 +41,30 @@ PY
 
 expect_red() {
   local label="$1" old="$2" new="$3" needle="$4" log="$5"
-  restore
+  local runner="$HERE/run.sh"
+  if [ "$MODE" = published-dependency ]; then
+    # The positive Creator has bin/obj already. Each published mutant must start
+    # from its own exact source checkout and keep the same original producer bytes.
+    MUTANT_INDEX=$((MUTANT_INDEX + 1))
+    local mutant="$WORK/creator-$MUTANT_INDEX"
+    local source_sha
+    source_sha="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+    git clone --no-hardlinks --no-checkout "$REPO_ROOT" "$mutant" >"$WORK/clone-$MUTANT_INDEX.log" 2>&1
+    git -C "$mutant" checkout --detach "$source_sha" >>"$WORK/clone-$MUTANT_INDEX.log" 2>&1
+    SUBJECT="$mutant/scripts/NewSddWorkspace/Program.fs"
+    [ "$(sha256sum "$SUBJECT" | cut -d' ' -f1)" = "$ORIGINAL_SHA" ] || {
+      echo "FAIL  $label — fresh mutant checkout differs from the original source"; exit 1;
+    }
+    runner="$mutant/tests/new-sdd-workspace/run.sh"
+  elif [ "$MODE" = source-only ]; then
+    restore
+  else
+    echo "FAIL  unknown Creator mutation dependency mode"; exit 1
+  fi
   mutate_exactly_once "$old" "$new"
-  # Each recursive real build owns a fresh temporary artifacts root; never reuse
-  # the outer positive build retained for later FSI and package qualification.
-  if env -u FSGG_CREATOR_SOURCE_ARTIFACTS FSGG_MUTATION_CHILD=1 bash "$HERE/run.sh" >"$log" 2>&1; then
+  # Source mode gets a fresh artifacts root; published mode keeps its explicit
+  # mode/producer/dependencies/caller and builds only the new isolated Creator.
+  if env -u FSGG_CREATOR_SOURCE_ARTIFACTS FSGG_MUTATION_CHILD=1 bash "$runner" >"$log" 2>&1; then
     echo "FAIL  $label — mutated suite stayed green"
     sed 's/^/    | /' "$log"
     exit 1
@@ -55,6 +78,9 @@ expect_red() {
   if [ "$(sha256sum "$SUBJECT" | cut -d' ' -f1)" != "$ORIGINAL_SHA" ]; then
     echo "FAIL  $label — production source was not restored exactly"
     exit 1
+  fi
+  if [ "$(sha256sum "$SOURCE_SUBJECT" | cut -d' ' -f1)" != "$ORIGINAL_SHA" ]; then
+    echo "FAIL  $label — outer Creator source changed"; exit 1
   fi
   echo "PASS  $label"
 }
