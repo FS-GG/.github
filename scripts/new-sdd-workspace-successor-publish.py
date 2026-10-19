@@ -256,6 +256,8 @@ def main() -> int:
                         "--source-sha", candidate_source, "--output", str(candidate)], check=True)
         manifest_path = candidate / "manifest.json"
         manifest = json.loads(manifest_path.read_text())
+        require(current_dependencies["protected_pin"](candidate_source) == dependency_pin,
+                "dependency pin changed between publisher preflight and candidate verification")
         current_dependencies["verify_evidence"](
             current_dependencies["read_json"]((candidate / "package-evidence.json").read_bytes()),
             candidate / "FS.GG.NewSddWorkspace.0.18.0.nupkg", manifest, dependency_pin)

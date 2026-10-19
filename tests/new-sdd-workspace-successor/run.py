@@ -1315,6 +1315,7 @@ class CreatorPublicationTests(unittest.TestCase):
                 def injected_run_path(path, *args, **kwargs):
                     if str(path).endswith("creator-current-coord-dependencies.py"):
                         return {"load_pin": lambda: {"explicitSyntheticUnitFixture": True},
+                                "protected_pin": lambda source: {"explicitSyntheticUnitFixture": True},
                                 "read_json": lambda body: {}, "verify_evidence": lambda *args: None}
                     return real_run_path(path, *args, **kwargs)
                 with patch.object(sys, "argv", argv), patch.dict(os.environ, env, clear=True), \
