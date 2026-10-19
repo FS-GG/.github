@@ -619,6 +619,56 @@ module DashboardProjection =
                     Ok(node :> JsonNode)
             | _ -> Error InvalidSnapshot
 
+    let private projectPassive (value: JsonElement) =
+        let require condition = if not condition then invalidOp "invalid passive display snapshot"
+        require (exactNames value (set ["schema";"limit";"truncated";"observations"])
+                 && text "schema" value = Some "fsgg.telemetry.passive-display/1"
+                 && number "limit" value = Some 256L)
+        let truncated = value.GetProperty "truncated"
+        require (truncated.ValueKind = JsonValueKind.True || truncated.ValueKind = JsonValueKind.False)
+        let observations = value.GetProperty "observations"
+        require (observations.ValueKind = JsonValueKind.Array && observations.GetArrayLength() <= 256)
+        let counters = ["input";"cachedInput";"cacheWriteInput";"output";"reasoning";"total"]
+        let names = Set.ofList (["revision";"capturedAt";"occurredAt";"receivedAt"] @ counters)
+        let rows = JsonArray()
+        for row in observations.EnumerateArray() do
+            require (exactNames row names)
+            let projected = JsonObject()
+            projected["ordinal"] <- JsonValue.Create(rows.Count + 1)
+            let revision = number "revision" row |> Option.filter (fun n -> n > 0L)
+            require revision.IsSome
+            projected["revision"] <- JsonValue.Create(revision.Value.ToString(Globalization.CultureInfo.InvariantCulture))
+            for name in counters do
+                match nullableNumber name row with
+                | Some(Some n) -> projected[name] <- JsonValue.Create(n.ToString(Globalization.CultureInfo.InvariantCulture))
+                | Some None -> projected[name] <- null
+                | None -> invalidOp "invalid passive display counter"
+            let counter name = nullableNumber name row |> Option.defaultWith (fun () -> invalidOp "invalid passive display counter")
+            let subset part whole = match counter part, counter whole with Some p, Some w -> p <= w | _ -> true
+            require (counters |> List.exists (counter >> Option.isSome))
+            require (subset "cachedInput" "input" && subset "cacheWriteInput" "input" && subset "reasoning" "output")
+            match counter "input", counter "output", counter "total" with
+            | Some input, Some output, Some total -> require (input <= Int64.MaxValue - output && input + output = total)
+            | _ -> ()
+            for name in ["capturedAt";"occurredAt";"receivedAt"] do
+                let node = row.GetProperty name
+                if name = "occurredAt" && node.ValueKind = JsonValueKind.Null then projected[name] <- null
+                else
+                    let timestamp = text name row |> safeTime
+                    require timestamp.IsSome
+                    projected[name] <- JsonValue.Create timestamp.Value
+            rows.Add projected
+        let result = JsonObject()
+        result["schema"] <- JsonValue.Create "fsgg.telemetry.unassigned-usage/1"
+        result["populationCoverage"] <- JsonValue.Create "partial"
+        result["attribution"] <- JsonValue.Create "unknown"
+        result["cost"] <- JsonValue.Create "unknown"
+        result["counterEncoding"] <- JsonValue.Create "decimal-int64"
+        result["limit"] <- JsonValue.Create 256
+        result["truncated"] <- JsonValue.Create(truncated.GetBoolean())
+        result["observations"] <- rows
+        result
+
     let project (authorizedWorkspace: string) (canonicalSnapshotEnvelopeBytes: byte array) =
         let bytes = canonicalSnapshotEnvelopeBytes
 
@@ -650,7 +700,7 @@ module DashboardProjection =
 
                 if not (exactNames envelope names) then
                     Error InvalidEnvelope
-                elif text "schema" envelope <> Some "fsgg.telemetry.item-detail/2" then
+                elif not (Set.contains (text "schema" envelope) (set [Some "fsgg.telemetry.item-detail/2";Some "fsgg.telemetry.item-detail/4"])) then
                     Error UnsupportedSchema
                 elif text "workspaceId" envelope <> Some authorizedWorkspace then
                     Error UnauthorizedWorkspace
@@ -751,6 +801,8 @@ module DashboardProjection =
                                             "reviews"
                                             "learningObservations"]
 
+                                    let withPassive = text "schema" envelope = Some "fsgg.telemetry.item-detail/4"
+                                    let expected = if withPassive then Set.add "passiveUsage" expected else expected
                                     let supportedShape =
                                         exactNames snapshot (Set.add "responseUsage" expected)
                                         && text "learningSnapshotSchema" snapshot = Some "fsgg.telemetry.learn-item-detail/4"
@@ -880,7 +932,8 @@ module DashboardProjection =
                                                         | Some error -> Error error
                                                         | None ->
                                                             let result = JsonObject()
-                                                            result["schema"] <- Schema
+                                                            result["schema"] <- (if withPassive then "fsgg.telemetry.private-dashboard/3" else Schema)
+                                                            if withPassive then result["unassignedUsage"] <- projectPassive (snapshot.GetProperty "passiveUsage")
                                                             result["workspaceId"] <- authorizedWorkspace
                                                             result["observedAt"] <- observedAt.Value
                                                             result["revision"] <- revision

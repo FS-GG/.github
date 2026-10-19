@@ -68,6 +68,16 @@ module HostPassiveReceiptTests =
             state.StartDrain()
             let app = (Hosting.createBuilder config.ListenUrl certificate).Build()
             Endpoints.configure app state (Configuration.credentials config)
+            let browserAccess = Convert.ToBase64String(Array.create 32 7uy).TrimEnd('=').Replace('+','-').Replace('/','_')
+            let browserDigest = Convert.ToHexString(SHA256.HashData(Array.create 32 7uy)).ToLowerInvariant()
+            let browserPrincipal: BrowserPrincipalConfig =
+                { PrincipalId = "passive-reader"; KeyHashFile = privateFile "browser-key.json" ($"""{{"schema":"fsgg.telemetry.browser-key/1","algorithm":"sha256","keyHash":"{browserDigest}"}}""")
+                  WorkspaceIds = [| owner.Workspace |]; Revoked = false }
+            let browserOptions: BrowserOptions =
+                { PublicOrigin = Uri config.ListenUrl; IdleLifetime = TimeSpan.FromMinutes 5.; AbsoluteLifetime = TimeSpan.FromHours 1.
+                  MaximumSessions = 8; LoginAttemptsPerMinute = 32; LoginAdmission = 4; QueryAdmission = 4; QueryTimeout = TimeSpan.FromSeconds 2. }
+            use browserSecurity = new BrowserSecurity.Service(browserOptions, [| browserPrincipal |])
+            BrowserEndpoints.map app browserOptions browserSecurity (BrowserComposition.snapshotWithAssessment config (fun _ -> approved))
             try
                 do! app.StartAsync()
                 use handler = new HttpClientHandler(AllowAutoRedirect = false)
@@ -148,6 +158,37 @@ module HostPassiveReceiptTests =
                 Assert.Null(current["model"])
                 Assert.False(current.AsObject().ContainsKey "cost")
                 Assert.Equal("partial", snapshot["populationCoverage"].GetValue<string>())
+                let browserRequest route body session =
+                    task {
+                        use message = new HttpRequestMessage(HttpMethod.Post, config.ListenUrl + route)
+                        message.Headers.Add("Origin", config.ListenUrl)
+                        session |> Option.iter (fun value -> message.Headers.Add("Cookie", "__Host-fsgg_session=" + value))
+                        message.Content <- new StringContent(body, Encoding.UTF8, "application/json")
+                        use! response = client.SendAsync message
+                        let! bytes = response.Content.ReadAsByteArrayAsync()
+                        let cookie = if response.Headers.Contains("Set-Cookie") then response.Headers.GetValues("Set-Cookie") |> Seq.head |> Some else None
+                        return response.StatusCode, bytes, cookie
+                    }
+                let! anonymous, _, _ = browserRequest "/private/dashboard/v1/snapshot" ($"""{{"workspaceId":"{owner.Workspace}"}}""") None
+                Assert.Equal(HttpStatusCode.Unauthorized, anonymous)
+                let! loggedIn, _, cookie = browserRequest "/private/dashboard/login" ($"""{{"principalId":"passive-reader","accessKey":"{browserAccess}"}}""") None
+                Assert.Equal(HttpStatusCode.OK, loggedIn)
+                let session = cookie.Value.Split(';').[0].Substring("__Host-fsgg_session=".Length)
+                let! displayed, bytes, _ = browserRequest "/private/dashboard/v1/snapshot" ($"""{{"workspaceId":"{owner.Workspace}"}}""") (Some session)
+                Assert.Equal(HttpStatusCode.OK, displayed)
+                let projection = JsonNode.Parse bytes
+                Assert.Equal("fsgg.telemetry.private-dashboard/3", projection["schema"].GetValue<string>())
+                let passive = Assert.Single(projection["unassignedUsage"].["observations"].AsArray())
+                Assert.Equal("2", passive["revision"].GetValue<string>())
+                Assert.Equal("22", passive["total"].GetValue<string>())
+                Assert.Null(passive["cachedInput"])
+                Assert.Equal(0, projection["items"].AsArray().Count)
+                let text = Encoding.UTF8.GetString bytes
+                for privateValue in [nativeThread; nativeTurn; "host-response"; identity; "sourceInstance"; "sourceDigest"] do Assert.DoesNotContain(privateValue, text)
+                let! outside, outsideBytes, _ = browserRequest "/private/dashboard/v1/snapshot" """{"workspaceId":"outside-workspace"}""" (Some session)
+                Assert.Equal(HttpStatusCode.NotFound, outside)
+                Assert.DoesNotContain("22", Encoding.UTF8.GetString outsideBytes)
+                Assert.True(BrowserComposition.snapshotWithAssessment config (fun _ -> approved) "outside-workspace" None |> Result.isError)
                 use connection = new SqliteConnection($"Data Source={Path.Combine(store, TelemetryStoreApplication.databaseFileName)};Mode=ReadOnly;Pooling=False")
                 connection.Open()
                 let count (sql: string) =

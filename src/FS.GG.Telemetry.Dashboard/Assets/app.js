@@ -112,6 +112,25 @@
     }
     return section;
   };
+  const passiveCounters = ["input","cachedInput","cacheWriteInput","output","reasoning","total"];
+  function renderPassive(data){
+    const target=$("unassigned-rows");target.replaceChildren();
+    if(data.schema!=="fsgg.telemetry.private-dashboard/3"){
+      text($("unassigned-status"),"Unassigned usage projection unavailable in this snapshot.");return;
+    }
+    const usage=data.unassignedUsage;
+    text($("unassigned-status"),`${usage.observations.length} displayed observations · partial population coverage · item attribution and billed cost: unknown.${usage.truncated?` Display limited to ${usage.limit} observations.`:""} Counters are shown per observation without a combined total.`);
+    if(!usage.observations.length)target.append(element("li","No receiver-applied unassigned observations are available in this bounded snapshot."));
+    const counter=value=>value===null?"unknown":BigInt(value).toLocaleString();
+    for(const row of usage.observations){
+      const item=element("li","","passive-row");
+      item.append(element("h3",`Observation ${row.ordinal} · revision ${row.revision}`));
+      item.append(element("p",`Input ${counter(row.input)} · cached input ${counter(row.cachedInput)} · cache writes ${counter(row.cacheWriteInput)} · output ${counter(row.output)} · reasoning ${counter(row.reasoning)}`));
+      item.append(element("p",`Observed total: ${counter(row.total)}`,"passive-total"));
+      item.append(element("p",`Captured ${row.capturedAt} · received ${row.receivedAt} · occurred ${row.occurredAt??"unknown"}`,"passive-clocks"));
+      target.append(item);
+    }
+  }
   function renderOverview(data){
     text($("process-verdict"),"Insufficient evidence");
     text($("process-reason"),"Health requires delivery, rework, coordination, cost and reliability evidence. This snapshot does not supply a diagnostic assessment or comparable baseline.");
@@ -137,6 +156,7 @@
   }
   function render(data) {
     renderOverview(data);
+    renderPassive(data);
     text($("freshness"),data.observedAt?`Snapshot read ${new Date(data.observedAt).toLocaleString()} · source freshness unestablished`:"Observation time unavailable");
     const receipts=data.operational.appliedReceipts==null||data.operational.rejectedReceipts==null?"receipt outcomes unavailable":`${data.operational.appliedReceipts} applied receipts · ${data.operational.rejectedReceipts} rejected receipts`;
     text($("health"),`${count(data.operational.pendingBatches)} pending receipts · ${receipts} · ${data.operational.consistency}`);
@@ -170,7 +190,7 @@
       }
       target.append(card);
     });
-    if(!data.items.length)target.append(element("p","No scoped observations are available."));
+    if(!data.items.length)target.append(element("p","No attributed item observations are available."));
     applySelection();
   }
   const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -205,12 +225,22 @@
     && (!item.steps || (object(item.steps) && ["runtimeCount","activityCount","ciStepCount","limitPerKind"].every(name=>Number.isSafeInteger(item.steps[name])&&item.steps[name]>=0)
       && typeof item.steps.truncated==="boolean" && Array.isArray(item.steps.rows) && item.steps.rows.length<=192 && item.steps.rows.every(validStep)))
     && validHealth(item.processHealth);
-  const validSnapshot = (data, workspace) => object(data) && data.schema==="fsgg.telemetry.private-dashboard/2"
+  const exactKeys = (value,names) => object(value) && Object.keys(value).length===names.length && names.every(name=>Object.hasOwn(value,name));
+  const decimal = value => typeof value==="string" && /^(0|[1-9][0-9]{0,18})$/.test(value) && BigInt(value)<=9223372036854775807n;
+  const validPassive = usage => exactKeys(usage,["schema","populationCoverage","attribution","cost","counterEncoding","limit","truncated","observations"])
+    && usage.schema==="fsgg.telemetry.unassigned-usage/1" && usage.populationCoverage==="partial" && usage.attribution==="unknown" && usage.cost==="unknown"
+    && usage.counterEncoding==="decimal-int64" && usage.limit===256 && typeof usage.truncated==="boolean" && Array.isArray(usage.observations) && usage.observations.length<=256
+    && usage.observations.every((row,index)=>exactKeys(row,["ordinal","revision","capturedAt","occurredAt","receivedAt",...passiveCounters])
+      && row.ordinal===index+1 && decimal(row.revision) && row.revision!=="0" && row.capturedAt!==null && row.receivedAt!==null
+      && ["capturedAt","occurredAt","receivedAt"].every(name=>timestamp(row[name])) && passiveCounters.every(name=>row[name]===null||decimal(row[name])));
+  const validSnapshot = (data, workspace) => object(data) && ["fsgg.telemetry.private-dashboard/2","fsgg.telemetry.private-dashboard/3"].includes(data.schema)
+    && (data.schema!=="fsgg.telemetry.private-dashboard/3"||validPassive(data.unassignedUsage))
     && data.workspaceId===workspace && string(data.revision,64) && /^[0-9a-f]{64}$/.test(data.revision) && timestamp(data.observedAt)
     && object(data.processHealth) && data.processHealth.schema==="fsgg.telemetry.process-health/1" && data.processHealth.verdict==="insufficient-evidence"
     && object(data.operational) && ["pendingBatches","appliedReceipts","rejectedReceipts"].every(name=>quantity(data.operational[name])) && string(data.operational.consistency)
     && Array.isArray(data.items) && data.items.length<=200 && data.items.every(validItem) && new Set(data.items.map(item=>item.id)).size===data.items.length;
   function clearSnapshot(){
+    $("unassigned-rows").replaceChildren();text($("unassigned-status"),"");
     lastValid=null;selectedOutcome="";openOutcomes.clear();openEvidence.clear();$("window").value="24h";$("items").replaceChildren();$("categories").replaceChildren();
     const option=element("option","All recorded outcomes");option.value="";$("outcome").replaceChildren(option);
     for(const id of ["freshness","health","process-verdict","process-reason","process-coverage","window-note"])text($(id),"");

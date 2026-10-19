@@ -7529,8 +7529,44 @@ WHERE n.source_ref=$source;
         if Encoding.UTF8.GetByteCount encoded > 4 * 1024 * 1024 then invalidOp "efficiency-export-byte-bound"
         encoded
 
+    // Same authenticated workspace/read transaction as the item snapshot. Raw
+    // native identities and source metadata never enter this display allowlist.
+    let private passiveDashboardRows (connection: SqliteConnection) (transaction: SqliteTransaction) =
+        use command = connection.CreateCommand()
+        command.Transaction <- transaction
+        command.CommandText <- """
+SELECT f.canonical,t.accepted_at FROM current_ingest_facts f
+JOIN fact_admissions a ON a.identity=f.identity AND a.authority_role='generic'
+JOIN fact_acceptance_times t ON t.identity=f.identity AND t.fact_revision=f.revision AND t.content_digest=f.content_digest
+JOIN receipt_admissions r ON r.receipt_key=t.receipt_key AND r.producer=a.producer AND r.stream=a.stream AND r.authority_role='generic'
+JOIN transport_receipts tr ON tr.producer=r.producer AND tr.batch=r.batch AND tr.digest=r.envelope_digest AND tr.state='applied'
+WHERE f.kind='provider-usage-observation/1' AND f.item_id IS NULL
+ORDER BY f.identity LIMIT 257;
+"""
+        use reader = command.ExecuteReader()
+        let observations = JsonArray()
+        let mutable truncated = false
+        while reader.Read() do
+            if observations.Count = 256 then truncated <- true
+            else
+                let canonical = reader.GetString 0
+                if Encoding.UTF8.GetByteCount canonical > 16384 then invalidOp "passive-display-row-byte-bound"
+                use document = JsonDocument.Parse canonical
+                let row = JsonObject()
+                for name in ["revision";"capturedAt";"occurredAt";"input";"cachedInput";"cacheWriteInput";"output";"reasoning";"total"] do
+                    row[name] <- JsonNode.Parse(document.RootElement.GetProperty(name).GetRawText())
+                row["receivedAt"] <- JsonValue.Create(reader.GetString 1)
+                observations.Add row
+        let result = JsonObject()
+        result["schema"] <- JsonValue.Create "fsgg.telemetry.passive-display/1"
+        result["limit"] <- JsonValue.Create 256
+        result["truncated"] <- JsonValue.Create truncated
+        result["observations"] <- observations
+        result
+
     let private dashboardSnapshotBound
         compactCi
+        includePassive
         path
         assessment
         (workspaceId: (string * (unit -> unit)) option)
@@ -7703,6 +7739,8 @@ WHERE n.source_ref=$source;
                                         journalMode = journal
                                     |}
 
+                            if includePassive then content["passiveUsage"] <- passiveDashboardRows connection transaction
+
                             content["items"] <- arrayOfStrings selectedItems
                             content["summaries"] <- summaries
 
@@ -7776,7 +7814,7 @@ WHERE n.source_ref=$source;
 
                             let revision = CanonicalJson.sha256 canonicalBytes
                             let envelope = JsonObject()
-                            envelope["schema"] <- JsonValue.Create(if compactCi then "fsgg.telemetry.item-detail/3" else "fsgg.telemetry.item-detail/2")
+                            envelope["schema"] <- JsonValue.Create(if includePassive then "fsgg.telemetry.item-detail/4" elif compactCi then "fsgg.telemetry.item-detail/3" else "fsgg.telemetry.item-detail/2")
                             envelope["workspaceId"] <- JsonValue.Create(snapshotWorkspace)
                             envelope["observedAt"] <- JsonValue.Create(DateTimeOffset.UtcNow.ToString("O"))
                             envelope["revision"] <- JsonValue.Create(revision)
@@ -7826,11 +7864,11 @@ WHERE n.source_ref=$source;
                 Error [ error.Message ]
 
     let efficiencyExport path assessment expectedRevision maxItems maxMetrics =
-        dashboardSnapshotBound true path assessment None ignore None
+        dashboardSnapshotBound true false path assessment None ignore None
             (Some(efficiencyExportInSnapshot expectedRevision maxItems maxMetrics))
 
     let efficiencyAnalysisInspect path assessment requestId =
-        dashboardSnapshotBound true path assessment None ignore None (Some(fun connection transaction baseSnapshot revision ->
+        dashboardSnapshotBound true false path assessment None ignore None (Some(fun connection transaction baseSnapshot revision ->
             let record,packet,_,_,_,_ = efficiencyQueueRow connection requestId
             record["packetBase64"] <- JsonValue.Create(Convert.ToBase64String packet)
             record["rawDigest"] <- JsonValue.Create("sha256:"+CanonicalJson.sha256 packet)
@@ -7876,19 +7914,19 @@ WHERE n.source_ref=$source;
             efficiencyQueueResult record))
 
     let dashboardSnapshotWithHooks path assessment (hooks: DashboardSnapshotHooks) itemId =
-        dashboardSnapshotBound false path assessment None hooks.AfterFirstRead itemId None
+        dashboardSnapshotBound false false path assessment None hooks.AfterFirstRead itemId None
 
     let dashboardSnapshot path assessment itemId =
         dashboardSnapshotWithHooks path assessment ({ AfterFirstRead = ignore }: DashboardSnapshotHooks) itemId
 
     let compactDashboardSnapshotWithHooks path assessment (hooks: DashboardSnapshotHooks) itemId =
-        dashboardSnapshotBound true path assessment None hooks.AfterFirstRead itemId None
+        dashboardSnapshotBound true false path assessment None hooks.AfterFirstRead itemId None
 
     let compactDashboardSnapshot path assessment itemId =
         compactDashboardSnapshotWithHooks path assessment ({ AfterFirstRead = ignore }: DashboardSnapshotHooks) itemId
 
     let scopedDashboardSnapshotWithHooks path assessment workspaceId (hooks: ScopedDashboardSnapshotHooks) itemId =
-        dashboardSnapshotBound false path assessment (Some(workspaceId, hooks.ReceiptKeyComputed)) hooks.AfterFirstRead itemId None
+        dashboardSnapshotBound false false path assessment (Some(workspaceId, hooks.ReceiptKeyComputed)) hooks.AfterFirstRead itemId None
 
     let scopedDashboardSnapshot path assessment workspaceId itemId =
         scopedDashboardSnapshotWithHooks
@@ -7900,6 +7938,10 @@ WHERE n.source_ref=$source;
                 ReceiptKeyComputed = ignore
             }
             itemId
+
+    /// Workspace-authorized current passive facts, sharing the item snapshot transaction.
+    let scopedDashboardSnapshotWithPassive path assessment workspaceId itemId =
+        dashboardSnapshotBound false true path assessment (Some(workspaceId, ignore)) ignore itemId None
 
     type private ActivationRow =
         {

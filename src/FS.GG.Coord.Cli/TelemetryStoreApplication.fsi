@@ -365,6 +365,11 @@ module TelemetryStoreApplication =
         itemId: string option ->
             Result<string, string list>
 
+    /// Workspace-authorized item and bounded unassigned usage snapshot from one read transaction.
+    val scopedDashboardSnapshotWithPassive:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment -> workspaceId: string -> itemId: string option ->
+            Result<string, string list>
+
     val exportPublic:
         path: string ->
         assessment: TelemetryStore.DurabilityAssessment ->

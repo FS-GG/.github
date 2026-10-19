@@ -824,3 +824,70 @@ module DashboardProjectionTests =
         let item = result.RootElement.GetProperty("items").[0]
         Assert.Equal(JsonValueKind.Null, item.GetProperty("steps").GetProperty("rows").[0].GetProperty("id").ValueKind)
         Assert.Equal(0, item.GetProperty("processHealth").GetProperty("edges").GetArrayLength())
+    let private passiveRow () =
+        row """{"revision":2,"capturedAt":"2026-10-18T12:00:00Z","occurredAt":null,"receivedAt":"2026-10-18T12:01:00Z","input":9007199254740993,"cachedInput":null,"cacheWriteInput":0,"output":2,"reasoning":null,"total":9007199254740995}"""
+
+    let private passiveSnapshot count =
+        let value = snapshot "item-a"
+        let passive = JsonObject()
+        passive["schema"] <- "fsgg.telemetry.passive-display/1"
+        passive["limit"] <- 256
+        passive["truncated"] <- (count = 256)
+        passive["observations"] <- JsonArray(Array.init count (fun _ -> passiveRow ()))
+        value["passiveUsage"] <- passive
+        value
+
+    let private passiveEnvelope value =
+        let encoded = JsonNode.Parse(envelope value)
+        encoded["schema"] <- "fsgg.telemetry.item-detail/4"
+        JsonSerializer.SerializeToUtf8Bytes encoded
+
+    [<Fact>]
+    let ``passive display preserves exact optional counters and observation clocks outside item totals`` () =
+        use projected = DashboardProjection.project "workspace-a" (passiveEnvelope (passiveSnapshot 1)) |> unwrap |> JsonDocument.Parse
+        let root = projected.RootElement
+        Assert.Equal("fsgg.telemetry.private-dashboard/3", root.GetProperty("schema").GetString())
+        let usage = root.GetProperty "unassignedUsage"
+        Assert.Equal("partial", usage.GetProperty("populationCoverage").GetString())
+        Assert.Equal("unknown", usage.GetProperty("attribution").GetString())
+        Assert.Equal("unknown", usage.GetProperty("cost").GetString())
+        let observation = usage.GetProperty("observations").[0]
+        Assert.Equal("9007199254740995", observation.GetProperty("total").GetString())
+        Assert.Equal("0", observation.GetProperty("cacheWriteInput").GetString())
+        Assert.Equal(JsonValueKind.Null, observation.GetProperty("cachedInput").ValueKind)
+        Assert.Equal(JsonValueKind.Null, observation.GetProperty("occurredAt").ValueKind)
+        Assert.Equal("2", observation.GetProperty("revision").GetString())
+        Assert.Equal(1, observation.GetProperty("ordinal").GetInt32())
+        Assert.Equal("2026-10-18T12:01:00.0000000+00:00", observation.GetProperty("receivedAt").GetString())
+        Assert.Equal(6L, root.GetProperty("items").[0].GetProperty("usage").GetProperty("total").GetInt64())
+
+    [<Fact>]
+    let ``passive extension rejects private fields malformed counters clocks and unsupported bounds`` () =
+        let mutations: (JsonNode -> unit) list = [
+            (fun value -> value["passiveUsage"].["observations"].[0]["threadId"] <- "PRIVATE-NATIVE-THREAD")
+            (fun value -> value["passiveUsage"].["observations"].[0]["total"] <- -1)
+            (fun value -> value["passiveUsage"].["observations"].[0]["total"] <- 1)
+            (fun value -> value["passiveUsage"].["observations"].[0]["cachedInput"] <- Int64.MaxValue)
+            (fun value -> value["passiveUsage"].["observations"].[0]["capturedAt"] <- "invalid")
+            (fun value -> value["passiveUsage"].["observations"].[0].AsObject().Remove("input") |> ignore)
+            (fun value -> value["passiveUsage"].["limit"] <- 257)
+            (fun value -> value["passiveUsage"].["truncated"] <- "unknown") ]
+        for mutate in mutations do
+            let value = passiveSnapshot 1
+            mutate value
+            Assert.True(DashboardProjection.project "workspace-a" (passiveEnvelope value) |> Result.isError)
+        Assert.True(DashboardProjection.project "workspace-a" (passiveEnvelope (passiveSnapshot 257)) |> Result.isError)
+        Assert.True(DashboardProjection.project "workspace-b" (passiveEnvelope (passiveSnapshot 1)) |> Result.isError)
+        Assert.True(DashboardProjection.project "workspace-a" (envelope (passiveSnapshot 1)) |> Result.isError)
+
+    [<Fact>]
+    let ``bounded passive view distinguishes an empty partial selection from unavailable legacy projection`` () =
+        for count in [0;256] do
+            use projected = DashboardProjection.project "workspace-a" (passiveEnvelope (passiveSnapshot count)) |> unwrap |> JsonDocument.Parse
+            let usage = projected.RootElement.GetProperty "unassignedUsage"
+            Assert.Equal(count, usage.GetProperty("observations").GetArrayLength())
+            Assert.Equal((count = 256), usage.GetProperty("truncated").GetBoolean())
+            Assert.Equal("partial", usage.GetProperty("populationCoverage").GetString())
+        use legacy = DashboardProjection.project "workspace-a" (envelope (snapshot "item-a")) |> unwrap |> JsonDocument.Parse
+        Assert.Equal("fsgg.telemetry.private-dashboard/2", legacy.RootElement.GetProperty("schema").GetString())
+        Assert.DoesNotContain("unassignedUsage", legacy.RootElement.GetRawText())

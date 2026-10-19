@@ -4,6 +4,12 @@ open System.Collections.Generic
 open System.Security.Cryptography.X509Certificates
 open Microsoft.AspNetCore.Builder
 
+module internal BrowserComposition =
+    val snapshotWithAssessment:
+        config: HostConfig -> assessmentFor: (string -> FS.GG.Coord.TelemetryStore.DurabilityAssessment) ->
+        workspace: string -> itemId: string option -> Result<byte array, string list>
+    val snapshot: config: HostConfig -> workspace: string -> itemId: string option -> Result<byte array, string list>
+
 module Hosting =
     val createBuilder: listenUrl: string -> certificate: X509Certificate2 -> WebApplicationBuilder
 
