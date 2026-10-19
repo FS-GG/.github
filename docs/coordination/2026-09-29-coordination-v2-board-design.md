@@ -203,6 +203,42 @@ rollback remain open; offline pairs and a host copy cannot satisfy them. Recover
 `github/programme-binding-custody-recovery`, verifies the host receipt and restored private manifest,
 and retains all original439/46Unknown reservations and unreconciled native operation identities.
 
+### Qualified replacement baseline and successor enrollment — 2026-10-19
+
+[Host receipt6262652143](https://github.com/FS-GG/.github/issues/4516#issuecomment-6262652143)
+completed the exclusive host copy and separate restore. Programme's
+[independent MATCH6262659355](https://github.com/FS-GG/.github/issues/4516#issuecomment-6262659355)
+verified the restored archive's exact bytes, restrictive ownership/mode, closed bounded manifest and
+both original pairs/commitments. Home retains the host archive and proof across client replacement
+until explicit Programme/root disposition. Host disk loss, off-machine backup, power-loss behavior
+and actual client replacement remain unqualified. The source archive and original pairs are preserved.
+
+[PR4690](https://github.com/FS-GG/.github/pull/4690) delivered the new binding4 commitment at
+041a60cbc8dd13b57415262c71bc60c6e41e9ced with identical reviewed/tested/delivered tree
+e1911a30698bcc16ecc7b567ec76483bd019df4c. The final private runtime binding changes only its protected
+population revision. Actual installed107 inspection exited successfully within its original270-second
+window: inspection/2 selected22 issues, reconciled25 memberships and read all22 sources Current,
+with no population/membership/repository gaps and zero mutation attempts. Twenty-one health values
+are Verified; #4682 retains Unknown solely because its Observation is unset, without a read/planning
+gap. Independent review accepts this bounded reader baseline for later actual rollback qualification.
+No integrator input or scheduling authority is supplied by this read.
+
+This candidate separately selects the already host-custodied binding5/schema3 public commitment for
+the same22 issues. An actual installed pre-activation control against the current protected binding4
+commitment refused the different private binding5 enrollment, with selected null, zero issue attempts
+and zero mutations. Its earlier draft-revision attempt failed at canonical-source acquisition and is
+retained as a setup failure; it does not prove the commitment invariant. Neither control activates5.
+After protected delivery, retain the original5 pair and qualify the exact final runtime revision
+through installed inspection3 before claiming successor caller acceptance.
+
+The new4 pair is an executable reader baseline, not an executed rollback. Real bounded restart/
+rollback must restore its protected commitment through ordinary source delivery, use its exact retained
+private pair and qualify the reader again; separately restore/requalify5 afterward. Preserve native
+human planning, existing Work level/view effects and every uncertain original throughout. UI/product/
+continuation and parent acceptance remain open. Recovery uses Atlas ID
+`github/programme-binding-custody-recovery`, the exact host-retention receipt and private manifest;
+a public commitment or volatile staging path alone cannot recover private bytes.
+
 ### Accepted installed real-use qualification — 2026-10-18
 
 Root accepted the original installed 0.105 invocations against that final binding:
