@@ -115,7 +115,9 @@ module ProgrammeFixture =
                     let text name = ownVariables |> List.tryPick (function actual, VString value when actual = name -> Some value | _ -> None) |> Option.defaultValue ""
                     let number = ownVariables |> List.tryPick (function "number", VNumber value -> Some(int value) | _ -> None) |> Option.defaultValue 0
                     let subject =
-                        if selection.Contains("subIssues(") then "selected native work hierarchy"
+                        if selection.Contains("issueCreationPolicy") then text "owner" + "/" + text "name" + " repository policy"
+                        elif selection.Contains("author{") || selection.Contains("author {") then text "owner" + "/" + text "name" + "#" + string number + " intake identity"
+                        elif selection.Contains("subIssues(") then "selected native work hierarchy"
                         elif selection.Contains("workLevel:") then "selected work classification"
                         elif ownVariables |> List.exists (fun (name, _) -> name = "projectOwner") then "bound V2 successor planning memberships"
                         elif selection.Contains("currentExpression") then "protected recipe " + String.replicate 40 "e" + ":" + (text "currentExpression").Substring(5)
