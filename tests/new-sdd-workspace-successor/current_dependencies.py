@@ -27,18 +27,32 @@ class CurrentDependencies(unittest.TestCase):
         self.members = {name: b'explicit synthetic unexecutable member ' + name.encode() for name in (
             'FS.GG.Coord.GitHub.dll', 'fsgg-coord-engine.dll', 'fsgg-coord-engine.deps.json',
             'fsgg-coord-engine.runtimeconfig.json', 'FS.GG.Coord.Core.dll', 'runtimes/linux-x64/native/test.so')}
+        framework = '.NETCoreApp,Version=v10.0'
+        self.producer = {'libraries': {
+            'fsgg-coord-engine/0.108.0': {'type': 'project'},
+            'FS.GG.Coord.Core/1.0.0': {'type': 'project'},
+            'FS.GG.Coord.GitHub/1.0.0': {'type': 'project'}}, 'targets': {framework: {
+                'fsgg-coord-engine/0.108.0': {'dependencies': {'FS.GG.Coord.Core': '1.0.0',
+                    'FS.GG.Coord.GitHub': '1.0.0'}, 'runtime': {'fsgg-coord-engine.dll': {}}},
+                'FS.GG.Coord.Core/1.0.0': {'runtime': {'FS.GG.Coord.Core.dll': {}}},
+                'FS.GG.Coord.GitHub/1.0.0': {'runtime': {'FS.GG.Coord.GitHub.dll': {}}}}}}
+        self.members['fsgg-coord-engine.deps.json'] = json.dumps(self.producer).encode()
         sha = lambda body: hashlib.sha256(body).hexdigest()
         self.pin = {'schema': 'fsgg.creator-current-coord-dependencies/1', 'version': '0.108.0',
                     'sourceSha': 'b' * 40, 'archiveSha256': 'c' * 64, 'promotedManifestSha256': 'd' * 64,
                     'releaseId': 1, 'assetId': 2, 'promotedManifestAssetId': 3,
                     'downloadUrl': 'https://github.com/FS-GG/.github/releases/download/coherent-set/v0.108.0/FS.GG.Coord.Cli.0.108.0.nupkg',
                     'projects': {'scripts/NewSddWorkspace/NewSddWorkspace.fsproj': 'new-sdd-workspace',
-                                 'src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj': 'fsgg-coord-engine'},
+                                 'src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj': 'fsgg-coord-engine',
+                                 'src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj': 'FS.GG.Coord.Core',
+                                 'src/FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj': 'FS.GG.Coord.GitHub'},
                     'sourceLeaves': [{'path': 'global.json', 'sha256': 'e' * 64}],
                     'members': {name: sha(body) for name, body in self.members.items()}}
-        self.deps = {'libraries': {'FS.GG.Coord.Cli/0.108.0': {'type': 'project'}}, 'targets': {
-            '.NETCoreApp,Version=v10.0': {'new-sdd-workspace/0.18.0': {'dependencies': {'FS.GG.Coord.Cli': '0.108.0'}},
-                                       'FS.GG.Coord.Cli/0.108.0': {'runtime': {'fsgg-coord-engine.dll': {}}}}}}
+        self.deps = json.loads(json.dumps(self.producer))
+        self.deps['libraries']['FS.GG.Coord.Cli/0.108.0'] = self.deps['libraries'].pop('fsgg-coord-engine/0.108.0')
+        rows = self.deps['targets'][framework]
+        rows['FS.GG.Coord.Cli/0.108.0'] = rows.pop('fsgg-coord-engine/0.108.0')
+        rows['new-sdd-workspace/0.18.0'] = {'dependencies': {'FS.GG.Coord.Cli': '0.108.0'}}
         self.write()
 
     def write(self, members=None, deps=None, extra=None):
@@ -81,6 +95,40 @@ class CurrentDependencies(unittest.TestCase):
         self.write(deps={'libraries': {}, 'targets': {}})
         with self.assertRaisesRegex(ValueError, 'metadata'):
             CURRENT['package_members'](self.package, self.pin)
+
+    def test_original_internal_versions_and_sdk_root_annotation_are_preserved(self):
+        # Coherent tool version is not the internal project version. These are
+        # explicit synthetic bytes mirroring the genuine producer graph shape.
+        self.assertIn('FS.GG.Coord.Core/1.0.0', self.deps['libraries'])
+        root = self.deps['targets']['.NETCoreApp,Version=v10.0']['FS.GG.Coord.Cli/0.108.0']
+        root['runtime']['fsgg-coord-engine.dll'] = {'fileVersion': '0.0.0.0'}
+        self.write()
+        self.assertEqual(CURRENT['package_members'](self.package, self.pin), self.pin['members'])
+        root['runtime']['fsgg-coord-engine.dll'] = {'fileVersion': '99.0.0.0'}
+        self.write()
+        with self.assertRaisesRegex(ValueError, 'entry runtime metadata'):
+            CURRENT['package_members'](self.package, self.pin)
+
+    def test_original_metadata_versions_edges_assets_and_aliases_are_exact(self):
+        framework, core = '.NETCoreApp,Version=v10.0', 'FS.GG.Coord.Core/1.0.0'
+        def missing(value):
+            del value['libraries'][core]
+        def alternate(value):
+            value['libraries']['FS.GG.Coord.Core/0.108.0'] = value['libraries'][core]
+        def edge(value):
+            value['targets'][framework]['FS.GG.Coord.Cli/0.108.0']['dependencies']['FS.GG.Coord.Core'] = '0.108.0'
+        def asset(value):
+            value['targets'][framework][core]['runtime'] = {'renamed.dll': {}}
+        def annotation(value):
+            value['targets'][framework][core]['runtime']['FS.GG.Coord.Core.dll'] = {'fileVersion': '99.0.0.0'}
+        def alias(value):
+            value['targets'][framework]['unrelated/1.0.0'] = {'runtime': {'FS.GG.Coord.Core.dll': {}}}
+        for mutate in (missing, alternate, edge, asset, annotation, alias):
+            changed = json.loads(json.dumps(self.deps))
+            mutate(changed)
+            self.write(deps=changed)
+            with self.subTest(mutation=mutate.__name__), self.assertRaisesRegex(ValueError, 'metadata'):
+                CURRENT['package_members'](self.package, self.pin)
 
     def test_fixed_pin_absence_and_duplicate_json_refuse(self):
         # Only this disposable root is missing the pin. A later genuine source
