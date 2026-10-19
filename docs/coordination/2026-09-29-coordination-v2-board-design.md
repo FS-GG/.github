@@ -92,6 +92,56 @@ and blob `7345444edeb7f6c60b31825995f5406fcea19422`; the complete twenty-row pop
 original nonce and binding remain restricted. Ordinary issue and owning-plan revisions are read
 freshly without changing enrollment. No private population or binding is published here.
 
+### Lost private binding and user-selected replacement — 2026-10-19
+
+The user instructed Programme/root to ask Host/Main for the most likely lost current private
+binding/custody pointer, then assume it lost and start over if Host/Main could not help.
+[Host/Main response6261658897](https://github.com/FS-GG/.github/issues/4516#issuecomment-6261658897)
+explicitly cannot supply the pointer and closes that bounded request. This is unavailability of a
+usable current copy, not proof that every historical copy disappeared or that old effects settled.
+The historical evidence search stays closed; no further search or renewed original grant is selected.
+
+Programme/root owns replacement under [#4682](https://github.com/FS-GG/.github/issues/4682) and
+[#4641](https://github.com/FS-GG/.github/issues/4641), through canonical
+[work-board](../../.agents/skills/work-board/SKILL.md). The source publication-bookkeeping prerequisite
+is delivered by [PR4686](https://github.com/FS-GG/.github/pull/4686) at9772af87da9cf299754ab106bba051e65bed88c0,
+with identical reviewed/tested/delivered tree586fc1df8ab5109a4e0b7c59cd9f18bf873e8f86. This source result
+neither restores the private binding nor establishes installed/native acceptance.
+
+Prepare a genuinely fresh authenticated binding/enrollment pair through the existing
+[offline preparation and installed contract](../../tests/coord-board-v2-cli-join/INSPECT.md).
+Select the complete new cohort explicitly from current owning scope and native identities; current
+membership alone cannot recover the lost old cohort or grant new enrollment. Retain the original
+twenty-row enrollment as unavailable history and all known/Unknown original operations, including
+439 inherited and46 later reservations. No new nonce, attempt or file path may disguise an
+uncertain-effect retry. Fresh shared effects require current relevant interference fencing and
+independent readback; the expired original operation family remains expired.
+
+Use a durable restrictive directory beneath
+`~/.local/share/fs-gg/coordination/programme-binding-20261019/` for the replacement's private template,
+exact payload, binding, original outputs and installed qualification evidence. The path is recovery
+navigation, not authority or a second status ledger. Keep private identities, nonce, payload and
+runtime artifacts out of public Git/Atlas. Record the safe directory pointer and decision in Atlas,
+then verify actual files and protected commitments on every recovery. Do not rely on a temporary
+session directory as the sole surviving copy. Future authorized replacement generations retain their
+original outputs rather than overwriting an uncertain partial pair.
+
+Fresh preparation has retained one validated offline binding4/schema2 pair using the maintained
+constructor at protected9772af87 and independently reviewed private inputs. The selected new cohort
+contains21 current native issues with explicit governing Roadmap values; four other visible members
+remain unenrolled. This is new selection, without an equality claim against the lost twenty-row
+cohort. Only the closed public commitment is delivered in the protected manifest. The original private
+pair remains in the restrictive directory above. After this commitment lands, create the final runtime
+binding against its exact protected revision while preserving the original nonce/payload and prepared
+output; authenticate it through the actual installed caller before any board-derived selection.
+No native field, membership, planning or Observation write was performed by offline preparation.
+
+Before activation, establish the new exact qualified caller/binding baseline and its bounded
+restart/rollback route. The lost original binding cannot serve as an executable rollback target;
+its historical acceptance remains recorded above. The selected binding5/schema3 successor still
+requires its separate field/classification/enrollment/views and programme/product/recovery acceptance.
+Neither pointer loss nor this replacement decision closes those promises or selects a legacy board.
+
 ### Accepted installed real-use qualification — 2026-10-18
 
 Root accepted the original installed 0.105 invocations against that final binding:
