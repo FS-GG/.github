@@ -681,6 +681,7 @@ grep -E '^  16 passing \(' "$itf_root/quint-tests.log"
 test "$(find "$itf_root" -maxdepth 1 -name '*.itf.json' -type f | wc -l)" -eq 16
 dotnet restore "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/PersistentV3.ImageClosure.Tests.fsproj" --locked-mode --disable-build-servers -m:1 /nodeReuse:false
 dotnet build "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/PersistentV3.ImageClosure.Tests.fsproj" --no-restore --disable-build-servers -m:1 /nodeReuse:false -p:UseSharedCompilation=false
+PERSISTENT_V3_RECIPE_CLI_CONTROLS_ONLY=1 dotnet "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/bin/Debug/net10.0/PersistentV3.ImageClosure.Tests.dll"
 dotnet restore "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/composition/PersistentV3.CallerComposition.Tests.fsproj" --locked-mode --disable-build-servers -m:1 /nodeReuse:false
 dotnet build "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/composition/PersistentV3.CallerComposition.Tests.fsproj" --no-restore --disable-build-servers -m:1 /nodeReuse:false -p:UseSharedCompilation=false
 # The actual inactive source fixture must create/check UID32768 files. Keep the
