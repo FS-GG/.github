@@ -316,6 +316,84 @@ and restart/rollback remain separate gates. The real Creator pin now names promo
 asset656002184; it preserves all81 dependency members and285 declared producer inputs. No future
 hash or rebuilt dependency substitute is selected.
 
+### Creator018 publication and installed byte coherence — 2026-10-19
+
+Root independently accepted genuine018 publication at12:16:53UTC. The original
+[publisher39247623510](https://github.com/FS-GG/.github/actions/runs/39247623510), attempt1,
+completed all eight effects through all17 validated generations without a forward attempt or resend.
+It used135 bounded reconciliation iterations and1000 Authority API entries below the4200 ceiling;
+its original observed quota was4983 against the4500 floor. Terminal summary artifact12185062270
+has original ZIP SHA256 `f93d6a18dbd722327cad4531331513a932de136917efbd7633fceaf4ac7499ef`.
+
+The promoted stable [release417234489](https://github.com/FS-GG/.github/releases/tag/new-sdd-workspace/v0.18.0)
+and lightweight tag bind exact source `f704a3e6e6b9b0149fe5b8e39b4fefb5d42cddb1`. All three
+public assets match native digests; package and manifest equal the original candidate bytes.
+The full protected journal ends at logical `fabb9ac5c49fab266ddaf858b0bfbf7b2c4e96a6`, physical
+`14d4dcf3e845d0326fa07fad08ee339072151f7e`. Fresh signed public NuGet archive SHA256
+`5efdb381f1f5aad539edf0ffa1c10991e5d66a85099f11b2b00fd84791568ba6` matches all93 original
+members and adds only its signature member. Both feed observations retain normalized producer payload
+`sha256:c71e3d51d0b364208b5620f248da4da18c58ac56f210a771668d411ad0af1d1c`. Local GitHub feed403
+remains a reader gap, supplied by the authenticated hosted original observation and matching public
+feed-journal asset. The signed feed package requires payload-aware validation; the initial prepared-archive
+check refusal is retained, and no original journal asset was rewritten for collection.
+
+The original local public SDK installation exited0. Collector return-shape/member-count refusals were
+reconciled against that settled installation without reinstalling it. All88 installed Creator tool files,
+all82 installed coordination108 files and the full81 shared pinned dependency members match their public
+originals. Each tool keeps its own command settings, outside that shared81-member pin.
+The actual public Creator help command passed. Both installed consumers carry adapter SHA256
+`393bf4e7e2a3fbeea3f7b5d15f23e246769e6baea0bca45e76e585fbeb8ef1e5`.
+Full public SDD/product journeys, programme continuation and executed bounded restart/rollback remain open.
+
+At12:18UTC root found the shared selector pointing to108 rather than the last verified107 observation.
+Its symlink metadata records11:52:08UTC; that is not an authenticated operation time or owner receipt.
+The earlier unchanged107-through-publication claim extended an observation without fresh readback and
+is superseded. Current108 bytes are independently qualified; the original selector change remains Unknown.
+[Host/Main request6267051676](https://github.com/FS-GG/.github/issues/4516#issuecomment-6267051676)
+received [Host/Main answer6267125651](https://github.com/FS-GG/.github/issues/4516#issuecomment-6267125651)
+before12:25UTC. The retained managed-service report attributes the108 selection to the existing updater
+at11:52:08UTC and joins the current selector metadata. Home reports that service terminal with no current
+writer from that unit; its existing hourly timer remains enabled, next due12:52UTC. This is reported
+original-operation evidence, not an independently captured syscall trace or proof that no unrelated writer
+acted. Root qualifies current bytes independently and preserves those limits. No overwrite, rollback,
+timer change or hold release follows. Read-only public receiver qualification proceeds independently;
+any dependent shared-selector mutation requires a fresh writer/fencing decision. UI acceptance and all439/46
+historical Unknown holds are retained.
+
+### Creator018 genuine candidate and runtime discovery — 2026-10-19
+
+[PR4693](https://github.com/FS-GG/.github/pull/4693) delivered protected source
+`f704a3e6e6b9b0149fe5b8e39b4fefb5d42cddb1`; its independently reviewed, tested and delivered
+tree is `a49de2efa86000fde7bb0fd8b06dd07f451e62d9`. The final hosted source fixture passed82
+assertions and three compiled mutants. The changelog placement failure and stale-event eligibility
+refusal are retained; the corrected candidate passed its required checks through normal delivery.
+
+The genuine first-attempt [Creator018 candidate39246748238](https://github.com/FS-GG/.github/actions/runs/39246748238)
+passed176 controls,82 fixture assertions and three compiled mutants using the original promoted108
+dependencies. Root independently authenticated original artifact12182823900, raw ZIP SHA256
+`fdfe1d8e2f50c0316204792057269c2990bee2821ead6061c134a94e36efd91b`, its exact three-member
+shape and complete81-member dependency evidence. Package SHA256 is
+`41ef9c76fa3facf639448b3fc4a46a2acbdd43026ae4ee4ca1976e603d2659fa`; the local prototype
+remains a separate artifact and is never substituted for this candidate.
+
+The actual installed Codex app-server discovered all16 repository skills in the isolated prototype
+materialization through its closed `skills/list` request with `cwds` and `forceReload`. Every discovered
+repository skill was enabled and matched the immutable published source; `work-board` was present,
+no catalog errors were returned and the owned app-server exited0. Earlier incomplete catalog attempts
+remain historical. This qualifies actual prototype instruction discovery, separate from public018
+workspace discovery and complete SDD/scaffolder adoption. Actual installed SDD CLI preflight reports2.2.0.
+
+The original [non-publishing preflight39247245445](https://github.com/FS-GG/.github/actions/runs/39247245445)
+passed with18 Authority GETs, zero POST/PATCH and no journal mutation. Root authenticated original
+summary artifact12183549878, raw ZIP SHA256
+`2c4b66bdf6286f098ae85a4eaaac56ced25f10592ee11145ea82c8e3b52dd6e9`, and independently read
+fresh journal/release coordinates. Local GitHub Packages reads return403; the authenticated hosted
+preflight supplies that package read. The separately admitted original
+[publisher39247623510](https://github.com/FS-GG/.github/actions/runs/39247623510) was still pending at that checkpoint.
+Its full eight-generation snapshot verifies tag, draft and GitHub package with NuGet at intent;
+no package resend or publication acceptance follows from that snapshot. Protected source remained
+fixed through publication. The earlier unchanged107 selector claim is corrected below.
+
 ### Creator018 staged package qualification — 2026-10-19
 
 The genuine108 pin is prepared from promoted originals, not a compiler rebuild. Actual staged
