@@ -422,10 +422,12 @@ Exact caller/projection scope to reconcile in the implementation candidate:
   generated lock/digest/changelog projections. Verify actual generated filenames/ownership before
   editing; generator output is not hand-authored. The inspection reference is generated from its
   check-board owner into work-board; do not fork those copies.
-- `src/FS.GG.Drivers/stage-drivers.py`, `.github/workflows/release-drivers.yml` restored-package
-  assertions, the kit materialization/release checks, `scripts/NewSddWorkspace/ProductBoard.fs` and
+- `src/FS.GG.Drivers/stage-drivers.py`, the current coherent `release-successor-candidate.yml`
+  package qualification, the kit materialization/release checks, `scripts/NewSddWorkspace/ProductBoard.fs` and
   its fixed materialization/preimage closure, plus the preserved-update receiver tests. These actual
   consumers can reject a catalog-correct but incomplete reference tree.
+  Historical `release-drivers.yml` is sealed and byte-bound; retain it unchanged. Current manifest/link
+  staging and the compiled Creator fixture prove the new reference closure through active consumers.
 - Existing `tests/work-programme` and `fsgg.programme.*`/`programme.fsx` compatibility, native
   `Roadmap`, `roadmap-telemetry`, strict lifecycle/review/feedback types and historical churn fixtures
   retain their current consumer contracts. No blind rename or corpus deletion is justified.
