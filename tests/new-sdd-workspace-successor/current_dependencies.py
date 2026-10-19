@@ -83,13 +83,20 @@ class CurrentDependencies(unittest.TestCase):
             CURRENT['package_members'](self.package, self.pin)
 
     def test_fixed_pin_absence_and_duplicate_json_refuse(self):
-        self.assertFalse((ROOT / 'scripts/creator-current-coord-dependencies.json').exists())
-        with self.assertRaisesRegex(ValueError, 'pin absent'):
-            CURRENT['load_pin']()
-        with self.assertRaisesRegex(ValueError, 'duplicate JSON'):
-            CURRENT['read_json'](b'{"mode":"published-dependency","mode":"source-only"}')
+        # Only this disposable root is missing the pin. A later genuine source
+        # pin in the production repository must not invalidate this control.
+        fixed = self.root / CURRENT['PIN_PATH']
+        self.assertFalse(fixed.exists())
         with self.assertRaisesRegex(ValueError, 'pin absent'):
             CURRENT['load_pin'](self.root)
+        (self.root / 'arbitrary-pin.json').write_text(json.dumps(self.pin))
+        with self.assertRaisesRegex(ValueError, 'pin absent'):
+            CURRENT['load_pin'](self.root)
+        fixed.parent.mkdir()
+        fixed.write_text(json.dumps(self.pin))
+        self.assertEqual(CURRENT['load_pin'](self.root), self.pin)
+        with self.assertRaisesRegex(ValueError, 'duplicate JSON'):
+            CURRENT['read_json'](b'{"mode":"published-dependency","mode":"source-only"}')
 
     def test_actual_artifact_reader_checks_body_before_extraction_and_checker(self):
         spec = importlib.util.spec_from_file_location('current_artifact_control', ROOT / 'scripts/new-sdd-workspace-successor-artifact.py')
@@ -156,7 +163,9 @@ class CurrentDependencies(unittest.TestCase):
         spec.loader.exec_module(publisher)
         argv = ['publisher', '--preflight-only', '--candidate-run-id', '1', '--candidate-artifact-id', '2',
                 '--candidate-archive-sha256', 'd' * 64, '--workdir', str(self.root / 'uncreated')]
-        with patch.object(sys, 'argv', argv), patch.object(publisher, 'GitHubAPI') as api, \
+        injected = {**CURRENT, 'load_pin': lambda: CURRENT['load_pin'](self.root)}
+        with patch.object(sys, 'argv', argv), patch.object(runpy, 'run_path', return_value=injected), \
+                patch.object(publisher, 'GitHubAPI') as api, \
                 patch.object(publisher, 'WizardProvider') as provider, \
                 patch.object(publisher, 'ProtectedReleaseJournal') as journal, \
                 patch.object(publisher.subprocess, 'run', side_effect=AssertionError('missing pin may not launch children')), \
