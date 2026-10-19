@@ -283,6 +283,21 @@ New source, actual publication/install, product fresh/upgrade journeys, programm
 restart/rollback remain separate acceptance steps. Root owns the Atlas capture and original private
 evidence custody gap until those findings and artifacts are durably delivered.
 
+### Retained qualification evidence custody — 2026-10-19
+
+Host receipt6263680429 and root independent MATCH6263940374 accept the second finite
+archive copy and restore. The original89,850-byte archive contains18 regular0600 members with
+one closed manifest; root independently checked the raw archive and every declared member after
+restoring to a new restrictive client path. Host retains that archive and its proof alongside the
+original binding-pair archive until explicit root disposition. No Host response is pending.
+
+Recover through Atlas ID `github/programme-binding-custody-recovery`, reconcile the original
+4516 receipts and4682 owner, and use the existing private custody boundary. Client staging remains
+volatile. This acceptance proves the finite copy/restore, not actual client replacement, host-disk
+loss, power-loss behavior or off-machine backup. It does not settle the original lost journals,
+reported25+5 native effects, or439 inherited/46 later Unknown holds. The archived local Creator
+run remains its original partial qualification; later hosted source qualification is separate.
+
 ### Accepted installed real-use qualification — 2026-10-18
 
 Root accepted the original installed 0.105 invocations against that final binding:
