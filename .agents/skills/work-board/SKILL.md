@@ -94,6 +94,21 @@ native consumer acceptance remain separate required joins before activating this
 
 ## Recover ownership and unavailable history
 
+During board clearing, reconcile unfiltered All items at entry and resume, including cards without
+Status, Work level or enrollment. Missing metadata triggers intake triage; it never excludes a visible
+card from the pass. Reconcile each such card against its native issue, complete acceptance, owner,
+plan, prerequisites and existing delivery evidence. Record the disposition in the existing owning
+issue: accepted scoped completion, eligible work, a concrete blocker/supplier, or an attributed Unknown.
+For unfinished work, name the intake owner, next action and event that triggers reconsideration.
+Do not call the clearing pass complete while these cards remain untriaged.
+
+Triage is separate from scheduling. Initialize missing planning/classification only through the
+admitted native route, preserving existing human values. A completed source card's Done applies only
+to its accepted source promise. An unfinished card needs its actual implementation owner and protected
+enrollment before action selection; neither metadata repair nor a child link enrolls it or grants Ready.
+Revisit blocked and unenrolled intake on its determining event or the next clearing pass. Keep gaps
+visible through existing issue/board fields, without another intake queue, ledger or status table.
+
 At entry/resume reconcile owners, isolated worktrees/dirty files, native open PRs/heads/checks, original
 operations and relevant reservations. Continue one unambiguous existing owner and PR before replacing it.
 Missing/conflicting ownership fences the affected scope. Read [bootstrap](references/bootstrap.md) for
