@@ -11,7 +11,7 @@ module ProductBoard =
     open FS.GG.Coord.Cli
 
     type FileChange = { Path: string; Before: byte array option; After: byte array; Executable: bool; BeforeMode: UnixFileMode option }
-    type Plan = { Repository: string; ProjectId: string; Changes: FileChange list }
+    type Plan = { Repository: string; ProjectId: string; Changes: FileChange list; Preimages: (string * byte array * UnixFileMode option) list }
 
     let private bytes (value: string) = Text.Encoding.UTF8.GetBytes value
     let private digest (value: byte array) = SHA256.HashData value |> Convert.ToHexString |> _.ToLowerInvariant()
@@ -101,7 +101,23 @@ module ProductBoard =
             | _ -> false
         if absent then Some(FreshScaffoldTarget(Path.GetFullPath target)) else None
 
+    let private checkDestination (target: string) (relative: string) =
+        if Path.IsPathRooted relative || relative.Contains('\\')
+           || (relative.Split('/') |> Array.exists (fun part -> part = "" || part = "." || part = "..")) then
+            invalidOp "unsafe receiver destination"
+        let mutable entry = Path.GetFullPath target
+        let check (path: string) =
+            try
+                if (File.GetAttributes path &&& FileAttributes.ReparsePoint) <> enum<FileAttributes> 0 then
+                    invalidOp "receiver destination must not contain symbolic links"
+            with :? FileNotFoundException | :? DirectoryNotFoundException -> ()
+        check entry
+        for part in relative.Split('/') do
+            entry <- Path.Combine(entry, part)
+            check entry
+
     let private generatedFilePreimage (target: string) (relative: string) =
+        checkDestination target relative
         let path = Path.Combine(target, relative)
         let mutable entry = Path.GetFullPath target
         if (File.GetAttributes entry &&& FileAttributes.ReparsePoint) <> enum<FileAttributes> 0 then
@@ -191,9 +207,86 @@ module ProductBoard =
                 else Error "fresh scaffold Git is not a readable originless unborn repository"
             else Error "retained workspace GitHub origin is unreadable"
 
+    // This grant belongs only to the accepted108-bound retained generator contract. The immutable
+    // predecessor manifests authenticate the complete installed instruction closure; local receipt
+    // edits cannot mint ownership. A future predecessor requires its own reviewed admission.
+    let private retainedRevision = "cc1d3c12c1ed7e7128012063d7ab478c7198b523"
+    let private retainedManifests =
+        [ "registry/coordination-kit-skill-manifest.json", "8663bd062d654e9be9ab6b512bfd6421b629b0c4e393d01fba711413afdf0111"
+          "registry/driver-skill-manifest.json", "d0edd883be8e19ac930ac479b523c33490d906a58cd1247ccf0ca339ebef8ac2" ]
+    let private captureRetained target repository bindingJson (fetchRevision: string -> string -> Result<string, string>) =
+        let bindingSha = digest (bytes bindingJson)
+        let provenanceBytes, provenanceMode = generatedFilePreimage target ".fsgg/scaffold-provenance.json"
+        let provenance = JsonNode.Parse(Text.Encoding.UTF8.GetString provenanceBytes).AsObject()
+        let selected = provenance.["productBoard"].AsObject()
+        if provenance.["schemaVersion"].GetValue<int>() <> 1
+           || provenance.["generator"].["id"].GetValue<string>() <> "FS.GG.SDD.Artifacts"
+           || provenance.["generator"].["version"].GetValue<string>() <> "2.2.0" then
+            invalidOp "retained instruction predecessor requires its accepted SDD provenance"
+        for key, value in
+            [ "repository", repository; "bindingSha256", bindingSha
+              "kitRevision", retainedRevision; "adapterVersion", "0.108.0"
+              "recipeRevision", "f984a3619129c5e9ab68e1291fd080ef77ef9337" ] do
+            if selected.[key].GetValue<string>() <> value then invalidOp ("retained predecessor identity differs: " + key)
+        if not (isNull selected.["instructionUpgrade"]) then invalidOp "retained predecessor already has an instruction transition"
+        let adoption = selected.["generatedDriverAdoption"].AsObject()
+        if adoption.["schemaVersion"].GetValue<int>() <> 1 || adoption.["kitRevision"].GetValue<string>() <> retainedRevision then
+            invalidOp "retained predecessor lacks its original generated adoption"
+        let captured = ResizeArray<string * byte array * UnixFileMode option>()
+        let prior = ResizeArray<string * bool>()
+        for manifestPath, expectedSha in retainedManifests do
+            let raw = fetchRevision retainedRevision manifestPath |> function Ok value -> value | Error error -> invalidOp error
+            if digest (bytes raw) <> expectedSha then invalidOp "retained predecessor manifest digest differs"
+            let manifest = JsonNode.Parse(raw).AsObject()
+            if manifest.["schemaVersion"].GetValue<int>() <> 2 then invalidOp "retained predecessor manifest schema differs"
+            for row in manifest.["skills"].AsArray() do
+                let id = row.["id"].GetValue<string>()
+                let selectedSkill =
+                    if manifestPath = "registry/driver-skill-manifest.json" then row.["scope"].GetValue<string>() = "driver"
+                    else Set.contains id (Set.ofList [ "check-board"; "cross-repo-coordination"; "initialize-sdd-workspace"; "intra-repo-parallel-work"; "pnext-item" ])
+                if selectedSkill then
+                    for leaf in row.["files"].AsArray() do
+                        for root in [ ".claude/skills"; ".agents/skills" ] do
+                            let relative = root + "/" + id + "/" + leaf.["path"].GetValue<string>()
+                            let content, mode = generatedFilePreimage target relative
+                            let executable = leaf.["executable"].GetValue<bool>()
+                            if digest content <> leaf.["sha256"].GetValue<string>()
+                               || (mode |> Option.exists (fun value -> ((value &&& UnixFileMode.UserExecute) <> enum<UnixFileMode> 0) <> executable)) then
+                                invalidOp ("retained instruction differs from accepted predecessor: " + relative)
+                            captured.Add(relative, content, mode)
+                            prior.Add(relative, executable)
+        if captured.Count = 0 || (captured |> Seq.map (fun (path, _, _) -> path) |> Set.ofSeq).Count <> captured.Count then
+            invalidOp "retained predecessor manifest destinations are not unique"
+        // Every active driver row must still match the actual receiver, including unrelated SDD
+        // entries. Original42-leaf adoption is historical and is never rewritten to claim48 leaves.
+        let rows = provenance.["driverPaths"].AsArray()
+        let seen = Collections.Generic.HashSet<string>()
+        for row in rows do
+            let relative = row.["path"].GetValue<string>()
+            if not (seen.Add relative) || Path.IsPathRooted relative || relative.Contains("..") || relative.Contains('\\') then
+                invalidOp "unsafe or duplicate retained driver provenance"
+            let content, mode = generatedFilePreimage target relative
+            if row.["owner"].GetValue<string>() <> "driver" || digest content <> row.["sha256"].GetValue<string>() then
+                invalidOp ("retained driver provenance differs: " + relative)
+            captured.Add(relative, content, mode)
+        let adoptedPaths = adoption.["drivers"].AsArray() |> Seq.map (fun row -> row.["path"].GetValue<string>()) |> Seq.toList
+        let expectedAdoption = prior |> Seq.map fst |> Seq.filter (fun path -> List.contains path generatedDriverPaths) |> Set.ofSeq
+        if Set.ofList adoptedPaths <> expectedAdoption || adoptedPaths.Length <> expectedAdoption.Count then
+            invalidOp "retained adoption does not cover the exact accepted generated instruction closure"
+        for row in adoption.["drivers"].AsArray() do
+            let relative = row.["path"].GetValue<string>()
+            let matching = rows |> Seq.filter (fun item -> item.["path"].GetValue<string>() = relative) |> Seq.toList
+            if matching.Length <> 1 || matching.Head.["sha256"].GetValue<string>() <> row.["afterSha256"].GetValue<string>() then
+                invalidOp "retained adoption no longer agrees with active driver ownership"
+        for relative in [ ".config/dotnet-tools.json"; ".fsgg/board-v2-binding.json"; ".claude/settings.json" ] do
+            let content, mode = generatedFilePreimage target relative
+            captured.Add(relative, content, mode)
+        captured.Add(".fsgg/scaffold-provenance.json", provenanceBytes, provenanceMode)
+        captured |> Seq.distinctBy (fun (path, _, _) -> path) |> Seq.toList, List.ofSeq prior, provenanceBytes
+
     /// Stage reviewed producer bytes and preserving JSON merges. Fetch is injected for offline controls.
     /// The immutable kit revision identifies both manifest projections, shim and exact local tool pin.
-    let private prepareWithGeneratedManifest generatedManifest (target: string) (repository: string) (kitRevision: string) (bindingJson: string) (fetch: string -> Result<string, string>) =
+    let private prepareWithGeneratedManifest generatedManifest retained (target: string) (repository: string) (kitRevision: string) (bindingJson: string) (fetch: string -> Result<string, string>) =
         try
             match generatedManifest with
             | Some(GeneratedToolManifest(originalTarget, before, beforeMode, drivers, (provenanceBefore, provenanceMode))) ->
@@ -278,6 +371,9 @@ module ProductBoard =
             staged.Add(".claude/settings.json", encode settings, false, true)
             let provenance = jsonObject (Path.Combine(target, ".fsgg", "scaffold-provenance.json"))
             let selected = objectAt provenance "productBoard"
+            match retained with
+            | Some _ -> selected.["kitRevision"] <- JsonValue.Create kitRevision
+            | None -> ()
             for key, value in
                 [ "repository", repository; "projectId", binding.ProjectId; "ownerKind", "organization"
                   "owner", binding.Owner; "bindingPath", ".fsgg/board-v2-binding.json"; "bindingSha256", digest (bytes bindingJson)
@@ -318,6 +414,50 @@ module ProductBoard =
                     invalidOp "generated driver adoption conflicts with existing provenance"
                 selected.["generatedDriverAdoption"] <- adoption
             | None -> ()
+            match retained with
+            | Some (preimages, prior, originalProvenance) ->
+                recheckGeneratedDrivers target preimages
+                let active = provenance.["driverPaths"].AsArray()
+                let transition = JsonObject()
+                transition.["schemaVersion"] <- JsonValue.Create 1
+                transition.["fromKitRevision"] <- JsonValue.Create retainedRevision
+                transition.["toKitRevision"] <- JsonValue.Create kitRevision
+                transition.["originalProvenanceSha256"] <- JsonValue.Create(digest originalProvenance)
+                transition.["originalProvenanceBase64"] <- JsonValue.Create(Convert.ToBase64String originalProvenance)
+                let manifests = JsonObject()
+                for path, sha in retainedManifests do manifests.[path] <- JsonValue.Create sha
+                transition.["predecessorManifests"] <- manifests
+                let records = JsonArray()
+                for relative, _ in prior do
+                    if not (staged |> Seq.exists (fun (path, _, _, merge) -> path = relative && not merge)) then
+                        invalidOp ("retained upgrade cannot remove an accepted instruction: " + relative)
+                for relative, after, _, merge in staged do
+                    if not merge && relative.StartsWith(".", StringComparison.Ordinal) && relative.Contains("/skills/") then
+                        let before = preimages |> List.tryFind (fun (path, _, _) -> path = relative)
+                        if before.IsNone && File.Exists(Path.Combine(target, relative)) then
+                            invalidOp ("new instruction destination is owner-authored: " + relative)
+                        let existing = active |> Seq.filter (fun row -> row.["path"].GetValue<string>() = relative) |> Seq.toList
+                        if existing.Length > 1 then invalidOp "duplicate active instruction ownership"
+                        match existing with
+                        | [ row ] -> row.["sha256"] <- JsonValue.Create(digest after)
+                        | [] when List.contains relative generatedDriverPaths ->
+                            let row = JsonObject()
+                            row.["path"] <- JsonValue.Create relative
+                            row.["owner"] <- JsonValue.Create "driver"
+                            row.["sha256"] <- JsonValue.Create(digest after)
+                            active.Add row
+                        | _ -> ()
+                        match before with
+                        | Some(_, original, _) when original = after -> ()
+                        | _ ->
+                            let record = JsonObject()
+                            record.["path"] <- JsonValue.Create relative
+                            record.["beforeSha256"] <- (match before with Some(_, original, _) -> JsonValue.Create(digest original) :> JsonNode | None -> null)
+                            record.["afterSha256"] <- JsonValue.Create(digest after)
+                            records.Add record
+                transition.["files"] <- records
+                selected.["instructionUpgrade"] <- transition
+            | None -> ()
             staged.Add(".fsgg/scaffold-provenance.json", encode provenance, false, true)
             let duplicates = staged |> Seq.countBy (fun (path, _, _, _) -> path) |> Seq.exists (fun (_, count) -> count <> 1)
             if duplicates then invalidOp "duplicate producer destination"
@@ -331,6 +471,7 @@ module ProductBoard =
             | None -> ()
             let changes =
                 staged |> Seq.choose (fun (rel, after, executable, merge) ->
+                    checkDestination target rel
                     let path = Path.Combine(target, rel)
                     let before = if File.Exists path then Some(File.ReadAllBytes path) else None
                     let mode = if before.IsSome && not (OperatingSystem.IsWindows()) then Some(File.GetUnixFileMode path) else None
@@ -357,34 +498,58 @@ module ProductBoard =
                     | Some current when current = after -> None
                     | Some current when merge && JsonNode.DeepEquals(JsonNode.Parse(Text.Encoding.UTF8.GetString current), JsonNode.Parse(Text.Encoding.UTF8.GetString after)) -> None
                     | Some _ when not merge &&
+                                  not (retained |> Option.exists (fun (preimages, prior, _) ->
+                                      (prior |> List.exists (fun (relative, _) -> relative = rel)) &&
+                                      (preimages |> List.exists (fun (relative, captured, capturedMode) ->
+                                          relative = rel && before = Some captured && mode = capturedMode)))) &&
                                   not (generatedManifest |> Option.exists (fun (GeneratedToolManifest(_, _, _, drivers, _)) ->
                                       drivers |> List.exists (fun (relative, captured, capturedMode) ->
                                           relative = rel && before = Some captured && mode = capturedMode))) ->
                         invalidOp ("owner-authored file conflicts: " + rel)
                     | _ -> Some { Path = rel; Before = before; After = after; Executable = executable; BeforeMode = mode }) |> Seq.toList
-            Ok { Repository = repository; ProjectId = binding.ProjectId; Changes = changes }
+            Ok { Repository = repository; ProjectId = binding.ProjectId; Changes = changes; Preimages = retained |> Option.map (fun (preimages, _, _) -> preimages) |> Option.defaultValue [] }
         with error -> Error("product V2 preparation refused: " + error.Message)
 
     /// Existing targets and retrofit always preserve conflicting owner pins.
     let prepare target repository kitRevision bindingJson fetch =
-        prepareWithGeneratedManifest None target repository kitRevision bindingJson fetch
+        prepareWithGeneratedManifest None None target repository kitRevision bindingJson fetch
+
+    /// Explicit retrofit may consume only the accepted retained predecessor. A current receiver
+    /// remains on ordinary strict preparation, so repeat never appends history or grants overwrite.
+    let prepareRetained target repository kitRevision bindingJson fetchRevision =
+        try
+            if not (immutableRevision kitRevision) then invalidOp "--board-kit-ref requires an immutable 40 hexadecimal revision"
+            let provenance = jsonObject (Path.Combine(target, ".fsgg/scaffold-provenance.json"))
+            let selected = provenance.["productBoard"]
+            let current = if isNull selected then None else Some(selected.["kitRevision"].GetValue<string>())
+            let retained =
+                match current with
+                | Some revision when revision = kitRevision -> None
+                | Some revision when revision = retainedRevision -> Some(captureRetained target repository bindingJson fetchRevision)
+                | _ -> invalidOp "retained upgrade requires the accepted original or the exact selected current revision"
+            prepareWithGeneratedManifest None retained target repository kitRevision bindingJson (fetchRevision kitRevision)
+        with error -> Error("retained product V2 preparation refused: " + error.Message)
 
     /// Only the opaque, unchanged fresh scaffold manifest and bounded driver preimages grant replacement.
     let prepareGenerated snapshot target repository kitRevision bindingJson fetch =
-        prepareWithGeneratedManifest (Some snapshot) target repository kitRevision bindingJson fetch
+        prepareWithGeneratedManifest (Some snapshot) None target repository kitRevision bindingJson fetch
 
     /// Recheck every staged preimage immediately before the first write; restore original bytes on
     /// failure. This local installation never runs an adapter, accesses GitHub or changes a board.
     let apply target (plan: Plan) =
         let written = ResizeArray<FileChange>()
+        let times = Collections.Generic.Dictionary<string, DateTime>()
         try
+            recheckGeneratedDrivers target plan.Preimages
             for change in plan.Changes do
+                checkDestination target change.Path
                 let path = Path.Combine(target, change.Path)
                 if change.Before.IsSome && ((generatedDriverPaths |> List.contains change.Path) || change.Path = ".fsgg/scaffold-provenance.json") then
                     generatedFilePreimage target change.Path |> ignore
                 let actual = if File.Exists path then Some(File.ReadAllBytes path) else None
                 let mode = if actual.IsSome && not (OperatingSystem.IsWindows()) then Some(File.GetUnixFileMode path) else None
                 if actual <> change.Before || mode <> change.BeforeMode then invalidOp ("workspace changed after preview: " + change.Path)
+                if actual.IsSome then times.[change.Path] <- File.GetLastWriteTimeUtc path
             for change in plan.Changes do
                 let path = Path.Combine(target, change.Path)
                 Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
@@ -402,6 +567,7 @@ module ProductBoard =
                     | Some value ->
                         File.WriteAllBytes(path, value)
                         change.BeforeMode |> Option.iter (fun mode -> File.SetUnixFileMode(path, mode))
+                        File.SetLastWriteTimeUtc(path, times.[change.Path])
                     | None -> File.Delete path
                 with rollback -> failures.Add rollback.Message
             Error(error.Message + (if failures.Count = 0 then "" else "; rollback incomplete: " + String.concat "; " failures))

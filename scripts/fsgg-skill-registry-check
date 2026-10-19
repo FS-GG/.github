@@ -808,6 +808,16 @@ _WHEN_CMP_RE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)\s*(?:==|!=)\s*("(?:[^"\\]|\
 # not a bare-name/backtick mention — a doc that merely NAMES another skill in prose is not a
 # dependency on that skill's presence the way a path a worker is told to RUN is.
 _SIBLING_PATH_RE = re.compile(r"\.(?:agents|claude)/skills/([a-z][a-z0-9-]*)/")
+# Explicit remote references resolve at their HTTP(S) destination, not in the receiver's
+# materialized skill tree. Do not exempt a whole line: it can also prescribe a local path.
+_HTTP_REFERENCE_RE = re.compile(r"https?://[^\s<>`\"')]+", re.IGNORECASE)
+
+
+def sibling_path_references(text: str) -> set[str]:
+    """Local sibling dependencies, excluding only path matches inside explicit remote URLs."""
+    local_text = _HTTP_REFERENCE_RE.sub("", text)
+    return set(_SIBLING_PATH_RE.findall(local_text))
+
 
 
 def _unquote_when(token: str) -> str:
@@ -953,7 +963,7 @@ def cross_references(rows: list[dict], repos_root: str) -> list[dict]:
             if raw is None:
                 continue
             text = raw.decode("utf-8", errors="replace")
-            referenced_ids.update(_SIBLING_PATH_RE.findall(text))
+            referenced_ids.update(sibling_path_references(text))
 
         for referenced_id in sorted(referenced_ids - {skill_id}):
             target = by_id.get(referenced_id)

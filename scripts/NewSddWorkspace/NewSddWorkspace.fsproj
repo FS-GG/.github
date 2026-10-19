@@ -20,7 +20,7 @@
     <!-- Independent Creator successor: the canonical work-board materializer is packaged here.
          Coherent 0.108 does not publish this tool; its own candidate and publisher qualify each independent successor. -->
     <Version>0.20.0</Version>
-    <PackageReleaseNotes>0.20.0 source preparation: adopt the closed48-leaf lifecycle instruction allowlist from this invocation's successful fresh SDD scaffold. Retained workspaces and owner edits remain strict. Independent published-dependency qualification retains genuine coordination 0.108 bytes; publication and installed receiver acceptance remain pending.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.20.0 source preparation: adopt the closed48-leaf lifecycle instruction allowlist from this invocation's successful fresh SDD scaffold. Explicit retained upgrades authenticate the accepted immutable predecessor instruction manifests, preserve original provenance and 108 tool pins, and refuse owner edits. Independent published-dependency qualification retains genuine coordination 0.108 bytes; publication and installed receiver acceptance remain pending.</PackageReleaseNotes>
     <AssemblyName>new-sdd-workspace</AssemblyName>
 
     <Description>FS.GG workspace scaffolder — composes a selectable Standard or Typed SDD lifecycle, a runnable provider workspace, and an optional Governance overlay in one command, with a rich Spectre.Console progress UI. Orchestrates existing published machinery; no FS.GG.Templates checkout required.</Description>

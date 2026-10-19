@@ -66,12 +66,23 @@ let creatorRoot = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "../.."))
 let frozenSetting name = Environment.GetEnvironmentVariable name |> Option.ofObj |> Option.filter (String.IsNullOrWhiteSpace >> not)
 let expectedCoherentVersion =
     let currentProperties = File.ReadAllText(Path.Combine(creatorRoot, "Directory.Build.props"))
-    match frozenSetting "FsggFrozenCoordSource", frozenSetting "FsggFrozenCoordDependencies" with
+    // The current publisher exports its real published-dependency route. Historical frozen099
+    // qualification keeps its original distinct inputs and pin; neither falls back to source109.
+    let producer, dependencies, pinPath =
+        match frozenSetting "FSGG_CREATOR_DEPENDENCY_MODE" with
+        | Some "published-dependency" ->
+            match frozenSetting "FSGG_CREATOR_PRODUCER_SOURCE", frozenSetting "FSGG_CREATOR_DEPENDENCIES" with
+            | Some source, Some dependencies -> Some source, Some dependencies, "scripts/creator-current-coord-dependencies.json"
+            | _ -> failwith "published108 qualification requires both actual producer and dependency roots"
+        | None | Some "source-only" ->
+            frozenSetting "FsggFrozenCoordSource", frozenSetting "FsggFrozenCoordDependencies", "scripts/creator-frozen-coord-dependencies.json"
+        | Some _ -> failwith "unknown Creator dependency qualification mode"
+    match producer, dependencies with
     | None, None -> selectedCoherentVersion currentProperties None None |> pass
     | Some source, Some _ ->
         if not (Path.IsPathFullyQualified source) || Path.GetFullPath source = creatorRoot then
             failwith "frozen producer source must be a distinct absolute root"
-        let pin = JsonNode.Parse(File.ReadAllText(Path.Combine(creatorRoot, "scripts/creator-frozen-coord-dependencies.json")))
+        let pin = JsonNode.Parse(File.ReadAllText(Path.Combine(creatorRoot, pinPath)))
         let leaf = pin.["sourceLeaves"].AsArray() |> Seq.filter (fun row -> row.["path"].GetValue<string>() = "Directory.Build.props") |> Seq.exactlyOne
         let properties = File.ReadAllBytes(Path.Combine(source, "Directory.Build.props"))
         selectedCoherentVersion currentProperties (Some properties) (Some (leaf.["sha256"].GetValue<string>())) |> pass
@@ -529,3 +540,7 @@ try
 finally
     Directory.Delete(root, true)
 printfn "Product V2 offline controls passed; native/public adoption remains unproven."
+
+// Exercise the retained predecessor using the same assembly. Published108 mode establishes
+// positive upgrade; source-mode qualification proves incompatible adapter refusal explicitly.
+#load "product-board-retained.fsx"

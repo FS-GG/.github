@@ -21,6 +21,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 TOOL="$HERE/../../scripts/fsgg-skill-registry-check"
 
 python3 "$HERE/catalog-metadata.py"
+python3 "$HERE/cross-reference-locations.py"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/skill-registry-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
