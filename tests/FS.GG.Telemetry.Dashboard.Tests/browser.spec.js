@@ -131,3 +131,75 @@ test("process overview abstains, preserves selected refresh, and distinguishes h
   await page.locator(".process-detail summary").click();await page.locator("#refresh").click();
   await expect(page.locator(".process-detail")).toHaveAttribute("open","");
 });
+
+const passiveObservation = ordinal => ({ordinal,revision:"2",capturedAt:"2026-10-18T12:00:00Z",occurredAt:null,receivedAt:"2026-10-18T12:01:00Z",input:"9007199254740993",cachedInput:null,cacheWriteInput:"0",output:"2",reasoning:null,total:"9007199254740995"});
+const passiveSnapshot = count => ({...snapshot("workspace-a"),schema:"fsgg.telemetry.private-dashboard/3",unassignedUsage:{schema:"fsgg.telemetry.unassigned-usage/1",populationCoverage:"partial",attribution:"unknown",cost:"unknown",counterEncoding:"decimal-int64",limit:256,truncated:count===256,observations:Array.from({length:count},(_,index)=>passiveObservation(index+1))}});
+async function passiveTransport(page, current){
+  let requests=0;
+  await page.route("https://telemetry.test/private/dashboard/**",async route=>{
+    const request=route.request(),url=new URL(request.url());
+    if(request.method()==="GET"){
+      const file=url.pathname.endsWith("app.js")?"app.js":url.pathname.endsWith("styles.css")?"styles.css":"index.html";
+      return route.fulfill({status:200,contentType:file.endsWith(".js")?"text/javascript":file.endsWith(".css")?"text/css":"text/html",body:fs.readFileSync(path.join(assets,file))});
+    }
+    if(url.pathname.endsWith("/session/refresh"))return route.fulfill({status:200,json:session});
+    if(url.pathname.endsWith("/snapshot")){
+      requests++;
+      if(request.postDataJSON().workspaceId!=="workspace-a")return route.fulfill({status:404,json:{code:"not-found"}});
+      return route.fulfill({status:200,json:current()});
+    }
+    return route.fulfill({status:204});
+  });
+  return ()=>requests;
+}
+
+test("unassigned observations keep exact large counters, unknowns and clocks separate from item totals",async({page})=>{
+  const data=passiveSnapshot(1);
+  await passiveTransport(page,()=>data);
+  await page.goto("https://telemetry.test/private/dashboard/");
+  await expect(page.locator(".passive-row")).toHaveCount(1);
+  await expect(page.locator("#unassigned-status")).toContainText("partial population coverage · item attribution and billed cost: unknown");
+  await expect(page.locator(".passive-total")).toHaveText("Observed total: 9,007,199,254,740,995");
+  await expect(page.locator(".passive-row")).toContainText("cached input unknown · cache writes 0");
+  await expect(page.locator(".passive-clocks")).toContainText("Captured 2026-10-18T12:00:00Z · received 2026-10-18T12:01:00Z · occurred unknown");
+  await expect(page.locator("#items .item-token")).toHaveText("Native tokens unavailable");
+  await page.locator("#workspace").selectOption("workspace-b");
+  await expect(page.locator("#error")).toContainText("selected workspace is unavailable");
+  await expect(page.locator("#unassigned-rows")).toBeEmpty();
+  await expect(page.locator("#unassigned-status")).toBeEmpty();
+});
+
+test("unassigned display is bounded at 256 rows and refuses malformed replacement snapshots",async({page})=>{
+  let data=passiveSnapshot(256);
+  const requests=await passiveTransport(page,()=>data);
+  await page.goto("https://telemetry.test/private/dashboard/");
+  await expect(page.locator(".passive-row")).toHaveCount(256);
+  await expect(page.locator("#unassigned-status")).toContainText("Display limited to 256 observations");
+  expect(requests()).toBe(1);
+  test.info().annotations.push({type:"structural-workload",description:"256 passive rows; one snapshot request; no cross-row counter aggregation"});
+  for(const mutate of [
+    value=>{value.unassignedUsage.observations[0].total="9223372036854775808";},
+    value=>{value.unassignedUsage.observations[0].cachedInput=0;},
+    value=>{value.unassignedUsage.observations[0].threadId="private-native-identity";},
+    value=>{value.unassignedUsage.observations[0].capturedAt=null;},
+    value=>{value.unassignedUsage.observations.push(passiveObservation(257));}
+  ]){
+    data=passiveSnapshot(256);mutate(data);
+    await page.locator("#refresh").click();
+    await expect(page.locator("#error")).toContainText("Malformed private snapshot");
+    await expect(page.locator(".passive-row")).toHaveCount(256);
+    await expect(page.locator("body")).not.toContainText("private-native-identity");
+  }
+});
+
+test("empty partial observations and legacy unavailable projection remain distinct",async({page})=>{
+  let data=passiveSnapshot(0);
+  await passiveTransport(page,()=>data);
+  await page.goto("https://telemetry.test/private/dashboard/");
+  await expect(page.locator("#unassigned-status")).toContainText("0 displayed observations · partial population coverage");
+  await expect(page.locator("#unassigned-rows")).toContainText("No receiver-applied unassigned observations");
+  data=snapshot("workspace-a");
+  await page.locator("#refresh").click();
+  await expect(page.locator("#unassigned-status")).toHaveText("Unassigned usage projection unavailable in this snapshot.");
+  await expect(page.locator("#unassigned-rows")).toBeEmpty();
+});

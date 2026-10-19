@@ -45,3 +45,19 @@ validated input hashes. Source verification, snapshot origin and shared-cost
 completeness remain `unknown`; capture qualification, native acceptance and
 activation remain false. This source addition requires a protected successor
 publication before served-code qualification; Host 0.3.0 does not contain it.
+
+## Unassigned usage browser projection
+
+The prepared browser composition reads item facts and up to 256 current,
+authenticated unassigned passive observations in one workspace-authorized
+transaction. Its item-detail/4 input produces private-dashboard/3 with an
+allowlisted unassigned-usage/1 section. Existing item-detail/2 projection and
+private-dashboard/2 consumers retain their format; the updated assets read both
+versions. Raw native identities, source paths and payloads are excluded.
+
+Counters remain per observation, with exact decimal-int64 strings and nullable
+missing values. Capture, occurrence and receiver clocks stay separate. Coverage
+is partial; item attribution and billed cost are unknown. These observations do
+not enter item totals, and the display does not aggregate cumulative snapshots.
+Source qualification does not publish a successor, change the frozen coherent
+0.107 or Host 0.7 artifacts, or establish installed/native receiver acceptance.

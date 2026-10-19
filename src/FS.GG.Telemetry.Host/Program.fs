@@ -21,7 +21,7 @@ open FS.GG.Coord.Cli
 open FS.GG.Coord.GitHub
 open FS.GG.Telemetry.Dashboard
 
-module private BrowserComposition =
+module internal BrowserComposition =
     let options config =
         {
             PublicOrigin = Uri config.ListenUrl
@@ -34,14 +34,14 @@ module private BrowserComposition =
             QueryTimeout = TimeSpan.FromSeconds(float config.BrowserSession.QueryTimeoutSeconds)
         }
 
-    let snapshot config workspace itemId =
+    let snapshotWithAssessment config assessmentFor workspace itemId =
         match config.Stores |> Array.tryFind (fun store -> store.WorkspaceId = workspace) with
         | None -> Error [ "projection-unavailable" ]
         | Some store ->
             match
-                TelemetryStoreApplication.scopedDashboardSnapshot
+                TelemetryStoreApplication.scopedDashboardSnapshotWithPassive
                     store.Root
-                    (TelemetryStoreApplication.assessProductionRoot store.Root)
+                    (assessmentFor store.Root)
                     workspace
                     itemId
             with
@@ -50,6 +50,9 @@ module private BrowserComposition =
                 match DashboardProjection.project workspace (Encoding.UTF8.GetBytes envelope) with
                 | Ok bytes -> Ok bytes
                 | Error _ -> Error [ "projection-unavailable" ]
+
+    let snapshot config workspace itemId =
+        snapshotWithAssessment config TelemetryStoreApplication.assessProductionRoot workspace itemId
 
 module Hosting =
     let createBuilder (listenUrl: string) certificate =
