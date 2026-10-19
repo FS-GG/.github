@@ -18,9 +18,9 @@
     <ToolCommandName>new-sdd-workspace</ToolCommandName>
     <PackageId>FS.GG.NewSddWorkspace</PackageId>
     <!-- Independent Creator successor: the canonical work-board materializer is packaged here.
-         Coherent 0.107 does not publish this tool; its own candidate and publisher qualify 0.17. -->
-    <Version>0.17.0</Version>
-    <PackageReleaseNotes>0.17.0: package the canonical work-board instruction closure and explicit product-board materializer against the normal coordination 0.107 source graph. Publication and installed adoption use this tool's independent release route.</PackageReleaseNotes>
+         Coherent 0.108 does not publish this tool; its own candidate and publisher qualify 0.18. -->
+    <Version>0.18.0</Version>
+    <PackageReleaseNotes>0.18.0: package the canonical work-board instruction closure and explicit product-board materializer with exact promoted coordination 0.108 runtime dependencies. Publication and installed adoption use this tool's independent release route.</PackageReleaseNotes>
     <AssemblyName>new-sdd-workspace</AssemblyName>
 
     <Description>FS.GG workspace scaffolder — composes a selectable Standard or Typed SDD lifecycle, a runnable provider workspace, and an optional Governance overlay in one command, with a rich Spectre.Console progress UI. Orchestrates existing published machinery; no FS.GG.Templates checkout required.</Description>
@@ -82,6 +82,7 @@
   </Target>
   <Target Name="VerifyFrozenCoordDependencies" BeforeTargets="PrepareForBuild"
           Condition="'$(FsggFrozenCoordDependencies)' != ''">
-    <Exec Command="python3 &quot;$(MSBuildThisFileDirectory)../creator-frozen-coord-dependencies.py&quot; verify-layout --producer-source &quot;$(FsggFrozenCoordSource)&quot; --dependencies &quot;$(FsggFrozenCoordDependencies)&quot;" />
+    <Exec Condition="'$(FsggCurrentCoordDependencies)' != 'true'" Command="python3 &quot;$(MSBuildThisFileDirectory)../creator-frozen-coord-dependencies.py&quot; verify-layout --producer-source &quot;$(FsggFrozenCoordSource)&quot; --dependencies &quot;$(FsggFrozenCoordDependencies)&quot;" />
+    <Exec Condition="'$(FsggCurrentCoordDependencies)' == 'true'" Command="python3 &quot;$(MSBuildThisFileDirectory)../creator-current-coord-dependencies.py&quot; verify-layout --producer-source &quot;$(FsggFrozenCoordSource)&quot; --dependencies &quot;$(FsggFrozenCoordDependencies)&quot;" />
   </Target>
 </Project>

@@ -26,9 +26,11 @@ def file_identity(path):
 
 def capture(root, caller):
     artifacts = {}
-    for project in ("Cli", "Core", "GitHub"):
+    projects = {p.parent for p in root.glob("src/**/*.fsproj")} | {p.parent for p in root.glob("scripts/NewSddWorkspace/*.fsproj")}
+    projects |= {root / f"src/FS.GG.Coord.{name}" for name in ("Cli", "Core", "GitHub")}
+    for project in sorted(projects):
         for kind in ("bin", "obj"):
-            directory = root / f"src/FS.GG.Coord.{project}" / kind
+            directory = project / kind
             key = str(directory.relative_to(root))
             artifacts[key] = None if not directory.exists() else file_identity(directory)
             if directory.is_dir() and not directory.is_symlink():
@@ -45,6 +47,7 @@ def capture(root, caller):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--root", type=Path, default=ROOT)
     args = parser.parse_args()
     found = shutil.which("fsgg-coord-engine")
-    args.output.write_text(json.dumps(capture(ROOT, Path(found) if found else None), sort_keys=True) + "\n")
+    args.output.write_text(json.dumps(capture(args.root, Path(found) if found else None), sort_keys=True) + "\n")

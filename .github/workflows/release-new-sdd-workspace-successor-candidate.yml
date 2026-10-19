@@ -1,21 +1,17 @@
 name: release-new-sdd-workspace-successor-candidate
 
-# Product V2 wizard 0.17.0: protected source and package-byte qualification only.
-# Normal 0.107 source graph; frozen 0.16/0.99 dependency inputs and historical recovery remain retained.
+# Creator018 release has no source-build fallback. Missing promoted108 pin refuses.
 on:
   workflow_dispatch:
-
 permissions:
   contents: read
   packages: read
-
 concurrency:
   group: release-new-sdd-workspace-successor-candidate
   cancel-in-progress: false
-
 jobs:
   candidate:
-    name: new-sdd-workspace-017-candidate
+    name: new-sdd-workspace-018-candidate
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -25,6 +21,8 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Refuse missing promoted dependency pin before SDK or graph qualification
+        run: python3 scripts/creator-current-coord-dependencies.py preflight
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
@@ -40,60 +38,69 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
           version="$(dotnet msbuild scripts/NewSddWorkspace/NewSddWorkspace.fsproj -getProperty:Version | tr -d '[:space:]')"
-          test "$version" = 0.17.0
-          test -z "$(git ls-remote --tags origin refs/tags/new-sdd-workspace/v0.17.0)"
+          test "$version" = 0.18.0
+          test -z "$(git ls-remote --tags origin refs/tags/new-sdd-workspace/v0.18.0)"
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
-            https://api.nuget.org/v3-flatcontainer/fs.gg.newsddworkspace/0.17.0/fs.gg.newsddworkspace.0.17.0.nupkg)"
+            https://api.nuget.org/v3-flatcontainer/fs.gg.newsddworkspace/0.18.0/fs.gg.newsddworkspace.0.18.0.nupkg)"
           test "$response" = 404
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
             -u "$GITHUB_ACTOR:$GITHUB_TOKEN" \
-            https://nuget.pkg.github.com/FS-GG/download/fs.gg.newsddworkspace/0.17.0/fs.gg.newsddworkspace.0.17.0.nupkg)"
+            https://nuget.pkg.github.com/FS-GG/download/fs.gg.newsddworkspace/0.18.0/fs.gg.newsddworkspace.0.18.0.nupkg)"
           test "$response" = 404
       - name: Refuse mismatched Creator profiles before costly graph qualification
         run: python3 tests/new-sdd-workspace-successor/run.py
-      - name: Qualify wizard source
-        run: |
-          export FSGG_CREATOR_SOURCE_ARTIFACTS="$RUNNER_TEMP/creator017-candidate-build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          echo "FSGG_CREATOR_SOURCE_ARTIFACTS=$FSGG_CREATOR_SOURCE_ARTIFACTS" >> "$GITHUB_ENV"
-          bash tests/new-sdd-workspace/run.sh
-      - name: Qualify the real compiled product board boundary
-        run: |
-          dotnet fsi --lib:"$FSGG_CREATOR_SOURCE_ARTIFACTS/bin/NewSddWorkspace/release/" \
-            --reference:"$FSGG_CREATOR_SOURCE_ARTIFACTS/bin/NewSddWorkspace/release/new-sdd-workspace.dll" \
-            --reference:"$FSGG_CREATOR_SOURCE_ARTIFACTS/bin/NewSddWorkspace/release/fsgg-coord-engine.dll" \
-            --reference:"$FSGG_CREATOR_SOURCE_ARTIFACTS/bin/NewSddWorkspace/release/FS.GG.Coord.GitHub.dll" \
-            --reference:"$FSGG_CREATOR_SOURCE_ARTIFACTS/bin/NewSddWorkspace/release/FS.GG.Coord.Core.dll" \
-            --exec tests/new-sdd-workspace/product-board.fsx
-      - name: Pack and bind one package archive
-        env:
-          SOURCE_SHA: ${{ github.sha }}
+      - name: Acquire verified promoted originals into fresh isolated checkouts
         run: |
           set -euo pipefail
-          mkdir -p artifacts/new-sdd-workspace
-          dotnet pack scripts/NewSddWorkspace/NewSddWorkspace.fsproj -c Release --no-build \
-            --artifacts-path "$FSGG_CREATOR_SOURCE_ARTIFACTS" \
-            -p:RepositoryCommit="$SOURCE_SHA" -o artifacts/new-sdd-workspace
-          package=artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.17.0.nupkg
-          manifest=artifacts/new-sdd-workspace/manifest.json
-          test -f "$package"
-          python3 scripts/new-sdd-workspace-release.py prepare --package "$package" \
-            --source-sha "$SOURCE_SHA" --version 0.17.0 \
-            --tag new-sdd-workspace/v0.17.0 --output "$manifest"
-          python3 scripts/new-sdd-workspace-release.py verify --manifest "$manifest" --package "$package"
-          python3 tests/new-sdd-workspace-successor/run.py
-          python3 tests/new-sdd-workspace-successor/run.py \
-            --board-package "$package" --source-sha "$SOURCE_SHA" --release-manifest "$manifest" \
-            --build-artifacts "$FSGG_CREATOR_SOURCE_ARTIFACTS" \
-            > artifacts/new-sdd-workspace/package-evidence.json
-      - name: Refuse changed main before retaining candidate
+          work="$RUNNER_TEMP/creator018-published-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$work"
+          mkdir -m 700 "$work"
+          git clone --no-hardlinks --no-checkout "$GITHUB_WORKSPACE" "$work/creator"
+          git -C "$work/creator" checkout --detach "$GITHUB_SHA"
+          producer_sha="$(python3 -c 'import json; print(json.load(open("scripts/creator-current-coord-dependencies.json"))["sourceSha"])')"
+          git clone --no-hardlinks --no-checkout "$GITHUB_WORKSPACE" "$work/producer"
+          git -C "$work/producer" checkout --detach "$producer_sha"
+          python3 "$work/creator/scripts/creator-current-coord-dependencies.py" acquire --package "$work/producer.nupkg"
+          python3 "$work/creator/scripts/creator-current-coord-dependencies.py" stage \
+            --producer-source "$work/producer" --dependencies "$work/dependencies" --package "$work/producer.nupkg"
+          echo "CREATOR_PUBLISHED_ROOT=$work" >> "$GITHUB_ENV"
+      - name: Qualify wizard published dependency mode and pack same output
         env:
-          SOURCE_SHA: ${{ github.sha }}
-        run: test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+          FSGG_CREATOR_DEPENDENCY_MODE: published-dependency
+        run: |
+          set -euo pipefail
+          work="$CREATOR_PUBLISHED_ROOT"
+          export FSGG_CREATOR_PRODUCER_SOURCE="$work/producer"
+          export FSGG_CREATOR_DEPENDENCIES="$work/dependencies"
+          export FSGG_CREATOR_CALLER_ROOT="$GITHUB_WORKSPACE"
+          export FSGG_CREATOR_SOURCE_ARTIFACTS="$work/fixture-state"
+          bash "$work/creator/tests/new-sdd-workspace/run.sh"
+          output="$work/creator/scripts/NewSddWorkspace/bin/Release/net10.0"
+          dotnet fsi --lib:"$output" --reference:"$output/new-sdd-workspace.dll" \
+            --reference:"$output/fsgg-coord-engine.dll" --reference:"$output/FS.GG.Coord.GitHub.dll" \
+            --reference:"$output/FS.GG.Coord.Core.dll" --exec "$work/creator/tests/new-sdd-workspace/product-board.fsx"
+          mkdir -p artifacts/new-sdd-workspace
+          dotnet pack "$work/creator/scripts/NewSddWorkspace/NewSddWorkspace.fsproj" -c Release --no-build \
+            -p:FsggCurrentCoordDependencies=true -p:BuildProjectReferences=false \
+            -p:CompileUsingReferenceAssemblies=false \
+            -p:FsggFrozenCoordSource="$work/producer" -p:FsggFrozenCoordDependencies="$work/dependencies" \
+            -p:RepositoryCommit="$GITHUB_SHA" -o "$GITHUB_WORKSPACE/artifacts/new-sdd-workspace"
+          package=artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.18.0.nupkg
+          manifest=artifacts/new-sdd-workspace/manifest.json
+          python3 scripts/new-sdd-workspace-release.py prepare --package "$package" \
+            --source-sha "$GITHUB_SHA" --version 0.18.0 --tag new-sdd-workspace/v0.18.0 --output "$manifest"
+          python3 scripts/new-sdd-workspace-release.py verify --manifest "$manifest" --package "$package"
+          python3 tests/new-sdd-workspace-successor/run.py --board-package "$package" \
+            --source-sha "$GITHUB_SHA" --release-manifest "$manifest" \
+            --published-coord-dependencies "$work/dependencies" --published-coord-source "$work/producer" \
+            --creator-source "$work/creator" > artifacts/new-sdd-workspace/package-evidence.json
+      - name: Refuse changed main before retaining candidate
+        run: test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: new-sdd-workspace-successor-candidate-${{ github.sha }}-${{ github.run_id }}
           path: |
-            artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.17.0.nupkg
+            artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.18.0.nupkg
             artifacts/new-sdd-workspace/manifest.json
             artifacts/new-sdd-workspace/package-evidence.json
           if-no-files-found: error
