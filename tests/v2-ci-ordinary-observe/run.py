@@ -15,6 +15,7 @@ import tempfile
 import shutil
 import time
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("v2_ci_ordinary_observe", ROOT / "tools/v2-ci-ordinary-observe.py")
@@ -108,7 +109,18 @@ class NativeObservationTests(unittest.TestCase):
             elif path.endswith("/pulls/3662"):
                 body = self.pull
             elif path.endswith("/check-runs?per_page=100"):
+                # Retain the real global endpoint response for the causal old-reader control.
                 body = self.checks
+            elif "/check-runs?" in path:
+                query = parse_qs(urlsplit(path).query)
+                self.assertEqual(["100"], query.get("per_page"))
+                self.assertEqual({"per_page", "check_name"}, set(query))
+                name = query["check_name"][0]
+                selected = [check for check in self.checks["check_runs"] if check.get("name") == name]
+                body = {"total_count": len(selected) + getattr(self, "missing_named_checks", 0),
+                        "check_runs": selected}
+                if hasattr(self, "named_response_override"):
+                    body = self.named_response_override(body, name)
             elif path.endswith("/git/ref/heads/main"):
                 body = {"object": {"sha": SOURCE}}
             elif path.endswith("/contents/policy/v2-ci-ordinary-settlement.json?ref=" + SOURCE):
@@ -418,8 +430,38 @@ class NativeObservationTests(unittest.TestCase):
             self.run_observation()
 
     def test_incomplete_check_population_refuses(self):
-        self.checks["total_count"] += 1
+        self.missing_named_checks = 1
         with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "incomplete native check-run"):
+            self.run_observation()
+
+    def test_unrelated_check_population_does_not_fence_selected_policy(self):
+        # This actual observe path previously refused solely on the global count.
+        self.checks["check_runs"].extend(
+            {"id": 10000 + index, "name": "unrelated-" + str(index)} for index in range(150)
+        )
+        self.checks["total_count"] = len(self.checks["check_runs"])
+        self.assertGreater(self.checks["total_count"], 100)
+        self.assertEqual("qualified", self.run_observation()["status"])
+
+    def test_selected_population_still_has_a_complete_bounded_read(self):
+        for total in (101, -1, True, None):
+            self.named_response_override = lambda body, _name, total=total: {**body, "total_count": total}
+            with self.subTest(total=total), self.assertRaisesRegex(
+                    MODULE.QUALIFICATION.Refusal, "bounded native read"):
+                self.run_observation()
+
+    def test_named_endpoint_cannot_supply_a_different_check(self):
+        def wrong_name(body, _name):
+            body = copy.deepcopy(body)
+            body["check_runs"][0]["name"] = "unrelated"
+            return body
+        self.named_response_override = wrong_name
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "check-name filter differs"):
+            self.run_observation()
+
+    def test_selected_duplicate_identity_still_refuses(self):
+        self.checks["check_runs"].append(copy.deepcopy(self.checks["check_runs"][0]))
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "duplicate native check identity"):
             self.run_observation()
 
     def test_live_gate_drift_and_merged_tree_difference_refuse(self):

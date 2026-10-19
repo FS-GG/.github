@@ -20,6 +20,7 @@ import sys
 import tempfile
 import time
 from datetime import datetime
+from urllib.parse import quote
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "policy/v2-ci-ordinary-settlement.json"
@@ -349,16 +350,27 @@ def observe(environ: dict[str, str], rehearsal: bool = False,
     tree = equivalent_tree(repository, head, source, current_pull["base"]["sha"])
     required_checks(repository, selected_source)
 
-    checks_response = api(f"repos/{repository}/commits/{head}/check-runs?per_page=100")
-    if not isinstance(checks_response, dict) or checks_response.get("total_count", 101) > 100:
-        raise QUALIFICATION.Refusal("check-run population exceeds bounded native read")
-    checks = checks_response.get("check_runs")
-    if not isinstance(checks, list) or len(checks) != checks_response["total_count"]:
-        raise QUALIFICATION.Refusal("incomplete native check-run population")
     expected_producers = selected_source["checkProducers"]
     expected_names = set(selected_source["requiredChecks"] + selected_source["requiredGateChecks"])
     if set(expected_producers) != expected_names:
         raise QUALIFICATION.Refusal("check-producer population differs from required checks")
+    checks = []
+    # The policy selects exact check names, not every unrelated workflow on this commit.
+    # Bound and prove completeness separately for each selected population; never truncate
+    # a name's reruns or skip their existing workflow/job/source authentication below.
+    for name in sorted(expected_names):
+        checks_response = api(
+            f"repos/{repository}/commits/{head}/check-runs?per_page=100&check_name={quote(name, safe='')}"
+        )
+        total = checks_response.get("total_count") if isinstance(checks_response, dict) else None
+        if not isinstance(total, int) or isinstance(total, bool) or total < 0 or total > 100:
+            raise QUALIFICATION.Refusal(f"check-run population exceeds bounded native read: {name}")
+        named_checks = checks_response.get("check_runs")
+        if not isinstance(named_checks, list) or len(named_checks) != total:
+            raise QUALIFICATION.Refusal(f"incomplete native check-run population: {name}")
+        if any(not isinstance(check, dict) or check.get("name") != name for check in named_checks):
+            raise QUALIFICATION.Refusal(f"native check-name filter differs: {name}")
+        checks.extend(named_checks)
     run_cache: dict[int, dict] = {}
 
     def producer(check: dict, name: str) -> dict:
