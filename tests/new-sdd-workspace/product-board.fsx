@@ -127,9 +127,34 @@ try
     let kit = [ "check-board"; "cross-repo-coordination"; "initialize-sdd-workspace"; "intra-repo-parallel-work"; "pnext-item" ]
     let drivers = [ "atlas"; "work-roadmap"; "work-board"; "work-board-normal"; "work-board-best"; "padd-item"; "continue-from-handoff"; "stop-with-handoff"; "routine-decisions"; "agent-handoff"; "work-programme" ]
     let content = "fixture consumer\n"
+    let generatedLeaves =
+        [ "padd-item/SKILL.md";
+          "padd-item/agents/openai.yaml";
+          "work-board-best/SKILL.md";
+          "work-board-best/agents/openai.yaml";
+          "work-board-normal/SKILL.md";
+          "work-board-normal/agents/openai.yaml";
+          "work-board/SKILL.md";
+          "work-board/agents/openai.yaml";
+          "work-board/references/backlog-triage.md";
+          "work-board/references/deep-detail.md";
+          "work-board/references/feedback-contract.md";
+          "work-board/references/host-loop.md";
+          "work-board/references/workspace-scope.md";
+          "work-roadmap/SKILL.md";
+          "work-roadmap/agents/openai.yaml";
+          "work-roadmap/references/critique-contract.md";
+          "work-roadmap/references/deep-detail.md";
+          "work-roadmap/references/feedback-contract.md";
+          "work-roadmap/references/host-loop.md";
+          "work-roadmap/references/lifecycle-log.md";
+          "work-roadmap/references/roadmap-ledger.md" ]
     let manifest ids =
         let rows = ids |> List.map (fun id ->
-            let leaves = if id = "work-board" then [ "SKILL.md"; "references/workspace-scope.md" ] else [ "SKILL.md" ]
+            let declared = generatedLeaves |> List.choose (fun path ->
+                let prefix = id + "/"
+                if path.StartsWith(prefix, StringComparison.Ordinal) then Some(path.Substring(prefix.Length)) else None)
+            let leaves = if declared.IsEmpty then [ "SKILL.md" ] else declared
             let files = leaves |> List.map (fun path -> sprintf "{\"path\":\"%s\",\"sha256\":\"%s\",\"executable\":false}" path (digest (Text.Encoding.UTF8.GetBytes content)))
             sprintf "{\"id\":\"%s\",\"scope\":\"driver\",\"files\":[%s]}" id (String.concat "," files))
         "{\"schemaVersion\":2,\"skills\":[" + String.concat "," rows + "]}"
@@ -168,28 +193,7 @@ try
     // Synthetic old/new bodies exercise the real compiled snapshot and replacement boundaries.
     let driverPaths =
         [ for mirror in [ ".agents/skills"; ".claude/skills" ] do
-              for leaf in
-                  [ "padd-item/SKILL.md";
-                    "padd-item/agents/openai.yaml";
-                    "work-board-best/SKILL.md";
-                    "work-board-best/agents/openai.yaml";
-                    "work-board-normal/SKILL.md";
-                    "work-board-normal/agents/openai.yaml";
-                    "work-board/SKILL.md";
-                    "work-board/agents/openai.yaml";
-                    "work-board/references/backlog-triage.md";
-                    "work-board/references/deep-detail.md";
-                    "work-board/references/feedback-contract.md";
-                    "work-board/references/host-loop.md";
-                    "work-board/references/workspace-scope.md";
-                    "work-roadmap/SKILL.md";
-                    "work-roadmap/agents/openai.yaml";
-                    "work-roadmap/references/critique-contract.md";
-                    "work-roadmap/references/deep-detail.md";
-                    "work-roadmap/references/feedback-contract.md";
-                    "work-roadmap/references/host-loop.md";
-                    "work-roadmap/references/lifecycle-log.md";
-                    "work-roadmap/references/roadmap-ledger.md" ] do
+              for leaf in generatedLeaves do
                   yield mirror + "/" + leaf ]
     let oldDriver = "synthetic SDD-generated predecessor driver\n"
     for relative in driverPaths do
