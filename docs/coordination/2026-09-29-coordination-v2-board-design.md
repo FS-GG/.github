@@ -2016,3 +2016,16 @@ The81-member genuine108 dependency closure stays unchanged;019 source, candidate
 publication, installed runtime receivers and native product inspections require separate gates.
 Published018 remains immutable. Work-board remains the standard coordination entrypoint;
 the accepted visual UI pass does not require repetition.
+
+Prospective019 parser qualification against the original staged108 dependency closure passed
+82 assertions and three compiled mutants in72.23seconds. Separate compiled ProductBoard
+qualification passed72 Linux provenance and99 driver refusals, eight-mirror replacement,
+original provenance preservation, rollback and exact repeat; older absent-roadmap and present
+unowned-roadmap controls also passed. Its original stdout digest is
+875d9a51f502af597f0b45806455695779e9172055147f5c7d4163e62b060e3d.
+Independent static review caught the initially stale six-leaf refusal inventory guards; corrected
+Windows/Unix expectations68/72 and77/99 then received exact-head PASS atb7bab4b2.
+The176 inert release controls passed separately. An earlier local setup refused shared-cache
+FSharp.Core hash validation before compilation; a fresh isolated NuGet cache resolved that setup
+failure without changing the locked dependency. The original refusal is retained. These are
+source/staged qualifications, not public019 publication or installed receiver acceptance.
