@@ -1,7 +1,7 @@
 namespace FS.GG.Coord.GitHub
 
-/// Invocation-local acquisition for the fixed read-only inspection. Evaluation discovers
-/// requests only; no mutation or authority result escapes until every discovered read resolves.
+// Invocation-local acquisition for the fixed read-only inspection. Evaluation discovers
+// requests only; no mutation or authority result escapes until every discovered read resolves.
 module internal V2InspectionAcquisition =
     open System
     open System.Collections.Generic
@@ -125,8 +125,8 @@ module internal V2InspectionAcquisition =
                         with _ -> Error(Malformed(original.Subject, "native inspection batch response is unreadable")))
                     original, result) requests parts
 
-    /// One phase owns one cache; callers create a new phase after integrator reads. The
-    /// evaluator must be read-only and recreate mutable gates/counters on every discovery round.
+    // One phase owns one cache; callers create a new phase after integrator reads. The
+    // evaluator must be read-only and recreate mutable gates/counters on every discovery round.
     let run (transport: IGitHubTransport) (evaluate: IGitHubTransport -> 'value) =
         let responses = Dictionary<Request, IoResult<Response>>()
         let pending = ResizeArray<Request>()
