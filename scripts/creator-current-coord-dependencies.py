@@ -16,6 +16,7 @@ import subprocess
 import urllib.request
 
 from creator_source_qualification import SOURCE_020, qualification_version
+from new_sdd_workspace_successor_execution import CURRENT_020
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PIN_PATH = pathlib.Path('scripts/creator-current-coord-dependencies.json')
@@ -240,6 +241,30 @@ def verify_evidence(body, package, manifest, pin, *, source_binding=None):
     require(body == expected, 'published dependency evidence body differs or is source-only')
     require(manifest.get('version') == qualification_version(source_binding) and manifest.get('archiveSha256') == expected['archiveSha256'],
             'Creator manifest/package dependency join differs')
+    return expected
+
+
+def release_evidence(package, source_sha, pin, *, fixtures_passed, release_binding=CURRENT_020):
+    """Recompute a fresh closed020 release qualification, never upgrade an old receipt.
+
+    The successful original candidate workflow supplies the compiled fixture verdict;
+    its authenticated run/archive is checked independently by the artifact reader.
+    Neither this evidence nor its eligibility field grants publication authority.
+    """
+    require(release_binding is CURRENT_020, 'unknown Creator release qualification binding')
+    result = evidence(package, source_sha, pin, fixtures_passed=fixtures_passed, source_binding=SOURCE_020)
+    return {**result, 'schema': 'fsgg.creator020-release-qualification/1',
+            'releaseBinding': CURRENT_020.tag, 'sourceQualificationOnly': False, 'releaseEligible': True}
+
+
+def verify_release_evidence(body, package, manifest, pin, *, release_binding=CURRENT_020):
+    require(isinstance(body, dict), 'Creator020 release qualification body missing')
+    expected = release_evidence(package, manifest['sourceSha'], pin, fixtures_passed=True,
+                                release_binding=release_binding)
+    require(body == expected, 'Creator020 release qualification differs or is source-only')
+    require(manifest.get('packageId') == CURRENT_020.package and manifest.get('version') == CURRENT_020.version
+            and manifest.get('tag') == CURRENT_020.tag and manifest.get('archiveSha256') == expected['archiveSha256'],
+            'Creator020 release manifest/package join differs')
     return expected
 
 

@@ -525,6 +525,27 @@ unrecognized preimages. Operator-only skills remain absent from product payloads
 are upgraded only through their selected preserving route. Defaults do not change except those explicitly
 selected by this implementation; no implicit lifecycle/binding/fleet activation follows.
 
+The Creator020 publisher source slice belongs to Delivery [#4712](https://github.com/FS-GG/.github/issues/4712);
+its source PR must retain that Delivery's full consumer promise. The closed current020 candidate uses the
+unchanged genuine promoted108 dependency pin, while ordinary source020 qualification uses coherent109.
+Fresh release qualification and source-only evidence have distinct schemas; the latter remains refused
+by the artifact reader and publisher even if its eligibility booleans are flipped. Publication still
+requires its own actual first-attempt candidate, independent review, held current-main source, fresh
+collision/protection observations and protected admission. The prospective creator020 journal does not
+reset consumed019 or any original effect. Published metadata and installed pins remain unchanged.
+
+Pipeline preflight selection: reuse the existing static workflow/profile checks, bad-input CLI and
+artifact controls, historical seal inversions, and actual eight-effect/final-generation fake-port route.
+The assessment is capped at 30 minutes and adds no custom model: ordering, retry, cancellation, journal
+state transitions and resource limits are unchanged. These maintained controls are reusable on future
+closed profile advances. Pin and malformed-profile refusal precede graph acquisition/compilation;
+source-only, wrong-graph/run/source and historical-binding controls precede Authority or publication
+effects. Preserve the exact019 attestation, reverse the current job and complete workflow to accepted019
+bytes, and retain013 recovery and all older proofs. Local source-only controls do not establish compiled
+qualification, CI success, live publication or measured savings. The single costly CLR slot and required
+CI remain separately admitted; qualify the genuine staged108 producer and current020 compiled caller,
+then preserve the same packed output and original three-file Actions archive for native acceptance.
+
 ### BOARD-LIFECYCLE-01.4 — Materialize current Outcome decomposition and reconcile intake
 
 Depends on .1 and actual availability/qualification of each necessary native effect; .3 gates any new
