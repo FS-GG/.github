@@ -41,6 +41,11 @@ let trusted bytes=
     closed doc.RootElement
     require(exactProperties(properties typeof<TrustedNativeSelection>)doc.RootElement) "trusted-input-is-not-closed"
     JsonSerializer.Deserialize<TrustedNativeSelection>(bytes,options)
+let recipeSelection bytes=
+    use doc=JsonDocument.Parse(bytes:byte array)
+    closed doc.RootElement
+    require(exactProperties(properties typeof<RecipeSelection>)doc.RootElement) "recipe-selection-is-not-closed"
+    JsonSerializer.Deserialize<RecipeSelection>(bytes,options)
 let emit=function
     | Prepared bytes->Console.OpenStandardOutput().Write bytes;0
     | Unavailable reason->eprintfn "persistent-v3-image-closure-unavailable: %s" reason;2
@@ -51,12 +56,12 @@ try
         let bytes=load args[0]
         Environment.ExitCode<-match placeholder bytes with Some result->emit result|None->emit(ImageClosure.prepare(selection bytes))
     else
-        require(args.Length=5||args.Length=13) "usage: persistent-v3-image-closure prepare --selection ABS --trusted-native-selection ABS | run-c4 or run-inactive --selection ABS --trusted-native-selection ABS --parent-oci ABS --work-root FRESH_ABS --evidence-root FRESH_ABS --command-recipe ROOT_SELECTED_ABS"
+        require(args.Length=5||args.Length=7||args.Length=13) "usage: persistent-v3-image-closure prepare --selection ABS --trusted-native-selection ABS | prepare-command-recipe --selection ABS --trusted-native-selection ABS --recipe-selection ABS | run-c4 or run-inactive --selection ABS --trusted-native-selection ABS --parent-oci ABS --work-root FRESH_ABS --evidence-root FRESH_ABS --command-recipe ROOT_SELECTED_ABS"
         let command=args[0]
-        require((command="prepare"&&args.Length=5)||((command="run-c4"||command="run-inactive")&&args.Length=13)) "command-arguments"
+        require((command="prepare"&&args.Length=5)||(command="prepare-command-recipe"&&args.Length=7)||((command="run-c4"||command="run-inactive")&&args.Length=13)) "command-arguments"
         let flags=Dictionary<string,string>()
         for index in 1..2..args.Length-1 do require(flags.TryAdd(args[index],args[index+1])&&Path.IsPathFullyQualified args[index+1]) "duplicate-flag-or-relative-path"
-        let expected=if command="prepare" then set["--selection";"--trusted-native-selection"] else set["--selection";"--trusted-native-selection";"--parent-oci";"--work-root";"--evidence-root";"--command-recipe"]
+        let expected=if command="prepare" then set["--selection";"--trusted-native-selection"] elif command="prepare-command-recipe" then set["--selection";"--trusted-native-selection";"--recipe-selection"] else set["--selection";"--trusted-native-selection";"--parent-oci";"--work-root";"--evidence-root";"--command-recipe"]
         require(Set.ofSeq flags.Keys=expected) "unknown-or-missing-flag"
         let bytes=load flags["--selection"]
         match placeholder bytes with
@@ -69,6 +74,11 @@ try
                 RootlessPolicy.requirePrivateInput flags["--selection"]
                 RootlessPolicy.requirePrivateInput flags["--trusted-native-selection"]
             match ImageClosure.prepareWithTrustedNative(Some rootTrusted)selected with
+            | Prepared prepared when command="prepare-command-recipe"->
+                let recipe=recipeSelection(load flags["--recipe-selection"])
+                let program=CommandRecipe.prepare selected rootTrusted prepared recipe.CustodyIdentity recipe.Target recipe.ParentOci recipe.WorkRoot recipe.EvidenceRoot recipe.NonceA recipe.NonceB recipe.CleanupRemovalLimit
+                require(program.Selection=recipe) "recipe-selection-input-drift"
+                Environment.ExitCode<-emit(Prepared(CommandRecipe.bytes program))
             | Prepared prepared when command="run-c4"||command="run-inactive"->
                 RootlessPolicy.requirePrivateInput flags["--command-recipe"]
                 let program=CommandRecipe.parse(load flags["--command-recipe"])
