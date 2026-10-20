@@ -853,3 +853,58 @@ toolchain evidence on the candidate image remain pending. No native fixture,
 installed custody, publication, receiver acceptance, activation or historical
 retirement is established by this candidate. The first failure and original
 unknown operations retain their identities and holds.
+
+### Hosted source image successor candidate, 2026-10-20
+
+[Run39383364443/a1](https://github.com/FS-GG/.github/actions/runs/39383364443)
+passed the passive Host HTTP stage, then refused before the LEARN census and
+dependent source compilation: actual image20261018.339.1 differed from selected
+20261012.334.1. Its failed prerequisite and prior unknown operations stay retained.
+
+Root selects image20261018.339.1 and official runner-images source
+[`b4067e48bd9bd803e958bfe1503ea0a06a3a127f`](https://github.com/actions/runner-images/tree/b4067e48bd9bd803e958bfe1503ea0a06a3a127f)
+for ordinary bounded source requalification. The official release remains marked
+prerelease; its manifest lists SDK10.0.402 while setup-dotnet still selects10.0.401.
+Declared versions supply no actual post-setup custody or framework acceptance.
+
+Only the three selected tuple scalars change. Provider/platform/image predicates,
+pinned census, SDK normalization, complete compiler/toolchain binding, all source
+gates and default-off protected native inputs remain required. Static preflight
+uses the extracted actual guard with a successful inert census sentinel and
+wrong-tuple refusal. The unchanged execution graph needs no custom model; the
+preflight effort cap is ten minutes against the existing twenty-minute hosted job.
+Fresh successful census and full required source CI on the exact candidate remain
+pending. No native fixture, whole-wrapper retirement, C5, installed receiver,
+publication, activation or old-operation replay is established by this selection.
+
+
+### Closed source candidates during the hosted rollout, 2026-10-20
+
+[Run39384280477/a1](https://github.com/FS-GG/.github/actions/runs/39384280477)
+received the older20261012.334.1 image after the preceding attempt received
+20261018.339.1. The single-newer-image guard correctly refused before the census.
+Neither failed prerequisite is retried or qualified by changing a literal again.
+
+Root admits exactly two ordinary-source candidate tuples:20261012.334.1 with
+7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe, and20261018.339.1 with
+b4067e48bd9bd803e958bfe1503ea0a06a3a127f. An actual version must match a literal
+case; its independent source pin must match before the pinned census runs.
+Unlisted images refuse. This is a closed selection map, with no wildcard/latest
+acceptance. Each actual selected image still requires fresh complete census,
+SDK normalization and all exact-source gates; success on one image does not
+qualify another. Protected native inputs, authority, budgets and cleanup remain
+unchanged. Static preflight exercises both good tuples and wrong/missing/unknown
+inputs against the actual guard with an inert census. Full hosted qualification,
+native/receiver/installed acceptance and all prior unknown effects remain separate.
+
+The first closed-map source attempt,
+[run39386130481/a1](https://github.com/FS-GG/.github/actions/runs/39386130481),
+advanced through image selection, compilation and the 41 HostAttempt controls.
+The later image-closure step then refused because shell-local exports did not
+cross the step boundary. That independent failure remains retained. After all
+tuple/provider checks, the workflow now writes only the validated literal image
+version and source to the job environment file, alongside its existing native
+metadata handling. Static preflight must launch a fresh second environment and
+prove that both admitted tuples reach the actual downstream required-variable
+read. It must also show that local exports alone do not establish the handoff.
+Full exact-source hosted qualification remains required after this repair.

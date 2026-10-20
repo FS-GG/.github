@@ -127,8 +127,10 @@ jobs:
     env:
       # Explicit existing GitHub-hosted provider trust selection. The native job
       # tuple must match; these constants do not authenticate newly hashed tools.
-      FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION: 20261012.334.1
-      FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE: 7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe
+      # Closed ordinary-source candidates during the hosted image rollout.
+      # Every actual selected image still needs its own fresh complete census.
+      FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE_20261012: 7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe
+      FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE_20261018: b4067e48bd9bd803e958bfe1503ea0a06a3a127f
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -204,6 +206,19 @@ jobs:
             # Unused dispatch strings never enter the environment file.
             printf 'FSGG_LEARN_NATIVE_FIXTURE=false\nFSGG_LEARN_NATIVE_ADMISSION_SHA256=\nFSGG_LEARN_NATIVE_PROFILE_SHA256=\n' >> "$GITHUB_ENV"
           fi
+          case "$ImageVersion" in
+            20261012.334.1)
+              export FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION=20261012.334.1
+              export FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE="$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE_20261012"
+              test "$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE" = 7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe
+              ;;
+            20261018.339.1)
+              export FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION=20261018.339.1
+              export FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE="$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE_20261018"
+              test "$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE" = b4067e48bd9bd803e958bfe1503ea0a06a3a127f
+              ;;
+            *) echo "Unadmitted hosted image: $ImageVersion" >&2; exit 1 ;;
+          esac
           printf 'custody-core provider=%s os=%s arch=%s image-os=%s actual-image=%s selected-image=%s source=%s\n' "$HOSTED_RUNNER_CUSTODY" "$RUNNER_OS" "$RUNNER_ARCH" "$ImageOS" "$ImageVersion" "$FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION" "$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE"
           test "$GITHUB_ACTIONS" = true
           test "$HOSTED_RUNNER_CUSTODY" = github-hosted
@@ -212,7 +227,9 @@ jobs:
           test "$RUNNER_ARCH" = X64
           test "$ImageOS" = ubuntu24
           test "$ImageVersion" = "$FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION"
-          test "$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE" = 7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe
+          # Each case independently checks its root-selected source above.
+          # Later steps start fresh shells; hand off only the validated literal tuple.
+          printf 'FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION=%s\nFSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE=%s\n' "$FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION" "$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE" >> "$GITHUB_ENV"
           # No package installation or compiler probe. Existing trusted image
           # readers bind provisioned package/file/ELF/search inputs. Root source
           # admission owns outer resources and actual descendant retirement.

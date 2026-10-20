@@ -21,7 +21,9 @@ independent work whose actual scope is known may continue.
   The integrator supplies attributed one-invocation action, prerequisite, intake, remaining-capacity
   and reservation facts for exact native issue/body/plan revisions and slices. Consume complete membership
   reconciliation and the ordered selected/deferred fold, including unenrolled in-flight conflicts.
-  Recheck determining facts beside execution. Human Status, Track and Roadmap remain human-owned;
+  Recheck determining facts beside execution. Status, Track and Roadmap remain owner-controlled;
+  the authorized root integrator maintains Status through the mandatory [Status lifecycle](status-lifecycle.md),
+  including verified guarded writes at coordination boundaries. Inspection never chooses or writes Status;
   Observation Verified is read health, never readiness or outcome acceptance.
 - **Product:** read [workspace scope](workspace-scope.md), `.fsgg/scaffold-provenance.json`,
   `.fsgg/board-v2-binding.json`, exact local tool pin and selected workspace configuration. Require
@@ -124,6 +126,14 @@ relevant interference blocks that operation. Unrelated historical Unknowns are n
 Keep existing journals/custody rather than a new recovery ledger.
 
 ## Keep one owner through accepted closure
+
+Observe results, reconcile scoped acceptance and blockers, update Status and verify native readback
+before selecting/admitting work; after dispatch, update Status and verify again. Reconcile after worker
+returns, CI/runtime completion, reviews, supplier replies and accepted closure, and before yielding or
+handoff. Update the Delivery first, then reassess its parent against its whole remaining promise.
+Apply the six [Status definitions and guarded write procedure](status-lifecycle.md). Workers provide
+evidence; the root integrator owns decisions. A freshness sweep supplements these boundaries.
+Status maintenance grants no dispatch, reservation release, retry, closure or weaker acceptance.
 
 Use the existing owning issue's Owner, Done when, Current deliverable, Next action, Blocked on and
 Acceptance evidence with native links. Preserve the complete Done when; a merged slice narrows the
