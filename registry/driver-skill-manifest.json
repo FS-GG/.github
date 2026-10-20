@@ -5,7 +5,7 @@
       "id": "atlas",
       "scope": "driver",
       "sha256": "c18e56fcc56abf80903e2fc6829cd94b44f42947724a26318ebcbf1ac5e1b35b",
-      "tree-sha256": "dd61721d5da5d09350a55fa41fbfa043283032855c883d9d2d68f7da4cc98c62",
+      "tree-sha256": "8b45b8937959f3f8fdbeebab871629be39b06713b907fbd97c276ed5b6f07f56",
       "files": [
         {
           "path": "SKILL.md",
@@ -24,7 +24,7 @@
         },
         {
           "path": "assets/seed/catalog.json",
-          "sha256": "a3284d20ac0d1026f49ee012a103f168336bca9b2e9829147bcc579572c8adcf",
+          "sha256": "1a15bef87b25891c159f5daa619c17d9af8bfad18ef6d2500c243223b45322ed",
           "executable": false
         },
         {
@@ -440,6 +440,11 @@
         {
           "path": "assets/seed/records/48d094622ada1806cb30335926007c1abc476b1f7b45a2e250c490afa25e847b.json",
           "sha256": "48d094622ada1806cb30335926007c1abc476b1f7b45a2e250c490afa25e847b",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/49e8cf09e38acefd3a0fa62d048028286d3b47b5ceccd8f51f10022978c47820.json",
+          "sha256": "49e8cf09e38acefd3a0fa62d048028286d3b47b5ceccd8f51f10022978c47820",
           "executable": false
         },
         {
@@ -1949,12 +1954,12 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "367bbcf86f45dd128fbcc09dd604b90561e8fb91699452fdfec14f321de10e98",
-      "tree-sha256": "9af3c9db9bcc9d66cf3cca041c04f23c21c8eb2fd70ea260a7a46a3cf724ebb6",
+      "sha256": "6d2c55eaa031c5f53cdcbcb4d169ee115156be7e563e877e5ab1b00f58c02eea",
+      "tree-sha256": "ca63354d66f9c41dfd67fb4a7c8684ccc05bdc83aff11286cc27499fc3d48562",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "367bbcf86f45dd128fbcc09dd604b90561e8fb91699452fdfec14f321de10e98",
+          "sha256": "6d2c55eaa031c5f53cdcbcb4d169ee115156be7e563e877e5ab1b00f58c02eea",
           "executable": false
         },
         {
@@ -2024,7 +2029,7 @@
         },
         {
           "path": "references/lifecycle-contract.md",
-          "sha256": "cf9144b311192bd80a2c8fd2f7b427d96103c35d6f8d6d2825d32b8407c3650d",
+          "sha256": "224fe820d82482ee0f8d9bc1e1858a362f3fb5d333ee0781b49b3b1df93f0c24",
           "executable": false
         },
         {
@@ -2039,7 +2044,12 @@
         },
         {
           "path": "references/organization-v2-inspection.md",
-          "sha256": "9bb92ca96a7c82afe74267a1f5be233133fcfece157ba229c96f95df0c3b0d4d",
+          "sha256": "704f1e5899aaa8d261cf3a56c6061b9d7da5bd6fe2c7638b38a95e974b301db8",
+          "executable": false
+        },
+        {
+          "path": "references/status-lifecycle.md",
+          "sha256": "7718ecb6509c7a20015dd6fe9c09486e2837ec263e0566b5299d64cf270f02f8",
           "executable": false
         },
         {
@@ -2169,12 +2179,12 @@
     {
       "id": "work-board-coord",
       "scope": "operator",
-      "sha256": "44c07d00abe0cb4e83b039d2c0878beb717531ff461d753a7c9957f0374a8f1a",
-      "tree-sha256": "6c10a420e51f2541bfa9abf25ffc6573aaf574d3dde2740cefd0dcf7047f611a",
+      "sha256": "586176fc669813249d8247f2bf0fa7377f6a84ed5da57aa790e8eac943c854e1",
+      "tree-sha256": "9a102b5829cdbff29776e8fb5295d4b399abcb5095e90995795fb154fe3094a8",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "44c07d00abe0cb4e83b039d2c0878beb717531ff461d753a7c9957f0374a8f1a",
+          "sha256": "586176fc669813249d8247f2bf0fa7377f6a84ed5da57aa790e8eac943c854e1",
           "executable": false
         },
         {
@@ -2324,12 +2334,12 @@
     {
       "id": "publishing-and-deployment",
       "scope": "operator",
-      "sha256": "a5fed37af922f2eb5f6b27d98cccb8566b192f4f9d6044de41dd0a2ebdf08958",
-      "tree-sha256": "e1b29b00f9fdcdf585f6ebd184ef052544b8296e218539ab974432befd30d8c3",
+      "sha256": "3a2b1d827cf63aa2de588578ca6e3940935bd83a3a8ac4a27c667850a1f4191f",
+      "tree-sha256": "55872de6f1bdbeb7f0389cb20de4a373cb373756ecff0959aaad8a698adaf0fe",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "a5fed37af922f2eb5f6b27d98cccb8566b192f4f9d6044de41dd0a2ebdf08958",
+          "sha256": "3a2b1d827cf63aa2de588578ca6e3940935bd83a3a8ac4a27c667850a1f4191f",
           "executable": false
         },
         {

@@ -513,31 +513,33 @@ class WizardReleaseTests(unittest.TestCase):
                 board_package_closure(package, 'a' * 40, source_root=root)
             project_path.write_bytes(original_project)
 
-            # The new explicit source binding follows the current109 build graph. It must never
+            # The new explicit source binding follows the current110 build graph. It must never
             # confuse normal source output with the separately retained genuine108 dependency mode.
             nuspec = nuspec.replace(b'0.19.0', b'0.20.0')
             source_deps = json.loads(json.dumps(deps))
-            source_deps['libraries']['FS.GG.Coord.Cli/0.109.0'] = source_deps['libraries'].pop('FS.GG.Coord.Cli/0.108.0')
+            source_deps['libraries']['FS.GG.Coord.Cli/0.110.0'] = source_deps['libraries'].pop('FS.GG.Coord.Cli/0.108.0')
             for target in source_deps['targets'].values():
-                target['FS.GG.Coord.Cli/0.109.0'] = target.pop('FS.GG.Coord.Cli/0.108.0')
-                target['new-sdd-workspace/0.20.0'] = {'dependencies': {'FS.GG.Coord.Cli': '0.109.0'}}
+                target['FS.GG.Coord.Cli/0.110.0'] = target.pop('FS.GG.Coord.Cli/0.108.0')
+                target['new-sdd-workspace/0.20.0'] = {'dependencies': {'FS.GG.Coord.Cli': '0.110.0'}}
                 del target['new-sdd-workspace/0.19.0']
             selected_members = {**members, 'new-sdd-workspace.deps.json': json.dumps(source_deps).encode()}
             for name, body in selected_members.items():
                 (output / name).write_bytes(body)
             pack(selected_members)
             result = board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_020)
-            self.assertEqual((result['version'], result['coherentVersion']), ('0.20.0', '0.109.0'))
+            self.assertEqual((result['version'], result['coherentVersion']), ('0.20.0', '0.110.0'))
             self.assertEqual(result['builtFilesCompared'], len(selected_members))
             self.assertIs(result['releaseEligible'], False)
             self.assertEqual(result['mode'], 'source-only')
             with self.assertRaisesRegex(ValueError, 'package/source identity'):
                 board_package_closure(package, 'a' * 40, source_root=root)
-            stale_metadata = json.dumps(source_deps).replace('0.109.0', '0.108.0').encode()
-            (output / 'new-sdd-workspace.deps.json').write_bytes(stale_metadata)
-            pack({**selected_members, 'new-sdd-workspace.deps.json': stale_metadata})
-            with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
-                board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_020)
+            # Neither the previous normal source graph nor genuine published108 qualifies110.
+            for stale_version in ('0.109.0', '0.108.0'):
+                stale_metadata = json.dumps(source_deps).replace('0.110.0', stale_version).encode()
+                (output / 'new-sdd-workspace.deps.json').write_bytes(stale_metadata)
+                pack({**selected_members, 'new-sdd-workspace.deps.json': stale_metadata})
+                with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
+                    board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_020)
 
     def test_every_effect_is_admitted_and_read_back_once(self):
         self.assertEqual(len(self.ordered), 8)
