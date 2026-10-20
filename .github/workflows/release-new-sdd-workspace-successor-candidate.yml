@@ -37,7 +37,7 @@ jobs:
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REF" = refs/heads/main
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+          python3 scripts/new_sdd_workspace_successor_admission.py
           version="$(dotnet msbuild scripts/NewSddWorkspace/NewSddWorkspace.fsproj -getProperty:Version | tr -d '[:space:]')"
           test "$version" = 0.21.0
           test -z "$(git ls-remote --tags origin refs/tags/new-sdd-workspace/v0.21.0)"
@@ -95,8 +95,10 @@ jobs:
             --source-sha "$GITHUB_SHA" --release-manifest "$manifest" \
             --published-coord-dependencies "$work/dependencies" --published-coord-source "$work/producer" \
             --creator-source "$work/creator" > artifacts/new-sdd-workspace/package-evidence.json
-      - name: Refuse changed main before retaining candidate
-        run: test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+      - name: Refuse determining source changes before retaining candidate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/new_sdd_workspace_successor_admission.py
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: new-sdd-workspace-successor-candidate-${{ github.sha }}-${{ github.run_id }}

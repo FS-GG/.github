@@ -25,7 +25,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from release_successor_execution import Dispatch, JournalState, Observation, Refused, advance_effects
 from release_successor_journal import Refused as JournalRefused
-from new_sdd_workspace_successor_admission import WizardAdmission
+import new_sdd_workspace_successor_admission as source_admission
+from new_sdd_workspace_successor_admission import WizardAdmission, SourceCompatibility
 from new_sdd_workspace_successor_execution import effects, CURRENT_017, CURRENT_021, CURRENT_020, CURRENT_019, CURRENT_016, CURRENT_015, CURRENT_014, HISTORICAL_013, ReleaseBinding
 from creator_source_qualification import SOURCE_020, SOURCE_021, SOURCE_COHERENT_VERSION, qualification_version
 from new_sdd_workspace_successor_provider import WizardProvider, NotFound, output_signals, publisher_error, DIAGNOSTIC_LIMIT
@@ -922,15 +923,18 @@ class WizardReleaseTests(unittest.TestCase):
                             "run_attempt": 1, "actor": {"login": self.actor}, "status": "in_progress"}
                 if path.endswith("/git/ref/heads/main"):
                     return {"object": {"sha": self.main}}
+                if "/git/commits/" in path: return {}
                 raise AssertionError(path)
         api = API()
-        admission = WizardAdmission(api, manifest(), "d" * 40, 123, "EHotwagner", "refs/heads/main")
-        effect = self.ordered[0]
-        self.assertTrue(admission.authorize(self.content_id, effect.identity, "intent", effect.request_digest))
+        current_manifest = {**manifest(), "sourceSha": "d" * 40}
+        admission = WizardAdmission(api, current_manifest, "d" * 40, 123, "EHotwagner", "refs/heads/main")
+        current_content, current_ordered = effects(current_manifest)
+        effect = current_ordered[0]
+        self.assertTrue(admission.authorize(current_content, effect.identity, "intent", effect.request_digest))
         api.main = "e" * 40
-        self.assertFalse(admission.authorize(self.content_id, effect.identity, "dispatch", effect.request_digest))
+        self.assertFalse(admission.authorize(current_content, effect.identity, "dispatch", effect.request_digest))
         api.main = "d" * 40; api.actor = "someone-else"
-        self.assertFalse(admission.authorize(self.content_id, effect.identity, "settle", effect.request_digest))
+        self.assertFalse(admission.authorize(current_content, effect.identity, "settle", effect.request_digest))
 
     def diagnostic_fixture(self, root):
         path = root / "manifest.json"
@@ -1071,6 +1075,317 @@ def creator_fixture_sources():
     return scope["RealGit"], fixture
 
 
+_FIXTURE_QUERY = None
+FIXTURE_HISTORY_LIMIT = 16
+
+
+def fixture_git(arguments):
+    """Test-only local Git reads through the maintained bounded query function.
+
+    All callers below supply fixed verbs/paths or validated immutable SHAs. No
+    network/acquisition fallback, inherited credentials, pager, hooks or lazy fetch.
+    """
+    import os, time
+    global _FIXTURE_QUERY
+    if _FIXTURE_QUERY is None:
+        spec = importlib.util.spec_from_file_location("creator_known_source_git_reader", ROOT / "tools/routine-delivery.py")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        _FIXTURE_QUERY = module.bounded_watch_query
+    environment = {"HOME": os.environ["HOME"], "PATH": "/usr/bin:/bin", "GIT_CONFIG_NOSYSTEM": "1",
+                   "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0",
+                   "GIT_NO_REPLACE_OBJECTS": "1", "GIT_NO_LAZY_FETCH": "1"}
+    code, raw = _FIXTURE_QUERY(["git", "--no-pager", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false",
+                               "-c", "gc.auto=0", "--literal-pathspecs", "-C", str(ROOT), *arguments],
+                              time.monotonic() + 5.5, max_seconds=5,
+                              max_bytes=source_admission.TREE_JSON_LIMIT, env=environment)
+    if code != 0:
+        raise RuntimeError("known source fixture local Git read refused")
+    return raw
+
+
+def working_source_tree():
+    """Observe current tracked bytes without following symlinks or submodules."""
+    import os, stat
+    tree = {}
+    for record in fixture_git(["ls-files", "--stage", "-z"]).split(b"\0"):
+        if not record:
+            continue
+        metadata, name = record.split(b"\t", 1)
+        mode, oid, stage = metadata.decode().split()
+        if stage != "0": raise RuntimeError("known source fixture has an unmerged index")
+        name = name.decode(); file = ROOT / name
+        if mode == "160000":
+            kind, sha, size = "commit", oid, 0
+        else:
+            info = file.lstat()
+            raw = os.fsencode(file.readlink()) if stat.S_ISLNK(info.st_mode) else file.read_bytes()
+            mode = "120000" if stat.S_ISLNK(info.st_mode) else "100755" if info.st_mode & 0o111 else "100644"
+            kind, sha, size = "blob", hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest(), len(raw)
+        tree[name] = {"path": name, "mode": mode, "type": kind, "sha": sha, "size": size}
+        parent = pathlib.PurePosixPath(name).parent
+        while str(parent) != ".":
+            key = str(parent)
+            tree[key] = {"path": key, "mode": "040000", "type": "tree", "sha": hashlib.sha1(key.encode()).hexdigest()}
+            parent = parent.parent
+    if len(tree) > source_admission.TREE_ENTRY_LIMIT: raise RuntimeError("known source fixture tree excessive")
+    return tree
+
+
+def immutable_fixture_tree(source):
+    if not source_admission.SHA.fullmatch(source): raise RuntimeError("known source fixture SHA malformed")
+    rows = []
+    for record in fixture_git(["ls-tree", "-rtzl", "--full-tree", source]).split(b"\0"):
+        if not record: continue
+        metadata, name = record.split(b"\t", 1)
+        mode, kind, sha, size = metadata.decode().split()
+        row = {"path": name.decode(), "mode": mode, "type": kind, "sha": sha}
+        if kind == "blob": row["size"] = int(size)
+        rows.append(row)
+    class GitObjects:
+        def get(self, path):
+            if path == f"repos/FS-GG/.github/git/commits/{source}": return {"sha": source, "tree": {"sha": source}}
+            if path == f"repos/FS-GG/.github/git/trees/{source}?recursive=1": return {"sha": source, "truncated": False, "tree": rows}
+            raise AssertionError(path)
+    # Reuse production completeness/mode/path/byte caps; never admit partial data.
+    return {name: {**row, "path": name} for name, row in SourceCompatibility(GitObjects()).tree(source).items()}
+
+
+def known_source_fixture():
+    """Known positives are independent of future unrelated current-tree changes.
+
+    The existing three maintained suite workflows use fetch-depth:0. If the
+    current graph is unknown, shallow/missing history is an explicit fixture-input
+    refusal; this function never fetches, rewrites the seal or skips positives.
+    """
+    def eligible(tree):
+        return (tree.get(source_admission.POLICY_PATH, {}).get("sha") == source_admission._POLICY_BLOB
+                and source_admission.graph_seal(tree) == source_admission.KNOWN_GRAPH_SEAL)
+    current = working_source_tree()
+    if eligible(current): return current
+    if fixture_git(["rev-parse", "--is-shallow-repository"]).strip() != b"false":
+        raise RuntimeError("known source fixture requires retained complete history; no acquisition permitted")
+    revisions = fixture_git(["log", "--no-show-signature", "--format=%H", f"-n{FIXTURE_HISTORY_LIMIT}",
+                             "--", source_admission.POLICY_PATH]).decode().splitlines()
+    if len(revisions) > FIXTURE_HISTORY_LIMIT: raise RuntimeError("known source fixture history excessive")
+    for revision in revisions:
+        tree = immutable_fixture_tree(revision)
+        if eligible(tree): return tree
+    raise RuntimeError("known source fixture unavailable within retained policy history")
+
+
+class ReportSourceAPI:
+    """Actual tracked source bytes, plus closed synthetic native Git object views.
+
+    No Git checkout, network, compiler or dynamic command is selected by data.
+    The positives use the authenticated local known epoch, not an assumed current epoch.
+    """
+    def __init__(self):
+        import copy
+        self.calls = []
+        self.main = "a" * 40
+        self.actor = "EHotwagner"
+        self.status = "in_progress"
+        self.path = ".github/workflows/release-new-sdd-workspace.yml"
+        self.run_source = "a" * 40
+        self.moved = False
+        self.blobs = {}
+        tree = known_source_fixture()
+        self.trees = {"a" * 40: tree}
+        self.add("a"*40, "e"*40, "2099-01-01-000000Z-control.md", b"Pure control report.\n")
+        self.add("e"*40, "f"*40, "2099-01-01-000001Z-control.md", b"Second pure control.\n")
+
+    def add(self, old, new, name, raw):
+        import copy, base64
+        tree = copy.deepcopy(self.trees[old])
+        sha = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+        path = source_admission.REPORT_DIRECTORY + "/" + name
+        tree[path] = {"path": path, "mode": "100644", "type": "blob", "sha": sha, "size": len(raw)}
+        self.trees[new] = tree
+        self.blobs[sha] = {"sha": sha, "encoding": "base64", "size": len(raw), "content": base64.b64encode(raw).decode()}
+
+    def get(self, path):
+        import copy
+        self.calls.append(path)
+        if path == "repos/FS-GG/.github":
+            return {"id": 1269292704, "full_name": "FS-GG/.github"}
+        if "/actions/runs/123" in path:
+            return {"id": 123, "repository": {"id": 1269292704}, "path": self.path,
+                    "event": "workflow_dispatch", "head_branch": "main", "head_sha": self.run_source,
+                    "run_attempt": 1, "actor": {"login": self.actor}, "status": self.status}
+        if path.endswith("/git/ref/heads/main"):
+            result = {"object": {"sha": self.main}}
+            if self.moved: self.main = "f"*40
+            return result
+        if "/git/commits/" in path:
+            sha = path.rsplit("/", 1)[-1]
+            return {"sha": sha, "tree": {"sha": sha}} if sha in self.trees else {}
+        if "/git/trees/" in path:
+            sha = path.rsplit("/", 1)[-1].split("?")[0]
+            return {"sha": sha, "truncated": False, "tree": copy.deepcopy(list(self.trees[sha].values()))}
+        if "/git/blobs/" in path:
+            return copy.deepcopy(self.blobs[path.rsplit("/", 1)[-1]])
+        raise AssertionError(path)
+
+
+class ReportSourceCompatibilityTests(unittest.TestCase):
+    def setUp(self):
+        self.api = ReportSourceAPI()
+
+    def test_actual_epoch_and_three_pairs_accept_only_added_reports(self):
+        reader = SourceCompatibility(self.api)
+        self.assertEqual(source_admission.graph_seal(reader.tree("a"*40)), source_admission.KNOWN_GRAPH_SEAL)
+        self.api.main = "f"*40
+        self.assertTrue(reader.current("a"*40, "e"*40))
+        self.assertEqual(len(reader.trees), 3)
+        self.assertEqual(len(reader.blobs), 2)
+        first = list(self.api.calls)
+        self.assertTrue(reader.current("a"*40, "e"*40))
+        self.assertEqual(self.api.calls[len(first):], ["repos/FS-GG/.github/git/ref/heads/main"] * 2)
+        # The pre-change literal source-equality predicate rejects this same fixture.
+        self.assertNotEqual("a"*40, self.api.main)
+        self.assertNotEqual("a"*40, "e"*40)
+
+    def test_unrelated_current_change_uses_immutable_known_fixture_without_new_source_gate(self):
+        import copy
+        known = working_source_tree(); unknown = copy.deepcopy(known)
+        unknown["scripts/NewSddWorkspace/Program.fs"]["sha"] = "9"*40
+        self.assertNotEqual(source_admission.graph_seal(unknown), source_admission.KNOWN_GRAPH_SEAL)
+        # Old fixture used unknown here and turned its semantic positive red.
+        with patch(__name__ + ".working_source_tree", return_value=unknown):
+            recovered = known_source_fixture()
+        self.assertEqual(source_admission.graph_seal(recovered), source_admission.KNOWN_GRAPH_SEAL)
+        self.assertEqual(recovered[source_admission.POLICY_PATH]["sha"], source_admission._POLICY_BLOB)
+        reader = SourceCompatibility(self.api)
+        self.api.trees["9"*40] = unknown
+        self.assertTrue(reader.compatible("9"*40, "9"*40))
+        self.api.add("9"*40, "8"*40, "2099-01-01-000002Z-control.md", b"unknown graph report")
+        with self.assertRaises(source_admission.Refused): reader.compatible("9"*40, "8"*40)
+
+    def test_known_fixture_fails_closed_for_shallow_missing_or_wrong_policy_history(self):
+        import copy
+        unknown = copy.deepcopy(working_source_tree()); unknown["Directory.Build.props"]["sha"] = "9"*40
+        real_git = fixture_git
+        for defect in ("shallow", "missing", "wrong-policy", "excessive"):
+            with self.subTest(defect=defect):
+                def read(args):
+                    if args[0] == "rev-parse": return b"true\n" if defect == "shallow" else b"false\n"
+                    if args[0] == "log":
+                        if defect == "missing": return b""
+                        if defect == "excessive": return (b"a"*40+b"\n") * (FIXTURE_HISTORY_LIMIT+1)
+                        return b"a"*40+b"\n"
+                    raise AssertionError(args)
+                wrong = copy.deepcopy(unknown); wrong[source_admission.POLICY_PATH]["sha"] = "9"*40
+                with patch(__name__ + ".working_source_tree", return_value=unknown), \
+                     patch(__name__ + ".fixture_git", side_effect=read), \
+                     patch(__name__ + ".immutable_fixture_tree", return_value=wrong), self.assertRaises(RuntimeError):
+                    known_source_fixture()
+
+    def test_each_pair_direction_and_moving_main_refuse(self):
+        for candidate, publisher, main in [("e", "a", "f"), ("a", "f", "e"), ("f", "e", "f")]:
+            with self.subTest(candidate=candidate, publisher=publisher, main=main):
+                self.api.main = main*40
+                with self.assertRaises(source_admission.Refused):
+                    SourceCompatibility(self.api).current(candidate*40, publisher*40)
+        self.api.main = "e"*40; self.api.moved = True
+        with self.assertRaisesRegex(source_admission.Refused, "main changed"):
+            SourceCompatibility(self.api).current("a"*40, "a"*40)
+
+    def test_whole_complement_rejects_shadow_import_policy_and_existing_report_changes(self):
+        import copy
+        paths = ["scripts/math.py", "Directory.Build.targets", "NuGet.Config", ".config/dotnet-tools.json",
+                 "dist/dotnet/Directory.Build.local.props", "scripts/NewSddWorkspace/Program.fs",
+                 ".github/workflows/release-new-sdd-workspace.yml", "scripts/creator021-coord-dependencies.json",
+                 ".claude/skills/initialize-sdd-workspace/SKILL.md", source_admission.POLICY_PATH]
+        for path in paths:
+            with self.subTest(path=path):
+                api = ReportSourceAPI(); row = {"path": path, "mode": "100644", "type": "blob", "sha": "9"*40, "size": 1}
+                api.trees["e"*40][path] = row
+                with self.assertRaises(source_admission.Refused): SourceCompatibility(api).compatible("a"*40, "e"*40)
+        original = next(p for p in self.api.trees["a"*40] if source_admission._report_path(p))
+        for defect in ("edit", "delete", "executable", "symlink", "submodule", "absent-namespace"):
+            with self.subTest(defect=defect):
+                api = ReportSourceAPI()
+                if defect == "delete": del api.trees["e"*40][original]
+                elif defect == "absent-namespace": del api.trees["a"*40][source_admission.REPORT_DIRECTORY]
+                elif defect == "edit": api.trees["e"*40][original]["sha"] = "9"*40
+                else: api.trees["e"*40][original]["mode"] = {"executable":"100755", "symlink":"120000", "submodule":"160000"}[defect]
+                with self.assertRaises(source_admission.Refused): SourceCompatibility(api).compatible("a"*40, "e"*40)
+
+    def test_unknown_graph_exact_source_fallback_and_report_namespace_closed(self):
+        self.assertTrue(SourceCompatibility(self.api).compatible("1"*40, "1"*40))
+        for name in ("2099-02-30-000000Z-control.md", "2099-01-01-240000Z-control.md", "sub/2099-01-01-000000Z-control.md", "../escape.md", "control.md", "2099-01-01-000000Z-control.py"):
+            with self.subTest(name=name):
+                api = ReportSourceAPI(); api.add("a"*40, "e"*40, name, b"data")
+                with self.assertRaises(source_admission.Refused): SourceCompatibility(api).compatible("a"*40, "e"*40)
+        self.api.trees["a"*40]["Directory.Build.props"]["sha"] = "9"*40
+        self.api.trees["e"*40]["Directory.Build.props"]["sha"] = "9"*40
+        with self.assertRaisesRegex(source_admission.Refused, "graph differs"):
+            SourceCompatibility(self.api).compatible("a"*40, "e"*40)
+
+    def test_native_tree_and_report_custody_faults_refuse(self):
+        for defect in ("truncated", "duplicate", "mode", "tree-id", "commit-id", "tree-cap", "path", "size", "blob-hash", "blob-size", "encoding", "report-cap", "metadata-cap", "missing-truncated", "missing-parent", "blob-bytes"):
+            with self.subTest(defect=defect):
+                api = ReportSourceAPI(); original = api.get
+                def get(path):
+                    row = original(path)
+                    if "/git/commits/" in path and defect == "commit-id": row["sha"] = "0"*40
+                    if "/git/trees/" in path:
+                        if defect == "truncated": row["truncated"] = True
+                        if defect == "duplicate": row["tree"].append(row["tree"][0])
+                        if defect == "mode": row["tree"][0]["mode"] = "120000"
+                        if defect == "tree-id": row["sha"] = "0"*40
+                        if defect == "tree-cap": row["tree"] *= 4
+                        if defect == "path": row["tree"][0]["path"] = "../escape"
+                        if defect == "metadata-cap": row["extra"] = "x" * source_admission.TREE_JSON_LIMIT
+                        if defect == "missing-truncated": del row["truncated"]
+                        if defect == "missing-parent": row["tree"] = [r for r in row["tree"] if r["path"] != "scripts"]
+                        if defect == "size":
+                            for r in row["tree"]:
+                                if r["path"].endswith("2099-01-01-000000Z-control.md"): r["size"] = 2**30
+                    if "/git/blobs/" in path:
+                        if defect == "blob-hash": row["sha"] = "0"*40
+                        if defect == "blob-size": row["size"] += 1
+                        if defect == "encoding": row["content"] = "!"
+                        if defect == "blob-bytes": row["content"] = "eA=="
+                    return row
+                api.get = get
+                if defect == "report-cap":
+                    for i in range(source_admission.REPORT_ADDITION_LIMIT + 1):
+                        api.add("e"*40, "e"*40, f"2099-01-02-000000Z-control-{i}.md", b"x")
+                with self.assertRaises(source_admission.Refused): SourceCompatibility(api).compatible("a"*40, "e"*40)
+
+    def test_live_authority_not_cached_with_warm_immutable_proof(self):
+        admission = WizardAdmission(self.api, manifest(), "a"*40, 123, "EHotwagner", "refs/heads/main")
+        content, ordered = effects(manifest()); effect = ordered[0]
+        self.api.main = "e"*40
+        for action in ("intent", "dispatch", "settle"):
+            self.assertTrue(admission.authorize(content, effect.identity, action, effect.request_digest))
+        self.api.status = "cancelled"
+        self.assertFalse(admission.authorize(content, effect.identity, "dispatch", effect.request_digest))
+        self.api.status = "in_progress"; self.api.actor = "other"
+        self.assertFalse(admission.authorize(content, effect.identity, "settle", effect.request_digest))
+        self.api.actor = "EHotwagner"; self.api.main = "9"*40
+        self.assertFalse(admission.authorize(content, effect.identity, "intent", effect.request_digest))
+
+    def test_candidate_entrypoint_is_fixed_and_both_workflow_boundaries_use_it(self):
+        import os
+        workflow = (ROOT / ".github/workflows/release-new-sdd-workspace-successor-candidate.yml").read_text()
+        self.assertEqual(workflow.count("python3 scripts/new_sdd_workspace_successor_admission.py"), 2)
+        environment = {"GITHUB_SHA":"a"*40, "GITHUB_REPOSITORY":"FS-GG/.github", "GITHUB_REF":"refs/heads/main",
+                       "GITHUB_EVENT_NAME":"workflow_dispatch", "GITHUB_RUN_ATTEMPT":"1", "GITHUB_ACTOR":"EHotwagner",
+                       "GITHUB_RUN_ID":"123", "GITHUB_TOKEN":"inert-only"}
+        self.api.path = ".github/workflows/release-new-sdd-workspace-successor-candidate.yml"
+        self.api.main = "e"*40
+        with patch.dict(os.environ, environment, clear=True), patch.object(source_admission, "GitHubAPI", return_value=self.api):
+            # isinstance requires the actual class; only the fixed factory is patched.
+            with patch.object(source_admission.SourceCompatibility, "__init__", lambda reader, api: reader.__dict__.update(api=api, trees={}, blobs={})):
+                source_admission.candidate_guard()
+                self.api.status = "completed"
+                with self.assertRaises(source_admission.Refused): source_admission.candidate_guard()
+
+
 class CreatorPublicationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -1147,6 +1462,9 @@ class CreatorPublicationTests(unittest.TestCase):
                     return {"object": {"sha": self.source}}
                 if "/compare/" in path:
                     return {"status": "ahead"}
+                if "/git/commits/" in path or "/git/trees/" in path or "/git/blobs/" in path:
+                    if not hasattr(self, "source_objects"): self.source_objects = ReportSourceAPI()
+                    return self.source_objects.get(path)
                 raise AssertionError(path)
         api = PublisherAPI()
         admission = self.primitives.ProtectedPublisherAdmission(
@@ -1217,6 +1535,7 @@ class CreatorPublicationTests(unittest.TestCase):
             _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))
             self.prepare(counted, journal, api, admission, provider)
             writes = len(native.writes)
+            api.source = "e"*40  # Compatible report-only successor, with original candidate retained.
             self.assertFalse(self.prepare(counted, journal, api, admission, provider, source="e"*40))
             self.assertFalse(self.report["fresh"])
             with self.assertRaisesRegex(Refused, "preflight requires"):
@@ -1229,9 +1548,21 @@ class CreatorPublicationTests(unittest.TestCase):
     def test_source_mismatch_prevents_genesis_and_effects(self):
         with tempfile.TemporaryDirectory() as temporary:
             _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))
-            with self.assertRaisesRegex(Refused, "exact current main"):
+            with self.assertRaises(source_admission.Refused):
                 self.prepare(counted, journal, api, admission, provider, source="e"*40)
             self.assertEqual(native.writes, []); self.assertEqual(provider.writes, [])
+
+    def test_report_only_main_advance_preserves_fresh_original_candidate_and_zero_effect_preflight(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))
+            api.source = "e"*40
+            original_intent = dict(self.intent)
+            self.assertTrue(self.prepare(counted, journal, api, admission, provider, preflight=True))
+            self.assertEqual(self.intent, original_intent)
+            self.assertEqual(self.intent["sourceSha"], "a"*40)
+            self.assertEqual(native.writes, []); self.assertEqual(provider.writes, [])
+            self.assertTrue(self.report["preflightPassed"])
+            self.assertFalse(self.report["complete"])
 
     def test_physical_classifier_refuses_incomplete_or_ambiguous_population(self):
         from release_successor_journal import REPOSITORY as authority
@@ -1263,7 +1594,7 @@ class CreatorPublicationTests(unittest.TestCase):
             with self.subTest(defect=defect), tempfile.TemporaryDirectory() as temporary:
                 _, native, counted, journal, api, admission, provider, policy = self.fixture(pathlib.Path(temporary))
                 self.prepare(counted, journal, api, admission, provider)
-                if defect == "source": api.source = "e"*40
+                if defect == "source": api.source = "9"*40  # Unknown determining graph, not admitted report-only advance.
                 elif defect == "origin":
                     route = "repos/FS-GG/FS.GG.Coordination.Authority/rules/branches/main"
                     rows = policy.get(route)
