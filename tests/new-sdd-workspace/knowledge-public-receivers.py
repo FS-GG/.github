@@ -1139,19 +1139,43 @@ def public021_supplier(binding):
     return binding['executable']
 
 
+def public021_original_file(path):
+    """Regular original bytes/mode/size, joined across one no-follow descriptor."""
+    path=Path(path);before=path.lstat()
+    require(path.is_absolute() and path==path.resolve() and stat.S_ISREG(before.st_mode)
+            and before.st_size<=64*1024*1024, 'public021-original-regular-file')
+    digest=hashlib.sha256();size=0
+    with os.fdopen(os.open(path,os.O_RDONLY|os.O_NOFOLLOW),'rb') as stream:
+        opened=os.fstat(stream.fileno())
+        require((before.st_dev,before.st_ino,before.st_mode,before.st_size,before.st_mtime_ns,before.st_ctime_ns)==
+                (opened.st_dev,opened.st_ino,opened.st_mode,opened.st_size,opened.st_mtime_ns,opened.st_ctime_ns),
+                'public021-original-open-identity')
+        while block:=stream.read(65536):
+            size+=len(block);require(size<=64*1024*1024,'public021-original-byte-bound');digest.update(block)
+        after=os.fstat(stream.fileno())
+    final=path.lstat()
+    identity=lambda v:(v.st_dev,v.st_ino,v.st_mode,v.st_size,v.st_mtime_ns,v.st_ctime_ns)
+    require(identity(before)==identity(after)==identity(final) and size==before.st_size,
+            'public021-original-changed-during-read')
+    return dict(sha256=digest.hexdigest(),mode=stat.S_IMODE(before.st_mode),size=size)
+
+
 def public021_prior_custody(m, custody, old_report_path):
     require(set(custody)=={'schema','rows','originals'} and custody['schema']=='fsgg.matrix4723.public021-prior22-custody/1'
             and set(custody['rows'])=={r['id'] for r in ROWS}, 'closed-public021-prior-custody')
     base = Path(m['workRoot'])
     originals = dict(custody['originals'])
-    require(originals.get(str(old_report_path))==ACCEPTED22_REPORT_SHA, 'public021-accepted22-custody')
+    require(type(originals.get(str(old_report_path))) is dict
+            and originals[str(old_report_path)].get('sha256')==ACCEPTED22_REPORT_SHA, 'public021-accepted22-custody')
+    for path,record in originals.items():
+        require(set(record)=={'sha256','mode','size'} and public021_original_file(path)==record,
+                'public021-original-file-custody-drift')
     expected = {}
     for directory,first,last in ((base,1,88),(base/'continuation01',89,414),
             (base/'supported-tail-recovery01',415,900),(base/'retained-post-apply-recovery01',901,979)):
         expected.update(verify_output_journal(directory,first,last))
-    require(set(expected)<=set(originals) and all(originals[p]==h for p,h in expected.items()),
+    require(set(expected)<=set(originals) and all(originals[p]['sha256']==h for p,h in expected.items()),
             'public021-all979-original-outputs')
-    for path,digest in originals.items(): require(sha(path)==digest,'public021-original-output-drift')
     for row in ROWS:
         require(complete_snapshot(base/row['id'])==custody['rows'][row['id']], 'public021-original-subject-drift')
     return originals
@@ -1240,8 +1264,15 @@ def continue_public021_python(path, digest):
         report.update(state='failed',full24Accepted=False,failureType=type(error).__name__,failure=str(error),commands=runner.sequence)
         # Retain a failed disposition even when the normal success-clock guard has
         # expired. The admitted outer collector remains the hard retirement bound.
-        (base/'report.json').write_text(json.dumps(report,indent=2)+'\n')
-        raise
+        try:
+            (base/'report.json').write_text(json.dumps(report,indent=2)+'\n')
+        except BaseException as custody_error:
+            report.update(reportCustody='Unknown',reportCustodyFailureClass=type(custody_error).__name__)
+            diagnostic=dict(schema='fsgg.matrix4723.public021-report-custody-failure/1',reportCustody='Unknown',
+                primaryExceptionClass=type(error).__name__,secondaryExceptionClass=type(custody_error).__name__)
+            try:os.write(2,(json.dumps(diagnostic)+'\n').encode())
+            except BaseException:pass
+        raise  # The original operational exception retains its identity and traceback.
 
 
 def qualify(path, expected_sha):
@@ -1817,15 +1848,16 @@ def source_controls():
                     case=base/row['id'];case.mkdir();(case/'owner').write_text(row['id'])
                 custody=dict(schema='fsgg.matrix4723.public021-prior22-custody/1',
                     rows={r['id']:complete_snapshot(base/r['id']) for r in ROWS},
-                    originals={str(old):ACCEPTED22_REPORT_SHA})
-                real_sha=sha
-                with patch(__name__+'.sha',side_effect=lambda p:ACCEPTED22_REPORT_SHA if Path(p)==old else real_sha(p)), \
+                    originals={str(old):dict(public021_original_file(old),sha256=ACCEPTED22_REPORT_SHA)})
+                real_file=public021_original_file
+                with patch(__name__+'.public021_original_file',side_effect=lambda p:custody['originals'][str(old)] if Path(p)==old else real_file(p)), \
                      patch(__name__+'.verify_output_journal',return_value={}):
                     public021_prior_custody({'workRoot':str(base)},custody,old)
                     (base/ROWS[0]['id']/'owner').write_text('mutation')
                     with self.assertRaisesRegex(ValueError,'subject-drift'):
                         public021_prior_custody({'workRoot':str(base)},custody,old)
-                with patch(__name__+'.verify_output_journal',return_value={'/inert/missing-original':'f'*64}):
+                with patch(__name__+'.public021_original_file',return_value=custody['originals'][str(old)]), \
+                     patch(__name__+'.verify_output_journal',return_value={'/inert/missing-original':'f'*64}):
                     with self.assertRaisesRegex(ValueError,'979-original-outputs'):
                         public021_prior_custody({'workRoot':str(base)},custody,old)
 
@@ -1893,7 +1925,7 @@ def source_controls():
                 if row['selection']=='typed':self.assertEqual(pins(row)['fs.gg.sdd.cli'],'2.2.0')
             self.assertEqual(PUBLIC021[3],'4326f57dc41ab3feaf6b7b693dcdc2867e818b0567af27da505b571aace4e190')
 
-        def public021_inert_integration(self, fail=False, late=False):
+        def public021_inert_integration(self, fail=False, late=False, custody_fail=False):
             from contextlib import nullcontext
             with tempfile.TemporaryDirectory() as td:
                 base=Path(td);out=base/'new';old=self.public021_old_rows();path=base/'checkpoint.json'
@@ -1905,15 +1937,22 @@ def source_controls():
                     runtimeManifest='runtime',runtimeManifestSha256='r'*64,priorReport='prior',priorReportSha256=ACCEPTED22_REPORT_SHA,
                     priorCustody='custody',priorCustodySha256='c'*64,supplier={},workRoot=str(out),report=str(out/'report.json'))
                 path.write_text(json.dumps(checkpoint));reads={'baseline':manifest,'runtime':runtime,'prior':old,'custody':{}}
+                primary=TimeoutError('original-case-clock-expired') if fail=='expired' else RuntimeError('first-creation-refusal')
+                self.last_primary_exception=primary;self.last_custody_diagnostics=[]
+                real_write=Path.write_text
+                def write(target,text,*a,**kw):
+                    if custody_fail and target==out/'report.json' and json.loads(text)['state']=='failed':raise OSError(28,'inert secondary full disk')
+                    return real_write(target,text,*a,**kw)
                 real_read=C.read_json;real_sha=sha;calls=[];runner=Mock(sequence=0);runner.subject.side_effect=lambda *a:nullcontext(runner)
                 def digest(p):return {'baseline':'b'*64,'runtime':'r'*64,'prior':ACCEPTED22_REPORT_SHA,'custody':'c'*64}.get(str(p),real_sha(p) if Path(p).exists() else '')
                 def clock(*_args):
+                    if fail=='expired' and calls:raise primary
                     if late and (out/'report.json').exists() and real_read(out/'report.json')['state']=='passed':
                         raise TimeoutError('late-report-original-deadline')
                     return time.monotonic()+500
                 def creation(_runner,_m,row,root,case):
                     calls.append(row['id'])
-                    if fail:raise RuntimeError('first-creation-refusal')
+                    if fail is True:raise primary
                 with patch.dict(os.environ,{'HOME':td,'LANG':'C.UTF-8','LC_ALL':'C.UTF-8'},clear=True), \
                      patch(__name__+'.sha',side_effect=digest),patch.object(C,'read_json',side_effect=lambda p:reads[str(p)] if str(p) in reads else real_read(p)), \
                      patch(__name__+'.public021_deadline',side_effect=clock), \
@@ -1922,9 +1961,12 @@ def source_controls():
                      patch(__name__+'.MatrixRunner',return_value=runner),patch.object(shutil,'copyfile'), \
                      patch(__name__+'.create',side_effect=creation),patch(__name__+'.initial',return_value={'commit':'caller'}), \
                      patch(__name__+'.full_knowledge',return_value={'probe':{'probeSetupCommit':'probe'}}), \
-                     patch(__name__+'.default_boundary',return_value={'effectiveLifecycle':'sdd','knowledgeReady':False}):
+                     patch(__name__+'.default_boundary',return_value={'effectiveLifecycle':'sdd','knowledgeReady':False}), \
+                     patch.object(Path,'write_text',write),patch.object(os,'write',side_effect=lambda fd,data:self.last_custody_diagnostics.append(json.loads(data)) or len(data)):
                     if fail:
-                        with self.assertRaisesRegex(RuntimeError,'first-creation-refusal'):continue_public021_python(path,real_sha(path))
+                        with self.assertRaises(type(primary)) as caught:continue_public021_python(path,real_sha(path))
+                        self.last_caught_exception=caught.exception
+                        self.assertIs(caught.exception,primary)
                     elif late:
                         with self.assertRaisesRegex(TimeoutError,'late-report-original-deadline'):continue_public021_python(path,real_sha(path))
                     else:continue_public021_python(path,real_sha(path))
@@ -1943,6 +1985,39 @@ def source_controls():
             self.assertEqual(calls,['python-wizard-typed','python-wizard-default'])
             self.assertEqual(report['state'],'failed');self.assertFalse(report['full24Accepted'])
             self.assertEqual(report['failureType'],'TimeoutError');self.assertEqual(report['priorRows'],old['rows'])
+
+        def test_public021_secondary_report_failure_never_masks_creation_or_expired_clock(self):
+            for fail in (True,'expired'):
+                with self.subTest(fail=fail):
+                    calls,report,old=self.public021_inert_integration(fail=fail,custody_fail=True)
+                    self.assertIs(self.last_caught_exception,self.last_primary_exception)
+                    self.assertEqual(calls,['python-wizard-typed'])
+                    self.assertEqual(len(self.last_custody_diagnostics),1)
+                    diagnostic=self.last_custody_diagnostics[0]
+                    self.assertEqual(diagnostic['reportCustody'],'Unknown')
+                    self.assertEqual(diagnostic['secondaryExceptionClass'],'OSError')
+                    self.assertEqual(diagnostic['primaryExceptionClass'],type(self.last_primary_exception).__name__)
+                    self.assertFalse(report['full24Accepted']);self.assertEqual(report['priorRows'],old['rows'])
+
+        def test_public021_original_journal_and_stream_mode_or_symlink_drift_refuses(self):
+            with tempfile.TemporaryDirectory() as td:
+                base=Path(td)
+                for name in ('commands.jsonl','414.stdout'):
+                    file=base/name;file.write_bytes(b'unchanged original');file.chmod(0o600)
+                    original=public021_original_file(file)
+                    old=base/'accepted-report';old.write_text('inert accepted report')
+                    old_record=dict(public021_original_file(old),sha256=ACCEPTED22_REPORT_SHA)
+                    custody=dict(schema='fsgg.matrix4723.public021-prior22-custody/1',rows={r['id']:{} for r in ROWS},
+                        originals={str(old):old_record,str(file):original})
+                    real_file=public021_original_file
+                    with patch(__name__+'.public021_original_file',side_effect=lambda p:old_record if Path(p)==old else real_file(p)):
+                        file.chmod(0o644)
+                        self.assertEqual(real_file(file)['sha256'],original['sha256'])
+                        with self.assertRaisesRegex(ValueError,'file-custody-drift'):
+                            public021_prior_custody({'workRoot':str(base)},custody,old)
+                        file.chmod(0o600);copy=base/(name+'.same');copy.write_bytes(file.read_bytes());file.unlink();file.symlink_to(copy)
+                        with self.assertRaisesRegex(ValueError,'regular-file'):
+                            public021_prior_custody({'workRoot':str(base)},custody,old)
 
         def test_public021_first_failure_stops_default_and_retains_partial_report(self):
             calls,report,old=self.public021_inert_integration(fail=True)
