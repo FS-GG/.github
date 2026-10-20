@@ -931,26 +931,64 @@ def execute_rows(runner, m, base, report, save, original_app, donor_default=None
 
 
 
+RETAINED_OPERATION = 'matrix4723-retained-post-apply-recovery20261020-01'
+PRIOR_RECOVERY_DEADLINE = '2026-10-20T09:24:15.950560+00:00'
+PRIOR_RECOVERY_CHECKPOINT_SHA = '3d98c37fddcefb9f37f49da268589dd05be5356fee6fc9d17bda19bbbaf404a5'
+RETAINED_CUSTODY_SHA = 'b6b5910f26ee5116fabf80c78a1e5e913aec919c411608e7f32ced7b6979f16c'
+
+
+def retained_recovery_deadline(clock, *, now_utc=None, now_monotonic=None):
+    """A new retained-only operation; never extend the expired prior operation."""
+    from datetime import datetime, timezone
+    require(set(clock) == {'operation','expiredRecoveryDeadlineUtc','expiredRecoveryWindowExpired',
+            'observedUtc','observedMonotonic','deadlineUtc','deadlineMonotonic'}
+            and clock['operation'] == RETAINED_OPERATION, 'closed-retained-recovery-clock')
+    now_utc = now_utc or datetime.now(timezone.utc)
+    now_monotonic = time.monotonic() if now_monotonic is None else now_monotonic
+    expired = datetime.fromisoformat(PRIOR_RECOVERY_DEADLINE)
+    require(clock['expiredRecoveryDeadlineUtc'] == PRIOR_RECOVERY_DEADLINE
+            and clock['expiredRecoveryWindowExpired'] is True and now_utc >= expired,
+            'prior-recovery-must-already-be-expired')
+    observed = datetime.fromisoformat(clock['observedUtc']); end = datetime.fromisoformat(clock['deadlineUtc'])
+    seconds = (end-observed).total_seconds()
+    require(observed >= expired and 0 < seconds <= 600, 'retained-recovery-profile-maximum600')
+    deadline = clock['deadlineMonotonic']
+    require(abs(deadline-clock['observedMonotonic']-seconds) < .01
+            and abs(now_monotonic-clock['observedMonotonic']-(now_utc-observed).total_seconds()) < 1,
+            'retained-recovery-wall-monotonic-clock-binding')
+    require(observed <= now_utc < end and now_monotonic < deadline-10,
+            'retained-recovery-window-expired-or-insufficient')
+    return deadline
+
+
 def continue_retained_post_apply(path, digest):
-    """Resume only unfinished effects of command900, inside its unchanged recovery clock."""
+    """Resume only unfinished effects of command900, with an explicitly identified clock."""
     require(sha(path) == digest, 'retained-checkpoint-digest')
     checkpoint = C.read_json(path)
-    require(set(checkpoint) == {'schema','admittedBy','operation','manifest','manifestSha256','originalRecoveryCheckpoint','originalRecoveryCheckpointSha256','custody','custodySha256'}
-            and checkpoint['schema'] == 'fsgg.matrix4723.retained-post-apply/4'
+    separate = checkpoint.get('schema') == 'fsgg.matrix4723.retained-post-apply-recovery/5'
+    common = {'schema','admittedBy','operation','manifest','manifestSha256','originalRecoveryCheckpoint','originalRecoveryCheckpointSha256','custody','custodySha256'}
+    require(set(checkpoint) == common | ({'freshClock'} if separate else set())
+            and checkpoint['schema'] == ('fsgg.matrix4723.retained-post-apply-recovery/5' if separate else 'fsgg.matrix4723.retained-post-apply/4')
             and checkpoint['admittedBy'] == 'Programme/root'
-            and checkpoint['operation'] == 'matrix4723-supported-tail-recovery20261020-01', 'closed-retained-post-apply-authority')
+            and checkpoint['operation'] == (RETAINED_OPERATION if separate else 'matrix4723-supported-tail-recovery20261020-01'), 'closed-retained-post-apply-authority')
     original = Path(checkpoint['originalRecoveryCheckpoint'])
     require(sha(original) == checkpoint['originalRecoveryCheckpointSha256'], 'original-recovery-clock-custody')
     clock = C.read_json(original)
-    deadline = recovery_deadline(clock)  #No new clock or profile, including validation time.
+    if separate:
+        require(checkpoint['originalRecoveryCheckpointSha256'] == PRIOR_RECOVERY_CHECKPOINT_SHA
+                and checkpoint['custodySha256'] == RETAINED_CUSTODY_SHA
+                and clock['operation'] == 'matrix4723-supported-tail-recovery20261020-01'
+                and clock['recoveryDeadlineUtc'] == PRIOR_RECOVERY_DEADLINE, 'sealed-expired-recovery-identity')
+    check_clock = lambda: retained_recovery_deadline(checkpoint['freshClock']) if separate else recovery_deadline(clock)
+    deadline = check_clock()  #Before validation: each operation includes all hashing/setup/cleanup.
     require(sha(checkpoint['custody']) == checkpoint['custodySha256'], 'retained-postterminal-custody')
     custody = C.read_json(checkpoint['custody'])
     require(custody['schema'] == 'fsgg.matrix4723.recovery-postterminal-custody/1'
-            and custody['operation'] == checkpoint['operation'] and custody['lastCommand'] == 900
+            and custody['operation'] == clock['operation'] and custody['lastCommand'] == 900
             and custody['passed'] == 21 and custody['blocked'] == 2 and custody['failed'] == 1
             and custody['originalDeadlineUtc'] == clock['recoveryDeadlineUtc'], 'exact-post-apply-prefix')
     m = validate(checkpoint['manifest'], checkpoint['manifestSha256'], after=True)
-    base = Path(m['workRoot']); prior = base/'supported-tail-recovery01'; tail = base/'retained-post-apply01'
+    base = Path(m['workRoot']); prior = base/'supported-tail-recovery01'; tail = base/('retained-post-apply-recovery01' if separate else 'retained-post-apply01')
     require(not tail.exists() and str(prior/'report.json') == custody['report']
             and sha(prior/'report.json') == custody['reportSha256'], 'retained-no-replay-or-report-drift')
     old = C.read_json(prior/'report.json')
@@ -977,11 +1015,12 @@ def continue_retained_post_apply(path, digest):
     require((prior/'898.stdout').read_text().strip() == '10.0.401', 'recorded-retained-sdk')
     observations = {'before':dict(sdk='10.0.401',observation=C.read_json(prior/'899.stdout'),
         cwdGlobalSha256=sha(root/'global.json'),internalMigrationChildLoadedPaths='not independently observed; this is an actual same-cwd/environment FSI observation')}
-    before_sdk = sdk_snapshot(m); recovery_deadline(clock); tail.mkdir(mode=0o700)
+    before_sdk = sdk_snapshot(m); check_clock(); tail.mkdir(mode=0o700)
     runner = MatrixRunner(tail,env_for(m,base),deadline=deadline-5); runner.sequence = 900
-    report = dict(schema='fsgg.wizard.retained-post-apply-result/4',state='started',runtimeOperation=checkpoint['operation'],
+    report = dict(schema=('fsgg.wizard.retained-post-apply-recovery-result/5' if separate else 'fsgg.wizard.retained-post-apply-result/4'),state='started',runtimeOperation=checkpoint['operation'],
                   originalFailureReportSha256=custody['reportSha256'],custodySha256=checkpoint['custodySha256'],
-                  manifestSha256=checkpoint['manifestSha256'],recoveryDeadlineUtc=clock['recoveryDeadlineUtc'],
+                  manifestSha256=checkpoint['manifestSha256'],recoveryDeadlineUtc=(checkpoint['freshClock']['deadlineUtc'] if separate else clock['recoveryDeadlineUtc']),
+                  priorRuntimeOperation=clock['operation'],priorRecoveryDeadlineUtc=clock['recoveryDeadlineUtc'],priorRecoveryExpired=separate,
                   full24Accepted=False,automaticRetry=False,rows=[dict(r) for r in old['rows']])
     report['rows'][-1] = dict(id=ROWS[-1]['id'],route='retained',selection='explicit-fsharp',state='started',firstCommand=901,
         originalFailedApplyReused=True,receiverCreationReplayed=False,migrationReplayed=False)
@@ -1002,7 +1041,7 @@ def continue_retained_post_apply(path, digest):
         for row in ROWS[:-1]:require(complete_snapshot(base/row['id']) == custody['rows'][row['id']]['caseFiles'],'21-passed-subjects-modified')
         require(all(sha(file) == value for file,value in originals.items()),'retained-originals-overwritten')
         require(validate(checkpoint['manifest'],checkpoint['manifestSha256'],after=True) == m and sdk_snapshot(m) == before_sdk,'retained-post-custody-drift')
-        recovery_deadline(clock)
+        check_clock()
         report.update(state='partial',passed=22,blocked=2,commands=runner.sequence);save();return report
     except BaseException as error:
         report['rows'][-1].update(state='failed',failureType=type(error).__name__,failure=str(error))
@@ -1103,6 +1142,47 @@ def source_controls():
                 path=Path(td)/'checkpoint';path.write_text('{}')
                 with patch('subprocess.Popen',side_effect=AssertionError('child launched')):
                     with self.assertRaisesRegex(ValueError,'retained-checkpoint-digest'):continue_retained_post_apply(path,'0'*64)
+
+        def retained_clock_fixture(self):
+            return dict(operation=RETAINED_OPERATION,expiredRecoveryDeadlineUtc=PRIOR_RECOVERY_DEADLINE,
+                expiredRecoveryWindowExpired=True,observedUtc='2026-10-20T10:00:00+00:00',observedMonotonic=2000,
+                deadlineUtc='2026-10-20T10:10:00+00:00',deadlineMonotonic=2600)
+
+        def test_retained_new_operation_uses_own_absolute_clock(self):
+            from datetime import datetime
+            clock=self.retained_clock_fixture()
+            self.assertEqual(retained_recovery_deadline(clock,now_utc=datetime.fromisoformat('2026-10-20T10:00:05+00:00'),now_monotonic=2005),2600)
+            self.assertEqual(retained_recovery_deadline(clock,now_utc=datetime.fromisoformat('2026-10-20T10:02:00+00:00'),now_monotonic=2120),2600)
+
+        def test_retained_clock_refuses_old_identity_unexpired_or_renewed_prior(self):
+            from datetime import datetime
+            now=datetime.fromisoformat('2026-10-20T10:00:05+00:00')
+            for key,value,error in [('operation','matrix4723-supported-tail-recovery20261020-01','closed-retained'),
+                                    ('expiredRecoveryDeadlineUtc','2026-10-20T09:24:16+00:00','already-be-expired'),
+                                    ('expiredRecoveryWindowExpired',False,'already-be-expired')]:
+                clock=self.retained_clock_fixture();clock[key]=value
+                with self.assertRaisesRegex(ValueError,error):retained_recovery_deadline(clock,now_utc=now,now_monotonic=2005)
+            with self.assertRaisesRegex(ValueError,'already-be-expired'):
+                retained_recovery_deadline(self.retained_clock_fixture(),now_utc=datetime.fromisoformat('2026-10-20T09:24:00+00:00'),now_monotonic=2005)
+
+        def test_retained_clock_refuses_over600_elapsed_reset_and_exhaustion(self):
+            from datetime import datetime
+            clock=self.retained_clock_fixture();clock.update(deadlineUtc='2026-10-20T10:10:01+00:00',deadlineMonotonic=2601)
+            with self.assertRaisesRegex(ValueError,'maximum600'):retained_recovery_deadline(clock,now_utc=datetime.fromisoformat('2026-10-20T10:00:05+00:00'),now_monotonic=2005)
+            with self.assertRaisesRegex(ValueError,'clock-binding'):retained_recovery_deadline(self.retained_clock_fixture(),now_utc=datetime.fromisoformat('2026-10-20T10:02:00+00:00'),now_monotonic=2000)
+            with self.assertRaisesRegex(ValueError,'expired-or-insufficient'):retained_recovery_deadline(self.retained_clock_fixture(),now_utc=datetime.fromisoformat('2026-10-20T10:09:55+00:00'),now_monotonic=2595)
+
+        def test_retained_v5_wrong_original_custody_never_reaches_runtime(self):
+            with tempfile.TemporaryDirectory() as td:
+                root=Path(td);prior=root/'prior';prior.write_text(json.dumps(dict(operation='matrix4723-supported-tail-recovery20261020-01',recoveryDeadlineUtc=PRIOR_RECOVERY_DEADLINE)))
+                checkpoint=dict(schema='fsgg.matrix4723.retained-post-apply-recovery/5',admittedBy='Programme/root',operation=RETAINED_OPERATION,
+                    manifest='/unused',manifestSha256='0'*64,originalRecoveryCheckpoint=str(prior),originalRecoveryCheckpointSha256=sha(prior),
+                    custody='/unused',custodySha256=RETAINED_CUSTODY_SHA,freshClock=self.retained_clock_fixture())
+                path=root/'checkpoint';path.write_text(json.dumps(checkpoint))
+                validator=Mock(side_effect=AssertionError('validation reached'));runner=Mock(side_effect=AssertionError('runtime constructed'))
+                with patch.dict(globals(),validate=validator,MatrixRunner=runner):
+                    with self.assertRaisesRegex(ValueError,'sealed-expired-recovery-identity'):continue_retained_post_apply(path,sha(path))
+                validator.assert_not_called();runner.assert_not_called()
 
         def test_exact_population_and_deferred_routes(self):
             self.assertEqual(len(ROWS), 24)
@@ -1504,7 +1584,7 @@ def main():
     try:
         if args.continuation:
             schema=C.read_json(args.continuation).get('schema')
-            if schema=='fsgg.matrix4723.retained-post-apply/4': continue_retained_post_apply(args.continuation,args.continuation_sha256)
+            if schema in {'fsgg.matrix4723.retained-post-apply/4','fsgg.matrix4723.retained-post-apply-recovery/5'}: continue_retained_post_apply(args.continuation,args.continuation_sha256)
             elif schema=='fsgg.matrix4723.supported-tail-recovery/3': continue_supported_tail(args.continuation,args.continuation_sha256,recovery=True)
             elif schema=='fsgg.matrix4723.supported-tail/2': continue_supported_tail(args.continuation,args.continuation_sha256)
             else: continue_qualification(args.continuation,args.continuation_sha256)
