@@ -10,7 +10,7 @@ module OperationObservationReads =
 
     exception private ReadFailure of string
 
-    let collect (transport: IDeadlineSinglePageGitHubTransport) (identity: Identity) clock workDeadline beforeRequest =
+    let collect (transport: IDeadlineSinglePageGitHubTransport) (identity: Identity) clock workDeadline (beforeRequest: unit -> Result<unit, string>) =
         let refuse message = raise (ReadFailure message)
         let property name (node: JsonElement) =
             if node.ValueKind <> JsonValueKind.Object then refuse "native object missing"

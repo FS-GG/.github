@@ -101,7 +101,8 @@ module OperationObservationApplication =
                 invalidArg "json" "corrupt cursor custody"
             body) json |> Result.bind decodeCursorBody
 
-    let observe transport clock sleep persist evidence initial =
+    let observe transport clock sleep (persist: Cursor -> unit)
+        (evidence: Sample -> string * int * (unit -> unit)) initial =
         let mutable current = initial
         let mutable answer = None
         let retain cursor = persist cursor; current <- cursor
