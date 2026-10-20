@@ -283,7 +283,7 @@ establish selection, and this observation does not independently observe the mig
 internal FSI child. Fresh runtime admission must cover simultaneous CLI/FSI heaps and native
 overhead. `0x60000000` is a per-process managed heap limit, not a process-group memory cap.
 
-The current source has thirty-seven pure controls. Original qualification failures and
+The qualified adapter has forty-five pure controls. Original qualification failures and
 recovery boundaries are recorded below; root retains runtime admission and independent acceptance. The two Wizard-bindings
 positive routes remain deferred for the published selector transport/key mismatch; no known
 failure is replayed or counted as positive acceptance. Parent4642 retains its full .4/.5
@@ -357,8 +357,49 @@ eleven accepted subjects and both prior failures stay unchanged.
 
 Held-row reporting distinguishes history from new effects: Python Wizard typed was actually
 invoked and refused at command414; Python Wizard default was not invoked. Neither is
-created by this recovery, and neither receives positive acceptance. Runtime remains held
-until root separately selects and admits the exact reviewed source and recovery checkpoint.
+created by this recovery, and neither receives positive acceptance. At this source stage,
+runtime remained held pending separate root selection and admission of the reviewed checkpoint.
+
+### Accepted supported matrix milestone — 2026-10-20
+
+The [scoped matrix report](../reports/knowledge-public-receiver-matrix-20261020.md)
+records **22 passed subjects and two held Python Wizard positives** at source
+`7d354facc7cbcf347cb37a303ad3007455f9caf0`. Independent runtime-evidence review accepted
+this supported portion; Delivery4723's full24-subject Done when and parent4642 remain open.
+Eleven explicit typed, ten omitted-default and one retained migration/rollback subjects
+passed. Typed Python Wizard was actually refused at command414; default Python Wizard
+was not invoked. Their separate [4727 source/adoption route](https://github.com/FS-GG/.github/issues/4727)
+requires a compatible published supplier and actual positive assertions; source delivery
+alone cannot accept them. Wizard bindings positives remain separately deferred outside24.
+
+History remains visible: the original operation stopped at88 with three passed subjects;
+its first continuation stopped at414 with eleven passed. Separately admitted supported
+recovery reached900 with21 passed, two held and one retained failure after successful
+migration: the fixture omitted the production authority lock from its exact output set.
+The repair allows only that exact zero-byte file, preserving every other output restriction.
+Original reports/receivers and both expired deadlines remain unchanged.
+
+A distinct `matrix4723-retained-post-apply-recovery20261020-01` operation, admitted through
+closed `fsgg.matrix4723.retained-post-apply-recovery/5` custody, reused the already-applied
+subject. It completed79 remaining commands901–979 in20.779seconds with exit0 and all79
+groups observed absent. No receiver creation/donor clone, migration/apply or21-row replay
+occurred; required owned knowledge-probe/bundle scratch clones were preserved. The original
+900-command evidence and21 passed subjects stayed unchanged. Its new absolute600-second
+clock includes validation/cleanup and retains180-second command/case limits; it does not
+renew an expired operation.
+
+The retained result verifies preview preservation with knowledge absent, migration-seeded
+knowledge, no-force two-asset CI composition and owner-collision refusal, full captures and
+post-private all-shared records export/restore, separate Git bundle/version recovery, and
+ordinary exact10MiB/one-over checker behavior. Rollback restores the original Standard
+source while preserving product/provenance/tools/guidance/note/CI bytes and modes, canonical
+captures and their history. Same-cwd SDK/FSI observations selected10.0.401/.NET10.0.12;
+the internal migration child's loaded paths remain independently unobserved.
+
+[PR4726](https://github.com/FS-GG/.github/pull/4726) retains this owner and source/report
+carrier. Final source CI, protected delivery and native scoped closure remain separate.
+No full24, product build, doctor, publication, performance, parent retirement or reservation
+release follows; original W013 and439/46 Unknown holds remain preserved.
 
 ## Source boundary
 
