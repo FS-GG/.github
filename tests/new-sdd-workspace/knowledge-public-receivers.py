@@ -1048,6 +1048,202 @@ def continue_retained_post_apply(path, digest):
         report.update(state='failed',failureType=type(error).__name__,failure=str(error),commands=runner.sequence);save();raise
 
 
+# A new public supplier completes only the two held subjects. Historical validators
+# and their literal019 package/source/checkpoint joins remain deliberately unchanged.
+PUBLIC021 = ('FS.GG.NewSddWorkspace', '0.21.0', '12480a2083a00e0ccc91f3e0f3111d56108d755c',
+             '4326f57dc41ab3feaf6b7b693dcdc2867e818b0567af27da505b571aace4e190')
+PUBLIC021_PAYLOAD = 'sha256:57232ac58044fae2b91d2898e0092500fcc9f57411cc1e04a17b43a356fd587e'
+PUBLIC021_APPHOST_SHA = '0b0aeaf3d759bc5d36a35f38c05038069de3cf3e4be36fc7e3c0f2c819d84c53'
+PUBLIC021_PROGRAM_SHA = 'aeeaccfe4d4f1f3c5664bb75d1c9b5c6637833e14e6d2d7e80ce847ac8d0e911'
+ACCEPTED22_REPORT_SHA = '2d76e48c9be15f17c73379584c8e5388c6a9006ef853d2bb397d160d92ccb4b0'
+PUBLIC021_OPERATION = 'matrix4723-public021-python-held-completion20261020-01'
+
+
+def public021_deadline(clock, entry, *, now_utc=None, now_monotonic=None):
+    from datetime import datetime, timezone
+    import math
+    require(set(clock) == {'operation','observedUtc','observedMonotonic','deadlineUtc','deadlineMonotonic'}
+            and clock['operation'] == PUBLIC021_OPERATION, 'closed-public021-clock')
+    now_utc = now_utc or datetime.now(timezone.utc)
+    now = time.monotonic() if now_monotonic is None else now_monotonic
+    observed, end = (datetime.fromisoformat(clock[k]) for k in ('observedUtc','deadlineUtc'))
+    require(observed.tzinfo is not None and end.tzinfo is not None, 'public021-clock-timezone')
+    seconds = (end-observed).total_seconds()
+    first, deadline = clock['observedMonotonic'], clock['deadlineMonotonic']
+    require(all(type(v) in (int,float) and math.isfinite(v) for v in (first,deadline,entry,now))
+            and 0 < seconds <= 600 and first <= entry <= now
+            and abs(deadline-first-seconds) < .01
+            and abs(now-first-(now_utc-observed).total_seconds()) < 1,
+            'public021-clock-profile-or-binding')
+    require(observed <= now_utc < end and now < min(deadline,entry+600)-10,
+            'public021-expired-or-insufficient')
+    return min(deadline,entry+600)
+
+
+def public021_manifest_successor(original, successor):
+    # The original accepted file stays immutable. Only this adapter's source hash
+    # changes in its separately sealed successor; all other4230 inputs keep custody.
+    expected = json.loads(json.dumps(original))
+    path = str(Path(__file__).resolve())
+    require(path in expected['inputs'], 'public021-original-adapter-input')
+    expected['inputs'][path] = sha(path)
+    require(successor == expected, 'public021-historical-manifest-substitution')
+
+
+def public021_prior_rows(report):
+    require(report['schema'] == 'fsgg.wizard.retained-post-apply-recovery-result/5'
+            and report['state'] == 'partial' and report['passed'] == 22 and report['blocked'] == 2
+            and report['commands'] == 979 and report['full24Accepted'] is False,
+            'public021-exact-original22-report')
+    matrix_state(report['rows'])
+    typed = next(r for r in report['rows'] if r['id']=='python-wizard-typed')
+    default = next(r for r in report['rows'] if r['id']=='python-wizard-default')
+    require(typed['originalAttemptInvoked'] is True and typed['originalRefusalEvidence']['sequence']==414
+            and typed['originalRefusalEvidence']['actualExitCode']==2
+            and default['originalAttemptInvoked'] is False
+            and typed['thisContinuationCreationInvoked'] is False
+            and default['thisContinuationCreationInvoked'] is False, 'public021-original414-history')
+    return [dict(r) for r in report['rows']]
+
+
+def public021_supplier(binding):
+    require(set(binding)=={'inputs','archive','closure','executable','publicationManifest',
+                          'publicationSummary','release','capabilitySource'}, 'closed-public021-supplier')
+    inputs = binding['inputs']
+    for path in inputs: C.regular(path,inputs)
+    metadata = [binding[k] for k in ('publicationManifest','publicationSummary','release')]
+    package_binding = dict(archive=binding['archive'],closure=binding['closure'],publicationReceipts=metadata)
+    members = C.package(package_binding,inputs,PUBLIC021)
+    C.tool_closure(package_binding,binding['executable'],inputs,members,'new-sdd-workspace.dll')
+    require(sha(C.regular(binding['executable'],inputs))==PUBLIC021_APPHOST_SHA, 'public021-adopted-apphost')
+    require(len([p for p in members if p.startswith('tools/net10.0/any/')])==88,
+            'public021-full88-tool-members')
+    manifest, summary, release = (C.read_json(C.regular(p,inputs)) for p in metadata)
+    require(manifest['schema']=='fsgg.new-sdd-workspace-release/1'
+            and (manifest['packageId'],manifest['version'],manifest['sourceSha'])==PUBLIC021[:3]
+            and manifest['producerPayloadSha256']==PUBLIC021_PAYLOAD
+            and manifest['tag']=='new-sdd-workspace/v0.21.0', 'public021-release-manifest')
+    require(summary['schema']=='fsgg.creator021-publication-summary/1' and summary['complete'] is True
+            and summary['publisherRunId']==39462099428 and summary['publisherSourceSha']==PUBLIC021[2]
+            and summary['firstCause'] is None and summary['reportingFailure'] is None
+            and summary['lastObservedJournal']['generation']==17
+            and set(summary['lastObservedJournal']['effects'])=={'tag','draft','package-asset','manifest-asset',
+                    'publication-journal-asset','github','nuget','promote'}
+            and set(summary['lastObservedJournal']['effects'].values())=={'verified'}, 'public021-eight-effect-publication')
+    require(release['id']==418651768 and release['draft'] is False and release['prerelease'] is False
+            and release['target_commitish']==PUBLIC021[2] and release['tag_name']==manifest['tag'],
+            'public021-promoted-source')
+    source = C.regular(binding['capabilitySource'],inputs)
+    require(sha(source)==PUBLIC021_PROGRAM_SHA, 'public021-immutable-capability-source')
+    require('"python", "minimal Python workspace"' in source.read_text(), 'public021-python-capability')
+    return binding['executable']
+
+
+def public021_prior_custody(m, custody, old_report_path):
+    require(set(custody)=={'schema','rows','originals'} and custody['schema']=='fsgg.matrix4723.public021-prior22-custody/1'
+            and set(custody['rows'])=={r['id'] for r in ROWS}, 'closed-public021-prior-custody')
+    base = Path(m['workRoot'])
+    originals = dict(custody['originals'])
+    require(originals.get(str(old_report_path))==ACCEPTED22_REPORT_SHA, 'public021-accepted22-custody')
+    expected = {}
+    for directory,first,last in ((base,1,88),(base/'continuation01',89,414),
+            (base/'supported-tail-recovery01',415,900),(base/'retained-post-apply-recovery01',901,979)):
+        expected.update(verify_output_journal(directory,first,last))
+    require(set(expected)<=set(originals) and all(originals[p]==h for p,h in expected.items()),
+            'public021-all979-original-outputs')
+    for path,digest in originals.items(): require(sha(path)==digest,'public021-original-output-drift')
+    for row in ROWS:
+        require(complete_snapshot(base/row['id'])==custody['rows'][row['id']], 'public021-original-subject-drift')
+    return originals
+
+
+def public021_join(rows, completed):
+    require([r['id'] for r in rows]==[r['id'] for r in ROWS]
+            and set(completed)==PYTHON_WIZARD_HOLDS
+            and all(completed[k]['id']==k and completed[k]['route']=='wizard'
+                    and completed[k]['selection']==next(r['selection'] for r in ROWS if r['id']==k)
+                    for k in completed), 'public021-only-two-held-rows')
+    result = [completed.get(row['id'],row) for row in rows]
+    require(all(row['state']=='passed' for row in result), 'public021-incomplete24')
+    return result
+
+
+def continue_public021_python(path, digest):
+    entry = time.monotonic()  # Includes every validation/hash/setup command below.
+    info = Path(path).lstat()
+    require(stat.S_ISREG(info.st_mode) and info.st_size <= 1024*1024, 'public021-checkpoint-file-bound')
+    require(sha(path)==digest,'public021-checkpoint-digest')
+    checkpoint = C.read_json(path)
+    require(set(checkpoint)=={'schema','admittedBy','operation','clock','baselineManifest','baselineManifestSha256',
+            'runtimeManifest','runtimeManifestSha256','priorReport','priorReportSha256','priorCustody',
+            'priorCustodySha256','supplier','workRoot','report'}
+            and checkpoint['schema']=='fsgg.matrix4723.python-wizard-public021-continuation/1'
+            and checkpoint['admittedBy']=='Programme/root' and checkpoint['operation']==PUBLIC021_OPERATION,
+            'closed-public021-checkpoint')
+    check_clock = lambda: public021_deadline(checkpoint['clock'],entry)
+    deadline = check_clock()
+    for field in ('baselineManifest','runtimeManifest','priorReport','priorCustody'):
+        require(sha(checkpoint[field])==checkpoint[field+'Sha256'],'public021-sealed-'+field)
+    require(checkpoint['priorReportSha256']==ACCEPTED22_REPORT_SHA,'public021-accepted-report-identity')
+    old = C.read_json(checkpoint['priorReport']); rows = public021_prior_rows(old)
+    baseline, successor = (C.read_json(checkpoint[k]) for k in ('baselineManifest','runtimeManifest'))
+    require(sha(checkpoint['baselineManifest'])==old['manifestSha256'],'public021-original-manifest-join')
+    public021_manifest_successor(baseline,successor)
+    m = validate(checkpoint['runtimeManifest'],checkpoint['runtimeManifestSha256'],after=True)
+    custody = C.read_json(checkpoint['priorCustody'])
+    public021_prior_custody(m,custody,Path(checkpoint['priorReport']))
+    executable = public021_supplier(checkpoint['supplier'])
+    base = Path(checkpoint['workRoot'])
+    require(base.is_absolute() and base==base.resolve() and not base.exists() and not base.is_symlink()
+            and Path(checkpoint['report'])==base/'report.json'
+            and base!=Path(m['workRoot']) and Path(m['workRoot']) not in base.parents,
+            'public021-exclusive-new-subjects')
+    before_sdk = sdk_snapshot(m);check_clock();base.mkdir(mode=0o700);(base/'tmp').mkdir()
+    execution=dict(m,wizard=executable)
+    runner=MatrixRunner(base,env_for(execution,base),deadline=deadline-5)
+    report=dict(schema='fsgg.matrix4723.public021-python-result/1',state='started',runtimeOperation=PUBLIC021_OPERATION,
+        prior22ReportSha256=ACCEPTED22_REPORT_SHA,priorRows=rows,rows=[],full24Accepted=False,
+        original22Replayed=False,original414Retained=True,supplier=dict(zip(('package','version','source','archiveSha256'),PUBLIC021)),automaticRetry=False)
+    def save():
+        check_clock()
+        (base/'report.json').write_text(json.dumps(report,indent=2)+'\n')
+        check_clock()
+    completed={}
+    try:
+        save()
+        feed=base/'feed';feed.mkdir()
+        for key,identity in PACKAGES.items():
+            check_clock()
+            if key!='wizard':shutil.copyfile(m['packages'][key]['archive'],feed/(identity[0]+'.'+identity[1]+'.nupkg'))
+        require(not any(c in str(feed) for c in '<>&"'),'public021-local-feed-path')
+        config=base/'NuGet.Config';config.write_text('<configuration><packageSources><clear/><add key="sealed-public-originals" value="'+str(feed)+'"/></packageSources></configuration>')
+        for row in [r for r in ROWS if r['id'] in PYTHON_WIZARD_HOLDS]:
+            check_clock();case=base/row['id'];case.mkdir();(case/'tmp').mkdir();root=case/'subject'
+            result=dict(id=row['id'],route='wizard',selection=row['selection'],state='started',firstCommand=runner.sequence+1)
+            report['rows'].append(result);save()
+            with runner.subject(case,env_for(execution,case)):
+                create(runner,execution,row,root,case)
+                if row['selection']=='default':result['boundary']=default_boundary(runner,root,row)
+                else:
+                    result['initial']=initial(runner,root,row,m['packages']['workspace']['archive'],'content/templates/fs-gg-python/')
+                    result['knowledge']=full_knowledge(runner,execution,root,row,case,config)
+                    require(result['initial']['commit']!=result['knowledge']['probe']['probeSetupCommit'], 'public021-caller-initial-not-probe')
+            result.update(state='passed',lastCommand=runner.sequence);completed[row['id']]=dict(result);save()
+        joined=public021_join(rows,completed)
+        public021_prior_custody(m,custody,Path(checkpoint['priorReport']))
+        require(validate(checkpoint['runtimeManifest'],checkpoint['runtimeManifestSha256'],after=True)==m
+                and public021_supplier(checkpoint['supplier'])==executable and sdk_snapshot(m)==before_sdk,
+                'public021-post-input-drift')
+        check_clock();report.update(state='passed',joinedRows=joined,passed=24,blocked=0,full24Accepted=True,commands=runner.sequence);save();return report
+    except BaseException as error:
+        if report['rows'] and report['rows'][-1]['state']=='started':report['rows'][-1].update(state='failed',failureType=type(error).__name__,failure=str(error))
+        report.update(state='failed',full24Accepted=False,failureType=type(error).__name__,failure=str(error),commands=runner.sequence)
+        # Retain a failed disposition even when the normal success-clock guard has
+        # expired. The admitted outer collector remains the hard retirement bound.
+        (base/'report.json').write_text(json.dumps(report,indent=2)+'\n')
+        raise
+
+
 def qualify(path, expected_sha):
     started = time.monotonic(); whole_deadline = started + 600
     m = validate(path, expected_sha)
@@ -1560,6 +1756,200 @@ def source_controls():
             self.assertFalse(default['originalAttemptInvoked']);self.assertIsNone(default['originalRefusalEvidence'])
             self.assertFalse(typed['thisContinuationCreationInvoked']);self.assertFalse(default['thisContinuationCreationInvoked'])
 
+        def public021_old_rows(self):
+            rows=[dict(r,state='passed') for r in ROWS]
+            for i,row in enumerate(rows):
+                if row['id'] in PYTHON_WIZARD_HOLDS:
+                    rows[i]=held_python(row,['rendering','console','web','fable-game','fable-bindings'],True)
+            return dict(schema='fsgg.wizard.retained-post-apply-recovery-result/5',state='partial',
+                passed=22,blocked=2,commands=979,full24Accepted=False,rows=rows,manifestSha256='b'*64)
+
+        def test_public021_preserves_original22_and_exact414_history(self):
+            old=self.public021_old_rows();before=json.loads(json.dumps(old));rows=public021_prior_rows(old)
+            completed={r['id']:dict(r,state='passed') for r in ROWS if r['id'] in PYTHON_WIZARD_HOLDS}
+            joined=public021_join(rows,completed)
+            self.assertEqual(old,before);self.assertEqual(len(joined),24)
+            for a,b in zip(old['rows'],joined):
+                if a['id'] not in PYTHON_WIZARD_HOLDS:self.assertEqual(a,b)
+            for mutation in ('typed-history','default-history','accepted-row'):
+                bad=json.loads(json.dumps(old))
+                if mutation=='typed-history':next(r for r in bad['rows'] if r['id']=='python-wizard-typed')['originalRefusalEvidence']['sequence']=413
+                elif mutation=='default-history':next(r for r in bad['rows'] if r['id']=='python-wizard-default')['originalAttemptInvoked']=True
+                else:bad['rows'][0]['state']='failed'
+                with self.assertRaises(ValueError):public021_prior_rows(bad)
+            with self.assertRaises(ValueError):public021_join(rows,{'python-wizard-typed':completed['python-wizard-typed']})
+            bad=dict(completed);bad['python-wizard-default']=dict(completed['python-wizard-typed'])
+            with self.assertRaises(ValueError):public021_join(rows,bad)
+            self.assertEqual(PACKAGES['wizard'][1],'0.19.0')
+            self.assertEqual(matrix_state(old['rows']),'partial')
+
+        def test_public021_successor_can_change_only_adapter_source_hash(self):
+            path=str(Path(__file__).resolve());old=dict(inputs={path:'a'*64,'/inert/original':'b'*64},packages={'wizard':'019'},workRoot='/inert/old')
+            successor=json.loads(json.dumps(old));successor['inputs'][path]=sha(path)
+            public021_manifest_successor(old,successor)
+            for field in ('other-input','package','workRoot'):
+                bad=json.loads(json.dumps(successor))
+                if field=='other-input':bad['inputs']['/inert/original']='c'*64
+                elif field=='package':bad['packages']['wizard']='021'
+                else:bad['workRoot']='/inert/replayed'
+                with self.assertRaisesRegex(ValueError,'substitution'):public021_manifest_successor(old,bad)
+            self.assertEqual(old['inputs'][path],'a'*64)
+
+        def test_public021_clock_is_one_finite600_bound_and_cannot_renew(self):
+            from datetime import datetime,timezone
+            clock=dict(operation=PUBLIC021_OPERATION,observedUtc='2026-10-20T20:00:00+00:00',
+                deadlineUtc='2026-10-20T20:10:00+00:00',observedMonotonic=1000,deadlineMonotonic=1600)
+            now=datetime.fromisoformat('2026-10-20T20:00:05+00:00')
+            self.assertEqual(public021_deadline(clock,1001,now_utc=now,now_monotonic=1005),1600)
+            for mutation in ('extended','future-entry','expired','nan','operation'):
+                bad=dict(clock);utc=now;mono=1005;entry=1001
+                if mutation=='extended':bad.update(deadlineUtc='2026-10-20T20:10:01+00:00',deadlineMonotonic=1601)
+                elif mutation=='future-entry':entry=1006
+                elif mutation=='expired':utc=datetime.fromisoformat('2026-10-20T20:10:00+00:00');mono=1600
+                elif mutation=='nan':bad['observedMonotonic']=float('nan')
+                else:bad['operation']='renew-old-operation'
+                with self.assertRaises(ValueError):public021_deadline(bad,entry,now_utc=utc,now_monotonic=mono)
+
+        def test_public021_actual_prior_custody_refuses_owner_drift_and_missing_outputs(self):
+            with tempfile.TemporaryDirectory() as td:
+                base=Path(td);old=base/'accepted.json';old.write_text('accepted-original')
+                for row in ROWS:
+                    case=base/row['id'];case.mkdir();(case/'owner').write_text(row['id'])
+                custody=dict(schema='fsgg.matrix4723.public021-prior22-custody/1',
+                    rows={r['id']:complete_snapshot(base/r['id']) for r in ROWS},
+                    originals={str(old):ACCEPTED22_REPORT_SHA})
+                real_sha=sha
+                with patch(__name__+'.sha',side_effect=lambda p:ACCEPTED22_REPORT_SHA if Path(p)==old else real_sha(p)), \
+                     patch(__name__+'.verify_output_journal',return_value={}):
+                    public021_prior_custody({'workRoot':str(base)},custody,old)
+                    (base/ROWS[0]['id']/'owner').write_text('mutation')
+                    with self.assertRaisesRegex(ValueError,'subject-drift'):
+                        public021_prior_custody({'workRoot':str(base)},custody,old)
+                with patch(__name__+'.verify_output_journal',return_value={'/inert/missing-original':'f'*64}):
+                    with self.assertRaisesRegex(ValueError,'979-original-outputs'):
+                        public021_prior_custody({'workRoot':str(base)},custody,old)
+
+        def test_public021_old_archive_cannot_pass_new_supplier_tuple(self):
+            # The real canonical archive validator rejects019 before receipt or
+            # closure processing; no runtime port or synthetic source replacement.
+            with tempfile.TemporaryDirectory() as td:
+                archive=Path(td)/'old.nupkg';archive.write_bytes(b'old019-original')
+                binding=dict(inputs={str(archive):sha(archive)},archive=str(archive),closure='/inert/closure',
+                    executable='/inert/executable',publicationManifest='/inert/manifest',publicationSummary='/inert/summary',
+                    release='/inert/release',capabilitySource='/inert/Program.fs')
+                # All input entries are genuine fixture bytes. Tuple refusal comes
+                # from C.package's literal021 raw hash, before any parsing/launch.
+                with self.assertRaisesRegex(ValueError,'literal-public-package'):
+                    public021_supplier(binding)
+
+        def test_public021_bad_checkpoint_refuses_before_runner_or_target_birth(self):
+            with tempfile.TemporaryDirectory() as td:
+                path=Path(td)/'checkpoint.json';target=Path(td)/'never-created'
+                path.write_text(json.dumps({'schema':'arbitrary-version-override','workRoot':str(target)}))
+                with patch(__name__+'.MatrixRunner') as runner,patch(__name__+'.create') as creation:
+                    with self.assertRaisesRegex(ValueError,'closed-public021-checkpoint'):
+                        continue_public021_python(path,sha(path))
+                    runner.assert_not_called();creation.assert_not_called();self.assertFalse(target.exists())
+
+        def test_public021_metadata_cannot_claim_wrong_source_effects_or_promotion(self):
+            with tempfile.TemporaryDirectory() as td:
+                base=Path(td);files={k:base/k for k in ('archive','executable','publicationManifest','publicationSummary','release','capabilitySource')}
+                manifest=dict(schema='fsgg.new-sdd-workspace-release/1',packageId=PUBLIC021[0],version=PUBLIC021[1],
+                    sourceSha=PUBLIC021[2],producerPayloadSha256=PUBLIC021_PAYLOAD,tag='new-sdd-workspace/v0.21.0')
+                summary=dict(schema='fsgg.creator021-publication-summary/1',complete=True,publisherRunId=39462099428,
+                    publisherSourceSha=PUBLIC021[2],firstCause=None,reportingFailure=None,lastObservedJournal=dict(generation=17,
+                    effects={k:'verified' for k in ('tag','draft','package-asset','manifest-asset','publication-journal-asset','github','nuget','promote')}))
+                release=dict(id=418651768,draft=False,prerelease=False,target_commitish=PUBLIC021[2],tag_name=manifest['tag'])
+                for key in ('archive','executable'):files[key].write_text('inert port')
+                files['capabilitySource'].write_text('"python", "minimal Python workspace"')
+                binding={k:str(v) for k,v in files.items()};binding['closure']='/inert/closure'
+                members={'tools/net10.0/any/'+str(n):'a'*64 for n in range(88)};real_sha=sha
+                def supplier(mf,sm,rel):
+                    for key,value in [('publicationManifest',mf),('publicationSummary',sm),('release',rel)]:files[key].write_text(json.dumps(value))
+                    binding['inputs']={str(v):real_sha(v) for v in files.values()}
+                    with patch.object(C,'package',return_value=members),patch.object(C,'tool_closure'), \
+                         patch(__name__+'.sha',side_effect=lambda p:PUBLIC021_PROGRAM_SHA if Path(p)==files['capabilitySource'] else PUBLIC021_APPHOST_SHA if Path(p)==files['executable'] else real_sha(p)):
+                        return public021_supplier(binding)
+                self.assertEqual(supplier(manifest,summary,release),str(files['executable']))
+                for mutation in ('source','payload','effect','failure','generation','draft','release-source','tag'):
+                    mf,sm,rel=(json.loads(json.dumps(v)) for v in (manifest,summary,release))
+                    if mutation=='source':mf['sourceSha']='0'*40
+                    elif mutation=='payload':mf['producerPayloadSha256']='sha256:'+'0'*64
+                    elif mutation=='effect':sm['lastObservedJournal']['effects']['nuget']='intent'
+                    elif mutation=='failure':sm['firstCause']='retained-failure'
+                    elif mutation=='generation':sm['lastObservedJournal']['generation']=16
+                    elif mutation=='draft':rel['draft']=True
+                    elif mutation=='release-source':rel['target_commitish']='0'*40
+                    else:rel['tag_name']='new-sdd-workspace/v0.20.0'
+                    with self.subTest(mutation=mutation),self.assertRaises(ValueError):supplier(mf,sm,rel)
+
+        def test_public021_fixed_commands_preserve_default_omission_and_pinset(self):
+            m={'wizard':'/inert/public021'}
+            for row in (r for r in ROWS if r['id'] in PYTHON_WIZARD_HOLDS):
+                argv=list(map(str,command(m,row,Path('/inert/new-subject'))))
+                self.assertIn('--pinned',argv);self.assertIn('--no-coordination',argv)
+                self.assertEqual('--lifecycle' in argv,row['selection']=='typed')
+                self.assertEqual(pins(row)['fs.gg.coord.cli'],'0.94.0')
+                if row['selection']=='typed':self.assertEqual(pins(row)['fs.gg.sdd.cli'],'2.2.0')
+            self.assertEqual(PUBLIC021[3],'4326f57dc41ab3feaf6b7b693dcdc2867e818b0567af27da505b571aace4e190')
+
+        def public021_inert_integration(self, fail=False, late=False):
+            from contextlib import nullcontext
+            with tempfile.TemporaryDirectory() as td:
+                base=Path(td);out=base/'new';old=self.public021_old_rows();path=base/'checkpoint.json'
+                manifest={'inputs':{str(Path(__file__).resolve()):'a'*64},'workRoot':str(base/'original'),
+                    'packages':{k:{'archive':str(base/'archive')} for k in PACKAGES},'childEnvironment':{}}
+                runtime=json.loads(json.dumps(manifest));runtime['inputs'][str(Path(__file__).resolve())]=sha(Path(__file__).resolve())
+                checkpoint=dict(schema='fsgg.matrix4723.python-wizard-public021-continuation/1',admittedBy='Programme/root',
+                    operation=PUBLIC021_OPERATION,clock={},baselineManifest='baseline',baselineManifestSha256='b'*64,
+                    runtimeManifest='runtime',runtimeManifestSha256='r'*64,priorReport='prior',priorReportSha256=ACCEPTED22_REPORT_SHA,
+                    priorCustody='custody',priorCustodySha256='c'*64,supplier={},workRoot=str(out),report=str(out/'report.json'))
+                path.write_text(json.dumps(checkpoint));reads={'baseline':manifest,'runtime':runtime,'prior':old,'custody':{}}
+                real_read=C.read_json;real_sha=sha;calls=[];runner=Mock(sequence=0);runner.subject.side_effect=lambda *a:nullcontext(runner)
+                def digest(p):return {'baseline':'b'*64,'runtime':'r'*64,'prior':ACCEPTED22_REPORT_SHA,'custody':'c'*64}.get(str(p),real_sha(p) if Path(p).exists() else '')
+                def clock(*_args):
+                    if late and (out/'report.json').exists() and real_read(out/'report.json')['state']=='passed':
+                        raise TimeoutError('late-report-original-deadline')
+                    return time.monotonic()+500
+                def creation(_runner,_m,row,root,case):
+                    calls.append(row['id'])
+                    if fail:raise RuntimeError('first-creation-refusal')
+                with patch.dict(os.environ,{'HOME':td,'LANG':'C.UTF-8','LC_ALL':'C.UTF-8'},clear=True), \
+                     patch(__name__+'.sha',side_effect=digest),patch.object(C,'read_json',side_effect=lambda p:reads[str(p)] if str(p) in reads else real_read(p)), \
+                     patch(__name__+'.public021_deadline',side_effect=clock), \
+                     patch(__name__+'.validate',return_value=runtime),patch(__name__+'.public021_prior_custody',return_value={}), \
+                     patch(__name__+'.public021_supplier',return_value='/inert/public021'),patch(__name__+'.sdk_snapshot',return_value={}), \
+                     patch(__name__+'.MatrixRunner',return_value=runner),patch.object(shutil,'copyfile'), \
+                     patch(__name__+'.create',side_effect=creation),patch(__name__+'.initial',return_value={'commit':'caller'}), \
+                     patch(__name__+'.full_knowledge',return_value={'probe':{'probeSetupCommit':'probe'}}), \
+                     patch(__name__+'.default_boundary',return_value={'effectiveLifecycle':'sdd','knowledgeReady':False}):
+                    if fail:
+                        with self.assertRaisesRegex(RuntimeError,'first-creation-refusal'):continue_public021_python(path,real_sha(path))
+                    elif late:
+                        with self.assertRaisesRegex(TimeoutError,'late-report-original-deadline'):continue_public021_python(path,real_sha(path))
+                    else:continue_public021_python(path,real_sha(path))
+                return calls,json.loads((out/'report.json').read_text()),old
+
+        def test_public021_actual_dispatch_reaches_only_two_new_subjects(self):
+            calls,report,old=self.public021_inert_integration()
+            self.assertEqual(calls,['python-wizard-typed','python-wizard-default'])
+            self.assertEqual(report['priorRows'],old['rows']);self.assertTrue(report['full24Accepted'])
+            self.assertEqual(report['passed'],24);self.assertFalse(report['original22Replayed'])
+            self.assertIn('knowledge',report['rows'][0]);self.assertNotIn('knowledge',report['rows'][1])
+            self.assertEqual(report['rows'][1]['boundary']['effectiveLifecycle'],'sdd')
+
+        def test_public021_late_final_report_cannot_claim_full24_success(self):
+            calls,report,old=self.public021_inert_integration(late=True)
+            self.assertEqual(calls,['python-wizard-typed','python-wizard-default'])
+            self.assertEqual(report['state'],'failed');self.assertFalse(report['full24Accepted'])
+            self.assertEqual(report['failureType'],'TimeoutError');self.assertEqual(report['priorRows'],old['rows'])
+
+        def test_public021_first_failure_stops_default_and_retains_partial_report(self):
+            calls,report,old=self.public021_inert_integration(fail=True)
+            self.assertEqual(calls,['python-wizard-typed']);self.assertEqual(report['state'],'failed')
+            self.assertFalse(report['full24Accepted']);self.assertEqual(report['priorRows'],old['rows'])
+            self.assertEqual(report['rows'][0]['failure'],'first-creation-refusal')
+
         def test_console_source_stays_byte_identical_and_workflow_reaches_controls(self):
             self.assertEqual(sha(Path(__file__).with_name('knowledge-console-public.py')), CONSOLE_SHA)
             workflow=Path(__file__).resolve().parents[2]/'.github/workflows/new-sdd-workspace-selftest.yml'
@@ -1584,7 +1974,8 @@ def main():
     try:
         if args.continuation:
             schema=C.read_json(args.continuation).get('schema')
-            if schema in {'fsgg.matrix4723.retained-post-apply/4','fsgg.matrix4723.retained-post-apply-recovery/5'}: continue_retained_post_apply(args.continuation,args.continuation_sha256)
+            if schema=='fsgg.matrix4723.python-wizard-public021-continuation/1': continue_public021_python(args.continuation,args.continuation_sha256)
+            elif schema in {'fsgg.matrix4723.retained-post-apply/4','fsgg.matrix4723.retained-post-apply-recovery/5'}: continue_retained_post_apply(args.continuation,args.continuation_sha256)
             elif schema=='fsgg.matrix4723.supported-tail-recovery/3': continue_supported_tail(args.continuation,args.continuation_sha256,recovery=True)
             elif schema=='fsgg.matrix4723.supported-tail/2': continue_supported_tail(args.continuation,args.continuation_sha256)
             else: continue_qualification(args.continuation,args.continuation_sha256)
