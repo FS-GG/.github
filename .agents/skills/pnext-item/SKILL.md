@@ -57,8 +57,8 @@ For an admitted routine item, the board is an asynchronous view rather than merg
    exact missing supplier and reopening condition; a partial merge is not completed Delivery acceptance.
 6. Return the accepted Delivery or concrete held remainder to work-board, which reconsiders suppliers,
    intake and opportunities and continues clearing. A direct single-item invocation ends at this boundary.
-   Telemetry and Observation projection are best-effort, asynchronous observations and cannot invalidate
-   an accepted merge. They do not replace mandatory work-board Status reconciliation and readback.
+   Telemetry and Observation projection are best-effort, asynchronous observations and cannot invalidate the merge.
+   They do not replace mandatory work-board Status reconciliation and readback.
 
 The routine route ends here. Do not execute the lifecycle, identity, claim, critique, receipt, feedback,
 or done-stamp instructions in the linked strict protocol for that item.
