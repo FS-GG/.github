@@ -67,6 +67,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-10-20** — — Mandatory Status lifecycle source0.110 (Programme/root; #4729): prepare coherent Kit/Drivers/CLI source0.110.0 for mandatory root-owned reconciliation. Published inventory and tags stay0.109.0; no candidate, publication, installation or original-operation replay is selected by source preparation.
+
 - **2026-10-19** — Unify board clearing and intake around work-board and pnext-item, retire contradictory active organization routes, and preserve scoped product compatibility and recovery custody.
 
 - **2026-10-19** — Require work-board to seek useful independent work at entry/resume and material transitions, compare ownership/prerequisites/touch-sets/shared outputs, admit real remaining capacity, preserve serial limits and retain one owner/integrator. Keep the delivered unfiltered intake triage and existing permission/enrollment safeguards. (work-board-parallel-opportunities)
