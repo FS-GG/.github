@@ -1,0 +1,7 @@
+interface:
+  display_name: "Work Board Coord"
+  short_description: "Clear Project 3 with useful parallel Deliveries"
+  default_prompt: "Use $work-board-coord to work FS-GG Coordination Project 3 until every item meets its full acceptance, aggressively finding useful parallel work and resolving authorized blockers."
+
+policy:
+  allow_implicit_invocation: true

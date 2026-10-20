@@ -241,6 +241,12 @@ DRIVERS = [
         "materializes-when": "false",
     },
     {
+        "id": "work-board-coord",
+        "scope": "operator",
+        "supplied-by": ".claude/skills/work-board-coord",
+        "materializes-when": "false",
+    },
+    {
         "id": "drive-board-normal",
         "scope": "operator",
         "supplied-by": ".claude/skills/drive-board-normal",
