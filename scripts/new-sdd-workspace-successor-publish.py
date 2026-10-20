@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import math
 import os
 import pathlib
 import re
@@ -49,6 +50,7 @@ def publication_report(candidate_run, artifact, archive, mode):
             "classifiedPhysicalHead": None, "fresh": None, "startingJournal": None,
             "lastObservedJournal": None, "journalMutationMayHaveOccurred": False,
             "lastDispatch": None, "iterationsAttempted": 0, "complete": False,
+            "reconciliationTiming": None,
             "preflightPassed": False, "stage": "startup", "firstCause": None, "reportingFailure": None,
             "authority": None}
 
@@ -111,6 +113,18 @@ def safe_summary(report, counted):
         value["lastDispatch"] = {"effect": row.get("effect") if row.get("effect") in known else None,
                                  "state": row.get("state") if row.get("state") in {"applied", "unknown", "refused"} else "unknown",
                                  "attempted": row.get("attempted") is True}
+    row = value["reconciliationTiming"]
+    if row is not None:
+        require(isinstance(row, dict), "Creator reconciliation timing differs")
+        def seconds(key):
+            raw = row.get(key)
+            return raw if type(raw) in (int, float) and 0 <= raw <= 604800 and math.isfinite(raw) else None
+        value["reconciliationTiming"] = {
+            **{key: seconds(key) for key in ("elapsedSeconds", "lastProgressSeconds", "waitSeconds")},
+            **{key: row.get(key) if type(row.get(key)) is int and 0 <= row[key] <= 136 else None
+               for key in ("progressCount", "waitingCount")},
+            "lastResult": row.get("lastResult") if row.get("lastResult") in
+                ("verified", "waiting", "unknown", "complete") else None}
     if counted is not None:
         value["authority"] = {"ceiling": 4200, "quotaFloor": 4500,
                               "attemptedByMethod": dict(counted.attempted),
@@ -167,15 +181,37 @@ def prepare_publication(primitives, journal, counted, admission, provider, api, 
 
 def reconcile_publication(content_id, ordered, journal, admission, provider, report,
                           *, clock=time.monotonic, sleep=time.sleep):
-    deadline = clock() + 45 * 60
+    started = clock()
+    deadline = started + 45 * 60
+    timing = {"elapsedSeconds": 0, "lastProgressSeconds": None, "waitSeconds": 0,
+              "progressCount": 0, "waitingCount": 0, "lastResult": None}
+    report["reconciliationTiming"] = timing
     for index in range(len(ordered) * 2 + 120):
-        require(clock() < deadline, "Wizard publication observation deadline expired")
+        now = clock()
+        timing["elapsedSeconds"] = max(0, now - started)
+        require(now < deadline, "Wizard publication observation deadline expired")
         report["iterationsAttempted"] = index + 1
         result = advance_effects(content_id, ordered, journal, admission, provider)
+        timing["lastResult"] = result
+        now = clock()
+        timing["elapsedSeconds"] = max(0, now - started)
+        if result == "verified":
+            timing["progressCount"] += 1
+            timing["lastProgressSeconds"] = timing["elapsedSeconds"]
+        require(now < deadline, "Wizard publication observation deadline expired")
         if result == "complete":
             report["complete"] = True
             return
-        sleep(5)
+        if result == "verified":
+            continue
+        # Unknown sends remain readback-only in advance_effects. Neither an
+        # uncertain outcome nor a wait grants another dispatch or a new clock.
+        require(result in ("waiting", "unknown"), "Wizard reconciliation result differs")
+        timing["waitingCount"] += 1
+        sleep(min(5, deadline - now))
+        after_wait = clock()
+        timing["waitSeconds"] += max(0, after_wait - now)
+        timing["elapsedSeconds"] = max(0, after_wait - started)
     raise Refused("Wizard publication exceeded bounded reconciliation steps")
 
 
