@@ -1075,11 +1075,111 @@ def creator_fixture_sources():
     return scope["RealGit"], fixture
 
 
+_FIXTURE_QUERY = None
+FIXTURE_HISTORY_LIMIT = 16
+
+
+def fixture_git(arguments):
+    """Test-only local Git reads through the maintained bounded query function.
+
+    All callers below supply fixed verbs/paths or validated immutable SHAs. No
+    network/acquisition fallback, inherited credentials, pager, hooks or lazy fetch.
+    """
+    import os, time
+    global _FIXTURE_QUERY
+    if _FIXTURE_QUERY is None:
+        spec = importlib.util.spec_from_file_location("creator_known_source_git_reader", ROOT / "tools/routine-delivery.py")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        _FIXTURE_QUERY = module.bounded_watch_query
+    environment = {"HOME": os.environ["HOME"], "PATH": "/usr/bin:/bin", "GIT_CONFIG_NOSYSTEM": "1",
+                   "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0",
+                   "GIT_NO_REPLACE_OBJECTS": "1", "GIT_NO_LAZY_FETCH": "1"}
+    code, raw = _FIXTURE_QUERY(["git", "--no-pager", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false",
+                               "-c", "gc.auto=0", "--literal-pathspecs", "-C", str(ROOT), *arguments],
+                              time.monotonic() + 5.5, max_seconds=5,
+                              max_bytes=source_admission.TREE_JSON_LIMIT, env=environment)
+    if code != 0:
+        raise RuntimeError("known source fixture local Git read refused")
+    return raw
+
+
+def working_source_tree():
+    """Observe current tracked bytes without following symlinks or submodules."""
+    import os, stat
+    tree = {}
+    for record in fixture_git(["ls-files", "--stage", "-z"]).split(b"\0"):
+        if not record:
+            continue
+        metadata, name = record.split(b"\t", 1)
+        mode, oid, stage = metadata.decode().split()
+        if stage != "0": raise RuntimeError("known source fixture has an unmerged index")
+        name = name.decode(); file = ROOT / name
+        if mode == "160000":
+            kind, sha, size = "commit", oid, 0
+        else:
+            info = file.lstat()
+            raw = os.fsencode(file.readlink()) if stat.S_ISLNK(info.st_mode) else file.read_bytes()
+            mode = "120000" if stat.S_ISLNK(info.st_mode) else "100755" if info.st_mode & 0o111 else "100644"
+            kind, sha, size = "blob", hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest(), len(raw)
+        tree[name] = {"path": name, "mode": mode, "type": kind, "sha": sha, "size": size}
+        parent = pathlib.PurePosixPath(name).parent
+        while str(parent) != ".":
+            key = str(parent)
+            tree[key] = {"path": key, "mode": "040000", "type": "tree", "sha": hashlib.sha1(key.encode()).hexdigest()}
+            parent = parent.parent
+    if len(tree) > source_admission.TREE_ENTRY_LIMIT: raise RuntimeError("known source fixture tree excessive")
+    return tree
+
+
+def immutable_fixture_tree(source):
+    if not source_admission.SHA.fullmatch(source): raise RuntimeError("known source fixture SHA malformed")
+    rows = []
+    for record in fixture_git(["ls-tree", "-rtzl", "--full-tree", source]).split(b"\0"):
+        if not record: continue
+        metadata, name = record.split(b"\t", 1)
+        mode, kind, sha, size = metadata.decode().split()
+        row = {"path": name.decode(), "mode": mode, "type": kind, "sha": sha}
+        if kind == "blob": row["size"] = int(size)
+        rows.append(row)
+    class GitObjects:
+        def get(self, path):
+            if path == f"repos/FS-GG/.github/git/commits/{source}": return {"sha": source, "tree": {"sha": source}}
+            if path == f"repos/FS-GG/.github/git/trees/{source}?recursive=1": return {"sha": source, "truncated": False, "tree": rows}
+            raise AssertionError(path)
+    # Reuse production completeness/mode/path/byte caps; never admit partial data.
+    return {name: {**row, "path": name} for name, row in SourceCompatibility(GitObjects()).tree(source).items()}
+
+
+def known_source_fixture():
+    """Known positives are independent of future unrelated current-tree changes.
+
+    The existing three maintained suite workflows use fetch-depth:0. If the
+    current graph is unknown, shallow/missing history is an explicit fixture-input
+    refusal; this function never fetches, rewrites the seal or skips positives.
+    """
+    def eligible(tree):
+        return (tree.get(source_admission.POLICY_PATH, {}).get("sha") == source_admission._POLICY_BLOB
+                and source_admission.graph_seal(tree) == source_admission.KNOWN_GRAPH_SEAL)
+    current = working_source_tree()
+    if eligible(current): return current
+    if fixture_git(["rev-parse", "--is-shallow-repository"]).strip() != b"false":
+        raise RuntimeError("known source fixture requires retained complete history; no acquisition permitted")
+    revisions = fixture_git(["log", "--no-show-signature", "--format=%H", f"-n{FIXTURE_HISTORY_LIMIT}",
+                             "--", source_admission.POLICY_PATH]).decode().splitlines()
+    if len(revisions) > FIXTURE_HISTORY_LIMIT: raise RuntimeError("known source fixture history excessive")
+    for revision in revisions:
+        tree = immutable_fixture_tree(revision)
+        if eligible(tree): return tree
+    raise RuntimeError("known source fixture unavailable within retained policy history")
+
+
 class ReportSourceAPI:
     """Actual tracked source bytes, plus closed synthetic native Git object views.
 
     No Git checkout, network, compiler or dynamic command is selected by data.
-    The fixtures exercise the real source-owned epoch and existing working tree.
+    The positives use the authenticated local known epoch, not an assumed current epoch.
     """
     def __init__(self):
         import copy
@@ -1091,19 +1191,7 @@ class ReportSourceAPI:
         self.run_source = "a" * 40
         self.moved = False
         self.blobs = {}
-        tree = {}
-        names = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).decode().split("\0")
-        for name in filter(None, names):
-            file = ROOT / name
-            raw = file.read_bytes()
-            sha = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
-            mode = "100755" if file.stat().st_mode & 0o111 else "100644"
-            tree[name] = {"path": name, "mode": mode, "type": "blob", "sha": sha, "size": len(raw)}
-            parent = pathlib.PurePosixPath(name).parent
-            while str(parent) != ".":
-                key = str(parent)
-                tree[key] = {"path": key, "mode": "040000", "type": "tree", "sha": hashlib.sha1(key.encode()).hexdigest()}
-                parent = parent.parent
+        tree = known_source_fixture()
         self.trees = {"a" * 40: tree}
         self.add("a"*40, "e"*40, "2099-01-01-000000Z-control.md", b"Pure control report.\n")
         self.add("e"*40, "f"*40, "2099-01-01-000001Z-control.md", b"Second pure control.\n")
@@ -1158,6 +1246,41 @@ class ReportSourceCompatibilityTests(unittest.TestCase):
         # The pre-change literal source-equality predicate rejects this same fixture.
         self.assertNotEqual("a"*40, self.api.main)
         self.assertNotEqual("a"*40, "e"*40)
+
+    def test_unrelated_current_change_uses_immutable_known_fixture_without_new_source_gate(self):
+        import copy
+        known = working_source_tree(); unknown = copy.deepcopy(known)
+        unknown["scripts/NewSddWorkspace/Program.fs"]["sha"] = "9"*40
+        self.assertNotEqual(source_admission.graph_seal(unknown), source_admission.KNOWN_GRAPH_SEAL)
+        # Old fixture used unknown here and turned its semantic positive red.
+        with patch(__name__ + ".working_source_tree", return_value=unknown):
+            recovered = known_source_fixture()
+        self.assertEqual(source_admission.graph_seal(recovered), source_admission.KNOWN_GRAPH_SEAL)
+        self.assertEqual(recovered[source_admission.POLICY_PATH]["sha"], source_admission._POLICY_BLOB)
+        reader = SourceCompatibility(self.api)
+        self.api.trees["9"*40] = unknown
+        self.assertTrue(reader.compatible("9"*40, "9"*40))
+        self.api.add("9"*40, "8"*40, "2099-01-01-000002Z-control.md", b"unknown graph report")
+        with self.assertRaises(source_admission.Refused): reader.compatible("9"*40, "8"*40)
+
+    def test_known_fixture_fails_closed_for_shallow_missing_or_wrong_policy_history(self):
+        import copy
+        unknown = copy.deepcopy(working_source_tree()); unknown["Directory.Build.props"]["sha"] = "9"*40
+        real_git = fixture_git
+        for defect in ("shallow", "missing", "wrong-policy", "excessive"):
+            with self.subTest(defect=defect):
+                def read(args):
+                    if args[0] == "rev-parse": return b"true\n" if defect == "shallow" else b"false\n"
+                    if args[0] == "log":
+                        if defect == "missing": return b""
+                        if defect == "excessive": return (b"a"*40+b"\n") * (FIXTURE_HISTORY_LIMIT+1)
+                        return b"a"*40+b"\n"
+                    raise AssertionError(args)
+                wrong = copy.deepcopy(unknown); wrong[source_admission.POLICY_PATH]["sha"] = "9"*40
+                with patch(__name__ + ".working_source_tree", return_value=unknown), \
+                     patch(__name__ + ".fixture_git", side_effect=read), \
+                     patch(__name__ + ".immutable_fixture_tree", return_value=wrong), self.assertRaises(RuntimeError):
+                    known_source_fixture()
 
     def test_each_pair_direction_and_moving_main_refuse(self):
         for candidate, publisher, main in [("e", "a", "f"), ("a", "f", "e"), ("f", "e", "f")]:
