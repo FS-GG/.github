@@ -560,9 +560,33 @@ def retained(runner, m, root, case, donor, config, row):
         if name in ('work/demo/spec.md', '.gitignore'): continue
         require(after.get(name) == old, 'migration-owner-content-changed')
     require((root / '.gitignore').read_bytes().startswith(ignore_bytes), 'retained-ignore-owner-prefix')
-    allowed_new = {'work/demo/spec.standard-sdd.rollback.md', 'work/demo/specification.fsx', 'readiness/demo/specification.normalized.json',
-                   'readiness/demo/typed-authority.json', '.fsgg/knowledge/schema.json', '.fsgg/knowledge/records/project-knowledge.json'}
+    migration_outputs(before, after, root)
+    return retained_post_apply(runner, m, root, case, config, row, baseline, preview, applied, observations)
+
+
+AUTHORITY_LOCK = '.fsgg/typed-sdd-transactions/authority.lock'
+
+
+def migration_outputs(before, after, root):
+    allowed_new = {'work/demo/spec.standard-sdd.rollback.md', 'work/demo/specification.fsx',
+                   'readiness/demo/specification.normalized.json', 'readiness/demo/typed-authority.json',
+                   '.fsgg/knowledge/schema.json', '.fsgg/knowledge/records/project-knowledge.json', AUTHORITY_LOCK}
     require(set(after) - set(before) <= allowed_new, 'migration-unexpected-output')
+    lock = root / AUTHORITY_LOCK
+    require(lock.is_file() and not lock.is_symlink() and lock.read_bytes() == b'', 'migration-authority-lock-not-empty-regular-file')
+
+
+def retained_post_apply(runner, m, root, case, config, row, baseline, preview, applied, observations):
+    """Remaining effects only: caller must bind the already-applied subject and original evidence.
+
+    Never clones, previews, migrates/applies or initializes the receiver again.
+    """
+    spec = root / 'work/demo/spec.md'
+    require(preview['outcome'] == 'noChange' and applied['outcome'] == 'succeeded'
+            and applied['classification'] == 'Migrated', 'retained-post-apply-original-proof')
+    require((root / '.fsgg/knowledge/records/project-knowledge.json').is_file()
+            and (root / 'work/demo/spec.standard-sdd.rollback.md').read_bytes() == supported_spec(m).read_bytes(), 'retained-post-apply-source-or-bootstrap')
+    migration_outputs(snapshot(root), snapshot(root), root)
     role = ci_role(runner, m, root, case)
     migration_commit = commit(runner, root, 'Accept explicit FSharp compatibility and preserving CI role')
     evidence = full_knowledge(runner, m, root, row, case, config)
@@ -904,6 +928,81 @@ def execute_rows(runner, m, base, report, save, original_app, donor_default=None
             save()
 
 
+
+def continue_retained_post_apply(path, digest):
+    """Resume only unfinished effects of command900, inside its unchanged recovery clock."""
+    require(sha(path) == digest, 'retained-checkpoint-digest')
+    checkpoint = C.read_json(path)
+    require(set(checkpoint) == {'schema','admittedBy','operation','manifest','manifestSha256','originalRecoveryCheckpoint','originalRecoveryCheckpointSha256','custody','custodySha256'}
+            and checkpoint['schema'] == 'fsgg.matrix4723.retained-post-apply/4'
+            and checkpoint['admittedBy'] == 'Programme/root'
+            and checkpoint['operation'] == 'matrix4723-supported-tail-recovery20261020-01', 'closed-retained-post-apply-authority')
+    original = Path(checkpoint['originalRecoveryCheckpoint'])
+    require(sha(original) == checkpoint['originalRecoveryCheckpointSha256'], 'original-recovery-clock-custody')
+    clock = C.read_json(original)
+    deadline = recovery_deadline(clock)  #No new clock or profile, including validation time.
+    require(sha(checkpoint['custody']) == checkpoint['custodySha256'], 'retained-postterminal-custody')
+    custody = C.read_json(checkpoint['custody'])
+    require(custody['schema'] == 'fsgg.matrix4723.recovery-postterminal-custody/1'
+            and custody['operation'] == checkpoint['operation'] and custody['lastCommand'] == 900
+            and custody['passed'] == 21 and custody['blocked'] == 2 and custody['failed'] == 1
+            and custody['originalDeadlineUtc'] == clock['recoveryDeadlineUtc'], 'exact-post-apply-prefix')
+    m = validate(checkpoint['manifest'], checkpoint['manifestSha256'], after=True)
+    base = Path(m['workRoot']); prior = base/'supported-tail-recovery01'; tail = base/'retained-post-apply01'
+    require(not tail.exists() and str(prior/'report.json') == custody['report']
+            and sha(prior/'report.json') == custody['reportSha256'], 'retained-no-replay-or-report-drift')
+    old = C.read_json(prior/'report.json')
+    require([r['id'] for r in old['rows']] == [r['id'] for r in ROWS]
+            and old['state'] == 'failed' and old['commands'] == 900
+            and old['failure'] == 'migration-unexpected-output'
+            and old['rows'][-1]['state'] == 'failed'
+            and all(r['state'] == ('blocked' if r['id'] in PYTHON_WIZARD_HOLDS else 'passed') for r in old['rows'][:-1]), 'exact-retained-failure-and21-passes')
+    originals = dict(custody['originals'])
+    originals.update(verify_output_journal(base,1,88))
+    originals.update(verify_output_journal(base/'continuation01',89,414))
+    originals.update(verify_output_journal(prior,415,900))
+    for file, expected in originals.items():require(sha(file) == expected, 'retained-original-output-drift')
+    for row in ROWS:
+        case = base/row['id']; saved = custody['rows'][row['id']]
+        require((case/'subject').exists() == saved['exists'] and complete_snapshot(case) == saved['caseFiles'], 'all21-and-retained-subject-custody')
+    root = base/ROWS[-1]['id']/'subject'; case = root.parent
+    terminal = [json.loads(line) for line in (prior/'commands.jsonl').read_text().splitlines() if json.loads(line).get('phase') == 'terminal'][-1]
+    require(terminal['sequence'] == 900 and terminal['actualExitCode'] == 0
+            and terminal['argv'] == list(map(str,migration_command(m,root,accept=True)))
+            and terminal['cwd'] == str(root), 'actual900-applied-command')
+    preview = C.read_json(prior/'897.stdout'); applied = C.read_json(prior/'900.stdout')
+    baseline = (prior/'896.stdout').read_text().strip()
+    require((prior/'898.stdout').read_text().strip() == '10.0.401', 'recorded-retained-sdk')
+    observations = {'before':dict(sdk='10.0.401',observation=C.read_json(prior/'899.stdout'),
+        cwdGlobalSha256=sha(root/'global.json'),internalMigrationChildLoadedPaths='not independently observed; this is an actual same-cwd/environment FSI observation')}
+    before_sdk = sdk_snapshot(m); recovery_deadline(clock); tail.mkdir(mode=0o700)
+    runner = MatrixRunner(tail,env_for(m,base),deadline=deadline-5); runner.sequence = 900
+    report = dict(schema='fsgg.wizard.retained-post-apply-result/4',state='started',runtimeOperation=checkpoint['operation'],
+                  originalFailureReportSha256=custody['reportSha256'],custodySha256=checkpoint['custodySha256'],
+                  manifestSha256=checkpoint['manifestSha256'],recoveryDeadlineUtc=clock['recoveryDeadlineUtc'],
+                  full24Accepted=False,automaticRetry=False,rows=[dict(r) for r in old['rows']])
+    report['rows'][-1] = dict(id=ROWS[-1]['id'],route='retained',selection='explicit-fsharp',state='started',firstCommand=901,
+        originalFailedApplyReused=True,receiverCreationReplayed=False,migrationReplayed=False)
+    def save():(tail/'report.json').write_text(json.dumps(report,indent=2)+'\n')
+    save()
+    try:
+        with runner.subject(root,env_for(m,case)):
+            require(runner.git(root,'rev-parse','HEAD') == baseline,'retained-baseline-head')
+            names = runner.git(root,'ls-tree','-r','--name-only',baseline).splitlines()
+            migration_outputs(dict.fromkeys(names),snapshot(root),root)
+            result = retained_post_apply(runner,m,root,case,base/'NuGet.Config',ROWS[-1],baseline,preview,applied,observations)
+        report['rows'][-1].update(state='passed',retained=result,lastCommand=runner.sequence)
+        require(matrix_state(report['rows']) == 'partial','retained-partial22-held2')
+        for row in ROWS[:-1]:require(complete_snapshot(base/row['id']) == custody['rows'][row['id']]['caseFiles'],'21-passed-subjects-modified')
+        require(all(sha(file) == value for file,value in originals.items()),'retained-originals-overwritten')
+        require(validate(checkpoint['manifest'],checkpoint['manifestSha256'],after=True) == m and sdk_snapshot(m) == before_sdk,'retained-post-custody-drift')
+        recovery_deadline(clock)
+        report.update(state='partial',passed=22,blocked=2,commands=runner.sequence);save();return report
+    except BaseException as error:
+        report['rows'][-1].update(state='failed',failureType=type(error).__name__,failure=str(error))
+        report.update(state='failed',failureType=type(error).__name__,failure=str(error),commands=runner.sequence);save();raise
+
+
 def qualify(path, expected_sha):
     started = time.monotonic(); whole_deadline = started + 600
     m = validate(path, expected_sha)
@@ -945,6 +1044,43 @@ def source_controls():
     import tempfile
 
     class Controls(unittest.TestCase):
+        def test_exact_empty_authority_lock_and_foreign_output_refusal(self):
+            with tempfile.TemporaryDirectory() as td:
+                root=Path(td);lock=root/AUTHORITY_LOCK;lock.parent.mkdir(parents=True);lock.write_bytes(b'')
+                migration_outputs({},snapshot(root),root)
+                (root/'foreign').write_text('unadmitted')
+                with self.assertRaisesRegex(ValueError,'unexpected-output'):migration_outputs({},snapshot(root),root)
+                (root/'foreign').unlink();lock.write_bytes(b'not empty')
+                with self.assertRaisesRegex(ValueError,'lock-not-empty'):migration_outputs({},snapshot(root),root)
+
+        def test_post_apply_port_only_executes_remaining_rollback_not_creation_or_migration(self):
+            with tempfile.TemporaryDirectory() as td:
+                case=Path(td);root=case/'subject';root.mkdir();standard=case/'standard.md';standard.write_text('retained standard')
+                files={'work/demo/spec.md':'typed projection','work/demo/spec.standard-sdd.rollback.md':'retained standard',
+                       'work/demo/specification.fsx':'canonical','readiness/demo/specification.normalized.json':'normalized',
+                       'readiness/demo/typed-authority.json':'authority','.fsgg/knowledge/records/project-knowledge.json':'{}',
+                       AUTHORITY_LOCK:'','src/Owner.fs':'original owner'}
+                for name,value in files.items():p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(value)
+                def rollback(argv,**kwargs):
+                    self.assertIn('rollback',argv);self.assertNotIn('migrate',argv);self.assertNotIn('clone',argv)
+                    (root/'work/demo/spec.md').write_bytes(standard.read_bytes())
+                    for name in ('work/demo/specification.fsx','readiness/demo/specification.normalized.json','readiness/demo/typed-authority.json'):(root/name).unlink()
+                    return types.SimpleNamespace(stdout=json.dumps({'outcome':'succeeded'}))
+                runner=Mock();runner.call.side_effect=rollback;runner.knowledge.return_value={'history':'same'}
+                observation={'observed':'recorded original899'}
+                with patch.dict(globals(),supported_spec=lambda *a:standard,ci_role=lambda *a:{},commit=Mock(side_effect=['migration','rollback']),
+                                full_knowledge=lambda *a:{'probe':{'probeSetupCommit':'distinct'}},fsi_observation=lambda *a:observation):
+                    result=retained_post_apply(runner,{'sddExecutable':'/sdd'},root,case,None,ROWS[-1],'original-baseline',
+                        {'outcome':'noChange'},{'outcome':'succeeded','classification':'Migrated'},{'before':observation})
+                self.assertEqual(runner.call.call_count,1);self.assertEqual(result['baselineCommit'],'original-baseline')
+                self.assertEqual((root/'src/Owner.fs').read_text(),'original owner');self.assertEqual((root/AUTHORITY_LOCK).read_bytes(),b'')
+
+        def test_retained_continuation_bad_custody_cannot_launch_or_reset(self):
+            with tempfile.TemporaryDirectory() as td:
+                path=Path(td)/'checkpoint';path.write_text('{}')
+                with patch('subprocess.Popen',side_effect=AssertionError('child launched')):
+                    with self.assertRaisesRegex(ValueError,'retained-checkpoint-digest'):continue_retained_post_apply(path,'0'*64)
+
         def test_exact_population_and_deferred_routes(self):
             self.assertEqual(len(ROWS), 24)
             self.assertEqual(sum(r['selection'] == 'typed' for r in ROWS), 12)
@@ -1345,7 +1481,8 @@ def main():
     try:
         if args.continuation:
             schema=C.read_json(args.continuation).get('schema')
-            if schema=='fsgg.matrix4723.supported-tail-recovery/3': continue_supported_tail(args.continuation,args.continuation_sha256,recovery=True)
+            if schema=='fsgg.matrix4723.retained-post-apply/4': continue_retained_post_apply(args.continuation,args.continuation_sha256)
+            elif schema=='fsgg.matrix4723.supported-tail-recovery/3': continue_supported_tail(args.continuation,args.continuation_sha256,recovery=True)
             elif schema=='fsgg.matrix4723.supported-tail/2': continue_supported_tail(args.continuation,args.continuation_sha256)
             else: continue_qualification(args.continuation,args.continuation_sha256)
         else: qualify(args.manifest,args.manifest_sha256)
