@@ -139,6 +139,13 @@
     "negative": "Burn down every FS-GG repository's Coordination board.",
     "boundary": "Plan the normal workspace wave, but do not dispatch a worker."
   },
+  "work-board-coord": {
+    "positive": "Use $work-board-coord to work FS-GG Coordination Project 3 until every item is done, aggressively pursuing useful parallel work.",
+    "indirect": "Keep independent organization Deliveries moving while CI runs, resolve supported setup blockers and finish their complete acceptance.",
+    "incomplete": "Clear the new Coordination board",
+    "negative": "Coordinate only this configured product board without selecting organization Project 3.",
+    "boundary": "Inspect Project 3 only; do not launch workers or mutate native state."
+  },
   "work-board-best": {
     "positive": "Use $work-board-best to burn down this workspace board with best-quality routed workers.",
     "indirect": "Drive the local product board using the highest quality worker tier.",

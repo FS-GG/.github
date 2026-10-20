@@ -79,6 +79,8 @@ This is source guidance delivery, not a claim of a new package or installed rece
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-10-20** — ADD (.github; user-requested work-board-coord): reconcile the Project 3 coordinator operator from the authored driver manifest. Both skill roots, normal discovery and bounded trigger coverage agree; aggressive useful parallelism reuses canonical work-board admission and whole-promise acceptance. Operator source only; no package, installation or board activation is claimed.
+
 - **2026-10-17** — Reconcile `work-roadmap` driver canonical-body digest from `.github`’s maintained `registry/driver-skill-manifest.json` while qualifying the bounded local registry preparation route. The protected source/manifest already carried this body; only its stale own registry snapshot changes. Other producer rows, materialization predicates, published packages and installed adoption remain unchanged. See [local preparation contract](../docs/roadmaps/2026-10-01-typed-administrative-fsharp-quint.md#local-registry-preparation-closure--2026-10-17).
 
 - **2026-10-17** — Reconcile `publishing-and-deployment` operator digest from `.github`’s `registry/driver-skill-manifest.json` after its generated release inventory advances to genuinely published Game WASM 0.4.0 ([original publisher](https://github.com/FS-GG/FS.GG.Game/actions/runs/39015233527), [release](https://github.com/FS-GG/FS.GG.Game/releases/tag/wasm/v0.4.0)). Full skill tree metadata is refreshed; coordination-kit bytes and materialization predicates are unchanged. Fresh both-feed installed acceptance remains open.

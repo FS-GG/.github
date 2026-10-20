@@ -107,7 +107,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-10-17"
+updated: "2026-10-20"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -411,3 +411,9 @@ skills:
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
   - { id: board-analyst,          scope: operator,owner: .github,         source: .github/.claude/skills/board-analyst/SKILL.md, sha256: d15ddb59637fd3ef7832b5d92fcc2f2166d03a2d7cb6b28132804f2a3259b43a, materializes-when: "false" }
+
+  # APPENDED by `fsgg-skill-registry-check --write` from the producer manifests (.github#289).
+  # Reconciled, not hand-authored: scope/sha256/materializes-when verbatim from the manifest
+  # entry, `source` from its `supplied-by`. Re-home and annotate these into the block they
+  # belong to, then set `updated:` and prepend a registry/skills.CHANGELOG.md entry.
+  - { id: work-board-coord,       scope: operator,owner: .github,         source: .github/.claude/skills/work-board-coord/SKILL.md, sha256: 44c07d00abe0cb4e83b039d2c0878beb717531ff461d753a7c9957f0374a8f1a, materializes-when: "false" }
