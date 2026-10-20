@@ -124,3 +124,38 @@ compiler/partial-fixture evidence keeps its original scope. The five maintained
 causal controls and final required exact-head coherent source CI/review remain
 required for this Delivery. This result does not qualify a published Wizard,
 bindings installed acceptance, publication or parent completion.
+
+## Current021 publication readiness
+
+[Delivery 4741](https://github.com/FS-GG/.github/issues/4741) continues the accepted
+4727 source work through a distinct `CURRENT_021` publication route. The earlier
+source-candidate qualification above remains source evidence. `SOURCE_021` still
+refuses release authority; published Creator 0.20, its original coherent108 pin,
+and historical 0.13/0.16/0.19 readers retain their own identities and journals.
+
+The current route selects genuinely published coherent110 from immutable source
+`42cd9e7c8505f7cd72d5a22ad424a27af6d51458`,
+[release 418406702](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.110.0).
+The dedicated [021 dependency pin](../../scripts/creator021-coord-dependencies.json)
+binds the original CLI asset 659535832, manifest asset 659550415 and its SHA256
+`bcae24d71571ab7f0dc26abbbf00beb0abf12718b22e7060838990384b86911f`,
+all 81 tool payload members, 11 project identities and 293 immutable source leaves.
+The historical [020 pin](../../scripts/creator-current-coord-dependencies.json)
+is not rewritten. Signed feed envelopes and original release archive bytes keep
+their distinct digests; normalized payload correspondence does not replace either.
+
+Candidate construction, artifact validation, admission, provider, publisher and
+workflow selectors use the same current021/110 contract. Published-dependency
+build properties and the transitive FSI product-board fixture select that same
+pin. Historical controls call their historical contract explicitly. The chosen
+`board-v2-product-creator-021` journal namespace is a source selection, not proof
+that a fresh namespace exists; ordinary guarded preflight must establish its
+actual custody and refuse a collision before any effect.
+
+Full acceptance remains with Delivery 4741: exact-head coherent CI and protected
+source; a genuine three-member candidate and read-only preflight; separately
+admitted publication with all eight effects independently read back; promoted
+release and equivalent payloads on both feeds; and isolated public021 installation
+and caller closure. The two public Python journeys remain with Delivery4723 and
+Outcome4642. This readiness amendment publishes no package, replays no historical
+operation and establishes no public Creator021 or whole-parent acceptance.

@@ -67,13 +67,13 @@ let frozenSetting name = Environment.GetEnvironmentVariable name |> Option.ofObj
 let expectedCoherentVersion =
     let currentProperties = File.ReadAllText(Path.Combine(creatorRoot, "Directory.Build.props"))
     // The current publisher exports its real published-dependency route. Historical frozen099
-    // qualification keeps its original distinct inputs and pin; neither falls back to source109.
+    // qualification keeps its original distinct inputs and pin; neither falls back to a different source version.
     let producer, dependencies, pinPath =
         match frozenSetting "FSGG_CREATOR_DEPENDENCY_MODE" with
         | Some "published-dependency" ->
             match frozenSetting "FSGG_CREATOR_PRODUCER_SOURCE", frozenSetting "FSGG_CREATOR_DEPENDENCIES" with
-            | Some source, Some dependencies -> Some source, Some dependencies, "scripts/creator-current-coord-dependencies.json"
-            | _ -> failwith "published108 qualification requires both actual producer and dependency roots"
+            | Some source, Some dependencies -> Some source, Some dependencies, "scripts/creator021-coord-dependencies.json"
+            | _ -> failwith "published110 qualification requires both actual producer and dependency roots"
         | None | Some "source-only" ->
             frozenSetting "FsggFrozenCoordSource", frozenSetting "FsggFrozenCoordDependencies", "scripts/creator-frozen-coord-dependencies.json"
         | Some _ -> failwith "unknown Creator dependency qualification mode"
