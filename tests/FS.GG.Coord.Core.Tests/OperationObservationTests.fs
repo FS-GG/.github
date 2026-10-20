@@ -61,7 +61,7 @@ module OperationObservationTests =
         let changed = { sample with Draft = true }
         let retained, id = attention MaterialChange (decide 1200L (Some changed) (waiting()))
         let replay, replayId = attention MaterialChange (decide 1300L None retained)
-        Assert.Equal(id, replayId)
+        Assert.Equal<string>(id, replayId)
         Assert.Equal(retained.Identity, replay.Identity)
 
     [<Fact>]

@@ -41,7 +41,7 @@ let ``complete selected sample uses only charged bounded GETs and double identit
     Assert.Equal(8, charged)
     Assert.Equal(8, fake.Calls.Length)
     for request, remaining in fake.Calls do
-        Assert.Equal("GET", request.Method)
+        Assert.Equal<string>("GET", request.Method)
         Assert.Equal(NoBody, request.Body)
         Assert.InRange(remaining.TotalSeconds, 0.001, 30.0)
 
@@ -49,7 +49,7 @@ let ``complete selected sample uses only charged bounded GETs and double identit
 let ``head change after checks and rerun before final barrier remain original changes`` () =
     let moved = complete() |> List.mapi (fun index value -> if index = 6 then response (pr (String.replicate 40 "c")) None else value)
     let result, _ = collect (Fake moved)
-    Assert.NotEqual(identity.Head, (result |> Result.defaultWith failwith).Head)
+    Assert.NotEqual<string>(identity.Head, (result |> Result.defaultWith failwith).Head)
     let rerun = complete() |> List.mapi (fun index value -> if index = 5 then response (run 2) None else value)
     let result, _ = collect (Fake rerun)
     Assert.Equal(2, (result |> Result.defaultWith failwith).RunAttempt)

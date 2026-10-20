@@ -68,7 +68,7 @@ let ``interruption retains original allowance and continuation roundtrip`` () =
         let decoded = OperationObservationApplication.encodeCursor cursor |> OperationObservationApplication.decodeCursor |> Result.defaultWith failwith
         Assert.Equal(cursor, decoded)
         match decide 1001L None decoded with
-        | ReturnAttention(_, Interrupted, replay) -> Assert.Equal(id, replay)
+        | ReturnAttention(_, Interrupted, replay) -> Assert.Equal<string>(id, replay)
         | other -> failwithf "lost original attention: %A" other
     | other -> failwithf "expected interruption: %A" other
 
