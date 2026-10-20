@@ -159,3 +159,58 @@ release and equivalent payloads on both feeds; and isolated public021 installati
 and caller closure. The two public Python journeys remain with Delivery4723 and
 Outcome4642. This readiness amendment publishes no package, replays no historical
 operation and establishes no public Creator021 or whole-parent acceptance.
+
+
+## Accepted021 publication and isolated installation
+
+[Delivery4741](https://github.com/FS-GG/.github/issues/4741) completed its declared
+publication and installed-caller scope on2026-10-20. Exact-head source CI and
+[PR4748](https://github.com/FS-GG/.github/pull/4748) preceded the genuine
+[candidate39459556960](https://github.com/FS-GG/.github/actions/runs/39459556960)
+on immutable source `12480a2083a00e0ccc91f3e0f3111d56108d755c`. Its original
+three-member artifact12281917883 has raw ZIP SHA256
+`630b5d9ea687615666fcf4bca9a45a3037933afe9abca77e839c431fa337bbb1`.
+The earlier candidate39458578797 passed compilation/packing but failed the final
+main-stability guard after a report merge; upload was skipped and no artifact was
+accepted. That failure is retained separately.
+
+The [read-only preflight39461041032](https://github.com/FS-GG/.github/actions/runs/39461041032)
+established fresh custody without journal mutation. The separately admitted
+[publisher39462099428](https://github.com/FS-GG/.github/actions/runs/39462099428)
+completed with all eight effects verified at generation17 after101 iterations.
+Its original summary reports `complete=true`, no first cause or reporting failure,
+logical head `f5114dd1c86c4541590c008d1cab8594e7da162c` and physical Authority head
+`7a6433e93dc7a0d8b1886a524e7f660f19258eb0`. The maintained journal reader validated
+the complete chain and original intent. The
+[promoted release418651768](https://github.com/FS-GG/.github/releases/tag/new-sdd-workspace/v0.21.0)
+contains the original package, manifest and publication journal. The bounded
+watcher's deadline was an observation failure; the publisher retained its original
+window and later completed. Neither operation was restarted.
+
+The original package SHA256 is
+`9cd48f4dcb02c0bee4355705227e06063e4d72c088eb453fa34829d4e5eb8de5`;
+the signed public NuGet archive is
+`4326f57dc41ab3feaf6b7b693dcdc2867e818b0567af27da505b571aace4e190`.
+Both original hosted feed observations join normalized payload
+`sha256:57232ac58044fae2b91d2898e0092500fcc9f57411cc1e04a17b43a356fd587e`.
+Independent direct NuGet bytes pass the maintained payload verifier. Direct GitHub
+feed access returned403, and the large release-package body read reached its
+12-second bound; original hosted receipts and the native release asset digest
+remain the accepted evidence for those scoped readback limits. No local full-body
+read or cryptographic signature-verification claim is inferred.
+
+Normal SDK installation from that retained genuine public NuGet archive into a
+fresh isolated tool path and the absolute installed apphost `--help` passed in
+1.04seconds. All88 tool files match the public archive, including all81 pinned
+genuine coherent110 dependency files from immutable source42. The ELF apphost
+target, both EOFs, direct-process reaping and absent process groups were verified.
+The SDK workload-verification warning is retained; no workload update was attempted.
+The loaded runtime patch was not observed. This proves the maintained installed
+caller smoke route, not product creation or a global tool selector update.
+
+The source-retention reservation ended only after root accepted the promoted
+readback. Creator020/013, coherent108 and their original operations remain
+immutable; `SOURCE_021` still refuses release authority. The two actual public
+Python Wizard subjects remain with4723 and whole Outcome4642 remains open. This
+metadata reconciliation publishes no new version and repeats no publication or
+receiver operation.
