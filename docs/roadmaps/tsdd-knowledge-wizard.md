@@ -964,3 +964,38 @@ promises. #4710 retains its separate complete browser/WASM scope. All original
 owns the Atlas capture gap until immutable delivered source and accepted runtime
 findings can be cited; historical `github/public-knowledge-receiver-recovery-boundary`
 remains historical evidence rather than a grant or new acceptance.
+
+### Raw-player tool preservation repair — first actual failure retained
+
+The first genuine #4759 invocation used the published Workspace 0.19.0 archive
+and reached four successful, cleanly retired commands. It stopped at
+`owner-game-tool-entry-changed` immediately after SDK 10.0.401 installed SDD 2.2.0
+into the product tool manifest. The SDK added `rollForward: false` to the existing
+Fable entry and reformatted the complete manifest. Fable/Fantomas versions and the
+0644 mode survived, but the original owner entry bytes did not. No knowledge
+initialization, normal initial commit or probe ran; the omitted receiver was not
+created. Original source, receiver, command outputs, clocks, factory and all 4,105
+input bindings remain frozen. Independent reads observed the outer and four child
+PIDs/groups absent; complete source/input/mode/SDK-layout postvalidation passed.
+This failed invocation establishes no completed public receiver acceptance.
+
+The adapter repair keeps the strict owner-entry comparison. It installs genuine
+SDD 2.2.0 into a fresh caller-owned scratch manifest outside the product, verifies
+the exact new entry and installed package payload against the sealed public archive,
+then appends only that entry at the authenticated Public019 end-of-tools boundary.
+It preserves the original byte prefix and closing suffix, existing owner entries,
+envelope metadata and mode; only the required separator/new entry is inserted.
+An atomic replacement follows an unchanged owner preimage check. The ordinary
+local-tool restore and all knowledge/commit/probe assertions remain in their
+original order. This narrow published-format append introduces no general JSON
+parser, forced overwrite or omitted/false equivalence exception. The Wizard's
+existing `pinKnowledgeProducer` writer reserializes JSON and therefore cannot
+satisfy this stronger byte-span promise for the raw route.
+
+Embedded source controls exercise actual append behavior with SDK-shaped scratch
+output and causal wrong-entry, metadata, byte-preimage and mode refusals. They
+launch no child. Independent review, exact-head CI and normal protected repair
+source delivery remain required. Any continuation needs a separately selected
+runtime operation which preserves the original failure and retained receiver;
+this source repair grants no replay, new receiver, SDK acquisition or runtime.
+Parent #4642 and the unrelated #4710 browser/WASM acceptance remain unchanged.
