@@ -261,7 +261,12 @@ are `schema`, `inputs`, `packages`, `workspaceOriginal`, `sourceRoot`, `caseInve
 `extraInventory`, `sourceClosure`, `fsiPreflight`, `fsiClosure`, `wizard`, `sddExecutable`,
 `dotnetExecutable`, `actualHome`, `childEnvironment`, `workRoot`, `report` and `acceptedApp`.
 Package bindings carry original archive/publication custody and full installed Wizard/SDD
-closures. `acceptedApp` binds `root`, `head`, `tree` and a complete relative-file map of
+closures. Only the literal published Fable5.18.0 archive uses a read-only adapter port for
+its internal repeated forward separators. Raw names, member digests and archive bytes stay
+unchanged; the report records raw-to-normalized extraction locators. Complete normalized
+collisions, file-parent collisions, absolute/traversal/dot/backslash/NUL/drive paths, links,
+unsupported member types and existing archive bounds refuse. Other packages keep the
+strict delivered reader. `acceptedApp` binds `root`, `head`, `tree` and a complete relative-file map of
 `sha256`/`mode`. Immutable source, case and SDK inventories are independently pinned by
 literal digests. Fresh per-case template/cache homes prevent package-version registration
 conflicts; the original work root refuses replay. Ambient Git configuration is disabled.
@@ -278,7 +283,7 @@ establish selection, and this observation does not independently observe the mig
 internal FSI child. Fresh runtime admission must cover simultaneous CLI/FSI heaps and native
 overhead. `0x60000000` is a per-process managed heap limit, not a process-group memory cap.
 
-This is source preparation with twenty pure controls; no qualification has run for this
+This is source preparation with twenty-six pure controls; no qualification has run for this
 matrix. Root retains runtime admission and independent acceptance. The two Wizard-bindings
 positive routes remain deferred for the published selector transport/key mismatch; no known
 failure is replayed or counted as positive acceptance. Parent4642 retains its full .4/.5

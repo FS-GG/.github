@@ -20,6 +20,7 @@ import types
 import unittest
 from unittest.mock import Mock, patch
 import zipfile
+import xml.etree.ElementTree as ET
 
 CONSOLE_SHA = 'afc9de40013bc71d430c91bb215a4938ef4ca9bd5e97e389ba53af3007204873'
 PINNED_FILES = {
@@ -69,6 +70,62 @@ PACKAGES = dict(C.PACKAGES, **{
     'fable': ('Fable', '5.18.0', '6ccad2d4f874427a0743f432561e5b67a14c2ae8', 'cda6bb5099e7e4833b7e1194066a204540deff6ae91fbf5447e93a7729bb9264'),
     'fantomas': ('fantomas', '8.0.5', '972f7d0133de540ab2c582decddb0313ae617b53', '93e0de98bd4674b2122cd13074f46880e993f4f2d7b4531a7dcc16d873a4f63d'),
 })
+
+
+
+def fable_members(archive):
+    """Read original names/bytes; normalize only a separately recorded extraction locator."""
+    entries = archive.infolist()
+    require(len(entries) <= 4096 and sum(e.file_size for e in entries) <= 128 * 1024 * 1024, 'archive-bound')
+    raw_names = set(); extraction = {}; payload = {}
+    for entry in entries:
+        name = entry.filename
+        require(name and entry.orig_filename == name and '\x00' not in name
+                and not name.startswith('/') and '\\' not in name and ':' not in name
+                and not name.endswith('//'), 'unsafe-fable-archive-member')
+        body = name[:-1] if name.endswith('/') else name
+        parts = body.split('/')
+        require(parts[0] and parts[-1] and all(p not in ('.', '..') for p in parts), 'unsafe-fable-archive-member')
+        kind = stat.S_IFMT(entry.external_attr >> 16)
+        require(kind in (0, stat.S_IFREG, stat.S_IFDIR)
+                and (kind != stat.S_IFDIR or entry.is_dir())
+                and (not entry.is_dir() or kind != stat.S_IFREG), 'unsafe-fable-archive-member-type')
+        normalized = '/'.join(p for p in parts if p)
+        require(name not in raw_names and normalized not in extraction.values(), 'fable-normalized-member-collision')
+        raw_names.add(name); extraction[name] = normalized
+        if not entry.is_dir() and name != '.signature.p7s':
+            payload[name] = hashlib.sha256(archive.read(entry)).hexdigest()
+    files = {extraction[e.filename] for e in entries if not e.is_dir()}
+    require(not any('/'.join(path.split('/')[:i]) in files
+                    for path in extraction.values() for i in range(1, len(path.split('/')))), 'fable-normalized-parent-collision')
+    return payload, extraction
+
+
+def fable_archive(path):
+    require(sha(path) == PACKAGES['fable'][3], 'literal-public-fable-archive')
+    with zipfile.ZipFile(path) as archive:
+        return fable_members(archive)
+
+
+def public_package(key, binding, inputs, identity):
+    if key != 'fable':
+        return C.package(binding, inputs, identity)
+    require(identity == PACKAGES['fable'], 'exact-public-fable-tuple')
+    path = C.regular(binding['archive'], inputs)
+    members, _ = fable_archive(path)
+    require(binding['publicationReceipts'] and isinstance(binding['publicationReceipts'], list), 'publication-custody-required')
+    for receipt in binding['publicationReceipts']: C.regular(receipt, inputs)
+    names = [n for n in members if n.endswith('.nuspec')]
+    require(len(names) == 1, 'package-metadata')
+    with zipfile.ZipFile(path) as archive: metadata = ET.fromstring(archive.read(names[0]))
+    values = lambda name: [n for n in metadata.iter() if n.tag.split('}')[-1] == name]
+    require(all(len(values(n)) == 1 for n in ('id', 'version', 'repository')), 'package-metadata')
+    require((values('id')[0].text, values('version')[0].text, values('repository')[0].get('commit')) == identity[:3], 'package-source-identity')
+    return members
+
+
+def package_payload(key, path):
+    return fable_archive(path)[0] if key == 'fable' else C.archive_payload(path)
 
 
 def rows():
@@ -168,7 +225,7 @@ def validate(path, expected_sha, after=False):
     for key, identity in PACKAGES.items():
         binding = m['packages'][key]
         require(set(binding) == ({'archive', 'publicationReceipts', 'closure'} if key in ('wizard', 'producer') else {'archive', 'publicationReceipts'}), 'closed-public-binding')
-        members = C.package(binding, m['inputs'], identity)
+        members = public_package(key, binding, m['inputs'], identity)
         if key in ('wizard', 'producer'):
             C.tool_closure(binding, m['wizard' if key == 'wizard' else 'sddExecutable'], m['inputs'], members,
                            'new-sdd-workspace.dll' if key == 'wizard' else 'FS.GG.SDD.Cli.dll')
@@ -351,7 +408,7 @@ def restore_tools(runner, m, root, row, config):
     package_root = Path(runner.env['NUGET_PACKAGES'])
     for key, identity in PACKAGES.items():
         if identity[0].lower() not in observed['tools']: continue
-        for name, digest in C.archive_payload(m['packages'][key]['archive']).items():
+        for name, digest in package_payload(key, m['packages'][key]['archive']).items():
             if name.startswith('tools/net10.0/any/'):
                 require(sha(package_root / identity[0].lower() / identity[1] / name) == digest, 'restored-tool-payload')
 
@@ -553,7 +610,7 @@ def qualify(path, expected_sha):
     config.write_text('<configuration><packageSources><clear/><add key="sealed-public-originals" value="' + str(feed) + '"/></packageSources></configuration>')
     runner = MatrixRunner(base, env_for(m, base), deadline=whole_deadline - 5)
     report = dict(schema='fsgg.wizard.public-knowledge-matrix-result/1', state='started', manifestSha256=expected_sha,
-                  outerSeconds=600, caseMaxSeconds=180, rows=[], deferred=['fable-bindings-wizard-typed', 'fable-bindings-wizard-default'], sdkBefore=before_sdk)
+                  outerSeconds=600, caseMaxSeconds=180, rows=[], deferred=['fable-bindings-wizard-typed', 'fable-bindings-wizard-default'], sdkBefore=before_sdk, fableRawToNormalizedExtraction=fable_archive(m['packages']['fable']['archive'])[1])
     def save(): Path(m['report']).write_text(json.dumps(report, indent=2) + '\n')
     save()
     donor_default = None
@@ -738,7 +795,7 @@ def source_controls():
                 base=Path(td)/'fresh';m={'sddExecutable':'/bound/producer','workRoot':str(base),'report':str(base/'report.json'),'packages':{k:{'archive':'sealed'} for k in PACKAGES},'actualHome':'/home','childEnvironment':{}}
                 events=[]
                 def invalid_create(*args):events.append('first-creation');raise ValueError('original-first-failure')
-                with patch.dict(globals(),validate=lambda *a,**k:m,sdk_snapshot=lambda *a:{},app_donor=lambda *a:Path('/donor'),create=invalid_create), patch.object(MatrixRunner,'call',return_value=types.SimpleNamespace(stdout='2.2.0')), patch('shutil.copyfile'), patch('subprocess.Popen',side_effect=AssertionError('native child')):
+                with patch.dict(globals(),validate=lambda *a,**k:m,sdk_snapshot=lambda *a:{},app_donor=lambda *a:Path('/donor'),create=invalid_create,fable_archive=lambda *a:({},{})), patch.object(MatrixRunner,'call',return_value=types.SimpleNamespace(stdout='2.2.0')), patch('shutil.copyfile'), patch('subprocess.Popen',side_effect=AssertionError('native child')):
                     with self.assertRaisesRegex(ValueError,'original-first-failure'):qualify('sealed','digest')
                 report=json.loads((base/'report.json').read_text())
                 self.assertEqual(report['state'],'failed');self.assertEqual(len(report['rows']),1)
@@ -808,6 +865,61 @@ def source_controls():
                     runner.knowledge.side_effect=lambda *a:ignore.write_bytes(b'# Replacement owner rules\n.fsgg/cache/\n')
                     with self.assertRaisesRegex(ValueError,'raw-ignore-owner-prefix'):
                         raw_initialize(runner,m,root,{'family':'console','route':'raw','selection':'typed'},None)
+
+        def fable_fixture(self, entries):
+            import io
+            data=io.BytesIO()
+            with zipfile.ZipFile(data,'w') as archive:
+                for name,body,mode in entries:
+                    entry=zipfile.ZipInfo(name);entry.external_attr=mode << 16
+                    archive.writestr(entry,body)
+            data.seek(0);return data
+
+        def test_fable_redundant_internal_separator_preserves_original_bytes_and_names(self):
+            entries=[('fable-library-js//Array.js',b'original library',stat.S_IFREG|420),('tools/net10.0/any/fable.dll',b'original tool',stat.S_IFREG|493)]
+            data=self.fable_fixture(entries);original=data.getvalue()
+            with zipfile.ZipFile(data) as archive:
+                payload,mapping=fable_members(archive)
+                self.assertEqual(archive.namelist(),[e[0] for e in entries])
+                self.assertEqual(archive.read(entries[0][0]),entries[0][1])
+            self.assertEqual(data.getvalue(),original)
+            self.assertEqual(payload[entries[0][0]],hashlib.sha256(entries[0][1]).hexdigest())
+            self.assertEqual(mapping[entries[0][0]],'fable-library-js/Array.js')
+            self.assertNotIn('fable-library-js/Array.js',payload)
+
+        def test_fable_normalized_and_file_parent_collisions_refuse(self):
+            for names in (('a//b','a/b'),('a','a//b'),('a/','a'),('a//b','a//b')):
+                with self.subTest(names=names):
+                    # Duplicate raw names use a fake roster to avoid ZipFile's warning.
+                    entries=[zipfile.ZipInfo(n) for n in names]
+                    fake=Mock();fake.infolist.return_value=entries;fake.read.return_value=b'bytes'
+                    with self.assertRaisesRegex(ValueError,'collision'):fable_members(fake)
+
+        def test_fable_only_internal_forward_separator_relaxation(self):
+            for name in ('/absolute','a/../b','a/./b','a\\b','C:drive','a//','//a','a\x00hidden'):
+                entry=zipfile.ZipInfo(name);fake=Mock();fake.infolist.return_value=[entry];fake.read.return_value=b'bytes'
+                with self.subTest(name=name),self.assertRaisesRegex(ValueError,'unsafe-fable'):fable_members(fake)
+
+        def test_fable_link_device_and_type_mismatch_refuse(self):
+            for mode,name in ((stat.S_IFLNK|511,'link'),(stat.S_IFCHR|420,'device'),(stat.S_IFDIR|493,'not-directory'),(stat.S_IFREG|420,'directory/')):
+                entry=zipfile.ZipInfo(name);entry.external_attr=mode<<16
+                fake=Mock();fake.infolist.return_value=[entry];fake.read.return_value=b'bytes'
+                with self.subTest(mode=mode,name=name),self.assertRaisesRegex(ValueError,'member-type'):fable_members(fake)
+
+        def test_fable_bounds_and_exact_archive_scope_refuse(self):
+            entry=zipfile.ZipInfo('tool');entry.file_size=128*1024*1024+1;fake=Mock();fake.infolist.return_value=[entry]
+            with self.assertRaisesRegex(ValueError,'archive-bound'):fable_members(fake)
+            fake.infolist.return_value=[zipfile.ZipInfo('tool')]*4097
+            with self.assertRaisesRegex(ValueError,'archive-bound'):fable_members(fake)
+            with tempfile.TemporaryDirectory() as td:
+                path=Path(td)/'substitute';path.write_bytes(b'unpublished substitute')
+                with self.assertRaisesRegex(ValueError,'literal-public-fable'):fable_archive(path)
+
+        def test_other_packages_keep_strict_archive_port(self):
+            sentinel=object()
+            with patch.object(C,'package',return_value=sentinel) as strict,patch.dict(globals(),fable_archive=Mock(side_effect=AssertionError('wrong relaxed port'))):
+                self.assertIs(public_package('fantomas',{}, {},PACKAGES['fantomas']),sentinel)
+                strict.assert_called_once_with({}, {},PACKAGES['fantomas'])
 
         def test_console_source_stays_byte_identical_and_workflow_reaches_controls(self):
             self.assertEqual(sha(Path(__file__).with_name('knowledge-console-public.py')), CONSOLE_SHA)
