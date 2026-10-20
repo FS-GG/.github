@@ -807,3 +807,40 @@ protected source delivery, private binding authentication, actual installed109
 qualification and fresh source/runtime admission remain distinct effects.
 This enrollment prerequisite is separate from the eventual implementation PR.
 All439 inherited and46 later Unknown originals remain distinct and unreleased.
+
+
+### Literal provider parameter source repair — 2026-10-20
+
+[SDD Delivery1115](https://github.com/FS-GG/FS.GG.SDD/issues/1115) owns a
+source-only prerequisite of [Outcome4642](https://github.com/FS-GG/.github/issues/4642):
+preserve literal effective values at both the legacy and catalog template edges,
+including empty values, with truthful displayed commands and invocation provenance.
+Retain deterministic defaults/overrides and the existing invalid-key/collision
+refusals. Qualify the exact candidate through both production callers and the
+actual selected SDK/template engine; doubles or skipped native cases do not prove
+acceptance. A causal control must detect the original split-argument failure.
+
+The governing Roadmap remains the parent's admitted SDD knowledge .4/.5 plan.
+Provider contract030 and catalog plan132 define implementation. Source preparation
+can proceed independently of publication. Existing source-CI compatibility packages
+are disposable candidate validation, distinct from immutable retained c8/2.3 release
+artifacts. This child selects no release version, namespace, packing of a retained
+candidate, publication, promotion or old-effect retry. Parent4642 retains coherent
+producer publication/adoption, the Wizard bindingTarget consumer fix and successful
+installed bindings journeys. SDD1113's original occupancy Unknown remains held.
+
+The existing matrix Delivery4723 owner and source attempt remain active on their
+own isolated branch. Its adapter/workflow/plan paths are disjoint from SDD producer
+code. Fresh capacity accounting must retain that known reservation alongside the
+three pre-existing dirty-worktree reservations and every unresolved original hold.
+Local FSharp build/native qualification needs separate admission through the
+existing cooperative profile and must not overlap matrix runtime. Missing profile
+compatibility fences the affected launch; it does not authorize a substituted test.
+
+This public commitment prepares the complete40-identity successor pair, preserving
+all39 previous identities and admitted paths. Native creation and cross-repository
+parent linking are independently read back. Absent-only metadata, protected source
+delivery, private binding authentication, installed109 full-scope qualification and
+fresh source/runtime admission remain separate effects. The enrollment prerequisite
+is separate from the later SDD implementation PR. All439 inherited and46 later
+Unknown originals remain distinct and unreleased.
