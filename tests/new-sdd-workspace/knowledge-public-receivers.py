@@ -379,14 +379,11 @@ def verify_bindings(root, m):
     return dict(package='@babylonjs/core', version=deps['@babylonjs/core'], defaultTargetContract='browser', browserAssetsVerified=True, packageJsonSha256=sha(root / 'package.json'))
 
 
-def raw_initialize(runner, m, root, row, config):
+def raw_knowledge_initialize(runner, m, root, row):
     before = snapshot(root)
     ignore = root / '.gitignore'
     ignore_bytes = ignore.read_bytes() if ignore.exists() else None
     require(not (root / '.fsgg/knowledge').exists(), 'raw-flag-impersonated-initializer')
-    if not (root / '.config/dotnet-tools.json').exists():
-        runner.call([m['dotnetExecutable'], 'new', 'tool-manifest'], cwd=root)
-    runner.call([m['dotnetExecutable'], 'tool', 'install', 'FS.GG.SDD.Cli', '--version', '2.2.0', '--local', '--configfile', config], cwd=root)
     manifest(root, pins(row))
     runner.knowledge(m['sddExecutable'], 'initialize', '--root', str(root))
     after = snapshot(root)
@@ -397,6 +394,19 @@ def raw_initialize(runner, m, root, row, config):
         if name in ('.gitignore', '.config/dotnet-tools.json'): continue
         require(after.get(name) == value, 'raw-owner-content-changed')
     return dict(rawFlagInitializesStore=False, explicitCallerInitialize=True)
+
+
+
+def raw_initialize(runner, m, root, row, config):
+    before_setup = snapshot(root)
+    require(not (root / '.fsgg/knowledge').exists(), 'raw-flag-impersonated-initializer')
+    target = root / '.config/dotnet-tools.json'
+    if not target.exists():
+        runner.call([m['dotnetExecutable'], 'new', 'tool-manifest', '--output', root / '.config'], cwd=root)
+    runner.call([m['dotnetExecutable'], 'tool', 'install', 'FS.GG.SDD.Cli', '--version', '2.2.0', '--local', '--tool-manifest', target, '--configfile', config], cwd=root)
+    after_setup = snapshot(root)
+    require(all(after_setup.get(p) == value for p, value in before_setup.items() if p != '.config/dotnet-tools.json'), 'raw-tool-setup-owner-content-changed')
+    return raw_knowledge_initialize(runner, m, root, row)
 
 
 def restore_tools(runner, m, root, row, config):
@@ -595,6 +605,170 @@ def create(runner, m, row, root, case):
     return result
 
 
+ORIGINAL_POSTTERMINAL_CUSTODY_SHA = 'f8e4693bada60e3c2954f2961118e1d4ee57080e8f2a6c08ab571c83509b95ea'
+ORIGINAL_DEADLINE_UTC = '2026-10-20T06:10:37.893628+00:00'
+
+
+def complete_snapshot(root):
+    result = {}
+    for path in Path(root).rglob('*'):
+        info = path.lstat()
+        require(not stat.S_ISLNK(info.st_mode), 'continuation-owner-symlink')
+        if path.is_file():
+            result[path.relative_to(root).as_posix()] = dict(sha256=sha(path), mode=stat.S_IMODE(info.st_mode), size=info.st_size)
+    return result
+
+
+def continuation_deadline(checkpoint):
+    from datetime import datetime, timezone
+    end = datetime.fromisoformat(checkpoint['deadlineUtc'])
+    observed = datetime.fromisoformat(checkpoint['clockObservedUtc'])
+    require(checkpoint['deadlineUtc'] == ORIGINAL_DEADLINE_UTC, 'original-deadline-not-renewed')
+    deadline = checkpoint['deadlineMonotonic']
+    require(abs(deadline - checkpoint['clockObservedMonotonic'] - (end - observed).total_seconds()) < .01
+            and abs(time.monotonic() - checkpoint['clockObservedMonotonic']
+                    - (datetime.now(timezone.utc) - observed).total_seconds()) < 1, 'original-wall-monotonic-clock-binding')
+    require(time.monotonic() < deadline - 10 and datetime.now(timezone.utc) < end, 'original-window-expired')
+    return deadline
+
+
+def relocate_raw_manifest(root):
+    source = root / 'dotnet-tools.json'; target = root / '.config/dotnet-tools.json'
+    require(source.is_file() and not source.is_symlink() and not target.exists()
+            and list(root.rglob('dotnet-tools.json')) == [source], 'retained-raw-manifest-location-conflict')
+    value = C.read_json(source)
+    require(value['version'] == 1 and value['isRoot'] is True
+            and set(value['tools']) == {'fs.gg.sdd.cli'}
+            and value['tools']['fs.gg.sdd.cli']['version'] == '2.2.0'
+            and value['tools']['fs.gg.sdd.cli']['commands'] == ['fsgg-sdd'], 'retained-raw-capable-pin')
+    before = complete_snapshot(root); payload = source.read_bytes(); mode = stat.S_IMODE(source.stat().st_mode)
+    target.parent.mkdir(exist_ok=True)
+    require(not target.parent.is_symlink(), 'retained-raw-config-symlink')
+    # link is exclusive: a raced destination refuses rather than replacing owner bytes.
+    os.link(source, target); source.unlink()
+    after = complete_snapshot(root)
+    expected = dict(before); expected['.config/dotnet-tools.json'] = expected.pop('dotnet-tools.json')
+    require(after == expected and target.read_bytes() == payload and stat.S_IMODE(target.stat().st_mode) == mode, 'retained-raw-relocation-owner-preservation')
+    return dict(originalSha256=hashlib.sha256(payload).hexdigest(), mode=mode, fromPath='dotnet-tools.json', toPath='.config/dotnet-tools.json')
+
+
+def resume_raw(runner, m, root, row, tail):
+    before = complete_snapshot(root)
+    checkpoint = dict(semantics='Actual retained post-successful-tool-install baseline; no lost preinstall snapshot claimed',
+                      files=before, sourceInputSha256=sha(__file__), beforeAnyReceiverMutation=True)
+    with (tail / 'raw-postinstall-checkpoint.json').open('x') as out: json.dump(checkpoint, out, indent=2)
+    relocation = relocate_raw_manifest(root)
+    result = raw_knowledge_initialize(runner, m, root, row)
+    result.update(originalToolInstallReused=True, creationReplayed=False, relocation=relocation,
+                  preservationBaseline='retained postinstall before explicit relocation/knowledge initialization')
+    return result
+
+
+def continue_qualification(path, digest):
+    require(sha(path) == digest, 'continuation-checkpoint-digest')
+    checkpoint = C.read_json(path)
+    require(set(checkpoint) == {'schema','admittedBy','operation','manifest','manifestSha256','originalCustody','originalCustodySha256',
+                               'originalTerminalSha256','deadlineUtc','clockObservedUtc','clockObservedMonotonic','deadlineMonotonic'}
+            and checkpoint['schema'] == 'fsgg.matrix4723.original-tail/1' and checkpoint['admittedBy'] == 'Programme/root'
+            and checkpoint['operation'] == 'matrix4723-runtime20261020-01', 'closed-continuation-authority')
+    deadline = continuation_deadline(checkpoint)  # Before validation/hashing; never now+600.
+    m = validate(checkpoint['manifest'], checkpoint['manifestSha256'], after=True)
+    base = Path(m['workRoot']); tail = base / 'continuation01'
+    require(base.name == 'matrix4723-runtime01' and base.is_dir() and not tail.exists(), 'retained-tail-no-replay')
+    require(checkpoint['originalCustodySha256'] == ORIGINAL_POSTTERMINAL_CUSTODY_SHA
+            and sha(checkpoint['originalCustody']) == ORIGINAL_POSTTERMINAL_CUSTODY_SHA, 'original-postterminal-custody')
+    custody = C.read_json(checkpoint['originalCustody'])
+    original_report = base / 'report.json'; journal = base / 'commands.jsonl'
+    require(sha(original_report) == custody['originalReportSha256'] and sha(journal) == custody['originalJournalSha256'], 'original-failure-report-journal')
+    original = C.read_json(original_report)
+    require(original['state'] == 'failed' and original['commands'] == 88 and len(original['rows']) == 4
+            and [r['id'] for r in original['rows']] == [r['id'] for r in ROWS[:4]]
+            and all(r['state'] == 'passed' for r in original['rows'][:3]) and original['rows'][3]['state'] == 'failed', 'exact-original-accepted-prefix')
+    terminal = base.parent / 'matrix4723-runtime-terminal01.json'
+    require(sha(terminal) == checkpoint['originalTerminalSha256'] and C.read_json(terminal)['actualExitCode'] == 1, 'original-failed-terminal')
+    originals = {str(original_report): sha(original_report), str(journal): sha(journal), str(terminal): sha(terminal)}
+    terminals = [json.loads(line) for line in journal.read_text().splitlines() if json.loads(line).get('phase') == 'terminal']
+    require([r['sequence'] for r in terminals] == list(range(1,89)) and all(r['groupObservedAbsent'] for r in terminals), 'original88-terminal-cleanup')
+    for command in terminals:
+        for stream in ('stdout','stderr'):
+            file = base / command[stream+'Path']; require(sha(file) == command[stream+'Sha256'], 'original88-output-drift')
+            originals[str(file)] = sha(file)
+    for row in ROWS[:4]:
+        require(complete_snapshot(base / row['id'] / 'subject') == custody['rows'][row['id']]['files'], 'retained-prefix-or-raw-owner-drift')
+    for key, identity in PACKAGES.items():
+        if key != 'wizard':
+            require(sha(base / 'feed' / (identity[0] + '.' + identity[1] + '.nupkg')) == identity[3], 'retained-feed-package-drift')
+    expected_config = '<configuration><packageSources><clear/><add key="sealed-public-originals" value="' + str(base / 'feed') + '"/></packageSources></configuration>'
+    require((base / 'NuGet.Config').read_text() == expected_config, 'retained-feed-config-drift')
+    before_sdk = sdk_snapshot(m)
+    continuation_deadline(checkpoint)
+    tail.mkdir(mode=0o700)
+    runner = MatrixRunner(tail, env_for(m, base), deadline=deadline-5); runner.sequence = 88
+    report = dict(schema='fsgg.wizard.public-knowledge-matrix-tail-result/1', state='started', manifestSha256=checkpoint['manifestSha256'],
+                  originalFailureReportSha256=originals[str(original_report)], originalJournalSha256=originals[str(journal)],
+                  originalCustodySha256=ORIGINAL_POSTTERMINAL_CUSTODY_SHA, originalDeadlineUtc=ORIGINAL_DEADLINE_UTC,
+                  first3AcceptedOriginalRowsReused=True, failedFourthRowRetained=True, automaticRetry=False,
+                  rows=original['rows'][:3], sdkBefore=before_sdk)
+    def save(): (tail / 'report.json').write_text(json.dumps(report,indent=2)+'\n')
+    save()
+    try:
+        for entry in original['rows'][:3]:
+            root = base / entry['id'] / 'subject'
+            expected = entry['boundary']['baselineCommit'] if 'boundary' in entry else entry['knowledge']['probe']['updatedCommit']
+            require(runner.git(root,'rev-parse','HEAD') == expected, 'accepted-prefix-reported-git-head')
+        donor = app_donor(runner,m)
+        execute_rows(runner,m,base,report,save,donor,base/'console-provider-default/subject',3,True)
+        require(len(report['rows']) == 24 and all(r['state']=='passed' for r in report['rows']), 'incomplete-original-prefix-tail')
+        require(all(sha(p)==h for p,h in originals.items()), 'original-custody-overwritten')
+        for row in ROWS[:3]:
+            require(complete_snapshot(base/row['id']/'subject') == custody['rows'][row['id']]['files'], 'accepted-prefix-changed-by-tail')
+        require(validate(checkpoint['manifest'],checkpoint['manifestSha256'],after=True)==m and sdk_snapshot(m)==before_sdk, 'tail-post-input-drift')
+        continuation_deadline(checkpoint)
+        report.update(state='passed',commands=runner.sequence,tailCommands=runner.sequence-88);save();return report
+    except BaseException as error:
+        if report['rows'][-1]['state']=='started':report['rows'][-1].update(state='failed',failureType=type(error).__name__,failure=str(error))
+        report.update(state='failed',failureType=type(error).__name__,failure=str(error),commands=runner.sequence);save();raise
+
+
+def execute_rows(runner, m, base, report, save, original_app, donor_default=None, start_index=0, raw_resume=False):
+    config = base / 'NuGet.Config'
+    for row in ROWS[start_index:]:
+        case = base / row['id']
+        if not (raw_resume and row['id'] == 'console-raw-typed'):
+            case.mkdir(); (case / 'tmp').mkdir()
+        root = case / 'subject'
+        entry = dict(id=row['id'], route=row['route'], selection=row['selection'], state='started', firstCommand=runner.sequence + 1)
+        if raw_resume and row['id'] == 'console-raw-typed': entry['recoveredOriginalFailedRow'] = True
+        report['rows'].append(entry); save()
+        with runner.subject(case, env_for(m, case)):
+            if row['route'] == 'accepted-clone':
+                runner.call(['git', 'clone', '--no-local', original_app, root])
+                entry['initial'] = inherited_initial(runner, m, root)
+                entry['knowledge'] = full_knowledge(runner, m, root, row, case, config)
+            elif row['route'] == 'retained':
+                require(donor_default is not None, 'retained-default-supplier-not-accepted')
+                entry['retained'] = retained(runner, m, root, case, donor_default, config, row)
+            else:
+                if raw_resume and row['id'] == 'console-raw-typed':
+                    entry['rawCaller'] = resume_raw(runner, m, root, row, runner.base)
+                else:
+                    create(runner, m, row, root, case)
+                if row['selection'] == 'default':
+                    entry['boundary'] = default_boundary(runner, root, row)
+                    if row['id'] == 'console-provider-default': donor_default = root
+                else:
+                    if row['route'] == 'raw' and not (raw_resume and row['id'] == 'console-raw-typed'): entry['rawCaller'] = raw_initialize(runner, m, root, row, config)
+                    key = 'overlay' if row['family'] == 'rendering' else 'workspace'
+                    prefix = 'content/templates/fs-gg-project-knowledge/' if key == 'overlay' else 'content/templates/fs-gg-' + row['family'] + '/'
+                    entry['initial'] = initial(runner, root, row, m['packages'][key]['archive'], prefix)
+                    entry['knowledge'] = full_knowledge(runner, m, root, row, case, config)
+            if 'knowledge' in entry:
+                original = entry['initial'].get('commit', entry['initial'].get('originalCallerCommit'))
+                require(entry['knowledge']['probe']['probeSetupCommit'] != original, 'probe-commit-relabeled-as-caller-initial')
+            entry.update(state='passed', lastCommand=runner.sequence)
+            save()
+
+
 def qualify(path, expected_sha):
     started = time.monotonic(); whole_deadline = started + 600
     m = validate(path, expected_sha)
@@ -617,35 +791,7 @@ def qualify(path, expected_sha):
     try:
         require(runner.call([m['sddExecutable'], '--version']).stdout.strip() == '2.2.0', 'actual-public-producer-version')
         original_app = app_donor(runner, m)
-        for row in ROWS:
-            case = base / row['id']; case.mkdir(); (case / 'tmp').mkdir()
-            root = case / 'subject'
-            entry = dict(id=row['id'], route=row['route'], selection=row['selection'], state='started', firstCommand=runner.sequence + 1)
-            report['rows'].append(entry); save()
-            with runner.subject(case, env_for(m, case)):
-                if row['route'] == 'accepted-clone':
-                    runner.call(['git', 'clone', '--no-local', original_app, root])
-                    entry['initial'] = inherited_initial(runner, m, root)
-                    entry['knowledge'] = full_knowledge(runner, m, root, row, case, config)
-                elif row['route'] == 'retained':
-                    require(donor_default is not None, 'retained-default-supplier-not-accepted')
-                    entry['retained'] = retained(runner, m, root, case, donor_default, config, row)
-                else:
-                    create(runner, m, row, root, case)
-                    if row['selection'] == 'default':
-                        entry['boundary'] = default_boundary(runner, root, row)
-                        if row['id'] == 'console-provider-default': donor_default = root
-                    else:
-                        if row['route'] == 'raw': entry['rawCaller'] = raw_initialize(runner, m, root, row, config)
-                        key = 'overlay' if row['family'] == 'rendering' else 'workspace'
-                        prefix = 'content/templates/fs-gg-project-knowledge/' if key == 'overlay' else 'content/templates/fs-gg-' + row['family'] + '/'
-                        entry['initial'] = initial(runner, root, row, m['packages'][key]['archive'], prefix)
-                        entry['knowledge'] = full_knowledge(runner, m, root, row, case, config)
-                if 'knowledge' in entry:
-                    original = entry['initial'].get('commit', entry['initial'].get('originalCallerCommit'))
-                    require(entry['knowledge']['probe']['probeSetupCommit'] != original, 'probe-commit-relabeled-as-caller-initial')
-                entry.update(state='passed', lastCommand=runner.sequence)
-                save()
+        execute_rows(runner, m, base, report, save, original_app)
         require(len(report['rows']) == 24 and all(r['state'] == 'passed' for r in report['rows']), 'incomplete-matrix')
         app_donor(runner, m)
         require(validate(path, expected_sha, after=True) == m and sdk_snapshot(m) == before_sdk, 'post-custody-drift')
@@ -921,6 +1067,53 @@ def source_controls():
                 self.assertIs(public_package('fantomas',{}, {},PACKAGES['fantomas']),sentinel)
                 strict.assert_called_once_with({}, {},PACKAGES['fantomas'])
 
+        def test_raw_sdk10_location_is_explicit_and_tool_install_cannot_search_shadow(self):
+            with tempfile.TemporaryDirectory() as td:
+                root=Path(td);runner=Mock();m={'dotnetExecutable':'/dotnet','sddExecutable':'/sdd'}
+                def sdk(argv,**kwargs):
+                    if argv[1:3]==['new','tool-manifest']:
+                        output=Path(argv[argv.index('--output')+1]) if '--output' in argv else root
+                        output.mkdir(exist_ok=True);(output/'dotnet-tools.json').write_text(json.dumps({'version':1,'isRoot':True,'tools':{}}))
+                    elif argv[1:3]==['tool','install']:
+                        self.assertIn('--tool-manifest',argv)
+                        target=Path(argv[argv.index('--tool-manifest')+1]);self.assertEqual(target,root/'.config/dotnet-tools.json')
+                        value=json.loads(target.read_text());value['tools']['fs.gg.sdd.cli']={'version':'2.2.0','commands':['fsgg-sdd']};target.write_text(json.dumps(value))
+                runner.call.side_effect=sdk
+                raw_initialize(runner,m,root,{'family':'console','route':'raw','selection':'typed'},None)
+                self.assertFalse((root/'dotnet-tools.json').exists());manifest(root,{'fs.gg.sdd.cli':'2.2.0'})
+
+        def test_retained_root_manifest_relocation_preserves_bytes_mode_and_owner(self):
+            with tempfile.TemporaryDirectory() as td:
+                root=Path(td);source=root/'dotnet-tools.json'
+                payload=json.dumps({'version':1,'isRoot':True,'tools':{'fs.gg.sdd.cli':{'version':'2.2.0','commands':['fsgg-sdd'],'rollForward':False}}}).encode()
+                source.write_bytes(payload);source.chmod(0o640);(root/'owner').write_text('untouched')
+                relocate_raw_manifest(root)
+                self.assertFalse(source.exists());self.assertEqual((root/'.config/dotnet-tools.json').read_bytes(),payload)
+                self.assertEqual(stat.S_IMODE((root/'.config/dotnet-tools.json').stat().st_mode),0o640)
+                self.assertEqual((root/'owner').read_text(),'untouched')
+                with self.assertRaisesRegex(ValueError,'location-conflict'):relocate_raw_manifest(root)
+
+        def test_retained_manifest_conflict_refuses_without_changes(self):
+            with tempfile.TemporaryDirectory() as td:
+                root=Path(td);(root/'dotnet-tools.json').write_text('{}');(root/'.config').mkdir();(root/'.config/dotnet-tools.json').write_text('owner')
+                before=complete_snapshot(root)
+                with self.assertRaisesRegex(ValueError,'location-conflict'):relocate_raw_manifest(root)
+                self.assertEqual(complete_snapshot(root),before)
+
+        def test_continuation_cannot_renew_deadline_and_checkpoint_precedes_mutation(self):
+            with self.assertRaisesRegex(ValueError,'deadline-not-renewed'):
+                continuation_deadline({'deadlineUtc':'2099-01-01T00:00:00+00:00','clockObservedUtc':'2026-10-20T06:00:00+00:00'})
+            with tempfile.TemporaryDirectory() as td:
+                tail=Path(td);root=tail/'subject';root.mkdir();(root/'owner').write_text('retained')
+                def move(actual):
+                    self.assertTrue((tail/'raw-postinstall-checkpoint.json').exists())
+                    recorded=json.loads((tail/'raw-postinstall-checkpoint.json').read_text())
+                    self.assertEqual(recorded['files'],complete_snapshot(root));return {}
+                runner=Mock()
+                with patch.dict(globals(),relocate_raw_manifest=move,raw_knowledge_initialize=lambda *a:{}):
+                    result=resume_raw(runner,{},root,{},tail)
+                self.assertFalse(result['creationReplayed']);runner.call.assert_not_called()
+
         def test_console_source_stays_byte_identical_and_workflow_reaches_controls(self):
             self.assertEqual(sha(Path(__file__).with_name('knowledge-console-public.py')), CONSOLE_SHA)
             workflow=Path(__file__).resolve().parents[2]/'.github/workflows/new-sdd-workspace-selftest.yml'
@@ -934,14 +1127,17 @@ def source_controls():
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source-controls',action='store_true')
+    parser.add_argument('--continuation',type=Path);parser.add_argument('--continuation-sha256')
     parser.add_argument('--manifest',type=Path);parser.add_argument('--manifest-sha256')
     args=parser.parse_args()
     if args.source_controls: source_controls();return
-    require(args.manifest and args.manifest_sha256,'sealed-matrix-input-required')
+    require((args.continuation and args.continuation_sha256) or (args.manifest and args.manifest_sha256),'sealed-matrix-input-required')
     import signal
     def cancelled(signum,frame): raise TimeoutError('original-outer-window-cancelled')
     previous=signal.signal(signal.SIGTERM,cancelled)
-    try: qualify(args.manifest,args.manifest_sha256)
+    try:
+        if args.continuation: continue_qualification(args.continuation,args.continuation_sha256)
+        else: qualify(args.manifest,args.manifest_sha256)
     finally: signal.signal(signal.SIGTERM,previous)
 
 

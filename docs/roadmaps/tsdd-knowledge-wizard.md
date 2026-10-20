@@ -283,12 +283,38 @@ establish selection, and this observation does not independently observe the mig
 internal FSI child. Fresh runtime admission must cover simultaneous CLI/FSI heaps and native
 overhead. `0x60000000` is a per-process managed heap limit, not a process-group memory cap.
 
-This is source preparation with twenty-six pure controls; no qualification has run for this
+This is source preparation with thirty pure controls; no qualification has run for this
 matrix. Root retains runtime admission and independent acceptance. The two Wizard-bindings
 positive routes remain deferred for the published selector transport/key mismatch; no known
 failure is replayed or counted as positive acceptance. Parent4642 retains its full .4/.5
 promise, other unselected providers/raw Rendering and upgrades, and original439/46 Unknown
 reservations. This source establishes no product build, doctor, publication or performance result.
+
+### First matrix failure and bounded retained continuation
+
+The first matrix qualification stopped after 88 commands: its first three subjects passed;
+raw console typed creation and SDD2.2 installation succeeded, but SDK10 wrote the stock
+manifest to `dotnet-tools.json` while the adapter expected `.config/dotnet-tools.json`.
+The original failed report, command outputs and receivers remain unchanged. Fresh raw setup
+now explicitly directs the stock template to `.config` and pins tool installation to that
+manifest, rather than relying on SDK discovery.
+
+The maintained `--continuation` port requires a digest-bound Programme/root checkpoint,
+a successor source-sealed manifest and the exact original postterminal custody. It verifies
+all original88 output hashes/group cleanup, the three accepted rows and their reported Git
+heads, and all four retained receiver file bytes/modes/sizes before receiver mutation. A new
+private checkpoint records the actual post-install baseline; no missing pre-install snapshot
+is inferred. Only the existing capable raw root manifest may move exclusively to the absent
+`.config` destination, preserving bytes/mode. Creation, template registration and tool install
+are reused. Knowledge initialization then continues from that honest retained baseline, using
+the same maintained row dispatcher for row4 and the remaining tail. Original failed evidence
+stays separate from the tail report/journal, whose sequence starts after88.
+
+This port admits only the original absolute deadline, `2026-10-20T06:10:37.893628+00:00`,
+joined to a sealed wall/monotonic observation before validation; it cannot renew600seconds.
+Expired or insufficient time refuses. Full24 acceptance requires both the unchanged accepted
+prefix and every completed tail assertion. Continuation requires independent source review
+and fresh root admission; this source repair establishes no recovered runtime result.
 
 ## Source boundary
 
