@@ -1,6 +1,6 @@
 # Compact progress report
 
-Use the same short overview in chat and in the saved report. Aim for 300–500 words.
+Use the same overview in chat and in the saved report. Aim for roughly 1,500 words unless another length is requested.
 No mandatory per-item appendix, scoring system or estimation worksheet.
 
 ```markdown
