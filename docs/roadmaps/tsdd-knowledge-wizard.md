@@ -999,3 +999,7 @@ source delivery remain required. Any continuation needs a separately selected
 runtime operation which preserves the original failure and retained receiver;
 this source repair grants no replay, new receiver, SDK acquisition or runtime.
 Parent #4642 and the unrelated #4710 browser/WASM acceptance remain unchanged.
+
+Temporary-file cleanup preserves the identical primary append failure and records
+a separate closed `temporary-custody-Unknown` note. A cleanup failure on its own
+refuses the operation; causal controls cover both outcomes.

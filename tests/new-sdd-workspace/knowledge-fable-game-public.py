@@ -184,6 +184,7 @@ def append_scratch_sdd_entry(target, original_bytes, original_mode, scratch):
     require(stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == original_mode
             and target.read_bytes() == original_bytes, 'game-manifest-owner-preimage')
     temporary = None
+    primary = None
     try:
         with tempfile.NamedTemporaryFile(dir=target.parent, prefix='.sdd-tool-', delete=False) as stream:
             temporary = Path(stream.name)
@@ -195,8 +196,17 @@ def append_scratch_sdd_entry(target, original_bytes, original_mode, scratch):
                 and stat.S_IMODE(target.lstat().st_mode) == original_mode,
                 'game-manifest-owner-preimage')
         os.replace(temporary, target)
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        if temporary is not None and temporary.exists(): temporary.unlink()
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except BaseException as custody_error:
+                if primary is None:
+                    raise
+                primary.add_note('temporary-custody-Unknown:' + type(custody_error).__name__)
     require(target.read_bytes() == merged and stat.S_IMODE(target.stat().st_mode) == original_mode,
             'game-manifest-append-readback')
     return dict(originalSha256=hashlib.sha256(original_bytes).hexdigest(),
@@ -571,6 +581,30 @@ def source_controls():
                     value = json.loads(self.sdk_manifest()); mutate(value); scratch.write_text(json.dumps(value))
                     with self.assertRaises(ValueError): append_scratch_sdd_entry(target, original, stat.S_IMODE(target.stat().st_mode), scratch)
                     self.assertEqual(target.read_bytes(), original)
+
+        def test_append_replace_and_cleanup_fault_keeps_identical_primary(self):
+            with tempfile.TemporaryDirectory() as td:
+                root = Path(td); target = root / 'product.json'; scratch = root / 'scratch.json'
+                original = self.owner_manifest(); target.write_bytes(original); scratch.write_text(self.sdk_manifest())
+                primary = OSError('replace-failure')
+                with patch.object(os, 'replace', side_effect=primary), patch.object(Path, 'unlink', side_effect=PermissionError('temporary-retained')):
+                    with self.assertRaises(OSError) as caught:
+                        append_scratch_sdd_entry(target, original, stat.S_IMODE(target.stat().st_mode), scratch)
+                self.assertIs(caught.exception, primary)
+                self.assertIn('temporary-custody-Unknown:PermissionError', primary.__notes__)
+                self.assertEqual(target.read_bytes(), original)
+                self.assertEqual(len(list(root.glob('.sdd-tool-*'))), 1)
+
+        def test_append_cleanup_only_fault_refuses_after_write(self):
+            with tempfile.TemporaryDirectory() as td:
+                root = Path(td); target = root / 'product.json'; scratch = root / 'scratch.json'
+                original = self.owner_manifest(); target.write_bytes(original); scratch.write_text(self.sdk_manifest())
+                custody = PermissionError('cleanup-unobserved')
+                with patch.object(Path, 'unlink', side_effect=custody):
+                    with self.assertRaises(PermissionError) as caught:
+                        append_scratch_sdd_entry(target, original, stat.S_IMODE(target.stat().st_mode), scratch)
+                self.assertIs(caught.exception, custody)
+                self.assertIn('fs.gg.sdd.cli', json.loads(target.read_bytes())['tools'])
 
         def test_owner_byte_or_mode_drift_refuses_without_overwrite(self):
             with tempfile.TemporaryDirectory() as td:
