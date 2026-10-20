@@ -18,6 +18,7 @@ import unittest
 import zipfile
 import runpy
 import shlex
+import re
 from xml.etree import ElementTree
 from unittest.mock import patch
 
@@ -38,6 +39,28 @@ SOURCE_FLOWS = {
         "Qualify the compiled product binding and complete driver materialization",
         "Qualify Creator 0.21 normal-source package closure", "source"),
 }
+
+
+def writer_lock_scope(source: str) -> dict[str, str | None]:
+    """Check the actual closed job roles, not a second scheduling implementation."""
+    if re.search(r"^concurrency:", source, re.MULTILINE):
+        raise ValueError("Creator writer lock: workflow-wide observation exclusion")
+    body = source.split("\njobs:\n", 1)[1]
+    matches = list(re.finditer(r"^  ([a-z][a-z-]+):\n", body, re.MULTILINE))
+    names = [match[1] for match in matches]
+    if len(names) != 3 or set(names) != {"publish", "recovery-complete", "recovery-diagnostic"}:
+        raise ValueError("Creator writer lock: unknown or repeated job role")
+    fence = ("    concurrency:\n"
+             "      group: release-new-sdd-workspace-successor-publish\n"
+             "      cancel-in-progress: false\n")
+    groups = {}
+    for index, match in enumerate(matches):
+        job = body[match.start():matches[index + 1].start() if index + 1 < len(matches) else None]
+        expected = 0 if match[1] == "recovery-diagnostic" else 1
+        if job.count("    concurrency:") != expected or job.count(fence) != expected:
+            raise ValueError("Creator writer lock: exact mutation-role fence differs")
+        groups[match[1]] = "release-new-sdd-workspace-successor-publish" if expected else None
+    return groups
 
 
 def source_flow(workflow: str, names: tuple[str, str, str, str]) -> None:
@@ -244,6 +267,35 @@ class Provider:
 
 
 class WizardReleaseTests(unittest.TestCase):
+    def test_writer_lock_excludes_only_closed_mutation_capable_jobs(self):
+        source = (ROOT / ".github/workflows/release-new-sdd-workspace.yml").read_text()
+        groups = writer_lock_scope(source)
+        self.assertEqual(groups["publish"], groups["recovery-complete"])
+        self.assertIsNone(groups["recovery-diagnostic"])
+        # The mixed ordinary job remains fenced even for preflight-only inputs.
+        self.assertIn("inputs.promotion_recovery == 'off'", source)
+        self.assertEqual(groups["publish"], "release-new-sdd-workspace-successor-publish")
+
+    def test_writer_lock_scope_refuses_actual_workflow_causal_mutants(self):
+        source = (ROOT / ".github/workflows/release-new-sdd-workspace.yml").read_text()
+        fence = ("    concurrency:\n"
+                 "      group: release-new-sdd-workspace-successor-publish\n"
+                 "      cancel-in-progress: false\n")
+        mutations = {
+            "old workflow observation lock": source.replace("\njobs:\n", "\nconcurrency:\n  group: release-new-sdd-workspace-successor-publish\n  cancel-in-progress: false\n\njobs:\n", 1),
+            "ordinary writer unfenced": source.replace("  publish:\n" + fence, "  publish:\n", 1),
+            "recovery writer unfenced": source.replace("  recovery-complete:\n" + fence, "  recovery-complete:\n", 1),
+            "candidate key permits competing writers": source.replace("group: release-new-sdd-workspace-successor-publish", "group: ${{ inputs.candidate_run_id }}", 1),
+            "cancel owned writer": source.replace("cancel-in-progress: false", "cancel-in-progress: true", 1),
+            "diagnostic takes writer lock": source.replace("\n  recovery-diagnostic:\n", "\n  recovery-diagnostic:\n" + fence, 1),
+            "new unclassified role": source + "\n  other-writer:\n    runs-on: ubuntu-latest\n",
+        }
+        for reason, mutant in mutations.items():
+            with self.subTest(reason=reason):
+                self.assertNotEqual(source, mutant)
+                with self.assertRaisesRegex(ValueError, "Creator writer lock:"):
+                    writer_lock_scope(mutant)
+
     def setUp(self):
         self.content_id, self.ordered = effects(manifest())
         self.journal = Journal(self.content_id)
