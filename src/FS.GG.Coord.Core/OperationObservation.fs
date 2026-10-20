@@ -1,6 +1,5 @@
 namespace FS.GG.Coord
 
-/// A read-only attention reducer for one already admitted original CI operation.
 module OperationObservation =
     open System
     open System.Security.Cryptography
@@ -161,7 +160,6 @@ module OperationObservation =
                 elif controlChanged then finish MaterialChange next
                 else AwaitWithinDeadline(next, int (min 5000L (max 0L (next.Budget.WorkDeadline - now))))
 
-    /// Charge before issuing a request; a crash can lose allowance, never replenish it.
     let chargeRequest now cursor =
         if now < cursor.Budget.LastClock || now >= cursor.Budget.WorkDeadline || cursor.Budget.RequestsRemaining <= 0 then
             Error "original request allowance exhausted"

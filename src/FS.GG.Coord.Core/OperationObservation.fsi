@@ -42,5 +42,6 @@ module OperationObservation =
     val attentionName: Attention -> string
     val finish: Attention -> Cursor -> Decision
     val decide: now: int64 -> Sample option -> Cursor -> Decision
+    /// Charge before issuing a request; a crash can lose allowance, never replenish it.
     val chargeRequest: now: int64 -> Cursor -> Result<Cursor, string>
     val chargeOutput: bytes: int -> Cursor -> Result<Cursor, string>
