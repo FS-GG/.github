@@ -876,3 +876,23 @@ preflight effort cap is ten minutes against the existing twenty-minute hosted jo
 Fresh successful census and full required source CI on the exact candidate remain
 pending. No native fixture, whole-wrapper retirement, C5, installed receiver,
 publication, activation or old-operation replay is established by this selection.
+
+
+### Closed source candidates during the hosted rollout, 2026-10-20
+
+[Run39384280477/a1](https://github.com/FS-GG/.github/actions/runs/39384280477)
+received the older20261012.334.1 image after the preceding attempt received
+20261018.339.1. The single-newer-image guard correctly refused before the census.
+Neither failed prerequisite is retried or qualified by changing a literal again.
+
+Root admits exactly two ordinary-source candidate tuples:20261012.334.1 with
+7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe, and20261018.339.1 with
+b4067e48bd9bd803e958bfe1503ea0a06a3a127f. An actual version must match a literal
+case; its independent source pin must match before the pinned census runs.
+Unlisted images refuse. This is a closed selection map, with no wildcard/latest
+acceptance. Each actual selected image still requires fresh complete census,
+SDK normalization and all exact-source gates; success on one image does not
+qualify another. Protected native inputs, authority, budgets and cleanup remain
+unchanged. Static preflight exercises both good tuples and wrong/missing/unknown
+inputs against the actual guard with an inert census. Full hosted qualification,
+native/receiver/installed acceptance and all prior unknown effects remain separate.
