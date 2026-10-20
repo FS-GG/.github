@@ -808,7 +808,11 @@ class HostedSdkIsolationTests(unittest.TestCase):
   for case,stage in cases.items():
    with self.subTest(case=case), tempfile.TemporaryDirectory() as td:
     result,sdk,retained,original,log,setup=self.isolate(pathlib.Path(td),case)
-    self.assertNotEqual(0,result.returncode); self.assertIn('hosted-sdk-isolation-refused stage='+stage,result.stderr); self.assertFalse(setup.exists())
+    self.assertNotEqual(0,result.returncode); self.assertFalse(setup.exists())
+    # GNU mv may refuse the racing destination itself or leave it for the post-rename guard.
+    expected_stages={stage,'retain-rename'} if case=='destination-race' else {stage}
+    observed_stages=re.findall(r'^hosted-sdk-isolation-refused stage=([a-z-]+)$',result.stderr,re.MULTILINE)
+    self.assertEqual(1,len(observed_stages),result.stderr); self.assertIn(observed_stages[0],expected_stages)
     if case not in ('source-file','source-symlink','missing-source'):
      self.assertEqual((original.st_dev,original.st_ino),(sdk.stat().st_dev,sdk.stat().st_ino)); self.assertEqual(b'original image SDK bytes\n',(sdk/'original-sdk').read_bytes())
     if case not in ('rename-failure','destination-race'): self.assertFalse(log.exists())
