@@ -113,6 +113,104 @@ public creation/instruction composition, not typed knowledge acceptance. Program
 owns the capture gap until the source finding and its immutable delivered citation
 can be admitted; no draft is presented as accepted knowledge.
 
+## Public console capture and recovery adapter — source preparation
+
+[Delivery4720](https://github.com/FS-GG/.github/issues/4720) selects one fresh console
+`typed-sdd` journey. [The adapter](../../tests/new-sdd-workspace/knowledge-console-public.py)
+keeps completed Rendering4708 and the historical creation drivers unchanged. Its
+source controls run in the existing Wizard self-test workflow. Source checks establish
+neither installed console acceptance nor runtime admission. Programme/root owns the
+actual qualification, independent result, final report and Atlas capture.
+
+The selected published tuple is Wizard0.19.0, SDD2.2.0 and descriptor-selected
+Workspace0.19.0. The real Wizard uses `--template console --lifecycle typed-sdd
+--pinned --no-governance --no-coordination --ref
+f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc`; no Rendering profile applies.
+Its pinned preflight first requires the sole exact Workspace0.18.2 Governance/knowledge
+registration even when Governance emission is disabled. The adapter supplies that genuine
+archive first, then observes the provider's normal install transition to genuine0.19.0.
+Both registrations must match their literal public archives. It changes no descriptor,
+executable, product template or production checker.
+
+Before probe mutations, the adapter requires absence of a background commit and creates
+the normal foreground caller initial commit. Canonical records/schema, guide, exact root
+tool manifest and byte-identical owner checker/workflow must be tracked; an optional
+cache must be ignored. Actual committed blob digests are retained. The observed manifest
+must contain exactly SDD2.2 and Coord0.94 before ordinary restoration from the closed
+original-package feed. The restored producer payload must match its public package.
+The checker runs through the normal local tool manifest without `--command-json`.
+
+The immutable Templates receiver source at that revision supplies `candidate.py:probe`,
+`receiver.py`, `findings.json` and `public21.py:ordinary_ci_limits`. Their original hashes
+are verified against the supplied source inventory before loading without bytecode writes.
+Only qualification command ports change: every original producer call, Git operation,
+clone and checker invocation goes through the same finite runner, retaining real command
+output and status. Production behavior is never simulated in actual qualification.
+The probe's later setup commit is recorded separately from the already accepted caller
+initial commit. Its captures, later commits, historical retrieval, stale-write/invalid-input
+refusals and preserving restore assertions remain original.
+
+A separate private-store retrieval after the probe establishes that private capture occurred.
+Only then does the adapter query all shared records, export every shared ID into a new
+archive, reject private-ID leakage and losslessly restore that complete shared selection.
+It does not use the probe's older pre-private export as evidence for this assertion.
+The original budget helper exercises the ordinary checker at exactly10MiB and one byte
+above it, restores original schema bytes in `finally`, and is followed by another normal check.
+
+Runtime accepts only `--manifest PATH --manifest-sha256 DIGEST`. The closed manifest
+schema is `fsgg.wizard.public-console-knowledge/1`. It contains exactly `schema`, `inputs`,
+`packages`, `workspaceOriginal`, `inventory`, `sourceRoot`, `wizard`, `sddExecutable`,
+`dotnetExecutable`, `actualHome`, `childEnvironment`, `workRoot` and `report`.
+`packages` contains exactly `wizard`, `producer`, `overlay` (0.18.2), `workspace` (0.19.0)
+and `coord` (0.94.0). Each binding contains `archive` and nonempty `publicationReceipts`;
+Wizard and producer additionally require `closure`. Literal archive hashes, NuGet metadata,
+source revisions, every packaged runtime member and apphost targets must match. The original
+0.19 release archive must match the signed archive's complete signature-excluded payload.
+Root authentication of publication custody and fresh operation admission remain separate.
+
+`inputs` binds canonical regular-file paths/digests for the adapter, source closure,
+packages, publication receipts, complete installed tool closures and selected executables,
+including Python, Git and dotnet. `inventory` identifies the originally supplied console
+source inventory, hash `8ceb12eaebd4bc96045791072312bdb96cb1a986bf17c0b1047f2bdb399cb8dd`;
+`sourceRoot` refers to its original immutable source paths. `childEnvironment` contains
+only `PATH`, `DOTNET_PROCESSOR_COUNT=1`, `DOTNET_GCHeapHardLimit=0x60000000`,
+`DOTNET_CLI_TELEMETRY_OPTOUT=1` and `MSBUILDDISABLENODEREUSE=1`. HOME remains actual;
+owned caches, feed, report and command outputs use one fresh private root. Existing output
+refuses replay. No arbitrary command JSON or unused negative artifact is required.
+
+The candidate runtime profile remains serial1CPU/1.5GiB managed heap,600-second outer
+window and180-second command ceiling, with shorter original helper limits retained.
+The runner records each command before launch and its actual terminal output/status,
+uses an owned process group and observes group cleanup. One monotonic deadline starts
+before input validation/feed setup; command budgets reserve four seconds for cleanup
+and five seconds remain for postchecks/reporting within the same600-second window.
+A kill request alone never establishes successful cleanup. Root separately enforces the
+outer window, refreshes resources/known and Unknown reservations, and reviews cleanup.
+Phase reports preserve first failures and partial receivers; this adapter has no automatic
+retry or new-creation replay. Missing telemetry remains advisory, and original439/46
+Unknown reservations remain unreleased. Retained upgrades and all other parent4642 routes
+remain outside this bounded Delivery and retain their full promise.
+
+### Accepted console technical milestone — 2026-10-20
+
+The first genuine public console qualification at source
+`7461d993076a7e355232ded733afe4773d9ac28e` exited 0 with 62 bounded commands;
+independent runtime-evidence review passed. [The scoped report](../reports/knowledge-public-console-receiver-20261020.md)
+records the actual registration change from Workspace 0.18.2 to 0.19.0, the caller initial commit before probe setup,
+four concise findings, normal later commits, two Git versions and cache-free clone
+recovery. A new all-shared selected-record export made after private capture excludes
+private knowledge and restores losslessly; its `HistoryIncluded=false` remains separate
+from the verified Git history. Intended stale-write/invalid-input/restore refusals preserve
+owner bytes. The ordinary SDD2.2 checker accepts exactly 10 MiB, refuses one byte over,
+and passes after original bytes are restored. All 157 bound inputs stayed unchanged and
+all command groups were observed absent. No retry or creation replay occurred.
+
+[PR4722](https://github.com/FS-GG/.github/pull/4722) carries source and acceptance evidence;
+final exact-head CI, delivery and native scoped closure remain separate. Parent 4642 keeps
+all other provider/raw-template routes, promised retained upgrades and its full .4/.5
+promise. This milestone establishes no product build, doctor coherence, publication,
+performance, fleet adoption or historical reservation release.
+
 ## Source boundary
 
 Only `scripts/NewSddWorkspace/Program.fs`, its README, focused `tests/new-sdd-workspace` fixtures, and this document change. Standard SDD, other lifecycle tokens, global tool self-update, governance, coordination, explicit upgrades, and initialization handoff retain their existing routes. Fable game omission preserves the exact historical 0.15 typed-selection gate; 0.17 and provisional 0.18 descriptors remain Standard SDD unless a caller explicitly selects typed SDD.
