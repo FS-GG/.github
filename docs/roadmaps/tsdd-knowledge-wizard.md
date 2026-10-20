@@ -278,7 +278,7 @@ establish selection, and this observation does not independently observe the mig
 internal FSI child. Fresh runtime admission must cover simultaneous CLI/FSI heaps and native
 overhead. `0x60000000` is a per-process managed heap limit, not a process-group memory cap.
 
-This is source preparation with eighteen pure controls; no qualification has run for this
+This is source preparation with twenty pure controls; no qualification has run for this
 matrix. Root retains runtime admission and independent acceptance. The two Wizard-bindings
 positive routes remain deferred for the published selector transport/key mismatch; no known
 failure is replayed or counted as positive acceptance. Parent4642 retains its full .4/.5

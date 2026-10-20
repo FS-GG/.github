@@ -324,15 +324,21 @@ def verify_bindings(root, m):
 
 def raw_initialize(runner, m, root, row, config):
     before = snapshot(root)
+    ignore = root / '.gitignore'
+    ignore_bytes = ignore.read_bytes() if ignore.exists() else None
     require(not (root / '.fsgg/knowledge').exists(), 'raw-flag-impersonated-initializer')
     if not (root / '.config/dotnet-tools.json').exists():
         runner.call([m['dotnetExecutable'], 'new', 'tool-manifest'], cwd=root)
     runner.call([m['dotnetExecutable'], 'tool', 'install', 'FS.GG.SDD.Cli', '--version', '2.2.0', '--local', '--configfile', config], cwd=root)
     manifest(root, pins(row))
     runner.knowledge(m['sddExecutable'], 'initialize', '--root', str(root))
+    after = snapshot(root)
+    if ignore_bytes is not None:
+        require(ignore.is_file() and ignore.read_bytes().startswith(ignore_bytes)
+                and after['.gitignore']['mode'] == before['.gitignore']['mode'], 'raw-ignore-owner-prefix')
     for name, value in before.items():
         if name in ('.gitignore', '.config/dotnet-tools.json'): continue
-        require(snapshot(root).get(name) == value, 'raw-owner-content-changed')
+        require(after.get(name) == value, 'raw-owner-content-changed')
     return dict(rawFlagInitializesStore=False, explicitCallerInitialize=True)
 
 
@@ -454,6 +460,15 @@ def fsi_observation(runner, m, root, case, label):
                 internalMigrationChildLoadedPaths='not independently observed; this is an actual same-cwd/environment FSI observation')
 
 
+def rollback_preservation(before, after):
+    changed = {'work/demo/spec.md', 'work/demo/specification.fsx',
+               'readiness/demo/specification.normalized.json', 'readiness/demo/typed-authority.json'}
+    require({p: v for p, v in before.items() if p not in changed}
+            == {p: v for p, v in after.items() if p not in changed}, 'rollback-owner-product-tool-preservation')
+    require('work/demo/spec.md' in after
+            and all(p in before and p not in after for p in changed - {'work/demo/spec.md'}), 'rollback-explicit-authority-removal')
+
+
 def retained(runner, m, root, case, donor, config, row):
     runner.call(['git', 'clone', '--no-local', donor, root])
     require(not (root / '.fsgg/knowledge').exists(), 'retained-store-not-absent')
@@ -485,13 +500,13 @@ def retained(runner, m, root, case, donor, config, row):
     migration_commit = commit(runner, root, 'Accept explicit FSharp compatibility and preserving CI role')
     evidence = full_knowledge(runner, m, root, row, case, config)
     require(evidence['probe']['probeSetupCommit'] != migration_commit, 'probe-commit-relabeled-as-migration')
-    canonical = {p: value for p, value in snapshot(root).items() if p.startswith('.fsgg/knowledge/') or p in (*CI_FILES, '.fsgg/knowledge-guide.md', 'docs/retained-owner-note.md')}
     history = runner.knowledge(m['sddExecutable'], 'history', '--root', str(root), '--id', 'architecture-decision')
+    before_rollback = snapshot(root)
     rolled = json.loads(runner.call(migration_command(m, root, operation='rollback', accept=True), cwd=root).stdout)
     require(rolled['outcome'] == 'succeeded' and spec.read_bytes() == supported_spec(m).read_bytes()
             and not (root / 'readiness/demo/typed-authority.json').exists()
             and not (root / 'work/demo/specification.fsx').exists(), 'actual-rollback-source-or-authority')
-    require(all(snapshot(root).get(p) == value for p, value in canonical.items()), 'rollback-overwrote-independent-knowledge')
+    rollback_preservation(before_rollback, snapshot(root))
     require(runner.knowledge(m['sddExecutable'], 'history', '--root', str(root), '--id', 'architecture-decision') == history, 'rollback-lost-knowledge-history')
     observations['after'] = fsi_observation(runner, m, root, case, 'after')
     require(observations['before'] == observations['after'], 'fsi-selection-drift')
@@ -768,6 +783,31 @@ def source_controls():
                 with self.assertRaisesRegex(ValueError,'input-drift'):C.regular(p,inputs)
                 link=Path(td)/'alias';link.symlink_to(p)
                 with self.assertRaisesRegex(ValueError,'unsafe-input'):C.regular(link,{str(link):sha(p)})
+
+        def test_rollback_preserves_all_product_provenance_tool_bytes_and_modes(self):
+            old={'sha256':'old','mode':420};new={'sha256':'restored','mode':420}
+            before={p:dict(old) for p in ('work/demo/spec.md','work/demo/specification.fsx','readiness/demo/specification.normalized.json','readiness/demo/typed-authority.json','src/Program.fs','.config/dotnet-tools.json','.fsgg/scaffold-provenance.json','.fsgg/knowledge/records/finding.json','work/demo/spec.standard-sdd.rollback.md')}
+            after={p:dict(v) for p,v in before.items() if p not in ('work/demo/specification.fsx','readiness/demo/specification.normalized.json','readiness/demo/typed-authority.json')}
+            after['work/demo/spec.md']=new;rollback_preservation(before,after)
+            for path in ('src/Program.fs','.config/dotnet-tools.json','.fsgg/scaffold-provenance.json'):
+                for field,value in (('sha256','changed'),('mode',493)):
+                    changed={p:dict(v) for p,v in after.items()};changed[path][field]=value
+                    with self.assertRaisesRegex(ValueError,'owner-product-tool-preservation'):rollback_preservation(before,changed)
+            after['unexpected-product']={'sha256':'new','mode':420}
+            with self.assertRaisesRegex(ValueError,'owner-product-tool-preservation'):rollback_preservation(before,after)
+
+        def test_raw_initialize_preserves_owner_ignore_prefix(self):
+            with tempfile.TemporaryDirectory() as td:
+                root=Path(td);ignore=root/'.gitignore';original=b'# Owner rule\nproduct-cache/\n';ignore.write_bytes(original)
+                (root/'.config').mkdir();(root/'.config/dotnet-tools.json').write_text('{}')
+                runner=Mock();m={'dotnetExecutable':'/dotnet','sddExecutable':'/sdd'}
+                runner.knowledge.side_effect=lambda *a:ignore.write_bytes(original+b'\n.fsgg/cache/\n')
+                with patch.dict(globals(),manifest=lambda *a:None):
+                    raw_initialize(runner,m,root,{'family':'console','route':'raw','selection':'typed'},None)
+                    ignore.write_bytes(original)
+                    runner.knowledge.side_effect=lambda *a:ignore.write_bytes(b'# Replacement owner rules\n.fsgg/cache/\n')
+                    with self.assertRaisesRegex(ValueError,'raw-ignore-owner-prefix'):
+                        raw_initialize(runner,m,root,{'family':'console','route':'raw','selection':'typed'},None)
 
         def test_console_source_stays_byte_identical_and_workflow_reaches_controls(self):
             self.assertEqual(sha(Path(__file__).with_name('knowledge-console-public.py')), CONSOLE_SHA)
