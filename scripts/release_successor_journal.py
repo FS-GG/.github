@@ -30,12 +30,12 @@ PATH = "release-state.json"
 SCHEMA = "fsgg.release-successor-journal/1"
 
 # One prospective root-selected source composition; no namespace allocation or effect authority.
-# Completed109/journal27 and frozen original cuts remain immutable.
-CURRENT_RELEASE = {"version": "0.110.0", "predecessor": "0.109.0",
-    "logicalRef": "refs/heads/fsgg/v2/journal/release/coord110-observer-20261020-01",
-    "directory": "state/releases/coord110-observer-20261020-01",
-    "predecessorSource": "0d85830e7329a2718ee57ff0f1a16e6c751a469c",
-    "predecessorContentId": "sha256:a3ff6fd1f998e32a750efe25bbb4255c5bd9d9b28ff5b21af441194d44e128ce"}
+# Completed110/observer journal and frozen original cuts remain immutable.
+CURRENT_RELEASE = {"version": "0.111.0", "predecessor": "0.110.0",
+    "logicalRef": "refs/heads/fsgg/v2/journal/release/coord111-resource-aware-20261021-01",
+    "directory": "state/releases/coord111-resource-aware-20261021-01",
+    "predecessorSource": "42cd9e7c8505f7cd72d5a22ad424a27af6d51458",
+    "predecessorContentId": "sha256:12c130cddf0a580334507cb821767ed1838884d897422f4515c3fbd6892224dc"}
 
 
 

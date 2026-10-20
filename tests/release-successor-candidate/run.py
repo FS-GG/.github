@@ -129,22 +129,22 @@ class CandidateUniquenessTests(unittest.TestCase):
             gate.check("0.104.0", "0.102.0", "read-token")
 
     def test_selected110_requires_exact109_on_all_six_feed_coordinates(self) -> None:
-        self.github_read.return_value = ["0.109.0"]
-        self.nuget_read.return_value = ["0.109.0"]
-        rows = gate.check("0.110.0", "0.109.0", "inert-token")
+        self.github_read.return_value = ["0.110.0"]
+        self.nuget_read.return_value = ["0.110.0"]
+        rows = gate.check("0.111.0", "0.110.0", "inert-token")
         self.assertEqual(len(rows), 6)
         for feed in (self.github_read, self.nuget_read):
             with self.subTest(feed=feed):
-                feed.return_value = ["0.109.0", "0.110.0"]
+                feed.return_value = ["0.110.0", "0.111.0"]
                 with self.assertRaisesRegex(gate.GateError, "already exists"):
-                    gate.check("0.110.0", "0.109.0", "inert-token")
-                feed.return_value = ["0.109.0"]
+                    gate.check("0.111.0", "0.110.0", "inert-token")
+                feed.return_value = ["0.110.0"]
         self.nuget_read.return_value = ["0.108.0"]
         with self.assertRaisesRegex(gate.GateError, "not predecessor"):
-            gate.check("0.110.0", "0.109.0", "inert-token")
+            gate.check("0.111.0", "0.110.0", "inert-token")
         self.github_read.side_effect = gate.GateError("HTTP 403: occupancy Unknown")
         with self.assertRaisesRegex(gate.GateError, "occupancy Unknown"):
-            gate.check("0.110.0", "0.109.0", "inert-token")
+            gate.check("0.111.0", "0.110.0", "inert-token")
 
     def test_an_occupied_version_on_either_feed_refuses(self) -> None:
         for feed in (self.github_read, self.nuget_read):
@@ -240,7 +240,7 @@ class SuccessorRailBindingTests(unittest.TestCase):
         self.assertIn('test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"', workflow)
         self.assertIn("python3 tests/release-successor-candidate/run.py", workflow)
         self.assertIn("python3 scripts/check-release-candidate-uniqueness.py", workflow)
-        self.assertIn("--version 0.110.0 --predecessor 0.109.0", workflow)
+        self.assertIn("--version 0.111.0 --predecessor 0.110.0", workflow)
         for forbidden in (
             "packages: write", "contents: write", "id-token:", "environment:", "secrets.",
             "release-successor-publish.py", "release-saga.py", "dotnet pack",
@@ -251,21 +251,21 @@ class SuccessorRailBindingTests(unittest.TestCase):
 
     def test_candidate_binds_the_next_version_and_exact_predecessor(self) -> None:
         workflow = (ROOT / ".github/workflows/release-successor-candidate.yml").read_text()
-        self.assertIn('test "$version" = 0.110.0', workflow)
-        self.assertIn("gh release download coherent-set/v0.109.0", workflow)
+        self.assertIn('test "$version" = 0.111.0', workflow)
+        self.assertIn("gh release download coherent-set/v0.110.0", workflow)
         self.assertIn("--tag-source 0d85830e7329a2718ee57ff0f1a16e6c751a469c", workflow)
-        self.assertEqual(workflow.count("--predecessor 0.109.0"), 2)
-        self.assertIn("--release-tag coherent-set/v0.109.0", workflow)
+        self.assertEqual(workflow.count("--predecessor 0.110.0"), 2)
+        self.assertIn("--release-tag coherent-set/v0.110.0", workflow)
         for namespace in ("coherent-set", "kit", "drivers", "coord-engine"):
-            self.assertIn(f"refs/tags/{namespace}/v0.110.0", workflow)
+            self.assertIn(f"refs/tags/{namespace}/v0.111.0", workflow)
         for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
             self.assertEqual(workflow.count(f"dotnet pack src/{project}/"), 1)
         initial=workflow.split('      - name: Verify the stable predecessor and unused package version',1)[1].split('      - name: Test the telemetry producer',1)[0]
         retention=workflow.split('      - name: Refuse a changed main or newly occupied version before retention',1)[1].split('      - uses: actions/upload-artifact',1)[0]
-        self.assertIn('releases/tags/coherent-set/v0.110.0',initial)
+        self.assertIn('releases/tags/coherent-set/v0.111.0',initial)
         self.assertIn('git ls-remote',initial)
         self.assertIn('refs/heads/main',retention)
-        self.assertIn('--predecessor 0.109.0',retention)
+        self.assertIn('--predecessor 0.110.0',retention)
         self.assertNotIn('releases/tags/',retention)
         self.assertNotIn('refs/tags/',retention)
         self.assertIn('timeout-minutes: 45',workflow)

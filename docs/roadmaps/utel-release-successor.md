@@ -2037,3 +2037,50 @@ reviewed021 candidate/publication binding. No future pin is invented, no020/108 
 Registry published versions and consumer pins advance only after their actual promotion/adoption
 boundaries; no new scalar bump, current-public inventory claim or shared projection rewrite is
 required by this prospective source preparation.
+
+
+### Accepted coherent110 and prospective111 operating window — 2026-10-21
+
+[Delivery4743](https://github.com/FS-GG/.github/issues/4743) retains its complete seven-clause
+promise under [Outcome4730](https://github.com/FS-GG/.github/issues/4730). Its guidance source
+was protected through4751; four packaged work-board leaves differ from accepted110 within the
+same22-leaf population. The Kit parallel-work leaves are unchanged. The organization operator
+uses the complete current work-board/work-board-coord checkout instructions; operator-scope
+work-board-coord is not packaged. No new Creator or SDD release follows from this guidance demand.
+
+Genuine110 was promoted from immutable source `42cd9e7c8505f7cd72d5a22ad424a27af6d51458`,
+content `sha256:12c130cddf0a580334507cb821767ed1838884d897422f4515c3fbd6892224dc`.
+Original candidate [39423302862](https://github.com/FS-GG/.github/actions/runs/39423302862),
+artifact12263934322, and final same-journal publisher
+[39438076230](https://github.com/FS-GG/.github/actions/runs/39438076230) are retained.
+[Release418406702](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.110.0)
+has seven original assets; release-manifest asset659550415 has SHA256
+`bcae24d71571ab7f0dc26abbbf00beb0abf12718b22e7060838990384b86911f`.
+Completed `coord110-observer-20261020-01` remains generation33/all16 verified. Original failed
+publisher and partial checkpoints, archives, channel, both-feed acceptance and installed110
+qualification remain distinct immutable evidence; never replay or repack110.
+
+Root selects SOURCE version0.111.0 over predecessor0.110.0, prospective logical ref
+`refs/heads/fsgg/v2/journal/release/coord111-resource-aware-20261021-01` and directory
+`state/releases/coord111-resource-aware-20261021-01`. This is no namespace allocation or effect
+admission. Bounded source-preparation reads found no coherent111 tag/release or public NuGet111;
+existing-user-token GitHub package metadata reads refused403, so private-feed collision remains
+Unknown. The actual candidate/preflight must freshly authenticate all ordinary feed/ref/protection,
+competing-entry/source/resource and authority prerequisites. Source reads do not prove availability.
+
+Keep the normal45-minute candidate graph, exact seven-member archive,60-minute publisher,
+1500 Authority-entry ceiling,1800 quota floor,2700-second inner deadline and135 visibility probes.
+Historical selectors, provider fences, coherent-tag-only publication, all16 durable effects and
+both-feed verification remain unchanged. Exact source CI and normal protected delivery precede
+separately admitted candidate, publish=false preflight and publish=true with the same original
+source/archive. Reserve the full determining main/ref horizon through final retention/publication;
+file-disjoint source work alone does not establish protected-ref independence.
+
+Whole-instruction discovery/loading and decisions during necessary organization operations are
+separate from catalog presence and package/source hashes. Root has used the current complete
+checkout instructions for conservative combined admission and preserved native Status readback;
+that bounded ordinary-use evidence does not prove two independently useful local runtime
+operations overlapping, measured combined peak, economic improvement or full4743 acceptance.
+Retain actual publication and selected physical caller/instruction adoption, ordinary useful-overlap
+qualification and proportionate baseline/coverage evidence as unfinished work. No synthetic product,
+new ledger, publisher retry, credential acquisition or Unknown-reservation release is introduced.

@@ -625,8 +625,11 @@
   <!-- 0.109.0 -> 0.110.0: mandatory root-owned Status reconciliation at lifecycle
        boundaries changes receiver-visible Kit/Drivers behavior. Source preparation only;
        published109, installed callers and original operation custody stay separately governed. -->
+  <!-- 0.110.0 -> 0.111.0 (#4743): operation-specific admission and bounded
+       source/ref/preflight guidance changes packaged work-board instructions.
+       Source readiness only; published110 and installed adoption remain separate. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.110.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.111.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

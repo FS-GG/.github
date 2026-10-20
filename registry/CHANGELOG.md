@@ -1,5 +1,15 @@
 # Registry changelog
 
+## 2026-10-21 — Resource-aware guidance coherent111 source readiness (#4743)
+
+Advance the shared CLI/Kit/Drivers source scalar and coord-engine source version to0.111.0
+for four changed packaged work-board instruction leaves within the unchanged22-leaf population.
+The closed ordinary route selects genuine completed110 source42cd9e7c/content12c130cd and
+prospective journal coord111-resource-aware-20261021-01. Published110 versions/tags, installed
+pins, completed journals and Creator/SDD release axes remain unchanged. Source preparation
+creates no namespace or effect authority; actual candidate, normal publication and instruction/caller
+adoption require their separate admission/readback. Full4743 useful-overlap/economic acceptance remains.
+
 ## 2026-10-19 — board lifecycle publications accepted (#4701/#4712)
 
 Publish coherent109 from original0d85830e through39317658813: all16effects/final33,
