@@ -85,9 +85,76 @@ assert f'WORKFLOW = "{WIZARD_SUCCESSOR}"' in admission
 
 # COORD-BOARD-V2-01.5 source successor: keep the accepted 0.13 route
 # as history and bind current bytes only after proving the retained boundaries.
-report = json.loads((ROOT / "docs/reports/gs2-08-9-release-route-dispositions.json").read_text())
+def verify_publication_writer_scope(document, source):
+    """Recover the entire accepted021 route through only the reviewed lock move."""
+    current = next(row for row in document["routes"] if row["path"] == WIZARD_SUCCESSOR)
+    assert current["sha256"] == hashlib.sha256(source.encode()).hexdigest()
+    amendment = current["publicationConcurrencyAmendment"]
+    assert amendment == {
+        "unit": "PUBLICATION-EFFICIENCY-4753", "sourceOnly": True,
+        "previousAcceptedSource": "0ef654b4d80c1d933e47fb6bf06636c9fae4926c",
+        "previousWorkflowSha256": "6073f2e469e84c8bcca6a47f8376feabec46290fd617e4d9d527877217f35312",
+        "previousRouteCanonicalSha256": "515ad83cf9fc0174b3ab8e75131ff4ef6d835fea3426c83badf947ef6a8a1a4b",
+        "previousHistoricalAttestationsCanonicalSha256": "2564ab86cb0f1adf21889715ac642fc581e0bd26b945b2b7f28a97edcaeeae24",
+        "writerGroup": "release-new-sdd-workspace-successor-publish",
+        "writerJobs": ["publish", "recovery-complete"],
+        "observationJobs": ["recovery-diagnostic"],
+        "operationAcceptance": "Source only; no new publication, recovery, credential, installation, observation or adoption operation admitted.",
+    }
+    canonical = lambda value: hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    histories = document["historicalRouteAttestations"]
+    assert canonical(histories[:-1]) == amendment["previousHistoricalAttestationsCanonicalSha256"]
+    assert histories[-1]["acceptedSource"] == amendment["previousAcceptedSource"]
+    assert histories[-1]["status"] == "non-current-history"
+    prior = histories[-1]["route"]
+    assert canonical(prior) == amendment["previousRouteCanonicalSha256"]
+    retained = copy.deepcopy(current)
+    del retained["publicationConcurrencyAmendment"]
+    retained["sha256"] = amendment["previousWorkflowSha256"]
+    assert retained == prior, "publication lock amendment changed a retained release boundary"
+    fence = ("    concurrency:\n"
+             "      group: release-new-sdd-workspace-successor-publish\n"
+             "      cancel-in-progress: false\n")
+    assert "\nconcurrency:\n" not in source
+    assert source.count("    concurrency:\n") == source.count(fence) == 2
+    restored = source
+    for name in ("publish", "recovery-complete"):
+        marker = "\n  " + name + ":\n"
+        assert restored.count(marker + fence) == 1
+        restored = restored.replace(marker + fence, marker, 1)
+    assert restored.count("\njobs:\n") == 1
+    restored = restored.replace("\njobs:\n", "\nconcurrency:\n  group: release-new-sdd-workspace-successor-publish\n  cancel-in-progress: false\n\njobs:\n", 1)
+    assert hashlib.sha256(restored.encode()).hexdigest() == amendment["previousWorkflowSha256"], "concurrency amendment failed whole-workflow inversion"
+    historical_document = copy.deepcopy(document)
+    historical_document["historicalRouteAttestations"].pop()
+    historical_document["routes"][document["routes"].index(current)] = copy.deepcopy(prior)
+    return historical_document, restored
+
+
+actual_report = json.loads((ROOT / "docs/reports/gs2-08-9-release-route-dispositions.json").read_text())
+actual_workflow = (ROOT / WIZARD_SUCCESSOR).read_text()
+report, historical_workflow = verify_publication_writer_scope(actual_report, actual_workflow)
+# Even repinning the current digest cannot excuse changes outside this exact move.
+for old, new in (
+    ("cancel-in-progress: false", "cancel-in-progress: true"),
+    ("      group: release-new-sdd-workspace-successor-publish", "      group: ${{ inputs.candidate_run_id }}"),
+    ("  recovery-diagnostic:\n", "  recovery-diagnostic:\n    concurrency: observe"),
+    ("permission-contents: read", "permission-contents: write"),
+    ("inputs.promotion_recovery == 'off'", "true"),
+):
+    assert old in actual_workflow
+    mutant = actual_workflow.replace(old, new, 1)
+    repinned = copy.deepcopy(actual_report)
+    next(row for row in repinned["routes"] if row["path"] == WIZARD_SUCCESSOR)["sha256"] = hashlib.sha256(mutant.encode()).hexdigest()
+    try:
+        verify_publication_writer_scope(repinned, mutant)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("repinned publication writer-scope mutant accepted: " + old)
+print("4753 exact writer-lock move: whole021 workflow/history retained; five repinned scope/authority mutants refused")
 route = next(row for row in report["routes"] if row["path"] == WIZARD_SUCCESSOR)
-assert route["sha256"] == digest(ROOT / WIZARD_SUCCESSOR)
+assert route["sha256"] == hashlib.sha256(historical_workflow.encode()).hexdigest()
 assert route["disposition"] == "exact-source-protected-journal-successor-only"
 amendment = route["successorAmendment"]
 assert amendment["unit"] == "CREATOR-PUBLIC-021-4741" and amendment["version"] == "0.21.0"
@@ -144,7 +211,7 @@ for mutation in ("missing019", "changed019", "changedOlder", "repinnedProof"):
 creator018_predecessor = next(row for row in report["historicalRouteAttestations"]
                              if row["acceptedSource"] == proof["creator018ProfileAmendment"]["previousAcceptedSource"])
 for name, expected in proof["currentRecoveryJobSha256"].items():
-    raw_workflow = (ROOT / WIZARD_SUCCESSOR).read_text()
+    raw_workflow = historical_workflow
     start = raw_workflow.index("  " + name + ":\n")
     end = raw_workflow.find("\n  recovery-", start + 1)
     assert hashlib.sha256(raw_workflow[start:end if end != -1 else None].encode()).hexdigest() == expected
@@ -426,7 +493,7 @@ assert capability_amendment["failedRun"] == 37273763257
 assert capability_amendment["originalErrorBodySha256"] == "7caac76bcb938ccbb5aa84f338b2f4ce5b59c2f31d7b524231d699a62d3673d2"
 assert capability_amendment["previousWorkflowSha256"] == "060d63be16394bca11cbb8ced3d05b1916c07b029ae065399c2c1b2e581fc9da"
 assert capability_amendment["previousRecoveryJobSha256"] == proof["historicalRecoveryJobSha256"]
-raw_workflow = (ROOT / WIZARD_SUCCESSOR).read_text()
+raw_workflow = historical_workflow
 verify_creator021_route(report, route, raw_workflow)
 for defect in ("missing020", "changed020", "changedOlder", "wrongHash", "wrongVersion", "wrongRoute", "wrongBinding", "wrongJournal", "effectClaim"):
     document, current = copy.deepcopy(report), copy.deepcopy(route)
