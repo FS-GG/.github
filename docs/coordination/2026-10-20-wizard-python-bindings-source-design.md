@@ -55,6 +55,20 @@ controls remove the Python family entry and restore the old `target` key. Each
 must fail its named compiled invariant; unrelated compiler failures cannot count
 as successful causal controls. Existing lifecycle controls remain required.
 
+## Source-only Creator 0.21 identity
+
+Creator 0.20 is already published at immutable source `699f60851288f5f817b98856bdd3d220cf27dd09`.
+This repair selects source-only Creator 0.21.0 with normal coherent 0.110.0.
+`SOURCE_021` admits only the normal isolated build/package closure and emits
+`releaseEligible=false`. It has no published-dependency, candidate publication,
+journal or installed-adoption authority. Retained `SOURCE_020`, `CURRENT_020`,
+consumed019 and genuine published108 readers keep their existing identities.
+The root-owned source selftest/registry integration must bind the same 0.21 source
+identity while leaving published package-version 0.20 and its effect routes intact.
+No namespace/feed probe, version publication or release dispatch follows from this cut.
+Previous a19 source020 compiler/partial-fixture results retain their original scope;
+the changed final021 head needs a fresh compiled closure and final qualification.
+
 ## Qualification still required
 
 Editing-only validation does not establish compiled acceptance. After separate
