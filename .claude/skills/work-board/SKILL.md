@@ -20,20 +20,29 @@ Qualified organization and PRODUCT contracts remain distinct. Instruction loadin
    or relevant native fact changes, including cards missing Status, Work level or enrollment.
    Use [intake and decomposition](references/intake.md); unfinished intake retains its owner, next action and reconsideration event.
    Local repair refreshes relevant context, not the full census.
-3. Compare eligible Deliveries against full acceptance, real prerequisites, explicit user priority and
+3. Reconcile observed results against acceptance and blockers, then update Status through the guarded
+   native route and verify readback. Update each Delivery before reassessing its parent Outcome.
+   Follow the mandatory [Status lifecycle](references/status-lifecycle.md); workers supply evidence and
+   the root integrator decides Status. Inspection remains read-only.
+4. Compare eligible Deliveries against full acceptance, real prerequisites, explicit user priority and
    remaining-after-active capacity. Prefer finishing owned acceptance and useful prerequisites; reconsider
    older deferred work and explain material repeated bypasses. Do not let new easy fixes starve product work.
    An Outcome is never an implementation assignment; linked but unenrolled Deliveries stay unschedulable.
-4. Execute one bounded admitted Delivery through [$pnext-item](https://github.com/FS-GG/.github/blob/main/.agents/skills/pnext-item/SKILL.md). The same owner carries
+5. Execute one bounded admitted Delivery through [$pnext-item](https://github.com/FS-GG/.github/blob/main/.agents/skills/pnext-item/SKILL.md), then update Status and verify readback after dispatch. The same owner carries
    implementation/relevant tests, one independent review for substantive changes, repair, delivery and whole-promise verification.
    Apply the lifecycle contract's risk rules and preserve exact-head required CI and native gates.
    Selected technical plans use [$work-roadmap](../work-roadmap/SKILL.md) as an adapter to that executor.
-5. After delivery, changed blockers and the start of a hosted wait, reconsider suppliers, intake and
+6. After worker returns, CI/runtime completion, reviews, supplier replies, accepted closure and the start
+   of a bounded wait, repeat Status reconciliation before reconsidering suppliers, intake and
    useful disjoint preparation/review/evidence work. Account actual runtime, machine, integrator and
    hosted capacity; delegate only when authorized and useful. Otherwise continue eligible serial work
    and name its constraint/reopening event. A free agent slot is not resource capacity.
-6. Read back accepted scope and remaining assertions, reconcile the parent and return to selection.
+7. Read back accepted scope and remaining assertions, reconcile Delivery Status before its parent and return to selection.
    A merge, worker return, completed milestone or stopped watcher does not end a clearing invocation.
+
+The boundary order is: observe results → reconcile acceptance/blockers → update Status and verify
+readback → select/admit work → dispatch → update Status and verify readback. Reconcile before yielding
+or handing off. A periodic freshness sweep is a backstop, not the primary mechanism.
 
 Keep Owner, Done when, Current deliverable, Next action, Blocked on and Acceptance evidence in the
 existing owning issue. Preserve complete Done when and native history. No routine claim, mandatory
