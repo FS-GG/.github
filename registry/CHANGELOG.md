@@ -67,6 +67,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-10-20** — SOURCE021 Python source qualification (Programme/root; .github#4727): advance only NewSddWorkspace source metadata to0.21.0 for normal coherent110 qualification; published0.20.0 and genuine108 dependency/release routes remain unchanged. No package publication or installed adoption is asserted.
+
 - **2026-10-20** — SOURCE PREPARATION (typed-intake-final-handoff-4731; Programme/root; #4730/#4731): prepare protected43 enrollment while preserving41 identities; standardize operation-scoped intake/preparation, typed native population and metadata joins, shared admission/reservation/request identities and finalized failure-gated invocation. Refresh Kit/Drivers manifests, source lock and curated Atlas seeds within still-unpublished coherent110. Source delivery, protected enrollment qualification, publication, installed adoption and full observer acceptance remain separate.
 
 - **2026-10-20** — — Mandatory Status lifecycle source0.110 (Programme/root; #4729): prepare coherent Kit/Drivers/CLI source0.110.0 for mandatory root-owned reconciliation. Published inventory and tags stay0.109.0; no candidate, publication, installation or original-operation replay is selected by source preparation.
