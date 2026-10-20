@@ -14,6 +14,18 @@ touch-set and one integrator for shared surfaces. Continue existing owners/PRs/a
 a second assignment or demand reservation for the same work. Before launch reconcile active demand,
 known/Unknown reservations, CPU/memory, hosted capacity and shared outputs. Free slots do not admit work.
 
+At the start of an unrelated CI/runtime wait, begin known useful intake/enrollment and disjoint
+source/design preparation within their own authority and remaining capacity. Gate each actual operation
+and its transitive resource/effect demand rather than freezing an entire Delivery for a later expensive
+step. Protected enrollment still precedes board-selected implementation; a free worker or prepared
+source grants no enrollment or runtime authority.
+
+Derive admission, reservation and request identity from the same exact typed `sliceId`, attempt,
+operation, owner, PR/head and actual paths/touch-set. Preserve existing relevant known/Unknown holds;
+a similar identifier, expired observation or absent owner is no release. Apply the
+[final-input invocation guidance](../work-board/references/delivery-reliability.md#final-inputs-and-failure-gated-invocation)
+before launch without introducing a new packet, ledger or scheduler.
+
 Communicate overlap through the [active worker channel](https://github.com/FS-GG/.github/blob/main/docs/coordination/worker-channels.md).
 Pause the affected edits when scope grows or conflicts; have owners/integrator reconcile the touch-set
 before proceeding. Do not overwrite another worker's files or infer release from silence/lease expiry.
