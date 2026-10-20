@@ -1,4 +1,4 @@
 interface:
   display_name: "showProgress"
-  short_description: "Lane progress, process health and real blockers"
-  default_prompt: "Use $show-progress for a short overview of lane progress and problems, practical process improvements, and blockers the current process cannot solve; save and deliver the report where permitted."
+  short_description: "Progress, token efficiency and process problems"
+  default_prompt: "Use $show-progress for a short overview of lane progress, available telemetry and token efficiency, evidence-backed process problems and improvements, and unresolved blockers; save and deliver the report where permitted."
