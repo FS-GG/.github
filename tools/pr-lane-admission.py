@@ -141,12 +141,18 @@ def machine_markers(body: str) -> dict[str, str]:
 
 
 def update_body(fresh: str, proposed: str, branch: str, head: str,
-                previous_head: str, campaign: str, chain: str) -> str:
-    """Only the routine head may change; native metadata owns every other field."""
-    if marker_from_body(fresh) != (campaign, chain) or fresh.count("fsgg-pr-lane-admission") != 1:
+                previous_head: str, campaign: str, chain: str, *, adopt_legacy: bool = False) -> str:
+    """Preserve native metadata, optionally adding a genuinely absent admission identity."""
+    adopting = adopt_legacy and "fsgg-pr-lane-admission" not in fresh
+    if adopting and not branch.startswith("routine/"):
+        raise ToolError("legacy adoption requires an existing routine PR")
+    if not adopting and (marker_from_body(fresh) != (campaign, chain)
+                         or fresh.count("fsgg-pr-lane-admission") != 1):
         raise ToolError("existing PR admission identity is missing, malformed or conflicts")
     original = machine_markers(fresh)
     desired = dict(original)
+    if adopting:
+        desired["fsgg-pr-lane-admission:v1"] = marker(campaign, chain)
     if branch.startswith("routine/"):
         # Idempotent retries can observe the already rebound marker.
         try:
@@ -158,6 +164,8 @@ def update_body(fresh: str, proposed: str, branch: str, head: str,
     submitted = machine_markers(proposed)
     for key, value in submitted.items():
         allowed = {original[key], desired[key]} if key in original else set()
+        if adopting and key == "fsgg-pr-lane-admission:v1":
+            allowed.add(desired[key])
         if key == "fsgg:routine-development/v1" and key in desired:
             allowed.add(re.sub(r"(?<!\S)head=[0-9a-f]+(?=\s)", "head=" + previous_head, desired[key]))
         if value not in allowed:
@@ -288,12 +296,47 @@ def update_pull(arguments: argparse.Namespace, proposed: str, identity: dict[str
 
     with repository_lock(arguments.repo):
         before, before_guard = read("initial-candidate")
+        adopting = arguments.adopt_legacy_pr and "fsgg-pr-lane-admission" not in before["body"]
         try:
             body = update_body(before["body"], proposed, arguments.head, arguments.head_sha,
-                               arguments.previous_head_sha, arguments.campaign_id, arguments.dependency_chain_id)
+                               arguments.previous_head_sha, arguments.campaign_id, arguments.dependency_chain_id,
+                               adopt_legacy=arguments.adopt_legacy_pr)
         except ToolError:
             refuse("update-metadata-conflict", "metadata-preparation", "policy-or-marker-conflict",
                    [metadata_difference("body", before["body"], proposed)])
+
+        def adoption_roster(stage: str) -> list[dict[str, Any]]:
+            try:
+                pulls = open_pulls(arguments.gh, arguments.repo)
+            except ToolError:
+                refuse("update-adoption-read-unresolved", stage, "read-error")
+            numbers = [pull.get("number") for pull in pulls]
+            if (any(type(number) is not int or number <= 0 for number in numbers)
+                    or len(set(numbers)) != len(numbers) or numbers.count(arguments.update_pr) != 1):
+                refuse("update-adoption-population-mismatch", stage, "unreadable")
+            candidate = next(pull for pull in pulls if pull["number"] == arguments.update_pr)
+            fields = ("number", "id", "node_id", "state", "title", "body", "head.ref", "head.sha",
+                      "head.repo.full_name", "base.ref", "base.repo.full_name")
+            differences = [metadata_difference(field, before_guard[field], metadata_field(candidate, field))
+                           for field in fields if metadata_field(candidate, field) != before_guard[field]]
+            if differences:
+                refuse("update-adoption-population-mismatch", stage, "mismatch", differences)
+            others = [pull for pull in pulls if pull["number"] != arguments.update_pr]
+            # A parsed marker accompanied by damaged/duplicate identity text is never trustworthy.
+            for pull in others:
+                text = pull.get("body")
+                if isinstance(text, str) and "fsgg-pr-lane-admission" in text:
+                    if marker_from_body(text) is None or text.count("fsgg-pr-lane-admission") != 1:
+                        refuse("managed-reservation-identity-unknown", stage, "policy-or-marker-conflict")
+            try:
+                enforce_lane(others, arguments.campaign_id, arguments.dependency_chain_id)
+            except Refusal as error:
+                raise Refusal(error.reason, **error.details, **identity, stage=stage,
+                              writeAttempted=False) from error
+            return [{field: metadata_field(pull, field) for field in fields}
+                    for pull in sorted(pulls, key=lambda pull: pull["number"])]
+
+        initial_roster = adoption_roster("initial-adoption-population") if adopting else None
         # Independently preserve the push-before-update guard, including unreadable branch facts.
         encoded_head = urllib.parse.quote(arguments.head, safe="")
         try:
@@ -307,6 +350,8 @@ def update_pull(arguments: argparse.Namespace, proposed: str, identity: dict[str
         if observed_sha != arguments.head_sha:
             refuse("head-moved", "branch-ref", "mismatch",
                    [metadata_difference("branch.sha", arguments.head_sha, observed_sha)])
+        if adopting and adoption_roster("prewrite-adoption-population") != initial_roster:
+            refuse("update-adoption-population-conflict", "prewrite-adoption-population", "mismatch")
         # No atomic compare-and-swap is available. Re-read immediately before the one possible PATCH.
         _, deciding_guard = read("prewrite-comparison")
         differences = [metadata_difference(field, before_guard[field], item)
@@ -566,6 +611,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--body-file", required=True, type=pathlib.Path)
     result.add_argument("--update-pr", type=int, help="Update an existing managed PR, preserving native machine metadata")
     result.add_argument("--previous-head-sha", help="Explicit previous routine marker head for an update")
+    result.add_argument("--adopt-legacy-pr", action="store_true",
+                        help="Explicitly assign the supplied campaign/chain to an existing routine PR with absent admission metadata")
     result.add_argument("--sc2-producer-predecessor-source", help="Protected canonical producer pin for the selected SC2 first-install predecessor")
     result.add_argument("--inspect", action="store_true", help="Check admission without creating a PR")
     result.add_argument("--gh", default="gh", help=argparse.SUPPRESS)
@@ -573,6 +620,8 @@ def parser() -> argparse.ArgumentParser:
 
 
 def validate(arguments: argparse.Namespace) -> None:
+    if arguments.adopt_legacy_pr and arguments.update_pr is None:
+        raise ToolError("legacy PR adoption requires --update-pr")
     if arguments.sc2_producer_predecessor_source and (arguments.update_pr is not None
             or not re.fullmatch(r"[0-9a-f]{40}", arguments.sc2_producer_predecessor_source)):
         raise ToolError("SC2 predecessor requires an exact producer pin and a new PR")

@@ -18,7 +18,10 @@ with pathlib.Path(os.environ["FAKE_GH_LOG"]).open("a", encoding="utf-8") as log:
 endpoint = arguments[-1] if arguments[-1] != "-" else arguments[-3]
 method = arguments[arguments.index("--method") + 1]
 if method == "GET" and endpoint.endswith("pulls?state=open&per_page=100"):
-    print(json.dumps(state.get("open_pages", [[]])))
+    sequence = state.get("open_read_sequence")
+    value = sequence.pop(0) if sequence else state.get("open_pages", [[]])
+    state_path.write_text(json.dumps(state))
+    print(json.dumps(value))
 elif method == "GET" and "/pulls/" in endpoint:
     if state.get("patched") and state.get("fail_read_after_patch"):
         raise SystemExit(8)
