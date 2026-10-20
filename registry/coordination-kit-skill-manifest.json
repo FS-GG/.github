@@ -100,11 +100,11 @@
     {
       "id": "intra-repo-parallel-work",
       "supplied-by": ".claude/skills/intra-repo-parallel-work",
-      "tree-sha256": "5a1f9f66563a2358d5dff1a6e97388a3c86dd38f924272e011f3dea9714defc5",
+      "tree-sha256": "9bf7069b37d14437e4e54e5caa036d02c76a317deddc45364c84672af9ca2393",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "0d68e9ea6fca8fdb438e0199661d4787b432cf8d5d52fe5d153e4400d7d24852",
+          "sha256": "ecdfd164c4e8ec45272f7d71e0131a87fd3e3d7ef57356a07ec420e4fad60eaa",
           "executable": false
         },
         {
@@ -132,11 +132,11 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "f738a19087c0fa9771e6bbdd55a22edaa574f5b3b92a6bb9ed6c98c6f97d9668",
+      "tree-sha256": "ae02d3f41d69e3b16f749bf6131e0f39eddd36dde4c6eff7238bb026e061cac9",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "3af3c1ddf76f005bccc45b76bf10f866aae227510be41e7621f638a440c46005",
+          "sha256": "710564bd37cf630ab1d05f336b36ba1f916fee1762cf53d14e93c89732cd3ef3",
           "executable": false
         },
         {
@@ -161,7 +161,7 @@
         },
         {
           "path": "references/findings-and-filing.md",
-          "sha256": "3a092b373f2248f30297bdc690f2a53daee9a1def58d15e80bee039799c03cdf",
+          "sha256": "6fa368f84e1b7bf5bdc24aed1a2d211cea55e9cd011efac8cc2f1316d787c7ab",
           "executable": false
         },
         {
