@@ -1609,22 +1609,33 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
 
 
 class SelectedReleaseBindingTests(unittest.TestCase):
-    def test_current_default_has_109_108_and_distinct27(self):
+    def test_current_default_has_110_109_and_selected_observer_identity(self):
         args = types.SimpleNamespace(recovery_checkpoint=False, repeat_original_nuget_kit_intent=False,
                                      recover_original_runtime_intent=False)
         self.assertEqual(publisher.selected_release_binding(args),
-                         ("0.109.0", "0.108.0", "refs/heads/fsgg/v2/journal/release/utel-rel-27"))
+                         ("0.110.0", "0.109.0", "refs/heads/fsgg/v2/journal/release/coord110-observer-20261020-01"))
 
-    def test_current_profile_binds_promoted108_and_cannot_claim_old_journals(self):
-        self.assertEqual(publisher.CURRENT_RELEASE['predecessorSource'],'f984a3619129c5e9ab68e1291fd080ef77ef9337')
-        self.assertEqual(publisher.CURRENT_RELEASE['predecessorContentId'],'sha256:36d93d38dff7a00a7781eb313191918a5c847288d7f743b878351eb0e800429e')
-        self.assertEqual(publisher.CURRENT_RELEASE['directory'],'state/releases/utel-rel-27')
-        for suffix in ('utel-rel-23','utel-rel-24','utel-rel-25','utel-rel-26'):
+    def test_current_profile_binds_promoted109_and_cannot_claim_old_journals(self):
+        self.assertEqual(set(publisher.CURRENT_RELEASE), {'version','predecessor','logicalRef','directory','predecessorSource','predecessorContentId'})
+        self.assertEqual(publisher.CURRENT_RELEASE['predecessorSource'],'0d85830e7329a2718ee57ff0f1a16e6c751a469c')
+        self.assertEqual(publisher.CURRENT_RELEASE['predecessorContentId'],'sha256:a3ff6fd1f998e32a750efe25bbb4255c5bd9d9b28ff5b21af441194d44e128ce')
+        self.assertEqual(publisher.CURRENT_RELEASE['directory'],'state/releases/coord110-observer-20261020-01')
+        for suffix in ('utel-rel-23','utel-rel-24','utel-rel-25','utel-rel-26','utel-rel-27'):
             authority=MemoryAuthority()
             with self.subTest(prior=suffix),self.assertRaisesRegex(JournalRefused,'different owner or profile'):
                 ProtectedReleaseJournal(authority,'refs/heads/fsgg/v2/journal/release/'+suffix,
                                         main_directory=True,ordinary_forward=True)
             self.assertFalse(any(method in {'post','patch'} for method,_ in authority.calls))
+
+    def test_current110_cannot_initialize_completed109_journal27(self):
+        authority=MemoryAuthority()
+        journal=ProtectedReleaseJournal(authority,'refs/heads/fsgg/v2/journal/release/utel-rel-27',main_directory=True)
+        authority.calls.clear()
+        intent={'version':'0.110.0','sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
+                'candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
+        with self.assertRaisesRegex(JournalRefused,'different journal identity'):
+            journal.initialize(intent)
+        self.assertFalse(any(method in {'post','patch'} for method,_ in authority.calls))
 
     def test_explicit_original103_selectors_do_not_follow_current_default(self):
         for flag in ('original_0103_candidate','recover_original_0103_tag_intent'):
@@ -2402,7 +2413,7 @@ class SuspensionControls(SuspensionFixture):
             self.assertLess(fence,workflow.index(name))
         self.assertNotIn('disposition_json:',workflow)
         candidate = (ROOT/'.github/workflows/release-successor-candidate.yml').read_text()
-        self.assertIn('test "$version" = 0.109.0',candidate)
+        self.assertIn('test "$version" = 0.110.0',candidate)
         self.assertNotIn('-p:Version=',candidate)
         self.assertIn('name: release-successor-candidate-${{ github.sha }}-${{ github.run_id }}',candidate)
         self.assertIn('Separate evidence: never add a member to the exact seven-member publisher archive.',candidate)
@@ -2413,8 +2424,8 @@ class LiteralForwardControls(SuspensionFixture):
     def context(self):
         if not hasattr(self,'_forward_base'):self._forward_base=copy.deepcopy(self.authority)
         self.authority=copy.deepcopy(self._forward_base)
-        self.install();self.authority.logical_ref=publisher.CURRENT_RELEASE['logicalRef'];self.authority.directory_suffix='utel-rel-27';self.authority.calls.clear()
-        candidate=manifest();candidate['descriptor'].update(version='0.109.0',previousStableVersion='0.108.0')
+        self.install();self.authority.logical_ref=publisher.CURRENT_RELEASE['logicalRef'];self.authority.directory_suffix='coord110-observer-20261020-01';self.authority.calls.clear()
+        candidate=manifest();candidate['descriptor'].update(version='0.110.0',previousStableVersion='0.109.0')
         candidate['contentId']='sha256:'+hashlib.sha256(json.dumps(candidate['descriptor'],sort_keys=True,separators=(',',':')).encode()).hexdigest()
         counted=publisher.CountedAuthorityAPI(self.authority,ceiling=1500,quota_floor=1800);counted.admit_quota()
         shared=self.mod.ReleaseSuspension(counted);rows=report();native=MemoryPublisher()
@@ -2431,7 +2442,7 @@ class LiteralForwardControls(SuspensionFixture):
             if observation.state=='matched' and observation.observed_digest==effect.target_digest:return 'potential'
             raise publisher.Refused('inert pending witness '+observation.state)
         provider.ordinary_visibility=visibility
-        intent={'contentId':candidate['contentId'],'sourceSha':'b'*40,'version':'0.109.0','candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
+        intent={'contentId':candidate['contentId'],'sourceSha':'b'*40,'version':'0.110.0','candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
         publisher.prepare_release_journal(journal,counted,admission,provider,native,candidate,intent,'b'*40,'b'*40,False,lambda:None)
         journal.capture();ticks=[0];sleeps=[]
         def sleep(seconds):sleeps.append(seconds);ticks[0]+=seconds
@@ -2499,7 +2510,7 @@ class LiteralForwardControls(SuspensionFixture):
                             if '/actions/runs/' in path:row['status']='cancelled'
                             return row
                         native.get=get
-                    elif mode=='suspension':self.add_file('state/releases/utel-rel-27/release-state.json',canonical(journal._observed.state)+b' ')
+                    elif mode=='suspension':self.add_file('state/releases/coord110-observer-20261020-01/release-state.json',canonical(journal._observed.state)+b' ')
                     else:next(iter(self.authority.controls.values()))['enforcement']='disabled'
                 with self.assertRaises(RuntimeError):run(sleep=sleep)
                 self.assertEqual(provider.dispatched,['tag']);self.assertEqual(sleeps,[5])
@@ -3499,12 +3510,21 @@ class OrdinaryCallerControls(SuspensionFixture):
         self.promoted108_fixture=b'preserved synthetic consumed108 journal bytes\n'
         self.add_file('state/releases/utel-rel-26/release-state.json',self.promoted108_fixture)
         self.add_file('state/releases/utel-rel-26/release-head.txt',b'preserved prior108 logical head\n')
-        self.authority.directory_suffix='utel-rel-27';self.authority.logical_ref=publisher.CURRENT_RELEASE['logicalRef']
+        # Synthetic completed109 sibling: its bytes/head must survive the real110 caller.
+        # These fixture identities are not native109 publication/history evidence.
+        self.promoted109_fixture=canonical({'schema':self.mod.SCHEMA,'version':'0.109.0',
+            'sourceSha':'9'*40,'contentId':'sha256:'+'9'*64,'candidateArchiveSha256':'9'*64,
+            'operator':'EHotwagner','generation':33,
+            'effects':{effect.identity:'verified' for effect in ordered_effects(manifest())}})
+        self.promoted109_head=b'9999999999999999999999999999999999999999\n'
+        self.add_file('state/releases/utel-rel-27/release-state.json',self.promoted109_fixture)
+        self.add_file('state/releases/utel-rel-27/release-head.txt',self.promoted109_head)
+        self.authority.directory_suffix='coord110-observer-20261020-01';self.authority.logical_ref=publisher.CURRENT_RELEASE['logicalRef']
         for n in range(history):self.add_file('state/ordinary/cold-history.json',canonical({'generation':n}))
-        self.native=Literal104ProviderFixture(self.root,None,version="0.109.0")
+        self.native=Literal104ProviderFixture(self.root,None,version="0.110.0")
         stream=io.BytesIO()
         with zipfile.ZipFile(stream,'w') as archive:
-            for name in [*(f'{package}.0.109.0.nupkg' for package in PACKAGES),
+            for name in [*(f'{package}.0.110.0.nupkg' for package in PACKAGES),
                          'release-manifest.json','previous-stable-channel.json',
                          'standalone-telemetry-evidence.json','standalone-telemetry-runtime-evidence.json']:
                 archive.writestr(name,(self.root/name).read_bytes())
@@ -3541,7 +3561,7 @@ class OrdinaryCallerControls(SuspensionFixture):
                 if '/releases?' in path:return []
             if hidden=='promote' and '/releases/tags/' in path:value['draft']=True
             if hidden and '/assets?per_page=100' in path:
-                name={**{f'archive-asset:{package}':f'{package}.0.109.0.nupkg' for package in PACKAGES},
+                name={**{f'archive-asset:{package}':f'{package}.0.110.0.nupkg' for package in PACKAGES},
                       'qualification-asset:evidence':'standalone-telemetry-evidence.json',
                       'qualification-asset:runtime':'standalone-telemetry-runtime-evidence.json',
                       'channel-asset':'stable-channel.json','manifest-asset':'release-manifest.json'}.get(hidden)
@@ -3611,7 +3631,7 @@ class OrdinaryCallerControls(SuspensionFixture):
                 return types.SimpleNamespace(returncode=0)
             if len(argv)>1 and argv[1].endswith('check-release-candidate-uniqueness.py'):
                 self.local_ports.append('uniqueness-external-port')
-                self.assertEqual(argv[2:],['--version','0.109.0','--predecessor','0.108.0'])
+                self.assertEqual(argv[2:],['--version','0.110.0','--predecessor','0.109.0'])
                 self.assertFalse(self.native.feeds);self.assertIsNone(self.native.release)
                 return types.SimpleNamespace(returncode=0)
             self.local_ports.append('inert-nuget-send' if argv[:3]==['dotnet','nuget','push'] else 'saga:'+argv[2])
@@ -3679,6 +3699,8 @@ class OrdinaryCallerControls(SuspensionFixture):
         self.assertEqual(reader.file(self.authority.head,'state/releases/utel-rel-25/release-state.json'),self.promoted107_fixture)
         self.assertEqual(reader.file(self.authority.head,'state/releases/utel-rel-26/release-state.json'),self.promoted108_fixture)
         self.assertEqual(reader.file(self.authority.head,'state/releases/utel-rel-26/release-head.txt'),b'preserved prior108 logical head\n')
+        self.assertEqual(reader.file(self.authority.head,'state/releases/utel-rel-27/release-state.json'),self.promoted109_fixture)
+        self.assertEqual(reader.file(self.authority.head,'state/releases/utel-rel-27/release-head.txt'),self.promoted109_head)
         self.assertEqual(reader.file(self.authority.head,'state/releases/utel-rel-24/release-head.txt'),b'preserved prior106 logical head\n')
         if self.history:self.assertEqual(reader.file(self.authority.head,'state/ordinary/cold-history.json'),canonical({'generation':self.history-1}))
         self.assertEqual(sum(self.rows['authorityCounter'].attempted.values()),counted_entries)
@@ -3804,7 +3826,7 @@ class OrdinaryCallerControls(SuspensionFixture):
                             return row
                         self.native.get=get
                     elif mode=='protection':next(iter(self.authority.controls.values()))['enforcement']='disabled'
-                    else:self.external_file('state/releases/utel-rel-27/release-state.json',canonical(self.rows['lastObservedJournal'])+b' ')
+                    else:self.external_file('state/releases/coord110-observer-20261020-01/release-state.json',canonical(self.rows['lastObservedJournal'])+b' ')
                 self.on_sleep=change
                 with self.assertRaises(RuntimeError):self.invoke_caller()
                 self.assertEqual(self.dispatches,['tag'])
@@ -3898,7 +3920,7 @@ class OrdinaryCallerControls(SuspensionFixture):
                         name='release-state.json' if mode=='state' else 'release-head.txt'
                         expected=self.providers[0]._ordinary_expected_journal
                         raw=expected[1]+b' ' if mode=='state' else ('e'*40+'\n').encode()
-                        self.external_file('state/releases/utel-rel-27/'+name,raw)
+                        self.external_file('state/releases/coord110-observer-20261020-01/'+name,raw)
                 self.on_prepare=prepare
                 with self.assertRaises(RuntimeError):self.invoke_caller()
                 self.assertIsNone(self.native.tag);self.assertEqual(self.publisher_ports.count('post'),0)

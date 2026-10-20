@@ -1958,3 +1958,82 @@ profiles are unchanged; a020 candidate cannot be published through019. An indepe
 bounded020 publisher successor and fresh effect admission remain required before publication, followed
 by actual installed fresh/retained Rendering and selected Game receiver acceptance. Source package
 qualification does not establish those later effects or widen the product binding.
+
+
+### Accepted coherent109 and prospective110 operating window — 2026-10-20
+
+Coherent109 is genuinely promoted from producer source
+`0d85830e7329a2718ee57ff0f1a16e6c751a469c`, content
+`sha256:a3ff6fd1f998e32a750efe25bbb4255c5bd9d9b28ff5b21af441194d44e128ce`.
+Its original candidate is [run39302112260](https://github.com/FS-GG/.github/actions/runs/39302112260),
+artifact12210674422, raw archive SHA256
+`2791d7009e469bd2e5a1325ed907522e64ac895118525dff3396ec6f26bc2b68`.
+The final same-journal publisher [39317658813](https://github.com/FS-GG/.github/actions/runs/39317658813)
+accepted generation33/all16 effects and [release417623644](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.109.0).
+Logical head is `bd0848b1e5c8318adbe840b411e69b431f75c724` under completed
+`utel-rel-27`; the final publisher's `699f60851288f5f817b98856bdd3d220cf27dd09` is
+an executor descendant, not the package producer. Original failed/forward runs, archives,
+channel and completed journal remain immutable.
+
+[Delivery4731](https://github.com/FS-GG/.github/issues/4731), under
+[Outcome4730](https://github.com/FS-GG/.github/issues/4730), retains its full source,
+publication, installed caller/instruction and ordinary native-observer acceptance.
+Programme/root remains sole integrator/publisher and the existing observer code owner
+is retained. This source readiness selects coherent110 over accepted109 for the accumulated
+mandatory Status lifecycle and finite read-only operation observer. It does not complete
+that Delivery or independently publish [Creator021](https://github.com/FS-GG/.github/issues/4727).
+
+The closed current tuple is version0.110.0, predecessor0.109.0, the genuine109 source/content
+above, logical ref `refs/heads/fsgg/v2/journal/release/coord110-observer-20261020-01` and
+protected-main directory `state/releases/coord110-observer-20261020-01`. This is a prospective
+root-chosen source identifier only: no namespace absence, allocation, reservation, journal
+creation or native authority has been observed or granted. Runtime must freshly authenticate
+selected Authority repository/main, protection, logical-ref/directory state, competing entries,
+both feeds and all selected tag/release identities before any first effect. Unknown or
+conflicting observations refuse; another namespace cannot bypass an unresolved write.
+
+The candidate and informational readiness workflow now bind110/109. Candidate qualification
+retains the45-minute existing graph, actual isolated install, standalone/causal receiver checks,
+separate packaged-V2 evidence and exact seven-member publisher archive. Its opening read checks
+predecessor/channel, both feeds and candidate tag/release eligibility; retention rechecks main
+and feed uniqueness. Source controls use inert external ports and preserve completed109/journal27
+state/head beside the real current ordinary-caller fixture. They are neither namespace/feed
+observations nor a genuine110 archive, hosted timing result or publication receipt.
+The readiness checks passed19 candidate controls and202 recovery cases:200 passed, with
+two explicit private-original census skips. The synthetic cold ordinary caller completed
+all16 effects with1222 Authority entries under the unchanged1500 ceiling, preserving the
+completed109 sibling state/head. These counts and virtual waits do not establish native
+network timing, hosted fit or availability.
+
+Integrate the accepted observer and Wizard source compositions, and any selected readiness
+source, before choosing the exact combined protected main candidate. Hold main stable only
+through that actual candidate qualification, publish=false preflight and first publication.
+Authenticate a successful first-attempt candidate/run/artifact/raw digest; use the same exact
+source and inputs for preflight and separately admitted publish=true. Existing EHotwagner,
+environment and single-operator restrictions, coherent-tag-only and all16 durable effect/both-feed
+readbacks remain unchanged. No candidate, pack, dispatch, credential, feed write, replay or
+installed update follows from this source window.
+
+Ordinary publication retains1500 Authority entries, quota floor1800,2700-second inner deadline,
+135 visibility probes and the60-minute hard publisher job. Candidate remains45 minutes;
+no budget, deadline or profile is renewed by this source successor. Historical102/103/104
+selectors and immutable authentication/recovery closures stay original. Completed109, all439
+inherited and46 later Unknowns, and every known source/runtime hold remain distinct/unreleased.
+The SDD1113 Commands2.3 occupancy Unknown remains scoped to its own effects; this window neither
+probes/retries it nor claims availability elsewhere.
+
+After genuine110 promotion, derive complete actual public package/instruction closures and
+qualify the intended installed110 caller before any activation or ordinary native observer use.
+The old109 SDK install deadline/cleanup uncertainty remains preserved separately from its later
+accepted existing82-member payload/version check. Source acceptance cannot establish installed
+adoption or the observer's declared changed-head/failure/interruption/restart/deadline/rollback
+acceptance, and Status grants no operation, release or closure authority.
+
+Creator021 currently qualifies normal source against coherent110; its retained020 genuine108
+published-dependency and consumed effect identities remain unchanged. A future021 public route
+must obtain actual promoted110 release/source/archive/manifest/member identities and a separately
+reviewed021 candidate/publication binding. No future pin is invented, no020/108 receipt becomes
+021 evidence, and coherent publication alone does not publish Creator or qualify its receivers.
+Registry published versions and consumer pins advance only after their actual promotion/adoption
+boundaries; no new scalar bump, current-public inventory claim or shared projection rewrite is
+required by this prospective source preparation.
