@@ -273,6 +273,8 @@ the standing safety advisories carry forward.
     <Compile Include="SkillCommandApplication.fs" />
     <Compile Include="BoardV2Application.fsi" />
     <Compile Include="BoardV2Application.fs" />
+    <Compile Include="OperationObservationApplication.fsi" />
+    <Compile Include="OperationObservationApplication.fs" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
