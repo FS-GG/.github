@@ -1436,6 +1436,104 @@ class Learn01ContractTests(unittest.TestCase):
                     with self.assertRaisesRegex(MODULE.Refusal, "lifecycle relation"):
                         self.lifecycle_report(content)
 
+    def test_lifecycle_long_producer_text_is_preserved_for_joins_and_accounting(self):
+        content = self.lifecycle_content()
+        long_item, long_invocation = "item-" + "x" * 513, "invocation-" + "x" * 513
+        content["learningObservations"] = [
+            {"canonical": json.dumps({**event, "itemId": long_item})}
+            for event in OBSERVATIONS["events"] if event.get("itemId") == "I-001"
+        ]
+        content["expectedDispatches"] = []; content["lineage"] = []
+        for relation in ("admissions", "starts", "terminals", "times", "usage"):
+            for row in content[relation]:
+                row.update(item_id=long_item, invocation_id=long_invocation)
+                if "identity" in row:
+                    row["identity"] += "x" * 513
+        content["starts"][0].update(thread_id="thread-" + "x" * 513, turn_id="turn-" + "x" * 513)
+        content["terminals"][0]["outcome"] = "outcome-" + "x" * 513
+        baseline = copy.deepcopy(content); del baseline["starts"]; del baseline["times"]
+        before = self.lifecycle_report(baseline)
+        after = self.lifecycle_report(content)
+        for key in before.keys() - {"lifecycleObservation", "snapshotRevision"}:
+            self.assertEqual(before[key], after[key], key)
+        summary = after["lifecycleObservation"]
+        self.assertEqual(1, summary["processStartPresence"]["present"])
+        self.assertEqual(1, summary["terminalOutcomes"]["other"])
+        # Equal prefixes do not alias distinct full input keys.
+        first = content["starts"][0]
+        content["starts"].extend([
+            {**first, "identity": "thread-fact-a", "phase": "thread", "thread_id": "t" * 600 + "a"},
+            {**first, "identity": "thread-fact-b", "phase": "thread", "thread_id": "t" * 600 + "b"},
+        ])
+        self.assertEqual(2, self.lifecycle_report(content)["lifecycleObservation"]["startRowsByPhase"]["thread"])
+        content["starts"].append({**content["starts"][-1], "identity": "another-fact"})
+        with self.assertRaisesRegex(MODULE.Refusal, "thread/turn start key"):
+            self.lifecycle_report(content)
+
+    def test_lifecycle_long_diagnostics_are_bounded_without_input_truncation(self):
+        content = self.lifecycle_content()
+        content["learningObservations"] = [
+            {"canonical": json.dumps(event)} for event in OBSERVATIONS["events"] if event.get("itemId") == "I-001"
+        ]
+        content["usage"] = []; content["expectedDispatches"] = []; content["lineage"] = []
+        prefix = "\u754c" * 600
+        content["admissions"] = [{**content["admissions"][0], "identity": "admit-" + str(i),
+                                  "invocation_id": prefix + str(i)} for i in range(30)]
+        content["starts"] = []; content["terminals"] = []; content["times"] = []
+        summary = self.lifecycle_report(content)["lifecycleObservation"]
+        missing = summary["processStartPresence"]["missing"]
+        self.assertEqual((30, 20, 10), (missing["count"], len(missing["sample"]), missing["omitted"]))
+        self.assertEqual(20, len({entry["jsonSha256"] for entry in missing["sample"]}))
+        for entry in missing["sample"]:
+            self.assertEqual(48, len(entry["prefix"]))
+            self.assertGreater(entry["characters"], 512)
+            self.assertLessEqual(len(json.dumps(entry, ensure_ascii=True).encode("ascii")), 512)
+        self.assertLess(len(json.dumps(summary, ensure_ascii=True).encode("ascii")), 65536)
+        content["admissions"].reverse()
+        self.assertEqual(summary, self.lifecycle_report(content)["lifecycleObservation"])
+
+    def test_lifecycle_whitespace_only_producer_fields_refuse(self):
+        for relation, field in (("starts", "identity"), ("starts", "thread_id"), ("starts", "turn_id"),
+                                ("terminals", "outcome"), ("terminals", "thread_id")):
+            for value in ("", " \t\r\n", "\u0085\u2003\u2028"):
+                with self.subTest(relation=relation, field=field, value=ascii(value)):
+                    content = self.lifecycle_content(); content[relation][0][field] = value
+                    with self.assertRaises(MODULE.Refusal):
+                        self.lifecycle_report(content)
+
+    def test_lifecycle_timestamp_requires_canonical_rfc3339_and_valid_calendar_offset(self):
+        values = ("2026-01-01 00:00:00Z", "20260101T000000Z", "2026-W01-1T00:00:00Z",
+                  "2026-01-01T00:00:00+00:00:30", "2026-01-01T00:00:00+0000",
+                  "2026-01-01T00:00:00,1Z", "2026-01-01t00:00:00Z", "2026-01-01T00:00:00z",
+                  "2026-01-01T00:00:00+14:01", "2026-01-01T00:00:00+15:00",
+                  "2026-01-01T00:00:00+00:99", "2026-02-30T00:00:00Z",
+                  "2026-01-01T24:00:00Z", "2026-01-01T00:00:60Z", "0001-01-01T00:00:00+14:00",
+                  "9999-12-31T23:59:59.99999999Z", "9999-12-31T23:59:59.99999999+01:00")
+        for field in ("occurred_at", "observed_at"):
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    content = self.lifecycle_content(); content["times"][0][field] = value
+                    with self.assertRaisesRegex(MODULE.Refusal, "timestamp is malformed"):
+                        self.lifecycle_report(content)
+
+    def test_lifecycle_fractional_offset_chronology_retains_raw_order_only(self):
+        content = self.lifecycle_content()
+        row = content["times"][1]
+        row.update(occurred_at="2026-01-01T01:00:00.1234567+01:00",
+                   observed_at="2026-01-01T00:00:00.1234567Z")
+        self.assertEqual(0, self.lifecycle_report(content)["lifecycleObservation"]["apparentTimestampOrderWarnings"]["count"])
+        row["observed_at"] = "2026-01-01T00:00:00.1234566Z"
+        summary = self.lifecycle_report(content)["lifecycleObservation"]
+        self.assertEqual(["inv-I-001:start"], summary["apparentTimestampOrderWarnings"]["sample"])
+        row.update(occurred_at="2026-01-01T14:00:00.10+14:00", observed_at="2025-12-31T10:00:00.1-14:00")
+        summary = self.lifecycle_report(content)["lifecycleObservation"]
+        self.assertEqual(0, summary["apparentTimestampOrderWarnings"]["count"])
+        self.assertEqual("unverified", summary["clockComparability"])
+        self.assertEqual("unknown", summary["waitCoverage"])
+        self.assertEqual("not-evaluated", summary["criticalPath"])
+        row.update(occurred_at="9999-12-31T23:59:59.9999999Z", observed_at="9999-12-31T23:59:59.9999999Z")
+        self.assertEqual(0, self.lifecycle_report(content)["lifecycleObservation"]["apparentTimestampOrderWarnings"]["count"])
+
     def test_lifecycle_malformed_fields_refuse_without_type_errors(self):
         cases = [("starts", "phase", []), ("starts", "process_id", True),
                  ("starts", "thread_id", []), ("starts", "turn_sequence", -1),

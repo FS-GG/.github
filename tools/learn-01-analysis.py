@@ -20,7 +20,7 @@ import time
 import unicodedata
 import uuid
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class Refusal(ValueError):
@@ -943,10 +943,55 @@ def lifecycle_observation_summary(relations: dict, invocations: dict, original_b
     """Audit retained evidence presence, without qualifying clocks, capture, or accounting."""
     def bounded(values):
         ordered = sorted(values)
-        return {"count": len(ordered), "sample": ordered[:20], "omitted": max(0, len(ordered) - 20)}
+        def render(value):
+            # Bound display independently of producer input acceptance. Keep
+            # full identities for joins, sorting, duplicate detection and counts.
+            encoded = json.dumps(value, ensure_ascii=True, separators=(",", ":")).encode("ascii")
+            if len(encoded) <= 512:
+                return value
+            return {"prefix": value[:48], "characters": len(value),
+                    "jsonSha256": hashlib.sha256(encoded).hexdigest()}
+        return {"count": len(ordered), "sample": [render(value) for value in ordered[:20]],
+                "omitted": max(0, len(ordered) - 20)}
 
     def text(value):
-        return isinstance(value, str) and 0 < len(value) <= 512
+        # Match requiredText/optionalText's String.IsNullOrWhiteSpace, including
+        # Unicode separators, without inventing an identity/outcome length cap.
+        return isinstance(value, str) and any(
+            char not in "\t\n\v\f\r\u0085" and unicodedata.category(char) not in ("Zs", "Zl", "Zp")
+            for char in value)
+
+    def timestamp(value):
+        # Match TelemetryStore.validTimestamp's shape before calendar/offset
+        # validation. fromisoformat alone admits additional non-RFC3339 forms.
+        if not isinstance(value, str):
+            raise Refusal("lifecycle timestamp is malformed")
+        match = re.fullmatch(
+            r"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})(?:\.([0-9]+))?(Z|[+-][0-9]{2}:[0-9]{2})",
+            value)
+        if match is None:
+            raise Refusal("lifecycle timestamp is malformed")
+        try:
+            if (int(match[1][11:13]) >= 24 or int(match[1][14:16]) >= 60
+                    or int(match[1][17:19]) >= 60):
+                raise ValueError("invalid time of day")
+            if match[3] != "Z" and int(match[3][-2:]) >= 60:
+                raise ValueError("invalid offset minutes")
+            whole = datetime.fromisoformat(match[1] + match[3].replace("Z", "+00:00"))
+            if abs(whole.utcoffset()) > timedelta(hours=14):
+                raise ValueError("DateTimeOffset range exceeded")
+            utc = whole.astimezone(timezone.utc)
+            # DateTimeOffset.TryParse rounds the parsed fractional second to
+            # ticks before its local/UTC range checks. A carry at year9999 is
+            # invalid even when parsing the whole second alone succeeds.
+            if match[2] and round(float("0." + match[2]) * 10000000) == 10000000:
+                (whole + timedelta(seconds=1)).astimezone(timezone.utc)
+        except (ValueError, OverflowError) as error:
+            raise Refusal("lifecycle timestamp is malformed") from error
+        # Preserve fractional ordering without Python's microsecond truncation
+        # or floating point rounding. This is still only a raw order warning.
+        return (utc.toordinal() * 86400 + utc.hour * 3600 + utc.minute * 60 + utc.second,
+                (match[2] or "").rstrip("0"))
 
     def integer(value):
         return type(value) is int and value >= 0
@@ -1035,15 +1080,7 @@ def lifecycle_observation_summary(relations: dict, invocations: dict, original_b
             if clock is not None and clock not in ("host-wall", "provider-native", "github-native"):
                 raise Refusal("lifecycle clock provenance is malformed")
             if value is not None:
-                if not text(value):
-                    raise Refusal("lifecycle timestamp is malformed")
-                try:
-                    timestamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
-                    if timestamp.tzinfo is None:
-                        raise ValueError("missing offset")
-                except ValueError as error:
-                    raise Refusal("lifecycle timestamp is malformed") from error
-                parsed[prefix] = timestamp
+                parsed[prefix] = timestamp(value)
                 time_counts[event][prefix + "Present"] += 1
             if clock is not None:
                 time_counts[event][prefix + "ClockPresent"] += 1

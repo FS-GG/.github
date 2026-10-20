@@ -34,15 +34,21 @@ An absent historical relation is `unavailable`, with missing-presence diagnostic
 set to null; a present empty relation reports missing evidence. Older summaries
 without retained identity/outcome columns expose those gaps. Malformed present
 relations, foreign joins and relations above 10,000 rows refuse within the existing
-snapshot byte bounds. Diagnostic samples contain at most 20 entries with exact
-counts and omitted counts. Replaying or reordering the same snapshot preserves
-the result; late evidence belongs to a separate snapshot result.
+snapshot byte bounds. Producer text retains its non-whitespace validation without
+an added identity length limit. Diagnostic samples contain at most 20 entries
+with exact counts and omitted counts. A sample string above 512 bytes in its
+ASCII JSON encoding is rendered as a 48-character prefix, original character
+count and `jsonSha256` of that full encoded string. Joins, duplicate checks and
+counts still use complete input identities. Replaying or reordering the same
+snapshot preserves the result; late evidence belongs to a separate snapshot result.
 
 A missing terminal remains unresolved, including after interruption or restart.
 Cancellation intent, actor exit and receiver observation order cannot supply an
 end or descendant retirement. Clock labels alone do not establish a shared clock
-domain; apparent timestamp reversals are evidence warnings, not duration or causal
-calculations. `clockComparability=unverified`, `waitCoverage=unknown` and
+domain; timestamps require the receiver's RFC 3339 shape and valid calendar/offset
+values. Apparent timestamp reversals preserve fractional ordering but remain
+evidence warnings, not duration or causal calculations.
+`clockComparability=unverified`, `waitCoverage=unknown` and
 `criticalPath=not-evaluated` remain explicit. Native population coverage is not
 assessed by this audit. Boundary-owned wait observations and qualified interval
 reduction, authentic collection, installed adoption and full LEARN acceptance
