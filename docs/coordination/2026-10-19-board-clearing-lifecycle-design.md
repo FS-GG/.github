@@ -721,3 +721,45 @@ nor claim fleet adoption, whole-board completion, actual restart or measured sav
 and46 later Unknown originals remain distinct and unreleased; closed unavailable historical searches
 stay closed. Reusable knowledge is superseded explicitly under the existing Atlas IDs
 `contract/new-sdd-workspace` and `github/programme-binding-custody-recovery`.
+
+
+### Next knowledge receiver delivery — 2026-10-20
+
+[Delivery4720](https://github.com/FS-GG/.github/issues/4720) owns clean public
+console Typed SDD creation and the complete installed knowledge capture/recovery
+journey under [Outcome4642](https://github.com/FS-GG/.github/issues/4642).
+Completed [Delivery4708](https://github.com/FS-GG/.github/issues/4708) establishes
+the separately qualified Rendering creation/checker/clone assertions; it does not
+establish this console journey. The full parent promise remains unchanged.
+
+Programme/root owns qualification; Templates owns composition and SDD owns the
+knowledge contract. Reuse the existing Templates knowledge-receiver probe and
+findings through a narrow current-public adapter. Preserve historical drivers.
+The genuine generated receiver, CI assets and exact local tool pin must enter the
+normal caller initial commit before probe mutations. The shared export used to
+prove private-store exclusion must be produced after private capture. Bound and
+journal every transitive command, including probe Git operations.
+
+Use genuine Wizard0.19 and SDD2.2 with immutable Templatesf5fbd06 console metadata.
+Its Workspace0.19.0 package is distinct from Rendering's0.18.2 overlay. Public019
+pinned preflight first requires sole exact0.18.2 Governance/knowledge registration;
+SDD then installs the console descriptor's0.19.0. Qualify both archive identities
+and the actual transition. Supply every generated-manifest tool dependency before
+ordinary restore, retaining the earlier missing Coord dependency failure.
+
+Acceptance includes four concise findings, normal later Git inclusion,
+history/version retrieval, preserving reinitialization, stale-write and invalid
+payload refusals, lossless export/restore and conflicting-restore preservation,
+post-private-capture export isolation, cache-free clone retrieval and the ordinary
+pinned common checker's exact10MiB acceptance/one-byte-over refusal. Independently
+review the exact invocation, immutable inputs, first failures, exits and cleanup.
+Other providers, raw templates and promised retained upgrades remain in Outcome4642.
+
+The public commitment change prepares the complete38-identity successor pair,
+preserving all37 original enrolled identities and plan paths. Native issue creation
+and parent linking are independently read back. Membership, absent-only planning
+and classification, protected source delivery, authenticated private binding and
+actual installed109 qualification remain separate effects. Neither this paragraph
+nor a linked issue selects implementation or runtime. Fresh resource/ownership
+admission must bind the selected supported profile and relevant original holds;
+all439 inherited and46 later Unknown originals remain distinct and unreleased.
