@@ -17,7 +17,7 @@ import urllib.request
 from fsgg_feed import _StripAuthOnRedirect
 from release_successor_execution import Dispatch, Effect, Observation, Refused as ExecutionRefused
 from release_successor_provider import GitHubAPI, LiveProvider, NotFound, Refused
-from new_sdd_workspace_successor_execution import PACKAGE, VERSION, TAG, effects
+from new_sdd_workspace_successor_execution import PACKAGE, effects, CURRENT_021
 
 REPOSITORY = "FS-GG/.github"
 
@@ -70,21 +70,22 @@ def publisher_error(error):
 
 
 class WizardProvider(LiveProvider):
-    def __init__(self, api: GitHubAPI, manifest_path: pathlib.Path, github_token: str, nuget_key: str):
+    def __init__(self, api: GitHubAPI, manifest_path: pathlib.Path, github_token: str, nuget_key: str, *, release_binding=CURRENT_021):
         self.api = api
         self.manifest_path = manifest_path
         self.root = manifest_path.parent
         self.manifest = json.loads(manifest_path.read_text())
-        self.content_id, self.ordered = effects(self.manifest)
-        self.version = VERSION
+        self.content_id, self.ordered = effects(self.manifest, binding=release_binding)
+        self.package_id = release_binding.package
+        self.version = release_binding.version
         self.source = self.manifest["sourceSha"]
-        self.tag = TAG
+        self.tag = release_binding.tag
         self.marker = f"new-sdd-workspace-successor:{self.content_id}"
         self.github_token = github_token
         self.nuget_key = nuget_key
         self.observed = self.root / "feed-observations"
         self.observed.mkdir(exist_ok=True)
-        self.package = self.root / f"{PACKAGE}.{VERSION}.nupkg"
+        self.package = self.root / f"{release_binding.package}.{release_binding.version}.nupkg"
         self.journal = self.root / "publication-journal.json"
         self._diagnostic_count = 0
 
@@ -118,7 +119,7 @@ class WizardProvider(LiveProvider):
             env = {**os.environ, "NUGET_PACKAGES": str(root / "packages"),
                    "NUGET_HTTP_CACHE_PATH": str(root / "http-cache"),
                    "DOTNET_CLI_HOME": str(root / "dotnet-home")}
-            command = ["dotnet", "tool", "install", PACKAGE, "--version", VERSION,
+            command = ["dotnet", "tool", "install", self.package_id, "--version", self.version,
                        "--tool-path", str(root / "tool"), "--configfile", str(config)]
             try:
                 installed = subprocess.run(command, capture_output=True, text=True, timeout=180, env=env)
@@ -143,12 +144,12 @@ class WizardProvider(LiveProvider):
             return help_result.returncode == 0 and matched
 
     def _download_package(self, feed: str, package: str = PACKAGE) -> pathlib.Path | None:
-        if package != PACKAGE or feed not in {"github", "nuget"}:
+        if package != self.package_id or feed not in {"github", "nuget"}:
             raise Refused("unknown Wizard package or feed")
-        ident = f"fs.gg.newsddworkspace.{VERSION}.nupkg"
-        url = (f"https://nuget.pkg.github.com/FS-GG/download/fs.gg.newsddworkspace/{VERSION}/{ident}"
+        ident = f"fs.gg.newsddworkspace.{self.version}.nupkg"
+        url = (f"https://nuget.pkg.github.com/FS-GG/download/fs.gg.newsddworkspace/{self.version}/{ident}"
                if feed == "github" else
-               f"https://api.nuget.org/v3-flatcontainer/fs.gg.newsddworkspace/{VERSION}/{ident}")
+               f"https://api.nuget.org/v3-flatcontainer/fs.gg.newsddworkspace/{self.version}/{ident}")
         headers = {"User-Agent": "fsgg-wizard-successor"}
         if feed == "github":
             headers["Authorization"] = "Basic " + base64.b64encode(f"x:{self.github_token}".encode()).decode()
@@ -193,7 +194,7 @@ class WizardProvider(LiveProvider):
         identity = effect.identity
         if identity == "tag":
             try:
-                tag = self.api.get(f"repos/{REPOSITORY}/git/ref/tags/{TAG}")
+                tag = self.api.get(f"repos/{REPOSITORY}/git/ref/tags/{self.tag}")
             except NotFound:
                 return Observation("absent")
             actual = tag.get("object", {}).get("sha")
@@ -202,7 +203,7 @@ class WizardProvider(LiveProvider):
             release = self._release()
             if release is None:
                 return Observation("absent")
-            valid = release.get("tag_name") == TAG and self.marker in release.get("body", "")
+            valid = release.get("tag_name") == self.tag and self.marker in release.get("body", "")
             return Observation("matched" if valid else "mismatched", self.content_id if valid else None)
         if identity in {"github", "nuget"}:
             try:
@@ -235,11 +236,11 @@ class WizardProvider(LiveProvider):
         stage = "dispatch"
         try:
             if identity == "tag":
-                self.api.post(f"repos/{REPOSITORY}/git/refs", {"ref": f"refs/tags/{TAG}", "sha": self.source})
+                self.api.post(f"repos/{REPOSITORY}/git/refs", {"ref": f"refs/tags/{self.tag}", "sha": self.source})
             elif identity == "draft":
                 self.api.post(f"repos/{REPOSITORY}/releases",
-                              {"tag_name": TAG, "target_commitish": self.source,
-                               "name": f"FS.GG.NewSddWorkspace {VERSION}", "body": self.marker,
+                              {"tag_name": self.tag, "target_commitish": self.source,
+                               "name": f"FS.GG.NewSddWorkspace {self.version}", "body": self.marker,
                                "draft": True, "prerelease": False})
             elif identity in {"github", "nuget"}:
                 key = self.github_token if identity == "github" else self.nuget_key

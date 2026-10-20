@@ -16,10 +16,18 @@ import subprocess
 import urllib.request
 
 from creator_source_qualification import SOURCE_020, qualification_version
-from new_sdd_workspace_successor_execution import CURRENT_020
+from new_sdd_workspace_successor_execution import CURRENT_020, CURRENT_021
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PIN_PATH = pathlib.Path('scripts/creator-current-coord-dependencies.json')
+PIN_021_PATH = pathlib.Path('scripts/creator021-coord-dependencies.json')
+
+
+def binding_pin_path(binding):
+    require(binding is CURRENT_020 or binding is CURRENT_021, 'unknown Creator dependency binding')
+    return PIN_021_PATH if binding is CURRENT_021 else PIN_PATH
+
+
 old = runpy.run_path(str(ROOT / 'scripts/creator-frozen-coord-dependencies.py'))
 require, regular, digest = (old[name] for name in ('require', 'regular', 'digest'))
 PREFIX = old['PREFIX']
@@ -40,15 +48,17 @@ def read_json(body):
     return json.loads(body, object_pairs_hook=object_pairs)
 
 
-def validate_pin(pin):
+def validate_pin(pin, *, release_binding=CURRENT_020):
+    binding_pin_path(release_binding)
+    coherent = '0.110.0' if release_binding is CURRENT_021 else '0.108.0'
     require(isinstance(pin, dict) and pin.get('schema') == 'fsgg.creator-current-coord-dependencies/1'
-            and pin.get('version') == '0.108.0', 'current dependencies require promoted coherent 0.108.0 pin')
+            and pin.get('version') == coherent, 'current dependencies require promoted coherent ' + coherent + ' pin')
     for field, size in (('sourceSha', 40), ('archiveSha256', 64), ('promotedManifestSha256', 64)):
         require(isinstance(pin.get(field), str) and re.fullmatch('[0-9a-f]{' + str(size) + '}', pin[field]),
                 'invalid current dependency ' + field)
     for field in ('releaseId', 'assetId', 'promotedManifestAssetId'):
         require(type(pin.get(field)) is int and pin[field] > 0, 'missing promoted dependency ' + field)
-    require(pin.get('downloadUrl') == 'https://github.com/FS-GG/.github/releases/download/coherent-set/v0.108.0/FS.GG.Coord.Cli.0.108.0.nupkg',
+    require(pin.get('downloadUrl') == f'https://github.com/FS-GG/.github/releases/download/coherent-set/v{coherent}/FS.GG.Coord.Cli.{coherent}.nupkg',
             'current dependency download identity differs')
     members = pin.get('members')
     require(isinstance(members, dict) and {'FS.GG.Coord.GitHub.dll', 'fsgg-coord-engine.dll',
@@ -74,18 +84,19 @@ def validate_pin(pin):
     return pin
 
 
-def load_pin(root=ROOT):
+def load_pin(root=ROOT, *, release_binding=CURRENT_020):
     """Only the fixed protected-source path; no caller-provided provenance path."""
-    path = root / PIN_PATH
-    require(path.exists(), 'Creator 0.19 release fenced: genuine promoted 0.108 dependency pin absent')
-    return validate_pin(read_json(regular(path)))
+    path = root / binding_pin_path(release_binding)
+    require(path.exists(), 'Creator release fenced: genuine promoted dependency pin absent')
+    return validate_pin(read_json(regular(path)), release_binding=release_binding)
 
 
-def protected_pin(source_sha):
-    pin = load_pin()
+def protected_pin(source_sha, *, release_binding=CURRENT_020):
+    pin = load_pin() if release_binding is CURRENT_020 else load_pin(release_binding=release_binding)
+    pin_path = binding_pin_path(release_binding)
     require(re.fullmatch('[0-9a-f]{40}', source_sha) is not None, 'invalid protected creator source')
-    original = subprocess.check_output(['git', '-C', str(ROOT), 'show', source_sha + ':' + PIN_PATH.as_posix()], timeout=10)
-    protected = subprocess.check_output(['git', '-C', str(ROOT), 'show', 'HEAD:' + PIN_PATH.as_posix()], timeout=10)
+    original = subprocess.check_output(['git', '-C', str(ROOT), 'show', source_sha + ':' + pin_path.as_posix()], timeout=10)
+    protected = subprocess.check_output(['git', '-C', str(ROOT), 'show', 'HEAD:' + pin_path.as_posix()], timeout=10)
     require(read_json(original) == pin == read_json(protected), 'candidate dependency pin differs from protected publisher source')
     return pin
 
@@ -99,7 +110,7 @@ def acquire(destination, pin):
         require(len(body) <= 134217728, 'dependency acquisition bound exceeded')
         return body
     release = read_json(request('https://api.github.com/repos/FS-GG/.github/releases/' + str(pin['releaseId'])))
-    require(release.get('id') == pin['releaseId'] and release.get('tag_name') == 'coherent-set/v0.108.0'
+    require(release.get('id') == pin['releaseId'] and release.get('tag_name') == 'coherent-set/v' + pin['version']
             and release.get('draft') is False and release.get('prerelease') is False, 'producer release not promoted')
     asset_rows = read_json(request('https://api.github.com/repos/FS-GG/.github/releases/' + str(pin['releaseId']) + '/assets?per_page=100&page=1'))
     require(isinstance(asset_rows, list) and len(asset_rows) < 100
@@ -109,7 +120,7 @@ def acquire(destination, pin):
     package = assets.get(pin['assetId'], {})
     manifest = assets.get(pin['promotedManifestAssetId'], {})
     require(package.get('browser_download_url') == pin['downloadUrl']
-            and package.get('name') == 'FS.GG.Coord.Cli.0.108.0.nupkg', 'producer asset identity differs')
+            and package.get('name') == 'FS.GG.Coord.Cli.' + pin['version'] + '.nupkg', 'producer asset identity differs')
     require(manifest.get('name') == 'release-manifest.json', 'promoted manifest asset identity differs')
     manifest_body = request(manifest['browser_download_url'])
     require(digest(manifest_body) == pin['promotedManifestSha256'], 'promoted manifest digest differs')
@@ -135,7 +146,7 @@ def dependency_metadata(deps, producer, pin):
     project name. This one root translation does not rewrite either document.
     Internal libraries retain their producer identities (currently 1.0.0).
     """
-    source_root, reference_root = 'fsgg-coord-engine/0.108.0', 'FS.GG.Coord.Cli/0.108.0'
+    source_root, reference_root = 'fsgg-coord-engine/' + pin['version'], 'FS.GG.Coord.Cli/' + pin['version']
     source_libraries, libraries = producer.get('libraries'), deps.get('libraries')
     source_targets, targets = producer.get('targets'), deps.get('targets')
     require(all(isinstance(value, dict) for value in (source_libraries, libraries, source_targets, targets))
@@ -183,10 +194,12 @@ def dependency_metadata(deps, producer, pin):
                         for asset in value.get('runtime', {})), 'published runtime metadata shadow')
 
 
-def package_members(package, pin, *, source_binding=None):
+def package_members(package, pin, *, source_binding=None, release_binding=None):
     """Recompute every producer member and reject alternate DLL shadowing."""
-    version = qualification_version(source_binding)
-    validate_pin(pin)
+    require(release_binding is None or (release_binding is CURRENT_021 and source_binding is None),
+            'unknown Creator release qualification binding')
+    version = CURRENT_021.version if release_binding is CURRENT_021 else qualification_version(source_binding)
+    validate_pin(pin, release_binding=CURRENT_021 if release_binding is CURRENT_021 else CURRENT_020)
     with zipfile.ZipFile(package) as archive:
         entries = archive.infolist()
         names = [row.filename for row in entries]
@@ -204,10 +217,10 @@ def package_members(package, pin, *, source_binding=None):
             if name.endswith('.dll') and pathlib.PurePosixPath(name).name.casefold() in shared_dlls:
                 require(name.startswith(PREFIX) and name[len(PREFIX):] in pin['members'], 'alternate dependency DLL shadow')
         deps = read_json(archive.read(PREFIX + 'new-sdd-workspace.deps.json'))
-        cli = 'FS.GG.Coord.Cli/0.108.0'
+        cli = 'FS.GG.Coord.Cli/' + pin['version']
         require(deps.get('libraries', {}).get(cli, {}).get('type') == 'project'
                 and deps.get('targets') and all(
-                    target.get('new-sdd-workspace/' + version, {}).get('dependencies', {}).get('FS.GG.Coord.Cli') == '0.108.0'
+                    target.get('new-sdd-workspace/' + version, {}).get('dependencies', {}).get('FS.GG.Coord.Cli') == pin['version']
                     and 'fsgg-coord-engine.dll' in target.get(cli, {}).get('runtime', {})
                     for target in deps['targets'].values()), 'Creator 0.19 dependency metadata differs')
         # This member already passed the complete original-byte comparison above.
@@ -216,14 +229,16 @@ def package_members(package, pin, *, source_binding=None):
     return dict(pin['members'])
 
 
-def evidence(package, source_sha, pin, *, fixtures_passed, source_binding=None):
+def evidence(package, source_sha, pin, *, fixtures_passed, source_binding=None, release_binding=None):
     require(fixtures_passed is True, 'published dependency compiled fixtures not accepted')
-    version = qualification_version(source_binding)
-    if source_binding is SOURCE_020:
+    require(release_binding is None or (release_binding is CURRENT_021 and source_binding is None),
+            'unknown Creator release qualification binding')
+    version = CURRENT_021.version if release_binding is CURRENT_021 else qualification_version(source_binding)
+    if source_binding is SOURCE_020 or release_binding is CURRENT_021:
         checker = runpy.run_path(str(ROOT / 'scripts/new-sdd-workspace-release.py'))
-        require(checker['package_identity'](package) == (SOURCE_020.package, version, source_sha),
+        require(checker['package_identity'](package) == (CURRENT_021.package if release_binding is CURRENT_021 else SOURCE_020.package, version, source_sha),
                 'Creator020 source qualification package/source identity differs')
-    members = package_members(package, pin, source_binding=source_binding)
+    members = package_members(package, pin, source_binding=source_binding, release_binding=release_binding)
     result = {'schema': SCHEMA, 'mode': MODE, 'version': version, 'sourceSha': source_sha,
             'publishedDependencySourceSha': pin['sourceSha'], 'coherentVersion': pin['version'],
             'dependencyPinSha256': pin_digest(pin), 'producerArchiveSha256': pin['archiveSha256'],
@@ -245,16 +260,17 @@ def verify_evidence(body, package, manifest, pin, *, source_binding=None):
 
 
 def release_evidence(package, source_sha, pin, *, fixtures_passed, release_binding=CURRENT_020):
-    """Recompute a fresh closed020 release qualification, never upgrade an old receipt.
+    """Recompute a closed020 or021 qualification, never upgrade an old receipt.
 
     The successful original candidate workflow supplies the compiled fixture verdict;
     its authenticated run/archive is checked independently by the artifact reader.
     Neither this evidence nor its eligibility field grants publication authority.
     """
-    require(release_binding is CURRENT_020, 'unknown Creator release qualification binding')
-    result = evidence(package, source_sha, pin, fixtures_passed=fixtures_passed, source_binding=SOURCE_020)
-    return {**result, 'schema': 'fsgg.creator020-release-qualification/1',
-            'releaseBinding': CURRENT_020.tag, 'sourceQualificationOnly': False, 'releaseEligible': True}
+    require(release_binding is CURRENT_020 or release_binding is CURRENT_021, 'unknown Creator release qualification binding')
+    result = evidence(package, source_sha, pin, fixtures_passed=fixtures_passed,
+                      **({'release_binding': CURRENT_021} if release_binding is CURRENT_021 else {'source_binding': SOURCE_020}))
+    return {**result, 'schema': 'fsgg.creator' + ('021' if release_binding is CURRENT_021 else '020') + '-release-qualification/1',
+            'releaseBinding': release_binding.tag, 'sourceQualificationOnly': False, 'releaseEligible': True}
 
 
 def verify_release_evidence(body, package, manifest, pin, *, release_binding=CURRENT_020):
@@ -262,8 +278,8 @@ def verify_release_evidence(body, package, manifest, pin, *, release_binding=CUR
     expected = release_evidence(package, manifest['sourceSha'], pin, fixtures_passed=True,
                                 release_binding=release_binding)
     require(body == expected, 'Creator020 release qualification differs or is source-only')
-    require(manifest.get('packageId') == CURRENT_020.package and manifest.get('version') == CURRENT_020.version
-            and manifest.get('tag') == CURRENT_020.tag and manifest.get('archiveSha256') == expected['archiveSha256'],
+    require(manifest.get('packageId') == release_binding.package and manifest.get('version') == release_binding.version
+            and manifest.get('tag') == release_binding.tag and manifest.get('archiveSha256') == expected['archiveSha256'],
             'Creator020 release manifest/package join differs')
     return expected
 
@@ -276,13 +292,13 @@ if __name__ == '__main__':
     parser.add_argument('--package', type=pathlib.Path)
     parser.add_argument('--source-sha')
     args = parser.parse_args()
-    pin = load_pin()
+    pin = load_pin(release_binding=CURRENT_021)
     if args.command == 'preflight':
         print(json.dumps({'mode': MODE, 'dependencyPinSha256': pin_digest(pin)}))
     elif args.command == 'acquire':
         print(json.dumps(acquire(args.package, pin), sort_keys=True))
     elif args.command == 'verify-package':
-        print(json.dumps(evidence(args.package, args.source_sha, pin, fixtures_passed=True), sort_keys=True))
+        print(json.dumps(release_evidence(args.package, args.source_sha, pin, fixtures_passed=True, release_binding=CURRENT_021), sort_keys=True))
     else:
         require(args.producer_source is not None, 'isolated producer source required')
         if args.command == 'verify-source':

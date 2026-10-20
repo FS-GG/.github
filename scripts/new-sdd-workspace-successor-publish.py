@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish the exact Wizard 0.20.0 candidate through fresh admitted effects."""
+"""Publish the exact Wizard 0.21.0 candidate through fresh admitted effects."""
 
 from __future__ import annotations
 
@@ -17,11 +17,11 @@ from release_successor_execution import Refused, advance_effects
 from release_successor_journal import ProtectedReleaseJournal
 from release_successor_provider import GitHubAPI
 from new_sdd_workspace_successor_admission import WizardAdmission
-from new_sdd_workspace_successor_execution import effects
+from new_sdd_workspace_successor_execution import effects, CURRENT_021
 from new_sdd_workspace_successor_provider import WizardProvider, publisher_error
 
 REPOSITORY = "FS-GG/.github"
-REF = "refs/heads/fsgg/v2/journal/release/board-v2-product-creator-020"
+REF = "refs/heads/fsgg/v2/journal/release/board-v2-product-creator-021"
 
 
 def require(ok: bool, detail: str) -> None:
@@ -40,12 +40,12 @@ def publication_primitives():
 
 
 def publication_report(candidate_run, artifact, archive, mode):
-    return {"schema": "fsgg.creator020-publication-summary/1", "mode": mode,
+    return {"schema": "fsgg.creator021-publication-summary/1", "mode": mode,
             "candidateRunId": candidate_run, "candidateArtifactId": artifact,
             "candidateArchiveSha256": archive, "candidateSourceSha": None,
             "publisherSourceSha": None, "publisherRunId": None,
             "logicalJournalRef": REF, "physicalJournalRef": "refs/heads/main",
-            "physicalJournalDirectory": "state/releases/board-v2-product-creator-020",
+            "physicalJournalDirectory": "state/releases/board-v2-product-creator-021",
             "classifiedPhysicalHead": None, "fresh": None, "startingJournal": None,
             "lastObservedJournal": None, "journalMutationMayHaveOccurred": False,
             "lastDispatch": None, "iterationsAttempted": 0, "complete": False,
@@ -206,13 +206,13 @@ def main() -> int:
                                 args.candidate_archive_sha256,
                                 "preflight" if args.preflight_only else "publish")
     counted = None
-    summary = args.workdir.parent / "creator020-publication-summary.json"
+    summary = args.workdir.parent / "creator021-publication-summary.json"
     outcome = 1
     try:
         require(args.recovery_binding is None, "recovery binding outside selected mode")
         import runpy
         current_dependencies = runpy.run_path(str(pathlib.Path(__file__).with_name("creator-current-coord-dependencies.py")))
-        dependency_pin = current_dependencies["load_pin"]()
+        dependency_pin = current_dependencies["load_pin"](release_binding=CURRENT_021)
         publisher_sha = os.environ["GITHUB_SHA"]
         report["publisherSourceSha"] = publisher_sha
         operator = os.environ["GITHUB_ACTOR"]
@@ -256,11 +256,11 @@ def main() -> int:
                         "--source-sha", candidate_source, "--output", str(candidate)], check=True)
         manifest_path = candidate / "manifest.json"
         manifest = json.loads(manifest_path.read_text())
-        require(current_dependencies["protected_pin"](candidate_source) == dependency_pin,
+        require(current_dependencies["protected_pin"](candidate_source, release_binding=CURRENT_021) == dependency_pin,
                 "dependency pin changed between publisher preflight and candidate verification")
         current_dependencies["verify_release_evidence"](
             current_dependencies["read_json"]((candidate / "package-evidence.json").read_bytes()),
-            candidate / "FS.GG.NewSddWorkspace.0.20.0.nupkg", manifest, dependency_pin)
+            candidate / "FS.GG.NewSddWorkspace.0.21.0.nupkg", manifest, dependency_pin, release_binding=CURRENT_021)
         content_id, ordered = effects(manifest)
         primitives = publication_primitives()
         report["stage"] = "quota"
@@ -269,7 +269,7 @@ def main() -> int:
         admission = primitives.ProtectedPublisherAdmission(
             WizardAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main"), counted, REF)
         provider = primitives.ReportingProvider(WizardProvider(api, manifest_path, github_token, nuget_key), report)
-        intent = {"contentId": content_id, "sourceSha": candidate_source, "version": "0.20.0",
+        intent = {"contentId": content_id, "sourceSha": candidate_source, "version": "0.21.0",
                   "candidateArchiveSha256": args.candidate_archive_sha256, "operator": operator}
         journal = primitives.ReportingJournal(ProtectedReleaseJournal(counted, REF, main_directory=True), report)
         report["stage"] = "preparation"
