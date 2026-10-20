@@ -13,3 +13,37 @@ The fixed fixtures in `tests/learn-01-analysis/fixtures/causal-admission/` are s
 Local source qualification on the isolated C1 candidate passed 46 Python analyzer tests, three focused Core decoder tests, one CLI schema-14 temporary-store ingress/reopen/replay/refusal test and one Dashboard private-row projection test. The synthetic fixture manifest SHA-256 is `58de080758af83f2e243faf6995a44a529d00f810d43b2ac64753d14f59ce880`. The source-built CLI DLL SHA-256 is `e3a0f5949cb54c7a00d2883083fd05d0efcd239fc18eb07a4e4c850a1492ef87`. A later controlled C3 source-artifact fixture passed genuine C2 batch ingestion, separate-process reopen, eight-batch replay and analyzer own joins with generic local receipts; it did not qualify a packed or installed receiver or native collector. The subsequent receipt-route repair passed both named causal CLI tests from its pinned source build, including terminal conflict rejection and canonical retention. Its first test-host attempt aborted before executing tests because the configured runtime roll-forward policy excluded the installed patch; a fresh test-only attempt with the installed patch passed 2/2. Earlier local restore/compiler/test-helper failures and the first synthetic assignment-scaffold refusal remain retained in the private qualification record. These checks used disposable source fixtures and temporary stores; they did not ingest into an installed observer or establish native provenance.
 
 Source order is merged A1–A3, C1 receiver, C2 producer, then C3 exact composition. Publication and installed adoption remain separate: adopt a compatible receiver before enabling new producer emission. This source window does not select a dependency wait or change fresh-workspace defaults. LEARN-01.2 and LEARN-01.4 remain open pending installed custody, independent population and shared-cost evidence, and the later qualified wait/lifecycle reduction.
+
+## Advisory lifecycle evidence
+
+The [private analyzer](../../tools/learn-01-analysis.py) adds `lifecycleObservation`
+from the existing selected snapshot's `starts`, `terminals` and `times` relations.
+It reports process-start and terminal presence for admitted invocations, terminal
+outcome categories, timestamp/clock-field presence, multiple observations and
+apparent within-row timestamp reversals. These diagnostics do not change token,
+native-source, shared-cost or enrollment qualification.
+
+Process-start presence requires a process row. Thread and turn rows cannot replace
+it. Phase and PID alone are not uniqueness keys: distinct process observations,
+threads and turns remain visible. Duplicate retained identities and the receiver's
+actual thread `(invocation, thread)` and turn `(invocation, thread, sequence)` keys
+refuse. Nullable historical thread fields retain their existing meaning. Multiple
+time observations remain visible rather than becoming inferred starts or ends.
+
+An absent historical relation is `unavailable`, with missing-presence diagnostics
+set to null; a present empty relation reports missing evidence. Older summaries
+without retained identity/outcome columns expose those gaps. Malformed present
+relations, foreign joins and relations above 10,000 rows refuse within the existing
+snapshot byte bounds. Diagnostic samples contain at most 20 entries with exact
+counts and omitted counts. Replaying or reordering the same snapshot preserves
+the result; late evidence belongs to a separate snapshot result.
+
+A missing terminal remains unresolved, including after interruption or restart.
+Cancellation intent, actor exit and receiver observation order cannot supply an
+end or descendant retirement. Clock labels alone do not establish a shared clock
+domain; apparent timestamp reversals are evidence warnings, not duration or causal
+calculations. `clockComparability=unverified`, `waitCoverage=unknown` and
+`criticalPath=not-evaluated` remain explicit. Native population coverage is not
+assessed by this audit. Boundary-owned wait observations and qualified interval
+reduction, authentic collection, installed adoption and full LEARN acceptance
+remain separate work; this source capability grants no operating authority.

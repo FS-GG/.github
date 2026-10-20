@@ -1330,6 +1330,190 @@ class Learn01ContractTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.Refusal, "repair does not follow acceptance"):
             MODULE.validate_corpus(CONTRACT, corpus)
 
+    def lifecycle_content(self):
+        content = self.complete_v3_content()
+        own = {"item_id": "I-001", "invocation_id": "inv-I-001"}
+        content["starts"] = [
+            {**own, "identity": "start-process", "phase": "process", "process_id": 7,
+             "thread_id": None, "turn_id": None, "turn_sequence": None},
+        ]
+        content["terminals"] = [{**own, "identity": "terminal", "outcome": "completed", "exit_code": 0}]
+        content["times"] = [
+            {**own, "identity": "time-" + event, "event": event,
+             "occurred_at": "2026-01-01T00:00:0" + str(index) + "Z",
+             "observed_at": "2026-01-01T00:00:0" + str(index) + "Z",
+             "occurred_clock_provenance": "host-wall", "observed_clock_provenance": "host-wall"}
+            for index, event in enumerate(("admission", "start", "terminal"))
+        ]
+        return content
+
+    def lifecycle_report(self, content):
+        return MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content, version=4))
+
+    def test_lifecycle_presence_is_advisory_and_preserves_every_accounting_result(self):
+        baseline = self.lifecycle_report(self.complete_v3_content())
+        content = self.lifecycle_content()
+        result = self.lifecycle_report(content)
+        summary = result["lifecycleObservation"]
+        self.assertEqual(1, summary["processStartPresence"]["present"])
+        self.assertEqual(0, summary["processStartPresence"]["missing"]["count"])
+        self.assertEqual(1, summary["terminalPresence"]["present"])
+        self.assertEqual(1, summary["terminalOutcomes"]["completed"])
+        for event in ("admission", "start", "terminal"):
+            self.assertEqual(1, summary["timestamps"][event]["occurredPresent"])
+        self.assertEqual("unverified", summary["clockComparability"])
+        self.assertEqual("unknown", summary["waitCoverage"])
+        self.assertEqual("not-evaluated", summary["criticalPath"])
+        self.assertEqual("not-assessed", summary["nativePopulationCoverage"])
+        for key in baseline.keys() - {"lifecycleObservation", "snapshotRevision"}:
+            self.assertEqual(baseline[key], result[key], key)
+        for field in ("duration", "waitSeconds", "tokenTotal", "operationalReady"):
+            self.assertNotIn(field, summary)
+
+    def test_lifecycle_preserves_distinct_processes_threads_and_turns_sharing_phase(self):
+        content = self.lifecycle_content()
+        process = content["starts"][0]
+        content["starts"].append({**process, "identity": "second-process"})  # PID alone is not unique.
+        for thread in ("thread-a", "thread-b"):
+            content["starts"].append({**process, "identity": thread, "phase": "thread", "thread_id": thread})
+            for sequence in (0, 1):
+                content["starts"].append({**process, "identity": thread + str(sequence), "phase": "turn",
+                                          "thread_id": thread, "turn_id": "turn-" + str(sequence),
+                                          "turn_sequence": sequence})
+        summary = self.lifecycle_report(content)["lifecycleObservation"]
+        self.assertEqual({"process": 2, "thread": 2, "turn": 4}, summary["startRowsByPhase"])
+        self.assertEqual(1, summary["processStartPresence"]["present"])
+        self.assertEqual(["inv-I-001"], summary["multipleProcessStarts"]["sample"])
+        content["starts"] = [row for row in content["starts"] if row["phase"] != "process"]
+        summary = self.lifecycle_report(content)["lifecycleObservation"]
+        self.assertEqual(0, summary["processStartPresence"]["present"])
+        self.assertEqual(["inv-I-001"], summary["processStartPresence"]["missing"]["sample"])
+
+    def test_lifecycle_duplicate_fact_and_actual_thread_turn_keys_refuse(self):
+        for phase in ("process", "thread", "turn"):
+            for change_identity in (False, True):
+                if phase == "process" and change_identity:
+                    continue
+                with self.subTest(phase=phase, changed_identity=change_identity):
+                    content = self.lifecycle_content()
+                    row = content["starts"][0]
+                    row.update(phase=phase, thread_id="thread", turn_id="turn", turn_sequence=0)
+                    duplicate = {**row}
+                    if change_identity:
+                        duplicate.update(identity="different-fact", turn_id="conflicting-turn")
+                    content["starts"].append(duplicate)
+                    with self.assertRaisesRegex(MODULE.Refusal, "duplicat"):
+                        self.lifecycle_report(content)
+        for relation in ("terminals", "times"):
+            with self.subTest(relation=relation):
+                content = self.lifecycle_content()
+                content[relation].append(copy.deepcopy(content[relation][0]))
+                with self.assertRaisesRegex(MODULE.Refusal, "duplicat"):
+                    self.lifecycle_report(content)
+
+    def test_lifecycle_old_absent_relations_are_unknown_and_partial_columns_stay_visible(self):
+        content = self.complete_v3_content()
+        summary = self.lifecycle_report(content)["lifecycleObservation"]
+        self.assertEqual("unavailable", summary["relations"]["starts"])
+        self.assertIsNone(summary["processStartPresence"]["missing"])
+        self.assertIsNone(summary["timestamps"]["start"]["eventPresence"]["missing"])
+        self.assertEqual(1, summary["terminalOutcomes"]["unknown"])
+        self.assertEqual(1, summary["rowsWithoutRetainedIdentity"]["terminals"])
+        del content["terminals"]
+        summary = self.lifecycle_report(content)["lifecycleObservation"]
+        self.assertIsNone(summary["terminalPresence"]["missing"])
+        content["starts"] = []; content["times"] = []; content["terminals"] = []
+        summary = self.lifecycle_report(content)["lifecycleObservation"]
+        self.assertEqual(1, summary["processStartPresence"]["missing"]["count"])
+        self.assertEqual(1, summary["terminalPresence"]["missing"]["count"])
+        self.assertEqual(1, summary["timestamps"]["start"]["eventPresence"]["missing"]["count"])
+
+    def test_lifecycle_present_malformed_and_oversized_relations_refuse(self):
+        for relation in ("admissions", "starts", "terminals", "times"):
+            for rows in (None, {}, [None], [{}] * 10001):
+                with self.subTest(relation=relation, shape=type(rows).__name__):
+                    content = self.lifecycle_content(); content[relation] = rows
+                    with self.assertRaisesRegex(MODULE.Refusal, "lifecycle relation"):
+                        self.lifecycle_report(content)
+
+    def test_lifecycle_malformed_fields_refuse_without_type_errors(self):
+        cases = [("starts", "phase", []), ("starts", "process_id", True),
+                 ("starts", "thread_id", []), ("starts", "turn_sequence", -1),
+                 ("starts", "identity", None), ("terminals", "outcome", None),
+                 ("terminals", "exit_code", -1), ("terminals", "thread_id", {}),
+                 ("times", "event", []), ("times", "occurred_at", "bad"),
+                 ("times", "observed_at", "2026-01-01T00:00:00"),
+                 ("times", "observed_clock_provenance", "monotonic-unproven")]
+        for relation, key, value in cases:
+            with self.subTest(relation=relation, key=key):
+                content = self.lifecycle_content(); content[relation][0][key] = value
+                with self.assertRaises(MODULE.Refusal):
+                    self.lifecycle_report(content)
+
+    def test_lifecycle_rows_cannot_join_a_foreign_invocation_original_or_workspace(self):
+        for relation in ("starts", "terminals", "times"):
+            for key, value in (("invocation_id", "foreign"), ("item_id", "I-002"),
+                               ("workspace_id", "foreign-workspace")):
+                with self.subTest(relation=relation, key=key):
+                    content = self.lifecycle_content(); content[relation][0][key] = value
+                    with self.assertRaises(MODULE.Refusal):
+                        self.lifecycle_report(content)
+
+    def test_lifecycle_open_restart_and_late_terminal_are_distinct_snapshots(self):
+        content = self.lifecycle_content(); content["terminals"] = []
+        content["times"] = [row for row in content["times"] if row["event"] != "terminal"]
+        # Neither a gap nor the passage of time closes the original invocation.
+        content["runtimeGaps"] = [{"invocation_id": "inv-I-001", "code": "interrupted"}]
+        before = self.lifecycle_report(content)["lifecycleObservation"]
+        self.assertEqual(1, before["terminalPresence"]["missing"]["count"])
+        restarted = copy.deepcopy(content)
+        restarted["times"][0]["observed_at"] = "2026-02-02T00:00:00Z"
+        self.assertEqual(before, self.lifecycle_report(restarted)["lifecycleObservation"])
+        content["terminals"] = self.lifecycle_content()["terminals"]
+        after = self.lifecycle_report(content)["lifecycleObservation"]
+        self.assertEqual(0, after["terminalPresence"]["missing"]["count"])
+        self.assertEqual(1, before["terminalPresence"]["missing"]["count"])
+        self.assertEqual(1, after["timestamps"]["terminal"]["eventPresence"]["missing"]["count"])
+
+    def test_lifecycle_times_retain_missing_multiple_and_apparent_order_evidence(self):
+        content = self.lifecycle_content()
+        row = content["times"][1]
+        row.update(occurred_at="2026-01-02T00:00:00Z", observed_at="2026-01-01T00:00:00Z")
+        content["times"].append({**row, "identity": "second-start-time", "occurred_at": None,
+                                 "observed_clock_provenance": "provider-native"})
+        content["times"].append({**row, "identity": "third-start-time", "occurred_at": "2026-01-03T00:00:00Z"})
+        summary = self.lifecycle_report(content)["lifecycleObservation"]
+        self.assertEqual(3, summary["timestamps"]["start"]["rows"])
+        self.assertEqual(2, summary["timestamps"]["start"]["occurredPresent"])
+        self.assertEqual(1, summary["timestamps"]["start"]["multipleObservations"]["count"])
+        self.assertEqual(1, summary["timestamps"]["start"]["differingOccurrenceObservations"]["count"])
+        self.assertEqual(["inv-I-001:start"], summary["apparentTimestampOrderWarnings"]["sample"])
+        self.assertEqual("unverified", summary["clockComparability"])
+        self.assertEqual("not-evaluated", summary["criticalPath"])
+
+    def test_lifecycle_summary_is_order_replay_invariant_and_samples_are_bounded(self):
+        content = self.lifecycle_content()
+        content["learningObservations"] = [
+            {"canonical": json.dumps(event)} for event in OBSERVATIONS["events"] if event.get("itemId") == "I-001"
+        ]
+        content["usage"] = []; content["expectedDispatches"] = []; content["lineage"] = []
+        content["admissions"] = [{**content["admissions"][0], "identity": "admit-" + str(i),
+                                  "invocation_id": "inv-" + str(i)} for i in range(30)]
+        content["starts"] = []; content["terminals"] = []; content["times"] = []
+        before = self.lifecycle_report(content)["lifecycleObservation"]
+        content["admissions"].reverse()
+        self.assertEqual(before, self.lifecycle_report(content)["lifecycleObservation"])
+        for field in (before["processStartPresence"]["missing"], before["terminalPresence"]["missing"],
+                      before["timestamps"]["start"]["eventPresence"]["missing"]):
+            self.assertEqual(30, field["count"])
+            self.assertEqual(20, len(field["sample"]))
+            self.assertEqual(10, field["omitted"])
+        # Exercise the inclusive relation boundary through the real bounded snapshot decoder.
+        content["times"] = [{"identity": "time-" + str(i), "invocation_id": "inv-0", "item_id": "I-001",
+                             "event": "admission"} for i in range(10000)]
+        summary = self.lifecycle_report(content)["lifecycleObservation"]
+        self.assertEqual(10000, summary["timestamps"]["admission"]["rows"])
+
     def test_causal_fixture_manifest_binds_exact_raw_and_event_bytes(self):
         fixture = ROOT / "tests/learn-01-analysis/fixtures/causal-admission"
         manifest = json.loads((fixture / "manifest.json").read_text())
