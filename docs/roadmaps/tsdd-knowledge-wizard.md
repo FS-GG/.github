@@ -68,7 +68,7 @@ The manifest uses schema `fsgg.wizard.current-public-knowledge/1` and contains:
 - Wizard and producer package bindings additionally contain `closure` and `entryDll`.
   Every `tools/net10.0/any/` member must match the complete installed closure, with
   no additional member; the admitted ELF apphost must point to that entry DLL.
-- `wizard`, `sddExecutable`, `insufficientExecutable`, `providers`, `dotnetExecutable`,
+- `wizard`, `sddExecutable`, `providers`, `dotnetExecutable`,
   `actualHome`, `childEnvironment`, `workRoot` and `report`. Executable/provider
   arguments must match. The environment's actual selected `dotnet` and `fsgg-sdd`
   must resolve to the bound executables. HOME stays unchanged; caches and output
@@ -81,16 +81,20 @@ The manifest uses schema `fsgg.wizard.current-public-knowledge/1` and contains:
   including the exact bound SDD 2.2.0 archive and its genuine dependency packages.
   All paths are in `inputs`. No tool download, build or repacking supplies a missing
   package during this preparation.
-- `insufficientPublic` retains the existing literal public SDD 2.0.3 archive,
-  full closure and apphost-target binding. Its version read does not establish
-  an insufficient-producer creation refusal in the current route.
+
+The selected positive `current-public` route requires no `--insufficient-cli`,
+`insufficientExecutable` or `insufficientPublic` binding and performs no negative
+producer version read. Actual insufficient-producer creation remains unfulfilled
+in its report. Both historical `source-candidate` and `installed-public` modes
+still require `--insufficient-cli` and execute their original negative creation;
+the historical installed mode retains its full public archive/closure validation.
 
 Input pins are checked again before a successful report. Commands retain actual
 argv, output and exits under the operation's existing `commands.jsonl` custody,
 with the existing 180-second per-command timeout. Root must apply a separately
 admitted outer deadline and observe cleanup; this fixture grants no runtime budget.
 
-The 32 pure source controls run through the maintained workflow's existing
+The 35 pure source controls run through the maintained workflow's existing
 `--source-controls` call. Their transitive execution is Python standard-library
 filesystem/ZIP/XML/hash handling plus mocked command routing; they invoke no CLR,
 SDK, producer, Wizard, browser, download or native effect. The current-route control

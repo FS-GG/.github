@@ -197,7 +197,7 @@ def validate_current(args, after=False):
     for path in m['inputs']:
         regular_input(path, m['inputs'])
     require(m['providerRevision'] == args.provider_revision == CURRENT_PROVIDER_REVISION, 'current-provider-revision')
-    for argument, key in [('wizard', 'wizard'), ('sdd_cli', 'sddExecutable'), ('insufficient_cli', 'insufficientExecutable'), ('providers', 'providers')]:
+    for argument, key in [('wizard', 'wizard'), ('sdd_cli', 'sddExecutable'), ('providers', 'providers')]:
         require(str(getattr(args, argument)) == m[key], 'current-argument:' + argument)
     for argument, key in [('workspace_package', 'workspace'), ('rendering_package', 'rendering')]:
         require(str(getattr(args, argument)) == m['packages'][key]['archive'], 'current-archive-argument')
@@ -207,7 +207,6 @@ def validate_current(args, after=False):
             current_tool(m['packages'][key], m['inputs'], members, m['wizard' if key == 'wizard' else 'sddExecutable'])
     require(m['packages']['wizard']['sourceRevision'] == 'cc1d3c12c1ed7e7128012063d7ab478c7198b523', 'current-wizard-source')
     require(m['packages']['rendering']['sourceRevision'] == '6c9f766fdd91483c2de6f061e75589e94852a265', 'current-rendering-source')
-    validate_insufficient_public(m)
     require(m['descriptorSha256'] == CURRENT_DESCRIPTOR_SHA256, 'current-descriptor-pin')
     require(any(item['path'] == m['packages']['producer']['archive'] for item in m['ordinaryToolPackages']), 'current-local-tool-package')
     names = [item['name'].casefold() for item in m['ordinaryToolPackages']]
@@ -237,7 +236,6 @@ def current_public(args):
     require(str(Path(shutil.which('dotnet', path=env['PATH'])).resolve()) == m['dotnetExecutable'], 'current-sdk-selection')
     require(str(Path(shutil.which('fsgg-sdd', path=env['PATH'])).resolve()) == str(args.sdd_cli.resolve()), 'current-producer-selection')
     require(call([args.sdd_cli, '--version']).stdout.strip() == '2.2.0', 'current-producer-version')
-    require(call([args.insufficient_cli, '--version']).stdout.strip() == '2.0.3', 'current-insufficient-version')
     config = prepare_offline_tools(m, base)
     # Current pinned bootstrap refuses a missing overlay before scaffold. Register the
     # original complete owner archive, including its governance and knowledge roles.
@@ -412,6 +410,41 @@ def source_controls():
         def test_current_missing_manifest_refuses(self):
             with self.assertRaisesRegex(ValueError, 'current-root-manifest-required'):
                 validate_current(argparse.Namespace(installed_manifest=None, approved_installed_manifest_sha256=None))
+        def test_current_arguments_accept_no_unused_negative_producer(self):
+            argv = ['--wizard', '/wizard', '--sdd-cli', '/producer', '--providers', '/providers',
+                    '--workspace-package', '/workspace', '--rendering-package', '/rendering', '--report', '/report']
+            args = parse_arguments(argv + ['--qualification-mode', 'current-public'])
+            self.assertIsNone(args.insufficient_cli)
+        def test_historical_arguments_still_require_negative_producer(self):
+            import io
+            from contextlib import redirect_stderr
+            argv = ['--wizard', '/wizard', '--sdd-cli', '/producer', '--providers', '/providers',
+                    '--workspace-package', '/workspace', '--rendering-package', '/rendering', '--report', '/report']
+            for mode in ('source-candidate', 'installed-public'):
+                with self.subTest(mode=mode), redirect_stderr(io.StringIO()) as errors:
+                    with self.assertRaises(SystemExit) as refused:
+                        parse_arguments(argv + ['--qualification-mode', mode])
+                    self.assertEqual(refused.exception.code, 2)
+                    self.assertIn('--insufficient-cli is required for ' + mode, errors.getvalue())
+                self.assertEqual(parse_arguments(argv + ['--qualification-mode', mode, '--insufficient-cli', '/negative']).insufficient_cli, Path('/negative'))
+        def test_current_manifest_does_not_require_or_validate_negative_custody(self):
+            with tempfile.TemporaryDirectory() as folder:
+                manifest = Path(folder) / 'manifest.json'
+                root = Path(folder) / 'fresh'
+                packages = {key: dict(archive='/' + key) for key in CURRENT_PACKAGES}
+                packages['wizard']['sourceRevision'] = 'cc1d3c12c1ed7e7128012063d7ab478c7198b523'
+                packages['rendering']['sourceRevision'] = '6c9f766fdd91483c2de6f061e75589e94852a265'
+                m = dict(schema='fsgg.wizard.current-public-knowledge/1', packages=packages, inputs={},
+                         providerRevision=CURRENT_PROVIDER_REVISION, wizard='/wizard', sddExecutable='/producer', providers='/providers',
+                         descriptorSha256=CURRENT_DESCRIPTOR_SHA256, ordinaryToolPackages=[dict(path='/producer', name='producer.nupkg')],
+                         dotnetExecutable='/dotnet', actualHome=os.environ['HOME'], workRoot=str(root), report=str(root / 'report.json'))
+                manifest.write_text(json.dumps(m))
+                args = argparse.Namespace(installed_manifest=manifest, approved_installed_manifest_sha256=sha(manifest),
+                    wizard=Path('/wizard'), sdd_cli=Path('/producer'), providers=Path('/providers'), provider_revision=CURRENT_PROVIDER_REVISION,
+                    workspace_package=Path('/workspace'), rendering_package=Path('/rendering'), report=root / 'report.json')
+                with patch(__name__ + '.current_package', return_value={}), patch(__name__ + '.current_tool'), \
+                     patch(__name__ + '.regular_input'), patch(__name__ + '.validate_insufficient_public', side_effect=AssertionError('unused negative custody')):
+                    self.assertEqual(validate_current(args), m)
         def test_current_package_requires_literal_source_and_publication_custody(self):
             with tempfile.TemporaryDirectory() as folder:
                 root = Path(folder)
@@ -448,7 +481,7 @@ def source_controls():
                 with zipfile.ZipFile(package, 'w') as archive:
                     for relative in ('scripts/check-project-knowledge.py', '.github/workflows/project-knowledge.yml'):
                         archive.writestr('content/templates/fs-gg-project-knowledge/' + relative, 'central bytes')
-                args = argparse.Namespace(wizard=Path('/wizard'), sdd_cli=Path('/producer'), insufficient_cli=Path('/insufficient'),
+                args = argparse.Namespace(wizard=Path('/wizard'), sdd_cli=Path('/producer'),
                     workspace_package=package, rendering_package=package, providers=Path('/providers'), report=base / 'report.json', installed_manifest=package)
                 m = dict(workRoot=str(base), actualHome=os.environ['HOME'], childEnvironment={'PATH': '/selected'}, dotnetExecutable='/dotnet',
                          descriptorSha256=hashlib.sha256(b'source: FS.GG.UI.Template::0.32.1').hexdigest())
@@ -457,7 +490,9 @@ def source_controls():
                 def fake_call(argv, **kwargs):
                     argv = [str(x) for x in argv]; commands.append(argv)
                     stdout = ''
-                    if argv[-1] == '--version': stdout = '2.0.3' if argv[0] == '/insufficient' else '2.2.0'
+                    if argv[-1] == '--version':
+                        self.assertEqual(argv[0], '/producer')
+                        stdout = '2.2.0'
                     elif argv[:2] == ['git', 'show']: stdout = 'source: FS.GG.UI.Template::0.32.1'
                     elif argv[0] == '/wizard':
                         root = Path(argv[1])
@@ -486,7 +521,7 @@ def source_controls():
                 report = json.loads(args.report.read_text())
                 self.assertEqual(report['retrievedRecordIds'], ['project-knowledge'])
                 self.assertTrue(report['overLimitRefused'])
-                self.assertTrue(report['remainingAssertions'])
+                self.assertIn('insufficient-producer creation', report['remainingAssertions'])
                 wizard = next(argv for argv in commands if argv[0] == '/wizard' and '--version' not in argv)
                 self.assertIn(CURRENT_PROVIDER_REVISION, wizard)
                 self.assertIn('typed-sdd', wizard)
@@ -505,11 +540,11 @@ def git(root, *args):
     return call(["git", "-C", root, *args]).stdout.strip()
 
 
-def main():
+def parse_arguments(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--wizard", type=Path, required=True)
     parser.add_argument("--sdd-cli", type=Path, required=True)
-    parser.add_argument("--insufficient-cli", type=Path, required=True)
+    parser.add_argument("--insufficient-cli", type=Path, help="Required for historical source-candidate/installed-public negative creation; unused by current-public")
     parser.add_argument("--providers", type=Path, required=True)
     parser.add_argument("--provider-revision", help="Explicit immutable provider source revision for source-candidate qualification")
     parser.add_argument("--workspace-package", type=Path, required=True)
@@ -519,7 +554,14 @@ def main():
     parser.add_argument('--installed-manifest', type=Path)
     parser.add_argument('--approved-installed-manifest-sha256')
     parser.add_argument('--source-controls', action='store_true', help='Pure controls only; no producer or Wizard invocation')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    if not args.source_controls and args.qualification_mode != 'current-public' and args.insufficient_cli is None:
+        parser.error('--insufficient-cli is required for ' + args.qualification_mode)
+    return args
+
+
+def main():
+    args = parse_arguments()
     if args.source_controls:
         source_controls()
         return
