@@ -6,8 +6,8 @@ description: Report lane progress and development health using delivery evidence
 # Show progress
 
 Answer: **Are we making useful progress, what is getting in the way, and what should change?**
-Write for the person directing development. Default to one screen or roughly 300–500 words;
-expand only when requested. Explain practical consequences in plain language.
+Write for the person directing development. Default to roughly 1,500 words;
+adapt when a different length is requested. Explain practical consequences in plain language.
 
 ## Report
 
