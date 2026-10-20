@@ -5,7 +5,7 @@
       "id": "atlas",
       "scope": "driver",
       "sha256": "c18e56fcc56abf80903e2fc6829cd94b44f42947724a26318ebcbf1ac5e1b35b",
-      "tree-sha256": "8b45b8937959f3f8fdbeebab871629be39b06713b907fbd97c276ed5b6f07f56",
+      "tree-sha256": "805b4cf20616bc77b8a320192305ed62c2bf9c39478cc791cc4f38968ca35914",
       "files": [
         {
           "path": "SKILL.md",
@@ -24,7 +24,7 @@
         },
         {
           "path": "assets/seed/catalog.json",
-          "sha256": "1a15bef87b25891c159f5daa619c17d9af8bfad18ef6d2500c243223b45322ed",
+          "sha256": "56b1b82a0d3732c157e0088d7b9c5fa1d30468758ba8bd6c7206cbc3e2f90fe9",
           "executable": false
         },
         {
@@ -330,6 +330,11 @@
         {
           "path": "assets/seed/records/34463778cf2d29e3896a65613cf9e3eb3e9f2d8946d17f12b609e70eec63d128.json",
           "sha256": "34463778cf2d29e3896a65613cf9e3eb3e9f2d8946d17f12b609e70eec63d128",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/348ba129b7b9c94e24fa8ddb81024e777c60448d1b5d49f7b2075591b23c13b1.json",
+          "sha256": "348ba129b7b9c94e24fa8ddb81024e777c60448d1b5d49f7b2075591b23c13b1",
           "executable": false
         },
         {
@@ -1955,7 +1960,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "6d2c55eaa031c5f53cdcbcb4d169ee115156be7e563e877e5ab1b00f58c02eea",
-      "tree-sha256": "ca63354d66f9c41dfd67fb4a7c8684ccc05bdc83aff11286cc27499fc3d48562",
+      "tree-sha256": "ae9581d20ba838aaeb61e5f751b720e10ed2e8a5279612aaa25be3807e93c06a",
       "files": [
         {
           "path": "SKILL.md",
@@ -1999,7 +2004,7 @@
         },
         {
           "path": "references/delivery-reliability.md",
-          "sha256": "80fd1b6d92c4ad4841b02a8b842e8e4e476eefb2ea83b2ffd631631f909992b2",
+          "sha256": "729a3fdaebe883238c01f8e980ba49930ac4ffa051648a0dab0ee35d27cc8b7c",
           "executable": false
         },
         {
@@ -2024,7 +2029,7 @@
         },
         {
           "path": "references/intake.md",
-          "sha256": "af51853d3c89f465de6389a97aad5c260cf80f02a377179287bbe5d84ac6d1c8",
+          "sha256": "af5fe4edacce30575eb03445d581d2a82238e3828ba2258a62e35b41a11425c2",
           "executable": false
         },
         {
