@@ -1,7 +1,5 @@
 # Registry changelog
 
-- **2026-10-20** — Source-only github coherent successor **0.110.0** for mandatory root-owned board Status reconciliation in receiver-visible Kit/Drivers lifecycle guidance. Published inventory and component tags remain **0.109.0**; no candidate, publication, installation or old-operation replay is selected by this source preparation.
-
 ## 2026-10-19 — board lifecycle publications accepted (#4701/#4712)
 
 Publish coherent109 from original0d85830e through39317658813: all16effects/final33,
@@ -68,6 +66,8 @@ review M4). The typed validator (`fsgg-sdd registry validate`) never saw that co
 no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
+
+- **2026-10-20** — — Mandatory Status lifecycle source0.110 (Programme/root; #4729): prepare coherent Kit/Drivers/CLI source0.110.0 for mandatory root-owned reconciliation. Published inventory and tags stay0.109.0; no candidate, publication, installation or original-operation replay is selected by source preparation.
 
 - **2026-10-19** — Unify board clearing and intake around work-board and pnext-item, retire contradictory active organization routes, and preserve scoped product compatibility and recovery custody.
 

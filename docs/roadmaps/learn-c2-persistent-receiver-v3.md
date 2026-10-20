@@ -853,3 +853,26 @@ toolchain evidence on the candidate image remain pending. No native fixture,
 installed custody, publication, receiver acceptance, activation or historical
 retirement is established by this candidate. The first failure and original
 unknown operations retain their identities and holds.
+
+### Hosted source image successor candidate, 2026-10-20
+
+[Run39383364443/a1](https://github.com/FS-GG/.github/actions/runs/39383364443)
+passed the passive Host HTTP stage, then refused before the LEARN census and
+dependent source compilation: actual image20261018.339.1 differed from selected
+20261012.334.1. Its failed prerequisite and prior unknown operations stay retained.
+
+Root selects image20261018.339.1 and official runner-images source
+[`b4067e48bd9bd803e958bfe1503ea0a06a3a127f`](https://github.com/actions/runner-images/tree/b4067e48bd9bd803e958bfe1503ea0a06a3a127f)
+for ordinary bounded source requalification. The official release remains marked
+prerelease; its manifest lists SDK10.0.402 while setup-dotnet still selects10.0.401.
+Declared versions supply no actual post-setup custody or framework acceptance.
+
+Only the three selected tuple scalars change. Provider/platform/image predicates,
+pinned census, SDK normalization, complete compiler/toolchain binding, all source
+gates and default-off protected native inputs remain required. Static preflight
+uses the extracted actual guard with a successful inert census sentinel and
+wrong-tuple refusal. The unchanged execution graph needs no custom model; the
+preflight effort cap is ten minutes against the existing twenty-minute hosted job.
+Fresh successful census and full required source CI on the exact candidate remain
+pending. No native fixture, whole-wrapper retirement, C5, installed receiver,
+publication, activation or old-operation replay is established by this selection.
