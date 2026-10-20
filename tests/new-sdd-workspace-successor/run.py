@@ -1346,6 +1346,103 @@ class CreatorPublicationTests(unittest.TestCase):
         self.assertEqual(provider.writes, []); self.assertEqual(journal.read().effects, {"tag": "intent"})
         self.assertFalse(self.report["complete"])
 
+    def test_verified_progress_continues_without_observation_sleep(self):
+        sleeps = []
+        with patch.object(self.caller, "advance_effects", side_effect=["verified", "verified", "complete"]) as advance:
+            self.caller.reconcile_publication(self.content, self.ordered, Journal(self.content), Admission(),
+                Provider(), self.report, clock=lambda: 0, sleep=sleeps.append)
+        self.assertEqual(advance.call_count, 3)
+        self.assertEqual(sleeps, [])
+        self.assertTrue(self.report["complete"])
+        self.assertEqual(self.report["reconciliationTiming"], dict(elapsedSeconds=0,
+            lastProgressSeconds=0, waitSeconds=0, progressCount=2, waitingCount=0, lastResult="complete"))
+
+    def test_actual_unknown_sends_wait_but_verified_settlements_do_not(self):
+        ticks = [0]
+        sleeps = []
+        def wait(seconds):
+            sleeps.append(seconds); ticks[0] += seconds
+        journal, provider = Journal(self.content), Provider()
+        self.caller.reconcile_publication(self.content, self.ordered, journal, Admission(), provider,
+            self.report, clock=lambda: ticks[0], sleep=wait)
+        self.assertEqual(provider.writes, [effect.identity for effect in self.ordered])
+        self.assertEqual(journal.read().effects, {effect.identity: "verified" for effect in self.ordered})
+        self.assertEqual(sleeps, [5] * 8)
+        self.assertEqual(self.report["iterationsAttempted"], 17)
+        timing = self.report["reconciliationTiming"]
+        self.assertEqual((timing["progressCount"], timing["waitingCount"], timing["waitSeconds"]), (8, 8, 40))
+        self.assertEqual(timing["lastProgressSeconds"], 40)
+
+    def test_wait_is_clipped_to_original_deadline_and_does_not_renew_it(self):
+        ticks = [0]
+        sleeps = []
+        def observe(*_):
+            ticks[0] = 2698
+            return "waiting"
+        def wait(seconds):
+            sleeps.append(seconds); ticks[0] += seconds
+        with patch.object(self.caller, "advance_effects", side_effect=observe) as advance:
+            with self.assertRaisesRegex(Refused, "observation deadline expired"):
+                self.caller.reconcile_publication(self.content, self.ordered, Journal(self.content), Admission(),
+                    Provider(), self.report, clock=lambda: ticks[0], sleep=wait)
+        self.assertEqual(sleeps, [2])
+        self.assertEqual(advance.call_count, 1)
+        self.assertEqual(self.report["reconciliationTiming"]["elapsedSeconds"], 2700)
+        self.assertFalse(self.report["complete"])
+
+    def test_uncertain_invisible_send_waits_without_duplicate_dispatch(self):
+        ticks = [0]
+        journal, provider = Journal(self.content), Provider()
+        provider.delayed.add("tag")
+        with self.assertRaisesRegex(Refused, "bounded reconciliation steps"):
+            self.caller.reconcile_publication(self.content, self.ordered, journal, Admission(), provider,
+                self.report, clock=lambda: ticks[0], sleep=lambda seconds: ticks.__setitem__(0, ticks[0]+seconds))
+        self.assertEqual(provider.writes, ["tag"])
+        self.assertEqual(journal.read().effects, {"tag": "intent"})
+        self.assertEqual(self.report["iterationsAttempted"], 136)
+        self.assertEqual(self.report["reconciliationTiming"]["waitingCount"], 136)
+        self.assertEqual(self.report["reconciliationTiming"]["progressCount"], 0)
+
+    def test_revocation_and_cas_conflict_keep_first_refusal_without_next_send(self):
+        for failure in ("revoked", "cas"):
+            with self.subTest(failure=failure):
+                self.report = self.caller.publication_report(1, 2, "d" * 64, "publish")
+                journal, provider, admission = Journal(self.content), Provider(), Admission()
+                if failure == "revoked":
+                    admission.denied.add(("draft", "intent"))
+                    reason = "draft: intent admission denied"
+                else:
+                    original = journal.compare_and_swap
+                    journal.compare_and_swap = lambda expected, effect, state: False if state == "verified" else original(expected, effect, state)
+                    reason = "tag: journal settlement CAS conflict"
+                sleeps = []
+                with self.assertRaisesRegex(Refused, reason):
+                    self.caller.reconcile_publication(self.content, self.ordered, journal, admission, provider,
+                        self.report, clock=lambda: 0, sleep=sleeps.append)
+                self.assertEqual(provider.writes, ["tag"])
+                self.assertEqual(sleeps, [5])
+                self.assertFalse(self.report["complete"])
+
+    def test_result_after_original_deadline_cannot_complete_or_advance_again(self):
+        for result in ("verified", "complete"):
+            with self.subTest(result=result):
+                report = self.caller.publication_report(1, 2, "d" * 64, "publish")
+                ticks = iter((0, 0, 2700))
+                with patch.object(self.caller, "advance_effects", return_value=result) as advance:
+                    with self.assertRaisesRegex(Refused, "observation deadline expired"):
+                        self.caller.reconcile_publication(self.content, self.ordered, Journal(self.content), Admission(),
+                            Provider(), report, clock=lambda: next(ticks), sleep=lambda _: self.fail("expired wait"))
+                self.assertEqual(advance.call_count, 1)
+                self.assertFalse(report["complete"])
+
+    def test_timing_projection_is_finite_closed_and_nonsecret(self):
+        self.report["reconciliationTiming"] = dict(elapsedSeconds=float("nan"), lastProgressSeconds=10**1000,
+            waitSeconds=-1, progressCount=True, waitingCount=137, lastResult="SECRET", extra="/private/SECRET")
+        row = self.caller.safe_summary(self.report, None)["reconciliationTiming"]
+        self.assertEqual(set(row), {"elapsedSeconds", "lastProgressSeconds", "waitSeconds", "progressCount", "waitingCount", "lastResult"})
+        self.assertTrue(all(value is None for value in row.values()))
+        self.assertNotIn("SECRET", json.dumps(row))
+
     def test_low_and_malformed_quota_refuse_before_journal_construction(self):
         for core in (None, {"limit": 5000, "remaining": 4499, "used": 501, "reset": 4102444800},
                      {"limit": 5000, "remaining": True, "used": 4999, "reset": 4102444800}):
