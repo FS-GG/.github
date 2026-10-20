@@ -37,9 +37,6 @@ NO_ANALYST_BRANCH = "**The current owner may dispose and file the finding direct
 REGISTRY = "registry/skills.yml"
 # `materializes-when` is ADR-0017's never-true literal. Broadening the operator payload requires
 # separate receiver review; it never removes the current owner's direct filing route.
-ANALYST_NEVER_MATERIALIZES = re.compile(
-    r"id:\s*board-analyst\s*,.*?materializes-when:\s*\"false\"", re.DOTALL
-)
 
 WORKFLOW = ".github/workflows/skill-quality.yml"
 OWN_TRIGGER = "tests/skill-quality/**"
@@ -62,6 +59,35 @@ def carries(text: str) -> int:
 def restatements(text: str) -> list[str]:
     """Every analyst-dispatch token in this document. Leg 2's whole detector, in one function."""
     return VOCABULARY.findall(text)
+
+
+def analyst_never_materializes(text: str) -> bool:
+    """Read one canonical YAML row, preserving duplicate keys instead of selecting a fallback."""
+    try:
+        registry = yaml.compose(text)
+    except yaml.YAMLError:
+        return False
+    if not isinstance(registry, yaml.MappingNode):
+        return False
+
+    def fields(node: yaml.MappingNode, name: str) -> list[yaml.Node]:
+        return [value for key, value in node.value
+                if isinstance(key, yaml.ScalarNode) and key.value == name]
+
+    populations = fields(registry, "skills")
+    if len(populations) != 1 or not isinstance(populations[0], yaml.SequenceNode):
+        return False
+    rows = []
+    for row in populations[0].value:
+        if isinstance(row, yaml.MappingNode):
+            identities = fields(row, "id")
+            if any(isinstance(value, yaml.ScalarNode) and value.value == "board-analyst" for value in identities):
+                rows.append(row)
+    if len(rows) != 1 or len(fields(rows[0], "id")) != 1:
+        return False
+    predicates = fields(rows[0], "materializes-when")
+    return (len(predicates) == 1 and isinstance(predicates[0], yaml.ScalarNode)
+            and predicates[0].tag == "tag:yaml.org,2002:str" and predicates[0].value == "false")
 
 
 def self_test() -> None:
@@ -98,6 +124,26 @@ def self_test() -> None:
         "the vocabulary detector missed a reworded analyst-dispatch instruction carrying no copy of "
         "the canonical block, which is exactly the variant drift leg 2 exists to catch",
     )
+
+    # Real YAML rows, including the later operator row that exposed the old DOTALL
+    # detector's cross-row match. Comments and duplicate identities/keys grant no fallback.
+    analyst = '  - { id: board-analyst, scope: operator, materializes-when: "false" }\n'
+    unrelated = '  - { id: work-board-coord, scope: operator, materializes-when: "false" }\n'
+    require(analyst_never_materializes("skills:\n" + analyst + unrelated),
+            "the canonical analyst row is not recognized")
+    changed = analyst.replace('"false"', 'always')
+    for label, rows in [
+        ("later unrelated predicate", changed + unrelated),
+        ("earlier unrelated predicate", unrelated + changed),
+        ("commented original", changed + "# " + analyst.strip() + "\n"),
+        ("comment-only identity", "# " + analyst.strip() + "\n" + unrelated),
+        ("duplicate analyst identity", changed + analyst),
+        ("duplicate analyst id key", analyst.replace("id: board-analyst,", "id: other, id: board-analyst,")),
+        ("duplicate predicate key", analyst.replace('materializes-when: "false"', 'materializes-when: always, materializes-when: "false"')),
+        ("nonliteral boolean", analyst.replace('"false"', 'false')),
+    ]:
+        require(not analyst_never_materializes("skills:\n" + rows),
+                "the analyst row borrowed a false predicate from " + label)
 
 
 def scan_roots(root: Path) -> list[Path]:
@@ -173,7 +219,7 @@ def check_finder_contract(root: Path, roots: list[Path]) -> int:
     registry = root / REGISTRY
     require(registry.is_file(), f"{REGISTRY} is missing, so nothing establishes where the analyst ships")
     require(
-        bool(ANALYST_NEVER_MATERIALIZES.search(registry.read_text(encoding="utf-8"))),
+        analyst_never_materializes(registry.read_text(encoding="utf-8")),
         f"{REGISTRY} no longer declares `board-analyst` with `materializes-when: \"false\"`. The "
         "operator-only distribution is part of this selected payload; changing receiver materialization "
         "needs its own review, while direct accountable-owner disposition remains available",
