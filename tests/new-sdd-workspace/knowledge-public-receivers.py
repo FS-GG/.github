@@ -586,6 +586,8 @@ def retained_post_apply(runner, m, root, case, config, row, baseline, preview, a
             and applied['classification'] == 'Migrated', 'retained-post-apply-original-proof')
     require((root / '.fsgg/knowledge/records/project-knowledge.json').is_file()
             and (root / 'work/demo/spec.standard-sdd.rollback.md').read_bytes() == supported_spec(m).read_bytes(), 'retained-post-apply-source-or-bootstrap')
+    #The fresh caller validated before/after; continuation validates committed baseline names.
+    #Recheck the persistent lock here without pretending this is a before-image.
     migration_outputs(snapshot(root), snapshot(root), root)
     role = ci_role(runner, m, root, case)
     migration_commit = commit(runner, root, 'Accept explicit FSharp compatibility and preserving CI role')
@@ -989,6 +991,10 @@ def continue_retained_post_apply(path, digest):
         with runner.subject(root,env_for(m,case)):
             require(runner.git(root,'rev-parse','HEAD') == baseline,'retained-baseline-head')
             names = runner.git(root,'ls-tree','-r','--name-only',baseline).splitlines()
+            require({'docs/retained-owner-note.md','.fsgg/knowledge-guide.md','work/demo/spec.md'} <= set(names),'retained-setup-must-be-committed-baseline')
+            for name in ('docs/retained-owner-note.md','.fsgg/knowledge-guide.md'):
+                recorded = runner.run(['git','-C',root,'show',baseline+':'+name],text=False,check=True).stdout
+                require(recorded == (root/name).read_bytes(),'retained-committed-owner-setup-drift')
             migration_outputs(dict.fromkeys(names),snapshot(root),root)
             result = retained_post_apply(runner,m,root,case,base/'NuGet.Config',ROWS[-1],baseline,preview,applied,observations)
         report['rows'][-1].update(state='passed',retained=result,lastCommand=runner.sequence)
@@ -1052,6 +1058,23 @@ def source_controls():
                 with self.assertRaisesRegex(ValueError,'unexpected-output'):migration_outputs({},snapshot(root),root)
                 (root/'foreign').unlink();lock.write_bytes(b'not empty')
                 with self.assertRaisesRegex(ValueError,'lock-not-empty'):migration_outputs({},snapshot(root),root)
+
+        def test_continuation_baseline_names_include_verified_owner_setup(self):
+            with tempfile.TemporaryDirectory() as td:
+                root=Path(td)
+                setup={'docs/retained-owner-note.md':'owner finding','.fsgg/knowledge-guide.md':'owner guidance',
+                       'work/demo/spec.md':'Standard source','src/Owner.fs':'owner product'}
+                for name,value in setup.items():p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(value)
+                baseline_names=list(snapshot(root))
+                (root/'work/demo/spec.md').write_text('typed projection')
+                for name in (AUTHORITY_LOCK,'work/demo/spec.standard-sdd.rollback.md','work/demo/specification.fsx',
+                             'readiness/demo/specification.normalized.json','readiness/demo/typed-authority.json',
+                             '.fsgg/knowledge/schema.json','.fsgg/knowledge/records/project-knowledge.json'):
+                    p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('' if name==AUTHORITY_LOCK else 'maintained output')
+                migration_outputs(dict.fromkeys(baseline_names),snapshot(root),root)
+                self.assertTrue(set(setup)<=set(baseline_names))
+                (root/'foreign').write_text('not an admitted output')
+                with self.assertRaisesRegex(ValueError,'unexpected-output'):migration_outputs(dict.fromkeys(baseline_names),snapshot(root),root)
 
         def test_post_apply_port_only_executes_remaining_rollback_not_creation_or_migration(self):
             with tempfile.TemporaryDirectory() as td:
