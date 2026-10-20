@@ -1,6 +1,6 @@
 # Compact progress report
 
-Use the same short overview in chat and in the saved report. Aim for 300–500 words.
+Use the same overview in chat and in the saved report. Aim for roughly 1,500 words unless another length is requested.
 No mandatory per-item appendix, scoring system or estimation worksheet.
 
 ```markdown
@@ -14,9 +14,21 @@ As of [time and timezone]. Compared with [previous report/date, or first snapsho
 |---|---|---|
 | [plain-language name] | [what improved or is usable] | [main obstacle and next useful result] |
 
+## Token efficiency
+
+[Window, source freshness and population/usage coverage; mention material gaps once.]
+
+| Dimension | Observed usage | Coverage / interpretation |
+|---|---|---|
+| [supported token category, role/model or attributed activity] | [measured amount] | [scope and limits] |
+
+[Cost per accepted delivery and baseline comparison if defensible; otherwise what remains
+unmeasured. Omit the table when no usage data is available and state the gap.]
+
 ## Process problems we can fix
 
-- [Observed problem → delivery impact → practical improvement and owner/decision.]
+- [Telemetry/evidence-backed pattern → delivery impact → practical improvement and owner/decision;
+  label suspected causes and unmeasured benefits.]
 
 ## Blockers the current process cannot resolve
 

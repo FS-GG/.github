@@ -15,15 +15,41 @@ Use the same exact typed values to derive admission, reservation and the operati
 `sliceId`, attempt, operation, accountable owner, exact PR/head and actual paths/touch-set, plus the
 selected binding/native joins. Reuse the existing owner/attempt and custody; independently assembled
 lookalike identifiers cannot prove self-exemption or absence of overlap. Preserve every relevant known/
-Unknown hold until its original release condition is independently observed. No new packet or ledger
-is required.
+Unknown hold until its original release condition is independently observed. A completed-source path
+handoff transfers only the explicitly verified subset; it does not release the whole row, other paths,
+runtime/effect custody or Unknowns. No new packet or ledger is required.
+
+Read [capacity/context](context.md#capacity-window-and-assembled-test-candidate) for supported
+operation-specific fits and their current observations. Select the actual transitive execution graph,
+including Python/shell forwarding ports, build servers and cleanup. Preserve exclusive/large-image
+profiles while admitting useful independent operations that fit; entry language and free worker slots
+establish no resource profile. Check actual producer framing, including valid trailing newlines;
+distinguish original-resource from encoded compression integrity and exercise the declared cache graph.
+Preserve the intended execution/input seam; a mock success cannot replace it.
+
+Reserve the full operation horizon through original terminal, artifact retention and scoped cleanup.
+Inspect final guards as well as launch steps: a candidate that checks protected `main` again before
+retaining an artifact needs that ref stable until that check, even when an intervening merge edits only
+documentation. File-disjoint source is insufficient to prove ref/output disjointness. Name the affected
+ref/write domain and existing owner for this finite horizon; do not freeze unrelated domains. When a
+selected guard compares a broader snapshot, account for its actual covered writers too. A refused
+Prepare without retained diagnostic detail does not establish which writer or input caused refusal.
 
 Freeze the final handoff input bytes and hashes before the final preflight. Validate the actual final
 inputs, schema/branches, typed identity joins, content hashes, source/head/paths and remaining capacity
-in one failure-gated sequence with invocation. Every check must succeed before invoking the selected
-route; a failed check must prevent later shell lines as well as the constructor/launch. Use explicit
+in one failure-gated sequence with invocation. Create owner-private final inputs exclusively at mode
+`0600`; re-read their exact bytes/hash and refuse a preexisting file or weaker mode. For typed capacity,
+reservation and action observations, require all three nonempty evidence arrays with actual supplier/
+time attribution, and true accepted prerequisites plus the complete flag. Dating an empty template or
+copying pending supplier text does not finalize those facts. Refresh actual native/body/owning-plan and
+protected-base joins; unchanged content blobs do not make an old revision join current.
+Every check must succeed before invoking the selected route; a failed check must prevent later shell lines as well as the constructor/launch. Use explicit
 success chaining or a controller that stops on any failed prerequisite. A changed input/hash invalidates
 the checked candidate: reconcile it and preflight the final bytes again within existing authority.
+Start the finite original clock before setup/helpers and include their actual cleanup and final retention;
+clip child work to leave that reserve. A new wrapper or per-checkpoint packet is not a substitute for
+completing the existing maintained route's preconditions. At dispatch/push, reconcile a stale event base
+on the same owner/branch/PR and obtain the required current-head CI; never relabel an old event as fresh.
 
 Retain original refusals, partial effects and uncertain outcomes with their operation identity. Diagnose
 and reconcile the original before any separately admitted continuation; never blindly retry or mint a

@@ -184,6 +184,8 @@
     <Compile Include="Chore.fs" />
     <Compile Include="Kit.fsi" />
     <Compile Include="Kit.fs" />
+    <Compile Include="OperationObservation.fsi" />
+    <Compile Include="OperationObservation.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -161,6 +161,29 @@ echo "new-sdd-workspace parse fixture — dll='$DLL'"
 # not manufacture repository, board, collaborator, chore-lock, or npm answers.
 dotnet fsi --reference:"$DLL" "$HERE/bounded-text.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/wizard-defaults.fsx"
+# The interactive TTY menu, help and parser use one compiled inventory. Inspect that exact
+# inventory and the real pure wizard assembler rather than imitating an interactive terminal.
+cat > "$BUILD_ROOT/python-wizard-defaults.fsx" <<'FS_PYTHON'
+open NewSddWorkspace.Program
+open System.Reflection
+
+let flags = BindingFlags.Static ||| BindingFlags.Public ||| BindingFlags.NonPublic
+let moduleType = typeof<Options>.Assembly.GetType("NewSddWorkspace.Program")
+let inventory = moduleType.GetMethod("get_templates", flags)
+if isNull inventory then failwith "the shared compiled wizard family inventory is missing"
+let families = inventory.Invoke(null, [||]) :?> (string * string) list
+if (families |> List.filter (fun (name, _) -> name = "python") |> List.length) <> 1 then
+    failwith "the shared wizard menu/parser inventory must include Python exactly once"
+let python = assembleWizardTemplateOptions "./Python" "Python" "python" None None None None
+if python.Template <> "python" || python.Lifecycle <> "sdd" || python.LifecycleExplicit
+   || python.Profile <> None || python.Bundle <> None || python.NpmPackage <> None
+   || python.NpmVersion <> None || python.BindingTarget <> None then
+    failwith "the Python wizard must preserve Standard SDD without other family parameters"
+for descriptor in [None; Some "source: FS.GG.Workspace.Template::0.15.0"; Some "source: FS.GG.Workspace.Template::0.19.0"] do
+    if selectScaffoldLifecycle python descriptor <> "sdd" then
+        failwith "Python omission must not inherit the Fable-game descriptor override"
+FS_PYTHON
+dotnet fsi --reference:"$DLL" "$BUILD_ROOT/python-wizard-defaults.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/doctor-coherence.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/knowledge-bootstrap.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/pinned-governance.fsx"
@@ -252,6 +275,14 @@ expect_err "fable-bindings validates its target" \
   "--binding-target must be browser, node, or universal" -- "$TGT" P --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target wasm
 expect_err "fable-bindings rejects a non-exact npm version" \
   "--npm-version must be an exact version" -- "$TGT" P --template fable-bindings --npm-package @babylonjs/core --npm-version latest --binding-target browser
+expect_err "Python rejects a Rendering-only profile" \
+  "--profile is only supported by the rendering template" -- "$TGT" P --template python --profile game
+expect_err "Python rejects a Fable-game-only bundle" \
+  "--bundle is only supported by the fable-game template" -- "$TGT" P --template python --bundle player
+expect_err "Python rejects a bindings-only package closure" \
+  "only supported by the fable-bindings" -- "$TGT" P --template python --npm-package example --npm-version 1.0.0
+expect_err "Python rejects a bindings-only target" \
+  "--binding-target is only supported by the fable-bindings" -- "$TGT" P --template python --binding-target browser
 expect_err "npm parameters are rejected outside fable-bindings" \
   "only supported by the fable-bindings" -- "$TGT" P --template console --npm-package @babylonjs/core --npm-version 8.0.0
 expect_err "--ref with no following token needs a value" \
@@ -278,7 +309,7 @@ expect_err "a public Project cannot omit its explicit writer allowlist" \
 
 expect_ok "the bare two-positional form parses (Profile defaults to the provider default)" \
   -- "$TGT" P
-for template in rendering console web fable-game; do
+for template in rendering console web python fable-game; do
   expect_ok "--template $template parses" -- "$TGT" P --template "$template"
 done
 for bundle in player studio tactical arcade complete; do
@@ -647,7 +678,7 @@ fi
 # server makes descriptor selection deterministic and avoids depending on unpublished providers.
 HTTP_ROOT="$WORK/templates"
 mkdir -p "$HTTP_ROOT/main/providers"
-for template in rendering console web fable-game fable-bindings; do
+for template in rendering console web python fable-game fable-bindings; do
   printf 'source: fixture/%s\nprovider: %s\n' "$template" "$template" > "$HTTP_ROOT/main/providers/$template.providers.yml"
 done
 mkdir -p "$HTTP_ROOT/d5/providers" "$HTTP_ROOT/legacy/providers"
@@ -708,6 +739,12 @@ expect_execution() {
   grep -q -- '^scaffold .* --no-update$' "$log" || params_ok=0
   if [ "$template" = "fable-bindings" ]; then
     grep -qF "npmPackage=@babylonjs/core" "$log" && grep -qF "npmVersion=8.0.0" "$log" || params_ok=0
+    ! grep -qF -- "--param target=" "$log" || params_ok=0
+  fi
+  if [ "$template" = python ]; then
+    # Python uses only the generic product/lifecycle contract: no Rendering, bundle or npm lane.
+    ! grep -qE -- '--param (profile|bundle|npmPackage|npmVersion|bindingTarget|target)=' "$log" || params_ok=0
+    grep -qF -- '--param productName=Product' "$log" || params_ok=0
   fi
   local expected_source="source: fixture/$template"
   case " $* " in
@@ -746,6 +783,10 @@ expect_execution "explicit Freeform is forwarded unchanged" rendering "lifecycle
 expect_execution "legacy Spec Kit remains selectable and frozen" rendering "lifecycle=spec-kit" --lifecycle spec-kit
 expect_execution "console routes to its provider and descriptor" console "productName=Product" --template console
 expect_execution "web routes to its provider and descriptor" web "productName=Product" --template web
+expect_execution "Python routes to its provider and descriptor with the Standard default" python "lifecycle=sdd" --template python
+for lifecycle in sdd typed-sdd none spec-kit; do
+  expect_execution "Python forwards explicit $lifecycle without family-specific parameters" python "lifecycle=$lifecycle" --template python --lifecycle "$lifecycle"
+done
 expect_execution "fable-game omission forwards its player default" fable-game "bundle=player" --template fable-game
 expect_execution "D.5 fable-game omission selects Typed SDD" fable-game "lifecycle=typed-sdd" --template fable-game --ref d5
 expect_execution "older fable-game source retains Standard SDD" fable-game "lifecycle=sdd" --template fable-game --ref legacy
@@ -754,7 +795,7 @@ expect_execution "explicit Freeform overrides D.5 omission" fable-game "lifecycl
 for bundle in studio tactical arcade complete; do
   expect_execution "fable-game forwards the $bundle bundle" fable-game "bundle=$bundle" --template fable-game --bundle "$bundle"
 done
-expect_execution "fable-bindings forwards its scoped closure and target" fable-bindings "target=universal" --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target universal
+expect_execution "fable-bindings forwards its scoped closure and target" fable-bindings "bindingTarget=universal" --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target universal
 
 # The actual compiled entry point must use the JSON verdict, not the doctor's zero exit.
 for doctor_case in true false malformed failure; do
@@ -824,6 +865,12 @@ else
   bad "help documents the fable-game bundle flag and its closed value set" "$OUT"
 fi
 
+if cli --help && grep -qF -- "python" <<<"$OUT"; then
+  ok "help includes the Python family from the shared menu/parser inventory"
+else
+  bad "help includes the Python family from the shared menu/parser inventory" "$OUT"
+fi
+
 # ── Meta: the hermetic harness held — no valid parse leaked a real scaffold ───────────────────────
 if [ ! -e "$TGT" ]; then
   ok "hermetic: no accepted parse created the target dir (all stopped at preflight)"
@@ -835,9 +882,9 @@ fi
 # after changing one production expression at a time; the guard prevents recursive mutation runs.
 if [ -z "${FSGG_MUTATION_CHILD:-}" ]; then
   if bash "$HERE/mutation-controls.sh"; then
-    ok "wrong-default and lifecycle-loss mutation controls go red and restore exactly"
+    ok "lifecycle and provider mutation controls go red and restore exactly"
   else
-    bad "wrong-default and lifecycle-loss mutation controls go red and restore exactly"
+    bad "lifecycle and provider mutation controls go red and restore exactly"
   fi
 fi
 

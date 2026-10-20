@@ -22,36 +22,53 @@ truncated finding. Retrieve the required sections through `view`; a retained han
 
 ## Capacity window and assembled test candidate
 
-Before a local compile/qualification window, retain the following in the existing owner artifact:
-current CPU/memory limits and availability with observation time; all live and unknown reservations
-(including helpers/build servers); selected enforcing profile and transitive launch closure; disjoint
-source/output/cache surfaces; storage backing/available space; and the original execution/cleanup bounds.
-A supplied machine envelope, free agent slots or a current memory reading is not a measured peak or admission.
-Verify storage class from the actual backing device/profile; an overlay mount or directory name leaves
-SSD/HDD placement unknown. Coordinate unresolved shared storage/profile changes with V3-ENV-01.
+Admit the actual operation and its transitive launch closure. Supported profiles, conservative demand
+and current remaining capacity can permit useful independent builds, installations or validations
+alongside remote CI/publication/supplier waits. Start serially when those bounds are missing; do not
+require another serial run of an already qualified profile or impose a blanket one-expensive-operation
+rule on independently qualified operations that fit together. Preserve actual large-image profiles,
+exclusive shared writes and existing source custody.
 
-Start with one admitted local compile. Retain its sampled CPU/memory peaks, elapsed time, actual concurrency
-and observed cleanup. Admit a second only when remaining headroom supports combined measured demand,
-outputs and shared state are disjoint, and every existing/unknown reservation is preserved. Missing peak,
-profile or reservation evidence keeps the narrower window; it never establishes two-workload acceptance.
-No new ledger is required: use the existing packet/current owner artifact and enforcing runner admission.
+Retain current CPU/memory limits, availability and observation time in the existing owner artifact,
+including helpers/build servers and all known/Unknown reservations. Use the applicable quota, CPU set and
+profile limits rather than host core count. For the existing integer resource fields, floor fractional
+CPU capacity and round demand/reservations conservatively upward; retain the actual fractions in the
+evidence. Convert memory to the same units conservatively too. A brief idle sample, free agent slots
+or a supplied machine envelope establishes neither demand nor admission.
+
+Account for combined memory peaks, transitive children, setup and uncertainty/headroom. A managed heap
+limit is not a process/group RSS cap; sampled peaks can miss overlap. Distinguish anonymous memory,
+shared backing and file cache without double counting or assuming inactive cache is safely reclaimable.
+Verify actual storage backing, available space and source/output/cache write domains; an overlay or
+directory name leaves SSD/HDD placement unknown. Unbounded writers or uncertain shared state hold the
+affected operation until its bounds are established. Coordinate unresolved storage/profile changes
+with V3-ENV-01. An unrelated supplier gap or scoped Unknown does not suspend independent work; preserve
+its original hold and release condition without treating its demand as zero.
+
+At relevant supplier reply/deadline boundaries, the accountable owner disposes the input through the
+existing owning issue/channel and names the next supplier action or decision. Do not defer useful
+follow-up to an unrelated runtime checkpoint or create a reporting worker/mailbox ledger. Missing
+operator access or a runtime profile still fences that effect; source/design preparation and bounded
+read-only work can proceed within their own authority and verified capacity. Neither preparation nor
+a supplier request invents credentials, an executor or a supported profile.
 
 ### Worked admission and evidence route
 
 Use the existing [routine-decisions contract](adapter.md#additive-routine-decisions), not a second
-scheduler. For example, after one successful serial qualification, a second component owner requests
-an independently useful compile. The designated capacity owner follows this route:
+scheduler. For example, one component has a supported bounded qualification while another owner has
+an independently useful local validation. The designated capacity owner follows this route:
 
-1. Retain the first operation's exact source, sampled demand, original bounds, terminal result and
-   observed cleanup in its existing owner artifact. Two CLR processes inside one caller are one
-   workload, not evidence of two independently admitted workloads. Sampling can miss peaks; choose
-   a supported profile with stated uncertainty/headroom rather than convert a sample into a hard cap.
-2. Refresh the complete lane reservation view and native process/storage evidence. Preserve unknown
-   processes in the resource evidence without inventing lane/operation identities. Missing resource
-   bounds, unquantified reservations or uncertain shared outputs keep the second workload held.
-3. Map those observations to the existing input fields below, retaining genuine source/owner/attempt
-   joins and original observation times. Carry `previous` and original operation history forward;
-   a newer summary cannot release an unresolved reservation or renew its deadline.
+1. Retain each operation's exact source/profile, demand evidence, original bounds and observed result/
+   cleanup in its existing owner artifact. Two CLR processes inside one caller are one workload, not
+   two independently admitted operations. Where demand is unqualified, first obtain an admitted serial
+   measurement; retain sampling uncertainty/headroom rather than convert a sample into a hard cap.
+2. Refresh the complete retained reservation view and native process/storage evidence, including
+   helpers/build servers. Preserve unknown processes without inventing lane/operation identities. Disjoint worktrees do not
+   prove independent caches, outputs or backing storage. Verify remaining combined headroom before
+   admitting the next operation; retain any narrower profile or unresolved affected hold.
+3. Map observations to the existing input fields below, retaining genuine source/owner/attempt joins
+   and original observation times. Carry `previous` and original operation history forward; a newer
+   summary cannot release an unresolved reservation or renew its deadline.
 
 | Existing input | Evidence supplied by the owner |
 |---|---|
@@ -67,13 +84,56 @@ an independently useful compile. The designated capacity owner follows this rout
    workloads. Account every newly admitted demand before evaluating or launching another operation.
 5. A favorable advisory result grants no execution. The existing native runner/owner rechecks actual
    source, resources, disjoint outputs and shared caches/state beside launch under the applicable
-   admission. For an admitted pair, retain measured overlap, each workload's peaks/results, combined
-   occupancy, first failures and independently observed cleanup in the same owner artifacts. If the
-   second workload stays held, record why; neither free cores nor multiple CLR processes clear it.
+   admission. For an admitted pair, retain actual overlap, per-operation and combined demand, timing,
+   results, first failures and independently observed cleanup in the same owner artifacts. If the
+   second operation stays held, record the determining scope/reopening condition; free cores alone
+   do not clear it. Source/CI delivery, publication and installed caller/instruction adoption remain
+   separate. Two-operation concurrency acceptance needs useful local operations, not synthetic activity;
+   economic comparisons require comparable coverage and can remain inconclusive.
 
 This field mapping is not a runnable input, a grant or proof of complete inventory. Reuse the current
-[typed controls](https://github.com/FS-GG/.github/blob/877dd41610ed48aa39895845d99202285d5f3955/tests/work-board/routine-decisions.fsx) for unknown/stale resources,
+[typed controls](https://github.com/FS-GG/.github/blob/75dfe5a98ce49fc5db3dab6232e554c7862a32f3/tests/work-programme/routine-decisions.fsx) for unknown/stale resources,
 CPU/memory occupancy and retained holds; no new scheduler or process ledger is needed.
+
+### Preflight the actual handoff
+
+Reuse maintained preparation/collection routes and existing owner artifacts. Inspect forwarding scripts
+and every transitive launch port before classifying a Python entry as pure: a Python wrapper can start
+CLR, acquisition or a product workload. Start the original clock before imports/preparation and include
+startup, children, output collection, actual helper cleanup and terminal verification. A helper's
+five-second cleanup reserve consumes that same window; wrapper repair or input finalization renews
+neither an original execution deadline nor an uncertain effect.
+
+Check genuine producer bytes and the declared graph before freezing fixture expectations. Worker
+source with two trailing newlines can be valid; original-resource integrity and encoded `.br`/`.gz`
+integrity differ; a reduced cache fixture does not establish the real cache graph. Preserve supported
+variants and deliberate negative controls. Diagnose wrong fixture/input assumptions at their owning
+boundary instead of treating a private guard refusal as a native product defect or replaying work.
+
+Before an effect-capable handoff, create the final input exclusively with mode0600 under its private
+root, freeze its hash, and check the actual closed schema, identity joins and branch predicates. For
+integrator observations, each of `capacity.observation`, `reservations.observation` and
+`slices[].observation` needs a genuine supplier, current bounded times and nonempty evidence. Accepted
+action prerequisites need their real truth/supplying owner and complete coverage before setting
+`prerequisitesComplete`; dating an empty/pending draft supplies none of those facts. Use existing cheap
+controls for missing evidence and false/incomplete prerequisites instead of discovering draft defects
+through another expensive read.
+Use a supported typed route for its own domain: `routine-decisions` does not re-evaluate a saved V2
+inspection with a different schema. A projection cannot turn an original Unknown selection into Ready.
+
+At dispatch and push, reconcile the actual protected base and current native/body/owning-plan/PR/head
+joins. An unchanged immutable blob can preserve a source fact while the maintained reader reports a
+new current protected revision; verify that equality and refresh the exact attributed join. Preserve
+the original result instead of assuming equal content preserves a stale commit/event binding. If
+required CI's event base is stale, integrate the current protected base into the same owner/branch/PR
+and qualify that candidate through the normal route; do not manually rerun the stale event or invent
+a replacement PR. Stable explicitly classified unenrolled memberships remain visible without automatic
+enrollment; membership movement during a read leaves that original incomplete and grants no selection.
+
+Run final checks and invocation in one failure-gated sequence as required by the
+[final-input guidance](delivery-reliability.md#final-inputs-and-failure-gated-invocation). A failed check
+must stop every following launch, including later shell lines. Keep original refusals/partial effects,
+scoped Unknowns and all reservations. These are finite cooperative checks, not atomic/server CAS.
 
 ### Cheap assembled carrier preflight
 
@@ -103,7 +163,7 @@ failures and cold/warm setup uncertainty rather than claim avoided attempts or c
 For this repository's work-board suites, run from the checkout:
 
 ```bash
-bash tests/work-board/run.sh --preflight
+bash tests/work-programme/run.sh --preflight
 ```
 
 Requires Bash and Python 3; checks `dotnet` availability for the selected FSI suites without invoking it.
@@ -116,7 +176,7 @@ Any blocked/malformed/unknown input returns nonzero; timeout or missing output s
 It cannot discover undeclared dynamic reads or transitive launches in trusted test source: the owner still
 inspects that closure and obtains its profile. Hashes establish identity, not correctness or authority.
 
-Normal `bash tests/work-board/run.sh` performs the same assembled-plan inspection before any suite.
+Normal `bash tests/work-programme/run.sh` performs the same assembled-plan inspection before any suite.
 Malformed inventory, missing entrypoint bindings and unknown launchers block all child launch. Existing
 per-suite tool/input/dependency failures retain their independent diagnostic behavior, original deadline,
 first cause and cleanup. Inputs are refreshed around each suite; a preflight pass never authorizes a later

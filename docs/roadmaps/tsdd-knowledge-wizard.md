@@ -401,6 +401,24 @@ carrier. Final source CI, protected delivery and native scoped closure remain se
 No full24, product build, doctor, publication, performance, parent retirement or reservation
 release follows; original W013 and439/46 Unknown holds remain preserved.
 
+## Creator021 genuine-coherent publication boundary
+
+[Delivery4741](https://github.com/FS-GG/.github/issues/4741) owns the current021
+release route described in the [Python source and publication design](../coordination/2026-10-20-wizard-python-bindings-source-design.md#current021-publication-readiness).
+It joins the accepted Python/binding source repair to genuinely published
+coherent110 through a dedicated immutable dependency pin. Historical Creator020,
+coherent108, SOURCE021 refusals and original journals retain their identities.
+Candidate, preflight, eight-effect publication, both-feed correspondence and actual
+isolated public021 installation remain distinct acceptance steps. A namespace
+literal in source grants no effect or fresh-custody claim.
+
+Delivery4723's remaining two public Python journeys require the actual published
+and installed successor; its accepted source-candidate controls cannot replace
+those subjects. Complete Outcome4642 acceptance still joins the whole original
+Wizard/knowledge promise. The source boundaries and qualification records below
+retain their original historical scope; this amendment does not rerun accepted
+receivers or release original Unknown reservations.
+
 ## Source boundary
 
 Only `scripts/NewSddWorkspace/Program.fs`, its README, focused `tests/new-sdd-workspace` fixtures, and this document change. Standard SDD, other lifecycle tokens, global tool self-update, governance, coordination, explicit upgrades, and initialization handoff retain their existing routes. Fable game omission preserves the exact historical 0.15 typed-selection gate; 0.17 and provisional 0.18 descriptors remain Standard SDD unless a caller explicitly selects typed SDD.

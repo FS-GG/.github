@@ -47,6 +47,7 @@
     <Compile Include="GraphQlErrorsFirstTests.fs" />
     <Compile Include="ConnectionPaginationTests.fs" />
     <Compile Include="GraphQlBoundaryTests.fs" />
+    <Compile Include="OperationObservationReadsTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

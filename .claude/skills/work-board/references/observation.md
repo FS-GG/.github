@@ -133,3 +133,79 @@ clocks, report time, lineage/attribution coverage and omissions. Historical gaps
 configready, helper success and updated dashboards cannot certify operational recovery or
 cost/efficiency compliance. See `docs/reference/local-telemetry-store.md` for the existing
 commands and concrete recipe. No automatic reviewer, provider interception or backfill follows.
+
+## Finite original-operation attention
+
+The additive `observe-operation` source route observes one explicitly admitted, already-running
+GitHub Actions run and attempt. Use it only after its source, coherent publication, physically
+verified installed caller and instruction discovery have been qualified for the selected scope.
+Source availability alone does not activate the route. Root retains operation/resource admission,
+Status reconciliation and full acceptance. The observer performs bodyless REST GETs; it does not
+schedule, dispatch, retry, cancel, release reservations, mutate planning or evaluate merge readiness.
+
+Prepare one private `fsgg.operation-observation-input/1` JSON object with exactly `schema`, `identity`
+and `seconds` (1–600). `identity` has exactly `issue` (`OWNER/REPO#NUMBER`), `slice`, `attempt`, `owner`,
+`sourceRevision` (40 lowercase hex), `issueUpdatedAt` (exact native value), `issueBodySha256` (SHA256
+of the exact UTF8 native body), `repository` (`OWNER/REPO`), `pullRequest`, `head` (40 lowercase hex),
+`runId`, `runAttempt`, `populationRevision` and `unknowns` (the retained original Unknown identifiers).
+These are attributed root inputs, never authentication or a new execution grant. Preserve all original
+effects and reservations, including obligations outside the selected run. Missing identity is a gap;
+do not reconstruct unavailable originals or replace them with a fresh attempt.
+
+Invoke the genuine qualified installed caller once for the admitted attention window:
+
+```bash
+fsgg-coord-engine observe-operation start --input /PRIVATE/operation-input.json --cursor /PRIVATE/original-observer.json
+```
+
+The private parent directory must already exist and remain in the original operation's custody.
+`GITHUB_TOKEN`, falling back to `GH_TOKEN`, supplies read credentials. The live adapter uses
+`https://api.github.com`; other hosts and non-Linux clock continuation are unsupported. It binds the
+owning issue's native body digest/update revision before and after each sample, PR head barriers,
+selected run/attempt barriers, two complete job-population sweeps, and every job's original run/attempt/head. Empty or incomplete jobs,
+ambiguous native PR association, count drift, missing continuation, duplicate fields/identities and
+unsupported native states produce attention rather than success. Jobs are the complete selected-run
+population, at most128 across two explicit100-item pages; this is not all PR checks or required checks.
+
+The invocation retains pending observations internally and prints one JSON result, at most4096bytes,
+when a terminal observation, PR control change, identity/population drift, native-read gap, interruption
+or deadline requires attention. Unchanged ticks and ordinary pending job progress cause no model callback or stdout record. The result
+contains the original PR/head/run/attempt, stable attention identity, semantic revision, remaining
+request budget, retained Unknown count and private cursor/evidence references. `completed` describes
+native selected-run/job observations only. Readiness remains `not-evaluated`; no observation releases
+Unknowns or establishes source/publication/installed/native acceptance.
+
+The original window is at most600seconds including a500ms cleanup reserve, at most384 requests,
+30seconds per request and4MiB total accepted evidence/result output. Each accepted response page is
+at most256KiB before parsing; the reused transport may transiently acquire up to4MiB before this
+adapter rejects an oversized page. This differs from the Python watcher's256KiB acquisition bound.
+Ordinary samples cost eight GETs for up to100jobs, or ten for101–128jobs, with a maximum5second
+internal wait. Owning issue revisions and source timestamps are not renewed by local observation.
+Filesystem calls and the hosting process are not a separately qualified process-tree supervisor.
+
+Resume the same cursor and exact input after interruption:
+
+```bash
+fsgg-coord-engine observe-operation resume --input /PRIVATE/operation-input.json --cursor /PRIVATE/original-observer.json
+```
+
+The checksum-protected cursor retains Linux boot/tick clock identity, original absolute work/cleanup
+deadlines, remaining request/output budgets, population and semantic revision. Its checksum detects
+accidental corruption, not hostile modification or authority. Missing, corrupt, changed-clock,
+identity-drifted or expired custody refuses before native IO. Every request is charged and persisted
+before sending; a crash can lose allowance but cannot renew it. Terminal attention replays its stable
+identity within the original window. This does not promise exactly-once crash delivery. An attention is terminal for its original invocation; resume replays that result. A new
+`start` refuses an existing cursor. Never delete custody to bypass expiry or a refusal.
+
+Private files are created with owner read/write permissions and one process holds the cursor lock.
+The cursor is replaced through a flushed temporary file; directory durability and disk-loss recovery
+are not established by this source. On cancellation, an in-flight read may consume its remaining
+bounded allowance before the interruption result. A hard-killed observer leaves the original cursor,
+Unknowns and reservations intact. Root reconciles the original operation independently.
+
+Rollback keeps the existing `tools/routine-delivery.py --watch-checks` route for an independently
+admitted remaining observation. That helper cannot consume this cursor or renew its deadline. After
+an observer failure, retain its original custody and use fresh bounded native readback; do not start
+a fresh600second watcher for the same expired window. Report actual parent/worker/reviewer usage,
+coverage omissions and native request costs. Zero unchanged-tick model invocations follows from the
+finite code path; measured whole-family savings and installed acceptance require their own evidence.

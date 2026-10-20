@@ -19,8 +19,8 @@
     <PackageId>FS.GG.NewSddWorkspace</PackageId>
     <!-- Independent Creator successor: the canonical work-board materializer is packaged here.
          Coherent 0.108 does not publish this tool; its own candidate and publisher qualify each independent successor. -->
-    <Version>0.20.0</Version>
-    <PackageReleaseNotes>0.20.0 source preparation: adopt the closed48-leaf lifecycle instruction allowlist from this invocation's successful fresh SDD scaffold. Explicit retained upgrades authenticate the accepted immutable predecessor instruction manifests, preserve original provenance and 108 tool pins, and refuse owner edits. Independent published-dependency qualification retains genuine coordination 0.108 bytes; publication and installed receiver acceptance remain pending.</PackageReleaseNotes>
+    <Version>0.21.0</Version>
+    <PackageReleaseNotes>0.21.0: expose the existing generic Python provider in the Wizard and forward the bindings descriptor bindingTarget key. Normal source uses coherent110; the independent release route reuses authenticated published coherent110 dependencies. Published Creator0.20 and its genuine108 dependency/effect identities remain immutable. Publication and installed successor adoption require their own acceptance.</PackageReleaseNotes>
     <AssemblyName>new-sdd-workspace</AssemblyName>
 
     <Description>FS.GG workspace scaffolder — composes a selectable Standard or Typed SDD lifecycle, a runnable provider workspace, and an optional Governance overlay in one command, with a rich Spectre.Console progress UI. Orchestrates existing published machinery; no FS.GG.Templates checkout required.</Description>

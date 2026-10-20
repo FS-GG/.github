@@ -204,7 +204,9 @@ by itself exclude independent work; action-specific prerequisites and admission 
 
 Use actual remaining worker, CPU/memory, integrator and hosted-CI capacity after active demand and
 known/Unknown reservations. Free agent slots are not resource capacity. Admit each chosen operation
-before launch, preserve serial expensive-run limits and keep one integrator for shared surfaces.
+before launch using its supported operation-specific profile; preserve required exclusive writes,
+large-image limits and one integrator for shared surfaces. Do not add blanket serial execution when
+independently qualified operations fit the remaining capacity together.
 Delegate only when the runtime permits it, ownership/isolation is clear and the expected contribution
 exceeds coordination cost. Continue an existing owner/attempt instead of creating a duplicate lane.
 
@@ -219,8 +221,13 @@ conflicts and relevant known/Unknown reservations. Free agents are not CI/review
 demand before selecting another operation. Prepare independent source while hosted work drains; repair
 and integrate the active queue before opening excess PRs. Read
 [capacity/context](context.md#capacity-window-and-assembled-test-candidate) for supported
-profiles, sampled peaks, storage uncertainty and assembled-candidate checks. Inspect transitive launch
-closure: a Python/shell label does not make CLR/native/external execution pure.
+profiles, conservative CPU quota/demand, combined peaks/headroom, shared backing/write domains and
+assembled-candidate checks. Attribute known/Unknown demand to its affected operation; unknown demand
+is not zero and an authentic-runtime supplier gap does not block unrelated authorized source preparation.
+Inspect transitive launch closure: a Python/shell label does not make CLR/native/external execution pure.
+Use existing owned supplier requests and disposition relevant replies/deadlines; do not add another ledger.
+Before invocation apply [final inputs and operation horizons](delivery-reliability.md#final-inputs-and-failure-gated-invocation),
+including complete attribution, prerequisite truth and source/ref stability through final retention.
 The maintained runner rechecks source/resources, reserves, sets a deadline and launches together.
 Never revive expired authority, extend an in-flight operation or send short-lived grants through conversation.
 Observation can have a separate fresh budget for the original identity; expiry is not replay permission.
@@ -253,7 +260,12 @@ Read [delivery reliability](delivery-reliability.md) for recurring qualification
 Use `tools/pr-lane-admission.py` for stable campaign/chain, exact pushed head and normal metadata.
 Keep one open PR per coherent chain and at most two managed PRs per repository across campaigns.
 Preserve metadata through canonical body/head updates. Assemble compatible source/version/Atlas edits
-and reconcile the final protected base with integration owners before costly CI; do not freeze unrelated work.
+and reconcile the actual protected base, native/body/owning-plan joins and exact PR/head with integration
+owners at dispatch/push before costly CI. Unchanged plan/blob bytes can preserve their content proof
+while a changed protected revision still requires a fresh join. Repair stale event-base integration on the
+same owner/branch/PR; do not manually rerun a stale event or create a replacement PR. Reserve required
+source/ref stability through the selected operation's final retention, then continue unrelated work whose
+actual dependencies remain disjoint.
 Use `tools/routine-delivery.py` and
 [ADR-0084](https://github.com/FS-GG/.github/blob/main/docs/adr/0084-semantic-reuse-never-cancels-coherent-validation.md)
 for classification, exact-head required checks, coherent validation, scoped reuse, merge and native readback.

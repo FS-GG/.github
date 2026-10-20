@@ -25,12 +25,18 @@ Qualified organization and PRODUCT contracts remain distinct. Instruction loadin
    Follow the mandatory [Status lifecycle](references/status-lifecycle.md); workers supply evidence and
    the root integrator decides Status. Inspection remains read-only.
 4. Compare eligible Deliveries against full acceptance, real prerequisites, explicit user priority and
-   remaining-after-active capacity. Prefer finishing owned acceptance and useful prerequisites; reconsider
+   remaining-after-active capacity. Use [operation-specific admission](references/context.md#capacity-window-and-assembled-test-candidate):
+   account conservative CPU quota/demand, combined memory peaks/headroom, storage/backing, transitive
+   children and known/Unknown write domains. Preserve selected exclusive/large-image profiles; a safe
+   supported fit needs no additional blanket one-expensive-operation limit. Prefer finishing owned
+   acceptance and useful prerequisites; reconsider
    older deferred work and explain material repeated bypasses. Do not let new easy fixes starve product work.
    An Outcome is never an implementation assignment; linked but unenrolled Deliveries stay unschedulable.
 5. Execute one bounded admitted Delivery through [$pnext-item](https://github.com/FS-GG/.github/blob/main/.agents/skills/pnext-item/SKILL.md), then update Status and verify readback after dispatch. The same owner carries
    implementation/relevant tests, one independent review for substantive changes, repair, delivery and whole-promise verification.
    Apply the lifecycle contract's risk rules and preserve exact-head required CI and native gates.
+   Before invocation read [final-input and operation-horizon guidance](references/delivery-reliability.md#final-inputs-and-failure-gated-invocation);
+   reservations cover the actual launch through terminal collection/retention, including determining refs.
    Selected technical plans use [$work-roadmap](../work-roadmap/SKILL.md) as an adapter to that executor.
 6. After worker returns, CI/runtime completion, reviews, supplier replies, accepted closure and the start
    of a bounded wait, repeat Status reconciliation before reconsidering suppliers, intake and

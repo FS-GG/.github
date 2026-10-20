@@ -701,6 +701,9 @@ let main argv =
             let arguments = List.ofArray argv
 
             match arguments with
+            | "observe-operation" :: _ ->
+                invoked <- "observe-operation"
+                OperationObservationApplication.tryRun arguments |> Option.defaultValue ExitError
             | "board-v2" :: _ ->
                 invoked <- "board-v2-refresh"
                 BoardV2Application.tryRun arguments |> Option.defaultValue ExitError
