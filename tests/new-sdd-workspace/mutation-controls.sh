@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate-inversion controls for the two lifecycle decisions that ordinary positive cases can mask.
+# Gate-inversion controls for lifecycle and provider decisions that positive cases can mask.
 # Each case changes exactly one production expression, requires the real compiled acceptance suite
 # to fail for the named reason, and restores the source byte-for-byte before continuing.
 
@@ -106,4 +106,18 @@ expect_red \
   'the D.5 fable-game descriptor must select Typed SDD on omission' \
   "$WORK/d5-descriptor.log"
 
-echo "new-sdd-workspace mutation controls — 3 passed, 0 failed"
+expect_red \
+  "Python family omission is detected and restored" \
+  $'        "python", "minimal Python workspace"\n' \
+  '' \
+  'the shared wizard menu/parser inventory must include Python exactly once' \
+  "$WORK/python-family-omission.log"
+
+expect_red \
+  "wrong bindings parameter key is detected and restored" \
+  'sprintf "bindingTarget=%s" target' \
+  'sprintf "target=%s" target' \
+  'FAIL  fable-bindings forwards its scoped closure and target' \
+  "$WORK/bindings-key.log"
+
+echo "new-sdd-workspace mutation controls — 5 passed, 0 failed"

@@ -14,10 +14,12 @@ import tempfile
 import unittest
 
 HERE = Path(__file__).resolve().parent
-SUBJECT = '''Product = product
+SUBJECT = '''        "python", "minimal Python workspace"
+Product = product
         Template = "rendering"
         Lifecycle = "sdd"
 sprintf "lifecycle=%s" lifecycle
+sprintf "bindingTarget=%s" target
 sourceLine = Some "source: FS.GG.Workspace.Template::0.15.0"
 '''
 RUNNER = r'''#!/usr/bin/env bash
@@ -49,6 +51,10 @@ elif 'sprintf "lifecycle=%s" "sdd"' in body:
     print('FAIL  explicit Typed SDD is forwarded unchanged')
 elif 'sourceLine = Some "source: FS.GG.Workspace.Template::0.14.0"' in body:
     print('the D.5 fable-game descriptor must select Typed SDD on omission')
+elif '        \"python\", \"minimal Python workspace\"\n' not in body:
+    print('the shared wizard menu/parser inventory must include Python exactly once')
+elif 'sprintf \"target=%s\" target' in body:
+    print('FAIL  fable-bindings forwards its scoped closure and target')
 else:
     raise SystemExit(0)
 raise SystemExit(1)
@@ -107,12 +113,12 @@ class MutationIsolation(unittest.TestCase):
             self.assertEqual((base / name / 'preserved-marker').read_bytes(), b'inert published environment')
         return creator, env, result, rows
 
-    def test_published_mutants_use_three_fresh_creator_checkouts(self):
+    def test_published_mutants_use_five_fresh_creator_checkouts(self):
         creator, env, result, rows = self.fixture('published-dependency')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('mutation controls — 3 passed, 0 failed', result.stdout)
-        self.assertEqual(len(rows), 3)
-        self.assertEqual(len({row['creator'] for row in rows}), 3)
+        self.assertIn('mutation controls — 5 passed, 0 failed', result.stdout)
+        self.assertEqual(len(rows), 5)
+        self.assertEqual(len({row['creator'] for row in rows}), 5)
         for row in rows:
             self.assertNotEqual(row['creator'], str(creator))
             self.assertFalse(Path(row['creator']).exists(), 'mutant checkout was not cleaned')
@@ -124,7 +130,7 @@ class MutationIsolation(unittest.TestCase):
     def test_source_mode_retains_its_original_restoration_route(self):
         creator, _, result, rows = self.fixture('source-only')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(len(rows), 3)
+        self.assertEqual(len(rows), 5)
         self.assertTrue(all(row['creator'] == str(creator) and row['mode'] == 'source-only' for row in rows))
 
     def test_reusing_positive_creator_cannot_count_as_mutation_detection(self):

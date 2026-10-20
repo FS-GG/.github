@@ -1861,6 +1861,7 @@ let private templates =
         "rendering", "FS.GG.Rendering application (supports --profile)"
         "console", "minimal F# executable"
         "web", "ASP.NET Core + TypeScript/Vite workspace"
+        "python", "minimal Python workspace"
         "fable-game", "Fable/Elmish game workspace"
         "fable-bindings", "Fable interop library (requires an exact npm package/version and target)"
     ]
@@ -2184,6 +2185,7 @@ let private previewPanel (d: Draft) =
             |> Option.defaultValue pendingCell
         | Some "console" -> "F# console executable", "[grey](no npm lane)[/]"
         | Some "web" -> "web workspace", "[grey](ASP.NET Core + TypeScript/Vite)[/]"
+        | Some "python" -> "Python workspace", "[grey](Python Hello provider)[/]"
         | Some "fable-game" -> "Fable game workspace", "[grey](Elmish + game provider)[/]"
         | Some "fable-bindings" ->
             "Fable bindings library",
@@ -2193,7 +2195,13 @@ let private previewPanel (d: Draft) =
         | _ -> "generated workspace", pendingCell
 
     let app = tree.AddNode(sprintf "%s  %s" appLabel profileAnno)
-    app.AddNode "[grey37]dotnet build && dotnet run[/]" |> ignore
+    app.AddNode(
+        if d.Template = Some "python" then
+            "[grey37]python3 python/app.py[/]"
+        else
+            "[grey37]dotnet build && dotnet run[/]"
+    )
+    |> ignore
     // The simulation core materializes only for the game-family profiles (game, sample-pack).
     match d.Template, d.Profile with
     | Some "rendering", Some p when hasGameCore p ->
@@ -3164,7 +3172,7 @@ let private run (opts: Options) : int =
 
             let bindingTargetParam =
                 opts.BindingTarget
-                |> Option.map (fun target -> [ "--param"; sprintf "target=%s" target ])
+                |> Option.map (fun target -> [ "--param"; sprintf "bindingTarget=%s" target ])
                 |> Option.defaultValue []
 
             let sourceLine =
