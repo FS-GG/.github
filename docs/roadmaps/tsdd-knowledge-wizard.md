@@ -211,6 +211,196 @@ all other provider/raw-template routes, promised retained upgrades and its full 
 promise. This milestone establishes no product build, doctor coherence, publication,
 performance, fleet adoption or historical reservation release.
 
+### Remaining receiver matrix source — 2026-10-20
+
+[Delivery4723](https://github.com/FS-GG/.github/issues/4723) selects the remaining
+24 subjects in the [.github matrix adapter](../../tests/new-sdd-workspace/knowledge-public-receivers.py).
+It retains the delivered console adapter byte for byte and dispatches fixed source-owned
+routes; proposal command arrays are evidence only.
+
+| Subjects | Assertions |
+| --- | --- |
+| Console: Wizard default; provider/raw typed and default | Five |
+| Web and Python: Wizard/provider/raw typed and default | Twelve |
+| Bindings: provider/raw typed and default | Four |
+| Rendering: Wizard game typed; fresh clone of accepted4708 app | Two |
+| Retained console-provider default clone | Nonempty Standard preview, explicit FSharp apply, capture/recovery and rollback |
+
+The twelve typed subjects require canonical knowledge, package-owned CI, exact local
+tool pins, caller initial assets and later finding commits, four captures, actual retrieval,
+Git history/version retrieval, cache-free clone retrieval, selected-record restoration and
+a separate Git bundle reconstruction. All-shared export runs after private capture and
+restores losslessly; records-only export does not claim Git history. Ordinary local-tool
+checker invocation uses no command override and retains exact10MiB/one-byte-over refusal
+and restoration controls. Eleven omitted-default subjects prove Standard SDD selection
+and absence of automatic canonical knowledge/CI; they establish no knowledge-ready result.
+
+The retained subject clones the accepted console-provider default receiver. It adds the
+published nonempty supported Standard fixture, authored guidance and an owner finding
+note while canonical knowledge remains absent. Preview must preserve all bytes/modes;
+accepted `fsharp-specification-v1` migration itself must seed knowledge. Caller composition
+then uses the published project-knowledge template without force, adding exactly its two
+absent CI assets while preserving every existing file. An independent owner collision
+must refuse. Subsequent canonical captures and Git history, authored guidance, owner note,
+product files and CI must survive rollback to the exact original Standard source. Neither
+retained nor accepted-app clone reruns generic initialization or scaffold creation. The
+accepted app donor is pinned by its original HEAD/tree and complete owner preimage;
+probe setup remains a distinct commit.
+
+The sealed tuple reuses Wizard0.19.0, SDD2.2.0, Coord0.94.0, Workspace0.19.0 and
+Templates descriptors at `f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc`. Rendering uses
+UI0.32.1 and its Workspace0.18.2 overlay. Bindings retain genuine Fable5.18.0 and
+Fantomas8.0.5 pins; omitted npm selectors use the package-owned
+`@babylonjs/core`9.19.0/browser defaults. Raw typed callers explicitly install the capable
+SDD pin and initialize knowledge; raw bindings preserve Fable/Fantomas without inventing
+Coord. Every generated manifest dependency must join the sealed feed before ordinary
+restore, and restored tool payloads must match the original public archives.
+
+The digest-bound input schema is `fsgg.wizard.public-knowledge-matrix/1`. Its closed fields
+are `schema`, `inputs`, `packages`, `workspaceOriginal`, `sourceRoot`, `caseInventory`,
+`extraInventory`, `sourceClosure`, `fsiPreflight`, `fsiClosure`, `wizard`, `sddExecutable`,
+`dotnetExecutable`, `actualHome`, `childEnvironment`, `workRoot`, `report` and `acceptedApp`.
+Package bindings carry original archive/publication custody and full installed Wizard/SDD
+closures. Only the literal published Fable5.18.0 archive uses a read-only adapter port for
+its internal repeated forward separators. Raw names, member digests and archive bytes stay
+unchanged; the report records raw-to-normalized extraction locators. Complete normalized
+collisions, file-parent collisions, absolute/traversal/dot/backslash/NUL/drive paths, links,
+unsupported member types and existing archive bounds refuse. Other packages keep the
+strict delivered reader. `acceptedApp` binds `root`, `head`, `tree` and a complete relative-file map of
+`sha256`/`mode`. Immutable source, case and SDK inventories are independently pinned by
+literal digests. Fresh per-case template/cache homes prevent package-version registration
+conflicts; the original work root refuses replay. Ambient Git configuration is disabled.
+
+One monotonic600-second deadline starts before validation and SDK hashing. Each case and
+command is capped at180seconds and clipped to the same remaining clock with cleanup/report
+margin; all original probe subprocess ports use the delivered journal/group-cleanup runner.
+Failures preserve the first failing row and partial receiver, without restarting or accepting
+an incomplete matrix. SDK content/layout and input hashes are checked before/after execution.
+Retained CLI and FSI commands run with the actual clone as cwd, whose `global.json` pins
+SDK10.0.401 with roll-forward disabled. A bounded same-cwd FSI observation records actual
+loaded framework/core/artifact locations against sealed content; metadata alone cannot
+establish selection, and this observation does not independently observe the migration's
+internal FSI child. Fresh runtime admission must cover simultaneous CLI/FSI heaps and native
+overhead. `0x60000000` is a per-process managed heap limit, not a process-group memory cap.
+
+The qualified adapter has forty-five pure controls. Original qualification failures and
+recovery boundaries are recorded below; root retains runtime admission and independent acceptance. The two Wizard-bindings
+positive routes remain deferred for the published selector transport/key mismatch; no known
+failure is replayed or counted as positive acceptance. Parent4642 retains its full .4/.5
+promise, other unselected providers/raw Rendering and upgrades, and original439/46 Unknown
+reservations. This source establishes no product build, doctor, publication or performance result.
+
+### First matrix failure and bounded retained continuation
+
+The first matrix qualification stopped after 88 commands: its first three subjects passed;
+raw console typed creation and SDD2.2 installation succeeded, but SDK10 wrote the stock
+manifest to `dotnet-tools.json` while the adapter expected `.config/dotnet-tools.json`.
+The original failed report, command outputs and receivers remain unchanged. Fresh raw setup
+now explicitly directs the stock template to `.config` and pins tool installation to that
+manifest, rather than relying on SDK discovery.
+
+The maintained `--continuation` port requires a digest-bound Programme/root checkpoint,
+a successor source-sealed manifest and the exact original postterminal custody. It verifies
+all original88 output hashes/group cleanup, the three accepted rows and their reported Git
+heads, and all four retained receiver file bytes/modes/sizes before receiver mutation. A new
+private checkpoint records the actual post-install baseline; no missing pre-install snapshot
+is inferred. Only the existing capable raw root manifest may move exclusively to the absent
+`.config` destination, preserving bytes/mode. Creation, template registration and tool install
+are reused. Knowledge initialization then continues from that honest retained baseline, using
+the same maintained row dispatcher for row4 and the remaining tail. Original failed evidence
+stays separate from the tail report/journal, whose sequence starts after88.
+
+This port admits only the original absolute deadline, `2026-10-20T06:10:37.893628+00:00`,
+joined to a sealed wall/monotonic observation before validation; it cannot renew600seconds.
+Expired or insufficient time refuses. Full24 acceptance requires both the unchanged accepted
+prefix and every completed tail assertion. Continuation requires independent source review
+and fresh root admission; this source repair establishes no recovered runtime result.
+
+### Published Python Wizard hold and supported-tail source
+
+Tail01 stopped at command414: eleven subjects passed, then published Wizard0.19.0 refused
+`--template python` before creating its target. Its immutable parser lists Rendering,
+console, web, fable-game and fable-bindings. Both Python Wizard positive assertions remain
+held for the Wizard producer to publish compatible support; the omitted-default refusal
+is already source-established and must not be replayed. Native Delivery4723 retains its
+complete24-subject Done when and remains open.
+
+The source now reads that exact published parser contract before route dispatch. It marks
+only the two Python Wizard assertions blocked without creating directories or launching
+commands. The separately admitted `fsgg.matrix4723.supported-tail/2` checkpoint binds original
+and tail01 failure custody, all414 original command outputs, eleven accepted receiver
+snapshots and reported Git heads. A new `continuation02` journal starts after414; the
+unchanged dispatcher runs only the eleven remaining supported assertions. Its complete
+possible result is **partial:22 passed,2 blocked**, with `full24Accepted=false`; it cannot
+claim full Delivery acceptance. The original absolute deadline still applies and expires
+without renewal. A later recovery window needs an explicit separate admission boundary.
+
+### Separately admitted supported-tail recovery source
+
+The original window ended at `2026-10-20T06:10:37.893628+00:00` without running
+continuation02. Its deadline and failed reports remain immutable. A distinct operation,
+`matrix4723-supported-tail-recovery20261020-01`, may run only the eleven identified
+supported subjects still missing after fresh root selection, resource admission and source
+review. This retains the existing600-second outer/180-second command-and-case profile
+for the new operation; it does not renew the old operation or impose a single wall-clock
+window across source repair on Delivery4723.
+
+The closed `fsgg.matrix4723.supported-tail-recovery/3` checkpoint preserves the same
+original/tail01 custody and adds the exact expired original deadline, an explicit
+`originalWindowExpired=true`, and fresh recovery wall/monotonic observation and absolute
+deadline. Source independently requires that the original window already expired and that
+the new admitted window is at most600seconds, including validation and cleanup. No runtime
+profile or arbitrary command knob exists. Exclusive `supported-tail-recovery01` outputs
+retain separate operation identity, recovery deadline and scope; the supported-tail report
+can establish only22 passed/2 blocked with full24 acceptance false. All original414 outputs,
+eleven accepted subjects and both prior failures stay unchanged.
+
+Held-row reporting distinguishes history from new effects: Python Wizard typed was actually
+invoked and refused at command414; Python Wizard default was not invoked. Neither is
+created by this recovery, and neither receives positive acceptance. At this source stage,
+runtime remained held pending separate root selection and admission of the reviewed checkpoint.
+
+### Accepted supported matrix milestone — 2026-10-20
+
+The [scoped matrix report](../reports/knowledge-public-receiver-matrix-20261020.md)
+records **22 passed subjects and two held Python Wizard positives** at source
+`7d354facc7cbcf347cb37a303ad3007455f9caf0`. Independent runtime-evidence review accepted
+this supported portion; Delivery4723's full24-subject Done when and parent4642 remain open.
+Eleven explicit typed, ten omitted-default and one retained migration/rollback subjects
+passed. Typed Python Wizard was actually refused at command414; default Python Wizard
+was not invoked. Their separate [4727 source/adoption route](https://github.com/FS-GG/.github/issues/4727)
+requires a compatible published supplier and actual positive assertions; source delivery
+alone cannot accept them. Wizard bindings positives remain separately deferred outside24.
+
+History remains visible: the original operation stopped at88 with three passed subjects;
+its first continuation stopped at414 with eleven passed. Separately admitted supported
+recovery reached900 with21 passed, two held and one retained failure after successful
+migration: the fixture omitted the production authority lock from its exact output set.
+The repair allows only that exact zero-byte file, preserving every other output restriction.
+Original reports/receivers and both expired deadlines remain unchanged.
+
+A distinct `matrix4723-retained-post-apply-recovery20261020-01` operation, admitted through
+closed `fsgg.matrix4723.retained-post-apply-recovery/5` custody, reused the already-applied
+subject. It completed79 remaining commands901–979 in20.779seconds with exit0 and all79
+groups observed absent. No receiver creation/donor clone, migration/apply or21-row replay
+occurred; required owned knowledge-probe/bundle scratch clones were preserved. The original
+900-command evidence and21 passed subjects stayed unchanged. Its new absolute600-second
+clock includes validation/cleanup and retains180-second command/case limits; it does not
+renew an expired operation.
+
+The retained result verifies preview preservation with knowledge absent, migration-seeded
+knowledge, no-force two-asset CI composition and owner-collision refusal, full captures and
+post-private all-shared records export/restore, separate Git bundle/version recovery, and
+ordinary exact10MiB/one-over checker behavior. Rollback restores the original Standard
+source while preserving product/provenance/tools/guidance/note/CI bytes and modes, canonical
+captures and their history. Same-cwd SDK/FSI observations selected10.0.401/.NET10.0.12;
+the internal migration child's loaded paths remain independently unobserved.
+
+[PR4726](https://github.com/FS-GG/.github/pull/4726) retains this owner and source/report
+carrier. Final source CI, protected delivery and native scoped closure remain separate.
+No full24, product build, doctor, publication, performance, parent retirement or reservation
+release follows; original W013 and439/46 Unknown holds remain preserved.
+
 ## Source boundary
 
 Only `scripts/NewSddWorkspace/Program.fs`, its README, focused `tests/new-sdd-workspace` fixtures, and this document change. Standard SDD, other lifecycle tokens, global tool self-update, governance, coordination, explicit upgrades, and initialization handoff retain their existing routes. Fable game omission preserves the exact historical 0.15 typed-selection gate; 0.17 and provisional 0.18 descriptors remain Standard SDD unless a caller explicitly selects typed SDD.
