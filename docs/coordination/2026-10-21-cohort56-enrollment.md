@@ -1,0 +1,13 @@
+# RAW COMPLETE knowledge enrollment — cohort56
+
+This source carrier appends existing [Delivery4766](https://github.com/FS-GG/.github/issues/4766), under [Outcome4642](https://github.com/FS-GG/.github/issues/4642), to the protected programme enrollment. Its exact scope is two genuine published RAW COMPLETE Fable-game standalone-knowledge journeys: explicit typed lifecycle and omitted lifecycle, both with explicit complete bundle. Accepted RAW PLAYER4759, Matrix4723 and the separate4710 product/browser/WASM ownership remain unchanged.
+
+The genuine canonical constructor produced the private binding/public commitment pair once. All55 prior ordered entries are preserved and only4766 is appended. The same nine repositories, caller/import identities and all other binding fields remain unchanged. The constructor retains its historical population origin `0d2777591116a39661c51b08733a492a3d448dd7`; that origin is distinct from this carrier's source base and later installed native population qualification. No source commitment or nonce was derived manually.
+
+The public file is the exact139-byte canonical constructor output, SHA256 `fd4a2682fcd721e432a79f1c8aa30a1dde3d43ff896c7ffc850f0c4854b0cb36`. Its private binding, payload and nonce remain outside source. No private membership list or runtime evidence is published.
+
+Before construction, actual guarded installed110 initialization set only4766's four absent values: Backlog, Delivery, Active delivery and the inherited SDD knowledge roadmap. Independent readback preserved all56 memberships,17 fields,8 views and the other55 rows. The separately admitted offline constructor passed once in0.130 seconds with retained original streams, EOF, direct reaping and observed group absence. These operations establish their named metadata and offline-pair scopes only.
+
+Caller provenance remains installed0.110.0 with its accepted `42cd9e7c8505f7cd72d5a22ad424a27af6d51458` source identity. The standalone canonical constructor is the existing separately sealed `f66b810e` implementation; it is not an installed110 command or a new native writer. This carrier changes neither caller artifact nor protected import recipe.
+
+Protected delivery, subsequent installed native56 qualification and explicit source/receiver admission remain separate boundaries. A source commit, membership or planning initialization cannot authorize implementation or runtime. Programme/root owns those decisions; existing `knowledge_fable_receiver` is the designated future scoped owner. Full4642, other variants/routes,1113's selected2.3 occupancyUnknown,4710's product qualification and every original hold remain open and unreleased.
