@@ -130,7 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.109.0 — Continuously clear selected work through native intake and complete Delivery acceptance.
+    <PackageReleaseNotes>0.110.0 — Require current root-owned board Status at canonical lifecycle boundaries.
+Reconcile observed acceptance and blockers before selection, after dispatch and before handoff; Delivery decisions precede whole-parent Outcome decisions.
+Use the six existing statuses with guarded native preimages, preservation and verified readback; inspection stays read-only and Status grants no operation or closure authority.
+Kit and Drivers inherit the mandatory lifecycle. Source preparation is distinct from publication and installed adoption.
+
+0.109.0 — Continuously clear selected work through native intake and complete Delivery acceptance.
 Canonical work-board owns recovery, complete intake, useful selection and reconsideration; pnext-item
 carries one Delivery through its declared source and consumer acceptance with the same owner and PR.
 Retire ordinary organization V1 filing/claims and mandatory analyst packets while preserving qualified

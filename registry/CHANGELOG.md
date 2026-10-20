@@ -1,5 +1,7 @@
 # Registry changelog
 
+- **2026-10-20** — Source-only github coherent successor **0.110.0** for mandatory root-owned board Status reconciliation in receiver-visible Kit/Drivers lifecycle guidance. Published inventory and component tags remain **0.109.0**; no candidate, publication, installation or old-operation replay is selected by this source preparation.
+
 ## 2026-10-19 — board lifecycle publications accepted (#4701/#4712)
 
 Publish coherent109 from original0d85830e through39317658813: all16effects/final33,
