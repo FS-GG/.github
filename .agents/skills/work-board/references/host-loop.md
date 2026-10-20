@@ -24,7 +24,7 @@ disposition grant no dispatch, reservation release, uncertain-effect retry, Stat
 or closure authority. Do not introduce a separate reporting worker, mandatory packet, duplicate ledger,
 measurement campaign or recurring unchanged reports.
 
-Keep an owner for existing reported findings. Canonical work-board owns coordination.
+**Keep an owner for reported finding packets.** Canonical work-board owns coordination.
 When an existing owner reports an evidence-backed distinct finding or a known `fsgg:finding-packet`
 needs disposition, retain that finding and its source identity in the existing owning issue/native
 thread. Resolve its accountable owner before treating it as new work. If a separately authorized
