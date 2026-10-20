@@ -21,7 +21,7 @@ module OperationObservationTests =
         match decision with
         | ReturnAttention(cursor, actual, id) ->
             Assert.Equal(expected, actual)
-            Assert.Equal(identity.Unknowns, cursor.Identity.Unknowns)
+            Assert.Equal<string list>(identity.Unknowns, cursor.Identity.Unknowns)
             Assert.Equal(64, id.Length)
             cursor, id
         | other -> failwithf "expected attention: %A" other

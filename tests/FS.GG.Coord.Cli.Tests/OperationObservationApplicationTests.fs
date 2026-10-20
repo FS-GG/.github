@@ -50,7 +50,7 @@ let ``finite application coalesces unchanged ticks into one deadline result with
         Assert.Equal(24, transport.Calls)
         Assert.Equal(360, cursor.Budget.RequestsRemaining)
         Assert.Equal(1, cursor.Revision)
-        Assert.Equal(identity.Unknowns, cursor.Identity.Unknowns)
+        Assert.Equal<string list>(identity.Unknowns, cursor.Identity.Unknowns)
         Assert.Equal(0, evidenceCalls)
         Assert.Equal((original()).Budget.WorkDeadline, cursor.Budget.WorkDeadline)
         Assert.True(saved.Count > transport.Calls)
@@ -125,5 +125,5 @@ let ``crash before evidence custody leaves only charged nonterminal continuation
         Assert.True(evidenceRetained)
         Assert.Equal(368, cursor.Budget.RequestsRemaining)
         Assert.Equal((original()).Budget.WorkDeadline, cursor.Budget.WorkDeadline)
-        Assert.Equal(identity.Unknowns, cursor.Identity.Unknowns)
+        Assert.Equal<string list>(identity.Unknowns, cursor.Identity.Unknowns)
     | other -> failwithf "fresh original observation did not establish custody: %A" other

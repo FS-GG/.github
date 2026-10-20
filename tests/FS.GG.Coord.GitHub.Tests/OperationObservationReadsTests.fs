@@ -88,7 +88,7 @@ let ``two complete128job sweeps charge exact explicit pages and reject bad secon
     Assert.Equal(128, (result |> Result.defaultWith failwith).Checks.Length)
     Assert.Equal(10, charged)
     let pages = fake.Calls |> List.filter (fun (request, _) -> request.Path.EndsWith("/jobs"))
-    Assert.Equal([ "1"; "2"; "1"; "2" ], pages |> List.map (fun (request, _) -> request.Query |> List.find (fst >> (=) "page") |> snd))
+    Assert.Equal<string list>([ "1"; "2"; "1"; "2" ], pages |> List.map (fun (request, _) -> request.Query |> List.find (fst >> (=) "page") |> snd))
     let badSeconds =
         [ response ((page [101..128]).Replace("\"total_count\":128", "\"total_count\":127")) None
           response (page [100..127]) None
