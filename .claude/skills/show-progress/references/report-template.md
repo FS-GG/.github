@@ -14,9 +14,21 @@ As of [time and timezone]. Compared with [previous report/date, or first snapsho
 |---|---|---|
 | [plain-language name] | [what improved or is usable] | [main obstacle and next useful result] |
 
+## Token efficiency
+
+[Window, source freshness and population/usage coverage; mention material gaps once.]
+
+| Dimension | Observed usage | Coverage / interpretation |
+|---|---|---|
+| [supported token category, role/model or attributed activity] | [measured amount] | [scope and limits] |
+
+[Cost per accepted delivery and baseline comparison if defensible; otherwise what remains
+unmeasured. Omit the table when no usage data is available and state the gap.]
+
 ## Process problems we can fix
 
-- [Observed problem → delivery impact → practical improvement and owner/decision.]
+- [Telemetry/evidence-backed pattern → delivery impact → practical improvement and owner/decision;
+  label suspected causes and unmeasured benefits.]
 
 ## Blockers the current process cannot resolve
 
