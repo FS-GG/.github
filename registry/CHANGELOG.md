@@ -1,15 +1,5 @@
 # Registry changelog
 
-## 2026-10-21 — Resource-aware guidance coherent111 source readiness (#4743)
-
-Advance the shared CLI/Kit/Drivers source scalar and coord-engine source version to0.111.0
-for four changed packaged work-board instruction leaves within the unchanged22-leaf population.
-The closed ordinary route selects genuine completed110 source42cd9e7c/content12c130cd and
-prospective journal coord111-resource-aware-20261021-01. Published110 versions/tags, installed
-pins, completed journals and Creator/SDD release axes remain unchanged. Source preparation
-creates no namespace or effect authority; actual candidate, normal publication and instruction/caller
-adoption require their separate admission/readback. Full4743 useful-overlap/economic acceptance remains.
-
 ## 2026-10-19 — board lifecycle publications accepted (#4701/#4712)
 
 Publish coherent109 from original0d85830e through39317658813: all16effects/final33,
@@ -76,6 +66,9 @@ review M4). The typed validator (`fsgg-sdd registry validate`) never saw that co
 no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
+
+- **2026-10-21** — Resource-aware guidance coherent111 source readiness (Programme/root; #4743): Advance the shared CLI/Kit/Drivers source scalar and coord-engine source version to0.111.0 for four changed packaged work-board instruction leaves within the unchanged22-leaf population. The closed ordinary route selects genuine completed110 source42cd9e7c/content12c130cd and prospective journal coord111-resource-aware-20261021-01. Published110 versions/tags, installed pins, completed journals and Creator/SDD release axes remain unchanged. Source preparation creates no namespace or effect authority; actual candidate, normal publication and instruction/caller adoption require their separate admission/readback. Full4743 useful-overlap/economic acceptance remains.
+
 
 - **2026-10-20** — — Creator021 publication and isolated installation accepted (github; #4741, #4748; creator021-publication-4741): record genuine candidate39459556960/artifact12281917883 and original publisher39462099428/a1, all eight effects/final17, promoted release418651768/source12480. Prepared package9cd48f4d and signed public NuGet4326f57d share normalized57232ac5; hosted both-feed receipts and native asset commitments retain local GitHub403/release-body timeout limits. Actual isolated public88/shared81 install and absolute help passed with genuine coherent110 source42. Preserve Creator020/013/coherent108 histories and SOURCE021 refusal. Product Python Matrix4723/parent4642 remain separate; this metadata update republishes nothing.
 
