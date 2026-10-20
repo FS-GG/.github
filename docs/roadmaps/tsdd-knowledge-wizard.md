@@ -211,6 +211,80 @@ all other provider/raw-template routes, promised retained upgrades and its full 
 promise. This milestone establishes no product build, doctor coherence, publication,
 performance, fleet adoption or historical reservation release.
 
+### Remaining receiver matrix source — 2026-10-20
+
+[Delivery4723](https://github.com/FS-GG/.github/issues/4723) selects the remaining
+24 subjects in the [.github matrix adapter](../../tests/new-sdd-workspace/knowledge-public-receivers.py).
+It retains the delivered console adapter byte for byte and dispatches fixed source-owned
+routes; proposal command arrays are evidence only.
+
+| Subjects | Assertions |
+| --- | --- |
+| Console: Wizard default; provider/raw typed and default | Five |
+| Web and Python: Wizard/provider/raw typed and default | Twelve |
+| Bindings: provider/raw typed and default | Four |
+| Rendering: Wizard game typed; fresh clone of accepted4708 app | Two |
+| Retained console-provider default clone | Nonempty Standard preview, explicit FSharp apply, capture/recovery and rollback |
+
+The twelve typed subjects require canonical knowledge, package-owned CI, exact local
+tool pins, caller initial assets and later finding commits, four captures, actual retrieval,
+Git history/version retrieval, cache-free clone retrieval, selected-record restoration and
+a separate Git bundle reconstruction. All-shared export runs after private capture and
+restores losslessly; records-only export does not claim Git history. Ordinary local-tool
+checker invocation uses no command override and retains exact10MiB/one-byte-over refusal
+and restoration controls. Eleven omitted-default subjects prove Standard SDD selection
+and absence of automatic canonical knowledge/CI; they establish no knowledge-ready result.
+
+The retained subject clones the accepted console-provider default receiver. It adds the
+published nonempty supported Standard fixture, authored guidance and an owner finding
+note while canonical knowledge remains absent. Preview must preserve all bytes/modes;
+accepted `fsharp-specification-v1` migration itself must seed knowledge. Caller composition
+then uses the published project-knowledge template without force, adding exactly its two
+absent CI assets while preserving every existing file. An independent owner collision
+must refuse. Subsequent canonical captures and Git history, authored guidance, owner note,
+product files and CI must survive rollback to the exact original Standard source. Neither
+retained nor accepted-app clone reruns generic initialization or scaffold creation. The
+accepted app donor is pinned by its original HEAD/tree and complete owner preimage;
+probe setup remains a distinct commit.
+
+The sealed tuple reuses Wizard0.19.0, SDD2.2.0, Coord0.94.0, Workspace0.19.0 and
+Templates descriptors at `f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc`. Rendering uses
+UI0.32.1 and its Workspace0.18.2 overlay. Bindings retain genuine Fable5.18.0 and
+Fantomas8.0.5 pins; omitted npm selectors use the package-owned
+`@babylonjs/core`9.19.0/browser defaults. Raw typed callers explicitly install the capable
+SDD pin and initialize knowledge; raw bindings preserve Fable/Fantomas without inventing
+Coord. Every generated manifest dependency must join the sealed feed before ordinary
+restore, and restored tool payloads must match the original public archives.
+
+The digest-bound input schema is `fsgg.wizard.public-knowledge-matrix/1`. Its closed fields
+are `schema`, `inputs`, `packages`, `workspaceOriginal`, `sourceRoot`, `caseInventory`,
+`extraInventory`, `sourceClosure`, `fsiPreflight`, `fsiClosure`, `wizard`, `sddExecutable`,
+`dotnetExecutable`, `actualHome`, `childEnvironment`, `workRoot`, `report` and `acceptedApp`.
+Package bindings carry original archive/publication custody and full installed Wizard/SDD
+closures. `acceptedApp` binds `root`, `head`, `tree` and a complete relative-file map of
+`sha256`/`mode`. Immutable source, case and SDK inventories are independently pinned by
+literal digests. Fresh per-case template/cache homes prevent package-version registration
+conflicts; the original work root refuses replay. Ambient Git configuration is disabled.
+
+One monotonic600-second deadline starts before validation and SDK hashing. Each case and
+command is capped at180seconds and clipped to the same remaining clock with cleanup/report
+margin; all original probe subprocess ports use the delivered journal/group-cleanup runner.
+Failures preserve the first failing row and partial receiver, without restarting or accepting
+an incomplete matrix. SDK content/layout and input hashes are checked before/after execution.
+Retained CLI and FSI commands run with the actual clone as cwd, whose `global.json` pins
+SDK10.0.401 with roll-forward disabled. A bounded same-cwd FSI observation records actual
+loaded framework/core/artifact locations against sealed content; metadata alone cannot
+establish selection, and this observation does not independently observe the migration's
+internal FSI child. Fresh runtime admission must cover simultaneous CLI/FSI heaps and native
+overhead. `0x60000000` is a per-process managed heap limit, not a process-group memory cap.
+
+This is source preparation with eighteen pure controls; no qualification has run for this
+matrix. Root retains runtime admission and independent acceptance. The two Wizard-bindings
+positive routes remain deferred for the published selector transport/key mismatch; no known
+failure is replayed or counted as positive acceptance. Parent4642 retains its full .4/.5
+promise, other unselected providers/raw Rendering and upgrades, and original439/46 Unknown
+reservations. This source establishes no product build, doctor, publication or performance result.
+
 ## Source boundary
 
 Only `scripts/NewSddWorkspace/Program.fs`, its README, focused `tests/new-sdd-workspace` fixtures, and this document change. Standard SDD, other lifecycle tokens, global tool self-update, governance, coordination, explicit upgrades, and initialization handoff retain their existing routes. Fable game omission preserves the exact historical 0.15 typed-selection gate; 0.17 and provisional 0.18 descriptors remain Standard SDD unless a caller explicitly selects typed SDD.
