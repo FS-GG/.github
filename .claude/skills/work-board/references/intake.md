@@ -54,6 +54,7 @@ the independently useful result, accountable owner, actual touch-set, suppliers 
 Do not invent Class/severity, seventh body fields, Ready authority or a failing cause for a user request.
 
 Ordinary authorized native issue creation/edit/link/close uses the existing authenticated GitHub path.
+Before invocation apply the [final-input and failure-gated invocation guidance](delivery-reliability.md#final-inputs-and-failure-gated-invocation).
 Before send verify target, existing body/state/relationships, content and effect authority; after send
 independently read back the exact result. An ambiguous creation response requires reconciling the
 original operation, never another create. Preserve partial effects and identity in existing custody.
