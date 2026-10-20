@@ -912,7 +912,7 @@ CI and pins before the frozen capture probe authors its separate setup commit.
 No generic `init`, `--force`, product build or browser command is involved.
 
 Both subjects use the existing sealed candidate/findings/ordinary-checker ports
-and bounded command journal. They retain four actual captures, retrieval/history/
+and command-journal ports. They retain four actual captures, retrieval/history/
 version and cache-free clone checks, post-private ALL-shared export/exclusion and
 lossless records restoration, distinct Git-bundle/history recovery, ordinary pinned
 checker acceptance at 10,485,760 bytes and refusal one byte over with restoration,
@@ -923,7 +923,7 @@ future operation; source checks confer no runtime admission or receiver acceptan
 
 The private manifest schema is `fsgg.raw-fable-player-knowledge/1`: exact keys are
 `schema`, `inputs`, `packages`, `sourceRoot`, `sddExecutable`, `dotnetExecutable`,
-`actualHome`, `childEnvironment`, `workRoot`, and `report`. `inputs` binds canonical
+`actualHome`, `childEnvironment`, `workRoot`, `report`, and `runnerPort`. `inputs` binds canonical
 regular-file absolute paths to SHA256, including this adapter, its unchanged Matrix
 and console ports, frozen probe/findings bytes, executable/tool closures and public
 archive/publication custody. `packages` has exactly `workspace`, `producer`, `fable`
@@ -934,6 +934,25 @@ NuGet, HTTP and temporary directories under a fresh private operation root.
 The child environment uses the existing serial CPU/1.5-GiB managed heap and bound
 physical dotnet-host contract. Root must separately admit the actual 4-GiB programme
 fit, actual input custody and runtime; source preparation launches no CLR or child.
+
+Runtime has no fallback to the frozen console runner: its collector/retirement
+behavior is not qualified by these source controls. A root-admitted launcher must
+call `qualify(path, digest, runner_factory=factory)` with an independently qualified
+finite collector adapter. `runnerPort` is the canonical source file of that exact
+Python function; the approved manifest binds its bytes in `inputs`. The function
+accepts `(base, environment, deadline=absolute_deadline)` and returns `run`, `call`,
+`git` and `knowledge` command ports plus mutable `env`, original `deadline` and
+`sequence` fields. It must start with sequence zero, preserve the selected environment
+and never extend the supplied absolute deadline. An inherited unmodified console
+`run` method refuses. Direct CLI runtime execution refuses without this injected port.
+Root must independently verify finite retained streams, identity-safe process-group
+retirement, original absolute cleanup bounds, ordinary expected nonzero exits and
+private artifact placement. The maintained `scripts/update_fsgg_coord_cli.py`
+collector is an existing source port for that later adaptation; this adapter neither
+runs it nor treats its installation-only command semantics as receiver acceptance.
+An outer watcher alone does not repair unsafe inner signaling. A failed report write
+retains the original command/probe exception and adds a separate custody-Unknown note;
+it neither replaces the original cause nor authorizes a retry or a new clock.
 
 The maintained workflow invokes only `--source-controls` for this adapter.
 Independent exact-source review, required CI, protected source delivery and separately

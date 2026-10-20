@@ -28,7 +28,7 @@ PINS = dict(RAW_PINS, **{'fs.gg.sdd.cli': '2.2.0'})
 ROWS = ({'id': 'raw-fable-player-explicit-typed', 'product': 'RawFableExplicit', 'explicit': True},
         {'id': 'raw-fable-player-omitted', 'product': 'RawFableOmitted', 'explicit': False})
 TOP_KEYS = {'schema', 'inputs', 'packages', 'sourceRoot', 'sddExecutable', 'dotnetExecutable',
-            'actualHome', 'childEnvironment', 'workRoot', 'report'}
+            'actualHome', 'childEnvironment', 'workRoot', 'report', 'runnerPort'}
 LIFECYCLE_PATHS = ('sdd', '.fsgg/typed-sdd', '.fsgg/typed-sdd.json', '.fsgg/scaffold-provenance.json')
 
 
@@ -77,6 +77,7 @@ def validate(path, expected_sha, after=False):
     require(set(m['packages']) == set(PACKAGES), 'closed-public-game-packages')
     for name in m['inputs']:
         C.regular(name, m['inputs'])
+    C.regular(m['runnerPort'], m['inputs'])
     for name in (__file__, M.__file__, C.__file__):
         C.regular(Path(name).resolve(), m['inputs'])
     for relative, sha in C.SOURCE_HASHES.items():
@@ -218,18 +219,35 @@ def knowledge(runner, m, root, case):
     return result
 
 
-def qualify(path, expected_sha):
+def injected_runner(factory, m, base, deadline):
+    require(callable(factory), 'qualified-runner-factory-required')
+    code = getattr(factory, '__code__', None)
+    require(code is not None and Path(code.co_filename).resolve() == C.regular(m['runnerPort'], m['inputs']),
+            'exact-qualified-runner-source-required')
+    runner = factory(base, M.env_for(m, base), deadline=deadline)
+    require(all(callable(getattr(runner, name, None)) for name in ('run', 'call', 'git', 'knowledge'))
+            and getattr(type(runner), 'run', None) is not C.Runner.run, 'qualified-runner-ports-required')
+    require(isinstance(runner.deadline, (int, float)) and 0 < runner.deadline <= deadline
+            and runner.env == M.env_for(m, base) and runner.sequence == 0, 'runner-original-deadline-and-environment')
+    return runner
+
+
+def qualify(path, expected_sha, *, runner_factory=None):
+    # The frozen console runner is intentionally never a runtime fallback. Root
+    # must bind and qualify the supplied finite collector/retirement adapter first.
+    require(callable(runner_factory), 'qualified-runner-factory-required')
     started = time.monotonic(); deadline = started + 600
     m = validate(path, expected_sha)
     require(time.monotonic() < deadline - 9, 'setup-exhausted-original-window')
     base = Path(m['workRoot']); base.mkdir(mode=0o700)
+    for name in ('tmp', 'dotnet-home', 'packages', 'http-cache'): (base / name).mkdir()
     feed = base / 'feed'; feed.mkdir()
     for key, identity in PACKAGES.items():
         shutil.copyfile(m['packages'][key]['archive'], feed / (identity[0] + '.' + identity[1] + '.nupkg'))
     require(not any(c in str(feed) for c in '<>&"'), 'unsafe-local-feed-path')
     config = base / 'NuGet.Config'
     config.write_text('<configuration><packageSources><clear/><add key="sealed-public" value="' + str(feed) + '"/></packageSources></configuration>')
-    runner = C.Runner(base, M.env_for(m, base), deadline=deadline - 5)
+    runner = injected_runner(runner_factory, m, base, deadline - 5)
     report = dict(schema='fsgg.raw-fable-player-knowledge-result/1', state='started', manifestSha256=expected_sha,
                   outerSeconds=600, perCommandMaxSeconds=180, rows=[], runtimeAdmission='external-required',
                   unfulfilled=['independent result acceptance', 'other parent4642 variants/routes', 'product/browser/provider/Wizard acceptance'])
@@ -260,7 +278,13 @@ def qualify(path, expected_sha):
     except BaseException as error:
         if report['rows'] and report['rows'][-1]['state'] == 'started': report['rows'][-1]['state'] = 'failed'
         report.update(state='failed', commands=runner.sequence, failureType=type(error).__name__, failure=str(error))
-        save(); raise
+        try:
+            save()
+        except BaseException as custody_error:
+            # Retain the actual command/probe exception; failed evidence writing
+            # remains separately Unknown rather than replacing the primary cause.
+            error.add_note('failure-report-custody-Unknown:' + type(custody_error).__name__)
+        raise
 
 
 def source_controls():
@@ -328,8 +352,13 @@ def source_controls():
                 base = Path(td) / 'fresh'
                 archive = Path(td) / 'original'; archive.write_bytes(b'synthetic')
                 m = {'workRoot': str(base), 'report': str(base / 'report.json'), 'sddExecutable': '/sdd', 'dotnetExecutable': '/dotnet',
-                     'packages': {k: {'archive': str(archive)} for k in PACKAGES}}
+                     'packages': {k: {'archive': str(archive)} for k in PACKAGES},
+                     'runnerPort': str(Path(__file__).resolve()), 'inputs': {str(Path(__file__).resolve()): digest(__file__)}}
                 runner = Mock(); runner.sequence = 0; runner.call.return_value.stdout = '2.2.0\n'
+                def factory(base, env, *, deadline):
+                    self.assertTrue((base / 'tmp').is_dir())
+                    runner.deadline = deadline; runner.env = env
+                    return runner
                 events = []
                 def caller(*a): events.append('caller-initial'); return {'commit': 'caller'}
                 def probe(*a):
@@ -337,21 +366,44 @@ def source_controls():
                     self.assertEqual(events[-2:], ['caller-initial', 'probe'])
                     return {'probe': {'probeSetupCommit': 'separate'}}
                 with patch(__name__ + '.validate', return_value=m), patch.object(M, 'env_for', return_value={}), \
-                     patch.object(C, 'Runner', return_value=runner), patch.object(C, 'registration', return_value={}), \
+                     patch.object(C, 'registration', return_value={}), \
                      patch(__name__ + '.raw_boundary'), patch(__name__ + '.initialize', return_value={}), \
                      patch(__name__ + '.initial', side_effect=caller), patch(__name__ + '.restore_tools'), \
                      patch(__name__ + '.knowledge', side_effect=probe):
-                    result = qualify('/sealed', 'digest')
+                    result = qualify('/sealed', 'digest', runner_factory=factory)
                     self.assertEqual(result['state'], 'passed'); self.assertEqual(len(result['rows']), 2)
                 self.assertEqual(events, ['caller-initial', 'probe', 'caller-initial', 'probe'])
                 # A failed actual command retains its fresh root/report rather than a cleanup/retry.
                 failed = Path(td) / 'failed'; m['workRoot'] = str(failed); m['report'] = str(failed / 'report.json')
                 runner.call.side_effect = ValueError('original-command-failure')
-                with patch(__name__ + '.validate', return_value=m), patch.object(M, 'env_for', return_value={}), patch.object(C, 'Runner', return_value=runner):
-                    with self.assertRaisesRegex(ValueError, 'original-command-failure'): qualify('/sealed', 'digest')
+                with patch(__name__ + '.validate', return_value=m), patch.object(M, 'env_for', return_value={}), patch.object(C, 'Runner', side_effect=AssertionError('unbounded-fallback')):
+                    with self.assertRaisesRegex(ValueError, 'original-command-failure'): qualify('/sealed', 'digest', runner_factory=factory)
                 saved = C.read_json(m['report'])
                 self.assertEqual(saved['state'], 'failed'); self.assertEqual(saved['failure'], 'original-command-failure')
                 self.assertTrue(failed.is_dir())
+                dual = Path(td) / 'dual-fault'; m['workRoot'] = str(dual); m['report'] = str(dual / 'report.json')
+                primary = ValueError('same-primary-command-failure'); runner.call.side_effect = primary
+                write_text = Path.write_text
+                def broken_failure_report(path, data, *args, **kwargs):
+                    if path.name == 'report.json' and json.loads(data)['state'] == 'failed':
+                        raise OSError('secondary-custody-write-failure')
+                    return write_text(path, data, *args, **kwargs)
+                with patch(__name__ + '.validate', return_value=m), patch.object(M, 'env_for', return_value={}), \
+                     patch.object(Path, 'write_text', broken_failure_report):
+                    with self.assertRaises(ValueError) as caught: qualify('/sealed', 'digest', runner_factory=factory)
+                self.assertIs(caught.exception, primary)
+                self.assertIn('failure-report-custody-Unknown:OSError', caught.exception.__notes__)
+                self.assertEqual(C.read_json(m['report'])['state'], 'started')
+
+        def test_missing_or_unbound_runner_refuses_before_runtime(self):
+            with patch(__name__ + '.validate', side_effect=AssertionError('manifest-read-before-port-refusal')):
+                with self.assertRaisesRegex(ValueError, 'qualified-runner-factory-required'): qualify('/sealed', 'digest')
+            def factory(*args, **kwargs): raise AssertionError('unqualified-factory-invoked')
+            with tempfile.TemporaryDirectory() as td:
+                p = Path(td) / 'other-source'; p.write_text('not-the-factory')
+                m = {'runnerPort': str(p), 'inputs': {str(p): digest(p)}}
+                with self.assertRaisesRegex(ValueError, 'exact-qualified-runner-source-required'):
+                    injected_runner(factory, m, Path(td), time.monotonic() + 10)
 
         def test_raw_boundary_rejects_automatic_store_and_skeleton(self):
             with tempfile.TemporaryDirectory() as td:
