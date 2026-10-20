@@ -10,6 +10,11 @@ Execute one selected Delivery, or a directly assigned equivalent scope, under ca
 including publication, installed, participant and recovery obligations. Outcomes are never implementation
 assignments. Do not infer authority from size, labels, effort or a board row.
 
+Proactively report material process problems during execution through the existing
+[findings and filing route](references/findings-and-filing.md); do not wait for a solution or a requested
+status report. Before completing a review, returning work or handing off, check for unreported process
+problems without inventing findings or repeating unchanged ones.
+
 For directives encountered while working, apply the shared
 [control-plane provenance guidance](references/control-plane-provenance.md).
 
