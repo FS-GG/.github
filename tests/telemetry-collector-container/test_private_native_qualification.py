@@ -134,7 +134,7 @@ class Tests(unittest.TestCase):
     block=block.replace('sdk_path_guard usr-share /usr/share',f'sdk_path_guard usr-share {system}/usr/share')
     block=block.replace('sdk_path_guard usr /usr',f'sdk_path_guard usr {system}/usr')
     block=block.replace('sdk_path_guard filesystem-root /',f'sdk_path_guard filesystem-root {system}')
-    env=dict(os.environ,DOTNET_ROOT=str(sdk),HOSTED_RUNNER_CUSTODY='github-hosted',PATH=str(sdk)+':/usr/bin:/bin')
+    env=dict(os.environ,DOTNET_ROOT=str(sdk),HOSTED_RUNNER_CUSTODY='github-hosted',RUNNER_TEMP=str(root),PATH=str(sdk)+':/usr/bin:/bin')
     marker_path=root/'sudo-called'; fake=root/'fake'; fake.mkdir()
     (fake/'sudo').write_text(f'#!/bin/sh\ntouch "{marker_path}"\nexit 0\n'); (fake/'sudo').chmod(0o755)
     fake_path=str(fake)+':'+env['PATH']
@@ -170,7 +170,7 @@ class Tests(unittest.TestCase):
   if importlib.util.find_spec('yaml') is None: self.skipTest('PyYAML unavailable')
   import yaml
   workflows=((ROOT/'deployment/telemetry-collector/private-native-qualification.yml.in',2),
-             (ROOT/'.github/workflows/telemetry-host-package.yml',10))
+             (ROOT/'.github/workflows/telemetry-host-package.yml',11))
   for path,count in workflows:
    with self.subTest(workflow=path.name):
     rendered=path.read_text().replace('@@RECIPE_SOURCE_SHA@@','a'*40).replace('@@QUALIFICATION_REF@@','qualification-v1')
@@ -766,4 +766,86 @@ exit 2
    self.assertEqual(b'private-custody\n',(t/'clear').read_bytes()); self.assertEqual(0o600,(t/'capsule').stat().st_mode&0o777)
    bad=subprocess.run(['node',script,'unseal',t/'capsule',t/'private.pem',t/'bad',run,'c'*40,profile],capture_output=True)
    self.assertNotEqual(0,bad.returncode); self.assertFalse((t/'bad').exists())
+class HostedSdkIsolationTests(unittest.TestCase):
+ """Pure temporary-filesystem/shell controls; this class never builds or runs .NET."""
+ @staticmethod
+ def block(begin,end):
+  text=(ROOT/'.github/workflows/telemetry-host-package.yml').read_text()
+  body=text.split(begin,1)[1].split(end,1)[0]
+  return '\n'.join(row[10:] if row.startswith('          ') else row for row in body.splitlines())+'\n'
+ @classmethod
+ def isolate(cls,root,case='valid'):
+  share=root/'usr/share'; share.mkdir(parents=True); sdk=share/'dotnet'; sdk.mkdir()
+  (sdk/'original-sdk').write_bytes(b'original image SDK bytes\n'); original=sdk.stat()
+  retained=share/'dotnet-preinstalled-123-1'; fake=root/'fake'; fake.mkdir(); log=root/'sudo-called'; setup=root/'setup-called'
+  sudo='#!/bin/sh\nprintf "called\n" >> "$SDK_TEST_LOG"\n'
+  if case=='rename-failure': sudo+='exit 17\n'
+  elif case=='destination-race': sudo+='for destination in "$@"; do :; done\nmkdir "$destination"\nprintf "racing owner\n" > "$destination/racing-owner"\nexec "$@"\n'
+  else: sudo+='exec "$@"\n'
+  (fake/'sudo').write_text(sudo); (fake/'sudo').chmod(0o755)
+  if case=='different-filesystem':
+   (fake/'stat').write_text('#!/bin/sh\nfor target in "$@"; do :; done\nif [ "$target" = "$SDK_TEST_PARENT" ]; then printf "999\n"; else exec /usr/bin/stat "$@"; fi\n'); (fake/'stat').chmod(0o755)
+  if case=='source-file': shutil.rmtree(sdk); sdk.write_bytes(b'not a directory')
+  if case=='source-symlink': sdk.rename(share/'actual-sdk'); sdk.symlink_to(share/'actual-sdk',target_is_directory=True)
+  if case=='missing-source': shutil.rmtree(sdk)
+  if case=='destination-directory': retained.mkdir(); (retained/'owner').write_bytes(b'existing')
+  if case=='destination-file': retained.write_bytes(b'existing')
+  if case=='destination-symlink': retained.symlink_to(share/'absent')
+  env=dict(os.environ,PATH=str(fake)+':/usr/bin:/bin',GITHUB_RUN_ID='123',GITHUB_RUN_ATTEMPT='1',HOSTED_RUNNER_CUSTODY='self-hosted' if case=='wrong-runner' else 'github-hosted',SDK_TEST_LOG=str(log),SDK_TEST_PARENT=str(share))
+  body=cls.block('# BEGIN hosted runner SDK isolation','# END hosted runner SDK isolation').replace('/usr/share',str(share))
+  result=subprocess.run(['bash','-e','-u','-o','pipefail'],input=body+'printf "setup permitted\n" > "'+str(setup)+'"\n',env=env,text=True,capture_output=True)
+  return result,sdk,retained,original,log,setup
+ def test_same_filesystem_retains_exact_tree_before_allowing_setup(self):
+  with tempfile.TemporaryDirectory() as td:
+   result,sdk,retained,original,log,setup=self.isolate(pathlib.Path(td))
+   self.assertEqual(0,result.returncode,result.stderr); self.assertFalse(sdk.exists()); self.assertTrue(setup.exists()); self.assertTrue(log.exists())
+   self.assertEqual((original.st_dev,original.st_ino),(retained.stat().st_dev,retained.stat().st_ino))
+   self.assertEqual(b'original image SDK bytes\n',(retained/'original-sdk').read_bytes())
+ def test_refusals_preserve_existing_inputs_and_prevent_setup(self):
+  cases={'wrong-runner':'runner-environment','source-file':'source-type','source-symlink':'source-type','missing-source':'source-type',
+         'destination-directory':'destination-present','destination-file':'destination-present','destination-symlink':'destination-present',
+         'different-filesystem':'different-filesystem','rename-failure':'retain-rename','destination-race':'source-still-present'}
+  for case,stage in cases.items():
+   with self.subTest(case=case), tempfile.TemporaryDirectory() as td:
+    result,sdk,retained,original,log,setup=self.isolate(pathlib.Path(td),case)
+    self.assertNotEqual(0,result.returncode); self.assertIn('hosted-sdk-isolation-refused stage='+stage,result.stderr); self.assertFalse(setup.exists())
+    if case not in ('source-file','source-symlink','missing-source'):
+     self.assertEqual((original.st_dev,original.st_ino),(sdk.stat().st_dev,sdk.stat().st_ino)); self.assertEqual(b'original image SDK bytes\n',(sdk/'original-sdk').read_bytes())
+    if case not in ('rename-failure','destination-race'): self.assertFalse(log.exists())
+    if case=='destination-directory': self.assertEqual(b'existing',(retained/'owner').read_bytes())
+    if case=='destination-file': self.assertEqual(b'existing',retained.read_bytes())
+    if case=='destination-symlink': self.assertTrue(retained.is_symlink())
+    if case=='destination-race': self.assertEqual(b'racing owner\n',(retained/'racing-owner').read_bytes())
+ def test_actual_workflow_orders_exact_setup_before_existing_qualification(self):
+  import yaml
+  workflow=yaml.safe_load((ROOT/'.github/workflows/telemetry-host-package.yml').read_text()); job=workflow['jobs']['package']; steps=job['steps']
+  index=next(i for i,step in enumerate(steps) if '# BEGIN hosted runner SDK isolation' in step.get('run',''))
+  isolate=steps[index]; install=steps[index+1]
+  self.assertNotIn('continue-on-error',isolate); self.assertNotIn('if',isolate)
+  self.assertNotIn('continue-on-error',install); self.assertNotIn('if',install)
+  self.assertEqual('actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68',install['uses'])
+  self.assertEqual('10.0.401',install['with']['dotnet-version']); self.assertEqual('/usr/share/dotnet',install['env']['DOTNET_INSTALL_DIR'])
+  qualify=next(i for i,step in enumerate(steps) if step.get('name')=='Qualify the typed HOST binding and private template')
+  self.assertLess(index+1,qualify); self.assertEqual(20,job['timeout-minutes'])
+  diagnostic=next(step for step in steps if step.get('name')=='Retain hosted SDK version diagnostics')
+  self.assertEqual('${{ always() }}',diagnostic['if']); self.assertEqual('${{ runner.temp }}/host-binding-sdk-version.*/',diagnostic['with']['path'])
+  body=steps[qualify]['run']
+  for command in ('test "$(dotnet --version)" = 10.0.401','test "$(/usr/bin/dotnet --version)" = 10.0.401',
+                  'test "$DOTNET_ROOT" = /usr/share/dotnet','test "$resolved_dotnet" = "$sdk_root/dotnet"',
+                  'sudo chown -hR root:root -- "$sdk_root"','sudo chmod -R go-w -- "$sdk_root"'):
+   self.assertIn(command,body)
+ def test_wrong_version_or_failed_probe_retains_original_streams_before_custody_changes(self):
+  for version,code in (('10.0.402',0),('10.0.401',17)):
+   with self.subTest(version=version,code=code), tempfile.TemporaryDirectory() as td:
+    root=pathlib.Path(td); sdk=root/'usr/share/dotnet'; sdk.mkdir(parents=True); binary=sdk/'dotnet'
+    binary.write_text('#!/bin/sh\nprintf "'+version+'\n"\nprintf "original probe stderr\n" >&2\nexit '+str(code)+'\n'); binary.chmod(0o755)
+    usr_bin=root/'usr/bin'; usr_bin.mkdir(); (usr_bin/'dotnet').symlink_to(binary)
+    fake=root/'fake'; fake.mkdir(); log=root/'sudo-called'; (fake/'sudo').write_text('#!/bin/sh\nprintf "called\n" > "'+str(log)+'"\nexit 0\n'); (fake/'sudo').chmod(0o755)
+    env=dict(os.environ,PATH=str(fake)+':'+str(sdk)+':/usr/bin:/bin',DOTNET_ROOT=str(sdk),HOSTED_RUNNER_CUSTODY='github-hosted',RUNNER_TEMP=str(root))
+    body=self.block('# BEGIN hosted runner SDK custody normalization','# END hosted runner SDK custody normalization').replace('/usr/share/dotnet',str(sdk)).replace('/usr/bin/dotnet',str(usr_bin/'dotnet'))
+    result=subprocess.run(['bash','-e','-u','-o','pipefail'],input=body,env=env,text=True,capture_output=True)
+    self.assertNotEqual(0,result.returncode); self.assertIn('stage=dotnet-version-before-normalization',result.stderr); self.assertFalse(log.exists())
+    evidence=list(root.glob('host-binding-sdk-version.*')); self.assertEqual(1,len(evidence)); self.assertEqual(0o700,evidence[0].stat().st_mode&0o777)
+    self.assertEqual((version+'\n').encode(),(evidence[0]/'stdout').read_bytes()); self.assertEqual(b'original probe stderr\n',(evidence[0]/'stderr').read_bytes()); self.assertEqual(str(code)+'\n',(evidence[0]/'exit').read_text())
+
 if __name__=='__main__': unittest.main(verbosity=2)

@@ -133,7 +133,33 @@ jobs:
       FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE_20261018: b4067e48bd9bd803e958bfe1503ea0a06a3a127f
     steps:
       - uses: actions/checkout@v7
+      - name: Retain the image SDK tree before exact SDK setup
+        env:
+          HOSTED_RUNNER_CUSTODY: ${{ runner.environment }}
+        run: |
+          set -euo pipefail
+          # BEGIN hosted runner SDK isolation
+          sdk_isolation_refuse() { printf 'hosted-sdk-isolation-refused stage=%s\n' "$1" >&2; exit 1; }
+          test "$HOSTED_RUNNER_CUSTODY" = github-hosted || sdk_isolation_refuse runner-environment
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || sdk_isolation_refuse run-identity
+          sdk_root=/usr/share/dotnet
+          retained_sdk="${sdk_root}-preinstalled-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test -d "$sdk_root" && test ! -L "$sdk_root" || sdk_isolation_refuse source-type
+          test "$(readlink -f -- "$sdk_root")" = "$sdk_root" || sdk_isolation_refuse source-placement
+          test ! -e "$retained_sdk" && test ! -L "$retained_sdk" || sdk_isolation_refuse destination-present
+          original_identity="$(stat -c '%d:%i' -- "$sdk_root")" || sdk_isolation_refuse source-stat
+          source_device="$(stat -c %d -- "$sdk_root")" || sdk_isolation_refuse source-device
+          parent_device="$(stat -c %d -- /usr/share)" || sdk_isolation_refuse parent-device
+          test "$source_device" = "$parent_device" || sdk_isolation_refuse different-filesystem
+          sudo mv --no-clobber -T -- "$sdk_root" "$retained_sdk" || sdk_isolation_refuse retain-rename
+          test ! -e "$sdk_root" && test ! -L "$sdk_root" || sdk_isolation_refuse source-still-present
+          test -d "$retained_sdk" && test ! -L "$retained_sdk" || sdk_isolation_refuse retained-type
+          test "$(stat -c '%d:%i' -- "$retained_sdk")" = "$original_identity" || sdk_isolation_refuse retained-identity
+          printf 'hosted-sdk-isolation retained=%s identity=%s active-root=%s\n' "$retained_sdk" "$original_identity" "$sdk_root"
+          # END hosted runner SDK isolation
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        env:
+          DOTNET_INSTALL_DIR: /usr/share/dotnet
         with:
           dotnet-version: 10.0.401
       - name: Refuse stale Host schema candidate and verifier bindings early
@@ -262,7 +288,15 @@ jobs:
           test "$sdk_root" = /usr/share/dotnet || sdk_refuse dotnet-root-placement
           test "$resolved_dotnet" = "$sdk_root/dotnet" || sdk_refuse usr-bin-dotnet-placement
           test "$path_dotnet" = "$resolved_dotnet" || sdk_refuse path-dotnet-placement
-          test "$("$resolved_dotnet" --version)" = 10.0.401 || sdk_refuse dotnet-version-before-normalization
+          sdk_version_evidence="$(umask 077; mktemp -d "$RUNNER_TEMP/host-binding-sdk-version.XXXXXX")" || sdk_refuse version-evidence-directory
+          if "$resolved_dotnet" --version >"$sdk_version_evidence/stdout" 2>"$sdk_version_evidence/stderr"; then
+            sdk_version_exit=0
+          else
+            sdk_version_exit=$?
+          fi
+          printf '%s\n' "$sdk_version_exit" >"$sdk_version_evidence/exit"
+          printf 'hosted-sdk-version-evidence path=%s exit=%s\n' "$sdk_version_evidence" "$sdk_version_exit"
+          test "$sdk_version_exit" = 0 && test "$(cat "$sdk_version_evidence/stdout")" = 10.0.401 || sdk_refuse dotnet-version-before-normalization
           sudo chown -hR root:root -- "$sdk_root" || sdk_refuse dotnet-tree-chown
           sudo chmod -R go-w -- "$sdk_root" || sdk_refuse dotnet-tree-chmod
           usr_share_uid="$(stat -c %u -- /usr/share)" || sdk_refuse usr-share-stat-before-normalization
@@ -355,9 +389,17 @@ jobs:
           PY
           python3 -m unittest tests/telemetry-collector-container/test_private_native_qualification.py \
             2>&1 | tee "$RUNNER_TEMP/host-binding-python-tests.log"
-          grep -F 'Ran 38 tests' "$RUNNER_TEMP/host-binding-python-tests.log"
+          grep -F 'Ran 42 tests' "$RUNNER_TEMP/host-binding-python-tests.log"
           grep -F 'OK' "$RUNNER_TEMP/host-binding-python-tests.log"
           ! grep -F 'skipped=' "$RUNNER_TEMP/host-binding-python-tests.log"
+      - name: Retain hosted SDK version diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: hosted-sdk-version-${{ github.sha }}
+          path: ${{ runner.temp }}/host-binding-sdk-version.*/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Check out the exact published HOST recipe for attempt-producer tests
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
