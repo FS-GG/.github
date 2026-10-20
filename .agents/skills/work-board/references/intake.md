@@ -26,6 +26,26 @@ new scope rather than claiming a first occurrence. State search bounds and unava
 results as Unknown; an empty bounded search does not prove global absence. Prior records remain
 evidence, not task or effect authority; preserve trusted-author/repository-policy admission.
 
+## Reconcile the actual population and typed planning facts
+
+Derive the selected population from the current authenticated binding and complete unfiltered native
+membership, not a remembered total or an expected report length. Reconcile enrolled identities and
+all additional visible memberships; retain historical/deferred dispositions, unexpected memberships,
+unresolved identities and pending intake distinctly. Do not silently drop extras or auto-enroll them.
+Missing/truncated membership or an unresolved join stays Unknown for the affected scope. Keep unfinished
+intake's owner, next action and reconsideration event in existing native context.
+
+Read Roadmap, Work level/classification, parent relationships and Status from their selected typed native
+fields/relationships and exact identities. Body text and linked plans supply acceptance and context;
+do not infer these values from prose or reject a valid typed join because its value is absent from the
+body. Missing/conflicting typed facts retain the affected Unknown rather than a prose fallback.
+
+Begin known useful intake and authorized protected-enrollment preparation while unrelated CI/runtime
+work waits; pursue the admitted enrollment effect when its own prerequisites and capacity permit.
+Disjoint source/design preparation within existing authority may also advance. Capacity gates the
+actual operation and its transitive demand, not the entire Delivery. Protected enrollment remains
+required before board-selected implementation; preparation, metadata repair and visibility grant none.
+
 ## Draft and perform only admitted effects
 
 Preserve original Acceptance/Verification text and complete Outcome promise. For a new V2 owner record,
