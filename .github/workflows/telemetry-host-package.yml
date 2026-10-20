@@ -228,6 +228,8 @@ jobs:
           test "$ImageOS" = ubuntu24
           test "$ImageVersion" = "$FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION"
           # Each case independently checks its root-selected source above.
+          # Later steps start fresh shells; hand off only the validated literal tuple.
+          printf 'FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION=%s\nFSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE=%s\n' "$FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION" "$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE" >> "$GITHUB_ENV"
           # No package installation or compiler probe. Existing trusted image
           # readers bind provisioned package/file/ELF/search inputs. Root source
           # admission owns outer resources and actual descendant retirement.

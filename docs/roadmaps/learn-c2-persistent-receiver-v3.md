@@ -896,3 +896,15 @@ qualify another. Protected native inputs, authority, budgets and cleanup remain
 unchanged. Static preflight exercises both good tuples and wrong/missing/unknown
 inputs against the actual guard with an inert census. Full hosted qualification,
 native/receiver/installed acceptance and all prior unknown effects remain separate.
+
+The first closed-map source attempt,
+[run39386130481/a1](https://github.com/FS-GG/.github/actions/runs/39386130481),
+advanced through image selection, compilation and the 41 HostAttempt controls.
+The later image-closure step then refused because shell-local exports did not
+cross the step boundary. That independent failure remains retained. After all
+tuple/provider checks, the workflow now writes only the validated literal image
+version and source to the job environment file, alongside its existing native
+metadata handling. Static preflight must launch a fresh second environment and
+prove that both admitted tuples reach the actual downstream required-variable
+read. It must also show that local exports alone do not establish the handoff.
+Full exact-source hosted qualification remains required after this repair.
