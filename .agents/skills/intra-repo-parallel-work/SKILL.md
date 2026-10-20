@@ -23,7 +23,7 @@ source grants no enrollment or runtime authority.
 Derive admission, reservation and request identity from the same exact typed `sliceId`, attempt,
 operation, owner, PR/head and actual paths/touch-set. Preserve existing relevant known/Unknown holds;
 a similar identifier, expired observation or absent owner is no release. Apply the
-[final-input invocation guidance](../work-board/references/delivery-reliability.md#final-inputs-and-failure-gated-invocation)
+[final-input invocation guidance](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/delivery-reliability.md#final-inputs-and-failure-gated-invocation)
 before launch without introducing a new packet, ledger or scheduler.
 
 Communicate overlap through the [active worker channel](https://github.com/FS-GG/.github/blob/main/docs/coordination/worker-channels.md).
