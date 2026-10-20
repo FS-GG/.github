@@ -748,12 +748,15 @@ def wizard_capabilities(m):
     return families
 
 
-def held_python(row, capabilities):
+def held_python(row, capabilities, original_refusal=False):
     if row['route']!='wizard' or row['family'] in capabilities: return None
     require(row['id'] in PYTHON_WIZARD_HOLDS, 'unreviewed-unsupported-wizard-route')
     return dict(id=row['id'],route='wizard',selection=row['selection'],state='blocked',
                 owner='FS-GG/.github Wizard producer',reason='Published Wizard0.19.0 excludes Python from its parser; compatible published supplier required',
-                positiveAcceptance=False,creationInvoked=False)
+                positiveAcceptance=False,thisContinuationCreationInvoked=False,
+                originalAttemptInvoked=bool(original_refusal and row['selection']=='typed'),
+                originalRefusalEvidence=(dict(sequence=414,actualExitCode=2,journal='continuation01/commands.jsonl',stdout='continuation01/414.stdout')
+                                         if original_refusal and row['selection']=='typed' else None))
 
 
 def matrix_state(rows):
@@ -775,15 +778,40 @@ def verify_output_journal(directory, first, last):
     return originals
 
 
-def continue_supported_tail(path,digest):
+
+def recovery_deadline(checkpoint, *, now_utc=None, now_monotonic=None):
+    from datetime import datetime, timezone
+    now_utc = now_utc or datetime.now(timezone.utc)
+    now_monotonic = time.monotonic() if now_monotonic is None else now_monotonic
+    original = datetime.fromisoformat(ORIGINAL_DEADLINE_UTC)
+    require(checkpoint['originalDeadlineUtc']==ORIGINAL_DEADLINE_UTC and checkpoint['originalWindowExpired'] is True
+            and now_utc>=original, 'original-window-must-already-be-expired')
+    require(checkpoint['operation']=='matrix4723-supported-tail-recovery20261020-01', 'separate-supported-recovery-operation')
+    observed = datetime.fromisoformat(checkpoint['recoveryClockObservedUtc'])
+    end = datetime.fromisoformat(checkpoint['recoveryDeadlineUtc'])
+    seconds = (end-observed).total_seconds()
+    require(observed>=original and 0<seconds<=600, 'recovery-profile-maximum600')
+    deadline = checkpoint['recoveryDeadlineMonotonic']
+    require(abs(deadline-checkpoint['recoveryClockObservedMonotonic']-seconds)<.01
+            and abs(now_monotonic-checkpoint['recoveryClockObservedMonotonic']-(now_utc-observed).total_seconds())<1,
+            'recovery-wall-monotonic-clock-binding')
+    require(observed<=now_utc<end and now_monotonic<deadline-10, 'fresh-recovery-window-expired-or-insufficient')
+    return deadline
+
+
+def continue_supported_tail(path,digest,recovery=False):
     require(sha(path)==digest,'continuation02-checkpoint-digest'); checkpoint=C.read_json(path)
-    require(set(checkpoint)=={'schema','admittedBy','operation','manifest','manifestSha256','originalCustody','originalCustodySha256',
-                            'tailCustody','tailCustodySha256','deadlineUtc','clockObservedUtc','clockObservedMonotonic','deadlineMonotonic'}
-            and checkpoint['schema']=='fsgg.matrix4723.supported-tail/2' and checkpoint['admittedBy']=='Programme/root'
-            and checkpoint['operation']=='matrix4723-runtime20261020-01','closed-continuation02-authority')
-    deadline=continuation_deadline(checkpoint)
+    common={'schema','admittedBy','operation','manifest','manifestSha256','originalCustody','originalCustodySha256','tailCustody','tailCustodySha256'}
+    clocks=({'originalDeadlineUtc','originalWindowExpired','recoveryClockObservedUtc','recoveryClockObservedMonotonic','recoveryDeadlineUtc','recoveryDeadlineMonotonic'}
+            if recovery else {'deadlineUtc','clockObservedUtc','clockObservedMonotonic','deadlineMonotonic'})
+    schema='fsgg.matrix4723.supported-tail-recovery/3' if recovery else 'fsgg.matrix4723.supported-tail/2'
+    operation='matrix4723-supported-tail-recovery20261020-01' if recovery else 'matrix4723-runtime20261020-01'
+    require(set(checkpoint)==common|clocks and checkpoint['schema']==schema and checkpoint['admittedBy']=='Programme/root'
+            and checkpoint['operation']==operation,'closed-supported-tail-authority')
+    check_clock=lambda: recovery_deadline(checkpoint) if recovery else continuation_deadline(checkpoint)
+    deadline=check_clock()  #Before validation/hashing; fixed original or separately admitted recovery.
     m=validate(checkpoint['manifest'],checkpoint['manifestSha256'],after=True);capabilities=wizard_capabilities(m)
-    base=Path(m['workRoot']);tail=base/'continuation02';prior=base/'continuation01'
+    base=Path(m['workRoot']);tail=base/('supported-tail-recovery01' if recovery else 'continuation02');prior=base/'continuation01'
     require(base.name=='matrix4723-runtime01' and not tail.exists(),'continuation02-no-replay')
     require(checkpoint['originalCustodySha256']==ORIGINAL_POSTTERMINAL_CUSTODY_SHA and sha(checkpoint['originalCustody'])==ORIGINAL_POSTTERMINAL_CUSTODY_SHA
             and checkpoint['tailCustodySha256']==TAIL01_CUSTODY_SHA and sha(checkpoint['tailCustody'])==TAIL01_CUSTODY_SHA,'original-and-tail01-custody')
@@ -805,11 +833,14 @@ def continue_supported_tail(path,digest):
         if key!='wizard':require(sha(base/'feed'/(identity[0]+'.'+identity[1]+'.nupkg'))==identity[3],'retained-feed-package-drift')
     expected='<configuration><packageSources><clear/><add key="sealed-public-originals" value="'+str(base/'feed')+'"/></packageSources></configuration>'
     require((base/'NuGet.Config').read_text()==expected,'retained-feed-config-drift')
-    before_sdk=sdk_snapshot(m);continuation_deadline(checkpoint);tail.mkdir(mode=0o700)
+    before_sdk=sdk_snapshot(m);check_clock();tail.mkdir(mode=0o700)
     runner=MatrixRunner(tail,env_for(m,base),deadline=deadline-5);runner.sequence=414
-    report=dict(schema='fsgg.wizard.public-knowledge-matrix-supported-tail-result/2',state='started',manifestSha256=checkpoint['manifestSha256'],
+    report=dict(schema=('fsgg.wizard.public-knowledge-matrix-supported-tail-recovery-result/3' if recovery else 'fsgg.wizard.public-knowledge-matrix-supported-tail-result/2'),state='started',manifestSha256=checkpoint['manifestSha256'],
                 originalFailureReportSha256=sha(base/'report.json'),tail01FailureReportSha256=sha(prior/'report.json'),
                 tail01CustodySha256=TAIL01_CUSTODY_SHA,originalDeadlineUtc=ORIGINAL_DEADLINE_UTC,full24Accepted=False,
+                runtimeOperation=operation,originalWindowExpired=recovery,newRecoveryOperation=recovery,
+                scope=[row['id'] for row in ROWS[13:]],
+                recoveryDeadlineUtc=checkpoint.get('recoveryDeadlineUtc'),profileOuterMaximumSeconds=600,profileCommandAndCaseMaximumSeconds=180,
                 elevenAcceptedSubjectsReused=True,wizardCapabilities=capabilities,rows=old['rows'][:11],automaticRetry=False)
     def save():(tail/'report.json').write_text(json.dumps(report,indent=2)+'\n')
     save()
@@ -818,23 +849,23 @@ def continue_supported_tail(path,digest):
             expected=entry['boundary']['baselineCommit'] if 'boundary' in entry else entry['knowledge']['probe']['updatedCommit']
             require(runner.git(base/entry['id']/'subject','rev-parse','HEAD')==expected,'eleven-prefix-reported-git-head')
         donor=app_donor(runner,m)
-        execute_rows(runner,m,base,report,save,donor,base/'console-provider-default/subject',11)
+        execute_rows(runner,m,base,report,save,donor,base/'console-provider-default/subject',start_index=11,original_python_refusal=True)
         state=matrix_state(report['rows'])
         require(all(sha(p)==h for p,h in originals.items()),'original-and-tail01-output-overwrite')
         for row in ROWS[:11]:require(complete_snapshot(base/row['id']/'subject')==custody['rows'][row['id']]['files'],'eleven-accepted-prefix-modified')
         require(validate(checkpoint['manifest'],checkpoint['manifestSha256'],after=True)==m and sdk_snapshot(m)==before_sdk,'continuation02-post-input-drift')
-        continuation_deadline(checkpoint)
+        check_clock()
         report.update(state=state,passed=22,blocked=2,full24Accepted=False,commands=runner.sequence,tailCommands=runner.sequence-414);save();return report
     except BaseException as error:
         if report['rows'][-1]['state']=='started':report['rows'][-1].update(state='failed',failureType=type(error).__name__,failure=str(error))
         report.update(state='failed',failureType=type(error).__name__,failure=str(error),commands=runner.sequence);save();raise
 
 
-def execute_rows(runner, m, base, report, save, original_app, donor_default=None, start_index=0, raw_resume=False):
+def execute_rows(runner, m, base, report, save, original_app, donor_default=None, start_index=0, raw_resume=False, original_python_refusal=False):
     config = base / 'NuGet.Config'
     capabilities = wizard_capabilities(m)
     for row in ROWS[start_index:]:
-        held = held_python(row, capabilities)
+        held = held_python(row, capabilities, original_python_refusal)
         if held is not None:
             report['rows'].append(held);save();continue
         case = base / row['id']
@@ -1248,6 +1279,48 @@ def source_controls():
             rows[-1]['state']='failed'
             with self.assertRaisesRegex(ValueError,'incomplete-supported-tail'):matrix_state(rows)
 
+        def recovery_fixture(self):
+            return dict(operation='matrix4723-supported-tail-recovery20261020-01',originalDeadlineUtc=ORIGINAL_DEADLINE_UTC,originalWindowExpired=True,
+                        recoveryClockObservedUtc='2026-10-20T07:00:00+00:00',recoveryClockObservedMonotonic=1000,
+                        recoveryDeadlineUtc='2026-10-20T07:10:00+00:00',recoveryDeadlineMonotonic=1600)
+
+        def test_separate_recovery_admits_only_expired_original_with_own_clock(self):
+            from datetime import datetime
+            value=self.recovery_fixture()
+            self.assertEqual(recovery_deadline(value,now_utc=datetime.fromisoformat('2026-10-20T07:00:05+00:00'),now_monotonic=1005),1600)
+            value['operation']='matrix4723-runtime20261020-01'
+            with self.assertRaisesRegex(ValueError,'separate-supported-recovery-operation'):
+                recovery_deadline(value,now_utc=datetime.fromisoformat('2026-10-20T07:00:05+00:00'),now_monotonic=1005)
+
+        def test_recovery_refuses_unexpired_original_despite_expired_claim(self):
+            from datetime import datetime
+            with self.assertRaisesRegex(ValueError,'must-already-be-expired'):
+                recovery_deadline(self.recovery_fixture(),now_utc=datetime.fromisoformat('2026-10-20T06:09:00+00:00'),now_monotonic=1005)
+            value=self.recovery_fixture();value['originalDeadlineUtc']='2026-10-20T08:00:00+00:00'
+            with self.assertRaisesRegex(ValueError,'must-already-be-expired'):
+                recovery_deadline(value,now_utc=datetime.fromisoformat('2026-10-20T07:00:05+00:00'),now_monotonic=1005)
+
+        def test_recovery_profile_cannot_exceed600_or_reset_elapsed_clock(self):
+            from datetime import datetime
+            value=self.recovery_fixture();value['recoveryDeadlineUtc']='2026-10-20T07:10:01+00:00';value['recoveryDeadlineMonotonic']=1601
+            with self.assertRaisesRegex(ValueError,'profile-maximum600'):
+                recovery_deadline(value,now_utc=datetime.fromisoformat('2026-10-20T07:00:05+00:00'),now_monotonic=1005)
+            value=self.recovery_fixture();value['recoveryDeadlineMonotonic']=1700
+            with self.assertRaisesRegex(ValueError,'wall-monotonic-clock-binding'):
+                recovery_deadline(value,now_utc=datetime.fromisoformat('2026-10-20T07:00:05+00:00'),now_monotonic=1005)
+            value=self.recovery_fixture()
+            with self.assertRaisesRegex(ValueError,'expired-or-insufficient'):
+                recovery_deadline(value,now_utc=datetime.fromisoformat('2026-10-20T07:10:01+00:00'),now_monotonic=1601)
+
+        def test_held_rows_keep_actual414_invocation_distinct_from_this_recovery(self):
+            capabilities=['rendering','console','web','fable-game','fable-bindings']
+            typed=held_python(next(r for r in ROWS if r['id']=='python-wizard-typed'),capabilities,True)
+            default=held_python(next(r for r in ROWS if r['id']=='python-wizard-default'),capabilities,True)
+            self.assertTrue(typed['originalAttemptInvoked']);self.assertEqual(typed['originalRefusalEvidence']['sequence'],414)
+            self.assertEqual(typed['originalRefusalEvidence']['actualExitCode'],2)
+            self.assertFalse(default['originalAttemptInvoked']);self.assertIsNone(default['originalRefusalEvidence'])
+            self.assertFalse(typed['thisContinuationCreationInvoked']);self.assertFalse(default['thisContinuationCreationInvoked'])
+
         def test_console_source_stays_byte_identical_and_workflow_reaches_controls(self):
             self.assertEqual(sha(Path(__file__).with_name('knowledge-console-public.py')), CONSOLE_SHA)
             workflow=Path(__file__).resolve().parents[2]/'.github/workflows/new-sdd-workspace-selftest.yml'
@@ -1271,7 +1344,9 @@ def main():
     previous=signal.signal(signal.SIGTERM,cancelled)
     try:
         if args.continuation:
-            if C.read_json(args.continuation).get('schema')=='fsgg.matrix4723.supported-tail/2': continue_supported_tail(args.continuation,args.continuation_sha256)
+            schema=C.read_json(args.continuation).get('schema')
+            if schema=='fsgg.matrix4723.supported-tail-recovery/3': continue_supported_tail(args.continuation,args.continuation_sha256,recovery=True)
+            elif schema=='fsgg.matrix4723.supported-tail/2': continue_supported_tail(args.continuation,args.continuation_sha256)
             else: continue_qualification(args.continuation,args.continuation_sha256)
         else: qualify(args.manifest,args.manifest_sha256)
     finally: signal.signal(signal.SIGTERM,previous)

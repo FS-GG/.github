@@ -283,8 +283,8 @@ establish selection, and this observation does not independently observe the mig
 internal FSI child. Fresh runtime admission must cover simultaneous CLI/FSI heaps and native
 overhead. `0x60000000` is a per-process managed heap limit, not a process-group memory cap.
 
-This is source preparation with thirty-three pure controls; no qualification has run for this
-matrix. Root retains runtime admission and independent acceptance. The two Wizard-bindings
+The current source has thirty-seven pure controls. Original qualification failures and
+recovery boundaries are recorded below; root retains runtime admission and independent acceptance. The two Wizard-bindings
 positive routes remain deferred for the published selector transport/key mismatch; no known
 failure is replayed or counted as positive acceptance. Parent4642 retains its full .4/.5
 promise, other unselected providers/raw Rendering and upgrades, and original439/46 Unknown
@@ -334,6 +334,31 @@ unchanged dispatcher runs only the eleven remaining supported assertions. Its co
 possible result is **partial:22 passed,2 blocked**, with `full24Accepted=false`; it cannot
 claim full Delivery acceptance. The original absolute deadline still applies and expires
 without renewal. A later recovery window needs an explicit separate admission boundary.
+
+### Separately admitted supported-tail recovery source
+
+The original window ended at `2026-10-20T06:10:37.893628+00:00` without running
+continuation02. Its deadline and failed reports remain immutable. A distinct operation,
+`matrix4723-supported-tail-recovery20261020-01`, may run only the eleven identified
+supported subjects still missing after fresh root selection, resource admission and source
+review. This retains the existing600-second outer/180-second command-and-case profile
+for the new operation; it does not renew the old operation or impose a single wall-clock
+window across source repair on Delivery4723.
+
+The closed `fsgg.matrix4723.supported-tail-recovery/3` checkpoint preserves the same
+original/tail01 custody and adds the exact expired original deadline, an explicit
+`originalWindowExpired=true`, and fresh recovery wall/monotonic observation and absolute
+deadline. Source independently requires that the original window already expired and that
+the new admitted window is at most600seconds, including validation and cleanup. No runtime
+profile or arbitrary command knob exists. Exclusive `supported-tail-recovery01` outputs
+retain separate operation identity, recovery deadline and scope; the supported-tail report
+can establish only22 passed/2 blocked with full24 acceptance false. All original414 outputs,
+eleven accepted subjects and both prior failures stay unchanged.
+
+Held-row reporting distinguishes history from new effects: Python Wizard typed was actually
+invoked and refused at command414; Python Wizard default was not invoked. Neither is
+created by this recovery, and neither receives positive acceptance. Runtime remains held
+until root separately selects and admits the exact reviewed source and recovery checkpoint.
 
 ## Source boundary
 
