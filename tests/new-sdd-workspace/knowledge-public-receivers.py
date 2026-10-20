@@ -730,9 +730,113 @@ def continue_qualification(path, digest):
         report.update(state='failed',failureType=type(error).__name__,failure=str(error),commands=runner.sequence);save();raise
 
 
+PYTHON_WIZARD_HOLDS = {'python-wizard-typed', 'python-wizard-default'}
+TAIL01_CUSTODY_SHA = '45446c83ade42813cd815e5c3f380283bf7c1af81b63a6a66606662f2e0015c9'
+
+
+def wizard_capabilities(m):
+    import re
+    candidates = [r for r in C.read_json(m['sourceClosure'])['files'] if r['repository']=='FS-GG/.github'
+                  and r['revision']==PACKAGES['wizard'][2] and r['sourcePath']=='scripts/NewSddWorkspace/Program.fs']
+    require(len(candidates)==1, 'published-wizard-capability-source')
+    source = C.regular(candidates[0]['frozenFile'],m['inputs']).read_text()
+    block = re.search(r'^let private templates =\s*\[(.*?)^\s*\]',source,re.M|re.S)
+    require(block is not None and 'let knownTemplates = templates |> List.map fst' in source
+            and 'if List.contains value knownTemplates then' in source, 'wizard-parser-capability-contract')
+    families = re.findall(r'^\s*"([a-z-]+)",',block.group(1),re.M)
+    require(families==['rendering','console','web','fable-game','fable-bindings'], 'exact-published019-wizard-families')
+    return families
+
+
+def held_python(row, capabilities):
+    if row['route']!='wizard' or row['family'] in capabilities: return None
+    require(row['id'] in PYTHON_WIZARD_HOLDS, 'unreviewed-unsupported-wizard-route')
+    return dict(id=row['id'],route='wizard',selection=row['selection'],state='blocked',
+                owner='FS-GG/.github Wizard producer',reason='Published Wizard0.19.0 excludes Python from its parser; compatible published supplier required',
+                positiveAcceptance=False,creationInvoked=False)
+
+
+def matrix_state(rows):
+    require(len(rows)==24 and [r['id'] for r in rows]==[r['id'] for r in ROWS], 'incomplete-24-subject-accounting')
+    blocked={r['id'] for r in rows if r['state']=='blocked'}
+    require(blocked==PYTHON_WIZARD_HOLDS and all(r['state']=='passed' for r in rows if r['id'] not in blocked), 'incomplete-supported-tail')
+    return 'partial'  #22passed/2held never establishes full24 or Delivery closure.
+
+
+def verify_output_journal(directory, first, last):
+    journal=directory/'commands.jsonl'
+    terminals=[json.loads(line) for line in journal.read_text().splitlines() if json.loads(line).get('phase')=='terminal']
+    require([r['sequence'] for r in terminals]==list(range(first,last+1)) and all(r['groupObservedAbsent'] for r in terminals), 'retained-tail-terminal-cleanup')
+    originals={str(journal):sha(journal)}
+    for command in terminals:
+        for stream in ('stdout','stderr'):
+            file=directory/command[stream+'Path'];require(sha(file)==command[stream+'Sha256'],'retained-tail-output-drift')
+            originals[str(file)]=sha(file)
+    return originals
+
+
+def continue_supported_tail(path,digest):
+    require(sha(path)==digest,'continuation02-checkpoint-digest'); checkpoint=C.read_json(path)
+    require(set(checkpoint)=={'schema','admittedBy','operation','manifest','manifestSha256','originalCustody','originalCustodySha256',
+                            'tailCustody','tailCustodySha256','deadlineUtc','clockObservedUtc','clockObservedMonotonic','deadlineMonotonic'}
+            and checkpoint['schema']=='fsgg.matrix4723.supported-tail/2' and checkpoint['admittedBy']=='Programme/root'
+            and checkpoint['operation']=='matrix4723-runtime20261020-01','closed-continuation02-authority')
+    deadline=continuation_deadline(checkpoint)
+    m=validate(checkpoint['manifest'],checkpoint['manifestSha256'],after=True);capabilities=wizard_capabilities(m)
+    base=Path(m['workRoot']);tail=base/'continuation02';prior=base/'continuation01'
+    require(base.name=='matrix4723-runtime01' and not tail.exists(),'continuation02-no-replay')
+    require(checkpoint['originalCustodySha256']==ORIGINAL_POSTTERMINAL_CUSTODY_SHA and sha(checkpoint['originalCustody'])==ORIGINAL_POSTTERMINAL_CUSTODY_SHA
+            and checkpoint['tailCustodySha256']==TAIL01_CUSTODY_SHA and sha(checkpoint['tailCustody'])==TAIL01_CUSTODY_SHA,'original-and-tail01-custody')
+    original_custody=C.read_json(checkpoint['originalCustody']);custody=C.read_json(checkpoint['tailCustody'])
+    require(sha(base/'report.json')==original_custody['originalReportSha256'] and sha(base/'commands.jsonl')==original_custody['originalJournalSha256']
+            and sha(prior/'report.json')==custody['tailReportSha256'] and sha(prior/'commands.jsonl')==custody['tailJournalSha256'],'both-original-failures-preserved')
+    terminal=base.parent/'matrix4723-original-tail-terminal01.json'
+    require(sha(terminal)==custody['tailTerminalSha256'],'original-tail01-terminal')
+    old=C.read_json(prior/'report.json')
+    require(old['state']=='failed' and old['commands']==414 and len(old['rows'])==12 and all(r['state']=='passed' for r in old['rows'][:11])
+            and [r['id'] for r in old['rows']]==[r['id'] for r in ROWS[:12]] and old['rows'][11]['state']=='failed','exact-eleven-accepted-prefix')
+    originals=verify_output_journal(base,1,88);originals.update(verify_output_journal(prior,89,414))
+    originals.update({str(base/'report.json'):sha(base/'report.json'),str(prior/'report.json'):sha(prior/'report.json'),str(terminal):sha(terminal)})
+    for row in ROWS[:12]:
+        subject=base/row['id']/'subject';saved=custody['rows'][row['id']]
+        require(subject.exists()==saved['exists'] and complete_snapshot(subject)==saved['files'],'tail01-postterminal-subject-drift')
+    require(not (base/'python-wizard-typed/subject').exists() and not (base/'python-wizard-default').exists(),'held-python-target-boundary')
+    for key,identity in PACKAGES.items():
+        if key!='wizard':require(sha(base/'feed'/(identity[0]+'.'+identity[1]+'.nupkg'))==identity[3],'retained-feed-package-drift')
+    expected='<configuration><packageSources><clear/><add key="sealed-public-originals" value="'+str(base/'feed')+'"/></packageSources></configuration>'
+    require((base/'NuGet.Config').read_text()==expected,'retained-feed-config-drift')
+    before_sdk=sdk_snapshot(m);continuation_deadline(checkpoint);tail.mkdir(mode=0o700)
+    runner=MatrixRunner(tail,env_for(m,base),deadline=deadline-5);runner.sequence=414
+    report=dict(schema='fsgg.wizard.public-knowledge-matrix-supported-tail-result/2',state='started',manifestSha256=checkpoint['manifestSha256'],
+                originalFailureReportSha256=sha(base/'report.json'),tail01FailureReportSha256=sha(prior/'report.json'),
+                tail01CustodySha256=TAIL01_CUSTODY_SHA,originalDeadlineUtc=ORIGINAL_DEADLINE_UTC,full24Accepted=False,
+                elevenAcceptedSubjectsReused=True,wizardCapabilities=capabilities,rows=old['rows'][:11],automaticRetry=False)
+    def save():(tail/'report.json').write_text(json.dumps(report,indent=2)+'\n')
+    save()
+    try:
+        for entry in old['rows'][:11]:
+            expected=entry['boundary']['baselineCommit'] if 'boundary' in entry else entry['knowledge']['probe']['updatedCommit']
+            require(runner.git(base/entry['id']/'subject','rev-parse','HEAD')==expected,'eleven-prefix-reported-git-head')
+        donor=app_donor(runner,m)
+        execute_rows(runner,m,base,report,save,donor,base/'console-provider-default/subject',11)
+        state=matrix_state(report['rows'])
+        require(all(sha(p)==h for p,h in originals.items()),'original-and-tail01-output-overwrite')
+        for row in ROWS[:11]:require(complete_snapshot(base/row['id']/'subject')==custody['rows'][row['id']]['files'],'eleven-accepted-prefix-modified')
+        require(validate(checkpoint['manifest'],checkpoint['manifestSha256'],after=True)==m and sdk_snapshot(m)==before_sdk,'continuation02-post-input-drift')
+        continuation_deadline(checkpoint)
+        report.update(state=state,passed=22,blocked=2,full24Accepted=False,commands=runner.sequence,tailCommands=runner.sequence-414);save();return report
+    except BaseException as error:
+        if report['rows'][-1]['state']=='started':report['rows'][-1].update(state='failed',failureType=type(error).__name__,failure=str(error))
+        report.update(state='failed',failureType=type(error).__name__,failure=str(error),commands=runner.sequence);save();raise
+
+
 def execute_rows(runner, m, base, report, save, original_app, donor_default=None, start_index=0, raw_resume=False):
     config = base / 'NuGet.Config'
+    capabilities = wizard_capabilities(m)
     for row in ROWS[start_index:]:
+        held = held_python(row, capabilities)
+        if held is not None:
+            report['rows'].append(held);save();continue
         case = base / row['id']
         if not (raw_resume and row['id'] == 'console-raw-typed'):
             case.mkdir(); (case / 'tmp').mkdir()
@@ -941,7 +1045,7 @@ def source_controls():
                 base=Path(td)/'fresh';m={'sddExecutable':'/bound/producer','workRoot':str(base),'report':str(base/'report.json'),'packages':{k:{'archive':'sealed'} for k in PACKAGES},'actualHome':'/home','childEnvironment':{}}
                 events=[]
                 def invalid_create(*args):events.append('first-creation');raise ValueError('original-first-failure')
-                with patch.dict(globals(),validate=lambda *a,**k:m,sdk_snapshot=lambda *a:{},app_donor=lambda *a:Path('/donor'),create=invalid_create,fable_archive=lambda *a:({},{})), patch.object(MatrixRunner,'call',return_value=types.SimpleNamespace(stdout='2.2.0')), patch('shutil.copyfile'), patch('subprocess.Popen',side_effect=AssertionError('native child')):
+                with patch.dict(globals(),validate=lambda *a,**k:m,sdk_snapshot=lambda *a:{},app_donor=lambda *a:Path('/donor'),create=invalid_create,fable_archive=lambda *a:({},{}),wizard_capabilities=lambda *a:['rendering','console','web','fable-game','fable-bindings']), patch.object(MatrixRunner,'call',return_value=types.SimpleNamespace(stdout='2.2.0')), patch('shutil.copyfile'), patch('subprocess.Popen',side_effect=AssertionError('native child')):
                     with self.assertRaisesRegex(ValueError,'original-first-failure'):qualify('sealed','digest')
                 report=json.loads((base/'report.json').read_text())
                 self.assertEqual(report['state'],'failed');self.assertEqual(len(report['rows']),1)
@@ -1114,6 +1218,36 @@ def source_controls():
                     result=resume_raw(runner,{},root,{},tail)
                 self.assertFalse(result['creationReplayed']);runner.call.assert_not_called()
 
+        def test_exact_published_wizard_capabilities_refuse_invented_python_support(self):
+            with tempfile.TemporaryDirectory() as td:
+                path=Path(td)/'Program.fs'
+                source='let private templates =\n    [\n'+''.join('        "'+name+'", "description"\n' for name in ('rendering','console','web','fable-game','fable-bindings'))+'    ]\nlet knownTemplates = templates |> List.map fst\nif List.contains value knownTemplates then\n'
+                path.write_text(source)
+                closure={'files':[{'repository':'FS-GG/.github','revision':PACKAGES['wizard'][2],'sourcePath':'scripts/NewSddWorkspace/Program.fs','frozenFile':str(path)}]}
+                m={'sourceClosure':'closure','inputs':{str(path):sha(path)}}
+                with patch.object(C,'read_json',return_value=closure):
+                    self.assertNotIn('python',wizard_capabilities(m))
+                    path.write_text(source.replace('"web",','"python",'));m['inputs'][str(path)]=sha(path)
+                    with self.assertRaisesRegex(ValueError,'exact-published019'):wizard_capabilities(m)
+
+        def test_python_wizard_holds_do_not_create_or_execute_and_supported_tail_remains(self):
+            with tempfile.TemporaryDirectory() as td:
+                base=Path(td);report={'rows':[]};runner=MatrixRunner(base,{},deadline=time.monotonic()+60);runner.call=Mock()
+                with patch.dict(globals(),wizard_capabilities=lambda *a:['console','web','rendering','fable-game','fable-bindings'],create=Mock(side_effect=ValueError('supported-provider-reached'))):
+                    with self.assertRaisesRegex(ValueError,'supported-provider-reached'):
+                        execute_rows(runner,{'childEnvironment':{}},base,report,lambda:None,None,start_index=11)
+                self.assertEqual([r['state'] for r in report['rows'][:2]],['blocked','blocked'])
+                self.assertEqual(report['rows'][2]['id'],'python-provider-typed')
+                self.assertFalse((base/'python-wizard-typed').exists());self.assertFalse((base/'python-wizard-default').exists())
+                runner.call.assert_not_called()
+
+        def test_22_passed_two_held_is_partial_and_any_supported_failure_refuses(self):
+            rows=[dict(id=row['id'],state='blocked' if row['id'] in PYTHON_WIZARD_HOLDS else 'passed') for row in ROWS]
+            self.assertEqual(matrix_state(rows),'partial')
+            self.assertEqual(sum(r['state']=='passed' for r in rows),22)
+            rows[-1]['state']='failed'
+            with self.assertRaisesRegex(ValueError,'incomplete-supported-tail'):matrix_state(rows)
+
         def test_console_source_stays_byte_identical_and_workflow_reaches_controls(self):
             self.assertEqual(sha(Path(__file__).with_name('knowledge-console-public.py')), CONSOLE_SHA)
             workflow=Path(__file__).resolve().parents[2]/'.github/workflows/new-sdd-workspace-selftest.yml'
@@ -1136,7 +1270,9 @@ def main():
     def cancelled(signum,frame): raise TimeoutError('original-outer-window-cancelled')
     previous=signal.signal(signal.SIGTERM,cancelled)
     try:
-        if args.continuation: continue_qualification(args.continuation,args.continuation_sha256)
+        if args.continuation:
+            if C.read_json(args.continuation).get('schema')=='fsgg.matrix4723.supported-tail/2': continue_supported_tail(args.continuation,args.continuation_sha256)
+            else: continue_qualification(args.continuation,args.continuation_sha256)
         else: qualify(args.manifest,args.manifest_sha256)
     finally: signal.signal(signal.SIGTERM,previous)
 

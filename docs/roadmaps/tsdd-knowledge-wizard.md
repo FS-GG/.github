@@ -283,7 +283,7 @@ establish selection, and this observation does not independently observe the mig
 internal FSI child. Fresh runtime admission must cover simultaneous CLI/FSI heaps and native
 overhead. `0x60000000` is a per-process managed heap limit, not a process-group memory cap.
 
-This is source preparation with thirty pure controls; no qualification has run for this
+This is source preparation with thirty-three pure controls; no qualification has run for this
 matrix. Root retains runtime admission and independent acceptance. The two Wizard-bindings
 positive routes remain deferred for the published selector transport/key mismatch; no known
 failure is replayed or counted as positive acceptance. Parent4642 retains its full .4/.5
@@ -315,6 +315,25 @@ joined to a sealed wall/monotonic observation before validation; it cannot renew
 Expired or insufficient time refuses. Full24 acceptance requires both the unchanged accepted
 prefix and every completed tail assertion. Continuation requires independent source review
 and fresh root admission; this source repair establishes no recovered runtime result.
+
+### Published Python Wizard hold and supported-tail source
+
+Tail01 stopped at command414: eleven subjects passed, then published Wizard0.19.0 refused
+`--template python` before creating its target. Its immutable parser lists Rendering,
+console, web, fable-game and fable-bindings. Both Python Wizard positive assertions remain
+held for the Wizard producer to publish compatible support; the omitted-default refusal
+is already source-established and must not be replayed. Native Delivery4723 retains its
+complete24-subject Done when and remains open.
+
+The source now reads that exact published parser contract before route dispatch. It marks
+only the two Python Wizard assertions blocked without creating directories or launching
+commands. The separately admitted `fsgg.matrix4723.supported-tail/2` checkpoint binds original
+and tail01 failure custody, all414 original command outputs, eleven accepted receiver
+snapshots and reported Git heads. A new `continuation02` journal starts after414; the
+unchanged dispatcher runs only the eleven remaining supported assertions. Its complete
+possible result is **partial:22 passed,2 blocked**, with `full24Accepted=false`; it cannot
+claim full Delivery acceptance. The original absolute deadline still applies and expires
+without renewal. A later recovery window needs an explicit separate admission boundary.
 
 ## Source boundary
 
