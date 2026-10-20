@@ -249,11 +249,46 @@ class SuccessorRailBindingTests(unittest.TestCase):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, workflow.lower())
 
+    def test_actual_declared_predecessor_command_joins_promoted110_and_current_binding(self) -> None:
+        import contextlib, io, json, re, runpy, shlex, tempfile
+        from release_successor_journal import CURRENT_RELEASE
+        saga = runpy.run_path(str(ROOT / "scripts/release-saga.py"))
+        workflow = (ROOT / ".github/workflows/release-successor-candidate.yml").read_text()
+        # Genuine promoted110 channel identity; fixture loading makes no native observation.
+        receipt = {"version":"0.110.0", "sourceSha":"42cd9e7c8505f7cd72d5a22ad424a27af6d51458",
+                   "contentId":"sha256:12c130cddf0a580334507cb821767ed1838884d897422f4515c3fbd6892224dc",
+                   "promotedAt":"2026-10-20T14:26:43.180517Z"}
+        expected = {"version":CURRENT_RELEASE["predecessor"], "sourceSha":CURRENT_RELEASE["predecessorSource"],
+                    "contentId":CURRENT_RELEASE["predecessorContentId"]}
+        def consume(declared, channel):
+            command = re.search(r"python3 scripts/release-saga\.py predecessor\s+(.+?)\s+> artifacts/predecessor/identity\.json", declared.replace(chr(92)+"\n", " "), re.S)
+            self.assertIsNotNone(command)
+            # Parse the workflow's actual arguments through the maintained CLI parser/consumer.
+            argv = shlex.split(command.group(1))
+            args = saga["parser"]().parse_args(["predecessor", *argv])
+            with tempfile.TemporaryDirectory() as directory:
+                path = pathlib.Path(directory)/"channel.json"; path.write_text(json.dumps(channel))
+                args.channel = str(path)
+                with contextlib.redirect_stdout(io.StringIO()) as output:
+                    args.run(args)
+                identity = json.loads(output.getvalue())
+            self.assertEqual(identity, expected)
+            self.assertIn("gh release download coherent-set/v"+identity["version"], declared)
+        consume(workflow, receipt)
+        old_source = "0d85830e7329a2718ee57ff0f1a16e6c751a469c"
+        with self.assertRaisesRegex(ValueError, "does not match tag source"):
+            consume(workflow.replace("--tag-source "+receipt["sourceSha"], "--tag-source "+old_source), receipt)
+        with self.assertRaisesRegex(ValueError, "does not match release tag"):
+            consume(workflow.replace("--release-tag coherent-set/v0.110.0", "--release-tag coherent-set/v0.109.0"), receipt)
+        with self.assertRaises(AssertionError):
+            consume(workflow, {**receipt,"contentId":"sha256:a3ff6fd1f998e32a750efe25bbb4255c5bd9d9b28ff5b21af441194d44e128ce"})
+
     def test_candidate_binds_the_next_version_and_exact_predecessor(self) -> None:
         workflow = (ROOT / ".github/workflows/release-successor-candidate.yml").read_text()
         self.assertIn('test "$version" = 0.111.0', workflow)
         self.assertIn("gh release download coherent-set/v0.110.0", workflow)
-        self.assertIn("--tag-source 0d85830e7329a2718ee57ff0f1a16e6c751a469c", workflow)
+        from release_successor_journal import CURRENT_RELEASE
+        self.assertIn("--tag-source " + CURRENT_RELEASE["predecessorSource"], workflow)
         self.assertEqual(workflow.count("--predecessor 0.110.0"), 2)
         self.assertIn("--release-tag coherent-set/v0.110.0", workflow)
         for namespace in ("coherent-set", "kit", "drivers", "coord-engine"):

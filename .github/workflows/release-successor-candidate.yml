@@ -58,7 +58,7 @@ jobs:
           python3 scripts/release-saga.py predecessor \
             --channel artifacts/predecessor/stable-channel.json \
             --release-tag coherent-set/v0.110.0 \
-            --tag-source 0d85830e7329a2718ee57ff0f1a16e6c751a469c \
+            --tag-source 42cd9e7c8505f7cd72d5a22ad424a27af6d51458 \
             > artifacts/predecessor/identity.json
           test "$(jq -r .version artifacts/predecessor/identity.json)" = 0.110.0
           python3 scripts/check-release-candidate-uniqueness.py \
