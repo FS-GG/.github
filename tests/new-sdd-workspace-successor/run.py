@@ -27,7 +27,7 @@ from release_successor_execution import Dispatch, JournalState, Observation, Ref
 from release_successor_journal import Refused as JournalRefused
 from new_sdd_workspace_successor_admission import WizardAdmission
 from new_sdd_workspace_successor_execution import effects, CURRENT_017, CURRENT_020, CURRENT_019, CURRENT_016, CURRENT_015, CURRENT_014, HISTORICAL_013, ReleaseBinding
-from creator_source_qualification import SOURCE_020, SOURCE_COHERENT_VERSION
+from creator_source_qualification import SOURCE_020, SOURCE_021, SOURCE_COHERENT_VERSION, qualification_version
 from new_sdd_workspace_successor_provider import WizardProvider, NotFound, output_signals, publisher_error, DIAGNOSTIC_LIMIT
 
 
@@ -35,7 +35,7 @@ SOURCE_FLOWS = {
     "new-sdd-workspace-selftest.yml": (
         "Run the new-sdd-workspace parse fixture",
         "Qualify the compiled product binding and complete driver materialization",
-        "Qualify Creator 0.20 normal-source package closure", "source"),
+        "Qualify Creator 0.21 normal-source package closure", "source"),
 }
 
 
@@ -52,7 +52,7 @@ def source_flow(workflow: str, names: tuple[str, str, str, str]) -> None:
         return "\n".join(line[10:] for line in body.splitlines() if line.startswith("          "))
 
     producer, materializer, package = map(step, names[:3])
-    assignment = ('export FSGG_CREATOR_SOURCE_ARTIFACTS="$RUNNER_TEMP/creator020-'
+    assignment = ('export FSGG_CREATOR_SOURCE_ARTIFACTS="$RUNNER_TEMP/creator021-'
                   + names[3] + '-build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"')
     retention = 'echo "FSGG_CREATOR_SOURCE_ARTIFACTS=$FSGG_CREATOR_SOURCE_ARTIFACTS" >> "$GITHUB_ENV"'
     launch = 'bash tests/new-sdd-workspace/run.sh'
@@ -82,7 +82,7 @@ def source_flow(workflow: str, names: tuple[str, str, str, str]) -> None:
             or pack.count('--no-build') != 1 or pack.count('--artifacts-path') != 1
             or pack[pack.index('--artifacts-path') + 1:pack.index('--artifacts-path') + 2]
                 != ['$FSGG_CREATOR_SOURCE_ARTIFACTS']
-            or validator.count('--source-qualification-020') != 1
+            or validator.count('--source-qualification-021') != 1
             or validator.count('--build-artifacts') != 1
             or validator[validator.index('--build-artifacts') + 1:validator.index('--build-artifacts') + 2]
                 != ['$FSGG_CREATOR_SOURCE_ARTIFACTS']
@@ -107,14 +107,14 @@ def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root
     spec = importlib.util.spec_from_file_location("wizard_package_identity", source_root / "scripts/new-sdd-workspace-release.py")
     checker = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(checker)
-    if release_binding is not CURRENT_019 and release_binding is not CURRENT_016 and release_binding is not SOURCE_020:
+    if release_binding is not CURRENT_019 and release_binding is not CURRENT_016 and release_binding is not SOURCE_020 and release_binding is not SOURCE_021:
         raise ValueError("unknown Creator package binding")
     if checker.package_identity(package) != (release_binding.package, release_binding.version, source_sha):
         raise ValueError("current creator package/source identity differs")
     dependency_pin = json.loads((source_root / "scripts/creator-frozen-coord-dependencies.json").read_text())
-    coherent_version = (SOURCE_COHERENT_VERSION if release_binding is SOURCE_020 else
+    coherent_version = (SOURCE_COHERENT_VERSION if release_binding is SOURCE_020 or release_binding is SOURCE_021 else
                         "0.108.0" if release_binding is CURRENT_019 else dependency_pin["version"])
-    if release_binding in (CURRENT_019, SOURCE_020) and (frozen_dependencies is not None or frozen_source is not None):
+    if release_binding in (CURRENT_019, SOURCE_020, SOURCE_021) and (frozen_dependencies is not None or frozen_source is not None):
         raise ValueError("Creator 0.19 requires its normal 0.108 source graph, not retained frozen inputs")
     if (frozen_dependencies is None) != (frozen_source is None):
         raise ValueError("frozen package qualification requires paired source and binary roots")
@@ -152,7 +152,7 @@ def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root
                 visit(path.parent / declared)
         visit(project)
     if build_artifacts is not None:
-        if (release_binding is not CURRENT_019 and release_binding is not SOURCE_020) or not build_artifacts.is_absolute():
+        if (release_binding is not CURRENT_019 and release_binding is not SOURCE_020 and release_binding is not SOURCE_021) or not build_artifacts.is_absolute():
             raise ValueError("isolated build artifacts require the current Creator and an absolute root")
         if (build_artifacts.is_symlink() or not build_artifacts.is_dir()
                 or build_artifacts.resolve().is_relative_to(source_root.resolve())):
@@ -308,9 +308,24 @@ class WizardReleaseTests(unittest.TestCase):
         self.assertEqual(len(ordered), 8)
         retained = WizardAdmission(NoReads(), prior, "a" * 40, 1, "EHotwagner", "refs/heads/main", release_binding=CURRENT_019)
         self.assertFalse(retained.authorize(content, "journal", "intent", content))
-        for binding in (SOURCE_020, ReleaseBinding(CURRENT_020.package, CURRENT_020.version, CURRENT_020.tag)):
+        for binding in (SOURCE_020, SOURCE_021, ReleaseBinding(CURRENT_020.package, CURRENT_020.version, CURRENT_020.tag)):
             with self.subTest(binding=binding), self.assertRaises(Refused):
                 WizardAdmission(NoReads(), manifest(), "a" * 40, 1, "EHotwagner", "refs/heads/main", release_binding=binding)
+
+    def test_source021_cli_refuses_non_normal_modes_before_input_reads(self):
+        base = [str(pathlib.Path(__file__)), '--board-package', '/absent/candidate.nupkg',
+                '--source-sha', 'a' * 40, '--source-qualification-021']
+        for extra in ([], ['--build-artifacts', '/absent/artifacts', '--published-coord-source', '/absent/producer'],
+                      ['--build-artifacts', '/absent/artifacts', '--published-coord-dependencies', '/absent/deps'],
+                      ['--build-artifacts', '/absent/artifacts', '--creator-source', '/absent/creator'],
+                      ['--build-artifacts', '/absent/artifacts', '--frozen-coord-source', '/absent/frozen'],
+                      ['--build-artifacts', '/absent/artifacts', '--frozen-coord-dependencies', '/absent/frozen']):
+            output = io.StringIO()
+            with self.subTest(extra=extra), patch.object(sys, 'argv', base + extra), contextlib.redirect_stderr(output):
+                with self.assertRaises(SystemExit) as stopped:
+                    runpy.run_path(str(pathlib.Path(__file__)), run_name='__main__')
+                self.assertEqual(stopped.exception.code, 2)
+                self.assertIn('Creator021 source qualification requires normal isolated build artifacts only', output.getvalue())
 
     def test_admission_cannot_cross_current_and_historical_routes(self):
         class NoReads:
@@ -541,6 +556,35 @@ class WizardReleaseTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
                     board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_020)
 
+
+            # The selected021 source identity is normal110 only; retained020 above stays exact.
+            nuspec = nuspec.replace(b'0.20.0', b'0.21.0')
+            next_deps = json.loads(json.dumps(source_deps))
+            for target in next_deps['targets'].values():
+                target['new-sdd-workspace/0.21.0'] = target.pop('new-sdd-workspace/0.20.0')
+            next_members = {**members, 'new-sdd-workspace.deps.json': json.dumps(next_deps).encode()}
+            for name, body in next_members.items():
+                (output / name).write_bytes(body)
+            pack(next_members)
+            result = board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_021)
+            self.assertEqual((result['version'], result['coherentVersion']), ('0.21.0', '0.110.0'))
+            self.assertEqual(result['builtFilesCompared'], len(next_members))
+            self.assertEqual(result['mode'], 'source-only')
+            self.assertIs(result['releaseEligible'], False)
+            self.assertIs(result['installedAdoptionAccepted'], False)
+            for old_binding in (SOURCE_020, CURRENT_019):
+                with self.assertRaisesRegex(ValueError, 'package/source identity'):
+                    board_package_closure(package, 'a' * 40, source_root=root, release_binding=old_binding)
+            forged = type(SOURCE_021)(SOURCE_021.package, SOURCE_021.version, SOURCE_021.tag)
+            with self.assertRaisesRegex(ValueError, 'unknown Creator package binding'):
+                board_package_closure(package, 'a' * 40, source_root=root, release_binding=forged)
+            for stale_version in ('0.109.0', '0.108.0'):
+                stale_metadata = json.dumps(next_deps).replace('0.110.0', stale_version).encode()
+                (output / 'new-sdd-workspace.deps.json').write_bytes(stale_metadata)
+                pack({**next_members, 'new-sdd-workspace.deps.json': stale_metadata})
+                with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
+                    board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_021)
+
     def test_every_effect_is_admitted_and_read_back_once(self):
         self.assertEqual(len(self.ordered), 8)
         for effect in self.ordered:
@@ -637,7 +681,10 @@ class WizardReleaseTests(unittest.TestCase):
     def test_source_cut_and_candidate_package_names_agree(self):
         project = (ROOT / 'scripts/NewSddWorkspace/NewSddWorkspace.fsproj').read_text()
         candidate = (ROOT / '.github/workflows/release-new-sdd-workspace-successor-candidate.yml').read_text()
-        self.assertIn('<Version>0.20.0</Version>', project)
+        self.assertIn('<Version>0.21.0</Version>', project)
+        self.assertEqual((SOURCE_021.version, SOURCE_021.tag), ('0.21.0', 'new-sdd-workspace/v0.21.0'))
+        with self.assertRaisesRegex(ValueError, 'unknown Creator source qualification binding'):
+            qualification_version(SOURCE_021)
         source_workflow = (ROOT / '.github/workflows/new-sdd-workspace-selftest.yml').read_text()
         self.assertEqual(source_workflow.count('      - "scripts/creator_source_qualification.py"'), 2)
         self.assertIn('test "$version" = 0.20.0', candidate)
@@ -669,7 +716,7 @@ class WizardReleaseTests(unittest.TestCase):
                 ('-build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT', '-fixed-root'),
                 ('$FSGG_CREATOR_SOURCE_ARTIFACTS/bin/NewSddWorkspace/release/', 'scripts/NewSddWorkspace/bin/Release/net10.0/'),
                 ('--no-build', ''),
-                ('--source-qualification-020', ''),
+                ('--source-qualification-021', ''),
                 ('--artifacts-path "$FSGG_CREATOR_SOURCE_ARTIFACTS"', '--artifacts-path "$OTHER_ROOT"'),
                 ('--build-artifacts "$FSGG_CREATOR_SOURCE_ARTIFACTS"', ''),
                 ('--build-artifacts "$FSGG_CREATOR_SOURCE_ARTIFACTS"', '# --build-artifacts "$FSGG_CREATOR_SOURCE_ARTIFACTS"'),
@@ -1437,6 +1484,7 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser()
         qualification = parser.add_mutually_exclusive_group()
         qualification.add_argument("--source-qualification-020", action="store_true")
+        qualification.add_argument("--source-qualification-021", action="store_true")
         qualification.add_argument("--release-qualification-020", action="store_true")
         parser.add_argument("--board-package", type=pathlib.Path, required=True)
         parser.add_argument("--source-sha", required=True)
@@ -1448,6 +1496,11 @@ if __name__ == "__main__":
         parser.add_argument("--published-coord-dependencies", type=pathlib.Path)
         parser.add_argument("--creator-source", type=pathlib.Path)
         args = parser.parse_args()
+        if args.source_qualification_021 and (args.build_artifacts is None
+                or args.published_coord_source is not None or args.published_coord_dependencies is not None
+                or args.creator_source is not None or args.frozen_coord_source is not None
+                or args.frozen_coord_dependencies is not None):
+            parser.error('Creator021 source qualification requires normal isolated build artifacts only')
         if args.release_qualification_020 and (args.published_coord_source is None
                 or args.published_coord_dependencies is None or args.creator_source is None
                 or args.release_manifest is None or args.build_artifacts is not None
@@ -1495,7 +1548,8 @@ if __name__ == "__main__":
                                         frozen_dependencies=args.frozen_coord_dependencies,
                                         frozen_source=args.frozen_coord_source,
                                         build_artifacts=args.build_artifacts,
-                                        release_binding=SOURCE_020 if args.source_qualification_020 else CURRENT_019)
+                                        release_binding=(SOURCE_021 if args.source_qualification_021 else
+                                                         SOURCE_020 if args.source_qualification_020 else CURRENT_019))
         if args.release_manifest:
             checker = runpy.run_path(str(ROOT / "scripts/new-sdd-workspace-release.py"))
             evidence = checker["verify_artifact"](args.release_manifest, args.board_package)
