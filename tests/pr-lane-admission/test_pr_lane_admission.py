@@ -103,9 +103,133 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
                 "<!-- fsgg:routine-development/v1 head=" + "b" * 40 + " operation=source-change extra=value -->\n"}}
         return json.loads(json.dumps(value))
 
-    def update(self, state, body="Revised prose\n", repo="FS-GG/example"):
+    def update(self, state, body="Revised prose\n", repo="FS-GG/example", extra=()):
         return self.invoke(state, body, "routine/fixture", extra=(
-            "--update-pr", "42", "--previous-head-sha", "b" * 40), repo=repo)
+            "--update-pr", "42", "--previous-head-sha", "b" * 40, *extra), repo=repo)
+
+    def legacy_state(self):
+        state = self.update_state()
+        state["pull"]["body"] = state["pull"]["body"].replace(
+            managed_body("campaign-7", "chain-3").split("\n\n")[1], "")
+        state["pull"]["body"] += "<!-- fsgg:future/v8 opaque=preserve-me -->\n"
+        state["open_pages"] = [[copy.deepcopy(state["pull"])]]
+        return state
+
+    def test_legacy_adoption_is_explicit_preserves_metadata_and_uses_independent_readback(self):
+        state = self.legacy_state()
+        completed, result, calls = self.update(state)
+        self.assertEqual(3, completed.returncode)
+        self.assertEqual("update-metadata-conflict", result["reason"])
+        self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+        completed, result, calls = self.update(state, extra=("--adopt-legacy-pr",))
+        self.assertEqual(0, completed.returncode, completed.stdout)
+        self.assertEqual(("updated", 42, EXPECTED_SHA), (result["action"], result["number"], result["headSha"]))
+        patches = [call for call in calls if call["arguments"][2] == "PATCH"]
+        self.assertEqual(1, len(patches))
+        payload = json.loads(patches[0]["stdin"])
+        self.assertEqual({"body", "title"}, set(payload))
+        self.assertEqual(1, payload["body"].count("fsgg-pr-lane-admission"))
+        self.assertIn("campaign=campaign-7 chain=chain-3", payload["body"])
+        self.assertIn("head=" + EXPECTED_SHA + " operation=source-change extra=value", payload["body"])
+        self.assertIn("<!-- fsgg:future/v8 opaque=preserve-me -->", payload["body"])
+        self.assertEqual(2, sum("--paginate" in call["arguments"] for call in calls))
+        self.assertEqual(["GET", "/repos/FS-GG/example/pulls/42"], calls[-1]["arguments"][2:])
+        state["pull"].update(payload)
+        completed, result, calls = self.update(state, extra=("--adopt-legacy-pr",))
+        self.assertEqual(0, completed.returncode, completed.stdout)
+        self.assertEqual("unchanged", result["action"])
+        self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+
+    def test_legacy_adoption_flag_requires_update_and_inspect_never_writes(self):
+        completed, _, calls = self.invoke({}, extra=("--adopt-legacy-pr",))
+        self.assertNotEqual(0, completed.returncode)
+        self.assertEqual([], calls)
+        completed, result, calls = self.update(self.legacy_state(), extra=("--adopt-legacy-pr", "--inspect"))
+        self.assertEqual(0, completed.returncode, completed.stdout)
+        self.assertEqual("admitted", result["action"])
+        self.assertFalse(any(call["arguments"][2] in {"PATCH", "POST"} for call in calls))
+
+    def test_legacy_adoption_refuses_damaged_conflicting_or_invented_metadata(self):
+        footprints = ["<!-- fsgg-pr-lane-admission", managed_body("other", "chain-3"),
+                      managed_body("campaign-7", "chain-3") * 2,
+                      "<!-- fsgg-pr-lane-admission:v2 campaign=campaign-7 chain=chain-3 -->"]
+        for footprint in footprints:
+            state = self.legacy_state()
+            state["pull"]["body"] += footprint
+            completed, result, calls = self.update(state, extra=("--adopt-legacy-pr",))
+            self.assertEqual(3, completed.returncode, completed.stdout)
+            self.assertFalse(result["writeAttempted"])
+            self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+        for body in ["No routine marker", self.legacy_state()["pull"]["body"].replace("b" * 40, "c" * 40),
+                     self.legacy_state()["pull"]["body"].replace("source-change", "publish")]:
+            state = self.legacy_state()
+            state["pull"]["body"] = body
+            completed, _, calls = self.update(state, extra=("--adopt-legacy-pr",))
+            self.assertEqual(3, completed.returncode, completed.stdout)
+            self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+        for proposed in ["<!-- fsgg:future/v8 replaced=yes -->", managed_body("other", "other")]:
+            completed, _, calls = self.update(self.legacy_state(), proposed, extra=("--adopt-legacy-pr",))
+            self.assertEqual(3, completed.returncode, completed.stdout)
+            self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+
+    def test_legacy_adoption_requires_current_complete_noncompeting_population(self):
+        for stage in (0, 1):
+            for kind in ("same-chain", "capacity", "unknown", "damaged", "missing", "duplicate", "changed"):
+                with self.subTest(stage=stage, kind=kind):
+                    state = self.legacy_state()
+                    roster = copy.deepcopy(state["open_pages"])
+                    if kind == "missing":
+                        roster = [[]]
+                    elif kind == "duplicate":
+                        roster[0].append(copy.deepcopy(roster[0][0]))
+                    elif kind == "changed":
+                        roster[0][0]["body"] += "Concurrent edit"
+                    else:
+                        other = {"number": 43, "body": managed_body("campaign-7", "chain-3") if kind == "same-chain"
+                                 else managed_body("other", "other"), "head": {"ref": "routine/other", "sha": EXPECTED_SHA}}
+                        if kind == "unknown":
+                            other["body"] = "No admission identity"
+                        if kind == "damaged":
+                            other["body"] += "<!-- fsgg-pr-lane-admission broken -->"
+                        roster[0].append(other)
+                        if kind == "capacity":
+                            roster[0].append({**other, "number": 44})
+                    state["open_read_sequence"] = [roster] if stage == 0 else [state["open_pages"], roster]
+                    completed, result, calls = self.update(state, extra=("--adopt-legacy-pr",))
+                    self.assertEqual(3, completed.returncode, completed.stdout)
+                    self.assertFalse(result["writeAttempted"])
+                    self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+        state = self.legacy_state()
+        state["open_pages"][0].append({"number": 43, "body": managed_body("other", "other")})
+        completed, _, _ = self.update(state, extra=("--adopt-legacy-pr",))
+        self.assertEqual(0, completed.returncode)
+
+    def test_legacy_adoption_retains_exact_candidate_race_and_uncertain_effect_guards(self):
+        for kind in ("wrong-base", "wrong-repository", "moved-ref", "prewrite-body", "prewrite-permissions",
+                     "postwrite-body", "patch_fail_before", "patch_fail_after", "fail_read_after_patch"):
+            with self.subTest(kind=kind):
+                state = self.legacy_state()
+                if kind == "wrong-base":
+                    state["pull"]["base"]["ref"] = "other"
+                elif kind == "wrong-repository":
+                    state["pull"]["head"]["repo"]["full_name"] = "other/repo"
+                elif kind == "moved-ref":
+                    state["head_sha"] = "c" * 40
+                elif kind.startswith(("prewrite-", "postwrite-")):
+                    changed = copy.deepcopy(state["pull"])
+                    if kind.endswith("permissions"):
+                        changed["head"]["repo"]["permissions"]["push"] = False
+                    else:
+                        changed["body"] += "Concurrent edit"
+                    state["read_sequence"] = [state["pull"]] * (2 if kind.startswith("postwrite-") else 1) + [changed]
+                else:
+                    state[kind] = True
+                completed, result, calls = self.update(state, extra=("--adopt-legacy-pr",))
+                self.assertEqual(3, completed.returncode, completed.stdout)
+                writes = sum(call["arguments"][2] == "PATCH" for call in calls)
+                self.assertEqual(1 if kind in {"postwrite-body", "patch_fail_before", "patch_fail_after", "fail_read_after_patch"} else 0, writes)
+                self.assertEqual(bool(writes), result["writeAttempted"])
+                self.assertFalse(any(call["arguments"][2] == "POST" for call in calls))
 
     def test_update_preserves_fresh_metadata_and_rebinds_only_routine_head(self):
         state = self.update_state()

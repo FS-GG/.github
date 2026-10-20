@@ -110,6 +110,32 @@ This qualifies the maintained repository helper and reader for the stated scope;
 installation and every-job test-time filesystem coverage remain separate.
 
 
+## Explicit adoption of a legacy routine PR
+
+For an existing routine PR that predates lane admission metadata, use the same
+`tools/pr-lane-admission.py --update-pr <number> --previous-head-sha <old-marker-sha>`
+route with explicit `--adopt-legacy-pr`, `--campaign-id <campaign>` and
+`--dependency-chain-id <chain>`. Supply the existing repository, branch and base,
+the exact already pushed candidate in `--head-sha`, and the reviewed title/body
+through the usual `--title` and `--body-file` arguments. `--inspect` checks this
+route without writing. This adds the supplied identity only when admission metadata
+is entirely absent; it never repairs or replaces malformed, duplicated or conflicting
+identity text. Without the flag, absent admission metadata still refuses.
+
+Adoption requires an existing valid routine marker at the explicit previous or current
+head, preserves its operation and other fields, and rebinds only its head. Unknown
+machine-owned metadata is retained. Complete paginated open-PR reads must include
+the same native PR exactly once, with no competing campaign/chain, unknown managed
+reservation or third managed PR across campaigns. These facts are checked again before
+writing, followed by the normal native metadata comparison. The route retains the
+exact pushed-head check, one possible PATCH and independent native readback. An uncertain
+write/readback remains unresolved and is never retried automatically. A subsequent
+call with the matching existing identity follows normal managed-PR update semantics;
+the flag grants no identity replacement or fresh PR creation.
+
+This is source support for an explicitly selected adoption. It does not establish
+native adoption, exact-head review/check qualification or Delivery acceptance.
+
 ## SC2 private-receiver first installation
 
 The [canonical first-install source predicate](../../tools/routine-delivery.py) can inspect a candidate
