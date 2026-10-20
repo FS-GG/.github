@@ -891,3 +891,76 @@ and artifact retrieval require a fresh root-selected admission, correlation, bin
 600s total / 480s work / 120s cleanup budget. No original grant or consumed attempt is renewed.
 The reader's successful report alone grants no public Wizard qualification, installed adoption or
 Creator-dependent acceptance. Root independently joins the retained H4 custody and fresh evidence.
+
+## Public raw Fable-player adapter — source preparation
+
+[Delivery #4759](https://github.com/FS-GG/.github/issues/4759) owns two fresh raw
+Workspace.Template 0.19.0 receivers: explicit `--lifecycle typed-sdd` and true
+omission of both `--lifecycle` and `--bundle`. The published current template has
+precedence 100 and defaults to `typed-sdd`/`player`; the precedence-0 legacy
+`svgFoundation` route remains a separate assertion. Completed Matrix24 (#4723),
+its adapter and its original failures/evidence retain their accepted scope.
+
+The [separate adapter](../../tests/new-sdd-workspace/knowledge-fable-game-public.py)
+checks the genuine published archive and config bytes, the player composition,
+conditional knowledge CI, absence of automatic canonical-store/lifecycle setup,
+and exact Fable 5.18.0/Fantomas 8.0.5 owner tool entries. It installs only the
+capable public SDD 2.2.0 local tool and invokes standalone `knowledge initialize`,
+preserving all generated owner bytes/modes and the existing `.gitignore` prefix.
+The caller makes its normal initial commit with canonical files, guide, emitted
+CI and pins before the frozen capture probe authors its separate setup commit.
+No generic `init`, `--force`, product build or browser command is involved.
+
+Both subjects use the existing sealed candidate/findings/ordinary-checker ports
+and command-journal ports. They retain four actual captures, retrieval/history/
+version and cache-free clone checks, post-private ALL-shared export/exclusion and
+lossless records restoration, distinct Git-bundle/history recovery, ordinary pinned
+checker acceptance at 10,485,760 bytes and refusal one byte over with restoration,
+and preserving/idempotent initialization/refusals. All command ports share one
+absolute 600-second runtime window (including validation and retirement), with
+commands capped at 180 seconds and clipped to remaining time. This describes the
+future operation; source checks confer no runtime admission or receiver acceptance.
+
+The private manifest schema is `fsgg.raw-fable-player-knowledge/1`: exact keys are
+`schema`, `inputs`, `packages`, `sourceRoot`, `sddExecutable`, `dotnetExecutable`,
+`actualHome`, `childEnvironment`, `workRoot`, `report`, and `runnerPort`. `inputs` binds canonical
+regular-file absolute paths to SHA256, including this adapter, its unchanged Matrix
+and console ports, frozen probe/findings bytes, executable/tool closures and public
+archive/publication custody. `packages` has exactly `workspace`, `producer`, `fable`
+and `fantomas`; each has `archive` and nonempty `publicationReceipts`, and only
+`producer` additionally has its exact `closure`. The bound genuine originals supply
+a local-only feed. HOME remains unchanged; each receiver has separate template,
+NuGet, HTTP and temporary directories under a fresh private operation root.
+The child environment uses the existing serial CPU/1.5-GiB managed heap and bound
+physical dotnet-host contract. Root must separately admit the actual 4-GiB programme
+fit, actual input custody and runtime; source preparation launches no CLR or child.
+
+Runtime has no fallback to the frozen console runner: its collector/retirement
+behavior is not qualified by these source controls. A root-admitted launcher must
+call `qualify(path, digest, runner_factory=factory)` with an independently qualified
+finite collector adapter. `runnerPort` is the canonical source file of that exact
+Python function; the approved manifest binds its bytes in `inputs`. The function
+accepts `(base, environment, deadline=absolute_deadline)` and returns `run`, `call`,
+`git` and `knowledge` command ports plus mutable `env`, original `deadline` and
+`sequence` fields. It must start with sequence zero, preserve the selected environment
+and never extend the supplied absolute deadline. An inherited unmodified console
+`run` method refuses. Direct CLI runtime execution refuses without this injected port.
+Root must independently verify finite retained streams, identity-safe process-group
+retirement, original absolute cleanup bounds, ordinary expected nonzero exits and
+private artifact placement. The maintained `scripts/update_fsgg_coord_cli.py`
+collector is an existing source port for that later adaptation; this adapter neither
+runs it nor treats its installation-only command semantics as receiver acceptance.
+An outer watcher alone does not repair unsafe inner signaling. A failed report write
+retains the original command/probe exception and adds a separate custody-Unknown note;
+it neither replaces the original cause nor authorizes a retry or a new clock.
+
+The maintained workflow invokes only `--source-controls` for this adapter.
+Independent exact-source review, required CI, protected source delivery and separately
+admitted genuine public execution/independent acceptance remain required. Source
+controls use synthetic files and mocked command routing; their passing result is
+harness evidence. Parent #4642 retains its full other variants/routes and supplier
+promises. #4710 retains its separate complete browser/WASM scope. All original
+439 inherited plus 46 later Unknown reservations remain unreleased. Programme/root
+owns the Atlas capture gap until immutable delivered source and accepted runtime
+findings can be cited; historical `github/public-knowledge-receiver-recovery-boundary`
+remains historical evidence rather than a grant or new acceptance.
