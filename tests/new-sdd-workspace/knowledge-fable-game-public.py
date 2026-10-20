@@ -14,6 +14,7 @@ from pathlib import Path
 import shutil
 import stat
 import sys
+import tempfile
 import time
 import types
 import unittest
@@ -147,13 +148,94 @@ def raw_boundary(root, archive):
     return game_manifest(root, original_tools=packed_contract(archive))
 
 
+def append_scratch_sdd_entry(target, original_bytes, original_mode, scratch):
+    """Append the sole SDK-installed entry without reserializing Public019 owners."""
+    original = json.loads(original_bytes, object_pairs_hook=C.unique)
+    installed_bytes = scratch.read_bytes()
+    installed_text = installed_bytes.decode('utf-8')
+    installed = json.loads(installed_text, object_pairs_hook=C.unique)
+    require(set(installed) == {'version', 'isRoot', 'tools'}
+            and type(installed['version']) is int and installed['version'] == 1
+            and installed['isRoot'] is True and set(installed['tools']) == {'fs.gg.sdd.cli'},
+            'scratch-sdd-manifest-metadata')
+    entry = installed['tools']['fs.gg.sdd.cli']
+    require(entry == {'version': '2.2.0', 'commands': ['fsgg-sdd'], 'rollForward': False}
+            and entry.get('rollForward') is False,
+            'scratch-sdd-installed-entry')
+    require(type(original['version']) is int and original['version'] == 1
+            and original['isRoot'] is True and set(original['tools']) == set(RAW_PINS),
+            'original-game-manifest-metadata')
+    # Public019 has a fixed, authenticated end-of-tools suffix. This is a narrow
+    # append at that boundary, not a general JSON formatting/parser replacement.
+    suffix = b'\n  }\n}\n'
+    require(original_bytes.endswith(suffix), 'original-game-manifest-byte-shape')
+    key = '"fs.gg.sdd.cli"'
+    require(installed_text.count(key) == 1, 'scratch-sdd-key-ambiguity')
+    start = installed_text.index(':', installed_text.index(key)) + 1
+    while installed_text[start].isspace(): start += 1
+    actual_entry, stop = json.JSONDecoder(object_pairs_hook=C.unique).raw_decode(installed_text, start)
+    require(actual_entry == entry, 'scratch-sdd-entry-span')
+    span = installed_text[start:stop].encode('utf-8')
+    prefix = original_bytes[:-len(suffix)]
+    merged = prefix + b',\n    "fs.gg.sdd.cli": ' + span + suffix
+    expected = dict(original, tools=dict(original['tools'], **{'fs.gg.sdd.cli': entry}))
+    require(json.loads(merged, object_pairs_hook=C.unique) == expected, 'game-manifest-append-content')
+    info = target.lstat()
+    require(stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == original_mode
+            and target.read_bytes() == original_bytes, 'game-manifest-owner-preimage')
+    temporary = None
+    primary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=target.parent, prefix='.sdd-tool-', delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(merged)
+        temporary.chmod(original_mode)
+        # The product belongs exclusively to this admitted caller. Refuse an
+        # observed owner change before replacing its manifest; never --force.
+        require(target.read_bytes() == original_bytes
+                and stat.S_IMODE(target.lstat().st_mode) == original_mode,
+                'game-manifest-owner-preimage')
+        os.replace(temporary, target)
+    except BaseException as error:
+        primary = error
+        raise
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except BaseException as custody_error:
+                if primary is None:
+                    raise
+                primary.add_note('temporary-custody-Unknown:' + type(custody_error).__name__)
+    require(target.read_bytes() == merged and stat.S_IMODE(target.stat().st_mode) == original_mode,
+            'game-manifest-append-readback')
+    return dict(originalSha256=hashlib.sha256(original_bytes).hexdigest(),
+                appendedSha256=hashlib.sha256(merged).hexdigest(),
+                sdkEntrySha256=hashlib.sha256(span).hexdigest(), ownerByteSpansPreserved=True)
+
+
 def initialize(runner, m, root, config):
     before = M.snapshot(root)
     original = game_manifest(root)
     ignore = (root / '.gitignore').read_bytes()
     target = root / '.config/dotnet-tools.json'
+    original_bytes = target.read_bytes()
+    original_mode = stat.S_IMODE(target.lstat().st_mode)
+    scratch = root.parent / 'caller-sdd-tool-install'
+    require(not scratch.exists() and not scratch.resolve().is_relative_to(root.resolve()), 'fresh-external-scratch-manifest')
+    (scratch / '.config').mkdir(parents=True, mode=0o700)
+    scratch_manifest = scratch / '.config/dotnet-tools.json'
+    scratch_manifest.write_text('{"version":1,"isRoot":true,"tools":{}}\n')
     runner.call([m['dotnetExecutable'], 'tool', 'install', 'FS.GG.SDD.Cli', '--version', '2.2.0',
-                 '--local', '--tool-manifest', target, '--configfile', config], cwd=root)
+                 '--local', '--tool-manifest', scratch_manifest, '--configfile', config], cwd=scratch)
+    # Even successful SDK installation may normalize every entry. It is allowed
+    # to write only caller-owned scratch; the product preimage must remain exact.
+    preserved(before, root)
+    installed = Path(runner.env['NUGET_PACKAGES']) / 'fs.gg.sdd.cli' / '2.2.0'
+    for name, sha in M.package_payload('producer', m['packages']['producer']['archive']).items():
+        if name.startswith('tools/net10.0/any/'):
+            require(digest(installed / name) == sha, 'scratch-sdd-genuine-payload')
+    addition = append_scratch_sdd_entry(target, original_bytes, original_mode, scratch_manifest)
     after_tool = preserved(before, root, tool_change=True)
     require(set(after_tool) == set(before), 'tool-install-added-owner-files')
     game_manifest(root, True, original)
@@ -161,7 +243,7 @@ def initialize(runner, m, root, config):
     preserved(after_tool, root, ignore_prefix=ignore)
     require(all(not (root / p).exists() for p in LIFECYCLE_PATHS), 'standalone-created-lifecycle')
     return dict(rawCreationInitializesStore=False, callerStandaloneInitialize=True,
-                ownerBytesAndModesPreserved=True, ignorePrefixSha256=hashlib.sha256(ignore).hexdigest())
+                ownerBytesAndModesPreserved=True, toolAddition=addition, ignorePrefixSha256=hashlib.sha256(ignore).hexdigest())
 
 
 def restore_tools(runner, m, root, config):
@@ -442,17 +524,99 @@ def source_controls():
                 value['tools']['fantomas']['rollForward'] = False; value['isRoot'] = False
                 with self.assertRaisesRegex(ValueError, 'tool-metadata-changed'): game_manifest(Path('/synthetic'), True, original)
 
-        def test_standalone_install_then_initialize_and_owner_preservation(self):
+        def test_standalone_scratch_install_then_initialize_preserves_product(self):
             with tempfile.TemporaryDirectory() as td:
-                root = Path(td); (root / '.gitignore').write_text('prefix\n')
-                runner = Mock(); events = []
-                runner.call.side_effect = lambda *a, **k: events.append(a[0])
+                root = Path(td) / 'receiver'; (root / '.config').mkdir(parents=True)
+                (root / '.gitignore').write_text('prefix\n')
+                owner = self.owner_manifest(); target = root / '.config/dotnet-tools.json'; target.write_bytes(owner)
+                runner = Mock(); runner.env = {'NUGET_PACKAGES': str(Path(td) / 'packages')}; events = []
+                def sdk_install(argv, **kwargs):
+                    events.append(argv)
+                    self.assertNotEqual(kwargs['cwd'], root)
+                    self.assertEqual(target.read_bytes(), owner)
+                    scratch = Path(argv[argv.index('--tool-manifest') + 1])
+                    self.assertFalse(scratch.is_relative_to(root))
+                    scratch.write_text(self.sdk_manifest())
+                runner.call.side_effect = sdk_install
                 runner.knowledge.side_effect = lambda *a: events.append(a)
-                with patch(__name__ + '.game_manifest', return_value={}), patch(__name__ + '.preserved', return_value=M.snapshot(root)):
-                    initialize(runner, {'dotnetExecutable': '/dotnet', 'sddExecutable': '/sdd'}, root, '/config')
+                with patch.object(M, 'package_payload', return_value={}):
+                    result = initialize(runner, {'dotnetExecutable': '/dotnet', 'sddExecutable': '/sdd', 'packages': {'producer': {'archive': '/sealed'}}}, root, '/config')
                 self.assertEqual(events[0][1:5], ['tool', 'install', 'FS.GG.SDD.Cli', '--version'])
                 self.assertEqual(events[1][1:3], ('initialize', '--root'))
-                self.assertNotIn('--force', events[0]); self.assertNotIn('init', events[0])
+                self.assertTrue(result['toolAddition']['ownerByteSpansPreserved'])
+                self.assertEqual(game_manifest(root, True)['tools']['fable'], {'version': '5.18.0', 'commands': ['fable']})
+
+        @staticmethod
+        def owner_manifest():
+            return b'{\n  "version": 1,\n  "isRoot": true,\n  "tools": {\n    "fable": {"version":"5.18.0","commands":["fable"]},\n    "fantomas": {"version":"8.0.5","commands":["fantomas"],"rollForward":false}\n  }\n}\n'
+
+        @staticmethod
+        def sdk_manifest():
+            return json.dumps({'version': 1, 'isRoot': True, 'tools': {'fs.gg.sdd.cli': {'version': '2.2.0', 'commands': ['fsgg-sdd'], 'rollForward': False}}}, indent=2)
+
+        def test_append_preserves_exact_owner_spans_and_mode_with_sdk_output(self):
+            with tempfile.TemporaryDirectory() as td:
+                root = Path(td); target = root / 'product.json'; scratch = root / 'scratch.json'
+                original = self.owner_manifest(); target.write_bytes(original); target.chmod(0o640)
+                scratch.write_text(self.sdk_manifest())
+                result = append_scratch_sdd_entry(target, original, 0o640, scratch)
+                actual = target.read_bytes(); suffix = b'\n  }\n}\n'
+                self.assertTrue(actual.startswith(original[:-len(suffix)])); self.assertTrue(actual.endswith(suffix))
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o640)
+                value = json.loads(actual); old = json.loads(original)
+                self.assertEqual({k:v for k,v in value.items() if k!='tools'}, {k:v for k,v in old.items() if k!='tools'})
+                self.assertTrue(all(value['tools'][k]==v for k,v in old['tools'].items()))
+                self.assertNotIn('rollForward', value['tools']['fable'])
+                self.assertEqual(result['originalSha256'], hashlib.sha256(original).hexdigest())
+
+        def test_wrong_scratch_entry_or_metadata_refuses_without_product_change(self):
+            with tempfile.TemporaryDirectory() as td:
+                root = Path(td); target = root / 'product.json'; scratch = root / 'scratch.json'
+                original = self.owner_manifest(); target.write_bytes(original)
+                for mutate in (lambda x:x['tools']['fs.gg.sdd.cli'].update(version='9.0.0'),
+                               lambda x:x['tools']['fs.gg.sdd.cli'].update(commands=['foreign']),
+                               lambda x:x['tools']['fs.gg.sdd.cli'].update(rollForward=0),
+                               lambda x:x.update(isRoot=False), lambda x:x.update(version=True),
+                               lambda x:x['tools'].update(foreign={'version':'1'})):
+                    value = json.loads(self.sdk_manifest()); mutate(value); scratch.write_text(json.dumps(value))
+                    with self.assertRaises(ValueError): append_scratch_sdd_entry(target, original, stat.S_IMODE(target.stat().st_mode), scratch)
+                    self.assertEqual(target.read_bytes(), original)
+
+        def test_append_replace_and_cleanup_fault_keeps_identical_primary(self):
+            with tempfile.TemporaryDirectory() as td:
+                root = Path(td); target = root / 'product.json'; scratch = root / 'scratch.json'
+                original = self.owner_manifest(); target.write_bytes(original); scratch.write_text(self.sdk_manifest())
+                primary = OSError('replace-failure')
+                with patch.object(os, 'replace', side_effect=primary), patch.object(Path, 'unlink', side_effect=PermissionError('temporary-retained')):
+                    with self.assertRaises(OSError) as caught:
+                        append_scratch_sdd_entry(target, original, stat.S_IMODE(target.stat().st_mode), scratch)
+                self.assertIs(caught.exception, primary)
+                self.assertIn('temporary-custody-Unknown:PermissionError', primary.__notes__)
+                self.assertEqual(target.read_bytes(), original)
+                self.assertEqual(len(list(root.glob('.sdd-tool-*'))), 1)
+
+        def test_append_cleanup_only_fault_refuses_after_write(self):
+            with tempfile.TemporaryDirectory() as td:
+                root = Path(td); target = root / 'product.json'; scratch = root / 'scratch.json'
+                original = self.owner_manifest(); target.write_bytes(original); scratch.write_text(self.sdk_manifest())
+                custody = PermissionError('cleanup-unobserved')
+                with patch.object(Path, 'unlink', side_effect=custody):
+                    with self.assertRaises(PermissionError) as caught:
+                        append_scratch_sdd_entry(target, original, stat.S_IMODE(target.stat().st_mode), scratch)
+                self.assertIs(caught.exception, custody)
+                self.assertIn('fs.gg.sdd.cli', json.loads(target.read_bytes())['tools'])
+
+        def test_owner_byte_or_mode_drift_refuses_without_overwrite(self):
+            with tempfile.TemporaryDirectory() as td:
+                root=Path(td); target=root/'product.json'; scratch=root/'scratch.json'
+                original=self.owner_manifest();target.write_bytes(original);target.chmod(0o640);scratch.write_text(self.sdk_manifest())
+                target.chmod(0o600)
+                with self.assertRaisesRegex(ValueError,'owner-preimage'): append_scratch_sdd_entry(target,original,0o640,scratch)
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode),0o600);self.assertEqual(target.read_bytes(),original)
+                target.chmod(0o640);target.write_bytes(original+b' ')
+                with self.assertRaisesRegex(ValueError,'owner-preimage'): append_scratch_sdd_entry(target,original,0o640,scratch)
+                self.assertEqual(target.read_bytes(),original+b' ')
+
 
     # A source-control regression must fail before any process can be launched.
     with patch.object(C.subprocess, 'Popen', side_effect=AssertionError('source-controls-launched-child')):
