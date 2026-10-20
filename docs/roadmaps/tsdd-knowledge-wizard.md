@@ -1003,3 +1003,32 @@ Parent #4642 and the unrelated #4710 browser/WASM acceptance remain unchanged.
 Temporary-file cleanup preserves the identical primary append failure and records
 a separate closed `temporary-custody-Unknown` note. A cleanup failure on its own
 refuses the operation; causal controls cover both outcomes.
+
+
+### Raw COMPLETE knowledge source qualification — Delivery4766
+
+The dedicated `knowledge-fable-game-complete-public.py` adapter fixes two genuine
+public Workspace019 subjects: `--bundle complete --lifecycle typed-sdd`, and
+`--bundle complete` with lifecycle genuinely omitted. The packed lifecycle default
+remains typed-sdd; bundle omission is not part of this COMPLETE qualification.
+
+The adapter seals the accepted4759 preservation ports, including external scratch
+SDD2.2 installation and exact owner-byte-preserving manifest append. COMPLETE
+composition requires Studio, models, both editable examples, FourD, WASM, Soldier
+and external-authority reference source. FourD/external reference JSON must match
+the packed original bytes. These opted-in examples are retained without invoking
+their product, browser, engine or provider flows. Complete owner bytes/modes and
+ignore prefix are preserved, and COMPLETE assets are verified as tracked initial
+commit blobs before the separate knowledge probe setup.
+
+Only the bounded runner factory supplied under root's separate runtime admission
+can execute either subject. The adapter reuses accepted capture/search/history,
+private exclusion, post-private ALL-shared export/restore, distinct Git bundle,
+exact10MiB/+1 ordinary checker and restoration ports. Its pure controls exercise
+COMPLETE presence/refusals, lifecycle-only omission, exact reference bytes, modes,
+scratch isolation and initial-commit/probe ordering without launching a child.
+
+Source controls/review/CI establish source readiness only. Actual public receivers
+and independent complete4766 acceptance remain separately admitted work. Accepted
+4759 PLAYER and4723 subjects are not replayed;4710 browser/WASM, other4642 routes
+and all historical failures/Unknown reservations keep their original scope.
