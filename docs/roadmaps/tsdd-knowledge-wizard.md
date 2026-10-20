@@ -9,6 +9,106 @@ Item: `TSDD-KNOWLEDGE-01.4`. Accountable owner: Wizard/bootstrap lane; integrato
 
 The Wizard requires an actual stable SDD producer at least 2.1.0 for `typed-sdd`, records its exact version in a root local tool manifest, and checks the generated knowledge store before the first-agent handoff. Rendering app and game creation composes the central Workspace.Template 0.18.0 knowledge overlay without changing the original Rendering archive. The caller retains ownership of the ordinary initial Git commit.
 
+## Current Rendering app qualification source — 2026-10-20
+
+[Delivery #4708](https://github.com/FS-GG/.github/issues/4708) retains the full
+knowledge-ready Rendering acceptance under [#4642](https://github.com/FS-GG/.github/issues/4642).
+The accepted public019 Rendering operation explicitly selected `--lifecycle sdd`;
+it does not establish typed knowledge initialization. Historical qualification below
+retains its original versions and scope.
+
+The [creation fixture](../../tests/new-sdd-workspace/knowledge-creation.py) adds
+`--qualification-mode current-public` alongside both historical modes. This is
+source preparation. No current knowledge-ready receiver or public adoption is accepted
+by these source controls. The selected current inputs are public Wizard 0.19.0,
+SDD 2.2.0, Workspace.Template 0.18.2 and UI.Template 0.32.1, with immutable Templates
+revision `f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc`.
+The [accepted receiver composition](../coordination/2026-09-29-coordination-v2-board-design.md#genuine019-selected-full-sdd-receivers-and-preservation--2026-10-19)
+establishes that compatible set at its original Standard SDD scope.
+
+The current route uses genuine descriptor transport at that immutable revision,
+without a loopback descriptor replacement or executable shim. Before pinned typed
+creation, it registers the original complete Workspace archive, including its
+Governance and knowledge roles, and the original Rendering archive in the owned
+clean template home. Current pinned bootstrap requires that exact preinstalled
+0.18.2 registration even with `--no-governance`. The selected operation creates one
+Rendering `app` with explicit `typed-sdd`, `--pinned`, `--no-governance` and
+`--no-coordination`; it does not replay the retained Standard SDD receiver.
+
+The route checks canonical files and the exact root 2.2.0 tool pin in the caller's
+normal initial commit, then restores that local tool from the admitted original
+package feed and invokes the emitted common checker without `--command-json`.
+An over-10-MiB canonical record must make that checker refuse; a `finally` restores
+the original record. A fresh Git clone must contain no project cache and must
+retrieve every seed record through the actual producer `knowledge get`, matching
+both canonical content and digest, then pass the ordinary local-tool checker.
+The report retains the selected invocation's narrower assertions and explicitly
+lists unfulfilled refusal/preservation and independent-acceptance assertions.
+
+### Required private inputs before runtime admission
+
+The existing `--installed-manifest` and
+`--approved-installed-manifest-sha256` arguments bind the operation's private input
+manifest. This is the fixture's input contract, not a publication receipt or an
+operation grant. Programme/root must separately authenticate the actual publication
+custody, admit execution/resources and independently accept the result. Missing
+archives, source revisions, authenticated feed custody or closures are required
+inputs; neither source package metadata nor synthetic controls supply them.
+
+The manifest uses schema `fsgg.wizard.current-public-knowledge/1` and contains:
+
+- `inputs`: canonical absolute regular-file paths and SHA256 digests for all immutable
+  inputs, including every executable, closure member, archive and publication receipt.
+- `packages`: exactly `wizard`, `producer`, `workspace` and `rendering`. Each binding
+  has `archive`, `archiveSha256`, `sourceRevision` and nonempty `publicationReceipts`
+  paths. Literal NuGet identity/version/repository-commit metadata must match each
+  binding. Wizard source is `cc1d3c12c1ed7e7128012063d7ab478c7198b523`; Rendering
+  source is `6c9f766fdd91483c2de6f061e75589e94852a265`. Producer and Workspace source
+  identities and all archive digests must come from their authenticated custody.
+- Wizard and producer package bindings additionally contain `closure` and `entryDll`.
+  Every `tools/net10.0/any/` member must match the complete installed closure, with
+  no additional member; the admitted ELF apphost must point to that entry DLL.
+- `wizard`, `sddExecutable`, `insufficientExecutable`, `providers`, `dotnetExecutable`,
+  `actualHome`, `childEnvironment`, `workRoot` and `report`. Executable/provider
+  arguments must match. The environment's actual selected `dotnet` and `fsgg-sdd`
+  must resolve to the bound executables. HOME stays unchanged; caches and output
+  live under one fresh private root. Only the root-admitted child environment is used.
+- `providerRevision` equals the immutable revision above; `descriptorSha256` is
+  `668873206cbed9b6e47b939a6325039e3eb54fee59b420b089245fb9294bf3f6`, the original
+  Rendering descriptor bytes at that revision. The source checkout supplies an
+  independent comparison; the Wizard fetches the real immutable provider path.
+- `ordinaryToolPackages` uses the existing `{path, name}` package-feed entries,
+  including the exact bound SDD 2.2.0 archive and its genuine dependency packages.
+  All paths are in `inputs`. No tool download, build or repacking supplies a missing
+  package during this preparation.
+- `insufficientPublic` retains the existing literal public SDD 2.0.3 archive,
+  full closure and apphost-target binding. Its version read does not establish
+  an insufficient-producer creation refusal in the current route.
+
+Input pins are checked again before a successful report. Commands retain actual
+argv, output and exits under the operation's existing `commands.jsonl` custody,
+with the existing 180-second per-command timeout. Root must apply a separately
+admitted outer deadline and observe cleanup; this fixture grants no runtime budget.
+
+The 32 pure source controls run through the maintained workflow's existing
+`--source-controls` call. Their transitive execution is Python standard-library
+filesystem/ZIP/XML/hash handling plus mocked command routing; they invoke no CLR,
+SDK, producer, Wizard, browser, download or native effect. The current-route control
+uses synthetic bytes only and establishes harness behavior.
+
+Programme/root retains remaining full #4708 acceptance: actual insufficient-producer
+creation refusal, cache/manifest conflict and explicit-selection preservation,
+independent invocation/knowledge evidence, source review and required CI, genuine
+runtime input custody and separately admitted execution. Parent #4642 retains all
+other supported routes and its full .4/.5 acceptance. Original W013 and all 439/46
+Unknown reservations remain held. Missing dispatch telemetry baseline/configuration
+remains an advisory gap; no measurement or receipt is inferred from source checks.
+
+Atlas restart pointer: `contract/new-sdd-workspace`. Its existing record covers the
+public creation/instruction composition, not typed knowledge acceptance. Programme/root
+owns the capture gap until the source finding and its immutable delivered citation
+can be admitted; no draft is presented as accepted knowledge.
+
 ## Source boundary
 
 Only `scripts/NewSddWorkspace/Program.fs`, its README, focused `tests/new-sdd-workspace` fixtures, and this document change. Standard SDD, other lifecycle tokens, global tool self-update, governance, coordination, explicit upgrades, and initialization handoff retain their existing routes. Fable game omission preserves the exact historical 0.15 typed-selection gate; 0.17 and provisional 0.18 descriptors remain Standard SDD unless a caller explicitly selects typed SDD.
