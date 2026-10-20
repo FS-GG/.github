@@ -5,6 +5,15 @@ matches, materiality and whether an in-scope repair belongs on the current PR. R
 a distinct cause does not automatically require a new row. A legitimate capability request need not
 be red today. Retain rejected/duplicate/deferred findings and their evidence in existing native context.
 
+Report material process problems promptly when they block progress, risk incorrect effects or acceptance,
+or cause substantial avoidable work. Distinguish observation from hypothesis; include bounded evidence,
+delivery impact, the workaround used and a proposed improvement when known. A missing solution does not
+suppress a valid report. Use existing owning issues/PRs and worker returns; do not invent findings,
+repeat unchanged reports or create a separate reporting worker, packet, ledger or measurement campaign.
+The root ensures [reasoned, owned disposition](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/host-loop.md#own-process-findings-and-disposition),
+retaining unresolved owner, next action and reconsideration condition. Reporting or disposition grants
+no dispatch, reservation release, uncertain-effect retry, Status write, weaker acceptance or closure.
+
 **The current owner may dispose and file the finding directly.** An analyst is optional when authorized
 and useful; availability never mandates a second actor, packet, minted identity or synchronous filing
 gate. Existing packets remain usable evidence. Keep one owner for unresolved findings; do not strand

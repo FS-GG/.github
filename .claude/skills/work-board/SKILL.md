@@ -48,8 +48,10 @@ Keep Owner, Done when, Current deliverable, Next action, Blocked on and Acceptan
 existing owning issue. Preserve complete Done when and native history. No routine claim, mandatory
 packet, second filing owner, lifecycle ledger or duplicate status/closure table is required.
 Optional [finding analysis](https://github.com/FS-GG/.github/blob/main/.agents/skills/board-analyst/SKILL.md) and [lane diagnosis](https://github.com/FS-GG/.github/blob/main/.agents/skills/lane-steward/SKILL.md)
-provide bounded advice; neither selects work or grants effects. [Host guidance](references/host-loop.md)
-keeps already reported findings owned. Normal/best wrappers select routing only.
+provide bounded advice; neither selects work or grants effects. Executing agents proactively report
+material process problems; existing review completion, worker returns and handoffs check for unreported
+findings. The root ensures reasoned, owned disposition through [host guidance](references/host-loop.md).
+Normal/best wrappers select routing only.
 
 ## Completion and waiting
 
