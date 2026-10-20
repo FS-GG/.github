@@ -144,6 +144,7 @@ jobs:
           python3 tests/release-effect-sealing/run.py
           python3 -B tests/new-sdd-workspace/knowledge-console-public.py --source-controls
           python3 -B tests/new-sdd-workspace/knowledge-public-receivers.py --source-controls
+          python3 -B tests/new-sdd-workspace/knowledge-fable-game-public.py --source-controls
           python3 tests/new-sdd-workspace/knowledge-creation.py \
             --wizard /pure-control --sdd-cli /pure-control --insufficient-cli /pure-control \
             --providers /pure-control --workspace-package /pure-control \
