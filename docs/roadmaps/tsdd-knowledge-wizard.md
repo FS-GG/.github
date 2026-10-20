@@ -191,6 +191,26 @@ retry or new-creation replay. Missing telemetry remains advisory, and original43
 Unknown reservations remain unreleased. Retained upgrades and all other parent4642 routes
 remain outside this bounded Delivery and retain their full promise.
 
+### Accepted console technical milestone — 2026-10-20
+
+The first genuine public console qualification at source
+`7461d993076a7e355232ded733afe4773d9ac28e` exited 0 with 62 bounded commands;
+independent runtime-evidence review passed. [The scoped report](../reports/knowledge-public-console-receiver-20261020.md)
+records the actual registration change from Workspace 0.18.2 to 0.19.0, the caller initial commit before probe setup,
+four concise findings, normal later commits, two Git versions and cache-free clone
+recovery. A new all-shared selected-record export made after private capture excludes
+private knowledge and restores losslessly; its `HistoryIncluded=false` remains separate
+from the verified Git history. Intended stale-write/invalid-input/restore refusals preserve
+owner bytes. The ordinary SDD2.2 checker accepts exactly 10 MiB, refuses one byte over,
+and passes after original bytes are restored. All 157 bound inputs stayed unchanged and
+all command groups were observed absent. No retry or creation replay occurred.
+
+[PR4722](https://github.com/FS-GG/.github/pull/4722) carries source and acceptance evidence;
+final exact-head CI, delivery and native scoped closure remain separate. Parent 4642 keeps
+all other provider/raw-template routes, promised retained upgrades and its full .4/.5
+promise. This milestone establishes no product build, doctor coherence, publication,
+performance, fleet adoption or historical reservation release.
+
 ## Source boundary
 
 Only `scripts/NewSddWorkspace/Program.fs`, its README, focused `tests/new-sdd-workspace` fixtures, and this document change. Standard SDD, other lifecycle tokens, global tool self-update, governance, coordination, explicit upgrades, and initialization handoff retain their existing routes. Fable game omission preserves the exact historical 0.15 typed-selection gate; 0.17 and provisional 0.18 descriptors remain Standard SDD unless a caller explicitly selects typed SDD.
