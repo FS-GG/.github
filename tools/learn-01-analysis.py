@@ -20,7 +20,7 @@ import time
 import unicodedata
 import uuid
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class Refusal(ValueError):
@@ -926,9 +926,209 @@ def causal_observation_summary(content: dict, events: list[dict]) -> dict:
             "populationScope": "bounded-selected-snapshot-only"}
 
 
+def lifecycle_relations(content: dict) -> dict:
+    """Bound present relations before any traversal; absent historical relations stay unavailable."""
+    result = {}
+    for name in ("admissions", "starts", "terminals", "times"):
+        if name in content:
+            rows = content[name]
+            if not isinstance(rows, list) or len(rows) > 10000 or any(not isinstance(row, dict) for row in rows):
+                raise Refusal("lifecycle relation must contain at most 10000 object rows: " + name)
+            result[name] = rows
+    return result
+
+
+def lifecycle_observation_summary(relations: dict, invocations: dict, original_by_item: dict,
+                                  workspace: str) -> dict:
+    """Audit retained evidence presence, without qualifying clocks, capture, or accounting."""
+    def bounded(values):
+        ordered = sorted(values)
+        def render(value):
+            # Bound display independently of producer input acceptance. Keep
+            # full identities for joins, sorting, duplicate detection and counts.
+            encoded = json.dumps(value, ensure_ascii=True, separators=(",", ":")).encode("ascii")
+            if len(encoded) <= 512:
+                return value
+            return {"prefix": value[:48], "characters": len(value),
+                    "jsonSha256": hashlib.sha256(encoded).hexdigest()}
+        return {"count": len(ordered), "sample": [render(value) for value in ordered[:20]],
+                "omitted": max(0, len(ordered) - 20)}
+
+    def text(value):
+        # Match requiredText/optionalText's String.IsNullOrWhiteSpace, including
+        # Unicode separators, without inventing an identity/outcome length cap.
+        return isinstance(value, str) and any(
+            char not in "\t\n\v\f\r\u0085" and unicodedata.category(char) not in ("Zs", "Zl", "Zp")
+            for char in value)
+
+    def timestamp(value):
+        # Match TelemetryStore.validTimestamp's shape before calendar/offset
+        # validation. fromisoformat alone admits additional non-RFC3339 forms.
+        if not isinstance(value, str):
+            raise Refusal("lifecycle timestamp is malformed")
+        match = re.fullmatch(
+            r"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})(?:\.([0-9]+))?(Z|[+-][0-9]{2}:[0-9]{2})",
+            value)
+        if match is None:
+            raise Refusal("lifecycle timestamp is malformed")
+        try:
+            if (int(match[1][11:13]) >= 24 or int(match[1][14:16]) >= 60
+                    or int(match[1][17:19]) >= 60):
+                raise ValueError("invalid time of day")
+            if match[3] != "Z" and int(match[3][-2:]) >= 60:
+                raise ValueError("invalid offset minutes")
+            whole = datetime.fromisoformat(match[1] + match[3].replace("Z", "+00:00"))
+            if abs(whole.utcoffset()) > timedelta(hours=14):
+                raise ValueError("DateTimeOffset range exceeded")
+            utc = whole.astimezone(timezone.utc)
+            # DateTimeOffset.TryParse rounds the parsed fractional second to
+            # ticks before its local/UTC range checks. A carry at year9999 is
+            # invalid even when parsing the whole second alone succeeds.
+            if match[2] and round(float("0." + match[2]) * 10000000) == 10000000:
+                (whole + timedelta(seconds=1)).astimezone(timezone.utc)
+        except (ValueError, OverflowError) as error:
+            raise Refusal("lifecycle timestamp is malformed") from error
+        # Preserve fractional ordering without Python's microsecond truncation
+        # or floating point rounding. This is still only a raw order warning.
+        return (utc.toordinal() * 86400 + utc.hour * 3600 + utc.minute * 60 + utc.second,
+                (match[2] or "").rstrip("0"))
+
+    def integer(value):
+        return type(value) is int and value >= 0
+
+    identities = set()
+    missing_identities = Counter()
+
+    def own_row(row, relation):
+        invocation, item = row.get("invocation_id"), row.get("item_id")
+        if (not text(invocation) or not text(item) or invocation not in invocations
+                or original_by_item.get(item) != invocations[invocation][0]):
+            raise Refusal("lifecycle row has no own admitted invocation: " + relation)
+        if any(row.get(key, workspace) != workspace for key in ("workspaceId", "workspace_id")):
+            raise Refusal("cross-workspace lifecycle join is forbidden")
+        identity = row.get("identity")
+        # Older retained summaries may omit identity/outcome columns. Preserve
+        # their presence without promoting them to complete retained evidence.
+        if "identity" not in row:
+            missing_identities[relation] += 1
+        elif not text(identity) or identity in identities:
+            raise Refusal("lifecycle fact identity is malformed or duplicated")
+        else:
+            identities.add(identity)
+        return invocation
+
+    starts = {phase: Counter() for phase in ("process", "thread", "turn")}
+    semantic_keys = set()
+    for row in relations.get("starts", []):
+        invocation = own_row(row, "starts")
+        phase = row.get("phase")
+        if not isinstance(phase, str) or phase not in starts or not integer(row.get("process_id")):
+            raise Refusal("lifecycle start phase/process identity is malformed")
+        for name in ("thread_id", "turn_id"):
+            if row.get(name) is not None and not text(row[name]):
+                raise Refusal("lifecycle start thread/turn identity is malformed")
+        sequence = row.get("turn_sequence")
+        if sequence is not None and not integer(sequence):
+            raise Refusal("lifecycle start turn sequence is malformed")
+        if phase == "turn" and (row.get("thread_id") is None or sequence is None):
+            raise Refusal("lifecycle turn start requires thread and sequence")
+        # Match the receiver's actual partial unique indexes. Neither phase nor
+        # PID is a uniqueness key; multiple processes, threads and turns survive.
+        key = None
+        if phase == "thread" and row.get("thread_id") is not None:
+            key = (phase, invocation, row["thread_id"])
+        elif phase == "turn":
+            key = (phase, invocation, row["thread_id"], sequence)
+        if key is not None:
+            if key in semantic_keys:
+                raise Refusal("duplicate lifecycle thread/turn start key")
+            semantic_keys.add(key)
+        starts[phase][invocation] += 1
+
+    terminals = set()
+    outcomes = Counter()
+    unknown_outcomes = set()
+    for row in relations.get("terminals", []):
+        invocation = own_row(row, "terminals")
+        if invocation in terminals:
+            raise Refusal("duplicate runtime terminal invocation")
+        terminals.add(invocation)
+        if "outcome" not in row:
+            unknown_outcomes.add(invocation)
+            outcomes["unknown"] += 1
+        elif not text(row["outcome"]):
+            raise Refusal("lifecycle terminal outcome is malformed")
+        else:
+            outcome = row["outcome"]
+            outcomes[outcome if outcome in ("completed", "failed", "cancelled") else "other"] += 1
+        if "exit_code" in row and not integer(row["exit_code"]):
+            raise Refusal("lifecycle terminal exit code is malformed")
+        if row.get("thread_id") is not None and not text(row["thread_id"]):
+            raise Refusal("lifecycle terminal thread identity is malformed")
+
+    times = {event: defaultdict(list) for event in ("admission", "start", "terminal")}
+    time_counts = {event: Counter() for event in times}
+    order_warnings = set()
+    for row in relations.get("times", []):
+        invocation = own_row(row, "times")
+        event = row.get("event")
+        if not isinstance(event, str) or event not in times:
+            raise Refusal("lifecycle time event is malformed")
+        parsed = {}
+        for prefix in ("occurred", "observed"):
+            value, clock = row.get(prefix + "_at"), row.get(prefix + "_clock_provenance")
+            if clock is not None and clock not in ("host-wall", "provider-native", "github-native"):
+                raise Refusal("lifecycle clock provenance is malformed")
+            if value is not None:
+                parsed[prefix] = timestamp(value)
+                time_counts[event][prefix + "Present"] += 1
+            if clock is not None:
+                time_counts[event][prefix + "ClockPresent"] += 1
+        # A label is not an authenticated clock domain. Report only apparent
+        # within-row ordering, never durations, causal order or comparability.
+        if (len(parsed) == 2 and row.get("occurred_clock_provenance") is not None
+                and row.get("occurred_clock_provenance") == row.get("observed_clock_provenance")
+                and parsed["occurred"] > parsed["observed"]):
+            order_warnings.add(invocation + ":" + event)
+        times[event][invocation].append(row)
+
+    def presence(present, relation):
+        return {"present": len(present), "missing": bounded(set(invocations) - set(present))
+                if relation in relations else None}
+
+    return {
+        "scope": "advisory-selected-snapshot-evidence-only",
+        "admittedInvocations": len(invocations),
+        "relations": {name: "present" if name in relations else "unavailable"
+                      for name in ("starts", "terminals", "times")},
+        "startRowsByPhase": {phase: sum(counts.values()) for phase, counts in starts.items()},
+        "processStartPresence": presence(starts["process"], "starts"),
+        "multipleProcessStarts": bounded(invocation for invocation, count in starts["process"].items() if count > 1),
+        "terminalPresence": presence(terminals, "terminals"),
+        "terminalOutcomes": {outcome: outcomes[outcome] for outcome in ("completed", "failed", "cancelled", "other", "unknown")},
+        "unknownTerminalOutcomes": bounded(unknown_outcomes),
+        "rowsWithoutRetainedIdentity": {name: missing_identities[name] for name in ("starts", "terminals", "times")},
+        "timestamps": {event: {
+            "rows": sum(map(len, observations.values())),
+            **{key: time_counts[event][key] for key in ("occurredPresent", "observedPresent", "occurredClockPresent", "observedClockPresent")},
+            "eventPresence": presence(observations, "times"),
+            "multipleObservations": bounded(invocation for invocation, rows in observations.items() if len(rows) > 1),
+            "differingOccurrenceObservations": bounded(
+                invocation for invocation, rows in observations.items()
+                if len({(row.get("occurred_at"), row.get("occurred_clock_provenance"))
+                        for row in rows if row.get("occurred_at") is not None}) > 1),
+        } for event, observations in times.items()},
+        "apparentTimestampOrderWarnings": bounded(order_warnings),
+        "clockComparability": "unverified",
+        "waitCoverage": "unknown", "criticalPath": "not-evaluated",
+        "nativePopulationCoverage": "not-assessed",
+    }
+
+
 def analyze_private_snapshot(contract: dict, envelope: dict, *, _protected_captures: list | None = None) -> dict:
     """Derive assigned-treatment token coverage only from one retained private snapshot."""
     content, workspace = decode_private_snapshot(envelope)
+    lifecycle_rows = lifecycle_relations(content)
     verified_invocations = verified_capture_invocations(content, _protected_captures) if _protected_captures is not None else set()
     learning_rows = content.get("learningObservations", [])
     try:
@@ -1109,6 +1309,7 @@ def analyze_private_snapshot(contract: dict, envelope: dict, *, _protected_captu
         if invocation in terminal:
             raise Refusal("duplicate runtime terminal invocation")
         terminal.add(invocation)
+    lifecycle_summary = lifecycle_observation_summary(lifecycle_rows, invocations, original_by_item, workspace)
     gaps = defaultdict(set)
     for row in content.get("runtimeGaps", []):
         invocation = row.get("invocation_id")
@@ -1577,6 +1778,7 @@ def analyze_private_snapshot(contract: dict, envelope: dict, *, _protected_captu
         "workspaceId": workspace,
         "snapshotRevision": envelope["revision"],
         "causalObservation": causal_summary,
+        "lifecycleObservation": lifecycle_summary,
         **observation_result,
         "assignedOriginalItemsByArm": {
             arm: sum(1 for value in arms.values() if value == arm) for arm in ("current", "focused")
