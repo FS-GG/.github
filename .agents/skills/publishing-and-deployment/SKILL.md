@@ -119,6 +119,13 @@ A consumed journal or completed publication does not authorize another candidate
 Historical `release-saga-start`, prepare, component publishers and promote workflows remain
 sealed under GS2-08.9; their recipes do not authorize current publication.
 
+Before pushing a coherent source cut, trace normal project-reference consumers and run their
+maintained pure closure/source-axis controls alongside registry preparation. Preserve distinct
+current-source, historical-source and published-dependency bindings; registry projection checks
+do not qualify consumers. Run the existing changelog check and update the release-note operand
+that the project actually uses. Static source checks do not establish CLR evaluation; require
+separately admitted execution or current hosted CI.
+
 1. Qualify and merge the selected successor source. Dispatch `release-successor-candidate.yml`
    on current `main` once. Authenticate the successful first-attempt run and its original seven-file
    Actions archive: three packages, manifest, predecessor channel and two standalone qualification files.
