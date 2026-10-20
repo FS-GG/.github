@@ -77,7 +77,7 @@ let ``corrupt missing unknown and duplicate cursor properties refuse before nati
     let raw = OperationObservationApplication.encodeCursor (original())
     Assert.True((OperationObservationApplication.decodeCursor "{}") |> Result.isError)
     Assert.True((OperationObservationApplication.decodeCursor (raw.Replace("unknown-original", "changed-original"))) |> Result.isError)
-    Assert.True((OperationObservationApplication.decodeCursor (raw.Replace("{\"schema\":", "{\"schema\":\"duplicate\",\"schema\":"))) |> Result.isError)
+    Assert.True((OperationObservationApplication.decodeCursor (raw.Insert(1, "\"schema\":\"duplicate\","))) |> Result.isError)
     Assert.True((OperationObservationApplication.parseInput "{\"schema\":\"unsupported\"}") |> Result.isError)
 
 [<Fact>]
