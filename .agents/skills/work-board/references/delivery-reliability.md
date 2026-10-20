@@ -9,6 +9,28 @@ Read this reference when planning the next horizon, diagnosing recurring qualifi
 changing acceptance tooling. Apply the defaults in the skill within existing owner authority; this
 reference does not start development, add gates or authorize protected effects.
 
+## Final inputs and failure-gated invocation
+
+Use the same exact typed values to derive admission, reservation and the operation request: stable
+`sliceId`, attempt, operation, accountable owner, exact PR/head and actual paths/touch-set, plus the
+selected binding/native joins. Reuse the existing owner/attempt and custody; independently assembled
+lookalike identifiers cannot prove self-exemption or absence of overlap. Preserve every relevant known/
+Unknown hold until its original release condition is independently observed. No new packet or ledger
+is required.
+
+Freeze the final handoff input bytes and hashes before the final preflight. Validate the actual final
+inputs, schema/branches, typed identity joins, content hashes, source/head/paths and remaining capacity
+in one failure-gated sequence with invocation. Every check must succeed before invoking the selected
+route; a failed check must prevent later shell lines as well as the constructor/launch. Use explicit
+success chaining or a controller that stops on any failed prerequisite. A changed input/hash invalidates
+the checked candidate: reconcile it and preflight the final bytes again within existing authority.
+
+Retain original refusals, partial effects and uncertain outcomes with their operation identity. Diagnose
+and reconcile the original before any separately admitted continuation; never blindly retry or mint a
+replacement identity. Describe these checks as finite cooperative verification at the observed boundary,
+not an atomic transaction or server-side compare-and-swap guarantee. They grant no native effect,
+settlement, reservation release or acceptance beyond the selected qualified route.
+
 ## Evidence window and limits
 
 The 2026-10-12 review covered **2026-10-11 18:56:30 UTC through 2026-10-12 18:56:30 UTC**.
