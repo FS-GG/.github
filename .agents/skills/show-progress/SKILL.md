@@ -1,6 +1,6 @@
 ---
 name: show-progress
-description: Give a concise overview of lane progress, development health, fixable process problems and blockers the current process cannot resolve.
+description: Report lane progress and development health using delivery evidence and available telemetry, including token efficiency, process pathologies, practical improvements and unresolved blockers.
 ---
 
 # Show progress
@@ -19,14 +19,19 @@ expand only when requested. Explain practical consequences in plain language.
    Cover the selected lanes, including blocked ones. Say what became usable, what moved
    closer to completion, and the next useful result. Distinguish implemented work from
    something people can actually use. Group unchanged lanes; avoid a task-by-task diary.
-3. **Process problems we can fix:** identify the few problems doing the most harm.
+3. **Token efficiency:** use available telemetry and the
+   [analysis guidance](references/telemetry-analysis.md). Give a compact usage breakdown,
+   coverage and the relationship to accepted delivery; compare with a compatible baseline
+   when one exists. Missing telemetry is a visible evidence gap, not zero cost or a reason
+   to omit the rest of the report.
+4. **Process problems we can fix:** identify the few problems doing the most harm.
    For each, give the observed pattern, its effect, and a practical change with an owner
    or decision needed. Explain why the change would help. Label suspected causes as such.
    Summarize existing owned findings and their reasoned dispositions from owning issues/PRs; for material
    unresolved findings, retain the owner, next action and reconsideration condition. Use canonical
    [finding disposition](../work-board/references/host-loop.md#own-process-findings-and-disposition)
    without a separate findings ledger, reporting worker or recurring unchanged reports.
-4. **Blockers the current process cannot resolve:** name the missing input or capability,
+5. **Blockers the current process cannot resolve:** name the missing input or capability,
    affected lanes, who can supply it, and what must change. State plainly when there is
    no supported workaround. More retries or agents cannot supply missing access, legal
    permission, participants or irretrievable evidence. If the route is merely uninvestigated,
@@ -56,6 +61,9 @@ without treating deferral or source completion as full outcome acceptance.
 
 - Ground material claims in current owning plans, board state and existing results.
   Include a snapshot time and a few useful links. Flag stale or incomplete coverage once.
+- Consult existing telemetry snapshots, summaries and assessments for the selected scope.
+  Keep measured facts, diagnostic counters, supported explanations and hypotheses distinct.
+  Report whether an improvement is demonstrated, merely plausible, or unmeasured.
 - Judge progress by useful outcomes and removed obstacles. PRs, green checks, agent activity
   and paperwork are evidence to interpret, not progress measures on their own.
 - Scrutinize the process itself: repeated repairs, late integration, excessive handoffs,
