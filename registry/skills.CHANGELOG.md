@@ -1,7 +1,6 @@
 # Skill registry changelog
 
 
-- **2026-10-18** — SOURCE PREPARATION (.github#4641): make work-board the normally discoverable canonical organization/product V2 coordinator; deliver recovery/routine/historical-handoff closure in Drivers and reconcile actual product materialization. Retain external Roadmap/telemetry identities and old observation provenance compatibility. Coherent 0.107 source declares no publication, installed discovery, hierarchy adoption or selector/binding change.
 Reverse-chronological log of changes to [`skills.yml`](skills.yml) — the FS-GG org skill
 registry (the authoritative catalog of process + product skills, ADR-0017). Its human projection
 is [`../docs/registry/compatibility.md`](../docs/registry/compatibility.md) (§Versioned contracts →
@@ -32,7 +31,11 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-10-20** — SOURCE PREPARATION (.github#4733): proactive process reporting (#4733) requires prompt material findings and owned dispositions at execution, review, return and handoff boundaries. Canonical coordinator, worker findings and show-progress agree; mirror/Atlas/maintained manifest closure is synchronized. No reporting actor, duplicate ledger, automatic filing or effect authority. CI, source delivery and applicable instruction adoption remain separate.
+
 - **2026-10-20** — SOURCE (Programme/root; ADR-0054): reconcile `work-board` and `work-board-coord` from the local driver manifest after the user-directed mandatory Status lifecycle change. Root decides and verifies guarded updates at result/selection/dispatch/handoff boundaries; inspection remains read-only. Both skill roots, dependent Kit contract and manifests agree. This is source delivery, not a new published or installed caller qualification.
+
+- **2026-10-18** — SOURCE PREPARATION (.github#4641): make work-board the normally discoverable canonical organization/product V2 coordinator; deliver recovery/routine/historical-handoff closure in Drivers and reconcile actual product materialization. Retain external Roadmap/telemetry identities and old observation provenance compatibility. Coherent 0.107 source declares no publication, installed discovery, hierarchy adoption or selector/binding change.
 
 - **2026-10-17** — Prepare current organization programme consumers for COORD-BOARD-V2-01.9/.11 ([owner #4634](https://github.com/FS-GG/.github/issues/4634)): reconcile paired programme/driver/check/recovery/reporting and cross-repository guidance, explicit supported model routing, generator-owned retirement of organization V1 projections, and their maintained driver/coordination-Kit manifest, raw Kit source lock and own-registry digests. Preserve product contracts and the six reporting user edits. This source preparation grants no publication, installed adoption, live Project 3 mutation, consumer switch or manual-status retirement; full qualification remains required. Kit membership, foreign producer rows and materialization predicates are unchanged.
 
