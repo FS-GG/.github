@@ -97,3 +97,30 @@ public-producer controls. Source merge closes only this declared source and
 source-candidate scope. Version choice, publication, both-feed custody and actual
 published receiver adoption stay with the parent. All original failures and
 Unknown reservations remain retained.
+
+## Observed SOURCE021 Python qualification
+
+The reviewed source candidate `a04827793e2819fb76227a830b6351b0f7f08d93`
+passed both genuine Python creation controls using its 89-file compiled closure
+SHA256 `6cca0692892c585762dea777fe24d3ae4d665b493e31b228af6c48a3deb3e2c6`,
+published SDD2.2 and Workspace0.19.0 from the immutable sources above.
+The operation completed in 5.722 seconds: 79 commands (26 default, 53 typed),
+170922 retained output bytes, with each direct child reaped and its process group
+observed absent. This is cooperative group evidence, not OS containment.
+
+Both isolated hives transitioned from the original Workspace0.18.2 preflight
+registration to genuine Workspace0.19.0. Each receiver has exactly one normal
+caller initial commit. The default receiver has no automatic canonical knowledge
+or either owner CI asset. The typed receiver includes all six required knowledge,
+guide, pin and CI blobs in that initial commit; its local tools retain SDD2.2 and
+Coord0.94. All 121 restored public SDD/Coord tool payload members match their
+original archives, and both owner CI assets match the Workspace0.19.0 archive.
+Genuine seed retrieval passed; the ordinary pinned SDD2.2 common checker passed
+without a source-candidate override. All 89 compiled files and 157 retained inputs
+remained unchanged through independent read-only review.
+
+These results qualify the two source-candidate Python journeys only. Earlier a19
+compiler/partial-fixture evidence keeps its original scope. The five maintained
+causal controls and final required exact-head coherent source CI/review remain
+required for this Delivery. This result does not qualify a published Wizard,
+bindings installed acceptance, publication or parent completion.
