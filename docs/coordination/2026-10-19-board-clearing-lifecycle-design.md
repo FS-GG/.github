@@ -763,3 +763,47 @@ actual installed109 qualification remain separate effects. Neither this paragrap
 nor a linked issue selects implementation or runtime. Fresh resource/ownership
 admission must bind the selected supported profile and relevant original holds;
 all439 inherited and46 later Unknown originals remain distinct and unreleased.
+
+
+### Remaining knowledge routes and retained compatibility — 2026-10-20
+
+[Delivery4723](https://github.com/FS-GG/.github/issues/4723) owns the next
+24 knowledge receiver subjects under [Outcome4642](https://github.com/FS-GG/.github/issues/4642).
+Its independently reviewed scope contains twelve typed knowledge journeys,
+eleven omitted-default preservation boundaries and one nonempty retained
+Standard-to-explicit-FSharp migration/rollback journey. Reuse the accepted
+console Wizard typed result from Delivery4720 and Rendering app creation from
+Delivery4708 at their exact scopes, leaving the original receivers unchanged.
+
+The remaining owned console, web, Python and bindings routes distinguish Wizard,
+provider and raw creation. Raw typed readiness requires explicit caller tool
+pinning and knowledge initialization; raw defaults establish selection and
+preservation, without claiming orchestrated Standard initialization. Rendering
+game uses the actual external Wizard profile; full app capture/recovery uses a
+fresh clone of the accepted receiver. Retained compatibility uses the supported
+nonempty specification and explicit FSharp backend. Caller-owned composition of
+the two knowledge CI assets requires absent destinations, no force and unchanged
+preexisting bytes. Rollback of typed authority remains separate from knowledge
+and Git-history preservation.
+
+The two Wizard bindings positive routes remain required on the parent: published
+Wizard/SDD selector transport and the target key need a compatible source and
+publication repair. Unsupported raw Rendering initialization, default Quint,
+automatic historical upgrades and fable-game/Governance remain outside this
+child, without reducing the parent promise or substituting a known refusal for
+successful creation.
+
+Implementation extends the existing sealed helpers with an explicit closed row
+inventory and route-specific tool sets. One original bounded window governs all
+commands and cleanup; partial rows remain incomplete. Retained migration invokes
+the pinned SDK FSI child, requiring fresh aggregate CLI/FSI resource admission.
+Per-process managed heap limits do not establish aggregate capacity. No npm,
+browser, Fable/Fantomas execution or product build is selected.
+
+This public commitment prepares the complete39-identity successor pair while
+preserving all38 previous identities and admitted plan paths. Native creation
+and parent linking are independently read back. Absent-only metadata,
+protected source delivery, private binding authentication, actual installed109
+qualification and fresh source/runtime admission remain distinct effects.
+This enrollment prerequisite is separate from the eventual implementation PR.
+All439 inherited and46 later Unknown originals remain distinct and unreleased.
