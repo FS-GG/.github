@@ -718,3 +718,30 @@ Canonical work-board now explicitly includes missing-Status/classification/enrol
 unfiltered intake and records their disposition in existing owning issues. This repairs the omission
 without adding an intake queue, Ready fallback or retrospective cards. Source guidance delivery and
 any later installed consumer update remain distinct; no fleet adoption is inferred from this edit.
+
+## Selected finite F# observer source — 2026-10-20
+
+[Delivery4731](https://github.com/FS-GG/.github/issues/4731), under
+[Outcome4730](https://github.com/FS-GG/.github/issues/4730), adds a finite attention invocation to
+`FS.GG.Coord.Core`, `FS.GG.Coord.GitHub` and the existing engine CLI. The pure reducer preserves exact
+issue/body revision, source, owner, slice/original attempt, PR/head, run/attempt and population identity.
+The read-only adapter checks the complete bounded selected-run jobs between owning-issue, run and PR
+barriers. `ObserveOriginal`, `AwaitWithinDeadline` and `ReturnAttention` keep unchanged pending ticks
+inside deterministic code. The [canonical observation instructions](../../.agents/skills/work-board/references/observation.md#finite-original-operation-attention)
+define the closed input, private original-clock continuation, output and rollback semantics.
+
+This source candidate is not publication, installed adoption or full Delivery acceptance. Relevant
+F# tests, one independent source review, exact-head required CI, coherent publication, physically
+verified installed caller/instruction discovery and one necessary ordinary exact-head CI observation
+remain required. That real window retains positive, changed-head/failure, interruption/restart/deadline
+and rollback evidence; no unrelated workload is replayed for acceptance. All439 inherited and46later
+Unknown original effects and reservations remain intact and unreleased.
+
+The selected native population is one Actions run/attempt, not all required checks or a whole-board
+read. A normal sample costs eight GETs (ten above100jobs), bounded by384requests and600seconds
+including cleanup. The existing deadline transport may transiently read4MiB; the observer accepts at
+most256KiB per page before parsing. This explicitly differs from the Python watcher's acquisition cap.
+Linux boot/tick continuation, local cursor checksum/locking and flushed replacement do not establish
+cross-host/disk-loss recovery, process containment or exactly-once result delivery. Actual native
+coverage, whole-family usage and economics remain observed/Unknown according to available evidence;
+no saving percentage is inferred from a language port or from unchanged-tick suppression.

@@ -51,6 +51,7 @@
     <Compile Include="ClaimOverlapTests.fs" />
     <Compile Include="ClaimLifecycleDestinationTests.fs" />
     <Compile Include="ReviewWaitEvidenceTests.fs" />
+    <Compile Include="OperationObservationApplicationTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

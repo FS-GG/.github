@@ -29,12 +29,13 @@ REF = "refs/heads/fsgg/v2/journal/release/utel-rel-19"
 PATH = "release-state.json"
 SCHEMA = "fsgg.release-successor-journal/1"
 
-# One selected current source composition, independent of frozen original cuts.
-CURRENT_RELEASE = {"version": "0.109.0", "predecessor": "0.108.0",
-    "logicalRef": "refs/heads/fsgg/v2/journal/release/utel-rel-27",
-    "directory": "state/releases/utel-rel-27",
-    "predecessorSource": "f984a3619129c5e9ab68e1291fd080ef77ef9337",
-    "predecessorContentId": "sha256:36d93d38dff7a00a7781eb313191918a5c847288d7f743b878351eb0e800429e"}
+# One prospective root-selected source composition; no namespace allocation or effect authority.
+# Completed109/journal27 and frozen original cuts remain immutable.
+CURRENT_RELEASE = {"version": "0.110.0", "predecessor": "0.109.0",
+    "logicalRef": "refs/heads/fsgg/v2/journal/release/coord110-observer-20261020-01",
+    "directory": "state/releases/coord110-observer-20261020-01",
+    "predecessorSource": "0d85830e7329a2718ee57ff0f1a16e6c751a469c",
+    "predecessorContentId": "sha256:a3ff6fd1f998e32a750efe25bbb4255c5bd9d9b28ff5b21af441194d44e128ce"}
 
 
 
