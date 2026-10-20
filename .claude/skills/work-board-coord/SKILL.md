@@ -14,6 +14,10 @@ Use its authenticated qualified installed caller, current protected enrollment a
 issues. This skill specializes coordination and persistence; it introduces no second scheduler,
 binding, enrollment route or operation authority.
 
+Inherit the canonical work-board Status lifecycle at every result, selection, dispatch and handoff
+boundary. Reconcile each Delivery before its parent Outcome; maintain Status with guarded native
+writes and verified readback. A read-only inspection or periodic sweep cannot replace those updates.
+
 The objective is accepted completion of every item in that scope. Recover existing owners,
 worktrees, PRs, attempts, pending replies and original effects before selecting work. Preserve each
 Outcome's whole promise, including publication, installed adoption and recovery. Execute enrolled

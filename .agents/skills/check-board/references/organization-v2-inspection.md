@@ -133,7 +133,9 @@ The read-only report itself acquires no reservation or authority and never dispa
 
 ## Planning and observation stay separate
 
-Status is owner planning intent: Backlog, Ready, In progress, In review, Blocked or Done. Keep Roadmap
+Status is owner-controlled current lifecycle state: Backlog, Ready, In progress, In review, Blocked or Done.
+The root integrator applies the mandatory [Status lifecycle](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/status-lifecycle.md) separately from this
+read-only inspection, with fresh preimages, preservation checks and verified native readback. Keep Roadmap
 and Track independent of Observation. Verified means healthy read coverage, never Ready or accepted.
 Surface Ready with unresolved prerequisites, ownerless In progress, superseded In review, unsupported
 Done and parents with incomplete required children. One slice's PR does not move its parent to In review.

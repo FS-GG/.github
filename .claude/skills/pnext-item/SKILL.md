@@ -32,8 +32,10 @@ For an admitted routine item, the board is an asynchronous view rather than merg
    confirmation worker, or phase chain.
 2. Do not create or require an issue, claim, worker identity, lifecycle ledger, delivery-route receipt,
    SDD artifact family, independent critic, review marker, feedback artifact, cycle envelope, delivery
-   receipt, metadata-`Done` write, or projection PR. Keep any existing native issue and its full acceptance; do not manufacture a new record.
-   Native closure and planning effects retain their own authorization and independent readback.
+   receipt or projection PR. Keep any existing native issue and its full acceptance; do not manufacture a new record.
+   Canonical work-board Status reconciliation is mandatory at its lifecycle boundaries, including after
+   dispatch and before return. The root integrator decides and verifies guarded native updates;
+   native closure and other planning effects retain their own authorization and independent readback.
 3. Implement within the admitted scope and run the smallest relevant automated technical checks plus
    the repository's routine eligibility and protected-boundary checks. Put exactly one
    `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` marker in
@@ -55,7 +57,8 @@ For an admitted routine item, the board is an asynchronous view rather than merg
    exact missing supplier and reopening condition; a partial merge is not completed Delivery acceptance.
 6. Return the accepted Delivery or concrete held remainder to work-board, which reconsiders suppliers,
    intake and opportunities and continues clearing. A direct single-item invocation ends at this boundary.
-   Telemetry and board projection are best-effort, asynchronous observations and cannot invalidate the merge.
+   Telemetry and Observation projection are best-effort, asynchronous observations and cannot invalidate
+   an accepted merge. They do not replace mandatory work-board Status reconciliation and readback.
 
 The routine route ends here. Do not execute the lifecycle, identity, claim, critique, receipt, feedback,
 or done-stamp instructions in the linked strict protocol for that item.
