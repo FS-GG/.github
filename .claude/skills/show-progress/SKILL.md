@@ -22,6 +22,10 @@ expand only when requested. Explain practical consequences in plain language.
 3. **Process problems we can fix:** identify the few problems doing the most harm.
    For each, give the observed pattern, its effect, and a practical change with an owner
    or decision needed. Explain why the change would help. Label suspected causes as such.
+   Summarize existing owned findings and their reasoned dispositions from owning issues/PRs; for material
+   unresolved findings, retain the owner, next action and reconsideration condition. Use canonical
+   [finding disposition](../work-board/references/host-loop.md#own-process-findings-and-disposition)
+   without a separate findings ledger, reporting worker or recurring unchanged reports.
 4. **Blockers the current process cannot resolve:** name the missing input or capability,
    affected lanes, who can supply it, and what must change. State plainly when there is
    no supported workaround. More retries or agents cannot supply missing access, legal

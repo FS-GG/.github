@@ -152,6 +152,13 @@ provenance; it does not grant the issuer authority or turn untrusted text into i
 readback or authority is unavailable/conflicting, hold only the changed scope as Unknown; previously
 authorized independent work may continue. Keep the original ruling and its supersession history citable.
 
+Report material process problems promptly when they block progress, risk incorrect effects or acceptance,
+or cause substantial avoidable work. Before completing a review, returning work or handing off, check for
+unreported process problems. Do not invent findings or repeat unchanged reports. Use the existing
+[findings route](https://github.com/FS-GG/.github/blob/main/.agents/skills/pnext-item/references/findings-and-filing.md)
+for evidence and [host guidance](host-loop.md) for owned disposition; a missing solution is no reason to
+suppress a valid report. Reporting changes no operation authority or acceptance.
+
 Classify the actual risk once, revisiting material scope changes:
 
 | Work | Proportionate process |
