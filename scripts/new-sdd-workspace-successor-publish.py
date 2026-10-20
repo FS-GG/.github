@@ -17,7 +17,7 @@ import time
 from release_successor_execution import Refused, advance_effects
 from release_successor_journal import ProtectedReleaseJournal
 from release_successor_provider import GitHubAPI
-from new_sdd_workspace_successor_admission import WizardAdmission
+from new_sdd_workspace_successor_admission import WizardAdmission, SourceCompatibility
 from new_sdd_workspace_successor_execution import effects, CURRENT_021
 from new_sdd_workspace_successor_provider import WizardProvider, publisher_error
 
@@ -147,11 +147,11 @@ def retain_summary(path, report, counted):
 def prepare_publication(primitives, journal, counted, admission, provider, api, intent,
                         ordered, publisher_sha, preflight_only, report):
     """Classify the complete physical destination before fresh or recovery work."""
+    require(SourceCompatibility(api).current(intent["sourceSha"], publisher_sha),
+            "Wizard determining source compatibility denied")
     fresh, physical = primitives.classify_journal_destination(counted, REF)
     report.update(fresh=fresh, classifiedPhysicalHead=physical)
     if fresh:
-        require(intent["sourceSha"] == publisher_sha,
-                "fresh Wizard publication requires exact current main candidate")
         for effect in ordered:
             require(provider.observe(effect).state == "absent",
                     "Wizard fresh publication has a preexisting or unreadable effect")
