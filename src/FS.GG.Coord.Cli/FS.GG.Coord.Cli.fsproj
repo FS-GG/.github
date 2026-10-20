@@ -130,7 +130,7 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.110.0 — Require current root-owned board Status at canonical lifecycle boundaries.
+    <PackageReleaseNotes>0.110.0 — Require current root-owned board Status at canonical lifecycle boundaries. Adds a finite read-only observer for one explicit original CI operation, preserving its identity, deadlines and remaining request/output budgets.
 Reconcile observed acceptance and blockers before selection, after dispatch and before handoff; Delivery decisions precede whole-parent Outcome decisions.
 Use the six existing statuses with guarded native preimages, preservation and verified readback; inspection stays read-only and Status grants no operation or closure authority.
 Kit and Drivers inherit the mandatory lifecycle. Source preparation is distinct from publication and installed adoption.
