@@ -26,6 +26,17 @@ type private Unchanged() =
             let body = if request.Path.Contains("/issues/") then issue elif request.Path.Contains("/pulls/") then pr elif request.Path.EndsWith("/jobs") then jobs else run
             Ok { Status = 200; Body = body; Headers = Map.empty; ETag = None; NextLink = None }
 
+let private completedTransport () =
+    { new IDeadlineSinglePageGitHubTransport with
+        member _.SendSingleWithin(request, _) =
+            let body =
+                if request.Path.Contains("/issues/") then issue
+                elif request.Path.Contains("/pulls/") then pr
+                elif request.Path.EndsWith("/jobs") then jobs
+                else run
+            let body = body.Replace("\"in_progress\"", "\"completed\"").Replace("\"conclusion\":null", "\"conclusion\":\"success\"")
+            Ok { Status = 200; Body = body; Headers = Map.empty; ETag = None; NextLink = None } }
+
 [<Fact>]
 let ``finite application coalesces unchanged ticks into one deadline result with retained spend`` () =
     let transport = Unchanged()
@@ -73,19 +84,46 @@ let ``corrupt missing unknown and duplicate cursor properties refuse before nati
 let ``late evidence or terminal persistence cannot emit completed observation`` () =
     let mutable now = 1000L
     let mutable saves = 0
-    let completed =
-        { new IDeadlineSinglePageGitHubTransport with
-            member _.SendSingleWithin(request, _) =
-                let body =
-                    if request.Path.Contains("/issues/") then issue
-                    elif request.Path.Contains("/pulls/") then pr
-                    elif request.Path.EndsWith("/jobs") then jobs
-                    else run
-                let body = body.Replace("\"in_progress\"", "\"completed\"").Replace("\"conclusion\":null", "\"conclusion\":\"success\"")
-                Ok { Status = 200; Body = body; Headers = Map.empty; ETag = None; NextLink = None } }
+    let completed = completedTransport()
     let result = OperationObservationApplication.observe completed (fun () -> now) ignore
                      (fun cursor -> saves <- saves + 1; if cursor.Evidence.IsSome then now <- cursor.Budget.WorkDeadline)
                      (fun _ -> "private-evidence", 10, (fun () -> ())) (original())
     match result with
     | ReturnAttention(_, Deadline, _) -> Assert.True(saves > 8)
     | other -> failwithf "late evidence accepted a positive result: %A" other
+
+[<Fact>]
+let ``crash before evidence custody leaves only charged nonterminal continuation`` () =
+    let mutable saved = original()
+    let mutable evidenceWrites = 0
+    let staged = ResizeArray<Cursor>()
+    let persist cursor = saved <- cursor; staged.Add cursor
+    Assert.Throws<InvalidOperationException>(fun () ->
+        OperationObservationApplication.observe (completedTransport()) (fun () -> 1000L) ignore persist
+            (fun _ -> "private-evidence", 10, (fun () ->
+                evidenceWrites <- evidenceWrites + 1
+                invalidOp "injected stop before evidence custody")) (original()) |> ignore) |> ignore
+    Assert.Equal(1, evidenceWrites)
+    Assert.True(staged |> Seq.forall (fun cursor -> cursor.Terminal <> Some Completed))
+    Assert.True(saved.Terminal.IsNone)
+    Assert.True(saved.Evidence.IsNone)
+    Assert.Equal(376, saved.Budget.RequestsRemaining)
+    Assert.Equal((original()).Budget.OutputBytesRemaining - 10, saved.Budget.OutputBytesRemaining)
+    let recovered = saved |> OperationObservationApplication.encodeCursor |> OperationObservationApplication.decodeCursor |> Result.defaultWith failwith
+    let resumed = resume identity "boot-domain" 1001L recovered |> Result.defaultWith failwith
+    match decide 1001L None resumed with
+    | ObserveOriginal _ -> ()
+    | other -> failwithf "pre-evidence crash left a replayable terminal: %A" other
+    let mutable evidenceRetained = false
+    let accepted = OperationObservationApplication.observe (completedTransport()) (fun () -> 1001L) ignore
+                       (fun cursor ->
+                           if cursor.Terminal = Some Completed then Assert.True(evidenceRetained && cursor.Evidence = Some "recovered-evidence")
+                           saved <- cursor)
+                       (fun _ -> "recovered-evidence", 10, (fun () -> evidenceRetained <- true)) resumed
+    match accepted with
+    | ReturnAttention(cursor, Completed, _) ->
+        Assert.True(evidenceRetained)
+        Assert.Equal(368, cursor.Budget.RequestsRemaining)
+        Assert.Equal((original()).Budget.WorkDeadline, cursor.Budget.WorkDeadline)
+        Assert.Equal(identity.Unknowns, cursor.Identity.Unknowns)
+    | other -> failwithf "fresh original observation did not establish custody: %A" other

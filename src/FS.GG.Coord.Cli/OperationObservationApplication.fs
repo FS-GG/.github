@@ -141,7 +141,9 @@ module OperationObservationApplication =
                             match chargeOutput bytes cursor with
                             | Error _ -> current <- cursor; stop BudgetExhausted
                             | Ok charged ->
-                                retain charged
+                                // A crash before evidence custody must resume native observation,
+                                // never replay a terminal result whose sample was not retained.
+                                retain { charged with Terminal = None; Evidence = None }
                                 if clock() >= charged.Budget.WorkDeadline then stop Deadline
                                 else
                                     write()
