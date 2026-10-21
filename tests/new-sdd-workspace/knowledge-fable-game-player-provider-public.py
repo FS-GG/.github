@@ -430,6 +430,9 @@ def boundary(root, archive, row):
         target = root / name
         require(target.is_file() and not target.is_symlink() and digest(target) == sha
                 and stat.S_IMODE(target.stat().st_mode) == 0o644, 'player-published-initial-file:' + name)
+    seed_path = root / '.fsgg/knowledge/records/project-knowledge.json'
+    require(seed_path.is_file() and not seed_path.is_symlink()
+            and stat.S_IMODE(seed_path.stat().st_mode) == 0o644, 'player-published-initial-seed-mode')
     require(canonical == ['.fsgg/knowledge/records/project-knowledge.json', '.fsgg/knowledge/schema.json']
             and V.exact_json(C.read_json(root / '.fsgg/knowledge/records/project-knowledge.json')) == V.exact_json(INITIAL_SEED),
             'player-published-initial-seed')
@@ -717,7 +720,9 @@ def source_controls():
                     target.write_bytes(raw);target.chmod(0o600)
                     with self.assertRaisesRegex(ValueError,'published-initial-file'):boundary(root,a,ROWS[0])
                     target.chmod(0o644)
-                target=root/'.fsgg/knowledge/records/project-knowledge.json';seed=json.loads(target.read_bytes());seed['Summary']='plausible but wrong';target.write_text(json.dumps(seed))
+                target=root/'.fsgg/knowledge/records/project-knowledge.json';target.chmod(0o600)
+                with self.assertRaisesRegex(ValueError,'published-initial-seed-mode'):boundary(root,a,ROWS[0])
+                target.chmod(0o644);seed=json.loads(target.read_bytes());seed['Summary']='plausible but wrong';target.write_text(json.dumps(seed))
                 with self.assertRaisesRegex(ValueError,'published-initial-seed'):boundary(root,a,ROWS[0])
 
         def test_actual_driver_two_auto_rows_caller_commit_precedes_probe(self):
