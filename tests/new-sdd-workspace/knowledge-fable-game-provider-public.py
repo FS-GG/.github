@@ -74,7 +74,7 @@ def descriptor_contract(path):
 def command(m, row, root):
     require(row in ROWS, 'unknown-provider-subject')
     argv = [m['sddExecutable'], 'scaffold', '--root', root, '--provider', 'fable-game',
-            '--no-update', '--json', '--param', 'productName=' + row['product'],
+            '--no-update', '--text', '--param', 'productName=' + row['product'],
             '--param', 'svgFoundation=false']
     return argv + (['--param', 'lifecycle=typed-sdd'] if row['explicit'] else [])
 
@@ -376,6 +376,9 @@ def source_controls():
             for row in ROWS:
                 argv=command({'sddExecutable':'/sdd'},row,Path('/fresh'))
                 self.assertEqual(argv[1],'scaffold');self.assertIn('svgFoundation=false',argv);self.assertNotIn('--force',argv)
+                # SDD2.2 defaults to JSON. Explicit text selects its compact
+                # supported renderer while disk/provenance remains authoritative.
+                self.assertEqual(argv.count('--text'),1);self.assertNotIn('--json',argv);self.assertNotIn('--rich',argv)
                 self.assertNotIn('bundle=', ' '.join(str(x) for x in argv));self.assertEqual('lifecycle=typed-sdd' in argv,row['explicit'])
             with self.assertRaisesRegex(ValueError,'unknown-provider'):command({'sddExecutable':'/sdd'},dict(ROWS[1],explicit=True),Path('/fresh'))
 
@@ -532,7 +535,7 @@ def source_controls():
                 with patch(__name__+'.validate',return_value=m),patch.object(P,'injected_runner',return_value=runner),patch.object(M,'env_for',return_value={}),patch.object(C,'registration',return_value={}),patch(__name__+'.boundary',return_value={'productFiles': []}),patch.object(M,'snapshot',return_value={}),patch.object(Path,'read_bytes',autospec=True,side_effect=lambda p:b'ignore' if p.name=='.gitignore' else original_read(p)),patch(__name__+'.initial',side_effect=start),patch(__name__+'.restore_tools') as restore,patch.object(P,'knowledge',side_effect=probe),patch.object(P,'preserved'),patch(__name__+'.hybrid_manifest'),patch.object(L,'packed_contract'),patch.object(P,'initialize',side_effect=AssertionError('standalone forbidden')):
                     result=qualify('/sealed','sha',runner_factory=lambda:None)
                     self.assertEqual(events,['initial','probe','initial','probe']);self.assertEqual(restore.call_count,2);self.assertTrue(all(r['knowledgeReady'] for r in result['rows']))
-                    creates=[c.args[0] for c in runner.call.call_args_list if c.args[0][1]=='scaffold'];self.assertEqual(len(creates),2);self.assertNotIn('lifecycle=typed-sdd',creates[1])
+                    creates=[c.args[0] for c in runner.call.call_args_list if c.args[0][1]=='scaffold'];self.assertEqual(len(creates),2);self.assertNotIn('lifecycle=typed-sdd',creates[1]);self.assertTrue(all('--text' in a and '--json' not in a and '--rich' not in a for a in creates))
 
         def test_actual_command_and_final_custody_dual_fault_keeps_primary(self):
             with tempfile.TemporaryDirectory() as td:
