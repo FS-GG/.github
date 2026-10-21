@@ -1110,3 +1110,45 @@ still select JSON. Filesystem, complete product inventory, provenance, initial G
 and knowledge assertions remain the qualification boundary, and the collector's
 stream limit is unchanged. A fresh operation needs separate root admission and
 new output roots; historical cleanup uncertainty is not released by this repair.
+
+
+### Published PLAYER Fable-game provider qualification — Delivery #4780
+
+The separate `knowledge-fable-game-player-provider-public.py` adapter selects the
+precedence100 current template in genuine published Workspace0.19.0 through
+published SDD2.2.0. Both rows omit the entire `svgFoundation` and `bundle` pairs;
+one supplies typed lifecycle and the other genuinely omits it. The immutable
+descriptor defaults both to typed SDD; the template defaults to PLAYER. Its full
+applicable inventory applies every selected package modifier and exact fixed
+ASCII name/namespace substitution, preserving all product bytes/modes except
+the authenticated tool-manifest merge, ignore composition, shell execute-bit
+promotion and product skill-manifest union. RAW creation is not substituted.
+
+The union preserves schema1 and every original product row, including the
+intentionally inactive `fable-bindings` declaration whose predicate excludes
+`fable-game`. The five applicable original skill payloads remain exact. Seventeen
+applicable additions come from the pinned genuine published Commands assembly:
+five drivers, five game skills, six rendering skills and one audio skill. Missing
+profile parameters exclude profile-only predicates; PLAYER excludes tactical,
+studio and complete-only predicates. Driver/game union rows use the published
+`always` projection; rendering/audio rows retain supplier and predicate. Each
+agent root must carry the exact union, matching amended-manifest provenance,
+and every selected supplier file with its exact bytes and mode. Because schema1
+has no per-file field, complete supplier file sets are verified independently
+against the compiled transport catalog; no whole-manifest ownership exemption
+is used. The published producer archive authenticates the pinned assembly.
+The exact21 seeded process skills are verified separately, with no namespace
+exemption. Complete published Foundation lifecycle literals, guide/schema bytes
+and semantic seed content are authenticated before the initial commit.
+
+The normal caller initial commit includes complete product, lifecycle, canonical,
+guide, CI/checker, pins, provenance and all supplier sidecars, using bounded Git
+object metadata for large blobs. The existing finite injected runner and complete
+knowledge ports then exercise capture/retrieval/history, preservation/refusals,
+private exclusion, ALL-shared export/lossless restore, distinct Git recovery and
+the ordinary pinned checker at exactly10,485,760 and10,485,761 canonical bytes.
+Pure causal controls run in the existing hosted selftest. Source readiness does
+not establish actual receiver acceptance: both genuine receivers need separate
+root runtime admission, original deadline, custody, qualified cleanup and
+independent result acceptance. Other parent4642 routes, product/browser/WASM
+acceptance, retained upgrades and historical failures/Unknowns remain separate.
