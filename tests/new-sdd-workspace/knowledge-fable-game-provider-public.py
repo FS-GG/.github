@@ -6,6 +6,7 @@ existing source-bound finite runner; no RAW initialization or Wizard substitute.
 """
 from __future__ import annotations
 import argparse
+import fnmatch
 import hashlib
 import json
 import os
@@ -46,6 +47,10 @@ P, M, C = L.P, L.M, L.C
 PACKAGES = dict(L.PACKAGES, coord=C.PACKAGES['coord'])
 TOP_KEYS = L.TOP_KEYS | {'providerDescriptor'}
 PINS = dict(P.PINS, **{'fs.gg.coord.cli': '0.94.0'})
+LIFECYCLE_FILES = ('.fsgg/project.yml', '.fsgg/sdd.yml', '.fsgg/agents.yml',
+                   '.fsgg/governance-resolution.proj', '.fsgg/constitution.md',
+                   '.fsgg/early-stage-guidance.md', 'AGENTS.md', 'CLAUDE.md')
+LIFECYCLE_DIRS = ('work', 'readiness')
 OWNED_TOOLS = {'fs.gg.sdd.cli': {'version': '2.2.0', 'commands': ['fsgg-sdd']},
                'fs.gg.coord.cli': {'version': '0.94.0', 'commands': ['fsgg-coord-engine']}}
 
@@ -96,6 +101,45 @@ def rendered_owner(raw, product):
         b'FableGameWorkspace', product.encode()).replace(b'fablegameworkspace', product.lower().encode())
 
 
+def matches_glob(name, pattern):
+    # Template globs match path segments; ** also matches zero directories.
+    def match(parts, patterns):
+        if not patterns: return not parts
+        if patterns[0] == '**':
+            return match(parts, patterns[1:]) or bool(parts and match(parts[1:], patterns))
+        return bool(parts and fnmatch.fnmatchcase(parts[0], patterns[0])
+                    and match(parts[1:], patterns[1:]))
+    return match(name.split('/'), pattern.split('/'))
+
+
+def product_inventory(archive, row):
+    # L.packed_contract authenticates this exact public selector/config. Both
+    # provider rows resolve typed-sdd, svgFoundation=false; no other modifiers
+    # or engine/rendering variants are inferred here.
+    with zipfile.ZipFile(archive) as z:
+        config = json.loads(z.read(L.PREFIX + '.template.config/template.json'))
+        source, = config['sources']
+        require(source['source'] == './' and source['target'] == './', 'provider-product-source-mapping')
+        excludes = source['exclude'] + next(m['exclude'] for m in source['modifiers']
+                                            if m['condition'] == '(svgFoundation == false)')
+        inventory, excluded = {}, []
+        members = [i for i in z.infolist() if i.filename.startswith(L.PREFIX) and not i.is_dir()]
+        require(len({i.filename for i in members}) == len(members), 'provider-product-duplicate-member')
+        for info in members:
+            name = info.filename[len(L.PREFIX):]
+            require(not Path(name).is_absolute() and '..' not in Path(name).parts, 'provider-product-package-path')
+            target = rendered_owner(name.encode(), row['product']).decode()
+            if any(matches_glob(name, pattern) for pattern in excludes):
+                excluded.append(target)
+                continue
+            mode = (info.external_attr >> 16) & 0o777
+            require(mode == 0o644, 'provider-public-product-mode-contract:' + name)
+            require(target not in inventory, 'provider-product-substitution-collision')
+            inventory[target] = (rendered_owner(z.read(info), row['product']), mode)
+        require(set(L.OWNER_FILES) <= set(inventory), 'provider-positive-owner-inventory')
+        return inventory, excluded
+
+
 def boundary(root, archive, row):
     require(row in ROWS, 'unknown-provider-subject')
     original = L.packed_contract(archive)
@@ -103,18 +147,21 @@ def boundary(root, archive, row):
     require(all((root / name).is_file() for name in L.OWNER_FILES), 'provider-positive-owner-assets')
     require(all(not (root / name).exists() for name in L.EXCLUDED), 'provider-excluded-svg-models')
     M.assets(root, archive, L.PREFIX)
-    with zipfile.ZipFile(archive) as z:
-        owner = {}
-        for name in L.OWNER_FILES:
-            if name in ('.config/dotnet-tools.json', '.gitignore'): continue
-            raw = rendered_owner(z.read(L.PREFIX + name), row['product'])
-            require((root / name).read_bytes() == raw, 'provider-original-product-bytes:' + name)
-            require(stat.S_IMODE((root / name).stat().st_mode) == 0o644, 'provider-product-mode:' + name)
+    inventory, excluded = product_inventory(archive, row)
+    require(all(not (root / name).exists() for name in excluded), 'provider-excluded-package-file')
+    owner = {}
+    for name, (raw, mode) in inventory.items():
+        target = root / name
+        require(target.is_file() and not target.is_symlink(), 'provider-product-file:' + name)
+        require(stat.S_IMODE(target.stat().st_mode) == mode, 'provider-product-mode:' + name)
+        if name == '.config/dotnet-tools.json': continue
+        if name == '.gitignore':
+            segment = raw
+            require(target.read_bytes() == IGNORE_PREFIX + segment + IGNORE_SUFFIX,
+                    'provider-owner-ignore-segment')
+        else:
+            require(target.read_bytes() == raw, 'provider-original-product-bytes:' + name)
             owner[name] = hashlib.sha256(raw).hexdigest()
-        segment = z.read(L.PREFIX + '.gitignore')
-        ignore = (root / '.gitignore').read_bytes()
-        require(ignore == IGNORE_PREFIX + segment + IGNORE_SUFFIX
-                and stat.S_IMODE((root / '.gitignore').stat().st_mode) == 0o644, 'provider-owner-ignore-segment')
     provenance = C.read_json(root / '.fsgg/scaffold-provenance.json')
     pairs = provenance['effectiveParameters']
     require(len({p['key'] for p in pairs}) == len(pairs), 'provider-effective-duplicates')
@@ -138,19 +185,23 @@ def boundary(root, archive, row):
     canonical = sorted(p.relative_to(root).as_posix() for p in (root / '.fsgg/knowledge').rglob('*') if p.is_file())
     require('.fsgg/knowledge/schema.json' in canonical and any('/records/' in p for p in canonical)
             and (root / '.fsgg/knowledge-guide.md').stat().st_size > 0
-            and (root / 'sdd').is_dir(), 'provider-automatic-typed-knowledge')
+            and all((root / name).is_file() and (root / name).stat().st_size > 0
+                    for name in LIFECYCLE_FILES)
+            and all((root / name).is_dir() for name in LIFECYCLE_DIRS),
+            'provider-automatic-typed-knowledge')
     return dict(effectiveParameters=effective, lifecycleOmitted=not row['explicit'], knowledgeReady=True,
                 automaticInitialization=True, standaloneInitializeInvoked=False, ownerAssets=owner,
                 productIgnoreSegmentSha256=hashlib.sha256(segment).hexdigest(), manifest=manifest,
-                canonicalFiles=canonical, skills=skills, provenanceSha256=digest(root / '.fsgg/scaffold-provenance.json'))
+                canonicalFiles=canonical, lifecycleFiles=list(LIFECYCLE_FILES),
+                productFiles=sorted(inventory), excludedProductFiles=sorted(excluded), skills=skills, provenanceSha256=digest(root / '.fsgg/scaffold-provenance.json'))
 
 
 def initial(runner, root, archive, row, observed):
     M.ensure_git(runner, root)
     require(not runner.git(root, 'rev-list', '--all'), 'provider-background-initial-commit')
     before = M.snapshot(root)
-    required = sorted(set(observed['canonicalFiles'] + list(L.OWNER_FILES) + list(M.CI_FILES)
-                          + list(observed['skills']) + [name for name in before if name.startswith('sdd/')] + ['.fsgg/knowledge-guide.md', '.fsgg/providers.yml',
+    required = sorted(set(observed['canonicalFiles'] + observed['productFiles'] + observed['lifecycleFiles'] + list(M.CI_FILES)
+                          + list(observed['skills']) + ['.fsgg/knowledge-guide.md', '.fsgg/providers.yml',
                                                        '.fsgg/scaffold-provenance.json']))
     cache = root / '.fsgg/cache/provider-control.json'; cache.parent.mkdir(parents=True, exist_ok=True); cache.write_text('{}')
     head = M.commit(runner, root, 'Initial public provider typed knowledge workspace')
@@ -244,7 +295,7 @@ def qualify(path, expected_sha, *, runner_factory=None):
             runner.call(command(m, row, root), cwd=case)
             entry['registration'] = C.registration(case, '0.19.0', PACKAGES['workspace'][3])
             entry['provider'] = boundary(root, m['packages']['workspace']['archive'], row)
-            before = {k: v for k, v in M.snapshot(root).items() if k in L.OWNER_FILES}
+            before = {k: v for k, v in M.snapshot(root).items() if k in entry['provider']['productFiles']}
             ignore = (root / '.gitignore').read_bytes()
             entry['initial'] = initial(runner, root, m['packages']['workspace']['archive'], row, entry['provider']); save()
             restore_tools(runner, m, root, config)
@@ -268,24 +319,42 @@ def qualify(path, expected_sha, *, runner_factory=None):
 def source_controls():
     class Controls(unittest.TestCase):
         def fixture(self, td, row=ROWS[0]):
+            # Synthetic package/lifecycle controls for the immutable public shape;
+            # these fixtures never stand in for actual provider acceptance.
             root = Path(td) / 'product'; root.mkdir()
             original = {'version': 1, 'isRoot': True, 'x-root': {'bool': False, 'n': 1}, 'tools': {
                 'fable': {'version': '5.18.0', 'commands': ['fable'], 'x-owner': [False, 1, 'x']},
                 'fantomas': {'version': '8.0.5', 'commands': ['fantomas'], 'rollForward': False}}}
             archive = Path(td) / 'fixture.nupkg'
             with zipfile.ZipFile(archive, 'w') as z:
-                for name in L.OWNER_FILES:
+                def put(name, raw):
+                    info = zipfile.ZipInfo(L.PREFIX + name);info.external_attr = (stat.S_IFREG | 0o644) << 16
+                    z.writestr(info, raw)
+                config = {'sources': [{'source': './', 'target': './',
+                    'exclude': ['**/.template.config/**', 'PortalExample/**', 'Browser.Tests/wasm-policy.spec.ts'],
+                    'modifiers': [{'condition': '(svgFoundation == false)', 'exclude': [
+                        'SvgFoundation/**', 'models/**', 'Conformance/GeneratedArenaRuleModel.fs',
+                        'Conformance/GeneratedTacticalRuleModel.fs']}]}]}
+                put('.template.config/template.json', json.dumps(config))
+                names = (*L.OWNER_FILES, 'Client/Api.fs', 'Client/Movement.fs', 'Protocol/Http.fs',
+                         'README.md', 'FableGameWorkspace.slnx', 'deploy/run-local.sh',
+                         'SvgFoundation/Program.fs', 'models/rules.qnt',
+                         'PortalExample/README.md', 'Browser.Tests/wasm-policy.spec.ts')
+                for name in names:
                     raw = json.dumps(original).encode() if name == '.config/dotnet-tools.json' else b'owner-ignore\n' if name=='.gitignore' else ('owner '+name+' FableGameWorkspaceNamespace').encode()
-                    z.writestr(L.PREFIX+name,raw)
-                    path=root/name;path.parent.mkdir(parents=True,exist_ok=True)
+                    put(name,raw)
+                    if any(matches_glob(name, pattern) for pattern in config['sources'][0]['exclude'] + config['sources'][0]['modifiers'][0]['exclude']): continue
+                    path=root/rendered_owner(name.encode(),row['product']).decode();path.parent.mkdir(parents=True,exist_ok=True)
                     path.write_bytes(rendered_owner(raw,row['product']));path.chmod(0o644)
                 for name in M.CI_FILES:
-                    z.writestr(L.PREFIX+name,b'central CI');p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b'central CI')
+                    put(name,b'central CI');p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b'central CI')
             (root/'.config/dotnet-tools.json').write_text(json.dumps(dict(original,tools=dict(original['tools'],**OWNED_TOOLS)),indent=4))
             (root/'.gitignore').write_bytes(IGNORE_PREFIX + b'owner-ignore\n' + IGNORE_SUFFIX)
             for name in ('.fsgg/knowledge/schema.json','.fsgg/knowledge/records/seed.json','.fsgg/knowledge-guide.md','.agents/skills/game-testing/SKILL.md','.fsgg/providers.yml'):
                 p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('{}')
-            (root/'sdd').mkdir()
+            for name in LIFECYCLE_FILES:
+                p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('synthetic lifecycle fixture')
+            for name in LIFECYCLE_DIRS: (root/name).mkdir()
             provenance={'providerName':'fable-game','templateRef':'fs-gg-fable-game','effectiveParameters':[{'key':k,'value':v} for k,v in {'productName':row['product'],'svgFoundation':'false','lifecycle':'typed-sdd'}.items()], 'sddOwnedPaths':[], 'producedPaths':[{'path':'.agents/skills/game-testing/SKILL.md','sha256':digest(root/'.agents/skills/game-testing/SKILL.md')}]}
             (root/'.fsgg/scaffold-provenance.json').write_text(json.dumps(provenance))
             return root,archive,original,provenance
@@ -331,7 +400,8 @@ def source_controls():
             with tempfile.TemporaryDirectory() as td:
                 root,archive,original,prov=self.fixture(td)
                 with patch.object(L,'packed_contract',return_value=original):
-                    for name in ('Domain/ArenaRules.fs','.gitignore',M.CI_FILES[0]):
+                    for name in ('Domain/ArenaRules.fs','Client/Api.fs','Client/Movement.fs','Protocol/Http.fs',
+                                 'README.md', ROWS[0]['product']+'.slnx', 'deploy/run-local.sh', '.gitignore',M.CI_FILES[0]):
                         path=root/name;raw=path.read_bytes();path.write_bytes(b'changed')
                         with self.assertRaises(ValueError):boundary(root,archive,ROWS[0])
                         path.write_bytes(raw)
@@ -339,6 +409,48 @@ def source_controls():
                     with self.assertRaisesRegex(ValueError,'product-mode'):boundary(root,archive,ROWS[0])
                     path.chmod(0o644);(root/'models').mkdir()
                     with self.assertRaisesRegex(ValueError,'excluded-svg'):boundary(root,archive,ROWS[0])
+
+        def test_real_lifecycle_artifact_deletions_and_no_invented_sdd_tree(self):
+            with tempfile.TemporaryDirectory() as td:
+                root,archive,original,_=self.fixture(td)
+                with patch.object(L,'packed_contract',return_value=original):
+                    self.assertFalse((root/'sdd').exists())
+                    self.assertEqual(boundary(root,archive,ROWS[0])['lifecycleFiles'],list(LIFECYCLE_FILES))
+                    for name in LIFECYCLE_FILES:
+                        p=root/name;raw=p.read_bytes();p.unlink()
+                        with self.assertRaisesRegex(ValueError,'automatic-typed-knowledge'):boundary(root,archive,ROWS[0])
+                        p.write_bytes(raw)
+                    for name in LIFECYCLE_DIRS:
+                        p=root/name;p.rmdir()
+                        with self.assertRaisesRegex(ValueError,'automatic-typed-knowledge'):boundary(root,archive,ROWS[0])
+                        p.mkdir()
+
+        def test_complete_inventory_exclusions_rename_missing_and_unhashed_provenance(self):
+            with tempfile.TemporaryDirectory() as td:
+                root,archive,original,prov=self.fixture(td)
+                inventory,excluded=product_inventory(archive,ROWS[0])
+                self.assertIn(ROWS[0]['product']+'.slnx',inventory)
+                self.assertNotIn('FableGameWorkspace.slnx',inventory)
+                self.assertTrue({'Client/Api.fs','Client/Movement.fs','Protocol/Http.fs','README.md'} <= set(inventory))
+                prov['producedPaths'].append({'path':'Client/Api.fs'})
+                (root/'.fsgg/scaffold-provenance.json').write_text(json.dumps(prov))
+                with patch.object(L,'packed_contract',return_value=original):
+                    boundary(root,archive,ROWS[0])
+                    for name in excluded:
+                        p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('excluded')
+                        with self.assertRaisesRegex(ValueError,'excluded-'):boundary(root,archive,ROWS[0])
+                        p.unlink()
+                        parent=p.parent
+                        while parent != root and not any(parent.iterdir()):
+                            parent.rmdir();parent=parent.parent
+                    for name in inventory:
+                        p=root/name;raw=p.read_bytes();p.unlink()
+                        with self.assertRaises((ValueError,FileNotFoundError)):boundary(root,archive,ROWS[0])
+                        p.write_bytes(raw);p.chmod(0o600)
+                        with self.assertRaises(ValueError):boundary(root,archive,ROWS[0])
+                        p.chmod(0o644)
+                    p=root/'Client/Api.fs';p.write_text('unhashed tamper')
+                    with self.assertRaisesRegex(ValueError,'original-product-bytes:Client/Api.fs'):boundary(root,archive,ROWS[0])
 
         def test_provenance_ownership_effective_selection_and_skill_digests(self):
             with tempfile.TemporaryDirectory() as td:
@@ -356,7 +468,7 @@ def source_controls():
                 runner.git.side_effect=lambda root,*a:'' if a[0]=='rev-list' else allfiles()
                 runner.run.side_effect=lambda a,**k:types.SimpleNamespace(stdout=(root/a[-1].split(':',1)[1]).read_bytes())
                 with patch.object(M,'ensure_git'),patch.object(M,'commit',return_value='caller'):
-                    result=initial(runner,root,archive,ROWS[0],observed);self.assertIn('.fsgg/scaffold-provenance.json',result['committedAssets']);self.assertIn('.fsgg/knowledge/schema.json',result['committedAssets'])
+                    result=initial(runner,root,archive,ROWS[0],observed);self.assertIn('.fsgg/scaffold-provenance.json',result['committedAssets']);self.assertIn('.fsgg/knowledge/schema.json',result['committedAssets']);self.assertTrue(set(LIFECYCLE_FILES) <= set(result['committedAssets']));self.assertIn('Client/Api.fs',result['committedAssets'])
                     runner.run.side_effect=None;runner.run.return_value.stdout=b'wrong'
                     with self.assertRaisesRegex(ValueError,'initial-owner-blob'):initial(runner,root,archive,ROWS[0],observed)
 
@@ -368,7 +480,7 @@ def source_controls():
                 def start(*a):events.append('initial');return {'commit':'caller'}
                 def probe(*a):self.assertEqual(events[-1],'initial');events.append('probe');return {'probe':{'probeSetupCommit':'separate'}}
                 original_read=Path.read_bytes
-                with patch(__name__+'.validate',return_value=m),patch.object(P,'injected_runner',return_value=runner),patch.object(M,'env_for',return_value={}),patch.object(C,'registration',return_value={}),patch(__name__+'.boundary',return_value={}),patch.object(M,'snapshot',return_value={}),patch.object(Path,'read_bytes',autospec=True,side_effect=lambda p:b'ignore' if p.name=='.gitignore' else original_read(p)),patch(__name__+'.initial',side_effect=start),patch(__name__+'.restore_tools') as restore,patch.object(P,'knowledge',side_effect=probe),patch.object(P,'preserved'),patch(__name__+'.hybrid_manifest'),patch.object(L,'packed_contract'),patch.object(P,'initialize',side_effect=AssertionError('standalone forbidden')):
+                with patch(__name__+'.validate',return_value=m),patch.object(P,'injected_runner',return_value=runner),patch.object(M,'env_for',return_value={}),patch.object(C,'registration',return_value={}),patch(__name__+'.boundary',return_value={'productFiles': []}),patch.object(M,'snapshot',return_value={}),patch.object(Path,'read_bytes',autospec=True,side_effect=lambda p:b'ignore' if p.name=='.gitignore' else original_read(p)),patch(__name__+'.initial',side_effect=start),patch(__name__+'.restore_tools') as restore,patch.object(P,'knowledge',side_effect=probe),patch.object(P,'preserved'),patch(__name__+'.hybrid_manifest'),patch.object(L,'packed_contract'),patch.object(P,'initialize',side_effect=AssertionError('standalone forbidden')):
                     result=qualify('/sealed','sha',runner_factory=lambda:None)
                     self.assertEqual(events,['initial','probe','initial','probe']);self.assertEqual(restore.call_count,2);self.assertTrue(all(r['knowledgeReady'] for r in result['rows']))
                     creates=[c.args[0] for c in runner.call.call_args_list if c.args[0][1]=='scaffold'];self.assertEqual(len(creates),2);self.assertNotIn('lifecycle=typed-sdd',creates[1])
