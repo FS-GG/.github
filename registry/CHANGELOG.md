@@ -1,5 +1,15 @@
 # Registry changelog
 
+## 2026-10-21 — prospective independent Host0.8 source (#4707)
+
+Advance only Host source to0.8.0 to package the accepted unassigned-usage dashboard
+and qualify its corrected private display in the installed-package browser. Published
+package-version/tag stay0.7.0. New journal14 and version/tag are prospective source
+coordinates; org-feed occupancy remains Unknown after authenticated403 responses.
+Fresh authoritative absence, candidate qualification and publication are still required.
+Preserve0.7/journal13, held0.6/journal12 and the unchanged Store14/receipt ABI. Home
+cutover, genuine receipt4705 and actual provider-to-browser acceptance remain separate.
+
 ## 2026-10-19 — board lifecycle publications accepted (#4701/#4712)
 
 Publish coherent109 from original0d85830e through39317658813: all16effects/final33,

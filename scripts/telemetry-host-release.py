@@ -77,7 +77,7 @@ def tree_digest(root: pathlib.Path) -> str:
 def store_schema_profile(version: str) -> tuple[int, int]:
     # The current release advertises only its selected operational schema. Legacy
     # artifact inspection retains its original profile; this grants no migration.
-    return (14, 14) if version in {"0.5.0", "0.6.0", "0.7.0"} else (10, 12)
+    return (14, 14) if version in {"0.5.0", "0.6.0", "0.7.0", "0.8.0"} else (10, 12)
 
 
 def build_manifest(args: argparse.Namespace) -> dict:

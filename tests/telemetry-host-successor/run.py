@@ -31,7 +31,7 @@ from telemetry_host_successor_provider import HostProvider, NotFound
 def manifest():
     return {
         "schema": "fsgg.telemetry.host-release/1", "packageId": "FS.GG.Telemetry.Host",
-        "version": "0.7.0", "tag": "telemetry-host/v0.7.0", "sourceSha": "a" * 40,
+        "version": "0.8.0", "tag": "telemetry-host/v0.8.0", "sourceSha": "a" * 40,
         "archiveSha256": "b" * 64, "producerPayloadSha256": "sha256:" + "c" * 64,
     }
 
@@ -46,7 +46,7 @@ class StoreProfileTests(unittest.TestCase):
             package = root / "fixture.nupkg"
             with zipfile.ZipFile(package, "w") as archive:
                 archive.writestr("FS.GG.Telemetry.Host.nuspec",
-                                 "<package><metadata><id>FS.GG.Telemetry.Host</id><version>0.7.0</version></metadata></package>")
+                                 "<package><metadata><id>FS.GG.Telemetry.Host</id><version>0.8.0</version></metadata></package>")
                 archive.writestr("tools/net10.0/linux-x64/FS.GG.Telemetry.Host.dll", b"fixture")
             lock = root / "lock.json"
             lock.write_text("{}")
@@ -54,21 +54,22 @@ class StoreProfileTests(unittest.TestCase):
             assets.mkdir()
             (assets / "app.js").write_text("fixture")
             prepared = module.build_manifest(SimpleNamespace(package=package, lock=lock, assets=assets,
-                                             version="0.7.0", tag="telemetry-host/v0.7.0", source_sha="a" * 40))
+                                             version="0.8.0", tag="telemetry-host/v0.8.0", source_sha="a" * 40))
             self.assertEqual((prepared["supportedStoreSchemaMin"], prepared["supportedStoreSchemaMax"]), (14, 14))
-            self.assertEqual(prepared["version"], "0.7.0")
+            self.assertEqual(prepared["version"], "0.8.0")
             # Renaming a retained older package cannot become a new genuine candidate.
             with zipfile.ZipFile(root / "renamed-old.nupkg", "w") as archive:
                 archive.writestr("FS.GG.Telemetry.Host.nuspec", "<package><metadata><id>FS.GG.Telemetry.Host</id><version>0.6.0</version></metadata></package>")
                 archive.writestr("tools/net10.0/linux-x64/FS.GG.Telemetry.Host.dll", b"older fixture")
             with self.assertRaisesRegex(ValueError, "package identity"):
                 module.build_manifest(SimpleNamespace(package=root / "renamed-old.nupkg", lock=lock, assets=assets,
-                    version="0.7.0", tag="telemetry-host/v0.7.0", source_sha="a" * 40))
+                    version="0.8.0", tag="telemetry-host/v0.8.0", source_sha="a" * 40))
 
     def test_current_profile_is_schema14_only_and_legacy_artifact_stays_unchanged(self):
         spec = importlib.util.spec_from_file_location("host_release_profile", ROOT / "scripts/telemetry-host-release.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        self.assertEqual(module.store_schema_profile("0.8.0"), (14, 14))
         self.assertEqual(module.store_schema_profile("0.7.0"), (14, 14))
         self.assertEqual(module.store_schema_profile("0.6.0"), (14, 14))
         self.assertEqual(module.store_schema_profile("0.5.0"), (14, 14))
@@ -92,18 +93,23 @@ class StoreProfileTests(unittest.TestCase):
                    "supportedStoreSchemaMin": 10, "supportedStoreSchemaMax": 12}
             path.write_text(json.dumps(old))
             self.assertEqual(module.load_manifest(path), old)
-            with self.assertRaisesRegex(Refused, "exact Host 0.7.0"):
+            with self.assertRaisesRegex(Refused, "exact Host 0.8.0"):
                 effects(old)
             previous = {**value, "version": "0.5.0", "tag": "telemetry-host/v0.5.0"}
             path.write_text(json.dumps(previous))
             self.assertEqual(module.load_manifest(path), previous)
-            with self.assertRaisesRegex(Refused, "exact Host 0.7.0"):
+            with self.assertRaisesRegex(Refused, "exact Host 0.8.0"):
                 effects(previous)
             held = {**value, "version": "0.6.0", "tag": "telemetry-host/v0.6.0"}
             path.write_text(json.dumps(held))
             self.assertEqual(module.load_manifest(path), held)
-            with self.assertRaisesRegex(Refused, "exact Host 0.7.0"):
+            with self.assertRaisesRegex(Refused, "exact Host 0.8.0"):
                 effects(held)
+            published = {**value, "version": "0.7.0", "tag": "telemetry-host/v0.7.0"}
+            path.write_text(json.dumps(published))
+            self.assertEqual(module.load_manifest(path), published)
+            with self.assertRaisesRegex(Refused, "exact Host 0.8.0"):
+                effects(published)
 
 
 class EarlyQualificationTests(unittest.TestCase):
@@ -118,6 +124,7 @@ class EarlyQualificationTests(unittest.TestCase):
             assert 'Retain passive Host HTTP diagnostics' in source and 'always()' in source
             assert 'retention-days: 7' in source and 'continue-on-error:' not in source
             assert 'dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj -c Release --no-restore\n' in source
+            assert '(cd tests/FS.GG.Telemetry.Dashboard.Tests && npm ci --ignore-scripts && npm run test:browser -- --reporter=line)' in source
             assert 'e["passiveReceiptQualified"] is True' in source
             if native:
                 assert 'if: ${{ !(inputs.learn_native_fixture || inputs.learn_native_preflight) }}' in source
@@ -131,6 +138,7 @@ class EarlyQualificationTests(unittest.TestCase):
                            source.replace('host-passive.trx" --minimum 4', 'host-passive.trx" --minimum 0'),
                            source.replace('python3 tests/telemetry-host-successor/run.py', 'echo absent'),
                            source.replace('always()', 'success()'),
+                           source.replace('npm run test:browser -- --reporter=line', 'echo browser-not-run'),
                            source.replace('e["passiveReceiptQualified"] is True', 'True')]:
                 with self.assertRaises((AssertionError, ValueError)):
                     check(mutant, expensive, native)
@@ -168,27 +176,74 @@ class InstalledPassiveInputTests(unittest.TestCase):
             self.assertNotEqual(bad, block)
             self.assertNotEqual(identity(bad, root / "bad.json"), expected)
 
-    def test_actual_browser_receipt_check_preserves_old_profile_and_exact_correction_count(self):
-        # Execute the maintained script with a page double: no browser or network is launched.
+    @staticmethod
+    def passive_snapshot():
+        return {"schema": "fsgg.telemetry.private-dashboard/3", "unassignedUsage": {
+            "schema": "fsgg.telemetry.unassigned-usage/1", "populationCoverage": "partial",
+            "attribution": "unknown", "cost": "unknown", "counterEncoding": "decimal-int64",
+            "limit": 256, "truncated": False, "observations": [{
+                "ordinal": 1, "revision": "2", "capturedAt": "2026-10-18T12:00:00Z",
+                "occurredAt": None, "receivedAt": "2026-10-18T12:00:01Z", "input": "20",
+                "cachedInput": None, "cacheWriteInput": "3", "output": "2", "reasoning": None,
+                "total": "22"}]}}
+
+    def browser_result(self, snapshot, applied=2, rejected=0, expected="2", text_changes=None):
+        # Execute the maintained assertion script with a page double, never a browser or network.
+        texts = {
+            "#health": f"0 pending receipts · {applied} applied receipts · {rejected} rejected receipts · consistent",
+            "#unassigned-rows h3": "Observation 1 · revision 2",
+            "#unassigned-rows .passive-total": "Observed total: 22",
+            "#unassigned-rows": "Input 20 · cached input unknown · cache writes 3 · output 2 · reasoning unknown",
+            "#unassigned-status": "1 displayed observations · partial population coverage · item attribution and billed cost: unknown. Counters are shown per observation without a combined total.",
+            "body": "private fixture dashboard"}
+        texts.update(text_changes or {})
         with tempfile.TemporaryDirectory() as temporary:
             mock = pathlib.Path(temporary) / "playwright.js"
-            for applied, rejected, expected, success in [
-                (1, 0, None, True), (2, 0, "2", True),
-                (1, 0, "2", False), (2, 0, None, False),
-                (12, 0, "2", False), (2, 1, "2", False),
-                (2, 2, "2", False), (0, 0, "2", False),
-                (2, 0, "0", False), (2, 0, "invalid", False)]:
-                with self.subTest(applied=applied, rejected=rejected, expected=expected):
-                    health = f"0 pending receipts · {applied} applied receipts · {rejected} rejected receipts · consistent"
-                    mock.write_text("const control={fill:async()=>{},click:async()=>{},waitFor:async()=>{},innerText:async()=>" + json.dumps(health) + "};\n"
-                                    "const page={goto:async()=>({status:()=>200}),locator:()=>control,getByRole:()=>({filter:()=>control,...control})};\n"
-                                    "module.exports={chromium:{launch:async()=>({newPage:async()=>page,close:async()=>{}})}};\n")
-                    args = ["node", str(ROOT / "tests/standalone-telemetry-host-package/installed-browser.js"), str(mock),
-                            "https://fixture.invalid", "fixture-principal", "fixture-key", "fixture-workspace", "fixture-item", "fixture-spki"]
-                    if expected is not None:
-                        args.append(expected)
-                    result = subprocess.run(args, capture_output=True, text=True, timeout=10)
-                    self.assertEqual(success, result.returncode == 0, result.stderr)
+            mock.write_text("const texts=" + json.dumps(texts) + ";const snapshot=" + json.dumps(snapshot) + ";\n" +
+                "const control=selector=>({fill:async()=>{},click:async()=>{},waitFor:async()=>{},count:async()=>1,innerText:async()=>texts[selector]});\n"
+                "const response={url:()=>\"https://fixture.invalid/private/dashboard/snapshot\",request:()=>({method:()=>\"POST\"}),status:()=>200,json:async()=>snapshot};\n"
+                "const page={goto:async()=>({status:()=>200}),locator:control,getByRole:()=>({filter:()=>control(\"\"),...control(\"\")}),waitForResponse:async predicate=>{if(!predicate(response))throw Error(\"snapshot predicate rejected actual route\");return response;}};\n"
+                "module.exports={chromium:{launch:async()=>({newPage:async()=>page,close:async()=>{}})}};\n")
+            args = ["node", str(ROOT / "tests/standalone-telemetry-host-package/installed-browser.js"), str(mock),
+                    "https://fixture.invalid", "fixture-principal", "fixture-key", "fixture-workspace", "fixture-item", "fixture-spki"]
+            if expected is not None:
+                args.append(expected)
+            return subprocess.run(args, capture_output=True, text=True, timeout=10)
+
+    def test_actual_browser_receipt_check_preserves_old_profile_and_exact_correction_count(self):
+        for applied, rejected, expected, success in [
+            (1, 0, None, True), (2, 0, "2", True),
+            (1, 0, "2", False), (2, 0, None, False),
+            (12, 0, "2", False), (2, 1, "2", False),
+            (2, 2, "2", False), (0, 0, "2", False),
+            (2, 0, "0", False), (2, 0, "invalid", False)]:
+            with self.subTest(applied=applied, rejected=rejected, expected=expected):
+                result = self.browser_result(self.passive_snapshot(), applied, rejected, expected)
+                self.assertEqual(success, result.returncode == 0, result.stderr)
+
+    def test_installed_browser_requires_corrected_private_projection_and_rendered_facts(self):
+        good = self.passive_snapshot()
+        self.assertEqual(0, self.browser_result(good).returncode)
+        mutations = [
+            lambda value: value.update(schema="fsgg.telemetry.private-dashboard/2"),
+            lambda value: value["unassignedUsage"].update(cost="0"),
+            lambda value: value["unassignedUsage"].update(populationCoverage="complete"),
+            lambda value: value["unassignedUsage"]["observations"][0].update(revision="1"),
+            lambda value: value["unassignedUsage"]["observations"][0].update(total=22),
+            lambda value: value["unassignedUsage"]["observations"][0].update(cachedInput="0"),
+            lambda value: value["unassignedUsage"]["observations"][0].update(threadId="private-thread"),
+            lambda value: value["unassignedUsage"]["observations"].append(copy.deepcopy(value["unassignedUsage"]["observations"][0])),
+            lambda value: value.update(leaked="package-response")]
+        for mutation in mutations:
+            value = copy.deepcopy(good)
+            mutation(value)
+            with self.subTest(snapshot=value):
+                self.assertNotEqual(0, self.browser_result(value).returncode)
+        for selector, text in [("#unassigned-rows .passive-total", "Observed total: 12"),
+                               ("#unassigned-status", "Complete usage and known cost"),
+                               ("body", "package-response")]:
+            with self.subTest(selector=selector):
+                self.assertNotEqual(0, self.browser_result(good, text_changes={selector: text}).returncode)
 
 
 class Journal:
@@ -246,16 +301,16 @@ class HostReleaseTests(unittest.TestCase):
     def test_successor_identity_and_journal_are_coherent(self):
         self.assertEqual(self.ordered[0].target_digest, "a" * 40)
         import xml.etree.ElementTree as ET
-        self.assertEqual(ET.parse(ROOT / "src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj").findtext(".//Version"), "0.7.0")
+        self.assertEqual(ET.parse(ROOT / "src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj").findtext(".//Version"), "0.8.0")
         publisher = (ROOT / "scripts" / "telemetry-host-successor-publish.py").read_text()
         candidate = (ROOT / ".github" / "workflows" / "release-telemetry-host-successor-candidate.yml").read_text()
-        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-13"', publisher)
+        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-14"', publisher)
         self.assertNotIn("utel-host-rel-10", publisher)
-        self.assertIn('"version": "0.7.0"', publisher)
-        self.assertIn("--version 0.7.0 --tag telemetry-host/v0.7.0", candidate)
-        self.assertIn("FS.GG.Telemetry.Host.0.7.0.nupkg", candidate)
-        self.assertIn("telemetry-host-070-candidate", candidate)
-        self.assertIn("telemetry-host-070-publisher", (ROOT / ".github/workflows/release-telemetry-host-successor-publish.yml").read_text())
+        self.assertIn('"version": "0.8.0"', publisher)
+        self.assertIn("--version 0.8.0 --tag telemetry-host/v0.8.0", candidate)
+        self.assertIn("FS.GG.Telemetry.Host.0.8.0.nupkg", candidate)
+        self.assertIn("telemetry-host-080-candidate", candidate)
+        self.assertIn("telemetry-host-080-publisher", (ROOT / ".github/workflows/release-telemetry-host-successor-publish.yml").read_text())
 
     def test_every_effect_is_admitted_and_read_back_once(self):
         self.assertEqual(len(self.ordered), 8)
@@ -292,13 +347,13 @@ class HostReleaseTests(unittest.TestCase):
             archive = root / "candidate.zip"
             package_digest = hashlib.sha256(b"fixture").hexdigest()
             positive = {"schema": "fsgg.telemetry-host-package-evidence/v1", "packageId": "FS.GG.Telemetry.Host",
-                        "version": "0.7.0", "archiveSha256": package_digest, "passed": 1, "failed": 0,
+                        "version": "0.8.0", "archiveSha256": package_digest, "passed": 1, "failed": 0,
                         "productionStorage": "eligible-linux-x64", "syntheticTls": True, "passiveReceiptQualified": True}
             def write_archive(evidence):
                 with zipfile.ZipFile(archive, "w") as zipped:
                     zipped.writestr("manifest.json", json.dumps({**manifest(), "archiveSha256": package_digest}))
                     zipped.writestr("package-evidence.json", json.dumps(evidence))
-                    zipped.writestr("FS.GG.Telemetry.Host.0.7.0.nupkg", "fixture")
+                    zipped.writestr("FS.GG.Telemetry.Host.0.8.0.nupkg", "fixture")
             write_archive(positive)
             digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             run = {"id": 123, "path": verifier.WORKFLOW, "head_sha": source,
@@ -310,7 +365,7 @@ class HostReleaseTests(unittest.TestCase):
                                          "repository_id": verifier.REPOSITORY_ID,
                                          "head_repository_id": verifier.REPOSITORY_ID}}
             with patch.object(verifier.subprocess, "run"):
-                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.7.0")
+                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.8.0")
             for field, value in [("productionStorage", "not-qualified:overlay"), ("passiveReceiptQualified", False),
                                  ("syntheticTls", False), ("failed", 1), ("failed", False), ("version", "0.5.0"),
                                  ("archiveSha256", "0" * 64)]:
@@ -348,9 +403,9 @@ class HostReleaseTests(unittest.TestCase):
                 self.assets = {}
                 self.writes = []
             def get(self, path):
-                if path.endswith("/git/ref/tags/telemetry-host/v0.7.0") and self.tag:
+                if path.endswith("/git/ref/tags/telemetry-host/v0.8.0") and self.tag:
                     return {"object": {"sha": self.tag}}
-                if path.endswith("/releases/tags/telemetry-host/v0.7.0") and self.release and not self.release["draft"]:
+                if path.endswith("/releases/tags/telemetry-host/v0.8.0") and self.release and not self.release["draft"]:
                     return self.release
                 if path.endswith("/releases?per_page=100&page=1"):
                     return [self.release] if self.release else []
@@ -374,7 +429,7 @@ class HostReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             row = manifest()
-            package = root / "FS.GG.Telemetry.Host.0.7.0.nupkg"
+            package = root / "FS.GG.Telemetry.Host.0.8.0.nupkg"
             package.write_bytes(b"exact original Host archive")
             row["archiveSha256"] = hashlib.sha256(package.read_bytes()).hexdigest()
             manifest_path = root / "manifest.json"
@@ -402,10 +457,10 @@ class HostReleaseTests(unittest.TestCase):
             def __init__(self, raw):
                 self.raw = raw
             def get(self, path):
-                if path.endswith("/releases/tags/telemetry-host/v0.7.0"):
+                if path.endswith("/releases/tags/telemetry-host/v0.8.0"):
                     raise NotFound(path)
                 if path.endswith("/releases?per_page=100&page=1"):
-                    return [{"id": 1, "tag_name": "telemetry-host/v0.7.0", "draft": True}]
+                    return [{"id": 1, "tag_name": "telemetry-host/v0.8.0", "draft": True}]
                 if path.endswith("/releases/1/assets?per_page=100"):
                     return [{"id": 1, "name": "publication-journal.json"}]
                 raise AssertionError(path)
@@ -588,7 +643,7 @@ class CurrentHostPublisherTests(unittest.TestCase):
         import ast
         route = ordinary_route()
         namespace = dict(copy=copy, NotFound=NotFound, AUTHORITY="FS-GG/FS.GG.Coordination.Authority",
-                         REF="refs/heads/fsgg/v2/journal/release/utel-host-rel-13",
+                         REF="refs/heads/fsgg/v2/journal/release/utel-host-rel-14",
                          reviewed_binding=route.authority_protection()[1])
         source = ast.parse((ROOT / "tests/release-successor-live/run.py").read_text())
         cls = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == "AuthorityAPI")
@@ -638,7 +693,7 @@ class CurrentHostPublisherTests(unittest.TestCase):
                                      continuation=case == "old-flag", old=case == "old-candidate", journal=Journal)
                 self.assertEqual(result, 0 if case == "current" else 1)
                 self.assertFalse(any(row[0] == "initialize" for row in writes))
-                self.assertTrue(all(row[1:] == ("refs/heads/fsgg/v2/journal/release/utel-host-rel-13", True) for row in writes))
+                self.assertTrue(all(row[1:] == ("refs/heads/fsgg/v2/journal/release/utel-host-rel-14", True) for row in writes))
                 if case == "old-flag":
                     self.assertEqual(api.reads, [])
                     self.assertFalse((root / "candidate").exists())
@@ -655,7 +710,7 @@ class CurrentHostPublisherTests(unittest.TestCase):
             path = pathlib.Path(temporary) / "manifest.json"; path.write_text(json.dumps(CURRENT_MANIFEST))
             api = API(); provider = HostProvider(api, path, "fixture", "fixture")
             self.assertEqual(provider.observe(effects(CURRENT_MANIFEST)[1][0]).state, "absent")
-            self.assertEqual(api.paths, ["repos/FS-GG/.github/git/ref/tags/telemetry-host/v0.7.0"])
+            self.assertEqual(api.paths, ["repos/FS-GG/.github/git/ref/tags/telemetry-host/v0.8.0"])
 
     def test_actual_new_journal_preserves_old12_and_unknown_never_resends(self):
         import ast
@@ -732,7 +787,7 @@ class CurrentHostPublisherTests(unittest.TestCase):
                     self.assertEqual(state.effects, {"tag": "intent"})
                     self.assertEqual(output.getvalue().count("Host successor effect state: waiting"), 2)
                 self.assertNotIn("SECRET", output.getvalue())
-                journal.validate_intent({"contentId": effects(CURRENT_MANIFEST)[0], "sourceSha": CURRENT_SOURCE, "version": "0.7.0",
+                journal.validate_intent({"contentId": effects(CURRENT_MANIFEST)[0], "sourceSha": CURRENT_SOURCE, "version": "0.8.0",
                                         "candidateArchiveSha256": CURRENT_ARCHIVE, "operator": "EHotwagner"})
 
     def test_actual_workflow_default_false_and_explicit_flag_shell(self):
@@ -754,6 +809,246 @@ class CurrentHostPublisherTests(unittest.TestCase):
             self.assertEqual(args.count("--continue-failed-original"), 1 if selected == "true" else 0)
             self.assertIn("--preflight-only", args)
 
+
+
+class CandidateReadFirstTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("host_candidate_read_gate", ROOT / "scripts/telemetry-host-candidate-read-gate.py")
+        cls.gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.gate)
+
+    def environment(self):
+        return {"GITHUB_REPOSITORY": "FS-GG/.github", "GITHUB_REPOSITORY_ID": "1269292704",
+                "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/main",
+                "GITHUB_ACTOR": "EHotwagner", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_SHA": "a" * 40,
+                "GITHUB_RUN_ID": "123", "GITHUB_TOKEN": "never-print-this-secret"}
+
+    def response(self, url, value, *, raw=None, length=None, redirect=None):
+        class Response(io.BytesIO):
+            status = 200
+            headers = {} if length is None else {"Content-Length": length}
+
+            def geturl(self):
+                return redirect or url
+
+        return Response(json.dumps(value).encode() if raw is None else raw)
+
+    def routes(self):
+        gate = self.gate
+        main = gate.API + "/git/ref/heads/main"
+        tag = gate.API + "/git/ref/tags/" + gate.TAG
+        value = {"ref": "refs/heads/main", "object": {"type": "commit", "sha": "a" * 40,
+                                                       "url": gate.API + "/git/commits/" + "a" * 40}}
+        routes = {main: [self.response(main, value), self.response(main, value)],
+                  tag: [urllib.error.HTTPError(tag, 404, "not found", {}, io.BytesIO())]}
+        for base in gate.FEEDS.values():
+            index = base + "/index.json"
+            package = base + f"/{gate.VERSION}/fs.gg.telemetry.host.{gate.VERSION}.nupkg"
+            routes[index] = [self.response(index, {"versions": ["0.6.0", "0.7.0"]})]
+            routes[package] = [urllib.error.HTTPError(package, 404, "not found", {}, io.BytesIO())]
+        return routes
+
+    def invoke(self, routes=None, environment=None, *, binding_error=None, checkout="a" * 40):
+        gate = self.gate
+        selected = self.routes() if routes is None else routes
+        calls, launched = [], []
+
+        def open_request(request, timeout):
+            calls.append((request.full_url, request.get_method(), timeout, dict(request.header_items())))
+            value = selected[request.full_url].pop(0)
+            if isinstance(value, Exception):
+                raise value
+            return value
+
+        output, error = io.StringIO(), io.StringIO()
+        with patch.dict(os.environ, self.environment() if environment is None else environment, clear=True), \
+             patch.object(gate.urllib.request, "build_opener", return_value=SimpleNamespace(open=open_request)), \
+             patch.object(gate.subprocess, "run", return_value=SimpleNamespace(stdout=checkout)), \
+             contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+            if binding_error is None:
+                result = gate.main()
+            else:
+                with patch.object(gate, "source_bindings", side_effect=binding_error):
+                    result = gate.main()
+            if result == 0:
+                launched.append("candidate-work")
+        for values in selected.values():
+            for value in values:
+                if hasattr(value, "close"):
+                    value.close()
+        self.assertNotIn("never-print-this-secret", output.getvalue() + error.getvalue())
+        self.assertTrue(all(method == "GET" and 0 < timeout <= 30 for _, method, timeout, _ in calls))
+        self.assertLessEqual(len(calls), 7)
+        return result, launched, calls, output.getvalue(), error.getvalue()
+
+    def test_readable_absent_coordinates_reach_existing_candidate_path(self):
+        result, launched, calls, output, _ = self.invoke()
+        self.assertEqual((result, launched, len(calls)), (0, ["candidate-work"], 7))
+        proof = json.loads(output)
+        self.assertEqual(proof["feedAbsence"], "verified")
+        self.assertFalse(proof["candidateCreated"])
+        self.assertEqual(proof["journalNativeAbsence"], "not-observed")
+        self.assertEqual(calls[0][0], calls[-1][0])
+        for url, _, _, headers in calls:
+            if url.startswith(self.gate.FEEDS["nuget"]):
+                self.assertNotIn("Authorization", headers)
+
+    def test_unreadable_or_occupied_feed_never_reaches_candidate_work(self):
+        gate = self.gate
+        for feed in gate.FEEDS.values():
+            index = feed + "/index.json"
+            package = feed + f"/{gate.VERSION}/fs.gg.telemetry.host.{gate.VERSION}.nupkg"
+            for case in ("401", "403", "404", "empty", "shape", "bad-json", "duplicate-json", "nonfinite-json", "oversize", "length",
+                         "redirect", "timeout", "missing-predecessor", "occupied", "normalized-occupied",
+                         "newer", "malformed-version", "package-present", "package-403", "package-redirect"):
+                with self.subTest(feed=feed, case=case):
+                    routes = self.routes()
+                    if case.isdecimal():
+                        replacement = urllib.error.HTTPError(index, int(case), "private-response", {}, io.BytesIO())
+                    elif case == "timeout":
+                        replacement = TimeoutError("never-print-this-secret")
+                    elif case == "bad-json":
+                        replacement = self.response(index, None, raw=b"not json")
+                    elif case == "duplicate-json":
+                        replacement = self.response(index, None, raw=b'{"versions":["0.8.0"],"versions":["0.7.0"]}')
+                    elif case == "nonfinite-json":
+                        replacement = self.response(index, None, raw=b'{"versions":["0.7.0"],"ignored":NaN}')
+                    elif case == "oversize":
+                        replacement = self.response(index, None, raw=b" " * (gate.MAX_BYTES + 1))
+                    elif case == "length":
+                        replacement = self.response(index, {}, length=str(gate.MAX_BYTES + 1))
+                    elif case == "redirect":
+                        replacement = self.response(index, {}, redirect="https://unselected.invalid/index.json")
+                    elif case.startswith("package-"):
+                        routes[package][0].close()
+                        routes[package] = [self.response(package, {}) if case == "package-present" else
+                                           urllib.error.HTTPError(package, 403 if case == "package-403" else 302,
+                                                                  "never-print-this-secret", {}, io.BytesIO())]
+                        replacement = None
+                    else:
+                        values = {"empty": [], "shape": "0.7.0", "missing-predecessor": ["0.6.0"],
+                                  "occupied": ["0.7.0", "0.8.0"], "normalized-occupied": ["0.7", "0.8.0.0"],
+                                  "newer": ["0.7.0", "0.9.0"], "malformed-version": ["0.7.0", "never-print-this-secret"]}
+                        replacement = self.response(index, {"versions": values[case]})
+                    if replacement is not None:
+                        routes[index][0].close()
+                        routes[index] = [replacement]
+                    result, launched, _, _, _ = self.invoke(routes)
+                    self.assertEqual((result, launched), (1, []))
+
+    def test_context_source_and_final_main_barriers_refuse_before_candidate(self):
+        for key, bad in {"GITHUB_ACTOR": "other", "GITHUB_RUN_ATTEMPT": "2", "GITHUB_REF": "refs/heads/other",
+                         "GITHUB_EVENT_NAME": "pull_request", "GITHUB_REPOSITORY_ID": "1", "GITHUB_TOKEN": "",
+                         "GITHUB_RUN_ID": "0", "GITHUB_SHA": "bad"}.items():
+            with self.subTest(key=key):
+                result, launched, calls, _, _ = self.invoke(environment={**self.environment(), key: bad})
+                self.assertEqual((result, launched, calls), (1, [], []))
+        for kwargs in ({"checkout": "b" * 40}, {"binding_error": self.gate.Refused("release-source-binding")}):
+            result, launched, calls, _, _ = self.invoke(**kwargs)
+            self.assertEqual((result, launched, calls), (1, [], []))
+        main = self.gate.API + "/git/ref/heads/main"
+        for position in (0, 1):
+            routes = self.routes()
+            routes[main][position].close()
+            routes[main][position] = self.response(main, {"ref": "refs/heads/main", "object": {"type": "commit", "sha": "b" * 40}})
+            result, launched, _, _, _ = self.invoke(routes)
+            self.assertEqual((result, launched), (1, []))
+
+    def test_request_deadline_bounds_and_redirect_policy_are_real(self):
+        gate = self.gate
+        reader = gate.Reader("private")
+        for mutate in (lambda: setattr(reader, "deadline", 0), lambda: setattr(reader, "requests", 7)):
+            reader.deadline = gate.time.monotonic() + 240
+            reader.requests = 0
+            mutate()
+            with patch.object(reader.opener, "open") as opener:
+                with self.assertRaises(gate.Refused):
+                    reader.get(gate.API + "/git/ref/heads/main")
+                opener.assert_not_called()
+        with self.assertRaises(gate.GateError):
+            gate._RefuseFeedIndexRedirect().redirect_request(None, None, 302, "redirect", {}, "https://unselected.invalid")
+
+    def test_transport_deadline_cleanup_and_unselected_endpoint(self):
+        gate = self.gate
+        url = gate.API + "/git/ref/heads/main"
+        reader = gate.Reader("private")
+        with patch.object(reader.opener, "open") as opener:
+            with self.assertRaises(gate.Refused):
+                reader.get("https://unselected.invalid")
+            opener.assert_not_called()
+        response = self.response(url, {})
+        # Expiry during response handling closes the response and refuses success.
+        with patch.object(reader.opener, "open", return_value=response), \
+             patch.object(gate.time, "monotonic", side_effect=[reader.deadline - 1, reader.deadline + 1]):
+            with self.assertRaisesRegex(gate.Refused, "observation-deadline"):
+                reader.get(url)
+        self.assertTrue(response.closed)
+        package = gate.FEEDS["github"] + f"/{gate.VERSION}/fs.gg.telemetry.host.{gate.VERSION}.nupkg"
+        response = self.response(package, {})
+        with patch.object(reader.opener, "open", return_value=response), patch.object(response, "read1") as read:
+            with self.assertRaisesRegex(gate.Refused, "coordinate-occupied"):
+                reader.get(package, absent=True)
+            read.assert_not_called()
+        self.assertTrue(response.closed)
+        routes = self.routes()
+        tag = gate.API + "/git/ref/tags/" + gate.TAG
+        routes[tag][0].close()
+        routes[tag] = [self.response(tag, {})]
+        result, launched, _, _, _ = self.invoke(routes)
+        self.assertEqual((result, launched), (1, []))
+
+    def test_source_journal_literal_is_checked_without_claiming_native_absence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            paths = ["src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj",
+                     "scripts/telemetry_host_successor_execution.py", "scripts/telemetry-host-successor-publish.py"]
+            for path in paths:
+                (root / path).parent.mkdir(parents=True, exist_ok=True)
+                (root / path).write_bytes((ROOT / path).read_bytes())
+            self.gate.source_bindings(root)
+            for path, old, new in [(paths[0], "<Version>0.8.0</Version>", "<Version>0.7.0</Version>"),
+                                   (paths[1], 'VERSION = "0.8.0"', 'VERSION = "0.6.0"'),
+                                   (paths[2], "utel-host-rel-14", "utel-host-rel-12")]:
+                original = (root / path).read_text()
+                (root / path).write_text(original.replace(old, new))
+                with self.assertRaises(self.gate.Refused):
+                    self.gate.source_bindings(root)
+                (root / path).write_text(original)
+
+    def test_actual_workflow_requires_gate_before_every_candidate_step(self):
+        source = (ROOT / ".github/workflows/release-telemetry-host-successor-candidate.yml").read_text()
+
+        def check(text):
+            steps = text.split("    steps:\n", 1)[1].split("      - ")[1:]
+            assert "actions/checkout@" in steps[0]
+            assert "id: read-first\n" in steps[1]
+            assert "timeout-minutes: 5\n" in steps[1]
+            assert "run: python3 scripts/telemetry-host-candidate-read-gate.py\n" in steps[1]
+            assert "GITHUB_TOKEN: ${{ github.token }}" in steps[1]
+            assert "if:" not in steps[1] and "continue-on-error:" not in text
+            assert "actions/setup-dotnet@" in steps[2]
+            assert "packages: read" in text and "contents: read" in text and "id-token:" not in text
+            for step in steps[2:]:
+                if "if:" in step:
+                    assert "name: Retain passive Host HTTP diagnostics" in step
+                    assert "always() && steps.read-first.outcome == 'success'" in step
+            assert "dotnet msbuild" in text and "Refuse changed main before retaining candidate" in text
+            assert "--version 0.8.0 --tag telemetry-host/v0.8.0" in text
+
+        check(source)
+        gate = source.split("      - name: Refuse unreadable", 1)[1].split("      - uses: actions/setup-dotnet", 1)[0]
+        for mutant in [source.replace("id: read-first", "id: optional"),
+                       source.replace("run: python3 scripts/telemetry-host-candidate-read-gate.py", "run: echo bypass"),
+                       source.replace("id: read-first", "id: read-first\n        if: false"),
+                       source.replace("id: read-first", "id: read-first\n        continue-on-error: true"),
+                       source.replace("packages: read", "packages: write"),
+                       source.replace("always() && steps.read-first.outcome == 'success'", "always()"),
+                       source.replace("      - uses: actions/setup-dotnet", "      - name: early-pack\n        run: dotnet pack\n      - uses: actions/setup-dotnet"),
+                       source.replace("      - name: Pack and bind one exact Host archive", "      - name: Pack and bind one exact Host archive\n        if: always()"),
+                       source.replace("      - name: Refuse unreadable" + gate, "")]:
+            with self.assertRaises((AssertionError, IndexError, ValueError)):
+                check(mutant)
 
 
 if __name__ == "__main__":
