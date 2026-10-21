@@ -244,10 +244,19 @@ class SuccessorRailBindingTests(unittest.TestCase):
         for forbidden in (
             "packages: write", "contents: write", "id-token:", "environment:", "secrets.",
             "release-successor-publish.py", "release-saga.py", "dotnet pack",
-            "gh release create", "git push", "oidc", "upload-artifact",
+            "gh release create", "git push", "oidc",
         ):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, workflow.lower())
+        # Default coherent freshness remains free of artifact retention. The explicit
+        # Host branch retains only its bounded already-published package observation.
+        default = workflow.split("      - name: Observe the published Host 0.8 org archive once", 1)[0]
+        self.assertNotIn("upload-artifact", default)
+        host_spec = importlib.util.spec_from_file_location(
+            "host_read_workflow_contract", ROOT / "tests/telemetry-host-published-org-read/run.py")
+        host_contract = importlib.util.module_from_spec(host_spec)
+        host_spec.loader.exec_module(host_contract)
+        host_contract.workflow_contract(workflow)
 
     def test_actual_declared_predecessor_command_joins_promoted110_and_current_binding(self) -> None:
         import contextlib, io, json, re, runpy, shlex, tempfile

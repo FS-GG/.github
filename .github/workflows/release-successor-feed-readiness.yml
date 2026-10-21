@@ -1,9 +1,18 @@
 name: release-successor-feed-readiness
 
-# Informational freshness observation for a prospective 0.111.0 coherent set.
+# Default: prospective coherent-set freshness; explicit Host choice: published org bytes.
 # This does not select a release, qualify source bytes, or authorize publication.
 on:
   workflow_dispatch:
+    inputs:
+      observation:
+        description: Closed read-only observation; no candidate or publication effects
+        type: choice
+        required: true
+        default: coherent-0111-absence
+        options:
+          - coherent-0111-absence
+          - host-080-org-artifact
 
 permissions:
   contents: read
@@ -27,6 +36,7 @@ jobs:
       - name: Verify the exact protected source and offline refusal controls
         env:
           SOURCE_SHA: ${{ github.sha }}
+          OBSERVATION: ${{ inputs.observation || 'coherent-0111-absence' }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = FS-GG/.github
@@ -34,11 +44,29 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+          python3 scripts/telemetry-host-published-org-read.py --check-selection
           python3 tests/release-successor-candidate/run.py
+          python3 tests/telemetry-host-published-org-read/run.py
       - name: Observe both feeds for 0.111.0 against published 0.110.0
+        if: inputs.observation == 'coherent-0111-absence' || inputs.observation == ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python3 scripts/check-release-candidate-uniqueness.py \
             --version 0.111.0 --predecessor 0.110.0
+      - name: Observe the published Host 0.8 org archive once
+        id: host-org
+        if: inputs.observation == 'host-080-org-artifact'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          OBSERVATION: ${{ inputs.observation }}
+        run: python3 scripts/telemetry-host-published-org-read.py --output "$RUNNER_TEMP/host080-org-read"
+      - name: Retain the exact Host org observation
+        if: inputs.observation == 'host-080-org-artifact' && steps.host-org.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: telemetry-host080-org-read-${{ github.sha }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/host080-org-read/
+          if-no-files-found: error
+          retention-days: 7
