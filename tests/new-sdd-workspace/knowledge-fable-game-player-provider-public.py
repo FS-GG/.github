@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import stat
@@ -43,12 +44,25 @@ def load_ports():
 
 V = load_ports()
 L, P, M, C = V.L, V.P, V.M, V.C
-PACKAGES, TOP_KEYS, PINS = V.PACKAGES, V.TOP_KEYS, V.PINS
+PACKAGES, TOP_KEYS, PINS = V.PACKAGES, V.TOP_KEYS | {'publishedSchemas'}, V.PINS
 LIFECYCLE_FILES, LIFECYCLE_DIRS = V.LIFECYCLE_FILES, V.LIFECYCLE_DIRS
 IGNORE_PREFIX, IGNORE_SUFFIX = V.IGNORE_PREFIX, V.IGNORE_SUFFIX
 hybrid_manifest, rendered_owner, matches_glob = V.hybrid_manifest, V.rendered_owner, V.matches_glob
 initial, restore_tools, descriptor_contract = V.initial, V.restore_tools, V.descriptor_contract
-AGENT_ROOTS = ('.agents', '.claude', '.codex')
+# Published cf2f046a src/FS.GG.Contracts/Schemas.fs is the sole union-root
+# contract. Authenticate its complete source and genuine compiled package below;
+# product-owned assets outside these roots remain part of product_inventory.
+SCHEMAS_SHA = '2457a3407eddf808a69dbc5d569dcb612f5317e623ba36e50c11627215e87592'
+CONTRACTS_SHA = '91f484d28416c5d860a375a91ed70cdda1d3b6d85d504c15ea21e08a9af727ee'
+ROOT_DECLARATION = b'    let agentSkillRoots: string list = [ ".claude"; ".agents" ]\n'
+AGENT_ROOTS = tuple(name.decode() for name in re.findall(rb'"([^"]+)"', ROOT_DECLARATION))
+
+
+def authenticated_agent_roots(raw):
+    require(hashlib.sha256(raw).hexdigest() == SCHEMAS_SHA, 'player-published-schemas-source')
+    declarations = re.findall(rb'(?m)^    let agentSkillRoots[^\n]*\n', raw)
+    require(declarations == [ROOT_DECLARATION], 'player-published-agent-root-contract')
+    return tuple(name.decode() for name in re.findall(rb'"([^"]+)"', declarations[0]))
 MANIFEST = '.agents/skills/skill-manifest.json'
 PREFIX = P.PREFIX
 # Fixed published2.2.0 compiled transport, independently extracted without CLR.
@@ -439,6 +453,7 @@ def boundary(root, archive, row):
     return dict(effectiveParameters=effective, bundle='player', selectorPrecedence=100, svgFoundationParameterOmitted=True,
                 lifecycleOmitted=not row['explicit'], automaticInitialization=True, standaloneInitializeInvoked=False,
                 knowledgeReady=True, ownerAssets=owner, manifest=manifest, skills=skills,
+                emittedSkillRoots=list(AGENT_ROOTS), publishedSchemasSha256=SCHEMAS_SHA,
                 productFiles=sorted(inventory), excludedProductFiles=sorted(excluded),canonicalFiles=canonical,
                 lifecycleFiles=list(LIFECYCLE_FILES), supplierManifestHashes=SUPPLIER_MANIFEST_HASHES,
                 provenanceSha256=digest(root/'.fsgg/scaffold-provenance.json'))
@@ -463,6 +478,9 @@ def validate(path, expected_sha, after=False):
     P.packed_contract(m['packages']['workspace']['archive'])
     with zipfile.ZipFile(m['packages']['producer']['archive']) as archive:
         require(hashlib.sha256(archive.read('tools/net10.0/any/FS.GG.SDD.Commands.dll')).hexdigest() == COMMANDS_SHA, 'player-published-supplier-assembly')
+        require(hashlib.sha256(archive.read('tools/net10.0/any/FS.GG.Contracts.dll')).hexdigest() == CONTRACTS_SHA, 'player-published-contracts-assembly')
+    roots = authenticated_agent_roots(C.regular(m['publishedSchemas'], m['inputs']).read_bytes())
+    require(roots == AGENT_ROOTS, 'player-derived-agent-root-drift')
     descriptor_contract(C.regular(m['providerDescriptor'], m['inputs']))
     env = m['childEnvironment']
     require(set(env) == {'PATH', *M.SERIAL_ENV, *M.HOST_ENV}
@@ -561,7 +579,7 @@ def source_controls():
                 'modifiers':[{'condition':c,'exclude':e if isinstance(e,list) else [e]} for c,e in zip(conditions,exclusions)]}]}
             files={n:('owner '+n+' FableGameWorkspaceNamespace\n').encode() for n in (*L.OWNER_FILES,'SvgFoundation/SvgFoundation.fsproj','Client/Api.fs','Protocol/Http.fs','FableGameWorkspace.slnx','deploy/run-local.sh',*M.CI_FILES)}
             for name in M.CI_FILES: files[name]=b'central CI fixture\n'
-            files.update({'.template.config/template.json':json.dumps(config).encode(),'.config/dotnet-tools.json':json.dumps(original).encode(),'.gitignore':b'owner-ignore\n',MANIFEST:json.dumps({'schemaVersion':1,'skills':rows}).encode(),'.agents/skills/owner/SKILL.md':owner,
+            files.update({'.template.config/template.json':json.dumps(config).encode(),'.config/dotnet-tools.json':json.dumps(original).encode(),'.gitignore':b'owner-ignore\n',MANIFEST:json.dumps({'schemaVersion':1,'skills':rows}).encode(),'.agents/skills/owner/SKILL.md':owner,'.codex/skills/owner/SKILL.md':owner,'.codex/README.md':b'product-owned Codex guidance\n',
                           'SvgFoundation/Studio/Editor.fs':b'excluded','models/rules.qnt':b'excluded'})
             with zipfile.ZipFile(archive,'w') as z:
                 for name,raw in files.items():
@@ -588,6 +606,29 @@ def source_controls():
             (root/'.fsgg/scaffold-provenance.json').write_text(json.dumps(prov))
             INITIAL_HASHES.update({name:digest(root/name) for name in (*LIFECYCLE_FILES,'.fsgg/knowledge-guide.md','.fsgg/knowledge/schema.json')})
             return root,archive,inventory,prov
+
+        def test_published_root_contract_is_independent_of_fixture_mirrors(self):
+            # This is the exact immutable published declaration, authenticated
+            # against the full source in validate; it is not inferred from output.
+            self.assertEqual(AGENT_ROOTS, ('.claude', '.agents'))
+            with patch(__name__+'.SCHEMAS_SHA', hashlib.sha256(ROOT_DECLARATION).hexdigest()):
+                self.assertEqual(authenticated_agent_roots(ROOT_DECLARATION), ('.claude', '.agents'))
+            for declaration in (ROOT_DECLARATION.replace(b'.agents',b'.codex'),
+                                ROOT_DECLARATION.replace(b' ]',b'; ".codex" ]'),
+                                ROOT_DECLARATION+ROOT_DECLARATION):
+                with patch(__name__+'.SCHEMAS_SHA',hashlib.sha256(declaration).hexdigest()):
+                    with self.assertRaisesRegex(ValueError,'agent-root-contract'):authenticated_agent_roots(declaration)
+            with self.assertRaisesRegex(ValueError,'schemas-source'):authenticated_agent_roots(ROOT_DECLARATION)
+
+        def test_product_codex_assets_are_preserved_without_union_manifest(self):
+            with tempfile.TemporaryDirectory() as td:
+                root,a,i,p=self.fixture(td);boundary(root,a,ROWS[0])
+                self.assertFalse((root/'.codex/skills/skill-manifest.json').exists())
+                self.assertTrue((root/'.codex/skills/owner/SKILL.md').exists())
+                target=root/'.codex/skills/owner/SKILL.md';raw=target.read_bytes();target.write_bytes(b'changed owner')
+                with self.assertRaisesRegex(ValueError,'owner-bytes'):boundary(root,a,ROWS[0])
+                target.write_bytes(raw);target.chmod(0o755)
+                with self.assertRaisesRegex(ValueError,'owner-file-mode'):boundary(root,a,ROWS[0])
 
         def test_genuine_parameter_omission_and_explicit_lifecycle(self):
             for row in ROWS:
@@ -693,7 +734,8 @@ def source_controls():
                 runner.git.side_effect=git
                 with patch.object(M,'ensure_git'),patch.object(M,'commit',return_value='head'):
                     result=initial(runner,root,a,ROWS[0],observed)
-                    self.assertIn('.codex/skills/fixture-driver/references/control.md',result['gitBlobs'])
+                    self.assertIn('.claude/skills/fixture-driver/references/control.md',result['gitBlobs'])
+                    self.assertIn('.codex/skills/owner/SKILL.md',result['gitBlobs'])
                     runner.git.side_effect=lambda r,*args:'100644 blob wrong\t'+args[-1] if args[0]=='ls-tree' else git(r,*args)
                     with self.assertRaisesRegex(ValueError,'initial-owner-blob'):initial(runner,root,a,ROWS[0],observed)
 
