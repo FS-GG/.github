@@ -159,7 +159,7 @@ PY_PASSIVE
   (cd "$ROOT/tests/FS.GG.Telemetry.Browser.Tests" && FSGG_BROWSER_BASE_URL="$base" FSGG_BROWSER_PRINCIPAL_ID=package-browser FSGG_BROWSER_ACCESS_KEY="$browser_key" FSGG_BROWSER_KNOWN_WORKSPACE=package-workspace FSGG_BROWSER_UNAVAILABLE_WORKSPACE=outside-workspace FSGG_BROWSER_CERTIFICATE_SPKI="$browser_spki" npm run test:browser) >"$WORK/browser.out" 2>"$WORK/browser.err" \
     && ok "installed host passes the pinned-certificate HTTPS browser isolation journey" || bad "installed host passes the pinned-certificate HTTPS browser isolation journey" "$(tail -10 "$WORK/browser.err")"
   node "$ROOT/tests/standalone-telemetry-host-package/installed-browser.js" "$ROOT/tests/FS.GG.Telemetry.Browser.Tests/node_modules/playwright" "$base" package-browser "$browser_key" package-workspace package-item "$browser_spki" 2 >"$WORK/installed-browser.out" 2>"$WORK/installed-browser.err" \
-    && ok "installed browser snapshot contains the applied native package item" || bad "installed browser snapshot contains the applied native package item" "$(tail -10 "$WORK/installed-browser.err")"
+    && ok "installed browser shows the applied item and private corrected unassigned usage" || bad "installed browser item and corrected unassigned usage" "$(tail -10 "$WORK/installed-browser.err")"
   kill -TERM "$pid"
   rc=0
   wait "$pid" || rc=$?
@@ -187,7 +187,7 @@ PY
   code="$(curl --silent --show-error --cacert "$tls/server.crt" -H "Authorization: Bearer $producer_secret" --output "$WORK/restored-receipt.json" --write-out '%{http_code}' "$restored_base/v1/receipts/package-batch")"
   [ "$code" = 200 ] && cmp -s "$WORK/applied-receipt.json" "$WORK/restored-receipt.json" && ok "restored host retains the exact applied receipt" || bad "restored host retains the exact applied receipt" "HTTP $code"
   node "$ROOT/tests/standalone-telemetry-host-package/installed-browser.js" "$ROOT/tests/FS.GG.Telemetry.Browser.Tests/node_modules/playwright" "$restored_base" package-browser "$browser_key" package-workspace package-item "$browser_spki" 2 >"$WORK/restored-browser.out" 2>"$WORK/restored-browser.err" \
-    && ok "restored browser snapshot retains the native package item" || bad "restored browser snapshot retains the native package item" "$(tail -10 "$WORK/restored-browser.err")"
+    && ok "restored browser retains the item and private corrected unassigned usage" || bad "restored browser item and corrected unassigned usage" "$(tail -10 "$WORK/restored-browser.err")"
   if assert_passive_state "$restored_root/package-workspace"; then
     # shellcheck disable=SC2034 # consumed by the package evidence writer
     HOST_PASSIVE_RECEIPT_QUALIFIED=true

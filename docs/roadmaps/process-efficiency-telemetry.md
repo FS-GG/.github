@@ -60,6 +60,16 @@ not telemetry implementation or installed acceptance.
 
 ## Reuse and ownership
 
+Delivery4707's current source preparation packages the already accepted PR4685
+unassigned-usage projection into an independently versioned Host successor. See the
+[Host0.8 source and release boundary](../coordination/telemetry-host-release.md#prospective-host-08-source--delivery4707-2026-10-21).
+Its prospective coordinates do not assert org-feed availability: current authenticated
+reads return403, and authoritative absence remains required before candidate/publication.
+This source lane can proceed independently of Home. The existing owner retains4707
+through source review/delivery; Home retains cutover and credential custody,4705
+supplies the genuine durable receipt, and4707 remains open for the actual browser
+journey. No earlier publication or uncertain operation is replayed.
+
 | Capability | State established by the design audit | Owner or dependency |
 |---|---|---|
 | Activities, complications, usage attribution and process reviews | Implemented in inspected source; automatic complete coverage not demonstrated | Coordination telemetry maintainers |

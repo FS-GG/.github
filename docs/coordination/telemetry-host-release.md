@@ -1,5 +1,43 @@
 # Telemetry host package and release boundary
 
+## Prospective Host 0.8 source — Delivery4707, 2026-10-21
+
+[Delivery4707](https://github.com/FS-GG/.github/issues/4707) owns the first installed
+facts-and-coverage browser journey. Its accepted source
+[PR4685](https://github.com/FS-GG/.github/pull/4685) postdates the published Host0.7
+source below: the independent Host package must advance to include the bounded
+unassigned-usage projection and browser assets. Advancing the coordination coherent
+set does not update this package.
+
+This source prepares **0.8.0**, `telemetry-host/v0.8.0` and logical journal14 at
+`state/releases/utel-host-rel-14`, with unchanged Store14 and receipt ABI. These
+are prospective coordinates, not an availability claim. Root's native4707 ruling
+permits this reversible source preparation despite the current org-feed REST and
+maintained NuGet v3 reads returning HTTP403. Org-feed occupancy remains **Unknown**.
+Candidate selection and publication require fresh authoritative checks of both
+feeds, tag, release, journal destination and exact source. If a coordinate exists,
+change the prospective source profile before selecting a candidate. No dispatch
+or publication follows from this source decision; the publisher stays default-false.
+Published0.7/journal13 and the held0.6/journal12 originals remain unchanged.
+
+Package qualification now requires the actual installed Host to serve corrected
+unassigned observations to its browser before shutdown and after isolated restore.
+It verifies one current revision, exact nullable counters, partial population,
+unknown attribution/cost and exclusion of private native identities. The existing
+canonical-store checks keep these observations outside item totals. The candidate
+also runs the maintained Dashboard JavaScript browser controls already required by
+normal Host package CI. Synthetic package acceptance remains distinct from Home's
+real receiver cutover, credential custody, durable receipt4705 and browser journey4707.
+
+Pipeline preflight reuses the existing closed-coordinate, artifact, schema-profile
+and fake-provider controls before costly builds. This bounded composition change
+does not introduce a new effect machine, so no custom model is selected. Initial
+composition/static review is capped at30minutes; required source, coherent-run,
+authority, reproducible-package and installed-runtime checks remain applicable.
+The release candidate must be a genuine first-attempt exact-main three-member
+artifact; source qualification artifacts and earlier candidates cannot substitute.
+Each later preflight/publication/adoption effect needs its own existing admission.
+
 ## Accepted Host 0.7 publication — 2026-10-18
 
 Original [candidate 39147197464](https://github.com/FS-GG/.github/actions/runs/39147197464) and
