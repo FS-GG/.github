@@ -1082,8 +1082,10 @@ defined by published SDD 2.2.0
 The published hybrid tool writer may change layout while adding SDD 2.2.0 and
 Coord 0.94.0. Every original JSON value, type, property presence and unknown
 co-tenant property remains exact, including Fantomas explicit false; manifest
-mode and the original product ignore segment remain preserved. Other product
-bytes stay exact. This does not weaken the separately accepted RAW byte spans.
+mode and the original product ignore segment remain preserved. The published
+SDD scaffold adds all three execute bits to produced `.sh` files; the adapter
+requires that exact mode transformation and preserves every other product mode.
+Other product bytes stay exact. This does not weaken the separately accepted RAW byte spans.
 
 Both rows reuse the accepted finite injected runner and knowledge capture,
 retrieval/history, private exclusion, ALL-shared export/lossless restore, distinct

@@ -135,7 +135,10 @@ def product_inventory(archive, row):
             mode = (info.external_attr >> 16) & 0o777
             require(mode == 0o644, 'provider-public-product-mode-contract:' + name)
             require(target not in inventory, 'provider-product-substitution-collision')
-            inventory[target] = (rendered_owner(z.read(info), row['product']), mode)
+            # Published SDD cf2f046a HandlersScaffold promotes every produced
+            # .sh; CommandEffects ORs all three execute bits, preserving others.
+            composed_mode = mode | 0o111 if target.endswith('.sh') else mode
+            inventory[target] = (rendered_owner(z.read(info), row['product']), composed_mode)
         require(set(L.OWNER_FILES) <= set(inventory), 'provider-positive-owner-inventory')
         return inventory, excluded
 
@@ -345,7 +348,7 @@ def source_controls():
                     put(name,raw)
                     if any(matches_glob(name, pattern) for pattern in config['sources'][0]['exclude'] + config['sources'][0]['modifiers'][0]['exclude']): continue
                     path=root/rendered_owner(name.encode(),row['product']).decode();path.parent.mkdir(parents=True,exist_ok=True)
-                    path.write_bytes(rendered_owner(raw,row['product']));path.chmod(0o644)
+                    path.write_bytes(rendered_owner(raw,row['product']));path.chmod(0o755 if name.endswith('.sh') else 0o644)
                 for name in M.CI_FILES:
                     put(name,b'central CI');p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b'central CI')
             (root/'.config/dotnet-tools.json').write_text(json.dumps(dict(original,tools=dict(original['tools'],**OWNED_TOOLS)),indent=4))
@@ -448,9 +451,23 @@ def source_controls():
                         with self.assertRaises((ValueError,FileNotFoundError)):boundary(root,archive,ROWS[0])
                         p.write_bytes(raw);p.chmod(0o600)
                         with self.assertRaises(ValueError):boundary(root,archive,ROWS[0])
-                        p.chmod(0o644)
+                        p.chmod(inventory[name][1])
                     p=root/'Client/Api.fs';p.write_text('unhashed tamper')
                     with self.assertRaisesRegex(ValueError,'original-product-bytes:Client/Api.fs'):boundary(root,archive,ROWS[0])
+
+        def test_published_shell_promotion_is_narrow_and_causal(self):
+            with tempfile.TemporaryDirectory() as td:
+                root,archive,original,_=self.fixture(td)
+                with patch.object(L,'packed_contract',return_value=original):
+                    boundary(root,archive,ROWS[0])
+                    script=root/'deploy/run-local.sh'
+                    self.assertEqual(stat.S_IMODE(script.stat().st_mode),0o755)
+                    script.chmod(0o644)
+                    with self.assertRaisesRegex(ValueError,'product-mode:deploy/run-local.sh'):boundary(root,archive,ROWS[0])
+                    script.chmod(0o755);plain=root/'Client/Api.fs';plain.chmod(0o755)
+                    with self.assertRaisesRegex(ValueError,'product-mode:Client/Api.fs'):boundary(root,archive,ROWS[0])
+                    plain.chmod(0o644);script.write_text('changed executable bytes')
+                    with self.assertRaisesRegex(ValueError,'original-product-bytes:deploy/run-local.sh'):boundary(root,archive,ROWS[0])
 
         def test_provenance_ownership_effective_selection_and_skill_digests(self):
             with tempfile.TemporaryDirectory() as td:
