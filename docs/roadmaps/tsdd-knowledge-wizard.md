@@ -1032,3 +1032,31 @@ Source controls/review/CI establish source readiness only. Actual public receive
 and independent complete4766 acceptance remain separately admitted work. Accepted
 4759 PLAYER and4723 subjects are not replayed;4710 browser/WASM, other4642 routes
 and all historical failures/Unknown reservations keep their original scope.
+
+### RAW legacy non-SVG knowledge source qualification — Delivery4769
+
+The dedicated `knowledge-fable-game-legacy-public.py` adapter fixes two genuine
+published Workspace019 RAW legacy subjects, each selected with required
+`--svgFoundation false` and no bundle parameter. Explicit `--lifecycle typed-sdd`
+receives the full standalone-knowledge flow. Genuine lifecycle omission retains
+the packed `sdd` default and reports `knowledgeReady=false`; it does not initialize
+knowledge or acquire a checker, knowledge CI, SDD pin or typed overlay.
+
+The adapter authenticates the precedence0 legacy definition independently of the
+precedence100 current selector. Both rows require ordinary Client/Server/Domain/
+Protocol assets, retained locks and exact owner tool/ignore bytes, and exclude SVG,
+models and generated rule-model artifacts. Both make normal caller initial Git
+commits and verify owner blobs. Only the explicit typed row installs genuine
+SDD2.2 through the accepted external scratch/preserving append port, initializes
+standalone knowledge, commits canonical files/guide/CI/pins before probe setup,
+and reuses capture/search/history, cache-free clone, private exclusion, ALL-shared
+export/lossless restore, distinct Git bundle and exact10MiB/+1 checker ports.
+
+Pure causal controls cover required selection, true omission, competing defaults,
+positive/excluded assets, conditional CI, pins/owner modes, initial-commit ordering,
+scratch isolation and primary-error custody without launching children. A supplied
+qualified finite runner factory and separate root admission remain mandatory for
+actual receivers; no frozen unbounded runner fallback is allowed. Source controls,
+review and CI establish source readiness only. Matrix4723, PLAYER4759, COMPLETE4766,
+4710 product/browser/WASM and the full parent4642 provider/Wizard/retained-upgrade
+promises and original failures/Unknowns retain their accepted or pending scopes.
