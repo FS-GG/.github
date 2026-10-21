@@ -1074,7 +1074,9 @@ product inventory, filename/content substitutions, exclusions and file modes,
 including product/lock/skill assets and excluded SVG content. They require
 effective-parameter provenance, automatic canonical seed/guide/central CI,
 and a normal caller initial commit with verified complete product, canonical and
-lifecycle Git blobs. The genuine lifecycle artifacts include `.fsgg/project.yml`,
+lifecycle Git blobs. Content-addressed Git blob identities and tree modes verify
+complete files while keeping command output below the finite stream cap. The
+genuine lifecycle artifacts include `.fsgg/project.yml`,
 `.fsgg/sdd.yml`, `.fsgg/agents.yml`, governance resolution, constitution, early-stage
 guidance and root agent guidance, with `work/` and `readiness/` directories, as
 defined by published SDD 2.2.0

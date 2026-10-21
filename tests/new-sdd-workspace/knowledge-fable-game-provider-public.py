@@ -210,13 +210,22 @@ def initial(runner, root, archive, row, observed):
     head = M.commit(runner, root, 'Initial public provider typed knowledge workspace')
     tracked = set(runner.git(root, 'ls-files').splitlines())
     require(set(required) <= tracked and cache.relative_to(root).as_posix() not in tracked, 'provider-initial-inclusion')
-    blobs = {}
+    algorithm = runner.git(root, 'rev-parse', '--show-object-format').strip()
+    require(algorithm in ('sha1', 'sha256'), 'provider-initial-git-object-format')
+    blobs, git_blobs = {}, {}
     for name in required:
-        raw = runner.run(['git', '-C', root, 'show', head + ':' + name], text=False, check=True).stdout
-        require(raw == (root / name).read_bytes(), 'provider-initial-owner-blob:' + name)
+        # Large genuine product blobs exceed the finite runner's32KiB stream
+        # cap. Compare Git's content-addressed blob identity and committed mode
+        # against complete local bytes; ls-tree emits only bounded metadata.
+        raw = (root / name).read_bytes()
+        oid = hashlib.new(algorithm, b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+        mode = '100755' if (root / name).stat().st_mode & 0o111 else '100644'
+        tree = runner.git(root, 'ls-tree', head, '--', name).strip()
+        require(tree == mode + ' blob ' + oid + '\t' + name, 'provider-initial-owner-blob:' + name)
         blobs[name] = hashlib.sha256(raw).hexdigest()
+        git_blobs[name] = dict(objectId=oid, mode=mode)
     P.preserved(before, root)
-    return dict(commit=head, committedAssets=blobs)
+    return dict(commit=head, committedAssets=blobs, gitBlobs=git_blobs)
 
 
 def restore_tools(runner, m, root, config):
@@ -340,11 +349,12 @@ def source_controls():
                         'Conformance/GeneratedTacticalRuleModel.fs']}]}]}
                 put('.template.config/template.json', json.dumps(config))
                 names = (*L.OWNER_FILES, 'Client/Api.fs', 'Client/Movement.fs', 'Protocol/Http.fs',
-                         'README.md', 'FableGameWorkspace.slnx', 'deploy/run-local.sh',
+                         'README.md', 'FableGameWorkspace.slnx', 'deploy/run-local.sh', 'Browser.Tests/two-client.spec.ts',
                          'SvgFoundation/Program.fs', 'models/rules.qnt',
                          'PortalExample/README.md', 'Browser.Tests/wasm-policy.spec.ts')
                 for name in names:
                     raw = json.dumps(original).encode() if name == '.config/dotnet-tools.json' else b'owner-ignore\n' if name=='.gitignore' else ('owner '+name+' FableGameWorkspaceNamespace').encode()
+                    if name == 'Browser.Tests/two-client.spec.ts': raw = b'large product fixture\n' * 4000
                     put(name,raw)
                     if any(matches_glob(name, pattern) for pattern in config['sources'][0]['exclude'] + config['sources'][0]['modifiers'][0]['exclude']): continue
                     path=root/rendered_owner(name.encode(),row['product']).decode();path.parent.mkdir(parents=True,exist_ok=True)
@@ -482,12 +492,34 @@ def source_controls():
                 root,archive,original,prov=self.fixture(td);runner=Mock()
                 with patch.object(L,'packed_contract',return_value=original):observed=boundary(root,archive,ROWS[0])
                 allfiles=lambda:'\n'.join(p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file() and '/cache/' not in str(p))
-                runner.git.side_effect=lambda root,*a:'' if a[0]=='rev-list' else allfiles()
-                runner.run.side_effect=lambda a,**k:types.SimpleNamespace(stdout=(root/a[-1].split(':',1)[1]).read_bytes())
+                def git_reply(root,*args):
+                    if args[0]=='rev-list':return ''
+                    if args[0]=='ls-files':return allfiles()
+                    if args[0]=='rev-parse':return 'sha1'
+                    self.assertEqual(args[:3],('ls-tree','caller','--'))
+                    name=args[-1];p=root/name;raw=p.read_bytes()
+                    oid=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+                    mode='100755' if p.stat().st_mode & 0o111 else '100644'
+                    return mode+' blob '+oid+'\t'+name
+                runner.git.side_effect=git_reply
+                runner.run.side_effect=AssertionError('raw blob output exceeds finite streams')
                 with patch.object(M,'ensure_git'),patch.object(M,'commit',return_value='caller'):
-                    result=initial(runner,root,archive,ROWS[0],observed);self.assertIn('.fsgg/scaffold-provenance.json',result['committedAssets']);self.assertIn('.fsgg/knowledge/schema.json',result['committedAssets']);self.assertTrue(set(LIFECYCLE_FILES) <= set(result['committedAssets']));self.assertIn('Client/Api.fs',result['committedAssets'])
-                    runner.run.side_effect=None;runner.run.return_value.stdout=b'wrong'
-                    with self.assertRaisesRegex(ValueError,'initial-owner-blob'):initial(runner,root,archive,ROWS[0],observed)
+                    result=initial(runner,root,archive,ROWS[0],observed)
+                    self.assertTrue(set(LIFECYCLE_FILES) <= set(result['committedAssets']))
+                    self.assertIn('Client/Api.fs',result['committedAssets'])
+                    self.assertEqual(result['gitBlobs']['deploy/run-local.sh']['mode'],'100755')
+                    self.assertGreater((root/'Browser.Tests/two-client.spec.ts').stat().st_size,32768)
+                    tree_rows={name:git_reply(root,'ls-tree','caller','--',name) for name in result['committedAssets']}
+                    target=root/'Client/Api.fs';original=target.read_bytes()
+                    target.write_bytes(bytes([original[0] ^ 1])+original[1:])
+                    runner.git.side_effect=lambda r,*args:tree_rows[args[-1]] if args[0]=='ls-tree' else git_reply(r,*args)
+                    with self.assertRaisesRegex(ValueError,'initial-owner-blob:Client/Api.fs'):initial(runner,root,archive,ROWS[0],observed)
+                    target.write_bytes(original)
+                    for changed in ('', tree_rows['Client/Api.fs'].replace('100644','100755',1)):
+                        runner.git.side_effect=lambda r,*args:changed if args[0]=='ls-tree' and args[-1]=='Client/Api.fs' else git_reply(r,*args)
+                        with self.assertRaisesRegex(ValueError,'initial-owner-blob:Client/Api.fs'):initial(runner,root,archive,ROWS[0],observed)
+                    runner.git.side_effect=lambda r,*args:'\n'.join(n for n in allfiles().splitlines() if n!='.fsgg/sdd.yml') if args[0]=='ls-files' else git_reply(r,*args)
+                    with self.assertRaisesRegex(ValueError,'initial-inclusion'):initial(runner,root,archive,ROWS[0],observed)
 
         def test_actual_driver_both_auto_rows_initial_commit_before_probe(self):
             with tempfile.TemporaryDirectory() as td:
