@@ -1132,7 +1132,7 @@ five drivers, five game skills, six rendering skills and one audio skill. Missin
 profile parameters exclude profile-only predicates; PLAYER excludes tactical,
 studio and complete-only predicates. Driver/game union rows use the published
 `always` projection; rendering/audio rows retain supplier and predicate. Each
-agent root must carry the exact union, matching amended-manifest provenance,
+published agent skill root must carry the exact union, matching amended-manifest provenance,
 and every selected supplier file with its exact bytes and mode. Because schema1
 has no per-file field, complete supplier file sets are verified independently
 against the compiled transport catalog; no whole-manifest ownership exemption
@@ -1152,3 +1152,24 @@ not establish actual receiver acceptance: both genuine receivers need separate
 root runtime admission, original deadline, custody, qualified cleanup and
 independent result acceptance. Other parent4642 routes, product/browser/WASM
 acceptance, retained upgrades and historical failures/Unknowns remain separate.
+
+
+The first admitted PLAYER operation stopped after its three successful scaffold
+commands because the adapter incorrectly demanded a `.codex/skills` union manifest.
+Published SDD2.2.0 defines exactly `.claude` and `.agents` in
+[`Contracts.Schemas.agentSkillRoots`](https://github.com/FS-GG/FS.GG.SDD/blob/cf2f046a10497a336d6243c9a314c3f91fb15771/src/FS.GG.Contracts/Schemas.fs).
+The original fixtures repeated the same incorrect three-root assumption, so their
+green result did not authenticate the producer contract. The repair derives the
+expected roots from the pinned declaration and independently authenticates both
+the complete published Schemas source and genuine compiled Contracts assembly.
+All union, seeded-skill, provenance and initial-commit checks follow that root set.
+Product-owned `.codex` assets remain in the complete package inventory and Git
+blob proof; their presence does not imply a producer-emitted union manifest.
+New causal controls independently pin the actual producer root contract and
+preserve product-owned Codex bytes/modes without requiring that manifest.
+
+Runtime01's original failure, partial receiver, receipts and custody remain
+retained. It ran no initial commit or knowledge probes and accepts no PLAYER
+receiver. The separately accepted [non-SVG provider result](https://github.com/FS-GG/.github/issues/4773#issuecomment-6324485155)
+accepts only its two non-SVG published receivers; PLAYER and the other parent
+acceptance remain separate. This source repair authorizes no replay.
