@@ -899,7 +899,7 @@ class CandidateReadFirstTests(unittest.TestCase):
         for feed in gate.FEEDS.values():
             index = feed + "/index.json"
             package = feed + f"/{gate.VERSION}/fs.gg.telemetry.host.{gate.VERSION}.nupkg"
-            for case in ("401", "403", "404", "empty", "shape", "bad-json", "oversize", "length",
+            for case in ("401", "403", "404", "empty", "shape", "bad-json", "duplicate-json", "nonfinite-json", "oversize", "length",
                          "redirect", "timeout", "missing-predecessor", "occupied", "normalized-occupied",
                          "newer", "malformed-version", "package-present", "package-403", "package-redirect"):
                 with self.subTest(feed=feed, case=case):
@@ -910,6 +910,10 @@ class CandidateReadFirstTests(unittest.TestCase):
                         replacement = TimeoutError("never-print-this-secret")
                     elif case == "bad-json":
                         replacement = self.response(index, None, raw=b"not json")
+                    elif case == "duplicate-json":
+                        replacement = self.response(index, None, raw=b'{"versions":["0.8.0"],"versions":["0.7.0"]}')
+                    elif case == "nonfinite-json":
+                        replacement = self.response(index, None, raw=b'{"versions":["0.7.0"],"ignored":NaN}')
                     elif case == "oversize":
                         replacement = self.response(index, None, raw=b" " * (gate.MAX_BYTES + 1))
                     elif case == "length":

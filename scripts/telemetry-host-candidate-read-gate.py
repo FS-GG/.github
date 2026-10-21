@@ -41,6 +41,21 @@ def require(condition: bool, reason: str) -> None:
         raise Refused(reason)
 
 
+def closed_json(raw: bytes):
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate-key")
+            result[key] = value
+        return result
+
+    def invalid_constant(_):
+        raise ValueError("nonfinite-json")
+
+    return json.loads(raw, object_pairs_hook=unique_object, parse_constant=invalid_constant)
+
+
 class Reader:
     """Seven fixed GETs at most; redirects and oversized bodies are refused."""
 
@@ -81,7 +96,7 @@ class Reader:
                         break
                     raw.extend(chunk)
                     require(len(raw) <= MAX_BYTES, "response-size")
-                return json.loads(raw)
+                return closed_json(raw)
         except urllib.error.HTTPError as error:
             status = error.code
             error.close()
