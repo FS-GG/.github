@@ -1098,3 +1098,15 @@ without children. Source review/CI establish source readiness only; full public
 receivers and independent result acceptance require separate root admission.
 Wizard/literal positives, retained upgrades, browser/WASM/product acceptance and
 all historical failures and Unknown reservations keep their original scopes.
+
+
+The first admitted provider operation stopped at its third command when scaffold's
+JSON report exceeded the qualified 32 KiB per-stream bound. Its original failure,
+partial receiver and incomplete stream/group observations remain retained; this
+source correction grants no replay. The adapter now explicitly selects the
+published SDD 2.2.0 `--text` renderer, which reports a changed-artifact count rather
+than serializing every changed-artifact object. Omitting the format flag would
+still select JSON. Filesystem, complete product inventory, provenance, initial Git
+and knowledge assertions remain the qualification boundary, and the collector's
+stream limit is unchanged. A fresh operation needs separate root admission and
+new output roots; historical cleanup uncertainty is not released by this repair.
