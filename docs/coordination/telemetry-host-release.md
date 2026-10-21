@@ -14,9 +14,18 @@ This source prepares **0.8.0**, `telemetry-host/v0.8.0` and logical journal14 at
 are prospective coordinates, not an availability claim. Root's native4707 ruling
 permits this reversible source preparation despite the current org-feed REST and
 maintained NuGet v3 reads returning HTTP403. Org-feed occupancy remains **Unknown**.
-Candidate selection and publication require fresh authoritative checks of both
-feeds, tag, release, journal destination and exact source. If a coordinate exists,
-change the prospective source profile before selecting a candidate. No dispatch
+The later [root read-first decision](https://github.com/FS-GG/.github/issues/4707)
+permits a separately admitted first-attempt candidate invocation to establish feed
+absence in its mandatory first gate. That gate precedes SDK setup, tests, build,
+pack and archive creation. Both authenticated/public indexes must demonstrate the
+known0.7 predecessor and normalized0.8 absence; exact package reads must also return404.
+Unreadable, redirected, oversized, occupied, contradictory or stale observations
+stop the original invocation before candidate work. Failed reads grant no retry.
+Root still verifies tag/release occupancy, Authority journal14 destination/protection
+and exact accepted source before any invocation; repository-token Authority or
+private draft visibility is not assumed. Source journal literals are not native
+absence. Publication repeats fresh effect admission and remains separate. If a
+coordinate exists, change the prospective source profile through review. No dispatch
 or publication follows from this source decision; the publisher stays default-false.
 Published0.7/journal13 and the held0.6/journal12 originals remain unchanged.
 
@@ -34,6 +43,11 @@ and fake-provider controls before costly builds. This bounded composition change
 does not introduce a new effect machine, so no custom model is selected. Initial
 composition/static review is capped at30minutes; required source, coherent-run,
 authority, reproducible-package and installed-runtime checks remain applicable.
+The read-first helper has seven fixed GETs at most, bounded response bodies and
+request/deadline checks within a five-minute Actions step. Its focused preflight is
+`python3 tests/telemetry-host-successor/run.py CandidateReadFirstTests EarlyQualificationTests`:
+fake transport failures must prevent dependent work, and workflow mutation checks
+reject moving, skipping or bypassing the gate. These controls do not read live feeds.
 The release candidate must be a genuine first-attempt exact-main three-member
 artifact; source qualification artifacts and earlier candidates cannot substitute.
 Each later preflight/publication/adoption effect needs its own existing admission.

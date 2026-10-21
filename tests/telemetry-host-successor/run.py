@@ -811,5 +811,241 @@ class CurrentHostPublisherTests(unittest.TestCase):
 
 
 
+class CandidateReadFirstTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("host_candidate_read_gate", ROOT / "scripts/telemetry-host-candidate-read-gate.py")
+        cls.gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.gate)
+
+    def environment(self):
+        return {"GITHUB_REPOSITORY": "FS-GG/.github", "GITHUB_REPOSITORY_ID": "1269292704",
+                "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/main",
+                "GITHUB_ACTOR": "EHotwagner", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_SHA": "a" * 40,
+                "GITHUB_RUN_ID": "123", "GITHUB_TOKEN": "never-print-this-secret"}
+
+    def response(self, url, value, *, raw=None, length=None, redirect=None):
+        class Response(io.BytesIO):
+            status = 200
+            headers = {} if length is None else {"Content-Length": length}
+
+            def geturl(self):
+                return redirect or url
+
+        return Response(json.dumps(value).encode() if raw is None else raw)
+
+    def routes(self):
+        gate = self.gate
+        main = gate.API + "/git/ref/heads/main"
+        tag = gate.API + "/git/ref/tags/" + gate.TAG
+        value = {"ref": "refs/heads/main", "object": {"type": "commit", "sha": "a" * 40,
+                                                       "url": gate.API + "/git/commits/" + "a" * 40}}
+        routes = {main: [self.response(main, value), self.response(main, value)],
+                  tag: [urllib.error.HTTPError(tag, 404, "not found", {}, io.BytesIO())]}
+        for base in gate.FEEDS.values():
+            index = base + "/index.json"
+            package = base + f"/{gate.VERSION}/fs.gg.telemetry.host.{gate.VERSION}.nupkg"
+            routes[index] = [self.response(index, {"versions": ["0.6.0", "0.7.0"]})]
+            routes[package] = [urllib.error.HTTPError(package, 404, "not found", {}, io.BytesIO())]
+        return routes
+
+    def invoke(self, routes=None, environment=None, *, binding_error=None, checkout="a" * 40):
+        gate = self.gate
+        selected = self.routes() if routes is None else routes
+        calls, launched = [], []
+
+        def open_request(request, timeout):
+            calls.append((request.full_url, request.get_method(), timeout, dict(request.header_items())))
+            value = selected[request.full_url].pop(0)
+            if isinstance(value, Exception):
+                raise value
+            return value
+
+        output, error = io.StringIO(), io.StringIO()
+        with patch.dict(os.environ, self.environment() if environment is None else environment, clear=True), \
+             patch.object(gate.urllib.request, "build_opener", return_value=SimpleNamespace(open=open_request)), \
+             patch.object(gate.subprocess, "run", return_value=SimpleNamespace(stdout=checkout)), \
+             contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+            if binding_error is None:
+                result = gate.main()
+            else:
+                with patch.object(gate, "source_bindings", side_effect=binding_error):
+                    result = gate.main()
+            if result == 0:
+                launched.append("candidate-work")
+        for values in selected.values():
+            for value in values:
+                if hasattr(value, "close"):
+                    value.close()
+        self.assertNotIn("never-print-this-secret", output.getvalue() + error.getvalue())
+        self.assertTrue(all(method == "GET" and 0 < timeout <= 30 for _, method, timeout, _ in calls))
+        self.assertLessEqual(len(calls), 7)
+        return result, launched, calls, output.getvalue(), error.getvalue()
+
+    def test_readable_absent_coordinates_reach_existing_candidate_path(self):
+        result, launched, calls, output, _ = self.invoke()
+        self.assertEqual((result, launched, len(calls)), (0, ["candidate-work"], 7))
+        proof = json.loads(output)
+        self.assertEqual(proof["feedAbsence"], "verified")
+        self.assertFalse(proof["candidateCreated"])
+        self.assertEqual(proof["journalNativeAbsence"], "not-observed")
+        self.assertEqual(calls[0][0], calls[-1][0])
+        for url, _, _, headers in calls:
+            if url.startswith(self.gate.FEEDS["nuget"]):
+                self.assertNotIn("Authorization", headers)
+
+    def test_unreadable_or_occupied_feed_never_reaches_candidate_work(self):
+        gate = self.gate
+        for feed in gate.FEEDS.values():
+            index = feed + "/index.json"
+            package = feed + f"/{gate.VERSION}/fs.gg.telemetry.host.{gate.VERSION}.nupkg"
+            for case in ("401", "403", "404", "empty", "shape", "bad-json", "oversize", "length",
+                         "redirect", "timeout", "missing-predecessor", "occupied", "normalized-occupied",
+                         "newer", "malformed-version", "package-present", "package-403", "package-redirect"):
+                with self.subTest(feed=feed, case=case):
+                    routes = self.routes()
+                    if case.isdecimal():
+                        replacement = urllib.error.HTTPError(index, int(case), "private-response", {}, io.BytesIO())
+                    elif case == "timeout":
+                        replacement = TimeoutError("never-print-this-secret")
+                    elif case == "bad-json":
+                        replacement = self.response(index, None, raw=b"not json")
+                    elif case == "oversize":
+                        replacement = self.response(index, None, raw=b" " * (gate.MAX_BYTES + 1))
+                    elif case == "length":
+                        replacement = self.response(index, {}, length=str(gate.MAX_BYTES + 1))
+                    elif case == "redirect":
+                        replacement = self.response(index, {}, redirect="https://unselected.invalid/index.json")
+                    elif case.startswith("package-"):
+                        routes[package][0].close()
+                        routes[package] = [self.response(package, {}) if case == "package-present" else
+                                           urllib.error.HTTPError(package, 403 if case == "package-403" else 302,
+                                                                  "never-print-this-secret", {}, io.BytesIO())]
+                        replacement = None
+                    else:
+                        values = {"empty": [], "shape": "0.7.0", "missing-predecessor": ["0.6.0"],
+                                  "occupied": ["0.7.0", "0.8.0"], "normalized-occupied": ["0.7", "0.8.0.0"],
+                                  "newer": ["0.7.0", "0.9.0"], "malformed-version": ["0.7.0", "never-print-this-secret"]}
+                        replacement = self.response(index, {"versions": values[case]})
+                    if replacement is not None:
+                        routes[index][0].close()
+                        routes[index] = [replacement]
+                    result, launched, _, _, _ = self.invoke(routes)
+                    self.assertEqual((result, launched), (1, []))
+
+    def test_context_source_and_final_main_barriers_refuse_before_candidate(self):
+        for key, bad in {"GITHUB_ACTOR": "other", "GITHUB_RUN_ATTEMPT": "2", "GITHUB_REF": "refs/heads/other",
+                         "GITHUB_EVENT_NAME": "pull_request", "GITHUB_REPOSITORY_ID": "1", "GITHUB_TOKEN": "",
+                         "GITHUB_RUN_ID": "0", "GITHUB_SHA": "bad"}.items():
+            with self.subTest(key=key):
+                result, launched, calls, _, _ = self.invoke(environment={**self.environment(), key: bad})
+                self.assertEqual((result, launched, calls), (1, [], []))
+        for kwargs in ({"checkout": "b" * 40}, {"binding_error": self.gate.Refused("release-source-binding")}):
+            result, launched, calls, _, _ = self.invoke(**kwargs)
+            self.assertEqual((result, launched, calls), (1, [], []))
+        main = self.gate.API + "/git/ref/heads/main"
+        for position in (0, 1):
+            routes = self.routes()
+            routes[main][position].close()
+            routes[main][position] = self.response(main, {"ref": "refs/heads/main", "object": {"type": "commit", "sha": "b" * 40}})
+            result, launched, _, _, _ = self.invoke(routes)
+            self.assertEqual((result, launched), (1, []))
+
+    def test_request_deadline_bounds_and_redirect_policy_are_real(self):
+        gate = self.gate
+        reader = gate.Reader("private")
+        for mutate in (lambda: setattr(reader, "deadline", 0), lambda: setattr(reader, "requests", 7)):
+            reader.deadline = gate.time.monotonic() + 240
+            reader.requests = 0
+            mutate()
+            with patch.object(reader.opener, "open") as opener:
+                with self.assertRaises(gate.Refused):
+                    reader.get(gate.API + "/git/ref/heads/main")
+                opener.assert_not_called()
+        with self.assertRaises(gate.GateError):
+            gate._RefuseFeedIndexRedirect().redirect_request(None, None, 302, "redirect", {}, "https://unselected.invalid")
+
+    def test_transport_deadline_cleanup_and_unselected_endpoint(self):
+        gate = self.gate
+        url = gate.API + "/git/ref/heads/main"
+        reader = gate.Reader("private")
+        with patch.object(reader.opener, "open") as opener:
+            with self.assertRaises(gate.Refused):
+                reader.get("https://unselected.invalid")
+            opener.assert_not_called()
+        response = self.response(url, {})
+        # Expiry during response handling closes the response and refuses success.
+        with patch.object(reader.opener, "open", return_value=response), \
+             patch.object(gate.time, "monotonic", side_effect=[reader.deadline - 1, reader.deadline + 1]):
+            with self.assertRaisesRegex(gate.Refused, "observation-deadline"):
+                reader.get(url)
+        self.assertTrue(response.closed)
+        package = gate.FEEDS["github"] + f"/{gate.VERSION}/fs.gg.telemetry.host.{gate.VERSION}.nupkg"
+        response = self.response(package, {})
+        with patch.object(reader.opener, "open", return_value=response), patch.object(response, "read1") as read:
+            with self.assertRaisesRegex(gate.Refused, "coordinate-occupied"):
+                reader.get(package, absent=True)
+            read.assert_not_called()
+        self.assertTrue(response.closed)
+        routes = self.routes()
+        tag = gate.API + "/git/ref/tags/" + gate.TAG
+        routes[tag][0].close()
+        routes[tag] = [self.response(tag, {})]
+        result, launched, _, _, _ = self.invoke(routes)
+        self.assertEqual((result, launched), (1, []))
+
+    def test_source_journal_literal_is_checked_without_claiming_native_absence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            paths = ["src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj",
+                     "scripts/telemetry_host_successor_execution.py", "scripts/telemetry-host-successor-publish.py"]
+            for path in paths:
+                (root / path).parent.mkdir(parents=True, exist_ok=True)
+                (root / path).write_bytes((ROOT / path).read_bytes())
+            self.gate.source_bindings(root)
+            for path, old, new in [(paths[0], "<Version>0.8.0</Version>", "<Version>0.7.0</Version>"),
+                                   (paths[1], 'VERSION = "0.8.0"', 'VERSION = "0.6.0"'),
+                                   (paths[2], "utel-host-rel-14", "utel-host-rel-12")]:
+                original = (root / path).read_text()
+                (root / path).write_text(original.replace(old, new))
+                with self.assertRaises(self.gate.Refused):
+                    self.gate.source_bindings(root)
+                (root / path).write_text(original)
+
+    def test_actual_workflow_requires_gate_before_every_candidate_step(self):
+        source = (ROOT / ".github/workflows/release-telemetry-host-successor-candidate.yml").read_text()
+
+        def check(text):
+            steps = text.split("    steps:\n", 1)[1].split("      - ")[1:]
+            assert "actions/checkout@" in steps[0]
+            assert "id: read-first\n" in steps[1]
+            assert "timeout-minutes: 5\n" in steps[1]
+            assert "run: python3 scripts/telemetry-host-candidate-read-gate.py\n" in steps[1]
+            assert "GITHUB_TOKEN: ${{ github.token }}" in steps[1]
+            assert "if:" not in steps[1] and "continue-on-error:" not in text
+            assert "actions/setup-dotnet@" in steps[2]
+            assert "packages: read" in text and "contents: read" in text and "id-token:" not in text
+            for step in steps[2:]:
+                if "if:" in step:
+                    assert "name: Retain passive Host HTTP diagnostics" in step
+                    assert "always() && steps.read-first.outcome == 'success'" in step
+            assert "dotnet msbuild" in text and "Refuse changed main before retaining candidate" in text
+            assert "--version 0.8.0 --tag telemetry-host/v0.8.0" in text
+
+        check(source)
+        gate = source.split("      - name: Refuse unreadable", 1)[1].split("      - uses: actions/setup-dotnet", 1)[0]
+        for mutant in [source.replace("id: read-first", "id: optional"),
+                       source.replace("run: python3 scripts/telemetry-host-candidate-read-gate.py", "run: echo bypass"),
+                       source.replace("id: read-first", "id: read-first\n        if: false"),
+                       source.replace("id: read-first", "id: read-first\n        continue-on-error: true"),
+                       source.replace("packages: read", "packages: write"),
+                       source.replace("always() && steps.read-first.outcome == 'success'", "always()"),
+                       source.replace("      - uses: actions/setup-dotnet", "      - name: early-pack\n        run: dotnet pack\n      - uses: actions/setup-dotnet"),
+                       source.replace("      - name: Pack and bind one exact Host archive", "      - name: Pack and bind one exact Host archive\n        if: always()"),
+                       source.replace("      - name: Refuse unreadable" + gate, "")]:
+            with self.assertRaises((AssertionError, IndexError, ValueError)):
+                check(mutant)
+
+
 if __name__ == "__main__":
     unittest.main()
