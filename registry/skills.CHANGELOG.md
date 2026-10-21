@@ -31,6 +31,8 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-10-21** — PUBLISHED112 INVENTORY (.github; #4789): reconcile only the generated publishing-and-deployment operator inventory and its existing driver-manifest/skills-registry digest after accepted coherent112 publication. Immutable source d5af and its original packages remain unchanged; selected SDD/Codex instruction adoption is separately qualified.
+
 - **2026-10-21** — CANONICAL CURRENT ROUTES (.github; #4789):
 
 Retire live sealed release/legacy intake recipes; make inspection read-only and
