@@ -1,0 +1,13 @@
+# Fable-game provider enrollment — cohort 58
+
+This carrier enrolls [Delivery #4773](https://github.com/FS-GG/.github/issues/4773) under [Outcome #4642](https://github.com/FS-GG/.github/issues/4642). Its future qualification uses two genuine published Workspace.Template 0.19.0 non-SVG Fable-game provider receivers: explicit typed SDD and genuine provider lifecycle omission. Both must prove automatic typed knowledge initialization and full capture/recovery. Accepted RAW #4759, #4766 and #4769 retain their separate scopes.
+
+The existing authentic constructor produced the private binding/public commitment pair once in 0.131 seconds. All 57 prior ordered entries are preserved; only #4773 is appended. The nine repositories, qualified caller/import identities and other binding fields remain unchanged. The constructor retains the accepted cohort-57 population origin `dcb7180e6482b567e89ff6387cbb003c919b892f`; this is distinct from the carrier source base and the later installed qualification anchor. No nonce or commitment was constructed manually.
+
+The [public manifest](board-v2-import-manifest.json) is the exact 139-byte constructor output, SHA256 `5f92720f9015b17d5bcbd33293efcd32f5c103cb15f26bd4439a9ab592b29c65`. The private binding, ordered payload and nonce stay outside source. This carrier publishes no private membership list or runtime logs.
+
+Before construction, guarded installed caller 111 initialization set only #4773's four absent values: Backlog, Delivery, Active delivery and the inherited SDD knowledge roadmap. Root verified preservation of all 58 memberships, 17 fields, eight views and the other 57 rows. Membership appeared automatically with an Unknown actor; no duplicate add was sent. The earlier strict-57 Status guard refused before sending when it observed that extra item; its original refusal remains preserved.
+
+The accepted installed caller 0.111.0 and the separately sealed canonical constructor/import identities are unchanged; their roles remain distinct as recorded in the [prior enrollment carrier](2026-10-21-cohort57-enrollment.md). This source change performs no live Project mutation, caller update or receiver execution.
+
+Normal protected delivery, a binding anchored to the actual enrollment merge, full installed caller 111 qualification of all 58 items and explicit implementation dispatch remain separate gates. Programme/root owns those decisions; the existing source/receiver owner retains the complete #4773 promise. Parent #4642's provider/Wizard and retained-upgrade assertions, the scoped #1113 occupancy Unknown and every other owner, original failure and historical reservation remain unchanged.
