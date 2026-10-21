@@ -88,7 +88,18 @@ def retired_intake_recipe(text: str) -> bool:
 
 
 def retired_release_commands(text: str) -> bool:
-    return bool(re.search(r"(?m)^\s*(?:command\s+)?gh\s+workflow\s+run\s+(?:release-saga-(?:prepare|promote)|release-(?:kit|drivers|coord-engine))\.yml\b", text))
+    workflow = r"(?:\.github/workflows/)?(?:release-saga-(?:prepare|promote)|release-(?:kit|drivers|coord-engine))\.yml\b"
+    shell = re.search(r"(?m)^\s*(?:command\s+)?gh\s+workflow\s+run\s+" + workflow, text)
+    # The original defect was an imperative prose recipe, not a shell command.
+    # Inspect each paragraph so an explicit sealed-history statement remains data.
+    for paragraph in re.split(r"\n\s*\n", text):
+        if not re.search(workflow, paragraph):
+            continue
+        if re.search(r"(?i)\b(?:do not|never|must not)\s+(?:dispatch|run|invoke)\b", paragraph):
+            continue
+        if re.search(r"(?i)\bdispatch\s+(?:the\s+)?`?" + workflow, paragraph):
+            return True
+    return bool(shell)
 
 
 def audit(root: Path) -> list[str]:
@@ -170,6 +181,19 @@ scripts/fsgg-coord intake validate intake.json --json
         raise Finding("current release entrypoint accepted sealed prepare workflow")
     if retired_intake_recipe("The legacy recipe is retired; no invocation is selected."):
         raise Finding("non-executable retirement disposition was rejected")
+    original_recipe = """On exact merged `main`, dispatch `.github/workflows/release-saga-prepare.yml` with the fresh version
+and source SHA. Require its Core/CLI/package gates to pass.
+
+Dispatch `.github/workflows/release-saga-promote.yml` only after all three journals exist.
+"""
+    if not retired_release_commands(original_recipe):
+        raise Finding("original imperative sealed release recipe was accepted")
+    for history in (
+        "Historical `.github/workflows/release-saga-prepare.yml` remains sealed; no operation is selected.",
+        "Do not dispatch `.github/workflows/release-saga-promote.yml`; retain original custody.",
+    ):
+        if retired_release_commands(history):
+            raise Finding("sealed historical release mention was rejected")
 
     marked = """```sh
 # fsgg:intake-break-glass: intake is unavailable and the operator records the owed projection
