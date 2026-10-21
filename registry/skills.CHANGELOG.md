@@ -31,6 +31,8 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-10-21** — SOURCE111 READINESS (Programme/root; .github#4743): reconcile only the maintained `publishing-and-deployment` operator inventory projection and its existing manifest/registry digest after coherent source advances111 while published110 remains. No skill population/schema or materialization change; packaged work-board changes were already protected by4751. Source is neither publication nor installed instruction/caller adoption.
+
 - **2026-10-20** — PUBLICATION PROJECTION (Programme/root; .github#4731/#4730): reconcile the `publishing-and-deployment` operator row and driver manifest from the maintained generator after genuine coherent110 publication acceptance. The current published inventory advances109 to110; released110 artifacts and Creator dependencies remain immutable. Canonical source metadata does not establish installed instruction/caller or native observer acceptance.
 
 - **2026-10-20** — SOURCE021 publication guidance projection (Programme/root; .github#4727): reconcile the maintained publishing-and-deployment source-version projection and producer digest for Creator source0.21 while retaining published0.20 and all release authority boundaries.

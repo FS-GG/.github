@@ -29,7 +29,7 @@ from release_successor_journal import Refused as JournalRefused
 import new_sdd_workspace_successor_admission as source_admission
 from new_sdd_workspace_successor_admission import WizardAdmission, SourceCompatibility
 from new_sdd_workspace_successor_execution import effects, CURRENT_017, CURRENT_021, CURRENT_020, CURRENT_019, CURRENT_016, CURRENT_015, CURRENT_014, HISTORICAL_013, ReleaseBinding
-from creator_source_qualification import SOURCE_020, SOURCE_021, SOURCE_COHERENT_VERSION, qualification_version
+from creator_source_qualification import SOURCE_020, SOURCE_021, SOURCE_020_COHERENT_VERSION, SOURCE_COHERENT_VERSION, qualification_version
 from new_sdd_workspace_successor_provider import WizardProvider, NotFound, output_signals, publisher_error, DIAGNOSTIC_LIMIT
 
 
@@ -136,7 +136,8 @@ def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root
     if checker.package_identity(package) != (release_binding.package, release_binding.version, source_sha):
         raise ValueError("current creator package/source identity differs")
     dependency_pin = json.loads((source_root / "scripts/creator-frozen-coord-dependencies.json").read_text())
-    coherent_version = (SOURCE_COHERENT_VERSION if release_binding is SOURCE_020 or release_binding is SOURCE_021 else
+    coherent_version = (SOURCE_COHERENT_VERSION if release_binding is SOURCE_021 else
+                        SOURCE_020_COHERENT_VERSION if release_binding is SOURCE_020 else
                         "0.108.0" if release_binding is CURRENT_019 else dependency_pin["version"])
     if release_binding in (CURRENT_019, SOURCE_020, SOURCE_021) and (frozen_dependencies is not None or frozen_source is not None):
         raise ValueError("Creator 0.19 requires its normal 0.108 source graph, not retained frozen inputs")
@@ -581,7 +582,7 @@ class WizardReleaseTests(unittest.TestCase):
                 board_package_closure(package, 'a' * 40, source_root=root)
             project_path.write_bytes(original_project)
 
-            # The new explicit source binding follows the current110 build graph. It must never
+            # The retained020 source binding follows its110 build graph. It must never
             # confuse normal source output with the separately retained genuine108 dependency mode.
             nuspec = nuspec.replace(b'0.19.0', b'0.20.0')
             source_deps = json.loads(json.dumps(deps))
@@ -602,7 +603,7 @@ class WizardReleaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'package/source identity'):
                 board_package_closure(package, 'a' * 40, source_root=root)
             # Neither the previous normal source graph nor genuine published108 qualifies110.
-            for stale_version in ('0.109.0', '0.108.0'):
+            for stale_version in ('0.111.0', '0.109.0', '0.108.0'):
                 stale_metadata = json.dumps(source_deps).replace('0.110.0', stale_version).encode()
                 (output / 'new-sdd-workspace.deps.json').write_bytes(stale_metadata)
                 pack({**selected_members, 'new-sdd-workspace.deps.json': stale_metadata})
@@ -610,9 +611,9 @@ class WizardReleaseTests(unittest.TestCase):
                     board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_020)
 
 
-            # The selected021 source identity is normal110 only; retained020 above stays exact.
+            # The selected021 source identity is normal111 only; retained020 above stays exact.
             nuspec = nuspec.replace(b'0.20.0', b'0.21.0')
-            next_deps = json.loads(json.dumps(source_deps))
+            next_deps = json.loads(json.dumps(source_deps).replace('0.110.0', '0.111.0'))
             for target in next_deps['targets'].values():
                 target['new-sdd-workspace/0.21.0'] = target.pop('new-sdd-workspace/0.20.0')
             next_members = {**members, 'new-sdd-workspace.deps.json': json.dumps(next_deps).encode()}
@@ -620,7 +621,7 @@ class WizardReleaseTests(unittest.TestCase):
                 (output / name).write_bytes(body)
             pack(next_members)
             result = board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_021)
-            self.assertEqual((result['version'], result['coherentVersion']), ('0.21.0', '0.110.0'))
+            self.assertEqual((result['version'], result['coherentVersion']), ('0.21.0', '0.111.0'))
             self.assertEqual(result['builtFilesCompared'], len(next_members))
             self.assertEqual(result['mode'], 'source-only')
             self.assertIs(result['releaseEligible'], False)
@@ -631,8 +632,8 @@ class WizardReleaseTests(unittest.TestCase):
             forged = type(SOURCE_021)(SOURCE_021.package, SOURCE_021.version, SOURCE_021.tag)
             with self.assertRaisesRegex(ValueError, 'unknown Creator package binding'):
                 board_package_closure(package, 'a' * 40, source_root=root, release_binding=forged)
-            for stale_version in ('0.109.0', '0.108.0'):
-                stale_metadata = json.dumps(next_deps).replace('0.110.0', stale_version).encode()
+            for stale_version in ('0.110.0', '0.109.0', '0.108.0'):
+                stale_metadata = json.dumps(next_deps).replace('0.111.0', stale_version).encode()
                 (output / 'new-sdd-workspace.deps.json').write_bytes(stale_metadata)
                 pack({**next_members, 'new-sdd-workspace.deps.json': stale_metadata})
                 with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
@@ -745,6 +746,8 @@ class WizardReleaseTests(unittest.TestCase):
         self.assertIn('--tag new-sdd-workspace/v0.21.0', candidate)
         props = ElementTree.parse(ROOT / 'Directory.Build.props')
         self.assertEqual(next(node.text for node in props.iter('FsggCoherentSetVersion')), SOURCE_COHERENT_VERSION)
+        self.assertEqual(SOURCE_020_COHERENT_VERSION, '0.110.0')
+        self.assertEqual(SOURCE_COHERENT_VERSION, '0.111.0')
         self.assertLess(candidate.index("creator-current-coord-dependencies.py preflight"),
                         candidate.index("actions/setup-dotnet"))
         self.assertIn('creator-current-coord-dependencies.py preflight', candidate)
