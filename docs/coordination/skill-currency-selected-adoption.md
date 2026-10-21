@@ -127,8 +127,10 @@ The consumed 0.111.0 publication cannot be replayed to carry new skill bytes.
 No next version or publication authority is allocated by this plan.
 
 Verify the immutable candidate, successful `publish=false` preflight and separately
-admitted ordinary publication, both-feed byte identity, tags/assets, original journal
-and promotion. A published package alone does not establish receiver adoption.
+admitted ordinary publication, each feed's raw archive identity against its promoted
+receipt and normalized producer-payload equality across both feeds, tags/assets,
+original journal and promotion. A published package alone does not establish
+receiver adoption.
 
 Use an isolated ordinary SDD adoption PR to update its owned Kit pin and actual
 required lock outputs. Materialize the exact accepted public package through the
