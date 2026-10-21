@@ -1,6 +1,6 @@
 """Closed Creator021 normal-source qualification; deliberately grants no release effects.
 
-The normal Creator021 source composition is coherent111. Retained Creator020 source qualification
+The normal Creator021 source composition is coherent112. Retained Creator020 source qualification
 and its separate genuine108 published-dependency mode keep their identities. Creator021
 is normal-source only; neither source binding is an installed/publication receipt.
 """
@@ -16,7 +16,7 @@ class SourceQualificationBinding:
 SOURCE_020 = SourceQualificationBinding("FS.GG.NewSddWorkspace", "0.20.0", "new-sdd-workspace/v0.20.0")
 SOURCE_021 = SourceQualificationBinding("FS.GG.NewSddWorkspace", "0.21.0", "new-sdd-workspace/v0.21.0")
 SOURCE_020_COHERENT_VERSION = "0.110.0"
-SOURCE_COHERENT_VERSION = "0.111.0"
+SOURCE_COHERENT_VERSION = "0.112.0"
 
 
 def qualification_version(binding):
