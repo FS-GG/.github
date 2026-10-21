@@ -1060,3 +1060,41 @@ actual receivers; no frozen unbounded runner fallback is allowed. Source control
 review and CI establish source readiness only. Matrix4723, PLAYER4759, COMPLETE4766,
 4710 product/browser/WASM and the full parent4642 provider/Wizard/retained-upgrade
 promises and original failures/Unknowns retain their accepted or pending scopes.
+
+### Published non-SVG Fable-game provider qualification — Delivery #4773
+
+The dedicated `knowledge-fable-game-provider-public.py` adapter selects genuine
+published Workspace 0.19.0 through SDD 2.2.0 and the immutable provider descriptor.
+Both rows supply `svgFoundation=false` and omit bundle. Explicit typed selection
+and genuine provider lifecycle omission both resolve to typed SDD and automatic
+knowledge initialization. Standalone initialization and RAW omission are not used.
+
+Before probes, both rows authenticate the complete applicable public package
+product inventory, filename/content substitutions, exclusions and file modes,
+including product/lock/skill assets and excluded SVG content. They require
+effective-parameter provenance, automatic canonical seed/guide/central CI,
+and a normal caller initial commit with verified complete product, canonical and
+lifecycle Git blobs. Content-addressed Git blob identities and tree modes verify
+complete files while keeping command output below the finite stream cap. The
+genuine lifecycle artifacts include `.fsgg/project.yml`,
+`.fsgg/sdd.yml`, `.fsgg/agents.yml`, governance resolution, constitution, early-stage
+guidance and root agent guidance, with `work/` and `readiness/` directories, as
+defined by published SDD 2.2.0
+[`Foundation.initEffects`](https://github.com/FS-GG/FS.GG.SDD/blob/cf2f046a10497a336d6243c9a314c3f91fb15771/src/FS.GG.SDD.Commands/CommandWorkflow/Foundation.fs).
+The published hybrid tool writer may change layout while adding SDD 2.2.0 and
+Coord 0.94.0. Every original JSON value, type, property presence and unknown
+co-tenant property remains exact, including Fantomas explicit false; manifest
+mode and the original product ignore segment remain preserved. The published
+SDD scaffold adds all three execute bits to produced `.sh` files; the adapter
+requires that exact mode transformation and preserves every other product mode.
+Other product bytes stay exact. This does not weaken the separately accepted RAW byte spans.
+
+Both rows reuse the accepted finite injected runner and knowledge capture,
+retrieval/history, private exclusion, ALL-shared export/lossless restore, distinct
+Git bundle and exact 10 MiB/+1 checker ports after committing initial files. Pure
+causal controls exercise provider omission, complete ownership (including
+unhashed provenance entries), missing lifecycle artifacts and initial-commit ordering
+without children. Source review/CI establish source readiness only; full public
+receivers and independent result acceptance require separate root admission.
+Wizard/literal positives, retained upgrades, browser/WASM/product acceptance and
+all historical failures and Unknown reservations keep their original scopes.
