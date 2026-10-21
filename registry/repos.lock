@@ -6,11 +6,11 @@
 # `repos-registry-selftest` fails on any diff, so nobody AUTHORS it — a collision here is a REBASE,
 # not a decision. DO NOT reserve it in a `Paths:` touch-set (#527); regenerate it and name it as
 # expected drift in the PR.
-f34cb94d1f600e7cbae8cb9f8730bbdc1e02c9e54f2fc7a3c6a04ce090f3aee0  .claude/skills/check-board
+e196e822e7cf1cf07c77b4906e8fb18b7e6d78e81a2da1202ab0630ceee0d818  .claude/skills/check-board
 ef09573ed99cd3a83edc674438e8f7d76ac31f925c2e24c41c3962796beaaa0a  .claude/skills/cross-repo-coordination
 7c19d93267d4033e6ce2c2ea95c3d277c4f2d50d57426790e9a06149eacfd634  .claude/skills/initialize-sdd-workspace
 ecdfd164c4e8ec45272f7d71e0131a87fd3e3d7ef57356a07ec420e4fad60eaa  .claude/skills/intra-repo-parallel-work
-710564bd37cf630ab1d05f336b36ba1f916fee1762cf53d14e93c89732cd3ef3  .claude/skills/pnext-item
+e514e0af7661d06b4cbf1c36e90f32e944f18ba51a81e37393f7f318819f7cb4  .claude/skills/pnext-item
 a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf  scripts/fsgg-coord
 e1f63cda5b499f4fdd4396626c0bac013c49019daf182336df8c7513d24918ba  scripts/fsgg-coord-report
 1f2a70607268d549aa59c56e612e654e52021e9b7015e26c8fdaa97a4a3a869e  scripts/lib/args.sh

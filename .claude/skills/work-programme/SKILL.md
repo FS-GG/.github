@@ -9,7 +9,8 @@ The active coordinator is [$work-board](../work-board/SKILL.md). Load it and app
 organization or selected-product scope, including recovery, capacity and effect-specific admission.
 This compatibility entrypoint does not schedule from a roadmap, execute a legacy board route, rebuild
 packets or maintain duplicate status/closure records. Existing handoffs retain their original identities,
-failed/unknown effects, 439 inherited holds and 46 later original records without release or replay.
+failed/unknown effects and reservations without release or replay. Retrieve their actual identities
+and scope from the existing owning records rather than copying incident counts into this redirect.
 
 Old reference/helper paths redirect to the same maintained work-board resources. Their
 `fsgg.programme.*` schemas and `programme.fsx` basename remain compatibility identifiers, not an active

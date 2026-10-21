@@ -18,7 +18,6 @@ from pathlib import Path
 SKILL_ROOTS = (Path(".claude/skills"), Path(".agents/skills"))
 SCOPED_SKILLS = ("work-board", "p-add", "padd-item", "check-board", "cross-repo-coordination", "pnext-item")
 LEGACY_RECIPES = (
-    "padd-item/references/legacy-product-intake.md",
     "pnext-item/references/deep-detail.md",
     "cross-repo-coordination/references/deep-detail.md",
 )
@@ -83,6 +82,15 @@ def valid_validate_apply_order(actions: list[str]) -> bool:
     )
 
 
+def retired_intake_recipe(text: str) -> bool:
+    # A compatibility tombstone must not reintroduce an executable current recipe.
+    return bool(re.search(r"(?m)^\s*(?:command\s+)?scripts/fsgg-coord\s+", text))
+
+
+def retired_release_commands(text: str) -> bool:
+    return bool(re.search(r"(?m)^\s*(?:command\s+)?gh\s+workflow\s+run\s+(?:release-saga-(?:prepare|promote)|release-(?:kit|drivers|coord-engine))\.yml\b", text))
+
+
 def audit(root: Path) -> list[str]:
     errors: list[str] = []
     for skill_root in SKILL_ROOTS:
@@ -105,6 +113,13 @@ def audit(root: Path) -> list[str]:
                         f"{path.relative_to(root)}:{line}: direct issue creation bypasses "
                         f"canonical native intake or qualified legacy validate/apply: {command}"
                     )
+
+        retired = resolved / "padd-item/references/legacy-product-intake.md"
+        if not retired.is_file() or retired_intake_recipe(retired.read_text()):
+            errors.append(f"{retired.relative_to(root)}: retired appendix must contain no executable legacy recipe")
+        cut = resolved / "cut-nuget-release/SKILL.md"
+        if not cut.is_file() or retired_release_commands(cut.read_text()):
+            errors.append(f"{cut.relative_to(root)}: sealed release workflow is executable through current entrypoint")
 
         for recipe in LEGACY_RECIPES:
             path = resolved / recipe
@@ -149,6 +164,13 @@ scripts/fsgg-coord intake validate intake.json --json
     if valid_validate_apply_order(actions):
         raise Finding("negative fixture escaped: intake apply before validate was accepted")
 
+    if not retired_intake_recipe("scripts/fsgg-coord flush\n"):
+        raise Finding("retired appendix accepted queue-wide flush")
+    if not retired_release_commands("gh workflow run release-saga-prepare.yml\n"):
+        raise Finding("current release entrypoint accepted sealed prepare workflow")
+    if retired_intake_recipe("The legacy recipe is retired; no invocation is selected."):
+        raise Finding("non-executable retirement disposition was rejected")
+
     marked = """```sh
 # fsgg:intake-break-glass: intake is unavailable and the operator records the owed projection
 gh api -X POST repos/FS-GG/FS.GG.Game/issues -f title=emergency -f body=accountable
@@ -174,7 +196,7 @@ def main() -> int:
             print(f"validated-intake-filing: {error}", file=sys.stderr)
         return 1
     print(
-        "validated-intake-filing: OK — canonical native routing and legacy PRODUCT order verified; command-wrapped bypass and "
+        "validated-intake-filing: OK — canonical native routing, retired product appendix and retained legacy PRODUCT order verified; sealed release, queue replay, command-wrapped bypass and "
         "inverted validate/apply order rejected"
     )
     return 0

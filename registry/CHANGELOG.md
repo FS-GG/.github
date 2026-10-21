@@ -1,5 +1,14 @@
 # Registry changelog
 
+## 2026-10-21 — prospective coherent112 canonical skill routing (#4789)
+
+Select SOURCE0.112.0 for CLI/Kit/Drivers over genuine promoted111, with the distinct
+prospective coord112-skill-routing-20261021-01 journal identity. Published package
+version/tag and installed pins remain111. Correct current skill routes and qualify
+selected SDD adoption separately; no candidate, namespace allocation or publication
+is authorized. Preserve all111 original attempts and historical recovery identities.
+The shared coherent feed selector advances to112; accepted Host0.8 behavior is unchanged.
+
 ## 2026-10-21 — prospective independent Host0.8 source (#4707)
 
 Advance only Host source to0.8.0 to package the accepted unassigned-usage dashboard

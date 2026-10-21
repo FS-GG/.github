@@ -1,5 +1,10 @@
 # Mechanical reconciliation
 
+Historical/compatibility evidence only. The current [check-board entrypoint](../SKILL.md)
+is read-only and grants no repair, claim, queue replay or field-write authority.
+Any genuine product repair/recovery requires its own actual qualified caller, target,
+original custody and separately admitted operation. Archived commands are not a live fallback.
+
 ## Organization scope is read-only
 
 For prepared .9/.11 organization consumers use only

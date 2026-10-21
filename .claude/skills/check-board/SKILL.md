@@ -1,6 +1,6 @@
 ---
 name: check-board
-description: Use when the FS-GG Coordination board looks stale, blockers may have cleared, or planning needs ground truth. Reconcile project fields against live issues and surface judgement calls.
+description: Inspect the explicitly selected FS-GG board against native evidence; explain stale planning, blockers and Unknowns without repairing fields or granting dispatch.
 ---
 
 # check-board (FS-GG)
@@ -48,42 +48,21 @@ fsgg-coord-engine board-v2 inspect --binding-file product-binding.json --report-
 Inspection remains read-only and grants no writes, selection or operation authority. Local-only workspaces
 retain their existing route. This organization preparation changes no product source or acceptance.
 
-### Independently qualified legacy-product reconciliation
+### Repair and historical product evidence
 
-The legacy recipes below apply only to a separately qualified legacy-product target and lifecycle.
-Before any product command, verify the actual product target/binding and configured product repository;
-a repository filter alone does not select a board. Refuse missing or organization-default target facts.
-No historical organization live opt-in exists. These recipes cannot repair unavailable V2 evidence or
-select Project 1, including when a caller requests a historical organization scope.
+Inspection is read-only. Before any product command, verify the actual product target/binding and configured product repository;
+Refuse missing or organization-default target facts. No historical organization live opt-in exists.
+A repair needs its own current effect authority, qualified caller and independent readback;
+this entrypoint supplies none. Failed reads retain Unknown rather than selecting an older route.
 
-For that verified product target, replace `<configured-product-repo>` with its actual repository:
-
-```bash
-scripts/fsgg-coord reconcile --repo <configured-product-repo> --json
-scripts/fsgg-coord lint --repo <configured-product-repo> --json
-```
-
-`reconcile` is fresh and dry-run unless `--apply` is present. Review its typed mechanical findings and
-the product's existing write authority before the scoped apply; this skill grants no new effect:
-
-```bash
-scripts/fsgg-coord reconcile --repo <configured-product-repo> --apply
-scripts/fsgg-coord reconcile --repo <configured-product-repo> --json
-scripts/fsgg-coord lint --repo <configured-product-repo> --json
-```
-
-A repair is applied only after its fresh post-mutation scan observes the intended fields. Failed or
-stale readback remains failed, never clean. Exit75 retains the reported backoff. Queued writes are not
-landed: queue-wide replay has no repository filter and needs its separately admitted original-effect
-recovery route and genuine target readback. No replay command is authorized by this check-board pass.
-The [offline receipt examples](references/mechanical-reconciliation.md#executable-receipt-examples)
-retain their independently qualified meaning and perform no live writes.
-
-`lint` findings are report-only. Investigate unknown blockers, undeclared paths, unclaimed work and
-outcome/child disagreements without rewriting issues, inventing dependencies or closing work. Report
-product-scoped mechanical results, queued/failed writes, judgement findings and the final fresh result.
-Use [mechanical reconciliation](references/mechanical-reconciliation.md) and
-[judgement findings](references/judgement-findings.md) within that product boundary.
+Historical product reconciliation and the offline receipt examples are retained in
+[mechanical reconciliation](references/mechanical-reconciliation.md) and
+[deep detail](references/deep-detail.md). They are evidence, not a live invocation recipe.
+In particular, queue-wide replay has no repository filter and requires genuine original-effect
+custody and separately admitted recovery. Do not replay a queue from an inspection pass.
+Use [judgement findings](references/judgement-findings.md) to explain discrepancies without
+rewriting issues, inventing dependencies or choosing Status. Current canonical work-board
+owns selection and guarded planning; future controller conversion remains separate.
 
 ## Historical organization examples are data only
 

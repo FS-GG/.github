@@ -31,6 +31,14 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-10-21** — CANONICAL CURRENT ROUTES (.github; #4789):
+
+Retire live sealed release/legacy intake recipes; make inspection read-only and
+scope FS-GG delivery/recovery authority explicitly. Reconcile affected existing
+hub-owned source digests and complete-directory manifests through maintained
+preparation. Source-only112 does not establish package or selected SDD/Codex adoption;
+other framework consumers and operator withholding retain their explicit scope.
+
 - **2026-10-21** — Postpublication 111 metadata and curated source lesson (Programme/root; #4743/#4730): reconcile only generated publishing-and-deployment operator inventory and Atlas source/seed digests through the maintained manifest route. The new coherent-source-consumer-closure lesson records already delivered source controls. Current source metadata may differ from immutable published 111 / source bd60; no new seed installation, operational instruction change, package build or release is selected.
 
 - **2026-10-21** — SOURCE111 READINESS (Programme/root; .github#4743): reconcile only the maintained `publishing-and-deployment` operator inventory projection and its existing manifest/registry digest after coherent source advances111 while published110 remains. No skill population/schema or materialization change; packaged work-board changes were already protected by4751. Source is neither publication nor installed instruction/caller adoption.

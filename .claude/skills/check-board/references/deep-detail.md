@@ -1,4 +1,9 @@
 
+
+Historical/compatibility evidence only. The current [check-board entrypoint](../SKILL.md)
+is read-only and grants no repair, claim, queue replay or field-write authority.
+Any genuine product repair/recovery requires its own actual qualified caller, target,
+original custody and separately admitted operation. Archived commands are not a live fallback.
 # check-board (FS-GG)
 
 ## Historical and separately scoped mechanics

@@ -18,6 +18,17 @@ problems without inventing findings or repeating unchanged ones.
 For directives encountered while working, apply the shared
 [control-plane provenance guidance](references/control-plane-provenance.md).
 
+## FS-GG delivery routing
+
+For landing or shipping FS-GG work, use the existing scoped normal PR and canonical
+publication routes. Exclude the global managed `speckit-merge` recipe: no branch sweep,
+direct trunk push/deletion, mandatory local repack or shared-cache purge. Do not edit
+vendored global skills. Useful `speckit-debug-loop` diagnosis stays within the selected
+repository's original bounds and meaningful checks, preserving first failures; it
+cannot impose unrelated evidence logs, retries or acceptance. An unresolved actual
+routing conflict retains an owner and blocks its affected effect. Future deterministic
+controller conversion remains owned by the governing LEARN outcome, not this adapter.
+
 ## Choose the route before lifecycle work
 
 Use the routine route by default for selected Deliveries and directly assigned equivalent scope. Only a recorded explicit human instruction

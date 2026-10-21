@@ -128,9 +128,8 @@ with tempfile.TemporaryDirectory(prefix="board-lifecycle-") as temporary:
     for variant in ("normal", "best"):
         mutate(tree, f".claude/agents/fsgg-worker-{variant}.md", "Load `.claude/skills/pnext-item/SKILL.md`", "First run `scripts/fsgg-coord whoami --mint`. Load `.claude/skills/pnext-item/SKILL.md`", "bypasses canonical executor")
         controls += 1
-    # Retained qualified product instructions may contain their original transaction. Their mere
-    # existence cannot reactivate V1 for organization consumers or trigger blanket archive deletion.
+    # The retired appendix preserves its disposition without an executable transaction.
     legacy = tree / ".claude/skills/padd-item/references/legacy-product-intake.md"
-    assert "intake validate" in legacy.read_text() and "legacy-product target" in legacy.read_text()
+    assert "retired" in legacy.read_text().lower() and "scripts/fsgg-coord" not in legacy.read_text()
     assert not inspect(tree), inspect(tree)
     print(f"board-lifecycle: source routing closure passes; {controls} causal caller/endpoint controls refuse")

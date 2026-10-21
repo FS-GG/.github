@@ -1,6 +1,6 @@
 # Canonical skill currency and selected SDD adoption
 
-Status: approved scope; implementation and consumer qualification remain pending.
+Status: selected source contract; publication and consumer qualification remain separate.
 Owning Outcome: [#4785](https://github.com/FS-GG/.github/issues/4785).
 Delivery: [#4789](https://github.com/FS-GG/.github/issues/4789).
 
@@ -124,7 +124,9 @@ version, promoted predecessor, candidate/source and journal operating window thr
 the [maintained successor route](../roadmaps/utel-release-successor.md). Preserve
 historical release identities, original archives, journals, failures and Unknowns.
 The consumed 0.111.0 publication cannot be replayed to carry new skill bytes.
-No next version or publication authority is allocated by this plan.
+The [root source ruling](https://github.com/FS-GG/.github/issues/4789#issuecomment-6317055404)
+selects prospective112 over genuine promoted111 through that existing operating window.
+It allocates no candidate, publication, main hold or installation authority.
 
 Verify the immutable candidate, successful `publish=false` preflight and separately
 admitted ordinary publication, each feed's raw archive identity against its promoted
@@ -193,3 +195,11 @@ supersession; retain a root-owned capture gap until that source closure is deliv
 
 This governing plan alone establishes none of those implementation, publication,
 installation, runtime, broader Outcome or future controller results.
+
+The source pipeline preflight reuses the existing static/pure candidate, recovery,
+coherent-selector and skill-route controls before costly qualification. Negative
+controls must refuse consumed111/current-journal or stale predecessor reuse, occupied
+or unreadable feed coordinates, sealed release dispatch and retired queue replay.
+The accepted Host0.8 observation branch remains unchanged. No custom model, new
+pipeline or savings claim is justified for this literal source-window correction;
+full required CI and genuine later candidate qualification remain mandatory.

@@ -628,8 +628,10 @@
   <!-- 0.110.0 -> 0.111.0 (#4743): operation-specific admission and bounded
        source/ref/preflight guidance changes packaged work-board instructions.
        Source readiness only; published110 and installed adoption remain separate. -->
+  <!-- 0.111.0 -> 0.112.0 (#4789): canonical current skill routing and selected SDD adoption.
+       SOURCE only; published111, original journals and installed pins remain unchanged. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.111.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.112.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
