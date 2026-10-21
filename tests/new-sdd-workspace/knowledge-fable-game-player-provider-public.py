@@ -241,6 +241,63 @@ SUPPLIERS = {'work-roadmap': {'channel': 'Driver',
                          'files': {'SKILL.md': '07d9a0277044162611cffb20089577565fcc0ef802ac71f0cbc668cf70c0818c'}}}
 SUPPLIER_MANIFEST_HASHES = {'Driver': 'bd2dfe4104494c4f7d8dbe55dbbc3d72f99fb99fd183b8567adf704435bc7a32', 'GameSkill': '1843439e0cf5d9b41c5025639e4bf0578e2037fb936b805a6d99f18de3ec58d8', 'RenderingSkill': 'b76d3756ce7733e1c0be570ff1928215b1a2bfbaaea7671512d88f5c9656add2', 'AudioSkill': '1d138562a632fa258d3718ecde44b1352f9588208322541d9983014f482cce2b'}
 
+# Exact published process skeleton; these skills are outside the product union.
+SEEDED_SKILLS = {'fs-gg-sdd-analyze': 'ae59ef0f6a58d70985b027e99ed728f687265d7631c600cc4998b040cd084bf3',
+ 'fs-gg-sdd-authoring-contracts': 'd2d9ee327c8e2ba340ae4263db0cf915f0374f49df56754a6b34de424e04c4eb',
+ 'fs-gg-sdd-charter': '8e1df19bf175309f46de3426a039c82a630bb87caf6a06189d858c1dba97c707',
+ 'fs-gg-sdd-checklist': '8471d642d6c7e45459d6fa8e5d2c75f7c426185ac1b8b94659871c9e6ffdf766',
+ 'fs-gg-sdd-clarify': 'dae626d25e237b39add1fa2446f8d8d7d5d0a55efdc1b6f1c482dd37a6f58ab2',
+ 'fs-gg-sdd-evidence': '91cec168ed536a769fbdf7734318d8990083dfa665890328e359b9fc14b38bfb',
+ 'fs-gg-sdd-getting-started': '498a8881158fbb06495b7fbd1ef02ae07a5f7ddd6252954e7f2c0492b86a03b5',
+ 'fs-gg-sdd-lifecycle': 'cf881c492738181b55c3527076b349890fd6011fcccb5cbdaa80cfc9a3f119eb',
+ 'fs-gg-sdd-plan': 'ae0dce2d603967a333b8c340ab2ba3890ad4e362d5ea060fb272dfeb9775a6f5',
+ 'fs-gg-sdd-refresh-agents': 'fc78016a53808fadee6a3692946694ad4a9e50e929769fee31b85c6140149619',
+ 'fs-gg-sdd-ship': '5255a14d529dea40802c438c9d69722d37d9fe545e2048d44f051efc673a84f2',
+ 'fs-gg-sdd-specify': 'f4bd7db58110b6d842bd0f48ab317029e3e5c1911a6a2d2bcb846bb06f976496',
+ 'fs-gg-sdd-tasks': '33c3410cab95503c5c0c6b91de785ad2682f21dc3088d8d46d3f1e1d8975d548',
+ 'fs-gg-sdd-troubleshooting': 'e1d92bc789903d8c7c3920a8d56cc5e15c242f211a7b549858137c9431aac1cf',
+ 'fs-gg-sdd-typed-author': '75db6adf4e273cd75819569562841c6f11ab215f01737b770492e52d17627d7c',
+ 'fs-gg-sdd-typed-correspond': '2788d51db70b048736e7a2b1081e0cac55a614dd09814c0c510de0e9b2ec720f',
+ 'fs-gg-sdd-typed-inspect': 'acf98b050f401ad583b2c4e651f8b090921c0df3b350f16a1ae4d9d0543bd266',
+ 'fs-gg-sdd-typed-migrate': '5e99051e9d179c256fcbe4d449f417183b6b9b05a2bc9107c421c9c867067584',
+ 'fs-gg-sdd-typed-reconcile': 'b237b94b6f50b3c658d20b14264df23ccbb4cc21a556ed5e262b8a559fb6f546',
+ 'fs-gg-sdd-validate': '87ed462650a26b7deafad23c46fa313928740ea9554385465fe74b5ecc23ec2a',
+ 'fs-gg-sdd-verify': 'ea8a770da57bd6c1c076bc115fa324e003e77e346b8aa52188f7c3a8c7548ee5'}
+# Published cf2f046a Foundation literals, project root leaf fixed to receiver.
+INITIAL_HASHES = {'.fsgg/agents.yml': 'c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3',
+ '.fsgg/constitution.md': 'c497a1960e9d63582dd9d45315af6e61e6cb46a1facda9819100722b2bccaa32',
+ '.fsgg/early-stage-guidance.md': '59406514de0c68207d0abb1d634d5314516a365454a79cd0dddf5f23552c27cb',
+ '.fsgg/governance-resolution.proj': 'a9cd7c6d696b20243e2002258d4147a98d9179f2c943a7df2e542fac36c8f2b9',
+ '.fsgg/knowledge-guide.md': '2c022b36ce07a4a6597f1eea13b5dd7aab77b9bfe27f2efa1e73a83ac975c08c',
+ '.fsgg/knowledge/schema.json': 'c49185af44bb4c399a14239e48b61b1d0ae8a5cd298534fc657abac246faee3b',
+ '.fsgg/project.yml': 'd4be2482e14df19296c5ab1d9b85880e0dd3dd9d78d4ea94a1ca101ad43f882a',
+ '.fsgg/sdd.yml': 'fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb',
+ 'AGENTS.md': 'e3b4532d71a00ac6fc9a9f7d51da9f63133e3e6965910fe2dff954f302f350ab',
+ 'CLAUDE.md': 'e8d5c33305d2621f7b1565d0a4332cd599506925a86404f5793cc76421f4b69c'}
+INITIAL_SEED = {'Applicability': 'Typed SDD workspace initialization',
+ 'AsOf': '2026-10-02',
+ 'Author': 'fsgg-sdd',
+ 'Basis': 'evidence',
+ 'Created': '2026-10-02',
+ 'Evidence': [{'Digest': '',
+               'Locator': '.fsgg/knowledge-guide.md',
+               'Path': '.fsgg/knowledge-guide.md',
+               'Repository': '',
+               'Revision': '',
+               'Run': 'typed-sdd-initialize/v1'}],
+ 'Id': 'project-knowledge',
+ 'Kind': 'guidance',
+ 'Limits': 'Structural checks do not establish usefulness or truth; evidence and review remain required.',
+ 'Rationale': 'Portable current records and Git history make the same project context available to people, '
+              'scripts and agents.',
+ 'Relations': [],
+ 'SchemaVersion': 1,
+ 'Scope': 'project',
+ 'State': 'accepted',
+ 'Summary': 'Capture concise reusable findings, evidence references and limits through the shared knowledge '
+            'API before development work.',
+ 'Title': 'Project knowledge capture and retrieval',
+ 'Updated': '2026-10-02'}
 
 def command(m, row, root):
     require(row in ROWS, 'unknown-player-provider-subject')
@@ -321,10 +378,14 @@ def skill_union(root, inventory, provenance):
                 require(path.is_file() and not path.is_symlink() and digest(path) == sha
                         and stat.S_IMODE(path.stat().st_mode) == 0o644, 'player-supplier-file:' + name)
                 paths[name] = sha; declared.add(name)
-        actual_files = {p.relative_to(root).as_posix() for p in (root / agent / 'skills').rglob('*') if p.is_file()
-                        and not p.relative_to(root / agent / 'skills').as_posix().startswith('fs-gg-sdd-')}
+        for id, sha in SEEDED_SKILLS.items():
+            name = agent + '/skills/' + id + '/SKILL.md'; target = root / name
+            require(target.is_file() and not target.is_symlink() and digest(target) == sha
+                    and stat.S_IMODE(target.stat().st_mode) == 0o644, 'player-seeded-skill:' + name)
+            paths[name] = sha; declared.add(name)
+        actual_files = {p.relative_to(root).as_posix() for p in (root / agent / 'skills').rglob('*') if p.is_file()}
         require(actual_files == declared | {manifest_path}, 'player-dangling-or-unexpected-skill-files')
-        paths[manifest_path] = digest(target)
+        paths[manifest_path] = digest(root / manifest_path)
         recorded = [p for key in ('producedPaths','mirroredPaths','driverPaths','gameSkillPaths','renderingSkillPaths')
                     for p in provenance.get(key,[]) if p['path'] == manifest_path]
         require(recorded and all(p.get('sha256') == paths[manifest_path] for p in recorded), 'player-amended-manifest-provenance')
@@ -365,6 +426,13 @@ def boundary(root, archive, row):
             and (root/'.fsgg/knowledge-guide.md').stat().st_size > 0
             and all((root/name).is_file() and (root/name).stat().st_size>0 for name in LIFECYCLE_FILES)
             and all((root/name).is_dir() for name in LIFECYCLE_DIRS), 'player-automatic-typed-knowledge')
+    for name, sha in INITIAL_HASHES.items():
+        target = root / name
+        require(target.is_file() and not target.is_symlink() and digest(target) == sha
+                and stat.S_IMODE(target.stat().st_mode) == 0o644, 'player-published-initial-file:' + name)
+    require(canonical == ['.fsgg/knowledge/records/project-knowledge.json', '.fsgg/knowledge/schema.json']
+            and V.exact_json(C.read_json(root / '.fsgg/knowledge/records/project-knowledge.json')) == V.exact_json(INITIAL_SEED),
+            'player-published-initial-seed')
     return dict(effectiveParameters=effective, bundle='player', selectorPrecedence=100, svgFoundationParameterOmitted=True,
                 lifecycleOmitted=not row['explicit'], automaticInitialization=True, standaloneInitializeInvoked=False,
                 knowledgeReady=True, ownerAssets=owner, manifest=manifest, skills=skills,
@@ -469,6 +537,8 @@ def source_controls():
             body=b'fixture supplier\n';sha=hashlib.sha256(body).hexdigest()
             self.suppliers={'fixture-driver':dict(channel='Driver',sourcePredicate='always',sourceSupplier='fixture',
                 row={'id':'fixture-driver','scope':'driver','sha256':sha,'resolvablePath':'.agents/skills/fixture-driver/SKILL.md','materializes-when':'always'},files={'SKILL.md':sha,'references/control.md':sha})}
+            seeds=patch.dict(SEEDED_SKILLS,{'fs-gg-sdd-fixture':sha},clear=True);seeds.start();self.addCleanup(seeds.stop)
+            initials=patch.dict(INITIAL_HASHES,{},clear=True);initials.start();self.addCleanup(initials.stop)
             self.body=body
             self.seal=patch.dict(SUPPLIERS,self.suppliers,clear=True);self.seal.start();self.addCleanup(self.seal.stop)
             packed=patch.object(P,'packed_contract');self.packed=packed.start();self.addCleanup(packed.stop)
@@ -501,16 +571,19 @@ def source_controls():
             allrows=rows+[s['row'] for s in SUPPLIERS.values()]
             prov={'providerName':'fable-game','templateRef':'fs-gg-fable-game','effectiveParameters':[{'key':k,'value':v} for k,v in {'productName':row['product'],'lifecycle':'typed-sdd'}.items()],'sddOwnedPaths':[],'producedPaths':[],'mirroredPaths':[]}
             for agent in AGENT_ROOTS:
+                p=root/agent/'skills/fs-gg-sdd-fixture/SKILL.md';p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(self.body)
                 for id,supplier in SUPPLIERS.items():
                     for relative in supplier['files']:
                         p=root/agent/'skills'/id/relative;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(self.body)
                 p=root/agent/'skills/owner/SKILL.md';p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(owner)
                 p=root/agent/'skills/skill-manifest.json';p.write_text(json.dumps({'schemaVersion':1,'skills':allrows}))
                 prov['producedPaths' if agent=='.agents' else 'mirroredPaths'].append({'path':p.relative_to(root).as_posix(),'sha256':digest(p)})
-            for name in ('.fsgg/knowledge/schema.json','.fsgg/knowledge/records/seed.json','.fsgg/knowledge-guide.md','.fsgg/providers.yml',*LIFECYCLE_FILES):
+            for name in ('.fsgg/knowledge/schema.json','.fsgg/knowledge/records/project-knowledge.json','.fsgg/knowledge-guide.md','.fsgg/providers.yml',*LIFECYCLE_FILES):
                 p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('fixture')
+            (root/'.fsgg/knowledge/records/project-knowledge.json').write_text(json.dumps(INITIAL_SEED))
             for name in LIFECYCLE_DIRS:(root/name).mkdir()
             (root/'.fsgg/scaffold-provenance.json').write_text(json.dumps(prov))
+            INITIAL_HASHES.update({name:digest(root/name) for name in (*LIFECYCLE_FILES,'.fsgg/knowledge-guide.md','.fsgg/knowledge/schema.json')})
             return root,archive,inventory,prov
 
         def test_genuine_parameter_omission_and_explicit_lifecycle(self):
@@ -568,7 +641,7 @@ def source_controls():
                         target.write_bytes(raw);target.chmod(0o755)
                         with self.assertRaisesRegex(ValueError,'supplier-file'):skill_union(root,i,p)
                         target.chmod(0o644)
-                target=root/'.agents/skills/fixture-driver/extra';target.write_text('dangling')
+                target=root/'.agents/skills/fs-gg-sdd-invented/SKILL.md';target.parent.mkdir();target.write_text('dangling')
                 with self.assertRaisesRegex(ValueError,'dangling-or-unexpected'):skill_union(root,i,p)
 
         def test_active_owner_missing_and_inactive_predicate_not_an_exemption(self):
@@ -620,6 +693,47 @@ def source_controls():
                     self.assertIn('.codex/skills/fixture-driver/references/control.md',result['gitBlobs'])
                     runner.git.side_effect=lambda r,*args:'100644 blob wrong\t'+args[-1] if args[0]=='ls-tree' else git(r,*args)
                     with self.assertRaisesRegex(ValueError,'initial-owner-blob'):initial(runner,root,a,ROWS[0],observed)
+
+        def test_exact_seeded_skills_content_mode_missing_and_no_namespace_exemption(self):
+            with tempfile.TemporaryDirectory() as td:
+                root,a,i,p=self.fixture(td);skill_union(root,i,p)
+                for agent in AGENT_ROOTS:
+                    target=root/agent/'skills/fs-gg-sdd-fixture/SKILL.md';raw=target.read_bytes();target.unlink()
+                    with self.assertRaisesRegex(ValueError,'seeded-skill'):skill_union(root,i,p)
+                    target.write_bytes(b'corruption')
+                    with self.assertRaisesRegex(ValueError,'seeded-skill'):skill_union(root,i,p)
+                    target.write_bytes(raw);target.chmod(0o755)
+                    with self.assertRaisesRegex(ValueError,'seeded-skill'):skill_union(root,i,p)
+                    target.chmod(0o644)
+                target=root/'.agents/skills/fs-gg-sdd-unexpected/undeclared.bin';target.parent.mkdir();target.write_bytes(b'unexpected')
+                with self.assertRaisesRegex(ValueError,'dangling-or-unexpected'):skill_union(root,i,p)
+
+        def test_complete_published_initial_bytes_modes_and_seed_are_causal(self):
+            with tempfile.TemporaryDirectory() as td:
+                root,a,i,p=self.fixture(td);boundary(root,a,ROWS[0])
+                for name in INITIAL_HASHES:
+                    target=root/name;raw=target.read_bytes();target.write_bytes(b'nonempty corrupt lifecycle')
+                    with self.assertRaisesRegex(ValueError,'published-initial-file'):boundary(root,a,ROWS[0])
+                    target.write_bytes(raw);target.chmod(0o600)
+                    with self.assertRaisesRegex(ValueError,'published-initial-file'):boundary(root,a,ROWS[0])
+                    target.chmod(0o644)
+                target=root/'.fsgg/knowledge/records/project-knowledge.json';seed=json.loads(target.read_bytes());seed['Summary']='plausible but wrong';target.write_text(json.dumps(seed))
+                with self.assertRaisesRegex(ValueError,'published-initial-seed'):boundary(root,a,ROWS[0])
+
+        def test_actual_driver_two_auto_rows_caller_commit_precedes_probe(self):
+            with tempfile.TemporaryDirectory() as td:
+                archive=Path(td)/'archive';archive.write_bytes(b'public');descriptor=Path(td)/'descriptor';descriptor.write_bytes(b'descriptor');base=Path(td)/'fresh'
+                m={'workRoot':str(base),'report':str(base/'report.json'),'sddExecutable':'/sdd','dotnetExecutable':'/dotnet','providerDescriptor':str(descriptor),'packages':{k:{'archive':str(archive)} for k in PACKAGES}}
+                runner=Mock();runner.sequence=0;runner.call.return_value.stdout='2.2.0\n';events=[]
+                def commit(*args):events.append('initial');return {'commit':'caller'}
+                def probe(*args):self.assertEqual(events[-1],'initial');events.append('probe');return {'probe':{'probeSetupCommit':'later'}}
+                original_read=Path.read_bytes
+                with patch(__name__+'.validate',return_value=m),patch.object(P,'injected_runner',return_value=runner),patch.object(M,'env_for',return_value={}),patch.object(C,'registration',return_value={}),patch(__name__+'.boundary',return_value={'productFiles':[]}),patch.object(M,'snapshot',return_value={}),patch.object(Path,'read_bytes',autospec=True,side_effect=lambda p:b'ignore' if p.name=='.gitignore' else original_read(p)),patch(__name__+'.initial',side_effect=commit),patch(__name__+'.restore_tools'),patch.object(P,'knowledge',side_effect=probe),patch.object(P,'preserved'),patch(__name__+'.hybrid_manifest'),patch.object(P,'initialize',side_effect=AssertionError('standalone forbidden')):
+                    result=qualify('/sealed','sha',runner_factory=lambda:None)
+                self.assertEqual(events,['initial','probe','initial','probe']);self.assertEqual(result['state'],'passed')
+                creates=[c.args[0] for c in runner.call.call_args_list if c.args[0][1]=='scaffold']
+                self.assertEqual(len(creates),2);self.assertNotIn('lifecycle=typed-sdd',creates[1])
+                self.assertFalse(any(str(a).startswith(('bundle=','svgFoundation=')) for args in creates for a in args))
 
         def test_closed_schema_and_factory_fail_before_runtime(self):
             with self.assertRaisesRegex(ValueError,'qualified-runner-factory-required'):qualify('/missing','sha')

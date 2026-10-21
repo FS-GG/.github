@@ -1137,6 +1137,9 @@ and every selected supplier file with its exact bytes and mode. Because schema1
 has no per-file field, complete supplier file sets are verified independently
 against the compiled transport catalog; no whole-manifest ownership exemption
 is used. The published producer archive authenticates the pinned assembly.
+The exact21 seeded process skills are verified separately, with no namespace
+exemption. Complete published Foundation lifecycle literals, guide/schema bytes
+and semantic seed content are authenticated before the initial commit.
 
 The normal caller initial commit includes complete product, lifecycle, canonical,
 guide, CI/checker, pins, provenance and all supplier sidecars, using bounded Git
