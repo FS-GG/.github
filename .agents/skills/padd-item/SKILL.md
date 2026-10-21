@@ -1,6 +1,6 @@
 ---
 name: padd-item
-description: Add or reuse a request for the explicitly configured product through canonical intake; preserve qualified legacy-product compatibility.
+description: Add or reuse a request for the explicitly configured product through canonical native intake; preserve exact scope and keep retired legacy recipes non-executable.
 ---
 
 # Configured product intake
@@ -15,6 +15,7 @@ Reuse an existing semantic match. If another repository owns the request, use
 
 For selected V2 product scope, do not run legacy intake/reconcile/apply/add/flush. Return created/reused
 identity and exact pending effects, or a concrete draft when the native operation is unavailable.
-Only an independently qualified legacy PRODUCT invocation may load
-[legacy-product intake](references/legacy-product-intake.md); it cannot authorize organization operations.
+The [retired legacy-product appendix](references/legacy-product-intake.md) records its disposition,
+not an executable alternative. No legacy receiver is selected here; any future exception needs its
+actual supported target, installed caller and separately admitted effect authority.
 File the requested work; do not implement it. A clearing invocation returns to work-board after intake.

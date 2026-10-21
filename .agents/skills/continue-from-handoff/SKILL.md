@@ -69,14 +69,15 @@ from worker reports and proposals. Missing temporary evidence remains unknown;
 do not reconstruct results or repeat a consumed operation to fill that gap.
 Apply the selected [forward-recovery boundary](../work-board/references/lifecycle-contract.md#recover-ownership-and-unavailable-history):
 the unavailable historical evidence-search task is closed as unavailable; stop repeated searches and
-requests. Preserve all known original records, 439 inherited reservations, 46 later original records
-and unproved outcomes Unknown, without release or replay. For a genuinely fresh operation, reconcile
+requests. Preserve all known original records and unproved outcomes Unknown, without release or replay.
+Retrieve the actual reservation identities and scope from their existing owning records;
+this generic entrypoint maintains no incident count or cohort ledger. For a genuinely fresh operation, reconcile
 current relevant ownership and remaining capacity, separate generation/writable state/identity/outputs,
 and fence shared destinations against old-actor interference. Missing history is not empty coverage;
 unresolved relevant interference still blocks its operation. Unrelated unavailable history does not
 globally block demonstrated-independent work, and a new ID cannot disguise an uncertain-effect retry.
-Use existing journals/custody, not another recovery ledger. SC2's existing-host container scope does
-not change the separate V3 two-machine portability requirement.
+Use existing journals/custody, not another recovery ledger. Product-specific host or portability
+obligations remain in their actual owning plans rather than this generic recovery entrypoint.
 
 Also recover each pending request's canonical
 channel and original message identity, owner, expected response, response/escalation
@@ -98,16 +99,12 @@ It owns model routing, lanes, telemetry, PR admission, native checks, source int
 separate publication/receiver acceptance boundaries. Do not restore duplicate status or closure upkeep.
 Do not duplicate its lifecycle here.
 
-Invocation authorizes autonomous decisions and completion of the recovered
-Unified Roadmap v3 and the in-scope games outcomes without human intervention, including its necessary source
-changes, PRs, merges, releases, and receiver work within the recorded programme
-scope. Choose implementation details and resolve routine tradeoffs directly;
-do not stop for preference questions or repeated confirmation. This does not
-create missing credentials, bypass protected checks, renew expired grants, or
-replace effect-specific admission. Inspect and obtain valid machine admission
-through the existing route before each concrete effect. Where access or an
-external dependency genuinely prevents an effect, preserve the blocker and
-continue independent ready work; never claim unavailable human feedback.
+Resume only the user's actually authorized recovered scope. Reading or editing this
+entrypoint grants no blanket programme, games, release or receiver authority. Existing
+authorization may permit autonomous completion, but it creates no missing credentials,
+protected approval, runtime capability or renewed original clock. Resolve actual current
+owner, plan and operation admission through work-board before the affected effect.
+Preserve blocked external feedback and continue demonstrated-independent authorized work.
 
 Seek dependency-ready parallel opportunities aggressively within available
 worker, CPU, integrator and hosted-CI capacity. Repair and integrate the existing

@@ -103,8 +103,7 @@ classes:
     reason: >-
       ADR-0057 operator skills are `.github`-authored and materialized NOWHERE — they run only in an
       operator checkout where every repository is a sibling. `stage-drivers.py`'s
-      `DELIVERED_SCOPES = {"driver"}` carries no operator bytes into the package, and every one of
-      the seven rows declares `materializes-when: "false"`, so the catalog and the transport agree.
+      `DELIVERED_SCOPES = {"driver"}` carries no operator bytes into the package, and every operator row declares `materializes-when: "false"`, so the catalog and the transport agree.
       This is a deliberate non-delivery, not an undetected one, which is why it is `withheld` rather
       than `gap`.
 
@@ -116,7 +115,7 @@ classes:
     channel: FS.GG.SDD SeededSkills.skillNames
     evidence: FS.GG.SDD/src/FS.GG.SDD.Commands/CommandWorkflow/SeededSkills.fs
     note: >-
-      A hard-coded in-code list of the 16 `fs-gg-sdd-*` process skills, whose own comment calls it
+      The in-code `fs-gg-sdd-*` process skill list, whose own comment calls it
       "the single in-code source of the set". It reads no registry, so it is not derived — but it IS
       a real, universal channel: the materializer that owns the skills is the same assembly that
       lists them, and `EHotwagner/S.I.R.` received all 16 through a non-rendering provider. Recorded

@@ -34,8 +34,8 @@ Registry release inventory: 18 package-bearing contracts across 9 producers; 16 
 | `game` | `game-scene-adapter` | `0.17.0` | `0.17.0` | `game:0.17.0` | FS.GG.Game.Render package — Adapter (sim-state -> FS.GG.UI.Scene drawables) |
 | `audio` | `fs-gg-audio` | `0.6.0` | `0.6.0` | `audio:0.6.0` | FS.GG.Audio.Core/.Host/.Engine/.Elmish/.WebBrowser public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge + browser Web Audio host |
 | `net` | `fs-gg-net` | `0.6.0` | `0.6.0` | `net:0.6.0` | FS.GG.Net.Core/.WebSocket/.WebSocket.Server/.Protobuf/.Grpc/.Elmish public .fsi surfaces — ITransport/IMessageChannel seam + Sequential/Multiplexed correlation + serve/ServerEcho + WebSocket client/server transport + Google.Protobuf/protobuf-net codecs + gRPC lifecycle bridge + Elmish Cmd/Sub |
-| `github` | `coord-engine` | `0.111.0` | `0.111.0` | `github:0.111.0` | the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool |
-| `github` | `telemetry-host` | `0.8.0` | `0.7.0` | `github:0.7.0` | optional Linux x64 FS.GG.Telemetry.Host dotnet tool — authenticated workspace-scoped ingestion, private dashboard, protected native capture and bounded learning export; independently versioned from the github coordination coherent set |
+| `github` | `coord-engine` | `0.112.0` | `0.111.0` | `github:0.111.0` | the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool |
+| `github` | `telemetry-host` | `0.8.0` | `0.8.0` | `github:0.8.0` | optional Linux x64 FS.GG.Telemetry.Host dotnet tool — authenticated workspace-scoped ingestion, private dashboard, protected native capture and bounded learning export; independently versioned from the github coordination coherent set |
 | `github` | `new-sdd-workspace` | `0.21.0` | `0.21.0` | `github:0.21.0` | the `new-sdd-workspace` scaffolder CLI (package FS.GG.NewSddWorkspace) — one-command full-stack SDD workspace creation, wrapping the FS.GG.Templates `rendering` provider (ADR-0016); shipped as a dotnet tool |
 | `templates` | `fs-gg-workspace-template` | `0.19.0` | `0.19.0` | `templates:0.19.0` | FS.GG.Workspace.Template package, eight template configurations and seven `dotnet new` selectors: workspace-provider identities — `fs-gg-console` (provider `console` — minimal F# executable, no npm lane, ADR-0072 §2); `fs-gg-web` (provider `web` — F# ASP.NET Core + plain TypeScript/Vite website, ADR-0071 §3); `fs-gg-fable-game` (provider `fable-game` — F# ASP.NET Core + Fable/Elmish game client, SignalR for connection-oriented real-time traffic + plain HTTP endpoints with explicit versioned DTOs for typed request/response per ADR-0073, consuming the published `fs-gg-game-core-fable-lockstep-v1` profile per ADR-0069); `fs-gg-fable-bindings` (provider `fable-bindings` — Fable interop library over an exactly pinned npm package/declaration closure, ADR-0072 §3, first proved by the unreleased EHotwagner/babylonjsBindings reference) — plus `fs-gg-governance`, the separately registered pre-existing governance overlay template folded into this package at the same rename; `fs-gg-project-knowledge` and `fs-gg-python` are also already packaged. The current and legacy fable-game configurations share one selector.  |
 | `game` | `game-skills` | `0.9.0` | `0.9.0` | `game:0.9.0` | FS.GG.Game.Skills 0.9.0 package — owner-sourced game, Fable, replay and rules guidance with schema-v2 per-file digests and workspace bundle predicates; embedded by the SDD 1.8 receiver |
@@ -100,6 +100,15 @@ Get the artifact wrong and the tag is real and immutable regardless
 (`kit-release-tags-are-immutable`): `.github#2135` declared a `FS.GG.Kit` release for a
 `drive-board`/`work-board` change that was actually `FS.GG.Drivers` content, tagged `kit/v0.47.0`, and
 published a `.nupkg` byte-identical to `0.46.0` that can never be un-tagged (`.github#2333`).
+
+## Compatibility and managed routing
+
+The explicit [cut-nuget-release](../cut-nuget-release/SKILL.md) compatibility name
+loads this current publishing contract; it provides no sealed prepare/component/promote
+fallback or authority to retry an uncertain original effect. FS-GG source landing uses
+scoped normal PR delivery, excluding the global managed `speckit-merge` branch sweep,
+direct trunk push/deletion, mandatory repack and shared-cache purge. A repository
+adapter does not uninstall or certify a vendored global package.
 
 ## How a package gets published
 

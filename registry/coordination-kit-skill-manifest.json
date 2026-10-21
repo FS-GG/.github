@@ -4,21 +4,21 @@
     {
       "id": "check-board",
       "supplied-by": ".claude/skills/check-board",
-      "tree-sha256": "919c07242cb7c12736f9c24d658b81a0e5435f4dd77f6bc791197b7624c2f2c5",
+      "tree-sha256": "c86cba94f1fde83ca8cffc6822eee3cb30119b3c10013702cb8077a7d9350615",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "f34cb94d1f600e7cbae8cb9f8730bbdc1e02c9e54f2fc7a3c6a04ce090f3aee0",
+          "sha256": "e196e822e7cf1cf07c77b4906e8fb18b7e6d78e81a2da1202ab0630ceee0d818",
           "executable": false
         },
         {
           "path": "agents/openai.yaml",
-          "sha256": "ce496dbe4554189ab811f644c23d82019dba330c7a0449bdcc3973f46966bcf0",
+          "sha256": "3848d63a965ef43c392828964485bed6d35b12db93b33aeee3fc324fa1a55e4f",
           "executable": false
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "ead0d4c56a5f8e82e9437562ff1e3019fc6a706f40f56d95831bca1a3c7fa0e1",
+          "sha256": "8e964cd0099b96c983e25e0690540bcc726b19e975a56cd5f97b616d84b8510c",
           "executable": false
         },
         {
@@ -28,7 +28,7 @@
         },
         {
           "path": "references/mechanical-reconciliation.md",
-          "sha256": "98a403509486c36e80b823fdc5f5991c4787cb81d3907a2489fddc56f3e515e4",
+          "sha256": "9563c48b56ee5aa761591d0887a5ee87fa0b66e27a9fd9f3c0c873f8fb57990c",
           "executable": false
         },
         {
@@ -132,11 +132,11 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "ae02d3f41d69e3b16f749bf6131e0f39eddd36dde4c6eff7238bb026e061cac9",
+      "tree-sha256": "f98c47fa00ae2d8481a967afa9d1a2987906a5b0223c181fafdf7eb8cc10ce7e",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "710564bd37cf630ab1d05f336b36ba1f916fee1762cf53d14e93c89732cd3ef3",
+          "sha256": "e514e0af7661d06b4cbf1c36e90f32e944f18ba51a81e37393f7f318819f7cb4",
           "executable": false
         },
         {

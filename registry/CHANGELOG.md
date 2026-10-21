@@ -1,5 +1,14 @@
 # Registry changelog
 
+## 2026-10-21 — prospective coherent112 canonical skill routing (#4789)
+
+Select SOURCE0.112.0 for CLI/Kit/Drivers over genuine promoted111, with the distinct
+prospective coord112-skill-routing-20261021-01 journal identity. Published package
+version/tag and installed pins remain111. Correct current skill routes and qualify
+selected SDD adoption separately; no candidate, namespace allocation or publication
+is authorized. Preserve all111 original attempts and historical recovery identities.
+The shared coherent feed selector advances to112; accepted Host0.8 behavior is unchanged.
+
 ## 2026-10-21 — prospective independent Host0.8 source (#4707)
 
 Advance only Host source to0.8.0 to package the accepted unassigned-usage dashboard
@@ -76,6 +85,8 @@ review M4). The typed validator (`fsgg-sdd registry validate`) never saw that co
 no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
+
+- **2026-10-21** — HOST0.8 PUBLISHED INVENTORY (Programme/root; .github#4707, .github#4789): reconcile `telemetry-host` package-version/tag to the accepted original0.8 publication, publisher39580298871 and independent readonly39591087147. Both feeds and eight journal/promote assertions are accepted; no republish or Home/full4707 acceptance is implied. Preserve immutable0.7 and earlier history; regenerate maintained projections.
 
 - **2026-10-21** — Coherent 111 publication and selected adoption accepted (Programme/root; #4743/#4730): record original candidate 39522441055/a1/artifact 12312227013 and third ordinary publisher 39529077063/a1, all 16 effects / gen33, promoted release 419029192 / source bd60a97a. Both-feed receipts, seven original assets and three signed public normalized payloads are independently matched. Exact inactive 82-file CLI111 installation, absolute 111 complete 56 read and selected dual-root instruction bytes are accepted separately. Functional operation-level overlap of two useful local validations is accepted; economics remains inconclusive. Advance only the published registry/tag/source-distributed pin and derived metadata. Preserve first failure/checkpoint, global selector-writer Unknown and all prior reservations; no new candidate/release, replay, fleet adoption or repack 111. Curated source knowledge ships only with its next actual artifact release.
 

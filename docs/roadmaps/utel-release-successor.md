@@ -2084,3 +2084,30 @@ operations overlapping, measured combined peak, economic improvement or full4743
 Retain actual publication and selected physical caller/instruction adoption, ordinary useful-overlap
 qualification and proportionate baseline/coverage evidence as unfinished work. No synthetic product,
 new ledger, publisher retry, credential acquisition or Unknown-reservation release is introduced.
+
+## Selected skill-routing coherent112 source window — 2026-10-21
+
+Programme/root selected prospective SOURCE0.112.0 under [Delivery4789](https://github.com/FS-GG/.github/issues/4789#issuecomment-6317055404)
+and the [governing adoption plan](../coordination/skill-currency-selected-adoption.md).
+The genuine promoted predecessor is111, immutable source`bd60a97a422c8fc8ca0c17b2a9dea4e504b708d2`,
+content`sha256:ea0b66a325ef425510a362e189469c5c6e6936880f455898e78520076737298b`.
+Current source selects logical ref`refs/heads/fsgg/v2/journal/release/coord112-skill-routing-20261021-01`
+and directory`state/releases/coord112-skill-routing-20261021-01`. This is reversible
+source composition, not namespace allocation, a candidate, publication, main hold or installation.
+Final candidate source/run/artifact/raw archive and operator admission remain unset.
+
+Preserve consumed111, all original failed/continued operations and historical recovery
+constants. The existing authenticated six-coordinate/latest-predecessor candidate gate
+must freshly establish occupancy and predecessor before tests/build/pack. Local org-feed403
+remains Unknown, not absence or permission to change credentials/retry. Preserve the existing
+45-minute candidate, exact seven-member original archive and60-minute publisher contracts.
+A successful actual publish=false preflight precedes separately admitted publication on
+those same immutable bytes. Compare each feed's raw archive against its own promoted
+receipt and normalized producer payloads across feeds; public NuGet signing can change
+raw archive hashes. Actual complete publication and selected SDD materialization/Codex
+identity/refusal acceptance remain separate required outcomes of4789.
+
+The closed coherent observation choice is`coherent-0112-absence`; only its literals
+advance in the shared Host observer. Accepted Host0.8 source/assets/pins, independent
+read behavior and application-custody acceptance remain unchanged. Source publication
+updates111 package/tag metadata only after the actual accepted future operation.
