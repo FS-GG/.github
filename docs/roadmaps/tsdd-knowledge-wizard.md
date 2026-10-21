@@ -1060,3 +1060,29 @@ actual receivers; no frozen unbounded runner fallback is allowed. Source control
 review and CI establish source readiness only. Matrix4723, PLAYER4759, COMPLETE4766,
 4710 product/browser/WASM and the full parent4642 provider/Wizard/retained-upgrade
 promises and original failures/Unknowns retain their accepted or pending scopes.
+
+### Published non-SVG Fable-game provider qualification — Delivery #4773
+
+The dedicated `knowledge-fable-game-provider-public.py` adapter selects genuine
+published Workspace 0.19.0 through SDD 2.2.0 and the immutable provider descriptor.
+Both rows supply `svgFoundation=false` and omit bundle. Explicit typed selection
+and genuine provider lifecycle omission both resolve to typed SDD and automatic
+knowledge initialization. Standalone initialization and RAW omission are not used.
+
+Before probes, both rows require positive product/lock/skill assets, excluded SVG
+content, effective-parameter provenance, automatic canonical seed/guide/central CI,
+and a normal caller initial commit with verified owner and canonical Git blobs.
+The published hybrid tool writer may change layout while adding SDD 2.2.0 and
+Coord 0.94.0. Every original JSON value, type, property presence and unknown
+co-tenant property remains exact, including Fantomas explicit false; manifest
+mode and the original product ignore segment remain preserved. Other product
+bytes stay exact. This does not weaken the separately accepted RAW byte spans.
+
+Both rows reuse the accepted finite injected runner and knowledge capture,
+retrieval/history, private exclusion, ALL-shared export/lossless restore, distinct
+Git bundle and exact 10 MiB/+1 checker ports after committing initial files. Pure
+causal controls exercise provider omission, ownership and initial-commit ordering
+without children. Source review/CI establish source readiness only; full public
+receivers and independent result acceptance require separate root admission.
+Wizard/literal positives, retained upgrades, browser/WASM/product acceptance and
+all historical failures and Unknown reservations keep their original scopes.
