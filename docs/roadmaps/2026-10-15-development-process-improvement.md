@@ -44,6 +44,47 @@ verification boundary and original failure remain unchanged. This finite-trial c
 bounded evaluation; it does not turn the source cohort into an ordinary comparison, installed V3
 acceptance or a throughput benefit.
 
+## Resource-aware ordinary adoption — 2026-10-21
+
+The later [Delivery #4743](https://github.com/FS-GG/.github/issues/4743) retains its complete
+acceptance independently of the historical finite trial above. Its reviewed source is published as
+[coherent 0.111.0](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.111.0) from immutable
+`bd60a97a422c8fc8ca0c17b2a9dea4e504b708d2`. The original candidate and packages were retained;
+[third ordinary invocation 39529077063](https://github.com/FS-GG/.github/actions/runs/39529077063)
+completed all sixteen effects at canonical generation 33. Root independently accepted both-feed
+receipts, all seven release assets and the three signed public package payloads. The original failed
+publisher and visibility checkpoint remain historical evidence, without a resend or replacement.
+
+Accepted receiver boundaries are distinct: inactive exact public 111 CLI installation and 82-file
+correspondence; an absolute installed 111 read of all 56 selected/native members with zero writes;
+and selected operator instruction discovery/byte qualification of 22 work-board files in each native
+root plus two source-only coordination files per root. This accepts the selected operator's scoped adoption, without establishing
+fleet installation, a global-selector provenance claim or renewed native effect authority.
+
+Two independently useful local validations overlapped at the operation level for 83.588 seconds:
+physical instruction qualification on CPU 1 / 0.5 GiB and installed 111 native read on CPU 0 / 4 GiB. The pair's
+reserved demand was 4.5 GiB, admitted within the whole reservation view and observed headroom. Both
+results and scoped cleanup were accepted. Instruction comparison reached its result at 67.341 seconds
+and retired at 93.397 seconds; native qualification took 94.401 seconds. Preparation and collection are
+part of those operation lifetimes, not all compute. Individual child-residency timestamps and
+measured combined peaks are unavailable. No simultaneous-CLR, peak, speedup or utilization claim follows.
+
+The earlier actual 110 full 56 read took 103.006 seconds versus 111's 94.401 seconds. These are descriptive,
+noncomparable observations: caller/source, network and preparation differ. The instruction check used
+98 read-only Git calls. No serial replay or synthetic work was generated for metrics. Functional
+adoption is accepted with economics inconclusive under #4743's unchanged acceptance.
+
+The first 111 read also exposed an owned preparation defect: a 0600 binding under a 0755 immediate
+parent violated the maintained private-path guard. Only the caller-owned parent was corrected to 0700
+under separate root admission, preserving input bytes/identity and the original refusal; a fresh output
+and original clock then passed. Actual-input preflight must inspect the consumer's parent/privacy and
+no-reparse contract, not file mode alone. This is not a product-guard weakening or a new framework.
+
+This ordinary postpublication maintenance updates published projections and captures a curated
+source lesson. New source knowledge/manifests can differ from the immutable published 111 archive;
+their future artifact shipping waits for the next actual release. No new release, installed Atlas seed,
+selector activation, global Unknown release or completion of the parent Outcome is implied.
+
 ## Change 1 — capacity and final-candidate preflight
 
 - [x] **V3-IMPROVE-01.1 — Deliver bounded capacity/preflight practice and the finite source trial.** Route: routine.
