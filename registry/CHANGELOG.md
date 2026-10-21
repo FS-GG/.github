@@ -86,6 +86,20 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-10-21** — ACCEPTED COHERENT112 PUBLICATION (.github; #4789):
+
+Reconcile CLI/Kit/Drivers publication from immutable source `d5af6a987e915bd0a1b572bcc09ad0d4b2e798b5`:
+[candidate39628492206](https://github.com/FS-GG/.github/actions/runs/39628492206),
+[preflight39632496381](https://github.com/FS-GG/.github/actions/runs/39632496381) and
+[ordinary forward39639020615](https://github.com/FS-GG/.github/actions/runs/39639020615)
+reached generation33/all16 verified effects and [release419781177](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.112.0).
+The original publisher39633207670 generation14 Kit checkpoint remains retained. Both feeds match
+original normalized package payloads; org acceptance uses the original hosted receipts and protected
+journal, preserving the local403 Unknown. Advance the canonical source tool manifest to112 and
+regenerate published inventory digests. This metadata reconciliation does not repack112 or establish
+installed CLI, selected SDD/Codex, or wider consumer adoption.
+
+
 - **2026-10-21** — HOST0.8 PUBLISHED INVENTORY (Programme/root; .github#4707, .github#4789): reconcile `telemetry-host` package-version/tag to the accepted original0.8 publication, publisher39580298871 and independent readonly39591087147. Both feeds and eight journal/promote assertions are accepted; no republish or Home/full4707 acceptance is implied. Preserve immutable0.7 and earlier history; regenerate maintained projections.
 
 - **2026-10-21** — Coherent 111 publication and selected adoption accepted (Programme/root; #4743/#4730): record original candidate 39522441055/a1/artifact 12312227013 and third ordinary publisher 39529077063/a1, all 16 effects / gen33, promoted release 419029192 / source bd60a97a. Both-feed receipts, seven original assets and three signed public normalized payloads are independently matched. Exact inactive 82-file CLI111 installation, absolute 111 complete 56 read and selected dual-root instruction bytes are accepted separately. Functional operation-level overlap of two useful local validations is accepted; economics remains inconclusive. Advance only the published registry/tag/source-distributed pin and derived metadata. Preserve first failure/checkpoint, global selector-writer Unknown and all prior reservations; no new candidate/release, replay, fleet adoption or repack 111. Curated source knowledge ships only with its next actual artifact release.
