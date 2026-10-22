@@ -1178,7 +1178,7 @@ acceptance remain separate. This source repair authorizes no replay.
 ### Published COMPLETE Fable-game provider qualification — Delivery #4798
 
 The separate `knowledge-fable-game-complete-provider-public.py` adapter selects the
-precedence100 current template in genuine published Workspace0.19.0 through published
+precedence100 current template in genuine published Workspace0.19.1 through published
 SDD2.2.0 and the immutable provider descriptor. Both rows supply
 `--param bundle=complete` and omit `svgFoundation`; one supplies typed lifecycle and
 the other genuinely omits it. The descriptor declares `bundle` as an optional parameter
@@ -1191,14 +1191,14 @@ knowledge ports.
 Applicable inventory is derived from the authenticated package definition with the
 seven fixed modifier conditions required exactly. With `PortalExample` defaulting to
 false, only the Portal and preview-file exclusions apply, so every
-bundle-specific modifier is unselected. The adapter pins exactly171 applicable
+bundle-specific modifier is unselected. The adapter pins exactly175 applicable
 owner files (each with an exact name/namespace substitution and mode, with only the
 published `.sh` execute-bit promotion) and exactly12 exclusions: the template
 configuration, nine `PortalExample` files and the two preview files. It also derives the
-53 COMPLETE-only files by differencing against the accepted PLAYER selection of the
+57 COMPLETE-only files by differencing against the accepted PLAYER selection of the
 same package, pinning their names and requiring Studio, models, generated rule models, both
-editable examples, FourD, WASM, Soldier and external-authority reference content with
-exact bytes and modes. A stray file under the managed Portal tree is refused.
+editable examples, FourD (including the local-save-replay example), WASM, Soldier and
+external-authority reference content with exact bytes and modes. A stray file under the managed Portal tree is refused.
 
 The seeded process skills and Foundation initial literals are bundle-independent and
 reused from the sealed PLAYER ports under the authenticated published `agentSkillRoots`.
@@ -1230,3 +1230,18 @@ acceptance, and the shared Atlas/driver-manifest integration remains root-owned.
 PLAYER's original failure and accepted runtime02, other parent4642 routes,
 product/browser/WASM acceptance, Wizard or literal-safe positives, retained upgrades
 and historical failures/Unknowns keep their separate scope.
+
+The first actual attempt against Workspace0.19.0 (2026-10-22) stopped at the first
+row on `complete-owner-bytes:SvgFoundation/Examples/Wasm/guest/policy.c`: the published
+package's template engine applied C-style conditional processing to the C source and
+removed its three `POLICY_*` blocks (1308 to 1130 bytes). That was a supplier defect
+(FS.GG.Templates#729), not an adapter assumption, and the original failure is retained.
+Templates PR #730 keeps C/H sources literal and Workspace.Template0.19.1 is published.
+The adapter is re-pinned to the nuget.org 0.19.1 package (identical over every
+non-signature entry to the GitHub Release asset) and the 0.19.1 provider descriptor
+whose only difference is the exact `source` pin. The re-derived inventory is 175
+applicable files (the four added FourD local-save-replay files), the same 12 exclusions,
+and 57 COMPLETE-only files; supplier delta, producer and ports are unchanged. Opt-in
+controls additionally require the packaged `policy.c` to keep its preprocessor blocks and
+the template to declare literal `**/*.c` and `**/*.h` operations. A re-pin grants no
+runtime acceptance; a fresh finite two-row run needs separate root admission.
