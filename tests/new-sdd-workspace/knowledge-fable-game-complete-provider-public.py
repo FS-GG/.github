@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Published019 COMPLETE provider: explicit and genuinely omitted typed lifecycle.
+"""Published019 COMPLETE provider (Workspace.Template 0.19.1): explicit and genuinely omitted typed lifecycle.
 
 Pure controls launch no children. Runtime needs separate root admission, sealed
 public inputs and the accepted finite runner. Fixed ASCII parameters only.
@@ -44,7 +44,7 @@ def load_ports():
 
 PL = load_ports()
 V, L, P, M, C = PL.V, PL.L, PL.P, PL.M, PL.C
-PACKAGES, TOP_KEYS, PINS = PL.PACKAGES, PL.TOP_KEYS, PL.PINS
+TOP_KEYS, PINS = PL.TOP_KEYS, PL.PINS
 LIFECYCLE_FILES, LIFECYCLE_DIRS = PL.LIFECYCLE_FILES, PL.LIFECYCLE_DIRS
 IGNORE_PREFIX, IGNORE_SUFFIX = PL.IGNORE_PREFIX, PL.IGNORE_SUFFIX
 hybrid_manifest, rendered_owner, matches_glob = PL.hybrid_manifest, PL.rendered_owner, PL.matches_glob
@@ -60,8 +60,33 @@ COMMANDS_SHA, CONTRACTS_SHA = PL.COMMANDS_SHA, PL.CONTRACTS_SHA
 authenticated_agent_roots = PL.authenticated_agent_roots
 MANIFEST, PREFIX = PL.MANIFEST, PL.PREFIX
 
-# Published Workspace.Template 0.19.0 fs-gg-fable-game modifier conditions. The
-# packed template.json is separately authenticated by P.packed_contract.
+# Re-pin of the sealed 0.19.0 identity (FS.GG.Templates#729 / PR #730). The 0.19.0
+# package delivered policy.c through the template engine's C-style conditional
+# processing (1308 -> 1130 bytes); 0.19.1 adds literal-only `**/*.c`/`**/*.h`
+# specialCustomOperations and the FourD local-save-replay example. The digest is the
+# nuget.org package; the GitHub Release asset fs-gg-templates/v0.19.1 is identical
+# over every non-signature entry (sha256 16736d87...538d81b without the signature).
+WORKSPACE_VERSION = '0.19.1'
+WORKSPACE_IDENTITY = ('FS.GG.Workspace.Template', WORKSPACE_VERSION, '1e95dddb6326d276773154df1336599907d8dbfe',
+                      '5d1886c37b6e6a0d64c3998ee23e76b4c5ba8b8a0c2136200c377d7bbab7d0c6')
+PACKAGES = dict(PL.PACKAGES, workspace=WORKSPACE_IDENTITY)
+require(set(PACKAGES) == set(PL.PACKAGES) and PL.PACKAGES['workspace'][:2] == ('FS.GG.Workspace.Template', '0.19.0'),
+        'complete-workspace-repin-base')
+# The immutable provider descriptor at the 0.19.1 publication commit: identical to the
+# sealed 0.19.0 descriptor except the exact `source` package pin.
+DESCRIPTOR_SHA = '10b532dacb0fba79c1c9dc666487f78903e1fd1a09fc757932f605a3f055f5f7'
+# Fable-game template.json of the published 0.19.1 package (sealed 0.19.0: f0f81f93...).
+CONFIG_SHA = 'e30f4a12584ea9bc8f55a3292a02318b26e7cdb54365fb4f8ac28f6324c9b4b7'
+
+
+def packed_contract(archive):
+    # P.packed_contract authenticates the pinned template.json digest, default
+    # selectors and packed tool pins; only the digest is re-pinned here.
+    with patch.object(P, 'CONFIG_SHA', CONFIG_SHA):
+        return P.packed_contract(archive)
+
+# Published Workspace.Template 0.19.1 fs-gg-fable-game modifier conditions. The
+# packed template.json is separately authenticated by packed_contract.
 ALL_MODIFIERS = frozenset({'(portalExample != true)', '(lifecycle != "typed-sdd")', '(bundle == "player")',
                            '((bundle != "tactical") && (bundle != "complete"))',
                            '((bundle != "arcade") && (bundle != "complete"))', '(bundle != "complete")', 'true'})
@@ -80,16 +105,20 @@ EXCLUDED_PACKAGE_FILES = ('.template.config/template.json', 'PortalExample/Consu
                           'PortalExample/packages.lock.json', 'PortalExample/source-provenance.json',
                           'PortalExample/verify-package-boundary.py', 'SvgFoundation/PreviewDocument.fs',
                           'SvgFoundation/PreviewFont.fs')
-APPLICABLE_FILE_COUNT = 171
-COMPLETE_ONLY_COUNT = 53
+APPLICABLE_FILE_COUNT = 175
+COMPLETE_ONLY_COUNT = 57
 # Fixed published package-relative selections; independent of the product name.
-APPLICABLE_NAMES_SHA = 'a801747a08df06ee541aef5f6de945574168189216baa999467da959314b525e'
-COMPLETE_ONLY_NAMES_SHA = '410a07e07b007f059404ccb6e02a4361baf223eca024209e2fc8e0ed0b7f9835'
+APPLICABLE_NAMES_SHA = 'daa6d3290b055d449610b83be285d50b73ae38e048c414d959b3ad35488e4f30'
+COMPLETE_ONLY_NAMES_SHA = 'ee2251b205ea248a2fba7134b050282f1be4d4ede9afd10cd83bfabaa477aadd'
 COMPLETE_FILES = ('Conformance/GeneratedArenaRuleModel.fs',
                   'Conformance/GeneratedTacticalRuleModel.fs', 'SvgFoundation/Studio/Studio.fsproj',
                   'models/svg-arena/arena-rules.qnt', 'models/svg-tactical/tactical-rules.qnt',
                   'SvgFoundation/Examples/Tactical/scene.json', 'SvgFoundation/Examples/Arcade/scene.json',
                   'SvgFoundation/Examples/FourD/reference.json',
+                  'SvgFoundation/Examples/FourD/LocalSaveReplayExample.fs',
+                  'SvgFoundation/Examples/FourD/LocalSaveReplayExample.Tests.fs',
+                  'SvgFoundation/Examples/FourD/LocalSaveReplayExample.TestEntry.fs',
+                  'SvgFoundation/Examples/FourD/README.md',
                   'SvgFoundation/Examples/ExternalAuthority/reference.json',
                   'SvgFoundation/Examples/Wasm/WasmPolicyExample.fs',
                   'SvgFoundation/Examples/SoldierReference/reference.json',
@@ -199,9 +228,20 @@ def published_producer_contract(archive):
 def names_sha(names): return hashlib.sha256('\n'.join(sorted(names)).encode()).hexdigest()
 
 
-def descriptor_contract(path):
+def published_descriptor(path):
     # The immutable descriptor is selected directly, never a mutable registry.
-    text = PL.descriptor_contract(path)
+    require(digest(path) == DESCRIPTOR_SHA, 'public-provider-descriptor-drift')
+    text = Path(path).read_text()
+    require('    source: FS.GG.Workspace.Template::' + WORKSPACE_VERSION + '\n' in text
+            and '    contractVersion: "2.0.0"\n' in text
+            and '      version: "2.1.0"\n' in text
+            and '      - key: lifecycle\n        required: false\n        default: typed-sdd\n' in text,
+            'provider-descriptor-default-contract')
+    return text
+
+
+def descriptor_contract(path):
+    text = published_descriptor(path)
     # bundle is a declared optional provider parameter with no descriptor default;
     # the template's own player default is therefore never inferred here.
     require('      - key: bundle\n        required: false\n      - key: portalExample\n' in text,
@@ -247,7 +287,7 @@ def complete_only(archive):
 
 def product_inventory(archive, row):
     require(row in ROWS, 'unknown-complete-provider-subject')
-    P.packed_contract(archive)
+    packed_contract(archive)
     with zipfile.ZipFile(archive) as z:
         included, excluded = package_selection(z, COMPLETE_SELECTED)
         require(sorted(excluded) == sorted(EXCLUDED_PACKAGE_FILES) and len(excluded) == len(EXCLUDED_PACKAGE_FILES),
@@ -271,7 +311,7 @@ def product_inventory(archive, row):
 
 
 def boundary(root, archive, row):
-    original = P.packed_contract(archive)
+    original = packed_contract(archive)
     manifest = hybrid_manifest(root, original)
     inventory, excluded = product_inventory(archive, row)
     only = [rendered_owner(n.encode(), row['product']).decode() for n in complete_only(archive)]
@@ -356,7 +396,7 @@ def validate(path, expected_sha, after=False):
                                 else {'archive', 'publicationReceipts'}), 'closed-provider-package-binding')
         members = M.public_package(key, binding, m['inputs'], identity)
         if key == 'producer': C.tool_closure(binding, m['sddExecutable'], m['inputs'], members, 'FS.GG.SDD.Cli.dll')
-    P.packed_contract(m['packages']['workspace']['archive'])
+    packed_contract(m['packages']['workspace']['archive'])
     published_producer_contract(m['packages']['producer']['archive'])
     roots = authenticated_agent_roots(C.regular(m['publishedSchemas'], m['inputs']).read_bytes())
     require(roots == AGENT_ROOTS, 'complete-derived-agent-root-drift')
@@ -408,7 +448,7 @@ def qualify(path, expected_sha, *, runner_factory=None):
             descriptor.write_bytes(Path(m['providerDescriptor']).read_bytes())
             runner.call([m['dotnetExecutable'], 'new', 'install', m['packages']['workspace']['archive']], cwd=case)
             runner.call(command(m, row, root), cwd=case)
-            entry['registration'] = C.registration(case, '0.19.0', PACKAGES['workspace'][3])
+            entry['registration'] = C.registration(case, WORKSPACE_VERSION, PACKAGES['workspace'][3])
             entry['provider'] = boundary(root, m['packages']['workspace']['archive'], row)
             before = {k: v for k, v in M.snapshot(root).items() if k in entry['provider']['productFiles']}
             ignore = (root / '.gitignore').read_bytes()
@@ -417,7 +457,7 @@ def qualify(path, expected_sha, *, runner_factory=None):
             entry['knowledge'] = P.knowledge(runner, m, root, case)
             require(entry['knowledge']['probe']['probeSetupCommit'] != entry['initial']['commit'], 'provider-probe-not-caller-initial')
             P.preserved(before, root, ignore_prefix=ignore)
-            hybrid_manifest(root, P.packed_contract(m['packages']['workspace']['archive']))
+            hybrid_manifest(root, packed_contract(m['packages']['workspace']['archive']))
             entry.update(state='passed', knowledgeReady=True); save()
         require(validate(path, expected_sha, after=True) == m, 'post-provider-custody-drift')
         require(time.monotonic() < deadline, 'original-provider-deadline')
@@ -539,10 +579,34 @@ def source_controls():
                 path = Path(td) / 'descriptor'
                 for text, ok in ((good, True), (good.replace('      - key: bundle\n        required: false\n', ''), False),
                                  (good.replace('required: false\n      - key: portalExample', 'required: false\n        default: complete\n      - key: portalExample'), False)):
-                    with patch.object(PL, 'descriptor_contract', return_value=text):
+                    with patch(__name__ + '.published_descriptor', return_value=text):
                         if ok: self.assertEqual(descriptor_contract(path), text)
                         else:
                             with self.assertRaisesRegex(ValueError, 'descriptor-bundle-contract'): descriptor_contract(path)
+
+        def test_descriptor_pins_the_republished_package_source_and_digest(self):
+            full = ('    source: FS.GG.Workspace.Template::' + WORKSPACE_VERSION + '\n    contractVersion: "2.0.0"\n'
+                    '      version: "2.1.0"\n      - key: lifecycle\n        required: false\n        default: typed-sdd\n')
+            with tempfile.TemporaryDirectory() as td:
+                path = Path(td) / 'descriptor'
+                path.write_text(full)
+                with patch(__name__ + '.DESCRIPTOR_SHA', digest(path)): self.assertEqual(published_descriptor(path), full)
+                with self.assertRaisesRegex(ValueError, 'descriptor-drift'): published_descriptor(path)
+                stale = full.replace('::' + WORKSPACE_VERSION, '::0.19.0'); path.write_text(stale)
+                with patch(__name__ + '.DESCRIPTOR_SHA', digest(path)):
+                    with self.assertRaisesRegex(ValueError, 'descriptor-default-contract'): published_descriptor(path)
+            self.assertEqual(WORKSPACE_VERSION, PACKAGES['workspace'][1])
+            self.assertEqual(PACKAGES['workspace'][:2], ('FS.GG.Workspace.Template', '0.19.1'))
+            self.assertEqual({k: v for k, v in PACKAGES.items() if k != 'workspace'},
+                             {k: v for k, v in PL.PACKAGES.items() if k != 'workspace'})
+
+        def test_packed_contract_is_evaluated_under_the_republished_config_digest(self):
+            seen = []
+            def fake(archive): seen.append(P.CONFIG_SHA); return {'tools': {}}
+            with patch.object(P, 'packed_contract', side_effect=fake):
+                self.assertEqual(packed_contract('archive'), {'tools': {}})
+            self.assertEqual(seen, [CONFIG_SHA])
+            self.assertNotEqual(CONFIG_SHA, 'f0f81f93b923084a56a42e2f8d008eb6fd7c5078afbc84b3b3781cfcfc2ffcff')
 
         def test_complete_inventory_exclusions_and_only_content_are_exact(self):
             with tempfile.TemporaryDirectory() as td:
@@ -814,7 +878,7 @@ def source_controls():
                 def probe(*args): self.assertEqual(events[-1], 'initial'); events.append('probe'); return {'probe': {'probeSetupCommit': 'later'}}
                 original_read = Path.read_bytes
                 with patch(__name__ + '.validate', return_value=m), patch.object(P, 'injected_runner', return_value=runner), \
-                        patch.object(M, 'env_for', return_value={}), patch.object(C, 'registration', return_value={}), \
+                        patch.object(M, 'env_for', return_value={}), patch.object(C, 'registration', return_value={}) as registration, \
                         patch(__name__ + '.boundary', return_value={'productFiles': []}), patch.object(M, 'snapshot', return_value={}), \
                         patch.object(Path, 'read_bytes', autospec=True, side_effect=lambda q: b'ignore' if q.name == '.gitignore' else original_read(q)), \
                         patch(__name__ + '.complete_initial', side_effect=commit), patch(__name__ + '.restore_tools'), \
@@ -822,6 +886,9 @@ def source_controls():
                         patch.object(P, 'initialize', side_effect=AssertionError('standalone forbidden')):
                     result = qualify('/sealed', 'sha', runner_factory=lambda: None)
                 self.assertEqual(events, ['initial', 'probe', 'initial', 'probe']); self.assertEqual(result['state'], 'passed')
+                # Each row's installed-template registration is bound to the re-pinned package identity.
+                self.assertEqual([c.args[1:] for c in registration.call_args_list], [(WORKSPACE_VERSION, PACKAGES['workspace'][3])] * 2)
+                self.assertEqual(PACKAGES['workspace'][2], '1e95dddb6326d276773154df1336599907d8dbfe')
                 creates = [c.args[0] for c in runner.call.call_args_list if c.args[0][1] == 'scaffold']
                 self.assertEqual(len(creates), 2); self.assertNotIn('lifecycle=typed-sdd', creates[1])
                 self.assertTrue(all('bundle=complete' in args for args in creates))
@@ -837,10 +904,10 @@ def source_controls():
                 with self.assertRaisesRegex(ValueError, 'closed-provider-manifest'): validate(p, digest(p))
 
     class RealPublicPackage(unittest.TestCase):
-        # Opt-in against the published Workspace.Template 0.19.0 archive; hosted
+        # Opt-in against the published Workspace.Template 0.19.1 archive; hosted
         # CI has no package, so this skips there and never fetches anything itself.
         @unittest.skipUnless(os.environ.get('FSGG_COMPLETE_PROVIDER_WORKSPACE_PACKAGE'), 'published package not supplied')
-        def test_published_package_has_exact_171_inventory_12_exclusions_and_53_complete_only(self):
+        def test_published_package_has_exact_175_inventory_12_exclusions_and_57_complete_only(self):
             archive = Path(os.environ['FSGG_COMPLETE_PROVIDER_WORKSPACE_PACKAGE'])
             self.assertEqual(digest(archive), PACKAGES['workspace'][3])
             for row in ROWS:
@@ -848,6 +915,21 @@ def source_controls():
                 self.assertEqual((len(inventory), len(excluded)), (APPLICABLE_FILE_COUNT, 12))
                 self.assertTrue(all(inventory[n][1] == 0o755 for n in inventory if n.endswith('.sh')))
             self.assertEqual(len(complete_only(archive)), COMPLETE_ONLY_COUNT)
+
+        @unittest.skipUnless(os.environ.get('FSGG_COMPLETE_PROVIDER_WORKSPACE_PACKAGE'), 'published package not supplied')
+        def test_published_package_keeps_c_sources_literal_for_the_template_engine(self):
+            # FS.GG.Templates#729: 0.19.0 let the engine strip policy.c preprocessor blocks.
+            archive = Path(os.environ['FSGG_COMPLETE_PROVIDER_WORKSPACE_PACKAGE'])
+            with zipfile.ZipFile(archive) as z:
+                config = json.loads(z.read(PREFIX + '.template.config/template.json'))
+                policy = z.read(PREFIX + 'SvgFoundation/Examples/Wasm/guest/policy.c')
+            self.assertEqual(len(policy), 1308)
+            for token in (b'POLICY_TRAP', b'POLICY_LOOP', b'POLICY_MALFORMED'): self.assertIn(token, policy)
+            operations = config['specialCustomOperations']
+            for glob in ('**/*.c', '**/*.h'):
+                row, = operations[glob]['operations']
+                self.assertEqual(row['type'], 'conditional')
+                self.assertTrue(all(row['configuration'][k] == [] for k in ('if', 'else', 'elseif', 'endif')))
 
     class RealPublicProducer(unittest.TestCase):
         # Opt-in against the published FS.GG.SDD.Cli 2.2.0 archive's compiled manifests.
