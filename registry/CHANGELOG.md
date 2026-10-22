@@ -1,5 +1,16 @@
 # Registry changelog
 
+## 2026-10-22 — reconcile published Workspace.Template 0.19.2 (FS-GG/.github#4709)
+
+Reconcile `fs-gg-workspace-template` source/package **0.19.2** and `fs-gg-templates/v0.19.2` after
+root-admitted original publisher [39845406998/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/39845406998)
+from protected `d15f085ff4d64b7736e09ff263644b3c86a576a6` (FS.GG.Templates#735, carrying #728 and #736),
+following fresh occupancy 39845263408 (ABSENT). Original artifact 12455007005 (`0af2a10e…`) equals the
+GitHub Packages readback and the release asset; the signed nuget.org archive (`ef5c5c2f…`) matches all
+512 signature-excluded payload entries. Annotated tag `c91b4b04…` peels to `d15f085f`. 0.19.2 adopts
+Rendering 0.32.3 (provider and SvgFoundation/Studio defaults) and is now the newest public default;
+installed/full Wizard qualification of 0.19.2 remains open. 0.19.1 stays historical.
+
 ## 2026-10-22 — reconcile published Workspace.Template 0.19.1 (FS-GG/.github#4709)
 
 Reconcile `fs-gg-workspace-template` source/package **0.19.1** and `fs-gg-templates/v0.19.1`
