@@ -1825,7 +1825,7 @@
       "id": "work-roadmap",
       "scope": "driver",
       "sha256": "48ee31933a1eb4114cf177bda85d8b7bb5bf0310b396b3915ebb85c214ac3f2e",
-      "tree-sha256": "4b21404bff41e2972d2622029886642ba4eb58b7e41361d532cf72a74b0a1af7",
+      "tree-sha256": "301d1668e2aefc840d33b0f0cad659a29ad3e486989f21bee8c90b74dfecbad7",
       "files": [
         {
           "path": "SKILL.md",
@@ -1869,7 +1869,7 @@
         },
         {
           "path": "references/lifecycle-log.md",
-          "sha256": "86452edc1985dd73b77ce06c1623306100ddc7fd415127d7b2394f7d32103700",
+          "sha256": "91f454e1c2cc2fb8b03086b761327f0aef2a0c6a3ee259ea117352d4352b0182",
           "executable": false
         },
         {
@@ -1889,7 +1889,7 @@
         },
         {
           "path": "references/runtime-observation.md",
-          "sha256": "61b6bc611b5cafe1a96dd39789e5a257a609f720fb0acaf32091154f7b90d8d9",
+          "sha256": "fe6e5ef7c1a903e2373e68c797543dbfe95373e0e4185c40d3f5dfd0b445e330",
           "executable": false
         }
       ],

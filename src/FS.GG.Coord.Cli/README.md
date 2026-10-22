@@ -96,7 +96,10 @@ An unreachable answer is not a negative one. That rule is the whole point.
 
 The engine owns the deterministic telemetry boundary. `telemetry usage collect codex|claude` emits the
 stable runtime-usage CSV (or canonical JSONL), including exact model and coherent tool versions; `--append`
-retains one CSV header and ignores an already-recorded response identity. Every completed collection also
+retains one CSV header and ignores an already-recorded response identity. Both runtimes read a native
+session JSONL through `--session-file` with `--turn-id`, `--all-responses`, `--since` and `--until`; for
+Claude Code that is the transcript, one row per completed `message.id` (the legacy `--snapshot` status-line
+input remains). Every completed collection also
 archives the frozen CSV under the canonical owner-private content-addressed receipt store. `telemetry usage
 archive|resolve` exposes idempotent archive and digest-verified retrieval; `--receipt-store` overrides the
 default `$FSGG_USAGE_RECEIPT_STORE` / `$XDG_STATE_HOME/fsgg/telemetry/usage` host-state root, while temporary

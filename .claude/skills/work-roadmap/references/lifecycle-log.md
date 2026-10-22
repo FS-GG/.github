@@ -104,7 +104,7 @@ in `source`.
 
 The roadmap driver, as supervising parent, owns every post-child seal. A child returns an unposted
 terminal draft with `pending final usage` and its exact session/turn identity (or Claude prompt and
-`SubagentStop` transcript path). It does not post its own terminal lifecycle event, because the final
+transcript path). It does not post its own terminal lifecycle event, because the final
 usage row does not exist until after that response ends. Once the child is terminal, the driver locates
 the completed record, runs the strict collector into a phase-scoped immutable receipt, seals the terminal
 event as `measured`, and only then accepts the handoff. A statement that final usage will be written after
@@ -114,9 +114,9 @@ If a legacy immutable event already used the timing excuse, append a separate
 `telemetry-reconciliation-<phase>` recovery phase before host acceptance, cycle completion, or Done.
 
 Codex's completed `token_usage_record` rows provide request, turn, and thread totals; matching
-`turn_context` rows provide the exact model variant and effort. Claude Code's status-line input provides
-the exact model ID and latest-response input/cache/output usage, while `Stop` and `SubagentStop` hooks
-provide the post-response lifecycle point and separate transcript paths. The `pnext-item` lifecycle-ledger
+`turn_context` rows provide the exact model variant and effort. Claude Code's transcript JSONL provides one
+completed usage record per API response (`message.id`) with its exact model and effort; collect it with
+`telemetry usage collect claude --session-file`, keeping each subagent's own transcript separate. The `pnext-item` lifecycle-ledger
 contract carries the equivalent normal-item collection rules. If turn-level usage spans multiple phases,
 do not allocate or estimate shares.
 
