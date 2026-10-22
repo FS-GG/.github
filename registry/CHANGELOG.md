@@ -2,7 +2,7 @@
 
 ## 2026-10-22 — flip governance-reference-gate-set 1.7.0 → 1.8.0 (publish-before-flip; FS-GG/.github#4709)
 
-`FS.GG.Governance.ReferenceGateSet` **1.8.0** (Governance#464/PR#466, merge `432de033`) was published by
+`FS.GG.Governance.ReferenceGateSet` **1.8.0** (content from Governance PR#442 `09a2014`; release-prep merge `432de033`, Governance#464/PR#466) was published by
 Governance publish run 39757858397 (tag `v1.13.0`) and is the newest version on both the org feed and
 nuget.org (raw `b3d43d10…`), so `check-feed-coherence` reported the registry as behind. 1.8.0 adds only a
 read-only neutral capability catalog plus its `FsggNeutralCapabilityCatalog` MSBuild property; the four

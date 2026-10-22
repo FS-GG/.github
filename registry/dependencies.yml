@@ -525,7 +525,8 @@ contracts:
     # and compared entry-wise — 14 non-signature payload entries, identical names, ZERO content
     # differences (nuget.org adds only .signature.p7s). Templates#305 still owns the downstream
     # overlay adoption, so the Templates edge below remains at its real pin.
-    # 1.8.0 (Governance#464/PR#466, merge 432de033826a6881ad3100c5b4d89bfe2340997b): MINOR — adds a
+    # 1.8.0 (Governance PR#442, merge 09a2014; published from the Governance#464/PR#466 release-prep merge
+    # 432de033826a6881ad3100c5b4d89bfe2340997b; the .fsx reformat is from PR#427 c4c188a): MINOR — adds a
     # read-only neutral capability catalog, contentFiles/any/any/neutral-capabilities.json, exposed by
     # buildTransitive/FS.GG.Governance.ReferenceGateSet.targets as `FsggNeutralCapabilityCatalog`;
     # resolving .fsgg does not copy or enforce it. The four packed .fsgg gate files are byte-identical
