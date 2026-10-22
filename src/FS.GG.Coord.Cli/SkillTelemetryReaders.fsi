@@ -86,14 +86,25 @@ module SkillTelemetryReaders =
           Effort: string option
           OccurredAt: string option
           SourceDigest: string
-          Position: int64 }
+          Position: int64
+          /// codex-local-rollout/1 or claude-local-transcript/1; selects the native identity namespace.
+          Provenance: string }
 
     type PassiveCursor =
         { SourceInstance: string
           Generation: string
           Offset: int64
           AnchorDigest: string
-          SkippingOversized: bool }
+          SkippingOversized: bool
+          /// Claude prompt identity in force at Offset; None when unknown or for Codex rollouts.
+          Context: string option }
+
+    /// The explicitly selected private root that a passive source file must lie below.
+    type PassiveSourceRoot =
+        /// Codex home; sources lie below its sessions directory.
+        | CodexHome of string
+        /// Claude Code configuration home; sources lie below its projects directory.
+        | ClaudeHome of string
 
     type PassiveScan =
         { Records: PassiveNativeRecord list
@@ -158,7 +169,17 @@ module SkillTelemetryReaders =
         [<Literal>]
         val PassiveMaximumObservations: int = 64
 
+        [<Literal>]
+        val CodexPassiveProvenance: string = "codex-local-rollout/1"
+        [<Literal>]
+        val ClaudePassiveProvenance: string = "claude-local-transcript/1"
+
         val passiveIdentity: thread: Guid -> turn: Guid -> response: string -> string
+        val passiveClaudeIdentity: thread: Guid -> turn: Guid -> response: string -> string
+        val passiveRecordIdentity: record: PassiveNativeRecord -> string
+        val scanPassiveFrom:
+            sourceRoot: PassiveSourceRoot -> path: string -> prior: PassiveCursor option -> maximumBytes: int -> maximumRecords: int ->
+                Result<PassiveScan, ReaderError>
         val scanPassive:
             codexHome: string -> path: string -> prior: PassiveCursor option -> maximumBytes: int -> maximumRecords: int ->
                 Result<PassiveScan, ReaderError>

@@ -1118,12 +1118,17 @@ module SkillTelemetryAdapter =
                    Generation = requiredString "generation" value
                    Offset = value["offset"].GetValue<int64>()
                    AnchorDigest = requiredString "anchorDigest" value
-                   SkippingOversized = boolValue "skippingOversized" value }
+                   SkippingOversized = boolValue "skippingOversized" value
+                   Context = if isNull value["context"] then None else Some(value["context"].GetValue<string>()) }
 
     let private cursorNode (cursor: PassiveCursor) =
-        jsonObject [ "sourceInstance", node cursor.SourceInstance; "generation", node cursor.Generation
-                     "offset", node cursor.Offset; "anchorDigest", node cursor.AnchorDigest
-                     "skippingOversized", node cursor.SkippingOversized ]
+        let value =
+            jsonObject [ "sourceInstance", node cursor.SourceInstance; "generation", node cursor.Generation
+                         "offset", node cursor.Offset; "anchorDigest", node cursor.AnchorDigest
+                         "skippingOversized", node cursor.SkippingOversized ]
+        // Only a Claude transcript carries prompt context; Codex cursor bytes are unchanged.
+        cursor.Context |> Option.iter (fun context -> value["context"] <- node context)
+        value
 
     let private passiveGap (state: JsonObject) (code: string) =
         // One reserved bounded status slot; original distinct reasons survive subsequent passes.
@@ -1135,7 +1140,7 @@ module SkillTelemetryAdapter =
         let optional value = value |> Option.map node |> Option.defaultValue nullNode
         let counts = record.Usage
         jsonObject [ "kind", node "provider-usage-observation/1"
-                     "identity", node (NativeUsage.passiveIdentity record.ThreadId record.TurnId record.ResponseId)
+                     "identity", node (NativeUsage.passiveRecordIdentity record)
                      "itemId", nullNode; "revision", node revision
                      "threadId", node (record.ThreadId.ToString("D")); "turnId", node (record.TurnId.ToString("D"))
                      "responseId", node record.ResponseId
@@ -1145,7 +1150,7 @@ module SkillTelemetryAdapter =
                      "sourceInstance", node cursor.SourceInstance; "sourceGeneration", node cursor.Generation
                      "sourceDigest", node record.SourceDigest; "position", node record.Position
                      "capturedAt", node capturedAt; "occurredAt", optional record.OccurredAt
-                     "provenance", node "codex-local-rollout/1"; "populationCoverage", node "partial"
+                     "provenance", node record.Provenance; "populationCoverage", node "partial"
                      "inventoryCoverage", node "unknown"; "terminalCoverage", node "unknown"; "attributionCoverage", node "unknown" ]
 
     let private passiveSnapshot (state: JsonObject) =
@@ -1193,7 +1198,7 @@ module SkillTelemetryAdapter =
     // One bounded pass over explicit sources. The production caller always supplies its selected association root.
     // Same-owner state cloning/reinitialization/root migration requires original-state/fence reconciliation;
     // undeclared clones cannot be detected offline and are outside this supported first profile.
-    let capturePassiveWithHook (root: string) (owner: string) (sourceIdentity: string) (codexHome: string) (paths: string list) (enqueue: byte array -> Result<string, string list>) (hook: string -> unit) =
+    let capturePassiveFromWithHook (root: string) (owner: string) (sourceIdentity: string) (sourceRoot: PassiveSourceRoot) (paths: string list) (enqueue: byte array -> Result<string, string list>) (hook: string -> unit) =
         try
             if paths.IsEmpty || paths.Length > NativeUsage.PassiveMaximumFiles
                || (paths |> List.exists (Path.IsPathFullyQualified >> not))
@@ -1240,7 +1245,7 @@ module SkillTelemetryAdapter =
                             if not (sources.ContainsKey key) && sources.Count >= NativeUsage.PassiveMaximumFiles then
                                 passiveGap state "source-index-full-capture-deferred"
                             else
-                                match NativeUsage.scanPassive codexHome path (passiveCursor sources[key]) budget (24 - events.Count) with
+                                match NativeUsage.scanPassiveFrom sourceRoot path (passiveCursor sources[key]) budget (24 - events.Count) with
                                 | Error _ -> passiveGap state "source-unavailable-cursor-retained"
                                 | Ok scan ->
                                     budget <- budget - scan.ScannedBytes
@@ -1248,12 +1253,12 @@ module SkillTelemetryAdapter =
                                     // Reserve all new response identities before advancing any source cursor.
                                     let fresh =
                                         scan.Records
-                                        |> List.map (fun row -> NativeUsage.passiveIdentity row.ThreadId row.TurnId row.ResponseId)
+                                        |> List.map (fun row -> NativeUsage.passiveRecordIdentity row)
                                         |> List.distinct
                                         |> List.filter (responses.ContainsKey >> not)
                                     let crossesCorrection =
                                         scan.Records |> List.exists (fun row ->
-                                            let identity = NativeUsage.passiveIdentity row.ThreadId row.TurnId row.ResponseId
+                                            let identity = NativeUsage.passiveRecordIdentity row
                                             (events |> Seq.exists (fun fact -> fact["identity"].GetValue<string>() = identity))
                                             && (responses[identity]["digest"]).GetValue<string>() <> row.SourceDigest)
                                     if responses.Count + fresh.Length > maximumPassiveIdentities then
@@ -1263,7 +1268,7 @@ module SkillTelemetryAdapter =
                                         passiveGap state "response-correction-boundary-deferred"
                                     else
                                         for record in scan.Records do
-                                            let identity = NativeUsage.passiveIdentity record.ThreadId record.TurnId record.ResponseId
+                                            let identity = NativeUsage.passiveRecordIdentity record
                                             let prior = responses[identity]
                                             let unchanged = not (isNull prior) && prior["digest"].GetValue<string>() = record.SourceDigest
                                             if not unchanged then
@@ -1309,6 +1314,12 @@ module SkillTelemetryAdapter =
         with
         | AdapterError message -> result 1 "" $"fsgg passive telemetry: {message}\n"
         | _ -> result 1 "" "fsgg passive telemetry: local capture outcome uncertain; inspect retained intent and state\n"
+
+    let capturePassiveWithHook root owner sourceIdentity codexHome paths enqueue hook =
+        capturePassiveFromWithHook root owner sourceIdentity (CodexHome codexHome) paths enqueue hook
+
+    let capturePassiveFrom root owner sourceIdentity sourceRoot paths enqueue =
+        capturePassiveFromWithHook root owner sourceIdentity sourceRoot paths enqueue ignore
 
     let capturePassive root owner sourceIdentity codexHome paths enqueue =
         capturePassiveWithHook root owner sourceIdentity codexHome paths enqueue ignore

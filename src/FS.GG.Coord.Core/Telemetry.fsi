@@ -45,6 +45,49 @@ module RuntimeUsage =
             SourceDigest: string
         }
 
+    /// Strict bounded decoder for Claude Code transcript JSONL. It retains only allowlisted identities and counters.
+    module ClaudeTranscript =
+        [<Literal>]
+        val MaximumFileBytes: int = 134217728
+
+        [<Literal>]
+        val MaximumLineBytes: int = 4194304
+
+        type Usage =
+            {
+                Uncached: int64
+                CacheRead: int64
+                CacheCreation: int64
+                Output: int64
+                /// Present only when the response reports output_tokens_details.thinking_tokens.
+                Thinking: int64 option
+            }
+
+        type Response =
+            {
+                MessageId: string
+                RequestId: string
+                SessionId: string
+                /// The session for the main thread; a derived stable identity for one sidechain agent.
+                ThreadId: string
+                Sidechain: bool
+                AgentId: string option
+                Model: string
+                Effort: string option
+                Timestamp: string
+                RuntimeVersion: string option
+                /// Final counters from a completed record; None for an incomplete streaming record.
+                Usage: Usage option
+            }
+
+        type Line =
+            | Prompt of promptId: string
+            | Assistant of Response
+            | Other
+
+        val subagentThreadId: sessionId: string -> agentId: string -> string
+        val decodeLine: line: byte array -> Result<Line, string>
+
     val collectCodex:
         task: string ->
         turnId: string option ->
@@ -59,6 +102,19 @@ module RuntimeUsage =
 
     val collectClaude:
         task: string ->
+        coordinationVersion: string ->
+        sddVersion: string ->
+        contractsVersion: string ->
+        bytes: byte array ->
+            Result<Collection, string list>
+
+    /// One row per distinct completed API response (message.id), deduplicated across per-block records.
+    val collectClaudeTranscript:
+        task: string ->
+        turnId: string option ->
+        allResponses: bool ->
+        sinceUtc: string option ->
+        untilUtc: string option ->
         coordinationVersion: string ->
         sddVersion: string ->
         contractsVersion: string ->

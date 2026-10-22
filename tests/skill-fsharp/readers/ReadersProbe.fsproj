@@ -6,6 +6,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.Core" />
+    <!-- The passive reader shares Core's strict Claude transcript decoder with the usage collector. -->
+    <ProjectReference Include="../../../src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
     <Compile Include="../../../src/FS.GG.Coord.Cli/SkillTelemetryReaders.fsi" Link="SkillTelemetryReaders.fsi" />
     <Compile Include="../../../src/FS.GG.Coord.Cli/SkillTelemetryReaders.fs" Link="SkillTelemetryReaders.fs" />
     <Compile Include="Program.fs" />

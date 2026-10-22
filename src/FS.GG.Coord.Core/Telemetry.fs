@@ -100,6 +100,268 @@ module RuntimeUsage =
             SourceDigest: string
         }
 
+    // Claude Code writes one transcript JSONL per session (`~/.claude/projects/<project>/<session>.jsonl`) and,
+    // on observed hosts, one per subagent beside it. The decoder is shared by the strict CLI collector and the
+    // passive scanner. It returns only allowlisted identities and counters; transcript bodies are never retained.
+    module ClaudeTranscript =
+        [<Literal>]
+        let MaximumFileBytes = 134217728
+
+        [<Literal>]
+        let MaximumLineBytes = 4194304
+
+        type Usage =
+            {
+                Uncached: int64
+                CacheRead: int64
+                CacheCreation: int64
+                Output: int64
+                Thinking: int64 option
+            }
+
+        type Response =
+            {
+                MessageId: string
+                RequestId: string
+                SessionId: string
+                ThreadId: string
+                Sidechain: bool
+                AgentId: string option
+                Model: string
+                Effort: string option
+                Timestamp: string
+                RuntimeVersion: string option
+                Usage: Usage option
+            }
+
+        type Line =
+            | Prompt of promptId: string
+            | Assistant of Response
+            | Other
+
+        let private identityPattern =
+            Regex("^[A-Za-z0-9_-]{1,200}$", RegexOptions.CultureInvariant)
+
+        let private agentPattern =
+            Regex("^[A-Za-z0-9_-]{1,128}$", RegexOptions.CultureInvariant)
+
+        let private timestampPattern =
+            Regex(
+                "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$",
+                RegexOptions.CultureInvariant
+            )
+
+        let private options =
+            JsonDocumentOptions(CommentHandling = JsonCommentHandling.Disallow, AllowTrailingCommas = false)
+
+        let rec private rejectDuplicates (value: JsonElement) =
+            match value.ValueKind with
+            | JsonValueKind.Object ->
+                let names = Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+
+                for property in value.EnumerateObject() do
+                    if not (names.Add property.Name) then
+                        invalidOp "transcript record has a duplicate property"
+
+                    rejectDuplicates property.Value
+            | JsonValueKind.Array ->
+                for item in value.EnumerateArray() do
+                    rejectDuplicates item
+            | _ -> ()
+
+        let private property (name: string) (node: JsonElement) =
+            match node.TryGetProperty name with
+            | true, value -> Some value
+            | _ -> None
+
+        let private profileText (label: string) (value: string) =
+            if
+                String.IsNullOrWhiteSpace value
+                || value.Length > 200
+                || (value |> Seq.exists Char.IsControl)
+            then
+                invalidOp $"%s{label} must be a bounded non-empty string"
+
+            value
+
+        let private requiredString (label: string) (name: string) (node: JsonElement) =
+            match property name node with
+            | Some value when value.ValueKind = JsonValueKind.String -> profileText $"%s{label}.%s{name}" (value.GetString())
+            | _ -> invalidOp $"%s{label}.%s{name} must be a non-empty string"
+
+        let private optionalString (label: string) (name: string) (node: JsonElement) =
+            match property name node with
+            | None -> None
+            | Some value when value.ValueKind = JsonValueKind.Null -> None
+            | Some value when value.ValueKind = JsonValueKind.String ->
+                Some(profileText $"%s{label}.%s{name}" (value.GetString()))
+            | Some _ -> invalidOp $"%s{label}.%s{name} must be a string when present"
+
+        let private guid (label: string) (value: string) =
+            match Guid.TryParseExact(value, "D") with
+            | true, parsed when parsed <> Guid.Empty && parsed.ToString("D") = value -> value
+            | _ -> invalidOp $"%s{label} must be a canonical lowercase UUID"
+
+        let private count (label: string) (name: string) (node: JsonElement) =
+            match property name node with
+            | Some value when value.ValueKind = JsonValueKind.Number ->
+                match value.TryGetInt64() with
+                | true, number when number >= 0L -> number
+                | _ -> invalidOp $"%s{label}.%s{name} must be a non-negative integer"
+            | _ -> invalidOp $"%s{label}.%s{name} must be a non-negative integer"
+
+        let subagentThreadId (sessionId: string) (agentId: string) =
+            // A deterministic RFC 9562 version-8 name-based identity: stable across hosts and passes, and never
+            // equal to the main thread's session identity.
+            let digest =
+                SHA256.HashData(Encoding.UTF8.GetBytes("claude-subagent-thread/1\u001f" + sessionId + "\u001f" + agentId))
+
+            let bytes = digest[..15]
+            bytes[6] <- (bytes[6] &&& 0x0Fuy) ||| 0x80uy
+            bytes[8] <- (bytes[8] &&& 0x3Fuy) ||| 0x80uy
+            let hex = Convert.ToHexString(bytes).ToLowerInvariant()
+            $"%s{hex[0..7]}-%s{hex[8..11]}-%s{hex[12..15]}-%s{hex[16..19]}-%s{hex[20..31]}"
+
+        let private usage (node: JsonElement) =
+            if node.ValueKind <> JsonValueKind.Object then
+                invalidOp "message.usage must be an object on a completed response"
+
+            let thinking =
+                match property "output_tokens_details" node with
+                | None -> None
+                | Some details when details.ValueKind = JsonValueKind.Null -> None
+                | Some details when details.ValueKind = JsonValueKind.Object ->
+                    match property "thinking_tokens" details with
+                    | None -> None
+                    | Some value when value.ValueKind = JsonValueKind.Null -> None
+                    | Some _ -> Some(count "message.usage.output_tokens_details" "thinking_tokens" details)
+                | Some _ -> invalidOp "message.usage.output_tokens_details must be an object when present"
+
+            let output = count "message.usage" "output_tokens" node
+
+            if thinking |> Option.exists (fun value -> value > output) then
+                invalidOp "message.usage thinking_tokens exceeds output_tokens"
+
+            {
+                Uncached = count "message.usage" "input_tokens" node
+                CacheRead = count "message.usage" "cache_read_input_tokens" node
+                CacheCreation = count "message.usage" "cache_creation_input_tokens" node
+                Output = output
+                Thinking = thinking
+            }
+
+        let decodeLine (line: byte array) : Result<Line, string> =
+            try
+                if line.Length > MaximumLineBytes then
+                    invalidOp "transcript line exceeds its bound"
+
+                // Strict UTF-8, no comments or trailing commas, and recursive duplicate-property refusal.
+                let text = UTF8Encoding(false, true).GetString line
+                use document = JsonDocument.Parse(text, options)
+                let root = document.RootElement
+
+                if root.ValueKind <> JsonValueKind.Object then
+                    invalidOp "transcript record must be an object"
+
+                rejectDuplicates root
+
+                match property "type" root with
+                | Some kind when kind.ValueKind = JsonValueKind.String && kind.GetString() = "user" ->
+                    match property "promptId" root with
+                    | None -> Ok Other
+                    | Some value when value.ValueKind = JsonValueKind.String ->
+                        Ok(Prompt(guid "promptId" (value.GetString())))
+                    | Some _ -> invalidOp "promptId must be a string"
+                | Some kind when kind.ValueKind = JsonValueKind.String && kind.GetString() = "assistant" ->
+                    let message =
+                        match property "message" root with
+                        | Some value when value.ValueKind = JsonValueKind.Object -> value
+                        | _ -> invalidOp "assistant.message must be an object"
+
+                    let model = requiredString "message" "model" message
+
+                    // Claude Code writes local error/interruption notices as assistant records with a synthetic
+                    // model and no API request. They are not provider responses.
+                    if model = "<synthetic>" then
+                        Ok Other
+                    else
+                        let messageId = requiredString "message" "id" message
+
+                        if not (identityPattern.IsMatch messageId) then
+                            invalidOp "message.id is not a bounded identity"
+
+                        let requestId = requiredString "assistant" "requestId" root
+
+                        if not (identityPattern.IsMatch requestId) then
+                            invalidOp "assistant.requestId is not a bounded identity"
+
+                        let session = guid "assistant.sessionId" (requiredString "assistant" "sessionId" root)
+
+                        let sidechain =
+                            match property "isSidechain" root with
+                            | Some value when value.ValueKind = JsonValueKind.True -> true
+                            | Some value when value.ValueKind = JsonValueKind.False -> false
+                            | _ -> invalidOp "assistant.isSidechain must be a boolean"
+
+                        let agent =
+                            if sidechain then
+                                let value = requiredString "assistant" "agentId" root
+
+                                if not (agentPattern.IsMatch value) then
+                                    invalidOp "assistant.agentId is not a bounded identity"
+
+                                Some value
+                            else
+                                None
+
+                        let timestamp = requiredString "assistant" "timestamp" root
+
+                        if not (timestampPattern.IsMatch timestamp) then
+                            invalidOp "assistant.timestamp must be an RFC 3339 timestamp"
+
+                        let completed =
+                            match property "stop_reason" message with
+                            | None -> false
+                            | Some value when value.ValueKind = JsonValueKind.Null -> false
+                            | Some value when value.ValueKind = JsonValueKind.String ->
+                                profileText "message.stop_reason" (value.GetString()) |> ignore
+                                true
+                            | Some _ -> invalidOp "message.stop_reason must be a string or null"
+
+                        Ok(
+                            Assistant
+                                {
+                                    MessageId = messageId
+                                    RequestId = requestId
+                                    SessionId = session
+                                    ThreadId =
+                                        match agent with
+                                        | Some value -> subagentThreadId session value
+                                        | None -> session
+                                    Sidechain = sidechain
+                                    AgentId = agent
+                                    Model = model
+                                    Effort = optionalString "assistant" "effort" root
+                                    Timestamp = timestamp
+                                    RuntimeVersion = optionalString "assistant" "version" root
+                                    // Streaming writers record incomplete per-block usage before stop_reason; only a
+                                    // completed record carries the response's final counters.
+                                    Usage =
+                                        if completed then
+                                            match property "usage" message with
+                                            | Some value -> Some(usage value)
+                                            | None -> invalidOp "message.usage is required on a completed response"
+                                        else
+                                            None
+                                }
+                        )
+                | _ -> Ok Other
+            with
+            | :? JsonException
+            | :? InvalidOperationException
+            | :? DecoderFallbackException
+            | :? ArgumentException as error -> Error error.Message
+
     let private text (label: string) (node: JsonElement) (name: string) =
         match node.TryGetProperty name with
         | true, value when
@@ -452,6 +714,256 @@ module RuntimeUsage =
         with error ->
             Error [ error.Message ]
 
+    type private ClaudeEntry =
+        {
+            First: ClaudeTranscript.Response
+            // The prompt identity in force at the response's first record, which owns an incomplete response.
+            StartTurn: string option
+            // The prompt identity in force at the response's first completed record; incomplete streaming records
+            // and later tool results never move it.
+            mutable Turn: string option
+            mutable Completed: (ClaudeTranscript.Response * ClaudeTranscript.Usage) option
+        }
+
+    let private claudeCounts (usage: ClaudeTranscript.Usage) =
+        let add (left: int64) (right: int64) =
+            if left > Int64.MaxValue - right then
+                invalidOp "Claude usage counters overflow"
+
+            left + right
+
+        let input = add (add usage.Uncached usage.CacheRead) usage.CacheCreation
+
+        {
+            Input = input
+            CachedInput = usage.CacheRead
+            CacheWriteInput = usage.CacheCreation
+            Output = usage.Output
+            Reasoning = usage.Thinking
+            Total = add input usage.Output
+        }
+
+    let private sumCounts (left: TokenCounts) (right: TokenCounts) =
+        let add (a: int64) (b: int64) =
+            if a > Int64.MaxValue - b then
+                invalidOp "Claude turn usage counters overflow"
+
+            a + b
+
+        {
+            Input = add left.Input right.Input
+            CachedInput = add left.CachedInput right.CachedInput
+            CacheWriteInput = add left.CacheWriteInput right.CacheWriteInput
+            Output = add left.Output right.Output
+            Reasoning = Option.map2 add left.Reasoning right.Reasoning
+            Total = add left.Total right.Total
+        }
+
+    let collectClaudeTranscript
+        (task: string)
+        (turnId: string option)
+        (allResponses: bool)
+        (sinceUtc: string option)
+        (untilUtc: string option)
+        (coordinationVersion: string)
+        (sddVersion: string)
+        (contractsVersion: string)
+        (bytes: byte array)
+        =
+        try
+            let errors = ensureVersions task coordinationVersion sddVersion contractsVersion
+
+            if not errors.IsEmpty then
+                Error errors
+            elif bytes.LongLength > int64 ClaudeTranscript.MaximumFileBytes then
+                Error [ "Claude transcript exceeds its 128 MiB bound; totals withheld" ]
+            elif bytes.Length = 0 then
+                Error [ "Claude transcript is empty" ]
+            elif bytes[bytes.Length - 1] <> byte '\n' then
+                Error [ "Claude transcript ends in a partial line; totals withheld until the record is complete" ]
+            else
+                let source = "claude-transcript-jsonl:sha256:" + TelemetryJson.sha256 bytes
+                let order = ResizeArray<string>()
+                let entries = Collections.Generic.Dictionary<string, ClaudeEntry>(StringComparer.Ordinal)
+                let failures = ResizeArray<string>()
+                let mutable turn = None
+                let mutable start = 0
+                let mutable lineNumber = 0
+
+                while start < bytes.Length && failures.Count = 0 do
+                    let stop = Array.IndexOf(bytes, byte '\n', start)
+                    lineNumber <- lineNumber + 1
+                    let length = stop - start
+
+                    if length > ClaudeTranscript.MaximumLineBytes then
+                        failures.Add $"line %d{lineNumber}: exceeds the 4 MiB line bound; totals withheld"
+                    elif length > 0 && not (length = 1 && bytes[start] = byte '\r') then
+                        match ClaudeTranscript.decodeLine bytes[start .. stop - 1] with
+                        | Error reason -> failures.Add $"line %d{lineNumber}: %s{reason}"
+                        | Ok(ClaudeTranscript.Prompt prompt) -> turn <- Some prompt
+                        | Ok ClaudeTranscript.Other -> ()
+                        | Ok(ClaudeTranscript.Assistant record) ->
+                            match entries.TryGetValue record.MessageId with
+                            | false, _ ->
+                                order.Add record.MessageId
+
+                                entries[record.MessageId] <-
+                                    {
+                                        First = record
+                                        StartTurn = turn
+                                        Turn = if record.Usage.IsSome then turn else None
+                                        Completed = record.Usage |> Option.map (fun usage -> record, usage)
+                                    }
+                            | true, entry ->
+                                if
+                                    entry.First.RequestId <> record.RequestId
+                                    || entry.First.SessionId <> record.SessionId
+                                    || entry.First.ThreadId <> record.ThreadId
+                                    || entry.First.Model <> record.Model
+                                then
+                                    failures.Add
+                                        $"line %d{lineNumber}: response %s{record.MessageId} changes its request, session, thread or model identity"
+                                else
+                                    match entry.Completed, record.Usage with
+                                    | None, Some usage ->
+                                        entry.Completed <- Some(record, usage)
+                                        entry.Turn <- turn
+                                    | Some(_, prior), Some usage when prior = usage -> ()
+                                    | Some _, Some _ ->
+                                        failures.Add
+                                            $"line %d{lineNumber}: response %s{record.MessageId} repeats disagreeing completed usage; totals withheld"
+                                    | Some _, None ->
+                                        failures.Add
+                                            $"line %d{lineNumber}: response %s{record.MessageId} has an incomplete record after its completed usage"
+                                    | None, None -> ()
+
+                    start <- stop + 1
+
+                let sessions = entries.Values |> Seq.map _.First.SessionId |> Seq.distinct |> Seq.length
+
+                if failures.Count > 0 then
+                    Error(List.ofSeq failures)
+                elif entries.Count = 0 then
+                    Error [ "no Claude API responses found" ]
+                elif sessions <> 1 then
+                    Error [ "Claude transcript mixes session identities" ]
+                else
+                    // Turn totals are cumulative within one thread and prompt, as Codex's turn_token_usage is. A
+                    // response whose turn predecessor is incomplete has an unknown turn total, never a partial sum.
+                    let running =
+                        Collections.Generic.Dictionary<string * string, Result<TokenCounts, string>>()
+
+                    let candidates =
+                        [
+                            for id in order do
+                                let entry = entries[id]
+
+                                let row =
+                                    match entry.Turn, entry.Completed with
+                                    | _, None -> Error $"response %s{id} has no completed usage record; totals withheld"
+                                    | None, Some _ -> Error $"response %s{id} has no preceding Claude prompt identity"
+                                    | Some prompt, Some(record, usage) ->
+                                        match record.RuntimeVersion with
+                                        | None -> Error $"response %s{id} has no Claude Code version"
+                                        | Some version ->
+                                            let counts = claudeCounts usage
+                                            let key = record.ThreadId, prompt
+
+                                            let turnCounts =
+                                                match running.TryGetValue key with
+                                                | true, Error reason -> Error reason
+                                                | true, Ok prior -> Ok(sumCounts prior counts)
+                                                | false, _ -> Ok counts
+
+                                            turnCounts
+                                            |> Result.map (fun turnTotal ->
+                                                {
+                                                    Timestamp = record.Timestamp
+                                                    Task = task
+                                                    SessionId = record.SessionId
+                                                    ThreadId = record.ThreadId
+                                                    TurnId = prompt
+                                                    ResponseId = id
+                                                    Provider = "Anthropic"
+                                                    Model = record.Model
+                                                    Effort = record.Effort |> Option.defaultValue ""
+                                                    RuntimeVersion = version
+                                                    CoordinationVersion = coordinationVersion
+                                                    SddVersion = sddVersion
+                                                    ContractsVersion = contractsVersion
+                                                    LedgerSchema = 1
+                                                    Response = counts
+                                                    Turn = turnTotal
+                                                    Thread = None
+                                                    Source = source
+                                                })
+
+                                // An incomplete response belongs to the turn it started in, so it is selected by
+                                // that turn and makes every later total in that turn unknown.
+                                let owner =
+                                    match entry.Completed with
+                                    | Some _ -> entry.Turn
+                                    | None -> entry.StartTurn
+
+                                match owner with
+                                | Some prompt ->
+                                    let key = entry.First.ThreadId, prompt
+
+                                    running[key] <-
+                                        match row with
+                                        | Ok value -> Ok value.Turn
+                                        | Error _ ->
+                                            Error $"turn %s{prompt} usage is incomplete before response %s{id}"
+                                | None -> ()
+
+                                let timestamp =
+                                    entry.Completed
+                                    |> Option.map (fun (record, _) -> record.Timestamp)
+                                    |> Option.defaultValue entry.First.Timestamp
+
+                                yield owner, timestamp, row
+                        ]
+
+                    let filtered =
+                        candidates
+                        |> List.filter (fun (turn, _, _) -> turnId |> Option.forall (fun wanted -> turn = Some wanted))
+                        |> List.filter (fun (_, timestamp, _) ->
+                            sinceUtc |> Option.forall (fun since -> String.CompareOrdinal(timestamp, since) >= 0))
+                        |> List.filter (fun (_, timestamp, _) ->
+                            untilUtc |> Option.forall (fun until -> String.CompareOrdinal(timestamp, until) < 0))
+
+                    if filtered.IsEmpty then
+                        Error [ "no Claude responses matched the requested turn/time window" ]
+                    else
+                        let selected =
+                            if allResponses then
+                                filtered
+                            else
+                                [ List.last filtered ]
+
+                        let refused =
+                            selected
+                            |> List.choose (fun (_, _, row) ->
+                                match row with
+                                | Error reason -> Some reason
+                                | Ok _ -> None)
+
+                        if not refused.IsEmpty then
+                            Error refused
+                        else
+                            Ok
+                                {
+                                    Rows =
+                                        selected
+                                        |> List.choose (fun (_, _, row) ->
+                                            match row with
+                                            | Ok value -> Some value
+                                            | Error _ -> None)
+                                    SourceDigest = source
+                                }
+        with error ->
+            Error [ error.Message ]
+
     let private csvEscape (value: string) =
         if value.IndexOfAny([| ','; '"'; '\n'; '\r' |]) >= 0 then
             "\"" + value.Replace("\"", "\"\"") + "\""
@@ -659,7 +1171,7 @@ module RuntimeUsage =
                     not (
                         Regex.IsMatch(
                             source,
-                            "^(codex-session-jsonl|claude-statusline-json):sha256:[0-9a-f]{64}$",
+                            "^(codex-session-jsonl|claude-statusline-json|claude-transcript-jsonl):sha256:[0-9a-f]{64}$",
                             RegexOptions.CultureInvariant
                         )
                     )

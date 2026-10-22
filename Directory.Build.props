@@ -630,8 +630,10 @@
        Source readiness only; published110 and installed adoption remain separate. -->
   <!-- 0.111.0 -> 0.112.0 (#4789): canonical current skill routing and selected SDD adoption.
        SOURCE only; published111, original journals and installed pins remain unchanged. -->
+  <!-- 0.112.0 -> 0.113.0 (#4801): Claude Code transcript usage capture in the CLI and
+       packaged pnext-item/work-roadmap guidance. SOURCE only; published112 and installed pins unchanged. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.112.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.113.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

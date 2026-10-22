@@ -460,6 +460,20 @@ module TelemetryStoreTests =
             $"""{{"kind":"provider-usage-observation/1","identity":"{identity}","itemId":null,"revision":1,"threadId":"{thread}","turnId":"{turn}","responseId":"response-a","provider":null,"model":null,"effort":null,"input":10,"cachedInput":9,"cacheWriteInput":8,"output":5,"reasoning":2,"total":15,"sourceInstance":"{String('a',64)}","sourceGeneration":"source-1","sourceDigest":"{String('b',64)}","position":0,"capturedAt":"2026-10-18T07:00:00Z","occurredAt":null,"provenance":"codex-local-rollout/1","populationCoverage":"partial","attributionCoverage":"unknown","inventoryCoverage":"unknown","terminalCoverage":"unknown"}}""")
 
     [<Fact>]
+    let ``passive Claude transcript provenance owns its own native identity namespace`` () =
+        let event = passiveEvent ()
+        let thread, turn = event["threadId"].GetValue<string>(), event["turnId"].GetValue<string>()
+        let claudeIdentity = "passive-" + CanonicalJson.sha256(bytes ("claude-transcript/1\u001f" + thread + "\u001f" + turn + "\u001fresponse-a"))
+        let parse (node: System.Text.Json.Nodes.JsonNode) = TelemetryStore.parseBatch(causalBatch (node.ToJsonString()))
+        event["provenance"] <- System.Text.Json.Nodes.JsonValue.Create "claude-local-transcript/1"
+        // Causal control: the same fact under the Codex namespace is refused once provenance says Claude.
+        Assert.True(parse event |> Result.isError)
+        event["identity"] <- System.Text.Json.Nodes.JsonValue.Create claudeIdentity
+        Assert.True(parse event |> Result.isOk)
+        event["provenance"] <- System.Text.Json.Nodes.JsonValue.Create "claude-statusline/1"
+        Assert.True(parse event |> Result.isError)
+
+    [<Fact>]
     let ``passive response is partial unassigned and preserves independent cache counters`` () =
         let event = passiveEvent ()
         let parsed = TelemetryStore.parseBatch(causalBatch (event.ToJsonString())) |> Result.defaultWith (sprintf "%A" >> failwith)

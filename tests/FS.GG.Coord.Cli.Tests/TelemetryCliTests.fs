@@ -622,6 +622,66 @@ module TelemetryCliTests =
         Assert.Contains(",10,4,0,5,2,15,", stdout)
         Assert.DoesNotContain(path, stdout)
 
+    // Synthetic Claude Code transcript in the observed native shape; no private transcript content.
+    let private claudeTranscript =
+        let session = "5f0c2a8e-3b1d-4e6f-9a7b-1c2d3e4f5a6b"
+        let user (prompt: string) =
+            $"""{{"type":"user","isSidechain":false,"promptId":"{prompt}","message":{{"role":"user","content":"synthetic"}},"sessionId":"{session}","timestamp":"2026-10-22T05:00:00.000Z","version":"2.1.299"}}"""
+        let assistant (id: string) (second: int) (output: int) =
+            $"""{{"type":"assistant","isSidechain":false,"message":{{"model":"claude-opus-5-5","id":"{id}","role":"assistant","content":[],"stop_reason":"end_turn","usage":{{"input_tokens":2,"cache_creation_input_tokens":3,"cache_read_input_tokens":5,"output_tokens":{output}}}}},"requestId":"req_{id}","sessionId":"{session}","timestamp":"2026-10-22T05:01:{second:D2}.000Z","version":"2.1.299","effort":"medium"}}"""
+        [ user "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"; assistant "msg_a" 1 7; assistant "msg_a" 2 7
+          user "1b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e"; assistant "msg_b" 3 11 ]
+        |> String.concat "\n"
+        |> fun text -> text + "\n"
+
+    [<Fact>]
+    let ``packaged Claude collector reads a transcript with the Codex selection contract`` () =
+        let disposable, path = temporary claudeTranscript
+        use _ = disposable
+
+        let store =
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "fsgg-4801-cli-tests",
+                Guid.NewGuid().ToString("n")
+            )
+
+        use _store =
+            { new IDisposable with
+                member _.Dispose() =
+                    if Directory.Exists store then
+                        Directory.Delete(store, true)
+            }
+
+        let collect (selection: string list) =
+            invoke (
+                [ "telemetry"; "usage"; "collect"; "claude" ]
+                @ selection
+                @ [ "--task"; "repo#1/claim"; "--coord-version"; "4.5.6"; "--sdd-version"; "7.8.9"
+                    "--contracts-version"; "10.0.0"; "--receipt-store"; store ]
+            )
+
+        let code, all, stderr = collect [ "--session-file"; path; "--all-responses" ]
+        Assert.Equal(0, code)
+        Assert.Equal("", stderr)
+        let rows = all.Trim().Split('\n') |> Array.tail
+        Assert.Equal(2, rows.Length)
+        Assert.Contains(",msg_a,Anthropic,claude-opus-5-5,medium,2.1.299,", rows[0])
+        Assert.Contains(",10,5,3,7,,17,", rows[0])
+        Assert.Contains("claude-transcript-jsonl:sha256:", rows[0])
+        Assert.DoesNotContain(path, all)
+        let _, latest, _ = collect [ "--session-file"; path ]
+        Assert.Contains(",msg_b,", latest)
+        Assert.DoesNotContain(",msg_a,", latest)
+        let _, turn, _ = collect [ "--session-file"; path; "--turn-id"; "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d" ]
+        Assert.Contains(",msg_a,", turn)
+        let both, _, bothError = collect [ "--session-file"; path; "--snapshot"; path ]
+        Assert.NotEqual(0, both)
+        Assert.Contains("mutually exclusive", bothError)
+        let neither, _, neitherError = collect []
+        Assert.NotEqual(0, neither)
+        Assert.Contains("--session-file or --snapshot", neitherError)
+
     [<Fact>]
     let ``#3259 collector durably archives and resolver returns the exact receipt`` () =
         let sessionDisposable, sessionPath = temporary (codex 15)

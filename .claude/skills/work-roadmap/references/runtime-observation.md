@@ -51,6 +51,15 @@ Call the item total proven only after every expected invocation is present, ever
 outcome and final completed-turn counters, and every submitted batch has an applied Host receipt. Missing,
 pending or conflicting evidence remains an explicit coverage gap; never infer a total from partial counters.
 
+## Claude Code usage
+
+Claude Code has no observed launcher or App Server join. Its native usage reaches the same local path from
+an explicitly selected transcript: `fsgg-coord-engine telemetry usage collect claude --session-file` for a
+phase receipt, or `telemetry passive capture` with a `fsgg.telemetry.passive-selection/1` file naming
+`claudeHome` and the selected transcripts below its `projects` directory. Passive rows use provenance
+`claude-local-transcript/1`, partial population and unknown attribution. Subagent transcripts stay separate
+files and threads; item totals and attribution remain unknown.
+
 ## Record repository-owned dispatches by default
 
 This native collaboration route applies when the opt-in `codex-exec` route above was not selected. The launcher

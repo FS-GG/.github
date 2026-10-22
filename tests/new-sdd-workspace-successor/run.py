@@ -611,9 +611,9 @@ class WizardReleaseTests(unittest.TestCase):
                     board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_020)
 
 
-            # The selected021 source identity is normal112 only; retained020 above stays exact.
+            # The selected021 source identity is normal113 only; retained020 above stays exact.
             nuspec = nuspec.replace(b'0.20.0', b'0.21.0')
-            next_deps = json.loads(json.dumps(source_deps).replace('0.110.0', '0.112.0'))
+            next_deps = json.loads(json.dumps(source_deps).replace('0.110.0', '0.113.0'))
             for target in next_deps['targets'].values():
                 target['new-sdd-workspace/0.21.0'] = target.pop('new-sdd-workspace/0.20.0')
             next_members = {**members, 'new-sdd-workspace.deps.json': json.dumps(next_deps).encode()}
@@ -621,7 +621,7 @@ class WizardReleaseTests(unittest.TestCase):
                 (output / name).write_bytes(body)
             pack(next_members)
             result = board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_021)
-            self.assertEqual((result['version'], result['coherentVersion']), ('0.21.0', '0.112.0'))
+            self.assertEqual((result['version'], result['coherentVersion']), ('0.21.0', '0.113.0'))
             self.assertEqual(result['builtFilesCompared'], len(next_members))
             self.assertEqual(result['mode'], 'source-only')
             self.assertIs(result['releaseEligible'], False)
@@ -632,8 +632,8 @@ class WizardReleaseTests(unittest.TestCase):
             forged = type(SOURCE_021)(SOURCE_021.package, SOURCE_021.version, SOURCE_021.tag)
             with self.assertRaisesRegex(ValueError, 'unknown Creator package binding'):
                 board_package_closure(package, 'a' * 40, source_root=root, release_binding=forged)
-            for stale_version in ('0.111.0', '0.110.0', '0.109.0', '0.108.0'):
-                stale_metadata = json.dumps(next_deps).replace('0.112.0', stale_version).encode()
+            for stale_version in ('0.112.0', '0.111.0', '0.110.0', '0.109.0', '0.108.0'):
+                stale_metadata = json.dumps(next_deps).replace('0.113.0', stale_version).encode()
                 (output / 'new-sdd-workspace.deps.json').write_bytes(stale_metadata)
                 pack({**next_members, 'new-sdd-workspace.deps.json': stale_metadata})
                 with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
@@ -747,7 +747,7 @@ class WizardReleaseTests(unittest.TestCase):
         props = ElementTree.parse(ROOT / 'Directory.Build.props')
         self.assertEqual(next(node.text for node in props.iter('FsggCoherentSetVersion')), SOURCE_COHERENT_VERSION)
         self.assertEqual(SOURCE_020_COHERENT_VERSION, '0.110.0')
-        self.assertEqual(SOURCE_COHERENT_VERSION, '0.112.0')
+        self.assertEqual(SOURCE_COHERENT_VERSION, '0.113.0')
         self.assertLess(candidate.index("creator-current-coord-dependencies.py preflight"),
                         candidate.index("actions/setup-dotnet"))
         self.assertIn('creator-current-coord-dependencies.py preflight', candidate)

@@ -5,7 +5,7 @@
       "id": "atlas",
       "scope": "driver",
       "sha256": "c18e56fcc56abf80903e2fc6829cd94b44f42947724a26318ebcbf1ac5e1b35b",
-      "tree-sha256": "b8b21621e25170e47bcc3d679fa35375bdd5756b105323bd40af6ca79dd23063",
+      "tree-sha256": "2434cf59f44914179a30befa0233cb9dabbd6b05d8f0275f78727bdffc82bebc",
       "files": [
         {
           "path": "SKILL.md",
@@ -24,7 +24,7 @@
         },
         {
           "path": "assets/seed/catalog.json",
-          "sha256": "6570c9ba2f7106d433141b292d2371cebfd4c3c393f090412204f7f49adaf933",
+          "sha256": "71c9394403f6c9e9e5d1efb8438a6683cfc3eab68784034c9904c00a5918ed57",
           "executable": false
         },
         {
@@ -475,6 +475,11 @@
         {
           "path": "assets/seed/records/4a724a6a842a132c2185279513f341b79f9be93e42660f1255770eeae3b1323c.json",
           "sha256": "4a724a6a842a132c2185279513f341b79f9be93e42660f1255770eeae3b1323c",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/4aecbdfafb68feb3124c39219498241864bcf1ceaf87fbf80598b1dd87a9191d.json",
+          "sha256": "4aecbdfafb68feb3124c39219498241864bcf1ceaf87fbf80598b1dd87a9191d",
           "executable": false
         },
         {
@@ -1825,7 +1830,7 @@
       "id": "work-roadmap",
       "scope": "driver",
       "sha256": "48ee31933a1eb4114cf177bda85d8b7bb5bf0310b396b3915ebb85c214ac3f2e",
-      "tree-sha256": "4b21404bff41e2972d2622029886642ba4eb58b7e41361d532cf72a74b0a1af7",
+      "tree-sha256": "301d1668e2aefc840d33b0f0cad659a29ad3e486989f21bee8c90b74dfecbad7",
       "files": [
         {
           "path": "SKILL.md",
@@ -1869,7 +1874,7 @@
         },
         {
           "path": "references/lifecycle-log.md",
-          "sha256": "86452edc1985dd73b77ce06c1623306100ddc7fd415127d7b2394f7d32103700",
+          "sha256": "91f454e1c2cc2fb8b03086b761327f0aef2a0c6a3ee259ea117352d4352b0182",
           "executable": false
         },
         {
@@ -1889,7 +1894,7 @@
         },
         {
           "path": "references/runtime-observation.md",
-          "sha256": "61b6bc611b5cafe1a96dd39789e5a257a609f720fb0acaf32091154f7b90d8d9",
+          "sha256": "fe6e5ef7c1a903e2373e68c797543dbfe95373e0e4185c40d3f5dfd0b445e330",
           "executable": false
         }
       ],
@@ -2429,12 +2434,12 @@
     {
       "id": "publishing-and-deployment",
       "scope": "operator",
-      "sha256": "32fc6114f11e0d2aff8f13be2cb35d5fd2ddd88dd4187a3b0854f49348083af8",
-      "tree-sha256": "b901f497817af1c1045a6cfcb560d2c197193b1b8f708e1a3c332791a29742ea",
+      "sha256": "b2f1c2f206d0c7756023e0d6c4e7d6b13f7c1fa4b43b1292d2af6cc33734acaf",
+      "tree-sha256": "f19e9a2a4d21ce297bdd7b8cbbb365a8bd61be215386e1309968d24fa5fda0f4",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "32fc6114f11e0d2aff8f13be2cb35d5fd2ddd88dd4187a3b0854f49348083af8",
+          "sha256": "b2f1c2f206d0c7756023e0d6c4e7d6b13f7c1fa4b43b1292d2af6cc33734acaf",
           "executable": false
         },
         {
