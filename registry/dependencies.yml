@@ -1143,7 +1143,11 @@ dependencies:
   # published Rendering 0.32.3 through reviewed source: the provider pin plus the fable-game
   # SvgFoundation/Studio defaults and codec/tactical refs (FS-GG/.github#4709). Published Workspace
   # 0.19.1 still carries 0.32.1; Workspace publication, the public default and installed/full Wizard
-  # qualification remain open. Prior: SELECTED @0.32.1 via Templates PR673 merge 784c4af5 (historical).
+  # qualification remain open.
+  # PRIOR (historical) SELECTED @0.32.1: Templates PR673 merge 784c4af52c4f0d426268e554ca58fa97125c2710
+  # adopts the published Rendering provider through reviewed source (TSDD-KNOWLEDGE-01.4).
+  # Published-feed installed receiver qualification remains open. Packed Fable SVG pins stay
+  # 0.31.0; provider lifecycle defaults and Workspace Template 0.18.0 publication are unchanged.
   - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.32.3 composed via scaffold-provider (lifecycle=sdd); fable-game SvgFoundation/Studio defaults pin UI.Scene/SvgBrowser/KeyboardInput 0.32.3" }
   # ADR-0022 P5 (Rendering#155): Rendering's template game/sample-pack profiles + Canvas.Tests consume the
   # extracted bottom layer. Rendering (upstream) reaching further UP to the new sibling bottom layer is

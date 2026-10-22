@@ -644,6 +644,7 @@ workspace_registry_block="$(sed -n '/^  - id: fs-gg-workspace-template$/,/^  - i
 architecture_template_comparator_is_current() {
   local subject="$1"
   grep -qF "registry's newest-tracking 0.19.1 pin above" "$subject" \
+    && grep -qF 'package (registry `package-version` **0.19.1** —' "$subject" \
     && ! grep -qF "registry's newest-tracking 0.13.0 pin above" "$subject"
 }
 if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \

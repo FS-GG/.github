@@ -437,7 +437,7 @@ README must name the same version), and proves the governance matrix end-to-end 
 adds a top-level distinction that the current rendering-only path does not need:
 `new-sdd-workspace --template` selects a provider, while `--profile` is interpreted only by that
 provider. Omission preserves the current rendering behaviour during the compatibility window.
-FS.GG.Templates owns one `FS.GG.Workspace.Template` package (registry `package-version` **0.19.0** —
+FS.GG.Templates owns one `FS.GG.Workspace.Template` package (registry `package-version` **0.19.1** —
 the feed's literal newest, per the versions table in §5; published to both feeds and registry-active
 through SVG-COHERENCE-01.8) with eight configurations and seven selectors: the
 current and legacy fable-game configurations share one selector. The existing
