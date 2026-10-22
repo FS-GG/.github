@@ -94,7 +94,7 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
-- **2026-10-22** — - **2026-10-22** — PROSPECTIVE COHERENT113 SOURCE (.github; #4801): select source 0.113.0 for CLI/Kit/Drivers to carry Claude Code transcript usage capture and corrected packaged guidance. Published112 and installed pins remain unchanged; no candidate or publication is authorized.
+- **2026-10-22** — PROSPECTIVE COHERENT113 SOURCE (.github; #4801): select source 0.113.0 for CLI/Kit/Drivers to carry Claude Code transcript usage capture and corrected packaged guidance. Published112 and installed pins remain unchanged; no candidate or publication is authorized.
 
 - **2026-10-21** — ACCEPTED COHERENT112 PUBLICATION (.github; #4789):
 
