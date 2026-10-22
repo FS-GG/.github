@@ -369,9 +369,26 @@ module TelemetryApplication =
                                 contracts
                                 (read path)
                     | "claude" ->
-                        match required "--snapshot" args with
-                        | Error reason -> Error [ reason ]
-                        | Ok path -> RuntimeUsage.collectClaude task coordination sdd contracts (read path)
+                        match option "--session-file" args, option "--snapshot" args with
+                        | Some _, Some _ -> Error [ "--session-file and --snapshot are mutually exclusive" ]
+                        | Some path, None when
+                            FileInfo(path).Length > int64 RuntimeUsage.ClaudeTranscript.MaximumFileBytes
+                            ->
+                            Error [ "Claude transcript exceeds its 128 MiB bound; totals withheld" ]
+                        | Some path, None ->
+                            // Claude Code transcript JSONL, collected with the Codex selection contract.
+                            RuntimeUsage.collectClaudeTranscript
+                                task
+                                (option "--turn-id" args)
+                                (has "--all-responses" args)
+                                (option "--since" args)
+                                (option "--until" args)
+                                coordination
+                                sdd
+                                contracts
+                                (read path)
+                        | None, Some path -> RuntimeUsage.collectClaude task coordination sdd contracts (read path)
+                        | None, None -> Error [ "--session-file or --snapshot is required" ]
                     | _ -> Error [ "runtime must be codex or claude" ]
 
                 match result with
@@ -1077,13 +1094,21 @@ module TelemetryApplication =
                             use document = JsonDocument.Parse bytes
                             let selection = document.RootElement
                             let fields = selection.EnumerateObject() |> Seq.map _.Name |> Seq.toList
-                            if fields.Length <> 3 || Set.ofList fields <> Set.ofList [ "schema"; "codexHome"; "sources" ]
+                            // Exactly one selected private root: a Codex home or a Claude Code configuration home.
+                            let homeField =
+                                if Set.ofList fields = Set.ofList [ "schema"; "codexHome"; "sources" ] then "codexHome"
+                                elif Set.ofList fields = Set.ofList [ "schema"; "claudeHome"; "sources" ] then "claudeHome"
+                                else invalidOp "passive source selection has an unsupported shape"
+                            if fields.Length <> 3
                                || selection.GetProperty("schema").GetString() <> "fsgg.telemetry.passive-selection/1" then
                                 invalidOp "passive source selection has an unsupported shape"
-                            let home = selection.GetProperty("codexHome").GetString()
+                            let home = selection.GetProperty(homeField).GetString()
                             if not (Path.IsPathFullyQualified home) then invalidOp "passive source root must be absolute"
+                            let sourceRoot =
+                                if homeField = "claudeHome" then SkillTelemetryReaders.ClaudeHome home
+                                else SkillTelemetryReaders.CodexHome home
                             let paths = selection.GetProperty("sources").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
-                            SkillTelemetryAdapter.capturePassive root owner scope.Stream home paths
+                            SkillTelemetryAdapter.capturePassiveFrom root owner scope.Stream sourceRoot paths
                                 (WorkspaceTelemetryApplication.tryEnqueueBound config (Some repository) (Some scope.Producer) (Some binding))
                         with _ ->
                             { SkillTelemetryAdapter.CommandResult.ExitCode = 1; Stdout = Array.empty

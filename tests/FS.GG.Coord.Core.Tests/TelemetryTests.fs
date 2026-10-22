@@ -309,6 +309,231 @@ module TelemetryTests =
         Assert.Equal(13L, first.Rows.Head.Response.Total)
         Assert.Equal(None, first.Rows.Head.Response.Reasoning)
 
+    // Synthetic Claude Code transcript records in the observed native shape (2.1.x). Identities, text and paths are
+    // invented; no private transcript content is used. Usage is repeated per content block exactly as Claude Code
+    // writes it, and a streaming writer's incomplete records carry stop_reason null with provisional counters.
+    module private ClaudeFixture =
+        let session = "5f0c2a8e-3b1d-4e6f-9a7b-1c2d3e4f5a6b"
+        let promptA = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+        let promptB = "1b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e"
+
+        let user (prompt: string) (index: int) =
+            $"""{{"parentUuid":null,"isSidechain":false,"promptId":"{prompt}","type":"user","message":{{"role":"user","content":"synthetic prompt"}},"uuid":"00000000-0000-4000-8000-{index:D12}","timestamp":"2026-10-22T05:00:{index:D2}.000Z","userType":"external","entrypoint":"cli","cwd":"/work","sessionId":"{session}","version":"2.1.299","gitBranch":"main"}}"""
+
+        let usage (input: int64) (cacheWrite: int64) (cacheRead: int64) (output: int64) (thinking: int64 option) =
+            let details =
+                match thinking with
+                | Some value -> $""","output_tokens_details":{{"thinking_tokens":{value}}}"""
+                | None -> ""
+
+            "\"usage\":"
+            + $"""{{"input_tokens":{input},"cache_creation_input_tokens":{cacheWrite},"cache_read_input_tokens":{cacheRead},"output_tokens":{output},"server_tool_use":{{"web_search_requests":0,"web_fetch_requests":0}},"service_tier":"standard","cache_creation":{{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":{cacheWrite}}},"inference_geo":"","iterations":[],"speed":"standard"{details}}}"""
+
+        let assistantWith (extra: string) (messageId: string) (request: string) (second: int) (stop: string) (usageJson: string) =
+            $"""{{"parentUuid":"00000000-0000-4000-8000-000000000001","isSidechain":false,{extra}"message":{{"model":"claude-opus-5-5","id":"{messageId}","type":"message","role":"assistant","content":[{{"type":"text","text":"synthetic"}}],"stop_reason":{stop},"stop_sequence":null,"stop_details":null,{usageJson},"context_management":null}},"requestId":"{request}","type":"assistant","uuid":"00000000-0000-4000-9000-{second:D12}","timestamp":"2026-10-22T05:01:{second:D2}.000Z","userType":"external","entrypoint":"cli","cwd":"/work","sessionId":"{session}","version":"2.1.299","gitBranch":"main","effort":"high"}}"""
+
+        let assistant = assistantWith ""
+
+        let sidechain (agent: string) (messageId: string) (request: string) (second: int) (usageJson: string) =
+            (assistant messageId request second "\"end_turn\"" usageJson)
+                .Replace("\"isSidechain\":false,", $"\"isSidechain\":true,\"agentId\":\"{agent}\",")
+
+        let other =
+            [
+                """{"type":"mode","mode":"default","sessionId":"5f0c2a8e-3b1d-4e6f-9a7b-1c2d3e4f5a6b"}"""
+                """{"type":"attachment","attachment":{"type":"synthetic"},"uuid":"00000000-0000-4000-a000-000000000001"}"""
+                """{"type":"system","subtype":"informational","content":"synthetic"}"""
+            ]
+
+        // Two API responses in prompt A: msg-a repeated identically per block; msg-b streamed then completed.
+        let transcript =
+            [ user promptA 1 ]
+            @ other
+            @ [
+                assistant "msg_a" "req_a" 1 "\"tool_use\"" (usage 2L 300L 4000L 50L None)
+                assistant "msg_a" "req_a" 2 "\"tool_use\"" (usage 2L 300L 4000L 50L None)
+                user promptA 2
+                assistant "msg_b" "req_b" 3 "null" (usage 2L 0L 0L 8L None)
+                assistant "msg_b" "req_b" 4 "\"end_turn\"" (usage 3L 10L 4300L 120L (Some 40L))
+                // Claude Code's local interruption notice is an assistant record but not a provider response.
+                """{"type":"assistant","isSidechain":false,"message":{"model":"<synthetic>","id":"6d1f3c58-0000-4000-8000-000000000000","role":"assistant","content":[],"stop_reason":"stop_sequence","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"isApiErrorMessage":true,"sessionId":"5f0c2a8e-3b1d-4e6f-9a7b-1c2d3e4f5a6b","timestamp":"2026-10-22T05:01:05.000Z"}"""
+            ]
+
+        let render (lines: string list) = (lines |> String.concat "\n") + "\n"
+
+    let private collectTranscript turn all since until (text: string) =
+        RuntimeUsage.collectClaudeTranscript "repo#1/claim" turn all since until "4.5.6" "7.8.9" "10.0.0" (bytes text)
+
+    let private refusal (result: Result<RuntimeUsage.Collection, string list>) =
+        match result with
+        | Ok collection -> failwithf "expected refusal, collected %A" collection.Rows
+        | Error reasons -> String.concat "; " reasons
+
+    [<Fact>]
+    let ``Claude transcript emits one deduplicated row per completed API response`` () =
+        let result =
+            ClaudeFixture.render ClaudeFixture.transcript
+            |> collectTranscript None true None None
+            |> unwrap
+
+        Assert.Equal<string list>([ "msg_a"; "msg_b" ], result.Rows |> List.map _.ResponseId)
+        let a, b = result.Rows[0], result.Rows[1]
+        Assert.Equal("Anthropic", a.Provider)
+        Assert.Equal("claude-opus-5-5", a.Model)
+        Assert.Equal("high", a.Effort)
+        Assert.Equal("2.1.299", a.RuntimeVersion)
+        Assert.Equal(ClaudeFixture.session, a.SessionId)
+        Assert.Equal(ClaudeFixture.session, a.ThreadId)
+        Assert.Equal(ClaudeFixture.promptA, a.TurnId)
+        Assert.Equal("2026-10-22T05:01:01.000Z", a.Timestamp)
+        // Input is uncached + cache-read + cache-creation; cache counters are its subsets.
+        Assert.Equal(4302L, a.Response.Input)
+        Assert.Equal(4000L, a.Response.CachedInput)
+        Assert.Equal(300L, a.Response.CacheWriteInput)
+        Assert.Equal(50L, a.Response.Output)
+        Assert.Equal(4352L, a.Response.Total)
+        // Reasoning is reported only when the response carries thinking_tokens.
+        Assert.Equal(None, a.Response.Reasoning)
+        Assert.Equal(Some 40L, b.Response.Reasoning)
+        // The completed record supersedes the streaming record's provisional output.
+        Assert.Equal(120L, b.Response.Output)
+        Assert.Equal(4313L, b.Response.Input)
+        Assert.Equal("2026-10-22T05:01:04.000Z", b.Timestamp)
+        // Turn totals accumulate within one prompt; reasoning stays unknown when any response lacks it.
+        Assert.Equal(a.Response.Input + b.Response.Input, b.Turn.Input)
+        Assert.Equal(a.Response.Total + b.Response.Total, b.Turn.Total)
+        Assert.Equal(None, b.Turn.Reasoning)
+        Assert.Equal(None, b.Thread)
+        Assert.StartsWith("claude-transcript-jsonl:sha256:", result.SourceDigest)
+        Assert.All(result.Rows, fun row -> Assert.Equal(result.SourceDigest, row.Source))
+        // The rendered receipt reparses under the admitted provenance.
+        let reparsed = RuntimeUsage.parseJsonLines (RuntimeUsage.renderJsonLines result.Rows) |> unwrap
+        Assert.Equal<RuntimeUsage.UsageRow list>(result.Rows, reparsed)
+        Assert.DoesNotContain("synthetic prompt", RuntimeUsage.renderCsv result.Rows)
+
+    [<Fact>]
+    let ``Claude transcript honours the Codex selection contract`` () =
+        let text =
+            ClaudeFixture.render (
+                ClaudeFixture.transcript
+                @ [
+                    ClaudeFixture.user ClaudeFixture.promptB 9
+                    ClaudeFixture.assistant "msg_c" "req_c" 30 "\"end_turn\"" (ClaudeFixture.usage 1L 0L 10L 5L (Some 0L))
+                ]
+            )
+
+        let latest = collectTranscript None false None None text |> unwrap
+        Assert.Equal("msg_c", (List.exactlyOne latest.Rows).ResponseId)
+        Assert.Equal(ClaudeFixture.promptB, latest.Rows.Head.TurnId)
+        Assert.Equal(latest.Rows.Head.Response, latest.Rows.Head.Turn)
+        Assert.Equal(Some 0L, latest.Rows.Head.Response.Reasoning)
+        let turnA = collectTranscript (Some ClaudeFixture.promptA) true None None text |> unwrap
+        Assert.Equal<string list>([ "msg_a"; "msg_b" ], turnA.Rows |> List.map _.ResponseId)
+        let window = collectTranscript None true (Some "2026-10-22T05:01:02Z") (Some "2026-10-22T05:01:29Z") text |> unwrap
+        Assert.Equal<string list>([ "msg_b" ], window.Rows |> List.map _.ResponseId)
+        Assert.Contains("no Claude responses matched", collectTranscript (Some ClaudeFixture.promptB) true (Some "2026-10-23T00:00:00Z") None text |> refusal)
+
+    [<Fact>]
+    let ``Claude sidechain usage stays on its own derived thread`` () =
+        let agent = "a5f3c1e2d4b6a8c9e"
+        let text =
+            ClaudeFixture.render (
+                ClaudeFixture.transcript
+                @ [ ClaudeFixture.sidechain agent "msg_s" "req_s" 20 (ClaudeFixture.usage 1L 0L 100L 9L None) ]
+            )
+
+        let rows = (collectTranscript None true None None text |> unwrap).Rows
+        let side = rows |> List.find (fun row -> row.ResponseId = "msg_s")
+        let expected = RuntimeUsage.ClaudeTranscript.subagentThreadId ClaudeFixture.session agent
+        Assert.Equal(expected, side.ThreadId)
+        Assert.NotEqual<string>(ClaudeFixture.session, side.ThreadId)
+        Assert.True(Guid.TryParseExact(side.ThreadId, "D") |> fst)
+        Assert.Equal(expected, RuntimeUsage.ClaudeTranscript.subagentThreadId ClaudeFixture.session agent)
+        // Same prompt, different thread: the sidechain never joins the main thread's turn total.
+        Assert.Equal(side.Response, side.Turn)
+        Assert.Equal(ClaudeFixture.promptA, side.TurnId)
+        let missingAgent = text.Replace($"\"agentId\":\"{agent}\",", "")
+        Assert.Contains("agentId", collectTranscript None true None None missingAgent |> refusal)
+
+    [<Fact>]
+    let ``Claude transcript refuses disagreeing repeated usage but accepts the agreeing control`` () =
+        let agreeing = ClaudeFixture.render ClaudeFixture.transcript
+        Assert.True(collectTranscript None true None None agreeing |> Result.isOk)
+        let disagreeing =
+            ClaudeFixture.render (
+                ClaudeFixture.transcript
+                @ [ ClaudeFixture.assistant "msg_a" "req_a" 7 "\"tool_use\"" (ClaudeFixture.usage 2L 300L 4000L 51L None) ]
+            )
+
+        Assert.Contains("repeats disagreeing completed usage", collectTranscript None true None None disagreeing |> refusal)
+        let changedRequest =
+            ClaudeFixture.render (
+                ClaudeFixture.transcript
+                @ [ ClaudeFixture.assistant "msg_a" "req_other" 7 "\"tool_use\"" (ClaudeFixture.usage 2L 300L 4000L 50L None) ]
+            )
+
+        Assert.Contains("changes its request", collectTranscript None true None None changedRequest |> refusal)
+
+    [<Fact>]
+    let ``Claude transcript withholds totals for partial malformed and oversized input`` () =
+        let complete = ClaudeFixture.render ClaudeFixture.transcript
+        Assert.True(collectTranscript None true None None complete |> Result.isOk)
+        Assert.Contains("partial line", collectTranscript None true None None (complete.TrimEnd('\n')) |> refusal)
+        Assert.Contains("partial line", collectTranscript None true None None (complete + "{\"type\":\"assi") |> refusal)
+        Assert.Contains("line 2:", collectTranscript None true None None (complete.Replace("\"mode\":\"default\"", "\"mode\":")) |> refusal)
+        let duplicateProperty = complete.Replace("\"type\":\"system\",", "\"type\":\"system\",\"type\":\"system\",")
+        Assert.Contains("duplicate property", collectTranscript None true None None duplicateProperty |> refusal)
+        let invalidUtf8 = Encoding.UTF8.GetBytes complete
+        invalidUtf8[complete.IndexOf("synthetic prompt", StringComparison.Ordinal)] <- 0xFFuy
+        let utf8Result =
+            RuntimeUsage.collectClaudeTranscript "task" None true None None "1" "1" "1" invalidUtf8
+
+        Assert.True(Result.isError utf8Result)
+        let oversized = complete + "{\"type\":\"attachment\",\"content\":\"" + String('x', RuntimeUsage.ClaudeTranscript.MaximumLineBytes) + "\"}\n"
+        Assert.Contains("line bound", collectTranscript None true None None oversized |> refusal)
+        Assert.Contains("empty", collectTranscript None true None None "" |> refusal)
+        Assert.Contains("no Claude API responses", collectTranscript None true None None (ClaudeFixture.render [ ClaudeFixture.user ClaudeFixture.promptA 1 ]) |> refusal)
+
+    [<Fact>]
+    let ``Claude transcript never turns missing counters into zero`` () =
+        let line = ClaudeFixture.assistant "msg_z" "req_z" 40 "\"end_turn\"" (ClaudeFixture.usage 1L 2L 3L 4L None)
+        let withLine (value: string) = ClaudeFixture.render [ ClaudeFixture.user ClaudeFixture.promptA 1; value ]
+        Assert.True(collectTranscript None true None None (withLine line) |> Result.isOk)
+
+        for field in [ "input_tokens"; "cache_creation_input_tokens"; "cache_read_input_tokens"; "output_tokens" ] do
+            let missing = line.Replace($"\"{field}\":", $"\"x_{field}\":")
+            Assert.Contains(field, collectTranscript None true None None (withLine missing) |> refusal)
+            let nulled = System.Text.RegularExpressions.Regex.Replace(line, $"\"{field}\":[0-9]+", $"\"{field}\":null")
+            Assert.Contains(field, collectTranscript None true None None (withLine nulled) |> refusal)
+
+        let negative = line.Replace("\"output_tokens\":4", "\"output_tokens\":-4")
+        Assert.Contains("output_tokens", collectTranscript None true None None (withLine negative) |> refusal)
+        let excessThinking = ClaudeFixture.assistant "msg_z" "req_z" 40 "\"end_turn\"" (ClaudeFixture.usage 1L 2L 3L 4L (Some 5L))
+        Assert.Contains("thinking_tokens", collectTranscript None true None None (withLine excessThinking) |> refusal)
+        Assert.Contains("version", collectTranscript None true None None (withLine (line.Replace("\"version\":\"2.1.299\",", ""))) |> refusal)
+        Assert.Contains("prompt identity", collectTranscript None true None None (ClaudeFixture.render [ line ]) |> refusal)
+        let otherSession = line.Replace(ClaudeFixture.session, "6f0c2a8e-3b1d-4e6f-9a7b-1c2d3e4f5a6b")
+        Assert.Contains("mixes session", collectTranscript None true None None (ClaudeFixture.render [ ClaudeFixture.user ClaudeFixture.promptA 1; line.Replace("msg_z", "msg_y"); otherSession ]) |> refusal)
+
+    [<Fact>]
+    let ``Claude incomplete response is withheld and makes later turn totals unknown`` () =
+        let streamed = ClaudeFixture.assistant "msg_i" "req_i" 10 "null" (ClaudeFixture.usage 2L 0L 0L 8L None)
+        let later = ClaudeFixture.assistant "msg_j" "req_j" 20 "\"end_turn\"" (ClaudeFixture.usage 2L 0L 10L 30L None)
+        let text = ClaudeFixture.render [ ClaudeFixture.user ClaudeFixture.promptA 1; streamed; later ]
+        // An interrupted stream's tokens are unknown, so neither it nor a later total in its turn is reported.
+        Assert.Contains("no completed usage record", collectTranscript None true None None text |> refusal)
+        Assert.Contains("incomplete before response", collectTranscript None false None None text |> refusal)
+        Assert.Contains("no completed usage record", collectTranscript (Some ClaudeFixture.promptA) true (Some "2026-10-22T05:01:09Z") (Some "2026-10-22T05:01:11Z") text |> refusal)
+        // A window that excludes the in-flight tail collects the completed responses before it.
+        let tail = ClaudeFixture.render [ ClaudeFixture.user ClaudeFixture.promptA 1; later; streamed.Replace("05:01:10", "05:01:50") ]
+        Assert.Contains("no completed usage record", collectTranscript None false None None tail |> refusal)
+        let before = collectTranscript None true None (Some "2026-10-22T05:01:30Z") tail |> unwrap
+        Assert.Equal("msg_j", (List.exactlyOne before.Rows).ResponseId)
+        // Completion after a streaming record is accepted; streaming after completion is refused.
+        let completed = streamed.Replace("\"stop_reason\":null", "\"stop_reason\":\"end_turn\"")
+        Assert.True(collectTranscript None true None None (ClaudeFixture.render [ ClaudeFixture.user ClaudeFixture.promptA 1; streamed; completed ]) |> Result.isOk)
+        Assert.Contains("incomplete record after", collectTranscript None true None None (ClaudeFixture.render [ ClaudeFixture.user ClaudeFixture.promptA 1; completed; streamed ]) |> refusal)
+
     [<Fact>]
     let ``lifecycle sealing is canonical and terminal pending usage is refused`` () =
         let common event at actual tokens =

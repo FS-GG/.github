@@ -1577,15 +1577,21 @@ module TelemetryStore =
                         let value = optional name
                         if value |> Option.exists (fun v -> v.Length > 200 || (v |> Seq.exists Char.IsControl)) then invalidOp "passive profile is invalid"
                         value
-                    let expected = "passive-" + CanonicalJson.sha256(Encoding.UTF8.GetBytes("codex-rollout/1\u001f" + thread + "\u001f" + turn + "\u001f" + response))
+                    // Each admitted local provenance owns one native identity namespace; no other value is accepted.
+                    let provenance = text "provenance"
+                    let ns =
+                        match provenance with
+                        | "codex-local-rollout/1" -> "codex-rollout/1"
+                        | "claude-local-transcript/1" -> "claude-transcript/1"
+                        | _ -> invalidOp "passive observation must preserve native identity and unknown attribution/population"
+                    let expected = "passive-" + CanonicalJson.sha256(Encoding.UTF8.GetBytes(ns + "\u001f" + thread + "\u001f" + turn + "\u001f" + response))
                     if itemId.IsSome || identity <> expected || revision < 1L || not (guid thread && guid turn)
                        || (response |> Seq.exists Char.IsControl)
                        || not (subset cached input && subset cacheWrite input && subset reasoning output)
                        || (match input, output, total with Some i, Some o, Some t -> i > Int64.MaxValue - o || i + o <> t | _ -> false)
                        || ([input; cached; cacheWrite; output; reasoning; total] |> List.forall Option.isNone)
                        || text "populationCoverage" <> "partial" || text "attributionCoverage" <> "unknown"
-                       || text "inventoryCoverage" <> "unknown" || text "terminalCoverage" <> "unknown"
-                       || text "provenance" <> "codex-local-rollout/1" then
+                       || text "inventoryCoverage" <> "unknown" || text "terminalCoverage" <> "unknown" then
                         invalidOp "passive observation must preserve native identity and unknown attribution/population"
                     let observation =
                         { ThreadId = thread; TurnId = turn; ResponseId = response

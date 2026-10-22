@@ -107,14 +107,20 @@ module SkillTelemetryReaders =
           Effort: string option
           OccurredAt: string option
           SourceDigest: string
-          Position: int64 }
+          Position: int64
+          Provenance: string }
 
     type PassiveCursor =
         { SourceInstance: string
           Generation: string
           Offset: int64
           AnchorDigest: string
-          SkippingOversized: bool }
+          SkippingOversized: bool
+          Context: string option }
+
+    type PassiveSourceRoot =
+        | CodexHome of string
+        | ClaudeHome of string
 
     type PassiveScan =
         { Records: PassiveNativeRecord list
@@ -1250,9 +1256,10 @@ module SkillTelemetryReaders =
             [<DllImport("libc", EntryPoint = "close", SetLastError = true)>]
             extern int Close(int descriptor)
 
-        let private openRollout codexHome path =
+        // Opens one regular file below a selected private root without following any link.
+        let private openUnder (selectedRoot: string) path =
             try
-                let sessions = Path.GetFullPath(Path.Combine(codexHome, "sessions"))
+                let sessions = Path.GetFullPath selectedRoot
                 let source = Path.GetFullPath path
                 let relative = Path.GetRelativePath(sessions, source)
 
@@ -1366,6 +1373,9 @@ module SkillTelemetryReaders =
             with _ ->
                 failure "native usage rollout is unavailable or outside the private host"
 
+        let private openRollout codexHome path =
+            openUnder (Path.Combine(codexHome, "sessions")) path
+
         [<Literal>]
         let PassiveMaximumFiles = 8
         [<Literal>]
@@ -1373,19 +1383,66 @@ module SkillTelemetryReaders =
         [<Literal>]
         let PassiveMaximumObservations = 64
 
+        [<Literal>]
+        let CodexPassiveProvenance = "codex-local-rollout/1"
+        [<Literal>]
+        let ClaudePassiveProvenance = "claude-local-transcript/1"
+
         let passiveIdentity (thread: Guid) (turn: Guid) (response: string) =
             "passive-" + sha256(Encoding.UTF8.GetBytes("codex-rollout/1\u001f" + thread.ToString("D") + "\u001f" + turn.ToString("D") + "\u001f" + response))
 
+        let passiveClaudeIdentity (thread: Guid) (turn: Guid) (response: string) =
+            "passive-" + sha256(Encoding.UTF8.GetBytes("claude-transcript/1\u001f" + thread.ToString("D") + "\u001f" + turn.ToString("D") + "\u001f" + response))
+
+        let passiveRecordIdentity (record: PassiveNativeRecord) =
+            if record.Provenance = ClaudePassiveProvenance then passiveClaudeIdentity record.ThreadId record.TurnId record.ResponseId
+            else passiveIdentity record.ThreadId record.TurnId record.ResponseId
+
+        let private passiveTimestamp (text: string) =
+            if not (Regex.IsMatch(text, "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$")) then None
+            else
+                match DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind) with
+                | true, parsed -> Some(parsed.ToUniversalTime().ToString("O"))
+                | _ -> None
+
+        // One completed Claude response as an allowlisted projection. Its digest deliberately excludes the per-block
+        // record timestamp, so a repeated identical record is the same observation rather than a correction.
+        let private claudeRecord (record: FS.GG.Coord.RuntimeUsage.ClaudeTranscript.Response) (usage: FS.GG.Coord.RuntimeUsage.ClaudeTranscript.Usage) (turn: string) (position: int64) =
+            let add (left: int64) (right: int64) = if left > Int64.MaxValue - right then None else Some(left + right)
+            match add usage.Uncached usage.CacheRead |> Option.bind (add usage.CacheCreation) with
+            | None -> None
+            | Some input ->
+                match add input usage.Output with
+                | None -> None
+                | Some total ->
+                    let thread, turnId = Guid.ParseExact(record.ThreadId, "D"), Guid.ParseExact(turn, "D")
+                    let normalized =
+                        JsonSerializer.SerializeToUtf8Bytes
+                            {| threadId = thread; turnId = turnId; responseId = record.MessageId; requestId = record.RequestId
+                               input = input; cachedInput = usage.CacheRead; cacheWriteInput = usage.CacheCreation
+                               output = usage.Output; reasoning = usage.Thinking |> Option.toNullable; total = total
+                               provider = "Anthropic"; model = record.Model; effort = record.Effort |> Option.toObj |}
+                    Some { ThreadId = thread; TurnId = turnId; ResponseId = record.MessageId
+                           Usage = { Input = Some input; CachedInput = Some usage.CacheRead; CacheWriteInput = Some usage.CacheCreation
+                                     Output = Some usage.Output; Reasoning = usage.Thinking; Total = Some total }
+                           Provider = Some "Anthropic"; Model = Some record.Model; Effort = record.Effort
+                           OccurredAt = passiveTimestamp record.Timestamp; SourceDigest = sha256 normalized
+                           Position = position; Provenance = ClaudePassiveProvenance }
+
         // Reads only selected files through the same no-follow opener as complete native accounting.
         // The inode/device identity comes from the opened descriptor, never the pathname's metadata.
-        let scanPassive (codexHome: string) (path: string) (prior: PassiveCursor option) (maximumBytes: int) (maximumRecords: int) : Result<PassiveScan, ReaderError> =
+        let scanPassiveFrom (sourceRoot: PassiveSourceRoot) (path: string) (prior: PassiveCursor option) (maximumBytes: int) (maximumRecords: int) : Result<PassiveScan, ReaderError> =
             if maximumBytes < 16384 || maximumBytes > PassiveMaximumScanBytes
                || maximumRecords < 1 || maximumRecords > PassiveMaximumObservations then
                 failure "passive native scan bounds are invalid"
             elif not (OperatingSystem.IsLinux() && RuntimeInformation.ProcessArchitecture = Architecture.X64) then
                 failure "passive source identity is unsupported on this platform"
             else
-                match openRollout codexHome path with
+                let opened, instanceLabel =
+                    match sourceRoot with
+                    | CodexHome codexHome -> openRollout codexHome path, "codex-file/1"
+                    | ClaudeHome claudeHome -> openUnder (Path.Combine(claudeHome, "projects")) path, "claude-file/1"
+                match opened with
                 | Error error -> Error error
                 | Ok opened ->
                     use source = opened
@@ -1394,7 +1451,7 @@ module SkillTelemetryReaders =
                         let mutable stat = Unchecked.defaultof<NativeFile.Stat>
                         if NativeFile.fstat(file.SafeFileHandle.DangerousGetHandle().ToInt32(), &stat) <> 0
                            || (stat.Mode &&& 0xF000u) <> 0x8000u then invalidOp "passive source is not a regular file"
-                        let instance = sha256(Encoding.UTF8.GetBytes($"codex-file/1:{stat.Device}:{stat.Inode}"))
+                        let instance = sha256(Encoding.UTF8.GetBytes($"{instanceLabel}:{stat.Device}:{stat.Inode}"))
                         let mutable scanned = 0
                         let anchor (offset: int64) =
                             use retained = new MemoryStream()
@@ -1411,18 +1468,22 @@ module SkillTelemetryReaders =
                             | Some cursor when cursor.SourceInstance = instance && cursor.Offset >= 0L && cursor.Offset <= source.Length ->
                                 anchor cursor.Offset = cursor.AnchorDigest
                             | _ -> false
-                        let generation, initialOffset, initialSkip =
+                        // A Claude response's turn is the nearest preceding prompt identity; the cursor retains it so
+                        // resumed passes attribute exactly as a full read would. Unknown context withholds the turn.
+                        let generation, initialOffset, initialSkip, initialContext =
                             match prior with
-                            | Some cursor when continuous -> cursor.Generation, cursor.Offset, cursor.SkippingOversized
+                            | Some cursor when continuous -> cursor.Generation, cursor.Offset, cursor.SkippingOversized, cursor.Context
                             | Some _ ->
                                 diagnostics.Add "source-continuity-gap" |> ignore
-                                Guid.NewGuid().ToString("N"), 0L, false
+                                Guid.NewGuid().ToString("N"), 0L, false, None
                             | None ->
                                 diagnostics.Add "source-population-unknown" |> ignore
-                                Guid.NewGuid().ToString("N"), 0L, false
+                                Guid.NewGuid().ToString("N"), 0L, false, None
                         source.Position <- initialOffset
                         let records = ResizeArray<PassiveNativeRecord>()
                         let identities = HashSet<string>(StringComparer.Ordinal)
+                        let claudeDigests = Dictionary<string, string>(StringComparer.Ordinal)
+                        let mutable context = initialContext
                         use line = new MemoryStream()
                         let buffer = Array.zeroCreate<byte> 8192
                         let mutable position, committed, lineStart = initialOffset, initialOffset, initialOffset
@@ -1443,12 +1504,45 @@ module SkillTelemetryReaders =
                                     if not skipping then
                                         if line.Length >= int64 maximumLineBytes then
                                             skipping <- true
+                                            // A skipped line may be a prompt; its successors' turn becomes unknown.
+                                            context <- None
                                             line.SetLength 0L
                                             diagnostics.Add "oversized-line-skipped" |> ignore
                                         else line.WriteByte value
                                     if value = byte '\n' then
                                         if not skipping then
-                                            let bytes = line.ToArray()
+                                          let bytes = line.ToArray()
+                                          match sourceRoot with
+                                          | ClaudeHome _ ->
+                                            let mutable length = bytes.Length
+                                            if length > 0 && bytes[length - 1] = byte '\n' then length <- length - 1
+                                            if length > 0 && bytes[length - 1] = byte '\r' then length <- length - 1
+                                            match (if length = 0 then Ok FS.GG.Coord.RuntimeUsage.ClaudeTranscript.Other
+                                                   else FS.GG.Coord.RuntimeUsage.ClaudeTranscript.decodeLine bytes[.. length - 1]) with
+                                            | Error _ ->
+                                                diagnostics.Add "malformed-row-skipped" |> ignore
+                                                context <- None
+                                            | Ok(FS.GG.Coord.RuntimeUsage.ClaudeTranscript.Prompt prompt) -> context <- Some prompt
+                                            | Ok FS.GG.Coord.RuntimeUsage.ClaudeTranscript.Other -> ()
+                                            | Ok(FS.GG.Coord.RuntimeUsage.ClaudeTranscript.Assistant response) ->
+                                                match response.Usage, context with
+                                                | None, _ -> () // An incomplete streaming record never becomes an observation.
+                                                | Some _, None -> diagnostics.Add "turn-identity-unavailable" |> ignore
+                                                | Some usage, Some turn ->
+                                                    match claudeRecord response usage turn lineStart with
+                                                    | None -> diagnostics.Add "malformed-row-skipped" |> ignore
+                                                    | Some record ->
+                                                        let identity = passiveRecordIdentity record
+                                                        match claudeDigests.TryGetValue identity with
+                                                        | true, digest when digest = record.SourceDigest -> ()
+                                                        | true, _ ->
+                                                            // Never collapse a correction before its prior revision has an intent.
+                                                            doneReading <- true
+                                                            diagnostics.Add "response-boundary-deferred" |> ignore
+                                                        | false, _ ->
+                                                            claudeDigests[identity] <- record.SourceDigest
+                                                            records.Add record
+                                          | CodexHome _ ->
                                             match decodeUsageRecord bytes with
                                             | Error _ -> diagnostics.Add "malformed-row-skipped" |> ignore
                                             | Ok None -> ()
@@ -1477,7 +1571,8 @@ module SkillTelemetryReaders =
                                                 if identities.Add(passiveIdentity thread turn response) then
                                                     records.Add { ThreadId = thread; TurnId = turn; ResponseId = response; Usage = usage
                                                                   Provider = profile "provider"; Model = profile "model"; Effort = profile "effort"
-                                                                  OccurredAt = occurred; SourceDigest = sha256 normalized; Position = lineStart }
+                                                                  OccurredAt = occurred; SourceDigest = sha256 normalized; Position = lineStart
+                                                                  Provenance = CodexPassiveProvenance }
                                                 else
                                                     // Never collapse a correction before its prior revision has an intent.
                                                     doneReading <- true
@@ -1495,10 +1590,14 @@ module SkillTelemetryReaders =
                         if not doneReading && records.Count < maximumRecords then diagnostics.Add "scan-pass-budget" |> ignore
                         let finalAnchor = anchor committed
                         Ok { Records = records |> Seq.toList
-                             Cursor = { SourceInstance = instance; Generation = generation; Offset = committed; AnchorDigest = finalAnchor; SkippingOversized = skipping }
+                             Cursor = { SourceInstance = instance; Generation = generation; Offset = committed; AnchorDigest = finalAnchor
+                                        SkippingOversized = skipping; Context = context }
                              ScannedBytes = scanned
                              Diagnostics = diagnostics |> Seq.sort |> Seq.toList }
                     with _ -> failure "passive native source read failed; cursor retained"
+
+        let scanPassive (codexHome: string) (path: string) (prior: PassiveCursor option) (maximumBytes: int) (maximumRecords: int) =
+            scanPassiveFrom (CodexHome codexHome) path prior maximumBytes maximumRecords
 
         type private UsageRecord =
             {

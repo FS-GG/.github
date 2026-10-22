@@ -514,6 +514,162 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Equal(int64(Encoding.UTF8.GetByteCount row), boundary.Cursor.Offset)
             Assert.Contains("response-boundary-deferred", boundary.Diagnostics)
 
+    // Synthetic Claude Code transcript records in the observed native shape; no private transcript content.
+    let private claudeSession = "5f0c2a8e-3b1d-4e6f-9a7b-1c2d3e4f5a6b"
+    let private claudePromptA = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+    let private claudePromptB = "1b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e"
+
+    let private claudeSource (root: string) (name: string) =
+        let home = Path.Combine(root, "claude")
+        let project = Path.Combine(home, "projects", "-work")
+        Directory.CreateDirectory project |> ignore
+        home, Path.Combine(project, name + ".jsonl")
+
+    let private claudePrompt (prompt: string) =
+        $"""{{"parentUuid":null,"isSidechain":false,"promptId":"{prompt}","type":"user","message":{{"role":"user","content":"synthetic"}},"uuid":"00000000-0000-4000-8000-000000000001","timestamp":"2026-10-22T05:00:00.000Z","cwd":"/work","sessionId":"{claudeSession}","version":"2.1.299"}}""" + "\n"
+
+    let private claudeResponse (messageId: string) (second: int) (stop: string) (output: int64) =
+        $"""{{"parentUuid":"00000000-0000-4000-8000-000000000001","isSidechain":false,"message":{{"model":"claude-opus-5-5","id":"{messageId}","type":"message","role":"assistant","content":[{{"type":"text","text":"synthetic"}}],"stop_reason":{stop},"usage":{{"input_tokens":2,"cache_creation_input_tokens":300,"cache_read_input_tokens":4000,"output_tokens":{output},"output_tokens_details":{{"thinking_tokens":7}}}}}},"requestId":"req_{messageId}","type":"assistant","uuid":"00000000-0000-4000-9000-0000000000{second:D2}","timestamp":"2026-10-22T05:01:{second:D2}.000Z","cwd":"/work","sessionId":"{claudeSession}","version":"2.1.299","effort":"high"}}""" + "\n"
+
+    [<Fact>]
+    let ``passive Claude reader deduplicates per-block records and carries prompt context across passes`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let home, path = claudeSource root "session"
+            let source = SkillTelemetryReaders.ClaudeHome home
+            let scan cursor = SkillTelemetryReaders.NativeUsage.scanPassiveFrom source path cursor 4194304 64 |> Result.defaultWith (fun error -> failwith error.Message)
+            // A streaming record before stop_reason never becomes an observation.
+            File.WriteAllText(path, claudePrompt claudePromptA + claudeResponse "msg_a" 1 "null" 8L)
+            let streaming = scan None
+            Assert.Empty streaming.Records
+            Assert.Equal(Some claudePromptA, streaming.Cursor.Context)
+            File.AppendAllText(path, claudeResponse "msg_a" 2 "\"tool_use\"" 50L + claudeResponse "msg_a" 3 "\"tool_use\"" 50L)
+            let completed = scan (Some streaming.Cursor)
+            let record = Assert.Single completed.Records
+            Assert.Equal("msg_a", record.ResponseId)
+            Assert.Equal(Guid.Parse claudeSession, record.ThreadId)
+            Assert.Equal(Guid.Parse claudePromptA, record.TurnId)
+            Assert.Equal(SkillTelemetryReaders.NativeUsage.ClaudePassiveProvenance, record.Provenance)
+            Assert.Equal(Some 4302L, record.Usage.Input)
+            Assert.Equal(Some 4000L, record.Usage.CachedInput)
+            Assert.Equal(Some 300L, record.Usage.CacheWriteInput)
+            Assert.Equal(Some 50L, record.Usage.Output)
+            Assert.Equal(Some 7L, record.Usage.Reasoning)
+            Assert.Equal(Some 4352L, record.Usage.Total)
+            Assert.Equal(Some "claude-opus-5-5", record.Model)
+            Assert.Equal(Some "high", record.Effort)
+            Assert.DoesNotContain("response-boundary-deferred", completed.Diagnostics)
+            Assert.Equal(
+                SkillTelemetryReaders.NativeUsage.passiveClaudeIdentity record.ThreadId record.TurnId record.ResponseId,
+                SkillTelemetryReaders.NativeUsage.passiveRecordIdentity record)
+            Assert.NotEqual<string>(
+                SkillTelemetryReaders.NativeUsage.passiveIdentity record.ThreadId record.TurnId record.ResponseId,
+                SkillTelemetryReaders.NativeUsage.passiveRecordIdentity record)
+            // A repeat in a later pass has the same allowlisted digest despite its different block timestamp.
+            File.AppendAllText(path, claudeResponse "msg_a" 4 "\"tool_use\"" 50L)
+            let repeated = Assert.Single((scan (Some completed.Cursor)).Records)
+            Assert.Equal(record.SourceDigest, repeated.SourceDigest)
+            // The resumed cursor attributes a later prompt exactly as a full read does.
+            let beforeB = scan (Some completed.Cursor)
+            File.AppendAllText(path, claudePrompt claudePromptB + claudeResponse "msg_b" 5 "\"end_turn\"" 9L)
+            let resumed = scan (Some beforeB.Cursor)
+            let fromStart = scan None
+            let resumedB = resumed.Records |> List.find (fun row -> row.ResponseId = "msg_b")
+            let fullB = fromStart.Records |> List.find (fun row -> row.ResponseId = "msg_b")
+            Assert.Equal(Guid.Parse claudePromptB, resumedB.TurnId)
+            Assert.Equal(fullB.TurnId, resumedB.TurnId)
+            Assert.Equal(fullB.SourceDigest, resumedB.SourceDigest)
+            // A disagreeing repeat within one pass is a correction boundary, never a silent overwrite.
+            File.AppendAllText(path, claudeResponse "msg_b" 6 "\"end_turn\"" 10L)
+            let boundary = scan (Some resumed.Cursor)
+            Assert.Single boundary.Records |> ignore
+            File.WriteAllText(path, claudePrompt claudePromptA + claudeResponse "msg_c" 1 "\"end_turn\"" 9L + claudeResponse "msg_c" 2 "\"end_turn\"" 10L)
+            let disagreeing = scan None
+            Assert.Single disagreeing.Records |> ignore
+            Assert.Contains("response-boundary-deferred", disagreeing.Diagnostics)
+
+    [<Fact>]
+    let ``passive Claude reader withholds unattributable malformed partial and outside sources`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let home, path = claudeSource root "session"
+            let source = SkillTelemetryReaders.ClaudeHome home
+            let scan cursor = SkillTelemetryReaders.NativeUsage.scanPassiveFrom source path cursor 4194304 64 |> Result.defaultWith (fun error -> failwith error.Message)
+            // Control: an attributable completed response is observed.
+            File.WriteAllText(path, claudePrompt claudePromptA + claudeResponse "msg_a" 1 "\"end_turn\"" 9L)
+            Assert.Single((scan None).Records) |> ignore
+            // No preceding prompt: the turn is unknown, so no observation is invented.
+            File.WriteAllText(path, claudeResponse "msg_a" 1 "\"end_turn\"" 9L)
+            let orphan = scan None
+            Assert.Empty orphan.Records
+            Assert.Contains("turn-identity-unavailable", orphan.Diagnostics)
+            // A malformed line may have been a prompt; later responses stay unattributed until the next prompt.
+            File.WriteAllText(path, claudePrompt claudePromptA + "{\"type\":\"user\",\"promptId\":\n" + claudeResponse "msg_a" 1 "\"end_turn\"" 9L)
+            let malformed = scan None
+            Assert.Empty malformed.Records
+            Assert.Contains("malformed-row-skipped", malformed.Diagnostics)
+            Assert.Contains("turn-identity-unavailable", malformed.Diagnostics)
+            // Missing counters are malformed, never zero.
+            File.WriteAllText(path, claudePrompt claudePromptA + (claudeResponse "msg_a" 1 "\"end_turn\"" 9L).Replace("\"cache_read_input_tokens\":4000,", ""))
+            let missing = scan None
+            Assert.Empty missing.Records
+            Assert.Contains("malformed-row-skipped", missing.Diagnostics)
+            // A partial tail is deferred without advancing past it.
+            let complete = claudePrompt claudePromptA
+            File.WriteAllText(path, complete + (claudeResponse "msg_a" 1 "\"end_turn\"" 9L).TrimEnd('\n'))
+            let tail = scan None
+            Assert.Empty tail.Records
+            Assert.Contains("partial-tail-deferred", tail.Diagnostics)
+            Assert.Equal(int64 (Encoding.UTF8.GetByteCount complete), tail.Cursor.Offset)
+            File.AppendAllText(path, "\n")
+            Assert.Single((scan (Some tail.Cursor)).Records) |> ignore
+            // Only files below the selected Claude projects root are readable.
+            let outside = Path.Combine(home, "session.jsonl")
+            File.WriteAllText(outside, complete)
+            Assert.True(SkillTelemetryReaders.NativeUsage.scanPassiveFrom source outside None 4194304 64 |> Result.isError)
+            Assert.True(SkillTelemetryReaders.NativeUsage.scanPassiveFrom (SkillTelemetryReaders.CodexHome home) path None 4194304 64 |> Result.isError)
+
+    [<Fact>]
+    let ``passive Claude capture enqueues admitted provider usage with its own provenance and corrections`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let home, path = claudeSource root "session"
+            let source = SkillTelemetryReaders.ClaudeHome home
+            File.WriteAllText(path, claudePrompt claudePromptA + claudeResponse "msg_a" 1 "\"tool_use\"" 50L)
+            let batches = ResizeArray<byte array>()
+            let capture () =
+                SkillTelemetryAdapter.capturePassiveFrom root "owner" "passive-stream" source [ path ] (fun bytes -> batches.Add(Array.copy bytes); Ok "locally-retained")
+                |> parseCapture
+            let first = capture ()
+            let row = Assert.Single(first["observations"].AsArray())
+            Assert.Equal("claude-local-transcript/1", row["provenance"].GetValue<string>())
+            Assert.Equal("partial", row["populationCoverage"].GetValue<string>())
+            Assert.Equal("unknown", row["attributionCoverage"].GetValue<string>())
+            Assert.Null(row["itemId"])
+            Assert.Equal(7L, row["reasoning"].GetValue<int64>())
+            let parsed = TelemetryStore.parseBatch batches[0] |> Result.defaultWith (sprintf "%A" >> failwith)
+            let fact = Assert.Single(parsed.Facts |> List.filter (fun value -> value.Kind = "provider-usage-observation/1"))
+            Assert.Equal(row["identity"].GetValue<string>(), fact.Identity)
+            let state = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "orchestrator-passive", "producer.json")))
+            let cursor = state["sources"].AsObject() |> Seq.exactlyOne
+            Assert.Equal(claudePromptA, cursor.Value["context"].GetValue<string>())
+            // An identical per-block repeat is not a new observation.
+            File.AppendAllText(path, claudeResponse "msg_a" 2 "\"tool_use\"" 50L)
+            capture () |> ignore
+            Assert.Equal(1, batches.Count)
+            // A disagreeing later record is a numbered correction under the same identity.
+            File.AppendAllText(path, claudeResponse "msg_a" 3 "\"tool_use\"" 60L)
+            let corrected = capture ()
+            Assert.Equal(2, batches.Count)
+            let current = Assert.Single(corrected["observations"].AsArray())
+            Assert.Equal(2L, current["revision"].GetValue<int64>())
+            Assert.Equal(60L, current["output"].GetValue<int64>())
+            let correction = TelemetryStore.parseBatch batches[1] |> Result.defaultWith (sprintf "%A" >> failwith)
+            Assert.Equal(fact.Identity, (Assert.Single correction.Facts).Identity)
+
     [<Fact>]
     let ``passive capture persists intent before enqueue and replays exact identity after uncertain enqueue`` () =
         if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
@@ -1059,6 +1215,49 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Equal(captured["observations"].ToJsonString(), report["observations"].ToJsonString())
             let invalidCode, _, _ = run ([ "capture" ] @ args @ [ "--input"; selection; "--item"; "invented" ])
             Assert.Equal(1, invalidCode)
+            Assert.Single(Directory.GetFiles(spool, "*.ready")) |> ignore
+
+    [<Fact>]
+    let ``passive command selects an explicit Claude transcript through the actual application route`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let config, spool = passiveRemoteConfig root
+            let home, path = claudeSource root "command"
+            File.WriteAllText(path, claudePrompt claudePromptA + claudeResponse "msg_a" 1 "\"end_turn\"" 9L)
+            let run (arguments: string list) =
+                let priorOut, priorError = Console.Out, Console.Error
+                use stdout = new StringWriter()
+                use stderr = new StringWriter()
+                try
+                    Console.SetOut stdout
+                    Console.SetError stderr
+                    let code = TelemetryApplication.tryRun ([ "telemetry"; "passive" ] @ arguments) |> Option.defaultValue 99
+                    code, stdout.ToString(), stderr.ToString()
+                finally
+                    Console.SetOut priorOut
+                    Console.SetError priorError
+            let select (name: string) (body: string) =
+                let selection = Path.Combine(root, name)
+                File.WriteAllText(selection, body)
+                File.SetUnixFileMode(selection, enum<UnixFileMode> 0o600)
+                selection
+            let args = [ "--config"; config; "--repository"; "FS-GG/.github" ]
+            // Exactly one selected root: both homes together are an unsupported shape and capture nothing.
+            let ambiguous =
+                select "ambiguous.json" (System.Text.Json.JsonSerializer.Serialize {| schema = "fsgg.telemetry.passive-selection/1"; codexHome = home; claudeHome = home; sources = [| path |] |})
+            let refusedCode, _, _ = run ([ "capture" ] @ args @ [ "--input"; ambiguous ])
+            Assert.Equal(1, refusedCode)
+            Assert.True(not (Directory.Exists spool) || Array.isEmpty (Directory.GetFiles(spool, "*.ready")))
+            let selection =
+                select "selected.json" (System.Text.Json.JsonSerializer.Serialize {| schema = "fsgg.telemetry.passive-selection/1"; claudeHome = home; sources = [| path |] |})
+            let code, output, error = run ([ "capture" ] @ args @ [ "--input"; selection ])
+            Assert.True((code = 0), error)
+            let captured = System.Text.Json.Nodes.JsonNode.Parse output
+            let row = Assert.Single(captured["observations"].AsArray())
+            Assert.Equal("claude-local-transcript/1", row["provenance"].GetValue<string>())
+            Assert.Equal("unknown", captured["attribution"].GetValue<string>())
+            Assert.DoesNotContain(root, output)
             Assert.Single(Directory.GetFiles(spool, "*.ready")) |> ignore
 
     [<Fact>]
