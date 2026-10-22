@@ -456,8 +456,8 @@ contracts:
     surface: "FS.GG.Governance.Config: configuration parsing and CapabilityBindings request/resolver"
     consumers: [sdd]
   - id: governance-reference-gate-set
-    version: "1.7.0"
-    package-version: "1.7.0"
+    version: "1.8.0"
+    package-version: "1.8.0"
     owner: governance
     # .github#15 (H3, epic #16 Pillar 3): the validated reference .fsgg gate set published as a
     # content-only NuGet package FS.GG.Governance.ReferenceGateSet — ONE versioned source of truth
@@ -525,6 +525,16 @@ contracts:
     # and compared entry-wise — 14 non-signature payload entries, identical names, ZERO content
     # differences (nuget.org adds only .signature.p7s). Templates#305 still owns the downstream
     # overlay adoption, so the Templates edge below remains at its real pin.
+    # 1.8.0 (Governance#464/PR#466, merge 432de033826a6881ad3100c5b4d89bfe2340997b): MINOR — adds a
+    # read-only neutral capability catalog, contentFiles/any/any/neutral-capabilities.json, exposed by
+    # buildTransitive/FS.GG.Governance.ReferenceGateSet.targets as `FsggNeutralCapabilityCatalog`;
+    # resolving .fsgg does not copy or enforce it. The four packed .fsgg gate files are byte-identical
+    # to 1.7.0, and controlled-imports.fsx changes only formatting (equal ignoring whitespace and
+    # comments), so NO CONSUMER'S GATE SET MOVES. Governance publish run 39757858397 (tag v1.13.0)
+    # published it. Feed: PUBLISHED — nuget.org 1.8.0 raw SHA256
+    # b3d43d10342019d2a90b8467731d5acc27936d4555fbf6982165e392afa27e95, nuspec commit 432de033;
+    # the org feed's newest is 1.8.0 per check-feed-coherence, and the later v1.14.0 publish run
+    # 39829604024 observed 1.8.0 already pushed. Registry flip lands after publication (publish-before-flip).
     surface: >
       FS.GG.Governance.ReferenceGateSet content package —
       contentFiles/any/any/.fsgg/{governance,capabilities,policy,tooling}.yml, byte-identical to
