@@ -18,6 +18,8 @@ sys.modules[spec.name] = engine
 spec.loader.exec_module(engine)
 sys.path.insert(0, str(MODULE.parent))
 from release_successor_admission import SingleOperatorAdmission
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import fence_controls
 
 
 def manifest() -> dict:
@@ -279,6 +281,49 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(self.advance(), "verified")
         self.assertEqual(self.advance(), "complete")
         self.assertEqual(self.provider.calls.count("promote"), 1)
+
+
+class BoundIntentFenceTests(unittest.TestCase):
+    """Opt-in invocation binding of an intent; every control is shown to matter below."""
+
+    def test_every_fence_control_holds_on_the_shipped_engine(self):
+        for scenario in fence_controls.SCENARIOS:
+            with self.subTest(scenario=scenario.__name__):
+                scenario(engine)
+
+    def test_legacy_callers_keep_the_unfenced_signature_and_behavior(self):
+        import inspect
+        for function in (engine.advance, engine.advance_effects, engine.full_transition):
+            parameter = inspect.signature(function).parameters["fence"]
+            self.assertIs(parameter.default, None)
+            self.assertEqual(parameter.kind, inspect.Parameter.KEYWORD_ONLY)
+
+    def test_every_mutant_of_the_fence_is_killed_by_its_named_control(self):
+        source = fence_controls.SOURCE.read_text()
+        for name, (replacements, expected) in fence_controls.MUTANTS.items():
+            with self.subTest(mutant=name):
+                mutant = fence_controls.load(fence_controls.mutate(source, replacements))
+                failed = set()
+                for scenario in fence_controls.SCENARIOS:
+                    try:
+                        scenario(mutant)
+                    except Exception:
+                        failed.add(scenario.__name__)
+                self.assertTrue(expected <= failed, f"mutant survived its controls: {sorted(expected - failed)}")
+
+    def test_the_defended_regression_is_real_and_only_the_fence_stops_it(self):
+        source = fence_controls.SOURCE.read_text()
+        self.assertEqual(fence_controls.regression_unfenced_calls(engine), [])
+        regressed = fence_controls.mutate(source, [fence_controls._REDISPATCH])
+        engine_regressed = fence_controls.load(regressed)
+        # Without the fence the regressed engine resends the inherited intent ...
+        self.assertEqual(fence_controls.regression_unfenced_calls(engine_regressed), ["tag"])
+        # ... with it the same regression is refused before the provider ...
+        fence_controls.regression_defence_fenced(engine_regressed)
+        # ... and removing the fence's own provider guard lets the regression through again.
+        unguarded = fence_controls.load(fence_controls.mutate(regressed, [fence_controls._GUARD_BYPASS]))
+        with self.assertRaises(AssertionError):
+            fence_controls.regression_defence_fenced(unguarded)
 
 
 if __name__ == "__main__":
