@@ -184,7 +184,8 @@ Choose the nearest independently useful accepted consumer outcome, not PR count 
 Finish selected publication/install/adoption while disjoint preparation continues. Do not reopen completed
 work, stopped profiling or unselected conditional scope. For material architecture/dependency changes
 read [feature planning](feature-planning.md); valid plans need no restart planning.
-New major planning uses supported `gpt-6-astra` high; implementation uses `gpt-6.1-sol` medium.
+New major planning uses supported `gpt-6-astra` high on Codex or `opus` high on Claude Code; implementation
+uses `gpt-6.1-sol` medium on Codex or `sonnet` high on Claude Code.
 [Normal](../../work-board-normal/SKILL.md) and [best](../../work-board-best/SKILL.md) wrappers select actual
 worker model/effort explicitly. No dispatch is mandatory; unsupported routing refuses dispatch without
 silent substitution. Deliver whole applicable instructions to owners and reviewers.
