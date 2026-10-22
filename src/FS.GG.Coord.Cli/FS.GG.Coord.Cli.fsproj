@@ -130,20 +130,8 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.112.0 — Carry current canonical skill routes and the selected SDD adoption contract through the coherent CLI/Kit/Drivers set.
-Retire sealed release and legacy intake recipes; distinguish read-only inspection, scoped delivery, compatibility and current recovery authority.
-The CLI command/API surface is unchanged. Source, genuine publication, selected SDD materialization and actual Codex discovery/mismatch acceptance remain separate; published111 and historical operation custody are unchanged.
-
-$(FsggStandingAdvisories)
-
-FULL PER-VERSION HISTORY IS SERVED BY THE REGISTRY, NOT REPEATED HERE (`.github#2579`). Every
-published version's own notes remain readable, permanently, on that version's own listing at
-https://www.nuget.org/packages/FS.GG.Coord.Cli — and each cut's evidence is recorded in
-`registry/dependencies.yml` and `registry/CHANGELOG.md` at https://github.com/FS-GG/.github.
-
-The release notes remain bounded: previous-version history stays on the registry listings and only
-the standing safety advisories carry forward.
-</PackageReleaseNotes>
+    <PackageReleaseNotes>0.113.0 — Add Claude Code transcript usage capture: `telemetry usage collect claude --session-file` and passive `claude-local-transcript/1` observations through the existing provider-usage path.
+Carry corrected pnext-item/work-roadmap guidance naming the working Claude route. Codex behavior is unchanged; publication, installed adoption and Host ingestion remain separate.</PackageReleaseNotes>
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
