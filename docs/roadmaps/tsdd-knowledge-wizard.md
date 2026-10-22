@@ -1185,8 +1185,8 @@ the other genuinely omits it. The descriptor declares `bundle` as an optional pa
 without a default and defaults lifecycle to typed SDD, so automatic knowledge
 initialization is expected for both. Standalone initialization, RAW creation and the
 raw COMPLETE adapter are not substituted. It seals the accepted PLAYER-provider ports
-by digest and reuses their producer-contract, supplier-union, initial-file, restore and
-knowledge ports unchanged.
+by digest and reuses their producer-contract, supplier-union (extended below), initial-file, restore and
+knowledge ports.
 
 Applicable inventory is derived from the authenticated package definition with the
 seven fixed modifier conditions required exactly. With `PortalExample` defaulting to
@@ -1200,12 +1200,20 @@ same package, pinning their names and requiring Studio, models, generated rule m
 editable examples, FourD, WASM, Soldier and external-authority reference content with
 exact bytes and modes. A stray file under the managed Portal tree is refused.
 
-The union, supplier-file, seeded-skill, amended-provenance and Foundation initial
-checks are bundle-independent because the pinned compiled predicates read profile
-and template only; the adapter reuses them under the authenticated published
-`agentSkillRoots` and does not demand an unshipped `.codex` union. Product-owned
-`.codex` content stays in the complete inventory and Git proof. The effective
-provenance must record `bundle=complete`, typed lifecycle, and no `svgFoundation` or
+The seeded process skills and Foundation initial literals are bundle-independent and
+reused from the sealed PLAYER ports under the authenticated published `agentSkillRoots`.
+The compiled supplier union is not: the pinned Commands manifests gate five more skills on
+`bundle` containing `complete`. Supplied `bundle=complete` enters the effective map the
+planners evaluate, so COMPLETE adds `fs-gg-rules` (game channel, folded as `always`
+without supplier) and `fs-gg-layout`, `fs-gg-styling`, `fs-gg-ui-widgets` and
+`fs-gg-svg-assets` (rendering channel, predicate and supplier retained) to the accepted
+PLAYER set, each with only `SKILL.md`. The adapter derives this exact delta from the
+pinned compiled assembly of the genuine producer archive during manifest validation,
+refuses any other difference, and checks the extended union, files, modes and amended
+provenance in every published agent root. No `.codex` union is demanded; the genuine
+package ships no product-owned `.codex` content, and controls prove such content would
+remain in the complete inventory and Git proof. The effective provenance
+must record `bundle=complete`, typed lifecycle, and no `svgFoundation` or
 opted-in Portal. The normal caller initial commit must carry every package file,
 including all COMPLETE-only blobs and executable shells, through bounded Git object
 metadata before the separate probe setup.
@@ -1214,8 +1222,8 @@ The existing finite injected runner and complete knowledge ports then exercise
 capture/retrieval/history, preservation/refusals, private exclusion, ALL-shared
 export/lossless restore, distinct Git recovery and the ordinary pinned checker at
 exactly10,485,760 and10,485,761 canonical bytes. Pure causal controls run in the
-existing hosted selftest; an opt-in control checks the exact counts against the
-published archive when supplied. They launch no child. Source readiness establishes
+existing hosted selftest; opt-in controls check the exact counts and the compiled
+supplier delta against the published archives when supplied. They launch no child. Source readiness establishes
 none of the actual receivers: both genuine receivers need separate root runtime
 admission, original deadline, custody, qualified cleanup and independent result
 acceptance, and the shared Atlas/driver-manifest integration remains root-owned.

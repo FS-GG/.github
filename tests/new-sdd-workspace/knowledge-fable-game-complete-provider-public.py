@@ -7,8 +7,10 @@ public inputs and the accepted finite runner. Fixed ASCII parameters only.
 from __future__ import annotations
 import argparse
 import hashlib
+import inspect
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import stat
@@ -49,9 +51,10 @@ hybrid_manifest, rendered_owner, matches_glob = PL.hybrid_manifest, PL.rendered_
 initial, restore_tools = PL.initial, PL.restore_tools
 INITIAL_HASHES, INITIAL_SEED = PL.INITIAL_HASHES, PL.INITIAL_SEED
 SUPPLIER_MANIFEST_HASHES = PL.SUPPLIER_MANIFEST_HASHES
-# The producer root contract and compiled supplier transport are the accepted
-# PLAYER-provider pins: Contracts.Schemas.agentSkillRoots and the pinned
-# Commands assembly do not depend on the template bundle parameter.
+# The producer root contract (Contracts.Schemas.agentSkillRoots), the pinned
+# Commands assembly, seeded process skills and Foundation literals are the
+# accepted PLAYER-provider pins and do not read the bundle parameter. The compiled
+# supplier predicates DO: see COMPLETE_SUPPLIERS below.
 AGENT_ROOTS, SCHEMAS_SHA = PL.AGENT_ROOTS, PL.SCHEMAS_SHA
 COMMANDS_SHA, CONTRACTS_SHA = PL.COMMANDS_SHA, PL.CONTRACTS_SHA
 authenticated_agent_roots = PL.authenticated_agent_roots
@@ -92,6 +95,105 @@ COMPLETE_FILES = ('Conformance/GeneratedArenaRuleModel.fs',
                   'SvgFoundation/Examples/SoldierReference/reference.json',
                   'SvgFoundation/Examples/SoldierReference/SoldierDocument.fs',
                   'SvgFoundation/Examples/SoldierReference/SoldierWorkload.fs')
+
+
+# Compiled published SDD2.2.0 Commands manifests gate five more skills on
+# `bundle in [..., complete]`. A supplied bundle=complete lands in the effective
+# map the planners evaluate, so COMPLETE emits exactly these additions to the
+# accepted PLAYER set. Game rows fold as `always` with no supplier; rendering rows
+# retain predicate and supplier. Schema1 declares no per-file sets: SKILL.md only.
+def _supplier(channel, id, sha, predicate, row_predicate, supplied):
+    row = {'id': id, 'scope': 'product', 'sha256': sha, 'resolvablePath': '.agents/skills/' + id + '/SKILL.md',
+           'materializes-when': row_predicate}
+    if supplied: row['supplied-by'] = 'template/product-skills/' + id + '/'
+    return {'channel': channel, 'sourcePredicate': predicate,
+            'sourceSupplier': 'template/product-skills/' + id + '/', 'row': row, 'files': {'SKILL.md': sha}}
+
+
+_RENDER = 'profile in [app, game] or template == fable-game and bundle in [studio, tactical, arcade, complete]'
+COMPLETE_SUPPLIERS = {
+    'fs-gg-rules': _supplier('GameSkill', 'fs-gg-rules', 'c656c3b73d946d4ff92d547a92fba22aadcdb72c0edb85b59942aa95f9abf6bf',
+                             'template == fable-game and bundle in [tactical, complete]', 'always', False),
+    'fs-gg-layout': _supplier('RenderingSkill', 'fs-gg-layout', '85c55e26ee42bd8d54533abcf6cb955d53e02651901be3c0e91bfe92dac92d62',
+                              _RENDER, _RENDER, True),
+    'fs-gg-styling': _supplier('RenderingSkill', 'fs-gg-styling', '24754ec5cb931deb6fcaf7d4b9e5926c42f4325dc4f67cb4852295de8b405ac9',
+                               _RENDER, _RENDER, True),
+    'fs-gg-ui-widgets': _supplier('RenderingSkill', 'fs-gg-ui-widgets', 'a975b5ec33c2fcf847a9075cf10c970090a2ed3728d19820baeffad352c9c44e',
+                                  _RENDER, _RENDER, True),
+    'fs-gg-svg-assets': _supplier('RenderingSkill', 'fs-gg-svg-assets', 'adccc361f6633585bf19218d94406bd15b1f001bf0d63d6ef40d821a7c6f4f82',
+                                  'template == fable-game and bundle in [studio, tactical, arcade, complete]',
+                                  'template == fable-game and bundle in [studio, tactical, arcade, complete]', True),
+}
+# Effective parameter maps seen by the compiled planners (profile absent).
+PLAYER_PARAMS = {'template': 'fable-game', 'lifecycle': 'typed-sdd'}
+COMPLETE_PARAMS = dict(PLAYER_PARAMS, bundle='complete')
+
+
+def _predicate_atom(params, atom):
+    atom = atom.strip()
+    if atom == 'always': return True
+    if atom == 'false': return False
+    for token in (' in ', ' == ', ' != '):
+        if token in atom:
+            key, value = atom.split(token, 1); key, value = key.strip(), value.strip()
+            current = params.get(key, '')
+            if token == ' in ':
+                require(value.startswith('[') and value.endswith(']'), 'complete-supplier-predicate')
+                return current in {x.strip() for x in value[1:-1].split(',') if x.strip()}
+            return (current == value) if token == ' == ' else (current != value)
+    raise ValueError('complete-supplier-predicate')
+
+
+def predicate_holds(predicate, params):
+    # SDD ProductPredicate: ordinary precedence, `and` binds within an `or` clause;
+    # an unset key reads as the empty string.
+    return any(all(_predicate_atom(params, a) for a in clause.split(' and ')) for clause in predicate.split(' or '))
+
+
+def embedded_manifests(raw):
+    decoder, text, found, position = json.JSONDecoder(), raw.decode('utf-8', 'replace'), [], 0
+    for opening in re.finditer(r'\{\s*"schemaVersion"', text):
+        if opening.start() < position: continue
+        try: value, position = decoder.raw_decode(text, opening.start())
+        except ValueError: continue
+        if isinstance(value, dict) and isinstance(value.get('skills'), list): found.append(value)
+    return found
+
+
+def authenticate_complete_suppliers(commands_dll):
+    """Derive the COMPLETE supplier delta from the pinned compiled manifests."""
+    require(hashlib.sha256(commands_dll).hexdigest() == COMMANDS_SHA, 'complete-published-supplier-assembly')
+    rows = [r for man in embedded_manifests(commands_dll) for r in man['skills']]
+    require(rows and all(isinstance(r.get('id'), str) and isinstance(r.get('materializes-when'), str) for r in rows),
+            'complete-compiled-manifest-rows')
+    def ids(params): return {r['id'] for r in rows if predicate_holds(r['materializes-when'], params)}
+    player, complete = ids(PLAYER_PARAMS), ids(COMPLETE_PARAMS)
+    require(player == set(PL.SUPPLIERS), 'complete-compiled-player-model-drift')
+    require(complete - player == set(COMPLETE_SUPPLIERS) and player <= complete, 'complete-compiled-supplier-delta')
+    for id, supplier in COMPLETE_SUPPLIERS.items():
+        matches = [r for r in rows if r['id'] == id]
+        require(len(matches) == 1, 'complete-compiled-supplier-row')
+        row = matches[0]
+        require(row['materializes-when'] == supplier['sourcePredicate'] and row['sha256'] == supplier['files']['SKILL.md']
+                and row['scope'] == 'product' and row['resolvablePath'] == supplier['row']['resolvablePath']
+                and row.get('supplied-by') == supplier['sourceSupplier']
+                and [(f['path'], f['sha256']) for f in row['files']] == [('SKILL.md', row['sha256'])],
+                'complete-compiled-supplier-row')
+    return sorted(complete - player)
+
+
+def skill_union(root, inventory, provenance):
+    # The sealed PLAYER union check over the accepted PLAYER suppliers plus the
+    # bundle-gated COMPLETE additions; no whole-manifest exemption is introduced.
+    with patch.dict(PL.SUPPLIERS, COMPLETE_SUPPLIERS):
+        return PL.skill_union(root, inventory, provenance)
+
+
+def published_producer_contract(archive):
+    with zipfile.ZipFile(archive) as z:
+        authenticate_complete_suppliers(z.read('tools/net10.0/any/FS.GG.SDD.Commands.dll'))
+        require(hashlib.sha256(z.read('tools/net10.0/any/FS.GG.Contracts.dll')).hexdigest() == CONTRACTS_SHA,
+                'complete-published-contracts-assembly')
 
 
 def names_sha(names): return hashlib.sha256('\n'.join(sorted(names)).encode()).hexdigest()
@@ -187,7 +289,7 @@ def boundary(root, archive, row):
             and effective.get('portalExample', 'false') != 'true', 'complete-effective-provider-selection')
     require(all(p['path'] != '.config/dotnet-tools.json' for p in provenance['sddOwnedPaths']),
             'complete-whole-tool-manifest-ownership')
-    skills = PL.skill_union(root, inventory, provenance)
+    skills = skill_union(root, inventory, provenance)
     owner = {}
     for name, (raw, mode) in inventory.items():
         target = root / name
@@ -233,8 +335,6 @@ def complete_initial(runner, root, archive, row, observed):
     result = initial(runner, root, archive, row, observed)
     # Every complete-only file is part of the committed bounded blob/tree proof.
     require(set(observed['completeOnlyFiles']) <= set(result['gitBlobs']), 'complete-only-initial-blob-coverage')
-    require(all(result['gitBlobs'][name]['mode'] == ('100755' if name.endswith('.sh') else '100644')
-                for name in observed['productFiles']), 'complete-initial-product-modes')
     return result
 
 
@@ -257,11 +357,7 @@ def validate(path, expected_sha, after=False):
         members = M.public_package(key, binding, m['inputs'], identity)
         if key == 'producer': C.tool_closure(binding, m['sddExecutable'], m['inputs'], members, 'FS.GG.SDD.Cli.dll')
     P.packed_contract(m['packages']['workspace']['archive'])
-    with zipfile.ZipFile(m['packages']['producer']['archive']) as archive:
-        require(hashlib.sha256(archive.read('tools/net10.0/any/FS.GG.SDD.Commands.dll')).hexdigest() == COMMANDS_SHA,
-                'complete-published-supplier-assembly')
-        require(hashlib.sha256(archive.read('tools/net10.0/any/FS.GG.Contracts.dll')).hexdigest() == CONTRACTS_SHA,
-                'complete-published-contracts-assembly')
+    published_producer_contract(m['packages']['producer']['archive'])
     roots = authenticated_agent_roots(C.regular(m['publishedSchemas'], m['inputs']).read_bytes())
     require(roots == AGENT_ROOTS, 'complete-derived-agent-root-drift')
     descriptor_contract(C.regular(m['providerDescriptor'], m['inputs']))
@@ -336,6 +432,8 @@ def qualify(path, expected_sha, *, runner_factory=None):
 
 
 def source_controls():
+    real_suppliers = dict(COMPLETE_SUPPLIERS)
+
     class Controls(unittest.TestCase):
         CONDITIONS = ['(portalExample != true)', '(lifecycle != "typed-sdd")', '(bundle == "player")',
                       '((bundle != "tactical") && (bundle != "complete"))',
@@ -355,11 +453,15 @@ def source_controls():
             suppliers = {'fixture-driver': dict(channel='Driver', sourcePredicate='always', sourceSupplier='fixture',
                 row={'id': 'fixture-driver', 'scope': 'driver', 'sha256': sha, 'resolvablePath': '.agents/skills/fixture-driver/SKILL.md', 'materializes-when': 'always'},
                 files={'SKILL.md': sha, 'references/control.md': sha})}
-            for target, value in ((PL.SEEDED_SKILLS, {'fs-gg-sdd-fixture': sha}), (INITIAL_HASHES, {}), (PL.SUPPLIERS, suppliers)):
+            extra = {'fixture-complete': dict(channel='RenderingSkill', sourcePredicate='bundle in [complete]', sourceSupplier='template/product-skills/fixture-complete/',
+                row={'id': 'fixture-complete', 'scope': 'product', 'sha256': sha, 'resolvablePath': '.agents/skills/fixture-complete/SKILL.md', 'materializes-when': 'bundle in [complete]',
+                     'supplied-by': 'template/product-skills/fixture-complete/'}, files={'SKILL.md': sha})}
+            for target, value in ((PL.SEEDED_SKILLS, {'fs-gg-sdd-fixture': sha}), (INITIAL_HASHES, {}), (PL.SUPPLIERS, suppliers),
+                                  (COMPLETE_SUPPLIERS, extra)):
                 seal = patch.dict(target, value, clear=True); seal.start(); self.addCleanup(seal.stop)
             packed = patch.object(P, 'packed_contract'); self.packed = packed.start(); self.addCleanup(packed.stop)
 
-        def build(self, td, *, row=ROWS[0], files=None, conditions=None, drop=()):
+        def build(self, td, *, row=ROWS[0], files=None, conditions=None, drop=(), modes=None):
             """Fixture package + receiver for the COMPLETE selection; pins are patched to its construction."""
             td = Path(td); root = td / 'receiver'; root.mkdir(); archive = td / 'fixture.nupkg'
             original = {'version': 1, 'isRoot': True, 'x-root': False, 'tools': {
@@ -371,7 +473,7 @@ def source_controls():
                     {'id': 'fable-bindings', 'scope': 'product', 'sha256': 'a' * 64, 'resolvablePath': '.agents/skills/fable-bindings/SKILL.md', 'materializes-when': 'template in [fable-bindings]', 'supplied-by': 'template/bindings/'}]
             conditions = conditions or self.CONDITIONS
             config = {'sources': [{'source': './', 'target': './', 'exclude': ['**/.template.config/**'],
-                'modifiers': [{'condition': c, 'exclude': e} for c, e in zip(conditions, self.EXCLUSIONS)]}]}
+                'modifiers': [{'condition': c, 'exclude': e} for c, e in zip(conditions, self.EXCLUSIONS + [[]])]}]}
             package = {n: ('owner ' + n + ' FableGameWorkspaceNamespace\n').encode() for n in
                        (*L.OWNER_FILES, *COMPLETE_FILES, 'SvgFoundation/SvgFoundation.fsproj', 'Client/Api.fs',
                         'Protocol/Http.fs', 'FableGameWorkspace.slnx', 'deploy/run-local.sh',
@@ -389,7 +491,7 @@ def source_controls():
             for name in drop: package.pop(name)
             with zipfile.ZipFile(archive, 'w') as z:
                 for name, raw in package.items():
-                    info = zipfile.ZipInfo(PREFIX + name); info.external_attr = (stat.S_IFREG | 0o644) << 16; z.writestr(info, raw)
+                    info = zipfile.ZipInfo(PREFIX + name); info.external_attr = (stat.S_IFREG | (modes or {}).get(name, 0o644)) << 16; z.writestr(info, raw)
             pins = {'EXCLUDED_PACKAGE_FILES': tuple(self.EXCLUDED), 'APPLICABLE_FILE_COUNT': len(applicable),
                     'APPLICABLE_NAMES_SHA': names_sha(applicable), 'COMPLETE_ONLY_COUNT': len(COMPLETE_FILES),
                     'COMPLETE_ONLY_NAMES_SHA': names_sha(COMPLETE_FILES)}
@@ -399,12 +501,13 @@ def source_controls():
                 p = root / name; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(raw); p.chmod(mode)
             (root / '.config/dotnet-tools.json').write_text(json.dumps(dict(original, tools=dict(original['tools'], **V.OWNED_TOOLS))))
             (root / '.gitignore').write_bytes(IGNORE_PREFIX + b'owner-ignore\n' + IGNORE_SUFFIX)
-            allrows = rows + [s['row'] for s in PL.SUPPLIERS.values()]
+            suppliers = {**PL.SUPPLIERS, **COMPLETE_SUPPLIERS}
+            allrows = rows + [s['row'] for s in suppliers.values()]
             prov = {'providerName': 'fable-game', 'templateRef': 'fs-gg-fable-game', 'sddOwnedPaths': [], 'producedPaths': [], 'mirroredPaths': [],
                     'effectiveParameters': [{'key': k, 'value': v} for k, v in {'productName': row['product'], 'bundle': 'complete', 'lifecycle': 'typed-sdd'}.items()]}
             for agent in AGENT_ROOTS:
                 p = root / agent / 'skills/fs-gg-sdd-fixture/SKILL.md'; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(self.body)
-                for id, supplier in PL.SUPPLIERS.items():
+                for id, supplier in suppliers.items():
                     for relative in supplier['files']:
                         p = root / agent / 'skills' / id / relative; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(self.body)
                 p = root / agent / 'skills/owner/SKILL.md'; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(owner)
@@ -458,6 +561,9 @@ def source_controls():
                 cases = (('extra', dict(files={'Extra/New.fs': b'x'}), 'exact-applicable-inventory'),
                          ('missing', dict(drop=['SvgFoundation/Examples/Wasm/WasmPolicyExample.fs']), 'exact-applicable-inventory'),
                          ('unexcluded', dict(drop=['PortalExample/Program.fs']), 'exact-exclusions'),
+                         ('same-count-rename', dict(files={'SvgFoundation/Examples/Wasm/Renamed.fs': b'x'}, drop=['SvgFoundation/Examples/Wasm/WasmPolicyExample.fs']), 'exact-applicable-inventory'),
+                         ('duplicate-modifier', dict(conditions=self.CONDITIONS + ['true']), 'selected-modifier-contract'),
+                         ('public-mode', dict(modes={'Client/Api.fs': 0o755}), 'public-product-mode'),
                          ('renamed', dict(conditions=self.CONDITIONS[:-1] + ['true  ']), 'selected-modifier-contract'),
                          ('swapped', dict(conditions=self.CONDITIONS[:5] + ['(bundle == "complete")', 'true']), 'selected-modifier-contract'))
                 for name, kwargs, reason in cases:
@@ -534,7 +640,7 @@ def source_controls():
 
         def test_exact_union_supplier_files_and_seeded_skills_follow_published_roots(self):
             with tempfile.TemporaryDirectory() as td:
-                root, a, i, p = self.build(td); PL.skill_union(root, i, p)
+                root, a, i, p = self.build(td); skill_union(root, i, p)
                 target = root / '.claude/skills/skill-manifest.json'; raw = target.read_bytes()
                 value = json.loads(raw); value['skills'].pop(); target.write_text(json.dumps(value))
                 with self.assertRaisesRegex(ValueError, 'exact-supplier-union'): boundary(root, a, ROWS[0])
@@ -552,6 +658,94 @@ def source_controls():
                 shutil.rmtree(t.parent)
                 p['mirroredPaths'][0]['sha256'] = '0' * 64; self.prov_path.write_text(json.dumps(p))
                 with self.assertRaisesRegex(ValueError, 'amended-manifest-provenance'): boundary(root, a, ROWS[0])
+
+        def test_bundle_gated_supplier_delta_is_in_union_and_every_root(self):
+            with tempfile.TemporaryDirectory() as td:
+                root, a, i, p = self.build(td); boundary(root, a, ROWS[0])
+                for agent in AGENT_ROOTS:
+                    target = root / agent / 'skills/fixture-complete/SKILL.md'; raw = target.read_bytes(); target.unlink()
+                    with self.assertRaisesRegex(ValueError, 'supplier-file'): boundary(root, a, ROWS[0])
+                    target.write_bytes(raw)
+                manifest = root / '.agents/skills/skill-manifest.json'; value = json.loads(manifest.read_bytes())
+                value['skills'] = [r for r in value['skills'] if r['id'] != 'fixture-complete']; manifest.write_text(json.dumps(value))
+                with self.assertRaisesRegex(ValueError, 'exact-supplier-union'): boundary(root, a, ROWS[0])
+            # The union must not borrow the COMPLETE delta permanently.
+            self.assertNotIn('fs-gg-rules', PL.SUPPLIERS)
+
+        def test_real_complete_supplier_constants_follow_channel_projection(self):
+            self.assertEqual(sorted(real_suppliers), ['fs-gg-layout', 'fs-gg-rules', 'fs-gg-styling', 'fs-gg-svg-assets', 'fs-gg-ui-widgets'])
+            rules = real_suppliers['fs-gg-rules']
+            self.assertEqual((rules['channel'], rules['row']['materializes-when'], 'supplied-by' in rules['row']), ('GameSkill', 'always', False))
+            for id, supplier in real_suppliers.items():
+                self.assertEqual(supplier['row']['resolvablePath'], '.agents/skills/' + id + '/SKILL.md')
+                self.assertEqual(supplier['files'], {'SKILL.md': supplier['row']['sha256']})
+                if id != 'fs-gg-rules':
+                    self.assertEqual((supplier['channel'], supplier['row']['materializes-when'], supplier['row']['supplied-by']),
+                                     ('RenderingSkill', supplier['sourcePredicate'], 'template/product-skills/' + id + '/'))
+
+        def test_predicate_semantics_match_sdd_precedence_and_unset_keys(self):
+            predicate = 'profile in [app, game] or template == fable-game and bundle in [studio, complete]'
+            self.assertFalse(predicate_holds(predicate, PLAYER_PARAMS))
+            self.assertTrue(predicate_holds(predicate, COMPLETE_PARAMS))
+            self.assertTrue(predicate_holds(predicate, {'profile': 'game'}))
+            self.assertFalse(predicate_holds(predicate, {'template': 'fable-game', 'bundle': 'player'}))
+            self.assertTrue(predicate_holds('bundle != complete', PLAYER_PARAMS))
+            with self.assertRaisesRegex(ValueError, 'supplier-predicate'): predicate_holds('nonsense', {})
+
+        def test_supplier_delta_derives_from_the_pinned_compiled_manifests(self):
+            def man(*rows): return json.dumps({'schemaVersion': 1, 'skills': list(rows)}, indent=2)
+            def row(id, when, sha='a' * 64, supplied=None):
+                value = {'id': id, 'scope': 'product', 'sha256': sha, 'resolvablePath': '.agents/skills/' + id + '/SKILL.md',
+                         'materializes-when': when, 'files': [{'path': 'SKILL.md', 'sha256': sha}]}
+                if supplied: value['supplied-by'] = supplied
+                return value
+            supplier = COMPLETE_SUPPLIERS['fixture-complete']
+            sha = supplier['files']['SKILL.md']
+            good = row('fixture-complete', 'bundle in [complete]', sha, 'template/product-skills/fixture-complete/')
+            def dll(*rows, noise=b'\x00junk{"schemaVersion"\x00'):
+                body = noise + b'{"schemaVersion":1,"exceptions":[]}' + man(*rows).encode()
+                return body
+            base = row('fixture-driver', 'always')
+            with patch.object(PL, 'SUPPLIERS', {'fixture-driver': {}}):
+                raw = dll(base, good)
+                with patch(__name__ + '.COMMANDS_SHA', hashlib.sha256(raw).hexdigest()):
+                    self.assertEqual(authenticate_complete_suppliers(raw), ['fixture-complete'])
+                    with self.assertRaisesRegex(ValueError, 'supplier-assembly'): authenticate_complete_suppliers(raw + b' ')
+                for rows, reason in (
+                        ((base, good, row('fs-gg-hidden', 'bundle in [complete]')), 'compiled-supplier-delta'),
+                        ((base, good, row('fs-gg-extra-player', 'always')), 'compiled-player-model-drift'),
+                        ((base, dict(good, sha256='b' * 64)), 'compiled-supplier-row'),
+                        ((base, dict(good, **{'supplied-by': 'template/elsewhere/'})), 'compiled-supplier-row'),
+                        ((base, dict(good, **{'materializes-when': 'bundle in [complete, studio]'})), 'compiled-supplier-row'),
+                        ((base,), 'compiled-supplier-delta')):
+                    raw = dll(*rows)
+                    with patch(__name__ + '.COMMANDS_SHA', hashlib.sha256(raw).hexdigest()):
+                        with self.assertRaisesRegex(ValueError, reason): authenticate_complete_suppliers(raw)
+
+        def test_producer_archive_contract_binds_both_assemblies(self):
+            # validate is only exercised end to end by the admitted runtime; pin that it
+            # routes the producer archive through this contract before any child runs.
+            self.assertIn("published_producer_contract(m['packages']['producer']['archive'])", inspect.getsource(validate))
+            manifests = json.dumps({'schemaVersion': 1, 'skills': [
+                {'id': 'fixture-driver', 'scope': 'driver', 'sha256': 'a' * 64, 'resolvablePath': 'x', 'materializes-when': 'always', 'files': []},
+                {'id': 'fixture-complete', 'scope': 'product', 'sha256': COMPLETE_SUPPLIERS['fixture-complete']['files']['SKILL.md'],
+                 'resolvablePath': '.agents/skills/fixture-complete/SKILL.md', 'materializes-when': 'bundle in [complete]',
+                 'supplied-by': 'template/product-skills/fixture-complete/',
+                 'files': [{'path': 'SKILL.md', 'sha256': COMPLETE_SUPPLIERS['fixture-complete']['files']['SKILL.md']}]}]}).encode()
+            contracts = b'fixture contracts'
+            with tempfile.TemporaryDirectory() as td, patch.object(PL, 'SUPPLIERS', {'fixture-driver': {}}):
+                archive = Path(td) / 'producer.nupkg'
+                def write(commands, contract):
+                    with zipfile.ZipFile(archive, 'w') as z:
+                        z.writestr('tools/net10.0/any/FS.GG.SDD.Commands.dll', commands)
+                        z.writestr('tools/net10.0/any/FS.GG.Contracts.dll', contract)
+                with patch(__name__ + '.COMMANDS_SHA', hashlib.sha256(manifests).hexdigest()), \
+                        patch(__name__ + '.CONTRACTS_SHA', hashlib.sha256(contracts).hexdigest()):
+                    write(manifests, contracts); published_producer_contract(archive)
+                    write(manifests, contracts + b'!')
+                    with self.assertRaisesRegex(ValueError, 'contracts-assembly'): published_producer_contract(archive)
+                    write(manifests + b' ', contracts)
+                    with self.assertRaisesRegex(ValueError, 'supplier-assembly'): published_producer_contract(archive)
 
         def test_initial_commit_covers_every_complete_only_blob_and_mode(self):
             with tempfile.TemporaryDirectory() as td:
@@ -594,6 +788,21 @@ def source_controls():
             with patch(__name__ + '.PLAYER_PROVIDER_SHA', '0' * 64):
                 with self.assertRaisesRegex(ValueError, 'accepted-player-provider-ports-drift'): load_ports()
             with self.assertRaisesRegex(ValueError, 'schemas-source'): authenticated_agent_roots(PL.ROOT_DECLARATION)
+
+        def test_probe_setup_commit_must_differ_from_caller_initial(self):
+            with tempfile.TemporaryDirectory() as td:
+                archive = Path(td) / 'archive'; archive.write_bytes(b'public'); descriptor = Path(td) / 'descriptor'; descriptor.write_bytes(b'descriptor'); base = Path(td) / 'fresh'
+                m = {'workRoot': str(base), 'report': str(base / 'report.json'), 'sddExecutable': '/sdd', 'dotnetExecutable': '/dotnet',
+                     'providerDescriptor': str(descriptor), 'packages': {k: {'archive': str(archive)} for k in PACKAGES}}
+                runner = Mock(); runner.sequence = 0; runner.call.return_value.stdout = '2.2.0\n'
+                original_read = Path.read_bytes
+                with patch(__name__ + '.validate', return_value=m), patch.object(P, 'injected_runner', return_value=runner), \
+                        patch.object(M, 'env_for', return_value={}), patch.object(C, 'registration', return_value={}), \
+                        patch(__name__ + '.boundary', return_value={'productFiles': []}), patch.object(M, 'snapshot', return_value={}), \
+                        patch.object(Path, 'read_bytes', autospec=True, side_effect=lambda q: b'ignore' if q.name == '.gitignore' else original_read(q)), \
+                        patch(__name__ + '.complete_initial', return_value={'commit': 'same'}), patch(__name__ + '.restore_tools'), \
+                        patch.object(P, 'knowledge', return_value={'probe': {'probeSetupCommit': 'same'}}):
+                    with self.assertRaisesRegex(ValueError, 'probe-not-caller-initial'): qualify('/sealed', 'sha', runner_factory=lambda: None)
 
         def test_actual_driver_two_rows_caller_commit_precedes_probe_with_bundle(self):
             with tempfile.TemporaryDirectory() as td:
@@ -640,9 +849,20 @@ def source_controls():
                 self.assertTrue(all(inventory[n][1] == 0o755 for n in inventory if n.endswith('.sh')))
             self.assertEqual(len(complete_only(archive)), COMPLETE_ONLY_COUNT)
 
+    class RealPublicProducer(unittest.TestCase):
+        # Opt-in against the published FS.GG.SDD.Cli 2.2.0 archive's compiled manifests.
+        @unittest.skipUnless(os.environ.get('FSGG_COMPLETE_PROVIDER_PRODUCER_PACKAGE'), 'published producer package not supplied')
+        def test_published_commands_assembly_yields_exactly_the_five_complete_suppliers(self):
+            archive = Path(os.environ['FSGG_COMPLETE_PROVIDER_PRODUCER_PACKAGE'])
+            self.assertEqual(digest(archive), PACKAGES['producer'][3])
+            with zipfile.ZipFile(archive) as z:
+                raw = z.read('tools/net10.0/any/FS.GG.SDD.Commands.dll')
+            self.assertEqual(authenticate_complete_suppliers(raw), sorted(COMPLETE_SUPPLIERS))
+
     with patch.object(C.subprocess, 'Popen', side_effect=AssertionError('complete-provider-source-controls-launched-child')):
         suite = unittest.TestSuite([unittest.defaultTestLoader.loadTestsFromTestCase(Controls),
-                                    unittest.defaultTestLoader.loadTestsFromTestCase(RealPublicPackage)])
+                                    unittest.defaultTestLoader.loadTestsFromTestCase(RealPublicPackage),
+                                    unittest.defaultTestLoader.loadTestsFromTestCase(RealPublicProducer)])
         result = unittest.TextTestRunner(verbosity=2).run(suite)
     require(result.wasSuccessful(), 'complete-provider-source-controls-failed')
 
