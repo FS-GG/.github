@@ -78,6 +78,7 @@ class Provider(Protocol):
 
 
 _INVOCATION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
+BOUND_INTENT_FENCE = 1  # capability marker: the engine accepts `fence=` and enforces BoundIntentFence
 
 
 class BoundIntentFence:
@@ -89,7 +90,14 @@ class BoundIntentFence:
     that write produced. An intent found in the journal at the start of a transition
     (written by any earlier invocation, or by this one in an earlier call) never
     arms the fence and is therefore never a send permit. A permit is single-use and
-    at most one is outstanding. Callers that do not pass a fence behave as before.
+    at most one is outstanding; once a release is refused the fence arms nothing more.
+    Callers that do not pass a fence behave as before.
+
+    Trust root: the release compares the journal's state, not a writer identity, so
+    it relies on the journal's compare-and-swap being linearizable (the protected
+    journal's non-forced fast-forward plus matching readback is) and on `journal.read()`
+    being a fresh read, not a cached one. `invocation` names the owner in refusals; the
+    binding itself is the identity of this object and of the state its own write produced.
     """
 
     def __init__(self, invocation: str):
@@ -98,6 +106,7 @@ class BoundIntentFence:
         self.invocation = invocation
         self._armed: tuple[str, str, JournalState] | None = None
         self._released: str | None = None
+        self._refused = False
         self._written: list[tuple[str, int]] = []
         self._sent: list[str] = []
 
@@ -113,8 +122,8 @@ class BoundIntentFence:
 
     def arm(self, content_id: str, effect: str, written: JournalState) -> None:
         """Bind the intent this invocation just won to its exact journal state."""
-        if self._armed is not None or self._released is not None:
-            raise Refused(f"{effect}: a prior intent in this invocation was never dispatched")
+        if self._armed is not None or self._released is not None or self._refused:
+            raise Refused(f"{effect}: a prior intent in invocation {self.invocation} was never dispatched")
         if effect in self._sent or any(name == effect for name, _ in self._written):
             raise Refused(f"{effect}: this invocation already wrote an intent for the effect")
         if written.effects.get(effect) != "intent":
@@ -126,13 +135,16 @@ class BoundIntentFence:
         """Spend the permit for exactly this effect; refuse unless the journal still shows our write."""
         armed, self._armed = self._armed, None  # spent on any outcome: never retried
         if armed is None or armed[0] != content_id or armed[1] != effect:
-            raise Refused(f"{effect}: send fence: no intent written by this invocation permits a send")
+            self._refused = True
+            raise Refused(f"{effect}: send fence {self.invocation}: no intent written by this invocation permits a send")
         try:
             current = journal.read()
         except Exception as error:
-            raise Refused(f"{effect}: send fence: journal unreadable before send: {error}") from error
+            self._refused = True
+            raise Refused(f"{effect}: send fence {self.invocation}: journal unreadable before send: {error}") from error
         if current != armed[2]:
-            raise Refused(f"{effect}: send fence: journal no longer holds the intent this invocation wrote")
+            self._refused = True
+            raise Refused(f"{effect}: send fence {self.invocation}: journal no longer holds the intent this invocation wrote")
         self._released = effect
         self._sent.append(effect)
 
@@ -143,7 +155,7 @@ class BoundIntentFence:
     def _consume(self, effect: str) -> None:
         released, self._released = self._released, None
         if released != effect:
-            raise Refused(f"{effect}: send fence: no intent written by this invocation permits a send")
+            raise Refused(f"{effect}: send fence {self.invocation}: no intent written by this invocation permits a send")
 
 
 class _GuardedProvider:

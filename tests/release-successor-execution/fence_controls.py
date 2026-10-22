@@ -235,6 +235,64 @@ def a_cas_that_reports_a_win_without_writing_forbids_the_send(E):
     assert rig.provider.calls == []
 
 
+def a_changed_journal_forbids_the_send_whatever_part_changed(E):
+    cases = {
+        "same generation, other effects": lambda cid: E.JournalState(2, cid, {"tag": "intent", "draft": "intent"}),
+        "other generation, same effects": lambda cid: E.JournalState(3, cid, {"tag": "intent"}),
+        "other content, same generation and effects": lambda cid: E.JournalState(2, "sha256:" + "e" * 64, {"tag": "intent"}),
+    }
+    for name, changed in cases.items():
+        rig = Rig(E)
+
+        def other_writer(_effect, rig=rig, changed=changed):
+            rig.journal.state = changed(rig.content_id)
+
+        rig.refuses("no longer holds the intent", lambda: rig.step(E.BoundIntentFence("raced"), prepare_dispatch=other_writer))
+        assert rig.provider.calls == [], name
+
+
+def the_intent_is_recorded_before_any_preparation_can_run(E):
+    rig = Rig(E)
+    fence = E.BoundIntentFence("recorded")
+    seen = []
+    rig.step(fence, prepare_dispatch=lambda effect: seen.append(fence.written))
+    assert seen == [(("tag", 2),)]
+
+
+def the_provider_permit_names_the_released_effect(E):
+    effect, state = _sample(E)
+    journal = types.SimpleNamespace(read=lambda: state)
+    provider = Provider(E)
+    fence = E.BoundIntentFence("named")
+    fence.arm(state.content_id, "tag", state)
+    fence.release(state.content_id, "tag", journal)
+    try:
+        fence.guard(provider).dispatch(E.Effect("draft", "t", "r"))
+    except E.Refused:
+        pass
+    else:
+        raise AssertionError("a release for one effect authorized another")
+    assert provider.calls == []
+
+
+def a_refused_release_stops_the_fence_arming_again(E):
+    _, state = _sample(E)
+    fence = E.BoundIntentFence("poisoned")
+    fence.arm(state.content_id, "tag", state)
+    try:
+        fence.release(state.content_id, "tag", types.SimpleNamespace(read=lambda: E.JournalState(9, state.content_id, {})))
+    except E.Refused:
+        pass
+    else:
+        raise AssertionError("release accepted a changed journal")
+    try:
+        fence.arm(state.content_id, "tag", E.JournalState(2, state.content_id, {"tag": "intent"}))
+    except E.Refused as error:
+        assert "never dispatched" in str(error)
+    else:
+        raise AssertionError("a fence armed again after a refused release")
+
+
 def an_unreadable_journal_before_the_send_forbids_it(E):
     rig = Rig(E)
     reads = []
@@ -329,6 +387,10 @@ SCENARIOS = (
     a_permit_is_single_use,
     a_journal_changed_after_our_write_forbids_the_send,
     a_cas_that_reports_a_win_without_writing_forbids_the_send,
+    a_changed_journal_forbids_the_send_whatever_part_changed,
+    the_intent_is_recorded_before_any_preparation_can_run,
+    the_provider_permit_names_the_released_effect,
+    a_refused_release_stops_the_fence_arming_again,
     an_unreadable_journal_before_the_send_forbids_it,
     a_denied_dispatch_admission_leaves_no_send,
     only_one_unsent_intent_may_be_outstanding,
@@ -375,14 +437,34 @@ MUTANTS = {
     "release skips the journal re-read comparison": (
         [("        if current != armed[2]:", "        if False:")],
         {"a_journal_changed_after_our_write_forbids_the_send", "a_cas_that_reports_a_win_without_writing_forbids_the_send"}),
+    "release compares only the generation": (
+        [("        if current != armed[2]:", "        if current.generation != armed[2].generation:")],
+        {"a_changed_journal_forbids_the_send_whatever_part_changed"}),
+    "release compares only the effects": (
+        [("        if current != armed[2]:", "        if current.effects != armed[2].effects:")],
+        {"a_changed_journal_forbids_the_send_whatever_part_changed"}),
+    "release ignores the journal content id": (
+        [("        if current != armed[2]:", "        if (current.generation, current.effects) != (armed[2].generation, armed[2].effects):")],
+        {"a_changed_journal_forbids_the_send_whatever_part_changed"}),
+    "guard accepts any released effect": (
+        [("        if released != effect:\n            raise Refused(f\"{effect}: send fence {self.invocation}: no intent written by this invocation permits a send\")\n\n\nclass _GuardedProvider",
+          "        if released is None:\n            raise Refused(f\"{effect}: send fence {self.invocation}: no intent written by this invocation permits a send\")\n\n\nclass _GuardedProvider")],
+        {"the_provider_permit_names_the_released_effect"}),
+    "engine arms the fence only after preparation": (
+        [("        if fence is not None:\n            fence.arm(content_id, effect.identity, written)\n        if prepare_dispatch is not None:\n            prepare_dispatch(effect)\n",
+          "        if prepare_dispatch is not None:\n            prepare_dispatch(effect)\n        if fence is not None:\n            fence.arm(content_id, effect.identity, written)\n")],
+        {"the_intent_is_recorded_before_any_preparation_can_run"}),
+    "a refused release leaves the fence armable": (
+        [("        if self._armed is not None or self._released is not None or self._refused:", "        if self._armed is not None or self._released is not None:")],
+        {"a_refused_release_stops_the_fence_arming_again"}),
     "release tolerates an unreadable journal": (
-        [("        except Exception as error:\n            raise Refused(f\"{effect}: send fence: journal unreadable before send: {error}\") from error",
+        [("        except Exception as error:\n            self._refused = True\n            raise Refused(f\"{effect}: send fence {self.invocation}: journal unreadable before send: {error}\") from error",
           "        except Exception:\n            current = armed[2]")],
         {"an_unreadable_journal_before_the_send_forbids_it"}),
     "guard returns the bare provider": (
         [_GUARD_BYPASS], {"guarded_provider_refuses_without_a_release", "later_invocation_after_crash_between_intent_and_send_never_sends"}),
     "guard does not check the release": (
-        [("        if released != effect:\n            raise Refused(f\"{effect}: send fence: no intent written by this invocation permits a send\")\n\n\nclass _GuardedProvider",
+        [("        if released != effect:\n            raise Refused(f\"{effect}: send fence {self.invocation}: no intent written by this invocation permits a send\")\n\n\nclass _GuardedProvider",
           "        if False:\n            raise Refused(f\"{effect}\")\n\n\nclass _GuardedProvider")],
         {"guarded_provider_refuses_without_a_release", "a_permit_is_single_use"}),
     "guard keeps the release after a send": (
@@ -398,7 +480,7 @@ MUTANTS = {
         [("armed is None or armed[0] != content_id or armed[1] != effect", "armed is None or armed[0] != content_id")],
         {"a_permit_is_bound_to_its_content_and_effect"}),
     "arm allows an outstanding intent": (
-        [("        if self._armed is not None or self._released is not None:", "        if False:")],
+        [("        if self._armed is not None or self._released is not None or self._refused:", "        if self._refused:")],
         {"only_one_unsent_intent_may_be_outstanding"}),
     "arm allows a repeated effect": (
         [("        if effect in self._sent or any(name == effect for name, _ in self._written):", "        if False:")],
