@@ -878,7 +878,7 @@ def source_controls():
                 def probe(*args): self.assertEqual(events[-1], 'initial'); events.append('probe'); return {'probe': {'probeSetupCommit': 'later'}}
                 original_read = Path.read_bytes
                 with patch(__name__ + '.validate', return_value=m), patch.object(P, 'injected_runner', return_value=runner), \
-                        patch.object(M, 'env_for', return_value={}), patch.object(C, 'registration', return_value={}), \
+                        patch.object(M, 'env_for', return_value={}), patch.object(C, 'registration', return_value={}) as registration, \
                         patch(__name__ + '.boundary', return_value={'productFiles': []}), patch.object(M, 'snapshot', return_value={}), \
                         patch.object(Path, 'read_bytes', autospec=True, side_effect=lambda q: b'ignore' if q.name == '.gitignore' else original_read(q)), \
                         patch(__name__ + '.complete_initial', side_effect=commit), patch(__name__ + '.restore_tools'), \
@@ -886,6 +886,9 @@ def source_controls():
                         patch.object(P, 'initialize', side_effect=AssertionError('standalone forbidden')):
                     result = qualify('/sealed', 'sha', runner_factory=lambda: None)
                 self.assertEqual(events, ['initial', 'probe', 'initial', 'probe']); self.assertEqual(result['state'], 'passed')
+                # Each row's installed-template registration is bound to the re-pinned package identity.
+                self.assertEqual([c.args[1:] for c in registration.call_args_list], [(WORKSPACE_VERSION, PACKAGES['workspace'][3])] * 2)
+                self.assertEqual(PACKAGES['workspace'][2], '1e95dddb6326d276773154df1336599907d8dbfe')
                 creates = [c.args[0] for c in runner.call.call_args_list if c.args[0][1] == 'scaffold']
                 self.assertEqual(len(creates), 2); self.assertNotIn('lifecycle=typed-sdd', creates[1])
                 self.assertTrue(all('bundle=complete' in args for args in creates))

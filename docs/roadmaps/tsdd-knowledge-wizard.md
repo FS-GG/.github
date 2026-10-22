@@ -1241,7 +1241,9 @@ The adapter is re-pinned to the nuget.org 0.19.1 package (identical over every
 non-signature entry to the GitHub Release asset) and the 0.19.1 provider descriptor
 whose only difference is the exact `source` pin. The re-derived inventory is 175
 applicable files (the four added FourD local-save-replay files), the same 12 exclusions,
-and 57 COMPLETE-only files; supplier delta, producer and ports are unchanged. Opt-in
+and 57 COMPLETE-only files; supplier delta, producer and ports are unchanged. Six existing
+files also changed content (local-save-replay wiring and a SignalR 10.0.13 lock bump); they
+are compared byte-for-byte at runtime rather than name-pinned. Opt-in
 controls additionally require the packaged `policy.c` to keep its preprocessor blocks and
 the template to declare literal `**/*.c` and `**/*.h` operations. A re-pin grants no
 runtime acceptance; a fresh finite two-row run needs separate root admission.
