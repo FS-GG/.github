@@ -1,5 +1,23 @@
 # Registry changelog
 
+## 2026-10-22 — reconcile published Workspace.Template 0.19.1 (FS-GG/.github#4709)
+
+Reconcile `fs-gg-workspace-template` source/package **0.19.1** and `fs-gg-templates/v0.19.1`
+after original publisher [39745222454/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/39745222454)
+from protected `1e95dddb6326d276773154df1336599907d8dbfe` (FS.GG.Templates#730). Original artifact
+12410648325 (`16736d87…`) equals the GitHub Packages and release asset; the signed nuget.org archive
+(`5d1886c3…`) matches all 512 signature-excluded payload entries. Annotated tag `515783ac…` peels to
+`1e95dddb`. 0.19.0 stays historical; its scoped Xantham receivers are not extended to 0.19.1.
+
+Also flip `fs-gg-ui-template` source/package/tag to **0.32.3**: protected publisher
+[39817794639/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/39817794639) (executor `fc2b177e`)
+published all 19 original `4ec6eafb` archives (artifact 12305198394, custody `7dbd4329…`) to both feeds
+with matching readbacks; tags converge by same-intent settlement 39774890888/a1 (original transport
+outcome Unknown). `feed-autofix` is audit-only since GS2-08.9 and cannot flip this row. The
+`templates -> rendering` edge now records Templates PR728 (`2f8d400a`) source selection of 0.32.3;
+published Workspace 0.19.1 still carries 0.32.1, and Workspace publication, the public default and
+full Wizard qualification remain open.
+
 ## 2026-10-22 — prospective coherent113 Claude Code usage capture (#4801)
 
 Select SOURCE0.113.0 for CLI/Kit/Drivers over published112 to carry the Claude Code
