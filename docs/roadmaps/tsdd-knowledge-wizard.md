@@ -1173,3 +1173,52 @@ retained. It ran no initial commit or knowledge probes and accepts no PLAYER
 receiver. The separately accepted [non-SVG provider result](https://github.com/FS-GG/.github/issues/4773#issuecomment-6324485155)
 accepts only its two non-SVG published receivers; PLAYER and the other parent
 acceptance remain separate. This source repair authorizes no replay.
+
+
+### Published COMPLETE Fable-game provider qualification — Delivery #4798
+
+The separate `knowledge-fable-game-complete-provider-public.py` adapter selects the
+precedence100 current template in genuine published Workspace0.19.0 through published
+SDD2.2.0 and the immutable provider descriptor. Both rows supply
+`--param bundle=complete` and omit `svgFoundation`; one supplies typed lifecycle and
+the other genuinely omits it. The descriptor declares `bundle` as an optional parameter
+without a default and defaults lifecycle to typed SDD, so automatic knowledge
+initialization is expected for both. Standalone initialization, RAW creation and the
+raw COMPLETE adapter are not substituted. It seals the accepted PLAYER-provider ports
+by digest and reuses their producer-contract, supplier-union, initial-file, restore and
+knowledge ports unchanged.
+
+Applicable inventory is derived from the authenticated package definition with the
+seven fixed modifier conditions required exactly. With `PortalExample` defaulting to
+false, only the Portal and preview-file exclusions apply, so every
+bundle-specific modifier is unselected. The adapter pins exactly171 applicable
+owner files (each with an exact name/namespace substitution and mode, with only the
+published `.sh` execute-bit promotion) and exactly12 exclusions: the template
+configuration, nine `PortalExample` files and the two preview files. It also derives the
+53 COMPLETE-only files by differencing against the accepted PLAYER selection of the
+same package, pinning their names and requiring Studio, models, generated rule models, both
+editable examples, FourD, WASM, Soldier and external-authority reference content with
+exact bytes and modes. A stray file under the managed Portal tree is refused.
+
+The union, supplier-file, seeded-skill, amended-provenance and Foundation initial
+checks are bundle-independent because the pinned compiled predicates read profile
+and template only; the adapter reuses them under the authenticated published
+`agentSkillRoots` and does not demand an unshipped `.codex` union. Product-owned
+`.codex` content stays in the complete inventory and Git proof. The effective
+provenance must record `bundle=complete`, typed lifecycle, and no `svgFoundation` or
+opted-in Portal. The normal caller initial commit must carry every package file,
+including all COMPLETE-only blobs and executable shells, through bounded Git object
+metadata before the separate probe setup.
+
+The existing finite injected runner and complete knowledge ports then exercise
+capture/retrieval/history, preservation/refusals, private exclusion, ALL-shared
+export/lossless restore, distinct Git recovery and the ordinary pinned checker at
+exactly10,485,760 and10,485,761 canonical bytes. Pure causal controls run in the
+existing hosted selftest; an opt-in control checks the exact counts against the
+published archive when supplied. They launch no child. Source readiness establishes
+none of the actual receivers: both genuine receivers need separate root runtime
+admission, original deadline, custody, qualified cleanup and independent result
+acceptance, and the shared Atlas/driver-manifest integration remains root-owned.
+PLAYER's original failure and accepted runtime02, other parent4642 routes,
+product/browser/WASM acceptance, Wizard or literal-safe positives, retained upgrades
+and historical failures/Unknowns keep their separate scope.
