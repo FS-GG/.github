@@ -1,5 +1,13 @@
 # Registry changelog
 
+## 2026-10-22 — prospective coherent113 Claude Code usage capture (#4801)
+
+Select SOURCE0.113.0 for CLI/Kit/Drivers over published112 to carry the Claude Code
+transcript usage reader, `telemetry usage collect claude --session-file`, passive
+`claude-local-transcript/1` capture and the corrected packaged pnext-item/work-roadmap
+guidance. Published package version/tag and installed pins remain112; no candidate or
+publication is authorized by this source change.
+
 ## 2026-10-21 — prospective coherent112 canonical skill routing (#4789)
 
 Select SOURCE0.112.0 for CLI/Kit/Drivers over genuine promoted111, with the distinct
