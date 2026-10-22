@@ -717,7 +717,7 @@ module RuntimeUsage =
     type private ClaudeEntry =
         {
             First: ClaudeTranscript.Response
-            /// The prompt identity in force at the response's first record, which owns an incomplete response.
+            // The prompt identity in force at the response's first record, which owns an incomplete response.
             StartTurn: string option
             // The prompt identity in force at the response's first completed record; incomplete streaming records
             // and later tool results never move it.
