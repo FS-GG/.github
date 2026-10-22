@@ -624,7 +624,17 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Contains("partial-tail-deferred", tail.Diagnostics)
             Assert.Equal(int64 (Encoding.UTF8.GetByteCount complete), tail.Cursor.Offset)
             File.AppendAllText(path, "\n")
-            Assert.Single((scan (Some tail.Cursor)).Records) |> ignore
+            let completedTail = scan (Some tail.Cursor)
+            Assert.Single completedTail.Records |> ignore
+            // A rotated source is a continuity gap: a new generation rereads from the start with no carried
+            // prompt context, so the replacement's responses are attributed only by its own prompts.
+            File.Move(path, path + ".old")
+            File.WriteAllText(path, claudeResponse "msg_r" 2 "\"end_turn\"" 9L)
+            let rotated = scan (Some completedTail.Cursor)
+            Assert.Contains("source-continuity-gap", rotated.Diagnostics)
+            Assert.NotEqual<string>(completedTail.Cursor.Generation, rotated.Cursor.Generation)
+            Assert.Empty rotated.Records
+            Assert.Contains("turn-identity-unavailable", rotated.Diagnostics)
             // Only files below the selected Claude projects root are readable.
             let outside = Path.Combine(home, "session.jsonl")
             File.WriteAllText(outside, complete)
