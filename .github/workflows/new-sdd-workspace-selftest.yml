@@ -150,6 +150,7 @@ jobs:
           python3 -B tests/new-sdd-workspace/knowledge-fable-game-provider-public.py --source-controls
           python3 -B tests/new-sdd-workspace/knowledge-fable-game-player-provider-public.py --source-controls
           python3 -B tests/new-sdd-workspace/knowledge-fable-game-complete-provider-public.py --source-controls
+          python3 -B tests/new-sdd-workspace/knowledge-wizard-bindings-public.py --source-controls
           python3 tests/new-sdd-workspace/knowledge-creation.py \
             --wizard /pure-control --sdd-cli /pure-control --insufficient-cli /pure-control \
             --providers /pure-control --workspace-package /pure-control \
