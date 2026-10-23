@@ -74,7 +74,7 @@ type HostSchemaProfileTests() =
             let manifestPath = Path.Combine(backup, "backup-manifest.json")
             let manifestBytes = File.ReadAllBytes manifestPath
             use manifest = JsonDocument.Parse manifestBytes
-            Assert.Equal("0.8.0", manifest.RootElement.GetProperty("hostVersion").GetString())
+            Assert.Equal("0.9.0", manifest.RootElement.GetProperty("hostVersion").GetString())
             Assert.Equal(14, manifest.RootElement.GetProperty("supportedStoreSchemaMin").GetInt32())
             Assert.Equal(14, manifest.RootElement.GetProperty("supportedStoreSchemaMax").GetInt32())
             let innerPath = Path.Combine(backup, workspace, "manifest.json")

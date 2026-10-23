@@ -19,9 +19,11 @@ Browser access keys and producer credentials are separate principals. Secrets
 belong in private files referenced by configuration; do not place them in
 arguments, URLs, logs, package contents, or source control.
 
-Prospective version `0.8.0` bundles Store14 and the bounded private unassigned-usage
+Prospective version `0.9.0` bundles Store14 and the bounded private unassigned-usage
 display. It accepts partial native response observations through the existing
-authenticated generic receipt API. Its manifest
+authenticated generic receipt API from local Codex rollouts
+(`codex-local-rollout/1`) and Claude Code transcripts (`claude-local-transcript/1`),
+each in its own native identity namespace; any other provenance is refused. Its manifest
 selects Store14 only; no schema migration is implied. Item attribution, inventory,
 terminal coverage and absent counters remain unknown. Passive observations stay
 outside qualified item totals. Its fresh release requires a new candidate from the exact
@@ -29,7 +31,7 @@ current source. The retained `0.6.0` candidate and its uncertain tag intent rema
 separate; this version does not retry or complete that publication.
 
 Host is independently released under `telemetry-host/v<VERSION>`, separate from
-the Kit, Drivers and coordination CLI coherent set. Published Host `0.7.0` and older
+the Kit, Drivers and coordination CLI coherent set. Published Host `0.8.0` and older
 artifacts remain unchanged. Source delivery does not establish a new publication, installed service,
 TLS trust, client enrollment or receiver durability.
 

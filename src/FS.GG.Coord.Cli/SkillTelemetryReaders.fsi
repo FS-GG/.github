@@ -110,7 +110,11 @@ module SkillTelemetryReaders =
         { Records: PassiveNativeRecord list
           Cursor: PassiveCursor
           ScannedBytes: int
-          Diagnostics: string list }
+          Diagnostics: string list
+          /// Length of the opened descriptor when the pass ended; a cursor at this offset has read the whole file.
+          SourceLength: int64
+          /// Modification time of the opened descriptor, in Unix seconds, used only to recognize a quiescent source.
+          ModifiedAtUnixSeconds: int64 }
 
     type NativeCounters =
         {

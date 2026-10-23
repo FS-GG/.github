@@ -1,4 +1,4 @@
-"""Fresh per-effect native Actions and main-ref admission for Host 0.8.0."""
+"""Fresh per-effect native Actions and main-ref admission for Host 0.9.0."""
 
 from __future__ import annotations
 

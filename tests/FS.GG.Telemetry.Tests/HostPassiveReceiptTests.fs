@@ -20,6 +20,114 @@ open FS.GG.Telemetry.Host
 [<Collection("Host schema profile")>]
 module HostPassiveReceiptTests =
     [<Fact(Timeout = 30000)>]
+    let ``passive HTTP receipt admits Claude transcript provenance and refuses unknown provenance`` () =
+        task {
+            let root = Path.Combine(Path.GetTempPath(), "fsgg-host-claude-" + Guid.NewGuid().ToString("N"))
+            Directory.CreateDirectory root |> ignore
+            let approved = TelemetryStore.ApprovedLocalDurable
+            let unwrap value = value |> Result.defaultWith (fun errors -> failwithf "%A" errors)
+            let store = Path.Combine(root, "store")
+            let owner: TelemetryReceipt.Scope = { Workspace = "host-claude"; Producer = "owner"; Stream = "observations" }
+            TelemetryStoreApplication.initialize store approved |> unwrap |> ignore
+            TelemetryStoreApplication.enrollReceiptPrincipal store approved
+                { Scope = owner; Role = TelemetryReceipt.Generic; GrantId = Some "owner-grant"; GrantGeneration = Some 1L } |> unwrap |> ignore
+            use listener = new TcpListener(IPAddress.Loopback, 0)
+            listener.Start()
+            let port = (listener.LocalEndpoint :?> IPEndPoint).Port
+            listener.Stop()
+            use rsa = RSA.Create(2048)
+            let request = CertificateRequest("CN=localhost", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+            let san = SubjectAlternativeNameBuilder()
+            san.AddIpAddress(IPAddress.Loopback)
+            request.CertificateExtensions.Add(san.Build())
+            use certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddDays(1))
+            let privateFile (name: string) (value: string) =
+                let path = Path.Combine(root, name)
+                File.WriteAllText(path, value)
+                File.SetUnixFileMode(path, enum<UnixFileMode> 0o600)
+                path
+            let secret = "owner" + String('s', 48)
+            let config: HostConfig =
+                { Schema = "fsgg.telemetry.host-config/2"; ListenUrl = $"https://127.0.0.1:{port}"
+                  CertificatePath = privateFile "unused.pfx" "not loaded by endpoint fixture"
+                  CertificatePasswordFile = privateFile "unused.pass" "not loaded by endpoint fixture"
+                  ServiceLockPath = Path.Combine(root, "host.lock")
+                  Stores = [| { WorkspaceId = owner.Workspace; Root = store } |]
+                  Credentials =
+                    [| { Reference = owner.Producer; SecretFile = privateFile "owner.key" secret
+                         WorkspaceId = owner.Workspace; ProducerId = owner.Producer; StreamId = owner.Stream
+                         Role = "generic"; GrantId = "owner-grant"; GrantGeneration = 1L; Revoked = false } |]
+                  BrowserPrincipals = [||]; BrowserSession = RemoteTelemetryTests.browserSession }
+            let state = new Runtime.HostState(config, fun _ -> approved)
+            state.Ready <- true
+            state.StartDrain()
+            let app = (Hosting.createBuilder config.ListenUrl certificate).Build()
+            Endpoints.configure app state (Configuration.credentials config)
+            try
+                do! app.StartAsync()
+                use handler = new HttpClientHandler(AllowAutoRedirect = false)
+                // Exact self-signed leaf is trusted only inside this loopback fixture.
+                handler.ServerCertificateCustomValidationCallback <- fun _ cert _ errors ->
+                    errors = Net.Security.SslPolicyErrors.RemoteCertificateChainErrors
+                    && cert.GetCertHashString() = certificate.GetCertHashString()
+                use client = new HttpClient(handler)
+                let nativeThread = "44444444-4444-4444-4444-444444444444"
+                let nativeTurn = "55555555-5555-5555-5555-555555555555"
+                let identity (ns: string) =
+                    "passive-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(ns + "\u001f" + nativeThread + "\u001f" + nativeTurn + "\u001fclaude-response"))).ToLowerInvariant()
+                let fact (ns: string) (provenance: string) =
+                    JsonNode.Parse($"""{{"kind":"provider-usage-observation/1","identity":"{identity ns}","itemId":null,"revision":1,"threadId":"{nativeThread}","turnId":"{nativeTurn}","responseId":"claude-response","provider":null,"model":null,"effort":null,"input":40,"cachedInput":30,"cacheWriteInput":5,"output":7,"reasoning":null,"total":47,"sourceInstance":"{String('c',64)}","sourceGeneration":"claude-g1","sourceDigest":"{String('d',64)}","position":0,"capturedAt":"2026-10-22T08:00:00Z","occurredAt":null,"provenance":"{provenance}","populationCoverage":"partial","inventoryCoverage":"unknown","terminalCoverage":"unknown","attributionCoverage":"unknown"}}""")
+                let send (batch: string) (event: JsonNode) =
+                    task {
+                        let value = JsonNode.Parse($"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{owner.Workspace}","producerId":"{owner.Producer}","streamId":"{owner.Stream}","batchId":"{batch}","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"{batch}","sourceIdentity":"{owner.Stream}","generation":"host-g1","cursor":"1","eventCount":1,"events":[]}}}}""")
+                        value["payload"].["events"].AsArray().Add event
+                        use message = new HttpRequestMessage(HttpMethod.Post, config.ListenUrl + "/v1/batches")
+                        message.Headers.Authorization <- Headers.AuthenticationHeaderValue("Bearer", secret)
+                        message.Content <- new ByteArrayContent(Encoding.UTF8.GetBytes(value.ToJsonString()))
+                        use! response = client.SendAsync message
+                        let! body = response.Content.ReadAsByteArrayAsync()
+                        return response.StatusCode, body
+                    }
+                // Unknown provenance and a Claude fact under the Codex namespace stay refused at the Host boundary.
+                for batch, ns, provenance in [ "unknown-provenance", "claude-transcript/1", "claude-statusline/1"
+                                               "foreign-namespace", "codex-rollout/1", "claude-local-transcript/1" ] do
+                    let! status, body = send batch (fact ns provenance)
+                    Assert.Equal(HttpStatusCode.BadRequest, status)
+                    Assert.Equal(Some "invalid-request", RemoteContract.parseError body)
+                let! accepted, acceptedBody = send "claude-first" (fact "claude-transcript/1" "claude-local-transcript/1")
+                Assert.True(accepted = HttpStatusCode.Accepted || accepted = HttpStatusCode.OK, Encoding.UTF8.GetString acceptedBody)
+                let mutable applied = false
+                for _ in 1..100 do
+                    if not applied then
+                        use message = new HttpRequestMessage(HttpMethod.Get, config.ListenUrl + "/v1/receipts/claude-first")
+                        message.Headers.Authorization <- Headers.AuthenticationHeaderValue("Bearer", secret)
+                        use! response = client.SendAsync message
+                        let! bytes = response.Content.ReadAsByteArrayAsync()
+                        match RemoteContract.parseReceipt bytes with
+                        | Ok value when value.Status = "applied" -> applied <- true
+                        | _ -> do! Task.Delay 25
+                Assert.True(applied, "Claude transcript receipt never became applied")
+                let snapshot = JsonNode.Parse(TelemetryStoreApplication.passiveObservations store approved owner |> unwrap)
+                let current = Assert.Single(snapshot["observations"].AsArray())
+                Assert.Equal(47L, current["total"].GetValue<int64>())
+                Assert.Null(current["itemId"])
+                use connection = new SqliteConnection($"Data Source={Path.Combine(store, TelemetryStoreApplication.databaseFileName)};Mode=ReadOnly;Pooling=False")
+                connection.Open()
+                use command = connection.CreateCommand()
+                command.CommandText <- "SELECT json_extract(canonical,'$.provenance') || ' ' || identity FROM current_ingest_facts WHERE kind='provider-usage-observation/1';"
+                Assert.Equal("claude-local-transcript/1 " + identity "claude-transcript/1", string (command.ExecuteScalar()))
+                use items = connection.CreateCommand()
+                items.CommandText <- "SELECT count(*) FROM items;"
+                Assert.Equal(0L, Convert.ToInt64(items.ExecuteScalar()))
+                connection.Close()
+            finally
+                app.StopAsync().GetAwaiter().GetResult()
+                app.DisposeAsync().AsTask().GetAwaiter().GetResult()
+                (state :> IDisposable).Dispose()
+                if Directory.Exists root then Directory.Delete(root, true)
+        }
+
+    [<Fact(Timeout = 30000)>]
     let ``passive HTTP receipt binds generic authority corrections and unknown attribution`` () =
         task {
             let root = Path.Combine(Path.GetTempPath(), "fsgg-host-passive-" + Guid.NewGuid().ToString("N"))
