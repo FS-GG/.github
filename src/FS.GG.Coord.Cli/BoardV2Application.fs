@@ -329,7 +329,7 @@ module BoardV2Application =
                 | _ -> Error "unsupported migration command or argument; no effects admitted")
         | [] -> Error "missing migration command"
 
-    /// Private sibling that retains a refused migration-prepare's typed, bounded reason.
+    // Private sibling that retains a refused migration-prepare's typed, bounded reason.
     let private migrationPrepareFailurePath (reportPath: string) = reportPath + ".prepare-failure.json"
     let private migrationDigest (bytes: byte array) = SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
     let private privatePath (path: string) =

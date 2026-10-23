@@ -701,8 +701,15 @@ module BoardV2MigrationTests =
         Assert.False(File.Exists(path + ".prepare-failure.json"))
         let fresh = Path.Combine(fixture.Directory, "prepare-collision-prepared.json")
         File.WriteAllText(fresh + ".prepare-failure.json", "first retained failure")
+        let readsBefore = fixture.Native.Requests.Length
         Assert.Equal(3, fixture.Run [ "migration-prepare"; "--scope-file"; input; "--report-file"; fresh ])
+        Assert.Equal(readsBefore, fixture.Native.Requests.Length)
         Assert.False(File.Exists fresh)
+        let directoryReport = Path.Combine(fixture.Directory, "prepare-directory-prepared.json")
+        Directory.CreateDirectory directoryReport |> ignore
+        Assert.Equal(3, fixture.Run [ "migration-prepare"; "--scope-file"; input; "--report-file"; directoryReport ])
+        Assert.Equal(readsBefore, fixture.Native.Requests.Length)
+        Assert.False(File.Exists(directoryReport + ".prepare-failure.json"))
         Assert.Equal("first retained failure", File.ReadAllText(fresh + ".prepare-failure.json"))
 
     [<Fact>]
