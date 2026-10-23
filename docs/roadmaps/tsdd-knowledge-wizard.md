@@ -1276,3 +1276,51 @@ equal the defaults; transport is proved by the recorded effective parameters, no
 package archive is hashed in the isolated HOME and must equal its pinned SHA-256. Pure causal controls
 run in the existing selftest; source merge establishes no runtime result, and acceptance remains fdev's
 after one independent review of the hosted artifact.
+
+### Retained knowledge upgrade R3 (#4822)
+
+[#4822](https://github.com/FS-GG/.github/issues/4822) carries the retained-upgrade clause of #4642.
+Its [route coverage](https://github.com/FS-GG/.github/issues/4822#issuecomment-6360179306) names R3:
+an existing knowledge-bearing Typed SDD workspace is upgraded in place from an older published tuple to
+the current one. [`knowledge-retained-upgrade-public.py`](../../tests/new-sdd-workspace/knowledge-retained-upgrade-public.py)
+is its runtime. The read-only hosted operation is
+[`retained-upgrade-public-acceptance.yml`](../../.github/workflows/retained-upgrade-public-acceptance.yml):
+dispatch-only, `contents: read`, public nuget.org, an isolated HOME and no token in any child.
+
+**Old tuple.** Published SDD.Cli 2.2.0 scaffolds a typed console workspace through the immutable
+Workspace.Template 0.19.0 console descriptor (Templates `f5fbd06e`). The owner makes the normal initial
+commit and runs the maintained #4723 typed probe under 2.2.0, which records four findings and two Git
+versions. The owner then edits product source, `CLAUDE.md`, `AGENTS.md`, early-stage guidance and one
+mirrored seeded skill, adds owner files, and commits.
+
+**Upgrade.**
+- The global and local tool pins move to SDD.Cli 2.4.0. The manifest check admits only the SDD version
+  change and the SDK's `rollForward: false`.
+- The owner copies the current console descriptor (Templates `24f3c307`, Workspace.Template 0.19.3) and
+  installs 0.19.3. The retained knowledge CI equals the 0.19.3 payload byte for byte.
+- `doctor` reports the owner's skill edit as drift, and `upgrade --yes` leaves every byte unchanged.
+- One seeded skill is deleted: `doctor` names exactly that path, and `upgrade --yes` re-seeds only it.
+- Re-applying the 0.19.3 `fs-gg-project-knowledge` overlay without `--force` refuses (exit 73) and
+  leaves all bytes unchanged.
+- The upgrade commit differs from the owner commit only in the tool manifest and the descriptor.
+
+**Current producer on the retained store.**
+- `search`, `get` and `history` under 2.4.0 are byte-identical to their 2.2.0 output.
+- `get-version` recovers the pre-upgrade version.
+- A later update and a new finding commit normally, so history crosses the upgrade with three versions.
+- Stale-writer, excluded-input and restore no-clobber refusals preserve owner bytes.
+- The write path accepts a capture that lands exactly on 10,485,760 bytes and refuses one that would
+  exceed the limit.
+- The ordinary pinned 2.4.0 checker accepts 10,485,760 bytes and refuses 10,485,761.
+- A cache-free clone returns the same search, history and pre-upgrade version.
+- Against the pre-upgrade owner tree, the final tree changes only the tool manifest, the descriptor and
+  the two captured records. Every other file keeps its bytes and mode.
+
+Every `fs-gg-console/**` and `fs-gg-project-knowledge/**` file is byte-identical in 0.19.0 and 0.19.3.
+On the template side, R3 therefore proves only three things: the pin moves, 0.19.3 becomes the sole
+registration, and re-applying the overlay is refused. It proves no template content migration.
+Refusals must carry the producer's own blocked diagnostic for their reason; a non-zero exit is not
+enough. Every installed or restored package archive in the isolated HOME must equal its pinned SHA-256.
+Pure causal controls run in the existing selftest. A source merge establishes no runtime result. Acceptance
+remains fdev's, after an independent review of the hosted artifact. R4 (a pre-knowledge workspace adopting
+knowledge), the Wizard fable-game rows and the Rendering raw/provider/default rows remain open on #4822.
