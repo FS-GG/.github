@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish the exact Host 0.8.0 candidate through fresh admitted effects."""
+"""Publish the exact Host 0.9.0 candidate through fresh admitted effects."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from telemetry_host_successor_execution import effects
 from telemetry_host_successor_provider import HostProvider
 
 REPOSITORY = "FS-GG/.github"
-REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-14"
+REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-15"
 
 
 def require(ok: bool, detail: str) -> None:
@@ -47,14 +47,14 @@ def main() -> int:
     parser.add_argument("--candidate-run-id", required=True, type=int)
     parser.add_argument("--candidate-artifact-id", required=True, type=int)
     parser.add_argument("--candidate-archive-sha256", required=True)
-    parser.add_argument("--continue-failed-original", action="store_true", help="Retired Host 0.6 flag; current Host 0.8 refuses it")
+    parser.add_argument("--continue-failed-original", action="store_true", help="Retired Host 0.6 flag; current Host 0.9 refuses it")
     parser.add_argument("--workdir", required=True, type=pathlib.Path)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--preflight-only", action="store_true")
     mode.add_argument("--publish", action="store_true")
     args = parser.parse_args()
     try:
-        require(not args.continue_failed_original, "Host 0.6 failed-original continuation is retired; current Host 0.8 requires a new exact-source candidate")
+        require(not args.continue_failed_original, "Host 0.6 failed-original continuation is retired; current Host 0.9 requires a new exact-source candidate")
         publisher_sha = os.environ["GITHUB_SHA"]
         operator = os.environ["GITHUB_ACTOR"]
         run_id = int(os.environ["GITHUB_RUN_ID"])
@@ -77,7 +77,7 @@ def main() -> int:
         require(artifact.get("id") == args.candidate_artifact_id, "candidate artifact API identity differs")
         candidate_source = run.get("head_sha")
         require(isinstance(candidate_source, str) and len(candidate_source) == 40, "candidate source malformed")
-        require(candidate_source == publisher_sha, "current Host 0.8 publication requires exact current main candidate")
+        require(candidate_source == publisher_sha, "current Host 0.9 publication requires exact current main candidate")
         require(artifact.get("digest") == "sha256:" + args.candidate_archive_sha256, "artifact digest differs")
         artifact_json = args.workdir / "artifact.json"
         run_json = args.workdir / "run.json"
@@ -97,7 +97,7 @@ def main() -> int:
         content_id, ordered = effects(manifest)
         admission = HostAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
         provider = HostProvider(api, manifest_path, github_token, nuget_key)
-        intent = {"contentId": content_id, "sourceSha": candidate_source, "version": "0.8.0",
+        intent = {"contentId": content_id, "sourceSha": candidate_source, "version": "0.9.0",
                   "candidateArchiveSha256": args.candidate_archive_sha256, "operator": operator}
         ledger_api = GitHubAPI(ledger_token)
         route = ordinary_route()

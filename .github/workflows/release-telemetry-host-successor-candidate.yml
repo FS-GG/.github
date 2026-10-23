@@ -1,10 +1,10 @@
 name: release-telemetry-host-successor-candidate
 
-# Published predecessor is immutable Host0.7.0 (utel-host-rel-13).
+# Published predecessor is immutable Host0.8.0 (utel-host-rel-14).
 # Prospective source coordinates only. Separately admitted invocation may establish
 # feed absence in its mandatory first gate; no candidate work precedes that PASS.
 # Root still supplies fresh tag/release/journal/protection and source admission.
-# Independent Host 0.8.0 source and byte qualification only. This workflow has
+# Independent Host 0.9.0 source and byte qualification only. This workflow has
 # no package-feed, tag, release, journal, OIDC or promotion write capability.
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   candidate:
-    name: telemetry-host-080-candidate
+    name: telemetry-host-090-candidate
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -54,14 +54,14 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
           version="$(dotnet msbuild src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -getProperty:Version | tr -d '[:space:]')"
-          test "$version" = 0.8.0
+          test "$version" = 0.9.0
       - name: Test passive Host HTTP authority before browser qualification
         timeout-minutes: 5
         run: |
           set -euo pipefail
           dotnet restore tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj --locked-mode
           dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj -c Release --no-restore --filter "FullyQualifiedName~HostPassiveReceiptTests|FullyQualifiedName~HostSchemaProfileTests|FullyQualifiedName~RemoteTelemetryTests.protected native collector resolves durable dispatch and replays retained envelope" --blame --logger "console;verbosity=normal" --logger "trx;LogFileName=host-passive.trx" --results-directory "$RUNNER_TEMP/host-passive"
-          python3 scripts/read-trx-count.py "$RUNNER_TEMP/host-passive/host-passive.trx" --minimum 4 --label "passive Host HTTP" --summary-file "$GITHUB_STEP_SUMMARY"
+          python3 scripts/read-trx-count.py "$RUNNER_TEMP/host-passive/host-passive.trx" --minimum 5 --label "passive Host HTTP" --summary-file "$GITHUB_STEP_SUMMARY"
       - name: Retain passive Host HTTP diagnostics
         if: ${{ always() && steps.read-first.outcome == 'success' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -95,13 +95,13 @@ jobs:
           mkdir -p artifacts/telemetry-host
           dotnet pack src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -c Release --no-restore \
             -p:RepositoryCommit="$SOURCE_SHA" -o artifacts/telemetry-host
-          package=artifacts/telemetry-host/FS.GG.Telemetry.Host.0.8.0.nupkg
+          package=artifacts/telemetry-host/FS.GG.Telemetry.Host.0.9.0.nupkg
           manifest=artifacts/telemetry-host/manifest.json
           test -f "$package"
           python3 scripts/telemetry-host-release.py prepare --package "$package" \
             --lock src/FS.GG.Telemetry.Host/packages.lock.json \
             --assets src/FS.GG.Telemetry.Dashboard/Assets \
-            --source-sha "$SOURCE_SHA" --version 0.8.0 --tag telemetry-host/v0.8.0 \
+            --source-sha "$SOURCE_SHA" --version 0.9.0 --tag telemetry-host/v0.9.0 \
             --output "$manifest"
           python3 scripts/telemetry-host-release.py verify --manifest "$manifest" --package "$package"
           bash tests/standalone-telemetry-host-package/run.sh "$package" artifacts/telemetry-host/package-evidence.json
@@ -115,7 +115,7 @@ jobs:
         with:
           name: telemetry-host-successor-candidate-${{ github.sha }}-${{ github.run_id }}
           path: |
-            artifacts/telemetry-host/FS.GG.Telemetry.Host.0.8.0.nupkg
+            artifacts/telemetry-host/FS.GG.Telemetry.Host.0.9.0.nupkg
             artifacts/telemetry-host/manifest.json
             artifacts/telemetry-host/package-evidence.json
           if-no-files-found: error

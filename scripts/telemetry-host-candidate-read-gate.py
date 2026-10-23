@@ -20,10 +20,10 @@ from fsgg_feed import GateError, _RefuseFeedIndexRedirect, parse_version
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PACKAGE = "FS.GG.Telemetry.Host"
-VERSION = "0.8.0"
-PREDECESSOR = "0.7.0"
-TAG = "telemetry-host/v0.8.0"
-JOURNAL = "refs/heads/fsgg/v2/journal/release/utel-host-rel-14"
+VERSION = "0.9.0"
+PREDECESSOR = "0.8.0"
+TAG = "telemetry-host/v0.9.0"
+JOURNAL = "refs/heads/fsgg/v2/journal/release/utel-host-rel-15"
 API = "https://api.github.com/repos/FS-GG/.github"
 FEEDS = {
     "github": "https://nuget.pkg.github.com/FS-GG/download/fs.gg.telemetry.host",

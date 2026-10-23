@@ -12,7 +12,7 @@
     <!-- Independent one-package release line. This literal deliberately does not resolve from
          FsggCoherentSetVersion, which belongs only to Kit, Drivers and Coord.Cli. -->
     <FsggCoherentSetVersion />
-    <Version>0.8.0</Version>
+    <Version>0.9.0</Version>
     <PackageId>FS.GG.Telemetry.Host</PackageId>
     <AssemblyName>FS.GG.Telemetry.Host</AssemblyName>
     <IsPackable>true</IsPackable>
@@ -27,7 +27,7 @@
     <RepositoryUrl>https://github.com/FS-GG/.github</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/FS-GG/.github/tree/main/src/FS.GG.Telemetry.Host</PackageProjectUrl>
-    <PackageReleaseNotes>0.8.0 — Prospective independent Host release of the accepted bounded unassigned-usage dashboard projection. Package qualification checks corrected private observations in the actual installed browser before and after restore, with partial population and unknown attribution/cost. Store14 and the existing receipt ABI are unchanged. Host0.7 publication/journal13 and Host0.6 journal12/tag intent remain immutable. Source preparation does not qualify coordinate availability, publication or receiver adoption.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.9.0 — Prospective independent Host release that admits passive provider-usage-observation/1 facts with provenance claude-local-transcript/1 in their own native identity namespace, alongside codex-local-rollout/1. Other provenances remain refused. Store14 and the existing receipt ABI are unchanged, so an existing Store14 workspace needs no migration. Host0.8 publication/journal14, Host0.7 publication/journal13 and Host0.6 journal12/tag intent remain immutable. Source preparation does not qualify coordinate availability, publication or receiver adoption.</PackageReleaseNotes>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../FS.GG.Coord.Cli/SkillTelemetryReaders.fsi" Link="SkillTelemetryReaders.fsi" />

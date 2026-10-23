@@ -31,7 +31,7 @@ from telemetry_host_successor_provider import HostProvider, NotFound
 def manifest():
     return {
         "schema": "fsgg.telemetry.host-release/1", "packageId": "FS.GG.Telemetry.Host",
-        "version": "0.8.0", "tag": "telemetry-host/v0.8.0", "sourceSha": "a" * 40,
+        "version": "0.9.0", "tag": "telemetry-host/v0.9.0", "sourceSha": "a" * 40,
         "archiveSha256": "b" * 64, "producerPayloadSha256": "sha256:" + "c" * 64,
     }
 
@@ -46,7 +46,7 @@ class StoreProfileTests(unittest.TestCase):
             package = root / "fixture.nupkg"
             with zipfile.ZipFile(package, "w") as archive:
                 archive.writestr("FS.GG.Telemetry.Host.nuspec",
-                                 "<package><metadata><id>FS.GG.Telemetry.Host</id><version>0.8.0</version></metadata></package>")
+                                 "<package><metadata><id>FS.GG.Telemetry.Host</id><version>0.9.0</version></metadata></package>")
                 archive.writestr("tools/net10.0/linux-x64/FS.GG.Telemetry.Host.dll", b"fixture")
             lock = root / "lock.json"
             lock.write_text("{}")
@@ -54,21 +54,22 @@ class StoreProfileTests(unittest.TestCase):
             assets.mkdir()
             (assets / "app.js").write_text("fixture")
             prepared = module.build_manifest(SimpleNamespace(package=package, lock=lock, assets=assets,
-                                             version="0.8.0", tag="telemetry-host/v0.8.0", source_sha="a" * 40))
+                                             version="0.9.0", tag="telemetry-host/v0.9.0", source_sha="a" * 40))
             self.assertEqual((prepared["supportedStoreSchemaMin"], prepared["supportedStoreSchemaMax"]), (14, 14))
-            self.assertEqual(prepared["version"], "0.8.0")
+            self.assertEqual(prepared["version"], "0.9.0")
             # Renaming a retained older package cannot become a new genuine candidate.
             with zipfile.ZipFile(root / "renamed-old.nupkg", "w") as archive:
                 archive.writestr("FS.GG.Telemetry.Host.nuspec", "<package><metadata><id>FS.GG.Telemetry.Host</id><version>0.6.0</version></metadata></package>")
                 archive.writestr("tools/net10.0/linux-x64/FS.GG.Telemetry.Host.dll", b"older fixture")
             with self.assertRaisesRegex(ValueError, "package identity"):
                 module.build_manifest(SimpleNamespace(package=root / "renamed-old.nupkg", lock=lock, assets=assets,
-                    version="0.8.0", tag="telemetry-host/v0.8.0", source_sha="a" * 40))
+                    version="0.9.0", tag="telemetry-host/v0.9.0", source_sha="a" * 40))
 
     def test_current_profile_is_schema14_only_and_legacy_artifact_stays_unchanged(self):
         spec = importlib.util.spec_from_file_location("host_release_profile", ROOT / "scripts/telemetry-host-release.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        self.assertEqual(module.store_schema_profile("0.9.0"), (14, 14))
         self.assertEqual(module.store_schema_profile("0.8.0"), (14, 14))
         self.assertEqual(module.store_schema_profile("0.7.0"), (14, 14))
         self.assertEqual(module.store_schema_profile("0.6.0"), (14, 14))
@@ -93,23 +94,28 @@ class StoreProfileTests(unittest.TestCase):
                    "supportedStoreSchemaMin": 10, "supportedStoreSchemaMax": 12}
             path.write_text(json.dumps(old))
             self.assertEqual(module.load_manifest(path), old)
-            with self.assertRaisesRegex(Refused, "exact Host 0.8.0"):
+            with self.assertRaisesRegex(Refused, "exact Host 0.9.0"):
                 effects(old)
             previous = {**value, "version": "0.5.0", "tag": "telemetry-host/v0.5.0"}
             path.write_text(json.dumps(previous))
             self.assertEqual(module.load_manifest(path), previous)
-            with self.assertRaisesRegex(Refused, "exact Host 0.8.0"):
+            with self.assertRaisesRegex(Refused, "exact Host 0.9.0"):
                 effects(previous)
             held = {**value, "version": "0.6.0", "tag": "telemetry-host/v0.6.0"}
             path.write_text(json.dumps(held))
             self.assertEqual(module.load_manifest(path), held)
-            with self.assertRaisesRegex(Refused, "exact Host 0.8.0"):
+            with self.assertRaisesRegex(Refused, "exact Host 0.9.0"):
                 effects(held)
             published = {**value, "version": "0.7.0", "tag": "telemetry-host/v0.7.0"}
             path.write_text(json.dumps(published))
             self.assertEqual(module.load_manifest(path), published)
-            with self.assertRaisesRegex(Refused, "exact Host 0.8.0"):
+            with self.assertRaisesRegex(Refused, "exact Host 0.9.0"):
                 effects(published)
+            predecessor = {**value, "version": "0.8.0", "tag": "telemetry-host/v0.8.0"}
+            path.write_text(json.dumps(predecessor))
+            self.assertEqual(module.load_manifest(path), predecessor)
+            with self.assertRaisesRegex(Refused, "exact Host 0.9.0"):
+                effects(predecessor)
 
 
 class EarlyQualificationTests(unittest.TestCase):
@@ -118,7 +124,7 @@ class EarlyQualificationTests(unittest.TestCase):
             pure = source.index("python3 tests/telemetry-host-successor/run.py")
             test = source.index('--filter "FullyQualifiedName~HostPassiveReceiptTests|FullyQualifiedName~HostSchemaProfileTests|FullyQualifiedName~RemoteTelemetryTests.protected native collector resolves durable dispatch and replays retained envelope"')
             assert pure < test < source.index(expensive)
-            assert 'host-passive.trx" --minimum 4' in source
+            assert 'host-passive.trx" --minimum 5' in source
             assert 'timeout-minutes: 5' in source
             assert '--blame ' in source and '--blame-hang' not in source and '--blame-crash' not in source
             assert 'Retain passive Host HTTP diagnostics' in source and 'always()' in source
@@ -135,7 +141,7 @@ class EarlyQualificationTests(unittest.TestCase):
             check(source, expensive, native)
             for mutant in [source.replace('FullyQualifiedName~HostPassiveReceiptTests', 'FullyQualifiedName~Unrelated'),
                            source.replace('FullyQualifiedName~RemoteTelemetryTests.protected native collector', 'FullyQualifiedName~UnrelatedNativeCollector'),
-                           source.replace('host-passive.trx" --minimum 4', 'host-passive.trx" --minimum 0'),
+                           source.replace('host-passive.trx" --minimum 5', 'host-passive.trx" --minimum 0'),
                            source.replace('python3 tests/telemetry-host-successor/run.py', 'echo absent'),
                            source.replace('always()', 'success()'),
                            source.replace('npm run test:browser -- --reporter=line', 'echo browser-not-run'),
@@ -301,16 +307,16 @@ class HostReleaseTests(unittest.TestCase):
     def test_successor_identity_and_journal_are_coherent(self):
         self.assertEqual(self.ordered[0].target_digest, "a" * 40)
         import xml.etree.ElementTree as ET
-        self.assertEqual(ET.parse(ROOT / "src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj").findtext(".//Version"), "0.8.0")
+        self.assertEqual(ET.parse(ROOT / "src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj").findtext(".//Version"), "0.9.0")
         publisher = (ROOT / "scripts" / "telemetry-host-successor-publish.py").read_text()
         candidate = (ROOT / ".github" / "workflows" / "release-telemetry-host-successor-candidate.yml").read_text()
-        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-14"', publisher)
+        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-15"', publisher)
         self.assertNotIn("utel-host-rel-10", publisher)
-        self.assertIn('"version": "0.8.0"', publisher)
-        self.assertIn("--version 0.8.0 --tag telemetry-host/v0.8.0", candidate)
-        self.assertIn("FS.GG.Telemetry.Host.0.8.0.nupkg", candidate)
-        self.assertIn("telemetry-host-080-candidate", candidate)
-        self.assertIn("telemetry-host-080-publisher", (ROOT / ".github/workflows/release-telemetry-host-successor-publish.yml").read_text())
+        self.assertIn('"version": "0.9.0"', publisher)
+        self.assertIn("--version 0.9.0 --tag telemetry-host/v0.9.0", candidate)
+        self.assertIn("FS.GG.Telemetry.Host.0.9.0.nupkg", candidate)
+        self.assertIn("telemetry-host-090-candidate", candidate)
+        self.assertIn("telemetry-host-090-publisher", (ROOT / ".github/workflows/release-telemetry-host-successor-publish.yml").read_text())
 
     def test_every_effect_is_admitted_and_read_back_once(self):
         self.assertEqual(len(self.ordered), 8)
@@ -347,13 +353,13 @@ class HostReleaseTests(unittest.TestCase):
             archive = root / "candidate.zip"
             package_digest = hashlib.sha256(b"fixture").hexdigest()
             positive = {"schema": "fsgg.telemetry-host-package-evidence/v1", "packageId": "FS.GG.Telemetry.Host",
-                        "version": "0.8.0", "archiveSha256": package_digest, "passed": 1, "failed": 0,
+                        "version": "0.9.0", "archiveSha256": package_digest, "passed": 1, "failed": 0,
                         "productionStorage": "eligible-linux-x64", "syntheticTls": True, "passiveReceiptQualified": True}
             def write_archive(evidence):
                 with zipfile.ZipFile(archive, "w") as zipped:
                     zipped.writestr("manifest.json", json.dumps({**manifest(), "archiveSha256": package_digest}))
                     zipped.writestr("package-evidence.json", json.dumps(evidence))
-                    zipped.writestr("FS.GG.Telemetry.Host.0.8.0.nupkg", "fixture")
+                    zipped.writestr("FS.GG.Telemetry.Host.0.9.0.nupkg", "fixture")
             write_archive(positive)
             digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             run = {"id": 123, "path": verifier.WORKFLOW, "head_sha": source,
@@ -365,7 +371,7 @@ class HostReleaseTests(unittest.TestCase):
                                          "repository_id": verifier.REPOSITORY_ID,
                                          "head_repository_id": verifier.REPOSITORY_ID}}
             with patch.object(verifier.subprocess, "run"):
-                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.8.0")
+                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.9.0")
             for field, value in [("productionStorage", "not-qualified:overlay"), ("passiveReceiptQualified", False),
                                  ("syntheticTls", False), ("failed", 1), ("failed", False), ("version", "0.5.0"),
                                  ("archiveSha256", "0" * 64)]:
@@ -389,6 +395,8 @@ class HostReleaseTests(unittest.TestCase):
                            ("version", "0.2.1"), ("tag", "telemetry-host/v0.2.1"),
                            ("version", "0.1.3"), ("tag", "telemetry-host/v0.1.3"),
                            ("version", "0.6.0"), ("tag", "telemetry-host/v0.6.0"),
+                           ("version", "0.7.0"), ("tag", "telemetry-host/v0.7.0"),
+                           ("version", "0.8.0"), ("tag", "telemetry-host/v0.8.0"),
                            ("producerPayloadSha256", "bad")):
             row = manifest(); row[key] = value
             with self.assertRaises(Refused):
@@ -403,9 +411,9 @@ class HostReleaseTests(unittest.TestCase):
                 self.assets = {}
                 self.writes = []
             def get(self, path):
-                if path.endswith("/git/ref/tags/telemetry-host/v0.8.0") and self.tag:
+                if path.endswith("/git/ref/tags/telemetry-host/v0.9.0") and self.tag:
                     return {"object": {"sha": self.tag}}
-                if path.endswith("/releases/tags/telemetry-host/v0.8.0") and self.release and not self.release["draft"]:
+                if path.endswith("/releases/tags/telemetry-host/v0.9.0") and self.release and not self.release["draft"]:
                     return self.release
                 if path.endswith("/releases?per_page=100&page=1"):
                     return [self.release] if self.release else []
@@ -429,7 +437,7 @@ class HostReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             row = manifest()
-            package = root / "FS.GG.Telemetry.Host.0.8.0.nupkg"
+            package = root / "FS.GG.Telemetry.Host.0.9.0.nupkg"
             package.write_bytes(b"exact original Host archive")
             row["archiveSha256"] = hashlib.sha256(package.read_bytes()).hexdigest()
             manifest_path = root / "manifest.json"
@@ -457,10 +465,10 @@ class HostReleaseTests(unittest.TestCase):
             def __init__(self, raw):
                 self.raw = raw
             def get(self, path):
-                if path.endswith("/releases/tags/telemetry-host/v0.8.0"):
+                if path.endswith("/releases/tags/telemetry-host/v0.9.0"):
                     raise NotFound(path)
                 if path.endswith("/releases?per_page=100&page=1"):
-                    return [{"id": 1, "tag_name": "telemetry-host/v0.8.0", "draft": True}]
+                    return [{"id": 1, "tag_name": "telemetry-host/v0.9.0", "draft": True}]
                 if path.endswith("/releases/1/assets?per_page=100"):
                     return [{"id": 1, "name": "publication-journal.json"}]
                 raise AssertionError(path)
@@ -643,7 +651,7 @@ class CurrentHostPublisherTests(unittest.TestCase):
         import ast
         route = ordinary_route()
         namespace = dict(copy=copy, NotFound=NotFound, AUTHORITY="FS-GG/FS.GG.Coordination.Authority",
-                         REF="refs/heads/fsgg/v2/journal/release/utel-host-rel-14",
+                         REF="refs/heads/fsgg/v2/journal/release/utel-host-rel-15",
                          reviewed_binding=route.authority_protection()[1])
         source = ast.parse((ROOT / "tests/release-successor-live/run.py").read_text())
         cls = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == "AuthorityAPI")
@@ -693,7 +701,7 @@ class CurrentHostPublisherTests(unittest.TestCase):
                                      continuation=case == "old-flag", old=case == "old-candidate", journal=Journal)
                 self.assertEqual(result, 0 if case == "current" else 1)
                 self.assertFalse(any(row[0] == "initialize" for row in writes))
-                self.assertTrue(all(row[1:] == ("refs/heads/fsgg/v2/journal/release/utel-host-rel-14", True) for row in writes))
+                self.assertTrue(all(row[1:] == ("refs/heads/fsgg/v2/journal/release/utel-host-rel-15", True) for row in writes))
                 if case == "old-flag":
                     self.assertEqual(api.reads, [])
                     self.assertFalse((root / "candidate").exists())
@@ -710,7 +718,7 @@ class CurrentHostPublisherTests(unittest.TestCase):
             path = pathlib.Path(temporary) / "manifest.json"; path.write_text(json.dumps(CURRENT_MANIFEST))
             api = API(); provider = HostProvider(api, path, "fixture", "fixture")
             self.assertEqual(provider.observe(effects(CURRENT_MANIFEST)[1][0]).state, "absent")
-            self.assertEqual(api.paths, ["repos/FS-GG/.github/git/ref/tags/telemetry-host/v0.8.0"])
+            self.assertEqual(api.paths, ["repos/FS-GG/.github/git/ref/tags/telemetry-host/v0.9.0"])
 
     def test_actual_new_journal_preserves_old12_and_unknown_never_resends(self):
         import ast
@@ -787,7 +795,7 @@ class CurrentHostPublisherTests(unittest.TestCase):
                     self.assertEqual(state.effects, {"tag": "intent"})
                     self.assertEqual(output.getvalue().count("Host successor effect state: waiting"), 2)
                 self.assertNotIn("SECRET", output.getvalue())
-                journal.validate_intent({"contentId": effects(CURRENT_MANIFEST)[0], "sourceSha": CURRENT_SOURCE, "version": "0.8.0",
+                journal.validate_intent({"contentId": effects(CURRENT_MANIFEST)[0], "sourceSha": CURRENT_SOURCE, "version": "0.9.0",
                                         "candidateArchiveSha256": CURRENT_ARCHIVE, "operator": "EHotwagner"})
 
     def test_actual_workflow_default_false_and_explicit_flag_shell(self):
@@ -845,7 +853,7 @@ class CandidateReadFirstTests(unittest.TestCase):
         for base in gate.FEEDS.values():
             index = base + "/index.json"
             package = base + f"/{gate.VERSION}/fs.gg.telemetry.host.{gate.VERSION}.nupkg"
-            routes[index] = [self.response(index, {"versions": ["0.6.0", "0.7.0"]})]
+            routes[index] = [self.response(index, {"versions": ["0.7.0", "0.8.0"]})]
             routes[package] = [urllib.error.HTTPError(package, 404, "not found", {}, io.BytesIO())]
         return routes
 
@@ -911,9 +919,9 @@ class CandidateReadFirstTests(unittest.TestCase):
                     elif case == "bad-json":
                         replacement = self.response(index, None, raw=b"not json")
                     elif case == "duplicate-json":
-                        replacement = self.response(index, None, raw=b'{"versions":["0.8.0"],"versions":["0.7.0"]}')
+                        replacement = self.response(index, None, raw=b'{"versions":["0.9.0"],"versions":["0.8.0"]}')
                     elif case == "nonfinite-json":
-                        replacement = self.response(index, None, raw=b'{"versions":["0.7.0"],"ignored":NaN}')
+                        replacement = self.response(index, None, raw=b'{"versions":["0.8.0"],"ignored":NaN}')
                     elif case == "oversize":
                         replacement = self.response(index, None, raw=b" " * (gate.MAX_BYTES + 1))
                     elif case == "length":
@@ -927,9 +935,9 @@ class CandidateReadFirstTests(unittest.TestCase):
                                                                   "never-print-this-secret", {}, io.BytesIO())]
                         replacement = None
                     else:
-                        values = {"empty": [], "shape": "0.7.0", "missing-predecessor": ["0.6.0"],
-                                  "occupied": ["0.7.0", "0.8.0"], "normalized-occupied": ["0.7", "0.8.0.0"],
-                                  "newer": ["0.7.0", "0.9.0"], "malformed-version": ["0.7.0", "never-print-this-secret"]}
+                        values = {"empty": [], "shape": "0.8.0", "missing-predecessor": ["0.7.0"],
+                                  "occupied": ["0.8.0", "0.9.0"], "normalized-occupied": ["0.8", "0.9.0.0"],
+                                  "newer": ["0.8.0", "0.10.0"], "malformed-version": ["0.8.0", "never-print-this-secret"]}
                         replacement = self.response(index, {"versions": values[case]})
                     if replacement is not None:
                         routes[index][0].close()
@@ -1007,9 +1015,9 @@ class CandidateReadFirstTests(unittest.TestCase):
                 (root / path).parent.mkdir(parents=True, exist_ok=True)
                 (root / path).write_bytes((ROOT / path).read_bytes())
             self.gate.source_bindings(root)
-            for path, old, new in [(paths[0], "<Version>0.8.0</Version>", "<Version>0.7.0</Version>"),
-                                   (paths[1], 'VERSION = "0.8.0"', 'VERSION = "0.6.0"'),
-                                   (paths[2], "utel-host-rel-14", "utel-host-rel-12")]:
+            for path, old, new in [(paths[0], "<Version>0.9.0</Version>", "<Version>0.8.0</Version>"),
+                                   (paths[1], 'VERSION = "0.9.0"', 'VERSION = "0.8.0"'),
+                                   (paths[2], "utel-host-rel-15", "utel-host-rel-14")]:
                 original = (root / path).read_text()
                 (root / path).write_text(original.replace(old, new))
                 with self.assertRaises(self.gate.Refused):
@@ -1034,7 +1042,7 @@ class CandidateReadFirstTests(unittest.TestCase):
                     assert "name: Retain passive Host HTTP diagnostics" in step
                     assert "always() && steps.read-first.outcome == 'success'" in step
             assert "dotnet msbuild" in text and "Refuse changed main before retaining candidate" in text
-            assert "--version 0.8.0 --tag telemetry-host/v0.8.0" in text
+            assert "--version 0.9.0 --tag telemetry-host/v0.9.0" in text
 
         check(source)
         gate = source.split("      - name: Refuse unreadable", 1)[1].split("      - uses: actions/setup-dotnet", 1)[0]
