@@ -1324,3 +1324,47 @@ enough. Every installed or restored package archive in the isolated HOME must eq
 Pure causal controls run in the existing selftest. A source merge establishes no runtime result. Acceptance
 remains fdev's, after an independent review of the hosted artifact. R4 (a pre-knowledge workspace adopting
 knowledge), the Wizard fable-game rows and the Rendering raw/provider/default rows remain open on #4822.
+
+### Retained knowledge adoption R4 (#4822)
+
+R3 was accepted on #4822. R4 is the remaining retained route: a Typed SDD workspace created before project
+knowledge existed adopts it on the current published tuple.
+[`knowledge-retained-adoption-public.py`](../../tests/new-sdd-workspace/knowledge-retained-adoption-public.py)
+is its runtime and loads the shared helpers from the accepted R3 adapter's sealed bytes. The read-only
+hosted operation is
+[`retained-adoption-public-acceptance.yml`](../../.github/workflows/retained-adoption-public-acceptance.yml),
+with the same boundaries as R3.
+
+**Pre-knowledge tuple.** Published SDD.Cli 2.0.3 scaffolds a typed console workspace through the
+Workspace.Template 0.13.0 console descriptor (Templates `908da309`, provider contract 1.1.0). The adapter
+asserts typed-sdd provenance from 2.0.3 and that no store, guide or knowledge CI exists. The owner then
+makes the normal initial commit and the same owner edits as R3. The insufficient 2.0.3 producer refuses
+`knowledge initialize` as an unknown command (exit 1, `blocked`) and changes nothing.
+
+**Adoption.**
+- Workspace.Template 0.19.3 is installed. In a clone carrying an owner-authored knowledge workflow, the
+  `fs-gg-project-knowledge` overlay refuses (exit 73) and changes no bytes. In the subject it adds
+  exactly its two CI files, identical to the package payload.
+- The emitted checker then refuses for the missing guide, before any initialization.
+- The SDD pin moves 2.0.3 → 2.4.0, and the owner copies the current descriptor.
+- `knowledge initialize` creates only the guide, schema and seed record, and appends the ignore block
+  after the owner's unchanged `.gitignore`. A second call changes nothing.
+- The pinned 2.4.0 checker passes.
+- `doctor` shows only the owner's mirror drift, and `upgrade --yes` changes nothing.
+- The owner's adoption commit tracks the canonical files and CI, keeps the optional cache ignored, and
+  differs from the owner commit only in those adoption paths.
+
+**Full typed contract on the adopted store.**
+- The maintained #4723 probe passes: four findings, history and version retrieval, owner-preserving
+  refusals, and a private store.
+- An ALL-shared export taken after the private capture restores losslessly.
+- The ordinary checker accepts 10,485,760 bytes and refuses 10,485,761.
+- Write-path budget, stale-writer and restore no-clobber refusals carry the producer's own diagnostics.
+- A cache-free clone returns the same search and history.
+- `CLAUDE.md` and `AGENTS.md` keep the owner's bytes; adoption does not rewrite agent guidance.
+- Against the pre-adoption owner tree, only the adoption paths, canonical records and the ignored cache
+  differ. Every other file keeps its bytes and mode.
+
+Every installed or restored archive must equal its pinned SHA-256: SDD.Cli 2.0.3 and 2.4.0,
+Workspace.Template 0.13.0 and 0.19.3, Coord.Cli 0.94.0. A source merge establishes no runtime result, and
+acceptance remains fdev's after an independent review of the hosted artifact.
