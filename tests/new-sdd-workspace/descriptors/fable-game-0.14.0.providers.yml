@@ -1,0 +1,49 @@
+# Drop-in `.fsgg/providers.yml` entry for the server-authoritative Fable game workspace.
+# `source` is an exact package pin: activation is deliberately deferred until this
+# coherent FS.GG.Workspace.Template release is published and independently proved
+# (ADR-0071 Section 6's rollout discipline: local pack and generated-consumer proof
+# precede publication; publication precedes registry activation and wizard release).
+# This row carries no `BEGIN GENERATED: effective-providers` block because it is not
+# yet a registry-active provider -- see web.providers.yml / console.providers.yml for
+# the same not-yet-activated shape; compare fable-bindings.providers.yml /
+# rendering.providers.yml, which carry the block because they are already active.
+#
+# PRODUCT SKILLS THIS PROVIDER DELIVERS (FS.GG.Templates#347). A product scaffolded through this
+# provider receives, in `.agents/skills/`, the owner-sourced generic Fable skills selected for
+# `fs-gg-fable-game` — `fable-project`, `fable-interop`, `fable-http-codecs`, `fable-signalr`,
+# `fable-testing` — plus the producer manifest `.agents/skills/skill-manifest.json` that declares
+# and digests them. They are authored once under `template/product-skills/` and projected into this
+# template's packed payload by package items in FS.GG.Templates.csproj; the authority for WHICH
+# skills land here is each manifest row's `materializes-when`, not this comment.
+#
+# THIS IS PROSE, NOT SCHEMA, DELIBERATELY. The scaffold-provider contract (1.1.0) has no field for a
+# delivered skill set, and inventing a key here would be read by nothing and enforced by nothing —
+# a declaration that cannot be wrong. What actually holds the claim up is executable: the
+# `assert-product` arm of scripts/generate-skill-manifest.fsx runs against a product instantiated
+# from the packed archive, through BOTH the direct `dotnet new` route and this provider's
+# `fsgg-sdd scaffold` route, and reds on an absent, unexpected, dangling, or digest-drifted skill.
+# See tests/composition/fable-game/run.sh and tests/composition/run.sh.
+schemaVersion: 1
+providers:
+  - name: fable-game
+    contractVersion: "1.1.0"
+    templateId: fs-gg-fable-game
+    source: FS.GG.Workspace.Template::0.14.0
+    nameParameter: productName
+    identifierParameter: rootNamespace
+    minimumFsggSdd:
+      version: "1.4.0-preview.1"
+      requires: "Typed Protocol Kernel lifecycle selection, compilation, provenance, refresh, and diagnostics"
+      adr: "FS-GG/.github docs/adr/0071-two-web-workspace-providers-one-template-package.md"
+    parameters:
+      - key: productName
+        required: true
+      - key: rootNamespace
+        required: false
+      - key: svgFoundation
+        required: false
+      - key: bundle
+        required: false
+      - key: lifecycle
+        required: false
+        default: sdd

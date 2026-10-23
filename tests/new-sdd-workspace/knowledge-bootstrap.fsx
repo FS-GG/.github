@@ -38,13 +38,14 @@ try
     File.WriteAllText(Path.Combine(cache, "packages.json"), """{"Packages":[{"Details":{"PackageId":"FS.GG.Workspace.Template","Version":"0.18.2"}},{"Details":{"PackageId":"FS.GG.Workspace.Template","Version":"0.18.2"}}]}""")
     knowledgeOverlayRegistration cache |> expectError "duplicate engine registration"
     let game = assembleWizardTemplateOptions "./Arena" "Arena" "fable-game" None None None None
-    for version in [ "0.17.0"; "0.18.0" ] do
-        let source = Some("source: FS.GG.Workspace.Template::" + version)
-        if selectScaffoldLifecycle game source <> "sdd" then
-            failwith "successor descriptor must preserve Standard SDD on omission"
-        if selectScaffoldLifecycle { game with LifecycleExplicit = true; Lifecycle = "typed-sdd" } source <> "typed-sdd" then
+    // Successor descriptors declare typed-sdd; omission follows that declaration (#4811).
+    for declared in [ Some "typed-sdd"; Some "sdd"; None ] do
+        let expected = defaultArg declared "sdd"
+        if selectScaffoldLifecycle game declared <> expected then
+            failwith "omission must follow the successor descriptor's declared lifecycle default"
+        if selectScaffoldLifecycle { game with LifecycleExplicit = true; Lifecycle = "typed-sdd" } declared <> "typed-sdd" then
             failwith "explicit typed selection must remain unchanged"
-    if selectScaffoldLifecycle { game with LifecycleExplicit = true; Lifecycle = "sdd" } (Some "source: FS.GG.Workspace.Template::0.18.0") <> "sdd" then
+    if selectScaffoldLifecycle { game with LifecycleExplicit = true; Lifecycle = "sdd" } (Some "typed-sdd") <> "sdd" then
         failwith "explicit Standard SDD changed"
 finally Directory.Delete(root, true)
 printfn "typed knowledge version and exact local manifest: ok"

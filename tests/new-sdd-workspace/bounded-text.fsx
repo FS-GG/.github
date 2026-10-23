@@ -225,7 +225,7 @@ let validateDescriptorRefusal () =
     let destination = Path.Combine(targetRoot, "providers.yml")
     try
         Environment.SetEnvironmentVariable("FSGG_TEMPLATES_RAW_BASE", "not-an-absolute-uri")
-        let result = (privateMethod "fetchDescriptor").Invoke(null, [| box "app"; box "immutable"; box destination |]) :?> Result<string option, string>
+        let result = (privateMethod "fetchDescriptor").Invoke(null, [| box "app"; box "immutable"; box destination |]) :?> Result<string option * string option, string>
         match result with
         | Error _ -> assertions <- assertions + 1
         | Ok _ -> failwith "actual descriptor accepted an invalid request URI"

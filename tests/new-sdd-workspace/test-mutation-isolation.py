@@ -20,7 +20,7 @@ Product = product
         Lifecycle = "sdd"
 sprintf "lifecycle=%s" lifecycle
 sprintf "bindingTarget=%s" target
-sourceLine = Some "source: FS.GG.Workspace.Template::0.15.0"
+not opts.LifecycleExplicit -> declared
 '''
 RUNNER = r'''#!/usr/bin/env bash
 set -euo pipefail
@@ -49,8 +49,8 @@ if 'Lifecycle = "typed-sdd"' in body:
     print('the wizard must preserve Standard SDD as the P4 default')
 elif 'sprintf "lifecycle=%s" "sdd"' in body:
     print('FAIL  explicit Typed SDD is forwarded unchanged')
-elif 'sourceLine = Some "source: FS.GG.Workspace.Template::0.14.0"' in body:
-    print('the D.5 fable-game descriptor must select Typed SDD on omission')
+elif 'not opts.LifecycleExplicit -> opts.Lifecycle' in body:
+    print('the current fable-game descriptor must select Typed SDD on omission')
 elif '        \"python\", \"minimal Python workspace\"\n' not in body:
     print('the shared wizard menu/parser inventory must include Python exactly once')
 elif 'sprintf \"target=%s\" target' in body:

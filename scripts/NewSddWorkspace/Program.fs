@@ -55,8 +55,8 @@ type Options =
         Product: string
         /// The SDD scaffold provider selected by --template. Omitted selection remains rendering.
         Template: string
-        /// The representation backend selected by --lifecycle. A pinned D.5 fable-game
-        /// provider can select Typed SDD when the caller omitted this flag.
+        /// The representation backend selected by --lifecycle. When the caller omitted this flag,
+        /// a fable-game creation uses its fetched descriptor's declared lifecycle default.
         /// The token is forwarded unchanged to the provider; typed-sdd is never aliased to sdd.
         Lifecycle: string
         LifecycleExplicit: bool
@@ -157,17 +157,50 @@ let assembleWizardTemplateOptions
         BindingTarget = bindingTarget
     }
 
-/// The D.5 omission applies only to the exact published SVG provider generation.
-/// Older descriptors and explicit lifecycle selections retain their original token.
-let selectScaffoldLifecycle (opts: Options) (sourceLine: string option) : string =
-    if
-        opts.Template = "fable-game"
-        && not opts.LifecycleExplicit
-        && sourceLine = Some "source: FS.GG.Workspace.Template::0.15.0"
-    then
-        "typed-sdd"
-    else
-        opts.Lifecycle
+/// The lifecycle tokens the Wizard admits, whether spelled with --lifecycle or declared by a
+/// provider descriptor as its omission default.
+let lifecycleTokens = [ "none"; "sdd"; "typed-sdd"; "spec-kit" ]
+
+/// The `default:` the fetched provider descriptor declares for its `lifecycle` parameter.
+/// Reads the committed descriptor's simple block shape (`- key: lifecycle` followed by its own
+/// `default:`). Anything absent, ambiguous, or outside `lifecycleTokens` is None, never a guess.
+let declaredLifecycleDefault (descriptor: string) : string option =
+    let indentOf (line: string) = line.Length - line.TrimStart().Length
+    let content (line: string) =
+        let hash = line.IndexOf " #"
+        (if line.TrimStart().StartsWith "#" then "" elif hash >= 0 then line.Substring(0, hash) else line).TrimEnd()
+    let unquote (value: string) = value.Trim().Trim('"', '\'')
+    let lines = descriptor.Replace("\r\n", "\n").Split('\n') |> Array.map content
+    let isLifecycleKey (line: string) =
+        let trimmed = line.TrimStart()
+        trimmed.StartsWith "- key:" && unquote (trimmed.Substring "- key:".Length) = "lifecycle"
+    let starts = lines |> Array.indexed |> Array.filter (snd >> isLifecycleKey) |> Array.map fst
+    match starts with
+    | [| start |] ->
+        let itemIndent = indentOf lines.[start]
+        let defaults =
+            lines
+            |> Array.skip (start + 1)
+            |> Array.filter (fun line -> line.Trim() <> "")
+            |> Array.takeWhile (fun line -> indentOf line > itemIndent)
+            |> Array.map (fun line -> line.Trim())
+            |> Array.filter (fun line -> line.StartsWith "default:")
+            |> Array.map (fun line -> unquote (line.Substring "default:".Length))
+        match defaults with
+        | [| value |] when List.contains value lifecycleTokens -> Some value
+        | _ -> None
+    | _ -> None
+
+/// The Wizard delegates an omitted fable-game lifecycle to the selected provider descriptor's
+/// declared default (D.5: Workspace.Template 0.15.0 and later declare typed-sdd; 0.14.0 and
+/// earlier declare sdd). Other templates keep the Wizard's Standard SDD default because pinned
+/// preflight runs before the descriptor is fetched and treats only an omitted fable-game
+/// lifecycle as possibly typed. An explicit --lifecycle is always forwarded unchanged; an
+/// unreadable declaration keeps the Standard default.
+let selectScaffoldLifecycle (opts: Options) (declaredDefault: string option) : string =
+    match declaredDefault with
+    | Some declared when opts.Template = "fable-game" && not opts.LifecycleExplicit -> declared
+    | _ -> opts.Lifecycle
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
@@ -461,8 +494,9 @@ let private fetchText (url: string) : Result<string, string> =
     with ex -> Error ex.Message
 
 /// Fetch the committed (already concretely pinned) rendering provider descriptor and write it
-/// to <target>/.fsgg/providers.yml. Returns the pinned `source:` line for display, or an error.
-let private fetchDescriptor (template: string) (gitRef: string) (dest: string) : Result<string option, string> =
+/// to <target>/.fsgg/providers.yml. Returns the pinned `source:` line for display and the
+/// descriptor's declared lifecycle default for omission, or an error.
+let private fetchDescriptor (template: string) (gitRef: string) (dest: string) : Result<string option * string option, string> =
     try
         let baseUrl =
             match Environment.GetEnvironmentVariable "FSGG_TEMPLATES_RAW_BASE" with
@@ -479,7 +513,7 @@ let private fetchDescriptor (template: string) (gitRef: string) (dest: string) :
                 content.Replace("\r\n", "\n").Split('\n')
                 |> Array.tryFind (fun l -> l.TrimStart().StartsWith "source:")
                 |> Option.map (fun l -> l.Trim())
-            Ok pinned
+            Ok(pinned, declaredLifecycleDefault content)
     with ex -> Error ex.Message
 
 // ── Coordination wiring (the kit + board env into the workspace) ──────────────
@@ -1931,7 +1965,7 @@ let private usage () =
         "  [green]--template[/] <name>  provider/template (default: rendering; omitted for compatibility)"
 
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", templates |> List.map fst)))
-    AnsiConsole.MarkupLine "  [green]--lifecycle[/] <name> representation backend (default: sdd; fable-game 0.15.0: typed-sdd)"
+    AnsiConsole.MarkupLine "  [green]--lifecycle[/] <name> representation backend (default: sdd; fable-game: descriptor default)"
     AnsiConsole.MarkupLine "                    [dim]none, sdd, typed-sdd, spec-kit (legacy/frozen)[/]"
     AnsiConsole.MarkupLine "  [green]--profile[/] <name>   rendering-only profile (default: game = provider default)"
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", profiles |> List.map fst)))
@@ -2073,7 +2107,7 @@ let private paramsPanel (d: Draft) =
     row
         "lifecycle"
         (match d.Template, d.Lifecycle with
-         | Some "fable-game", None -> "[aqua]provider pin: 0.15.0 → typed-sdd; otherwise sdd[/]"
+         | Some "fable-game", None -> "[aqua]provider descriptor default (typed-sdd since 0.15.0)[/]"
          | _, Some lifecycle -> sprintf "[aqua]%s[/]" (Markup.Escape lifecycle)
          | _ -> pendingCell)
 
@@ -2167,7 +2201,7 @@ let private previewPanel (d: Draft) =
 
     let lifecycle =
         match d.Template, d.Lifecycle with
-        | Some "fable-game", None -> "from provider pin (0.15.0 → typed-sdd; otherwise sdd)"
+        | Some "fable-game", None -> "provider descriptor default (typed-sdd since 0.15.0)"
         | _, Some lifecycle -> lifecycle
         | _ -> "sdd"
 
@@ -2492,7 +2526,7 @@ let private parse (argv: string list) : Result<Options, string> =
     let knownProfiles = profiles |> List.map fst
     let knownBundles = bundles |> List.map fst
     let knownTemplates = templates |> List.map fst
-    let knownLifecycles = [ "none"; "sdd"; "typed-sdd"; "spec-kit" ]
+    let knownLifecycles = lifecycleTokens
 
     let validate (opts: Options) =
         match opts.Profile, opts.Template with
@@ -3083,7 +3117,7 @@ let private run (opts: Options) : int =
                 )
 
         match fetched with
-        | Ok pinned ->
+        | Ok (pinned, _) ->
             match pinned with
             | Some line -> AnsiConsole.MarkupLine(sprintf "  [green]✓[/] pinned: [grey]%s[/]" (Markup.Escape line))
             | None -> AnsiConsole.MarkupLine "  [green]✓[/] descriptor fetched"
@@ -3129,8 +3163,14 @@ let private run (opts: Options) : int =
                     Outcome = outcome
                 }
 
-        let sourceLine = match fetched with Ok pinned -> pinned | Error _ -> None
-        let lifecycle = selectScaffoldLifecycle opts sourceLine
+        let declaredDefault = match fetched with Ok (_, declared) -> declared | Error _ -> None
+        let lifecycle = selectScaffoldLifecycle opts declaredDefault
+        if not fatal && opts.Template = "fable-game" && not opts.LifecycleExplicit && declaredDefault.IsNone then
+            AnsiConsole.MarkupLine(
+                sprintf
+                    "  [yellow]⚠[/] descriptor declares no readable lifecycle default; using %s"
+                    (Markup.Escape lifecycle)
+            )
         let mutable knowledgeVersion = None
         if not fatal && lifecycle = "typed-sdd" then
             let code, reported = runProcess false "fsgg-sdd" [ "--version" ]
@@ -3175,12 +3215,6 @@ let private run (opts: Options) : int =
                 |> Option.map (fun target -> [ "--param"; sprintf "bindingTarget=%s" target ])
                 |> Option.defaultValue []
 
-            let sourceLine =
-                match fetched with
-                | Ok pinned -> pinned
-                | Error _ -> None
-
-            let lifecycle = selectScaffoldLifecycle opts sourceLine
             let lifecycleParam = [ "--param"; sprintf "lifecycle=%s" lifecycle ]
 
             let code, _ =
