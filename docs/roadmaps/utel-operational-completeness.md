@@ -56,6 +56,18 @@ a 256-response revision index and 1 MiB private state. Existing spool bounds rem
 envelopes/8 MiB with bounded outcome retention. Partial tails defer; truncation/replacement creates a
 new source generation and continuity gap. Cumulative turn snapshots never become response spend.
 
+Finished-source retirement (2026-10-23, Outcome #4640) keeps one long-running association inside
+these bounds. A source closes when a pass reads its descriptor to the end on a line boundary and the
+file has been unmodified for 15 minutes. Its cursor moves to a compact retired entry and its response
+identities leave the index. A later append resumes from that entry; a closed file that no longer
+continues its entry is never re-read from the start. An active Claude transcript keeps only its newest
+24 response identities, because the writer finishes every content block of one API response before the
+next begins; active Codex rollouts keep the original rule. At most 384 retired entries are kept. Evicting
+the oldest sets a horizon one second after that file's modification time; records from an unknown source
+at or before the horizon are suppressed with `pre-horizon-record-suppressed` rather than counted twice.
+Retirement travels in the existing intent, so a crash applies it once. Measured before the change, two
+real transcripts filled the 256-identity index in ten passes and every later pass deferred.
+
 Existing `activate-remote --capture-only` is an explicit initial local setup option. It retains
 configuration, permission, conflict and lock checks while skipping credential presence; its result is
 capture-configured/receiver-unverified. Default activation and later credential/receipt checks remain

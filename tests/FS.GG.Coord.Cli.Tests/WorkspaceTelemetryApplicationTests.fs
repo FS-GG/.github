@@ -1370,3 +1370,208 @@ module WorkspaceTelemetryApplicationTests =
             Assert.Equal(0, canceledEntries)
             Assert.Equal(0, unexpectedSubmits)
             Assert.Equal(52, Directory.GetFiles(spool, "*.ready").Length)
+
+    // Retirement of finished passive state. Synthetic transcripts only; every response is written as two identical
+    // per-block records, as the Claude main-thread writer does.
+    let private retirementStamp (at: DateTimeOffset) = at.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", Globalization.CultureInfo.InvariantCulture)
+
+    let private retirementPrompt (session: string) (prompt: string) (at: DateTimeOffset) =
+        $"""{{"parentUuid":null,"isSidechain":false,"promptId":"{prompt}","type":"user","message":{{"role":"user","content":"synthetic"}},"uuid":"{Guid.NewGuid()}","timestamp":"{retirementStamp at}","cwd":"/work","sessionId":"{session}","version":"2.1.309"}}""" + "\n"
+
+    let private retirementResponse (session: string) (messageId: string) (at: DateTimeOffset) =
+        let record =
+            $"""{{"parentUuid":null,"isSidechain":false,"message":{{"model":"claude-opus-5-5","id":"{messageId}","type":"message","role":"assistant","content":[{{"type":"text","text":"synthetic"}}],"stop_reason":"tool_use","usage":{{"input_tokens":3,"cache_creation_input_tokens":20,"cache_read_input_tokens":400,"output_tokens":11}}}},"requestId":"req_{messageId}","type":"assistant","uuid":"{Guid.NewGuid()}","timestamp":"{retirementStamp at}","cwd":"/work","sessionId":"{session}","version":"2.1.309"}}""" + "\n"
+        record + record
+
+    /// One prompt followed by `count` completed responses; returns the text and the response ids.
+    let private retirementTurn (session: string) (prefix: string) (count: int) (at: DateTimeOffset) =
+        let ids = [ for index in 1..count -> $"{prefix}-{index:D4}" ]
+        let text = retirementPrompt session (Guid.NewGuid().ToString()) at + (ids |> List.mapi (fun index id -> retirementResponse session id (at.AddSeconds(float (index + 1)))) |> String.concat "")
+        text, ids
+
+    /// Marks a file as last written shortly after its final record, as an idle transcript would be.
+    let private age (path: string) (lastRecord: DateTimeOffset) = File.SetLastWriteTimeUtc(path, lastRecord.AddMinutes(1.0).UtcDateTime)
+
+    type private RetirementLedger() =
+        let seen = Collections.Generic.Dictionary<string, int64>(StringComparer.Ordinal)
+        member val Duplicates = 0 with get, set
+        member val Batches = Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+        member this.Enqueue(bytes: byte array) =
+            let batch = TelemetryStore.parseBatch bytes |> Result.defaultWith (sprintf "%A" >> failwith)
+            // Replaying an identical retained intent after a crash is the spool's exact-bytes idempotence, not a re-emission.
+            let digest = Convert.ToHexString(Security.Cryptography.SHA256.HashData bytes)
+            if this.Batches.Add digest then
+                for fact in batch.Facts |> List.filter (fun value -> value.Kind = "provider-usage-observation/1") do
+                    // A retired identity re-emitted at a revision the receiver already holds would be refused as a conflict.
+                    match seen.TryGetValue fact.Identity with
+                    | true, revision when fact.Revision <= revision -> this.Duplicates <- this.Duplicates + 1
+                    | _ -> seen[fact.Identity] <- fact.Revision
+            Ok "locally-retained"
+        member _.Count = seen.Count
+
+    let private retirementCapture root home (ledger: RetirementLedger) (paths: string list) =
+        SkillTelemetryAdapter.capturePassiveFrom root "owner" "passive-stream" (SkillTelemetryReaders.ClaudeHome home) paths ledger.Enqueue |> parseCapture
+
+    let private passiveStateFile root =
+        System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "orchestrator-passive", "producer.json")))
+
+    [<Fact>]
+    let ``passive retirement lets one active Claude session exceed the response index without re-emission`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let home, path = claudeSource root "long-session"
+            let session = Guid.NewGuid().ToString()
+            let start = DateTimeOffset.UtcNow.AddDays -1.0
+            let first, _ = retirementTurn session "first" 300 start
+            File.WriteAllText(path, first)
+            let ledger = RetirementLedger()
+            let mutable last = Unchecked.defaultof<System.Text.Json.Nodes.JsonNode>
+            for _ in 1..14 do last <- retirementCapture root home ledger [ path ]
+            // A second prompt arrives while the session stays active (fresh modification time).
+            let second, _ = retirementTurn session "second" 300 (start.AddHours 1.0)
+            File.AppendAllText(path, second)
+            for _ in 1..14 do last <- retirementCapture root home ledger [ path ]
+            Assert.Equal(600, ledger.Count)
+            Assert.Equal(0, ledger.Duplicates)
+            Assert.DoesNotContain("response-index-full-capture-deferred", last["gaps"].ToJsonString())
+            // Control: the active source is still open, and only its newest responses stay indexed.
+            let state = passiveStateFile root
+            Assert.Equal(1, state["sources"].AsObject().Count)
+            Assert.Equal(24, state["responses"].AsObject().Count)
+            Assert.Equal(576L, last["retiredResponses"].GetValue<int64>())
+            Assert.Equal(0, last["closedSources"].GetValue<int>())
+
+    [<Fact>]
+    let ``passive retirement closes finished files beyond eight resumes appends and never re-reads a rewrite`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let home, _ = claudeSource root "unused"
+            let start = DateTimeOffset.UtcNow.AddDays -1.0
+            let files =
+                [ for index in 0..19 ->
+                    let _, path = claudeSource root $"subagent-{index:D2}"
+                    let session = Guid.NewGuid().ToString()
+                    let at = start.AddMinutes(float index)
+                    let text, _ = retirementTurn session $"file{index:D2}" 10 at
+                    File.WriteAllText(path, text)
+                    age path (at.AddSeconds 11.0)
+                    session, path ]
+            let paths = files |> List.map snd
+            let ledger = RetirementLedger()
+            let mutable last = Unchecked.defaultof<System.Text.Json.Nodes.JsonNode>
+            for pass in 0..29 do
+                let group = [ for offset in 0..7 -> paths[(pass * 8 + offset) % paths.Length] ] |> List.distinct
+                last <- retirementCapture root home ledger group
+            Assert.Equal(200, ledger.Count)
+            Assert.Equal(0, ledger.Duplicates)
+            Assert.DoesNotContain("source-index-full-capture-deferred", last["gaps"].ToJsonString())
+            Assert.Equal(20, last["closedSources"].GetValue<int>())
+            Assert.Equal(0, ((passiveStateFile root)["sources"]).AsObject().Count)
+            Assert.Equal(0, ((passiveStateFile root)["responses"]).AsObject().Count)
+            // A resumed session appends to its closed file: only the new responses are observed.
+            let session0, path0 = files[0]
+            let resumed, _ = retirementTurn session0 "resumed" 3 (start.AddHours 2.0)
+            File.AppendAllText(path0, resumed)
+            retirementCapture root home ledger [ path0 ] |> ignore
+            Assert.Equal(203, ledger.Count)
+            Assert.Equal(0, ledger.Duplicates)
+            // A closed file rewritten in place is never re-read from its start.
+            let _, path1 = files[1]
+            let rewritten, _ = retirementTurn (fst files[1]) "rewritten" 4 (start.AddHours 3.0)
+            File.WriteAllText(path1, rewritten)
+            let skipped = retirementCapture root home ledger [ path1 ]
+            Assert.Equal(203, ledger.Count)
+            Assert.Contains("closed-source-discontinuity-skipped", skipped["gaps"].ToJsonString())
+
+    [<Fact>]
+    let ``passive retirement keeps a multi-day Claude host inside its finite profile`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let home, mainPath = claudeSource root "main-session"
+            let mainSession = Guid.NewGuid().ToString()
+            let ledger = RetirementLedger()
+            let mutable expected = 0
+            let mutable last = Unchecked.defaultof<System.Text.Json.Nodes.JsonNode>
+            let dayOneFiles = ResizeArray<string>()
+            let firstDay = DateTimeOffset.UtcNow.AddDays -4.0
+            for day in 0..2 do
+                let dayStart = firstDay.AddDays(float day)
+                // The long main session grows each day and is active while it grows.
+                let text, _ = retirementTurn mainSession $"main-day{day}" 120 dayStart
+                File.AppendAllText(mainPath, text)
+                expected <- expected + 120
+                let dayFiles =
+                    [ for index in 0..149 ->
+                        let _, path = claudeSource root $"day{day}-agent-{index:D3}"
+                        let at = dayStart.AddMinutes(float index)
+                        let text, _ = retirementTurn (Guid.NewGuid().ToString()) $"d{day}a{index:D3}" 3 at
+                        File.WriteAllText(path, text)
+                        age path (at.AddSeconds 4.0)
+                        path ]
+                if day = 0 then dayOneFiles.AddRange dayFiles
+                expected <- expected + 450
+                // Each selection is captured until a pass observes nothing new, as a periodic caller would.
+                let drain paths =
+                    let mutable progressing = true
+                    while progressing do
+                        let before = ledger.Count
+                        last <- retirementCapture root home ledger paths
+                        progressing <- ledger.Count > before
+                for group in dayFiles |> List.chunkBySize 7 do drain (mainPath :: group)
+                drain [ mainPath ]
+                // Overnight the main session goes quiet and closes on the next pass.
+                age mainPath (dayStart.AddSeconds 121.0)
+                last <- retirementCapture root home ledger [ mainPath ]
+            Assert.Equal(expected, ledger.Count)
+            Assert.Equal(0, ledger.Duplicates)
+            let gaps = last["gaps"].ToJsonString()
+            Assert.DoesNotContain("response-index-full-capture-deferred", gaps)
+            Assert.DoesNotContain("source-index-full-capture-deferred", gaps)
+            Assert.DoesNotContain("passive-state-overload", gaps)
+            let statePath = Path.Combine(root, "orchestrator-passive", "producer.json")
+            Assert.True(FileInfo(statePath).Length < 1024L * 1024L)
+            let state = passiveStateFile root
+            Assert.True(state["retired"].AsObject().Count <= 384)
+            Assert.True(state["responses"].AsObject().Count <= 256)
+            Assert.NotNull(state["retiredHorizon"])
+            // An evicted day-one file selected again is suppressed below the horizon instead of being counted twice.
+            let evicted = dayOneFiles |> Seq.find (fun path -> isNull state["retired"].[Convert.ToHexString(Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath path))).ToLowerInvariant()])
+            let suppressed = retirementCapture root home ledger [ evicted ]
+            Assert.Equal(expected, ledger.Count)
+            Assert.Contains("pre-horizon-record-suppressed", suppressed["gaps"].ToJsonString())
+            // Control: a genuinely new transcript after the horizon is still observed.
+            let _, fresh = claudeSource root "after-horizon"
+            let text, _ = retirementTurn (Guid.NewGuid().ToString()) "fresh" 5 (DateTimeOffset.UtcNow.AddMinutes 5.0)
+            File.WriteAllText(fresh, text)
+            retirementCapture root home ledger [ fresh ] |> ignore
+            Assert.Equal(expected + 5, ledger.Count)
+            Assert.Equal(0, ledger.Duplicates)
+
+    [<Fact>]
+    let ``passive retirement in an interrupted closing pass is applied exactly once on recovery`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            for cut in [ "before-intent-write"; "after-intent-write"; "before-local-enqueue"; "after-local-enqueue"; "before-cursor-write"; "after-cursor-write" ] do
+                let cleanup, root = temp ()
+                use cleanup = cleanup
+                let home, path = claudeSource root "closing"
+                let at = DateTimeOffset.UtcNow.AddDays -1.0
+                let text, _ = retirementTurn (Guid.NewGuid().ToString()) "closing" 5 at
+                File.WriteAllText(path, text)
+                age path (at.AddSeconds 6.0)
+                let ledger = RetirementLedger()
+                let hook (stage: string) = if stage = cut then raise (IOException "inert crash cut")
+                let interrupted = SkillTelemetryAdapter.capturePassiveFromWithHook root "owner" "passive-stream" (SkillTelemetryReaders.ClaudeHome home) [ path ] ledger.Enqueue hook
+                Assert.Equal(1, interrupted.ExitCode)
+                let recovered = retirementCapture root home ledger [ path ]
+                // The source is closed once, its five responses are retired once, and nothing is emitted twice.
+                Assert.Equal(5, ledger.Count)
+                Assert.Equal(0, ledger.Duplicates)
+                Assert.Equal(1, recovered["closedSources"].GetValue<int>())
+                Assert.Equal(5L, recovered["retiredResponses"].GetValue<int64>())
+                Assert.False(recovered["pendingIntent"].GetValue<bool>())
+                let again = retirementCapture root home ledger [ path ]
+                Assert.Equal(5, ledger.Count)
+                Assert.Equal(5L, again["retiredResponses"].GetValue<int64>())

@@ -126,7 +126,11 @@ module SkillTelemetryReaders =
         { Records: PassiveNativeRecord list
           Cursor: PassiveCursor
           ScannedBytes: int
-          Diagnostics: string list }
+          Diagnostics: string list
+          /// Length of the opened descriptor when the pass ended; a cursor at this offset has read the whole file.
+          SourceLength: int64
+          /// Modification time of the opened descriptor, in Unix seconds, used only to recognize a quiescent source.
+          ModifiedAtUnixSeconds: int64 }
 
     type NativeCounters =
         {
@@ -1593,7 +1597,9 @@ module SkillTelemetryReaders =
                              Cursor = { SourceInstance = instance; Generation = generation; Offset = committed; AnchorDigest = finalAnchor
                                         SkippingOversized = skipping; Context = context }
                              ScannedBytes = scanned
-                             Diagnostics = diagnostics |> Seq.sort |> Seq.toList }
+                             Diagnostics = diagnostics |> Seq.sort |> Seq.toList
+                             SourceLength = source.Length
+                             ModifiedAtUnixSeconds = stat.ModifySeconds }
                     with _ -> failure "passive native source read failed; cursor retained"
 
         let scanPassive (codexHome: string) (path: string) (prior: PassiveCursor option) (maximumBytes: int) (maximumRecords: int) =
