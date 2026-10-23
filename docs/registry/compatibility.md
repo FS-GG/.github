@@ -106,6 +106,13 @@ tool installs and passes the real handoff smoke. That runtime release left
 Governance#324 subsequently advanced the content package to 1.5.0 for the production-journey
 evidence floor described above.
 
+Governance runtime release evidence (2026-10-23): `FS.GG.Governance.Cli` **1.15.0** (tag `v1.15.0`
+→ `282741b1`, Governance PR #472, publish run 39928935417) connects explicit provider-mode
+`fsgg-governance verify` to GateExecution held-cwd execution and Governance-observed
+`governance-handoff@2.x` evidence acceptance. It needs Linux-x64 with glibc 2.40 or later; legacy verbs are
+unchanged. Readback run 39935018723 found both 1.15.0 tool archives entry-identical across GitHub Packages
+and nuget.org apart from the signature, both naming `282741b1`.
+
 The same SDD merge advances the emitted `governance-handoff` contract from 1.1.0 to
 1.2.0. The registry and the emitter's single `governanceHandoffContractVersion` literal
 now agree at 1.2.0; source-coherence run 30186679362 first exposed the inseparable drift,

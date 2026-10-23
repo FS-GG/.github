@@ -1,5 +1,27 @@
 # Registry changelog
 
+## 2026-10-23 — record published Governance CLI 1.15.0 (FS-GG/FS.GG.Governance#423)
+
+Record `FS.GG.Governance.Cli` and `FS.GG.Governance.FSharpSurfaceCommand` **1.15.0**, published from annotated tag
+`v1.15.0` → `282741b1ed9ec555abbde8c7ad8ce472c70786cf` (Governance PR#472, GOV-423-C2 execution join) by publish run
+[39928935417](https://github.com/FS-GG/FS.GG.Governance/actions/runs/39928935417). The unchanged CodeChecks,
+ReferenceGateSet, Kernel and Adapters.Spi packages were skipped as duplicates.
+
+Read-only readback run [39935018723](https://github.com/FS-GG/FS.GG.Governance/actions/runs/39935018723) checked both
+feeds:
+- **Cli:** org feed `0b0ebefd…` and nuget.org `9eb3eed6…` share 257 identical entries; nuget.org adds only `.signature.p7s`.
+- **FSharpSurfaceCommand:** org feed `7cecc0a8…`, equal to the run's recorded producer hash, and nuget.org `4c9147d6…` share 38 identical entries; nuget.org adds only `.signature.p7s`.
+- Both nuspecs name `282741b1`.
+
+The nuget.org tools cold-install into an isolated tool path. The installed CLI passed the provider-mode SDD 2.4.0
+journey (FS-GG/FS.GG.SDD#928 C3.1-03 / SDD928-C2.3) in the fdev container on Home (glibc 2.44, local profile). A separate run as `eugen` on Home is admitted on its own:
+- the fixture's `run` writes the declared `fsgg.governance-handoff@2.0.0` evidence and Verify exits 0;
+- missing, stale, mismatched and exit-2 runs exit 1;
+- provenance-digest, policy-identity, platform and unrouted-path refusals exit 3.
+
+Registry text only. No contract version, coherence flag or package pin changes. GOV-423-C2 stays open; its remaining
+assertions live on Governance#423.
+
 ## 2026-10-23 — reconcile published Workspace.Template 0.19.3 (FS-GG/.github#4710)
 
 Reconcile `fs-gg-workspace-template` source/package **0.19.3** and `fs-gg-templates/v0.19.3` after
