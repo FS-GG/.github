@@ -42,9 +42,9 @@ new-sdd-workspace ./Arena Arena --template fable-game --bundle studio
 
 Run it with **no arguments** on an interactive terminal and it asks for the product name, target
 directory, and workspace template. Choosing `fable-bindings` also asks for its required exact npm
-package/version and binding target. Standard SDD remains the default for other templates; a
-`fable-game` descriptor pinned to `FS.GG.Workspace.Template` 0.15.0 selects `typed-sdd` when
-`--lifecycle` is omitted. Light governance remains the default; GitHub
+package/version and binding target. Standard SDD remains the default for other templates. When
+`--lifecycle` is omitted, `fable-game` uses the lifecycle default its fetched descriptor declares:
+`typed-sdd` for `FS.GG.Workspace.Template` 0.15.0 and later. Light governance remains the default; GitHub
 coordination stays unset, and the wizard installs
 `$initialize-sdd-workspace` for the agent you open inside the new repository. That skill discovers
 the real local/provider state and asks about repository, board, access, collaborators, chore locks,
@@ -62,7 +62,7 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 | Option | Effect |
 |---|---|
 | `--template <name>` | Selects the scaffold provider: `rendering` (the compatibility default when omitted), `console`, `web`, `fable-game`, or `fable-bindings`. This chooses the generated workspace shape; it is not a rendering profile. |
-| `--lifecycle <none\|sdd\|typed-sdd\|spec-kit>` | Selects the root lifecycle and forwards an explicit token unchanged to `fsgg-sdd scaffold`. Omission is `sdd` except for a `fable-game` descriptor whose exact source is `FS.GG.Workspace.Template::0.15.0`, which selects `typed-sdd`. An older descriptor keeps `sdd`. `none` is Freeform; `spec-kit` remains legacy/frozen. |
+| `--lifecycle <none\|sdd\|typed-sdd\|spec-kit>` | Selects the root lifecycle and forwards an explicit token unchanged to `fsgg-sdd scaffold`. Omission is `sdd`, except that `fable-game` forwards the `lifecycle` default its fetched descriptor declares (`typed-sdd` from Workspace.Template 0.15.0; `sdd` before). A missing or unrecognized declaration keeps `sdd`. `none` is Freeform; `spec-kit` remains legacy/frozen. |
 | `--profile <name>` | Rendering-only `fs-gg-ui` profile: `game` (default — minimal Pong-style starter), `app`, `headless-scene`, `governed`, `sample-pack`. Omitted ⇒ the rendering provider default (`game`); other templates reject it. |
 | `--bundle <player\|studio\|tactical\|arcade\|complete>` | `fable-game` composition only. Omitted selects `player`; unrelated providers reject the flag. The value is forwarded as the provider's `bundle` parameter and does not change lifecycle or Rendering profile selection. |
 | `--npm-package <name>` / `--npm-version <exact>` / `--binding-target <browser\|node\|universal>` | Required together for `--template fable-bindings`, to pin its npm/declaration closure and target runtime. They are rejected for other templates. |
@@ -106,11 +106,12 @@ those public pins. See the [qualification record](../../docs/roadmaps/tsdd-knowl
 
 ### Release D.5 qualification boundary
 
-Version 0.12.0 is the wizard candidate for the selected SVG default. Its omitted `fable-game`
-lifecycle changes only when the fetched descriptor's exact `source:` is
-`FS.GG.Workspace.Template::0.15.0`. This binds the choice to the Templates 0.15.0
-candidate; fetching an older descriptor or spelling `--lifecycle` preserves that selection.
-This source change does not publish either package or activate the registry default.
+Version 0.12.0 introduced the selected SVG default, scoped to a descriptor whose exact `source:`
+was `FS.GG.Workspace.Template::0.15.0`. Wizards 0.12.0 to 0.21.0 therefore forwarded `sdd` once
+that pin moved on, contrary to D.5 (FS-GG/.github#4811). From 0.22.0 the omitted `fable-game`
+lifecycle is the `lifecycle` default the fetched descriptor declares: `typed-sdd` for 0.15.0 and
+later, `sdd` for 0.14.0 and earlier. Spelling `--lifecycle` always preserves that selection.
+A source change does not publish the package or activate the registry default.
 
 Before public activation, verify immutable Templates 0.15.0 and wizard 0.12.0 packages and
 the selected SDD release (2.0.2 or later, independently qualified) from public feeds.

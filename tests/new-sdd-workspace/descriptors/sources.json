@@ -1,0 +1,47 @@
+{
+  "schema": "new-sdd-workspace-descriptor-fixtures/1",
+  "repository": "FS-GG/FS.GG.Templates",
+  "note": "Unmodified bytes of tagged provider descriptors; each declared lifecycle default is the Templates owner's, read here only to bind the Wizard omission rule.",
+  "descriptors": [
+    {
+      "file": "fable-game-0.14.0.providers.yml",
+      "tag": "fs-gg-templates/v0.14.0",
+      "commit": "2d8802d527e01afe4755ae7015a5627be88e318f",
+      "path": "providers/fable-game.providers.yml",
+      "sha256": "29b4c726ffacbd270e1e2f700243657ff10dcfb9ecaa4c2bd91421d9a0bb0ec7",
+      "declaredLifecycleDefault": "sdd"
+    },
+    {
+      "file": "fable-game-0.15.0.providers.yml",
+      "tag": "fs-gg-templates/v0.15.0",
+      "commit": "b86c841a1c4c4bf7f157a3ae4dc61b0356d6576d",
+      "path": "providers/fable-game.providers.yml",
+      "sha256": "16326925cd728a833cc2a1febc0ab2865ea5120047fe8a1d56ee499aed68161a",
+      "declaredLifecycleDefault": "typed-sdd"
+    },
+    {
+      "file": "fable-game-0.19.2.providers.yml",
+      "tag": "fs-gg-templates/v0.19.2",
+      "commit": "d15f085ff4d64b7736e09ff263644b3c86a576a6",
+      "path": "providers/fable-game.providers.yml",
+      "sha256": "e8dbf8958f90d522e577378ae36b0e131954e400991d542ae9709ac32c713e3b",
+      "declaredLifecycleDefault": "typed-sdd"
+    },
+    {
+      "file": "fable-game-0.19.3.providers.yml",
+      "tag": "fs-gg-templates/v0.19.3",
+      "commit": "7be0bcf5886d39a8161b186beb8cc06e82415f1e",
+      "path": "providers/fable-game.providers.yml",
+      "sha256": "6b3d8f2dcbdcd429e4f622cfd6e1515c439097147bb79f5d5c7969d36c3b5006",
+      "declaredLifecycleDefault": "typed-sdd"
+    },
+    {
+      "file": "fable-bindings-0.19.3.providers.yml",
+      "tag": "fs-gg-templates/v0.19.3",
+      "commit": "7be0bcf5886d39a8161b186beb8cc06e82415f1e",
+      "path": "providers/fable-bindings.providers.yml",
+      "sha256": "1c199eee42dd0f3898eeb47fc67f71522d5e66ae031ad51511e01ded14bef197",
+      "declaredLifecycleDefault": "sdd"
+    }
+  ]
+}

@@ -100,11 +100,11 @@ expect_red \
   "$WORK/lifecycle-loss.log"
 
 expect_red \
-  "D.5 descriptor gate mutation is detected and restored" \
-  'sourceLine = Some "source: FS.GG.Workspace.Template::0.15.0"' \
-  'sourceLine = Some "source: FS.GG.Workspace.Template::0.14.0"' \
-  'the D.5 fable-game descriptor must select Typed SDD on omission' \
-  "$WORK/d5-descriptor.log"
+  "descriptor-default omission mutation is detected and restored" \
+  'not opts.LifecycleExplicit -> declared' \
+  'not opts.LifecycleExplicit -> opts.Lifecycle' \
+  'the current fable-game descriptor must select Typed SDD on omission' \
+  "$WORK/descriptor-default.log"
 
 expect_red \
   "Python family omission is detected and restored" \

@@ -86,20 +86,73 @@ let game =
 if game.Template <> "fable-game" || game.Bundle <> Some "studio" then
     failwith "the wizard must preserve the selected fable-game bundle"
 
-let d5Source = Some "source: FS.GG.Workspace.Template::0.15.0"
-let legacySource = Some "source: FS.GG.Workspace.Template::0.14.0"
+// The omission rule reads the selected descriptor's declared lifecycle default. Exercise it on the
+// unmodified bytes of tagged Templates descriptors, including the current public ones (#4811).
+let descriptorRoot = System.IO.Path.Combine(__SOURCE_DIRECTORY__, "descriptors")
+let fixtures =
+    System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(descriptorRoot, "sources.json")))
+        .RootElement.GetProperty("descriptors").EnumerateArray()
+    |> Seq.map (fun row ->
+        let file = row.GetProperty("file").GetString()
+        let bytes = System.IO.File.ReadAllBytes(System.IO.Path.Combine(descriptorRoot, file))
+        let digest = System.Convert.ToHexString(System.Security.Cryptography.SHA256.HashData bytes).ToLowerInvariant()
+        if digest <> row.GetProperty("sha256").GetString() then
+            failwithf "descriptor fixture %s is not the recorded tagged bytes" file
+        file, System.Text.UTF8Encoding(false, true).GetString bytes, row.GetProperty("declaredLifecycleDefault").GetString())
+    |> Seq.toList
 
-if selectScaffoldLifecycle game d5Source <> "typed-sdd" then
+let descriptor name =
+    fixtures |> List.find (fun (file, _, _) -> file = name) |> fun (_, text, _) -> text
+
+for file, text, declared in fixtures do
+    if declaredLifecycleDefault text <> Some declared then
+        failwithf "descriptor %s must read its declared lifecycle default %s" file declared
+
+let current = declaredLifecycleDefault (descriptor "fable-game-0.19.3.providers.yml")
+let publicCurrent = declaredLifecycleDefault (descriptor "fable-game-0.19.2.providers.yml")
+let d5 = declaredLifecycleDefault (descriptor "fable-game-0.15.0.providers.yml")
+let legacy = declaredLifecycleDefault (descriptor "fable-game-0.14.0.providers.yml")
+
+if selectScaffoldLifecycle game current <> "typed-sdd" then
+    failwith "the current fable-game descriptor must select Typed SDD on omission"
+
+if selectScaffoldLifecycle game publicCurrent <> "typed-sdd" then
+    failwith "the public 0.19.2 fable-game descriptor must select Typed SDD on omission"
+
+if selectScaffoldLifecycle game d5 <> "typed-sdd" then
     failwith "the D.5 fable-game descriptor must select Typed SDD on omission"
 
-if selectScaffoldLifecycle game legacySource <> "sdd" then
+if selectScaffoldLifecycle game legacy <> "sdd" then
     failwith "the older fable-game descriptor must preserve Standard SDD"
 
-if selectScaffoldLifecycle console d5Source <> "sdd" then
+if selectScaffoldLifecycle game None <> "sdd" then
+    failwith "an unreadable fable-game declaration must keep Standard SDD"
+
+if selectScaffoldLifecycle console current <> "sdd" then
     failwith "an unrelated template must preserve Standard SDD"
 
-if selectScaffoldLifecycle { game with Lifecycle = "none"; LifecycleExplicit = true } d5Source <> "none" then
-    failwith "an explicit lifecycle must take precedence over the D.5 default"
+for explicit in lifecycleTokens do
+    let selected = { game with Lifecycle = explicit; LifecycleExplicit = true }
+    for declared in [ current; legacy; None ] do
+        if selectScaffoldLifecycle selected declared <> explicit then
+            failwithf "an explicit %s lifecycle must take precedence over the descriptor default" explicit
+
+// The parser accepts only one unambiguous admitted declaration in the lifecycle item itself.
+let row (body: string) = "providers:\n  - name: fable-game\n    parameters:\n" + body
+for refused, body in
+    [
+        "missing default", "      - key: lifecycle\n        required: false\n      - key: bundle\n        default: typed-sdd\n"
+        "unknown token", "      - key: lifecycle\n        default: quint\n"
+        "duplicate item", "      - key: lifecycle\n        default: typed-sdd\n      - key: lifecycle\n        default: sdd\n"
+        "duplicate default", "      - key: lifecycle\n        default: typed-sdd\n        default: sdd\n"
+        "commented default", "      - key: lifecycle\n        # default: typed-sdd\n"
+        "other key", "      - key: lifecycleMode\n        default: typed-sdd\n"
+    ] do
+    if declaredLifecycleDefault (row body) <> None then
+        failwithf "an unreadable lifecycle declaration (%s) must not be guessed" refused
+
+if declaredLifecycleDefault (row "      - key: \"lifecycle\"   # quoted\r\n        required: false\r\n\r\n        default: 'typed-sdd' # D.5\r\n") <> Some "typed-sdd" then
+    failwith "a quoted, commented CRLF lifecycle declaration must be read exactly"
 
 let defaultGame =
     assembleWizardTemplateOptions "./Player" "Player" "fable-game" None None None None

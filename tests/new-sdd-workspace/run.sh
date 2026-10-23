@@ -179,8 +179,8 @@ if python.Template <> "python" || python.Lifecycle <> "sdd" || python.LifecycleE
    || python.Profile <> None || python.Bundle <> None || python.NpmPackage <> None
    || python.NpmVersion <> None || python.BindingTarget <> None then
     failwith "the Python wizard must preserve Standard SDD without other family parameters"
-for descriptor in [None; Some "source: FS.GG.Workspace.Template::0.15.0"; Some "source: FS.GG.Workspace.Template::0.19.0"] do
-    if selectScaffoldLifecycle python descriptor <> "sdd" then
+for declared in [None; Some "sdd"; Some "typed-sdd"] do
+    if selectScaffoldLifecycle python declared <> "sdd" then
         failwith "Python omission must not inherit the Fable-game descriptor override"
 FS_PYTHON
 dotnet fsi --reference:"$DLL" "$BUILD_ROOT/python-wizard-defaults.fsx"
@@ -681,9 +681,12 @@ mkdir -p "$HTTP_ROOT/main/providers"
 for template in rendering console web python fable-game fable-bindings; do
   printf 'source: fixture/%s\nprovider: %s\n' "$template" "$template" > "$HTTP_ROOT/main/providers/$template.providers.yml"
 done
-mkdir -p "$HTTP_ROOT/d5/providers" "$HTTP_ROOT/legacy/providers"
-printf 'source: FS.GG.Workspace.Template::0.15.0\nprovider: fable-game\n' > "$HTTP_ROOT/d5/providers/fable-game.providers.yml"
-printf 'source: FS.GG.Workspace.Template::0.14.0\nprovider: fable-game\n' > "$HTTP_ROOT/legacy/providers/fable-game.providers.yml"
+# The lifecycle omission legs serve the unmodified tagged Templates descriptors (#4811).
+mkdir -p "$HTTP_ROOT/d5/providers" "$HTTP_ROOT/legacy/providers" "$HTTP_ROOT/current/providers" "$HTTP_ROOT/public/providers"
+cp "$HERE/descriptors/fable-game-0.15.0.providers.yml" "$HTTP_ROOT/d5/providers/fable-game.providers.yml"
+cp "$HERE/descriptors/fable-game-0.14.0.providers.yml" "$HTTP_ROOT/legacy/providers/fable-game.providers.yml"
+cp "$HERE/descriptors/fable-game-0.19.3.providers.yml" "$HTTP_ROOT/current/providers/fable-game.providers.yml"
+cp "$HERE/descriptors/fable-game-0.19.2.providers.yml" "$HTTP_ROOT/public/providers/fable-game.providers.yml"
 PORT_FILE="$WORK/http-port"
 python3 - "$HTTP_ROOT" "$PORT_FILE" <<'PY' &
 import functools
@@ -750,6 +753,8 @@ expect_execution() {
   case " $* " in
     *" --ref d5 "*) expected_source='source: FS.GG.Workspace.Template::0.15.0' ;;
     *" --ref legacy "*) expected_source='source: FS.GG.Workspace.Template::0.14.0' ;;
+    *" --ref current "*) expected_source='source: FS.GG.Workspace.Template::0.19.3' ;;
+    *" --ref public "*) expected_source='source: FS.GG.Workspace.Template::0.19.2' ;;
   esac
   if [[ "$expected_params" == *"lifecycle=typed-sdd"* ]]; then
     if [ "$rc" -eq 1 ] && grep -qF "$expected_source" "$target/.fsgg/providers.yml" \
@@ -790,6 +795,10 @@ done
 expect_execution "fable-game omission forwards its player default" fable-game "bundle=player" --template fable-game
 expect_execution "D.5 fable-game omission selects Typed SDD" fable-game "lifecycle=typed-sdd" --template fable-game --ref d5
 expect_execution "older fable-game source retains Standard SDD" fable-game "lifecycle=sdd" --template fable-game --ref legacy
+expect_execution "current fable-game descriptor omission selects its declared Typed SDD" fable-game "lifecycle=typed-sdd" --template fable-game --ref current
+expect_execution "public 0.19.2 fable-game descriptor omission selects its declared Typed SDD" fable-game "lifecycle=typed-sdd" --template fable-game --ref public
+expect_execution "explicit Standard SDD overrides the current descriptor default" fable-game "lifecycle=sdd" --template fable-game --ref current --lifecycle sdd
+expect_execution "explicit Freeform overrides the current descriptor default" fable-game "lifecycle=none" --template fable-game --ref current --lifecycle none
 expect_execution "explicit Standard SDD overrides D.5 omission" fable-game "lifecycle=sdd" --template fable-game --ref d5 --lifecycle sdd
 expect_execution "explicit Freeform overrides D.5 omission" fable-game "lifecycle=none" --template fable-game --ref d5 --lifecycle none
 for bundle in studio tactical arcade complete; do
