@@ -1,0 +1,60 @@
+# Read-only hosted public acceptance run for the retained knowledge upgrade R3 (FS-GG/.github#4822).
+#
+# An existing knowledge-bearing Typed SDD console workspace is created on published SDD.Cli 2.2.0 /
+# Workspace.Template 0.19.0, used by its owner, then upgraded in place to the current published SDD.Cli
+# 2.4.0 / Workspace.Template 0.19.3. Public nuget.org feeds only and an isolated HOME. The job writes nothing
+# to any repository, feed, board or package registry and receives no token: `contents: read` is the only
+# permission and no credential reaches a child process. Its single output is the Actions evidence artifact
+# an independent reviewer checks against the pinned package identities. Dispatch-only.
+name: retained-upgrade-public-acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retained-upgrade-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Frozen receiver probes and the 0.19.0 console descriptor, hash-verified by the adapter.
+      - uses: actions/checkout@v7
+        with:
+          repository: FS-GG/FS.GG.Templates
+          ref: f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc
+          path: templates-probe-source
+          persist-credentials: false
+      # The current console descriptor (Workspace.Template 0.19.3), hash-verified by the adapter.
+      - uses: actions/checkout@v7
+        with:
+          repository: FS-GG/FS.GG.Templates
+          ref: 24f3c30790b401d4bc435a1b1c07c07ecfd30d76
+          path: templates-current
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Run the retained upgrade
+        run: |
+          set -euo pipefail
+          test "$(git -C templates-probe-source rev-parse HEAD)" = f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc
+          test "$(git -C templates-current rev-parse HEAD)" = 24f3c30790b401d4bc435a1b1c07c07ecfd30d76
+          python3 -B tests/new-sdd-workspace/knowledge-retained-upgrade-public.py --source-controls
+          python3 -B tests/new-sdd-workspace/knowledge-retained-upgrade-public.py --run \
+            --templates "$GITHUB_WORKSPACE/templates-probe-source" --current "$GITHUB_WORKSPACE/templates-current" \
+            --work "$RUNNER_TEMP/retained-upgrade-public"
+      - name: Keep the evidence (report, command journal and original outputs)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: retained-upgrade-public-acceptance
+          path: |
+            ${{ runner.temp }}/retained-upgrade-public/report.json
+            ${{ runner.temp }}/retained-upgrade-public/evidence/
+          if-no-files-found: error
+          retention-days: 30
