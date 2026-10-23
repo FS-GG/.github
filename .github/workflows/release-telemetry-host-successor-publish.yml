@@ -19,7 +19,7 @@ on:
         required: true
         type: string
       continue_failed_original:
-        description: Retired Host 0.6 continuation flag; current Host 0.8 refuses true
+        description: Retired Host 0.6 continuation flag; current Host 0.9 refuses true
         required: true
         default: false
         type: boolean
@@ -41,7 +41,7 @@ concurrency:
 
 jobs:
   publish:
-    name: telemetry-host-080-publisher
+    name: telemetry-host-090-publisher
     if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
     runs-on: ubuntu-latest
     environment: release-successor

@@ -1,5 +1,40 @@
 # Telemetry host package and release boundary
 
+## Prospective Host 0.9 source — Outcome4640, 2026-10-23
+
+[PR4802](https://github.com/FS-GG/.github/pull/4802) taught the shared store to admit
+passive `provider-usage-observation/1` facts with provenance
+`claude-local-transcript/1`, each in its own native identity namespace
+(`claude-transcript/1`), beside `codex-local-rollout/1`. Every other provenance is still
+refused. Published Host0.8 was built from `74cbd6f0` and predates that change, so it
+answers a Claude transcript batch with `invalid-request`. The Host takes the parser
+through its Store and Coord.Core project references. It therefore needs a new
+independent package rather than any Host logic change.
+
+This source prepares **0.9.0**, `telemetry-host/v0.9.0` and logical journal15 at
+`state/releases/utel-host-rel-15`. The predecessor is the accepted original Host0.8
+publication: [publisher39580298871](https://github.com/FS-GG/.github/actions/runs/39580298871)
+with independent readonly [39591087147](https://github.com/FS-GG/.github/actions/runs/39591087147),
+nonlatest release419394647 at `74cbd6f0b1b598d48556eb854c4ba6a3c3abda54`, release archive
+`44273495…5aba89` and common normalized payload `f036808546…1802ee`, with journal14.
+The read-first gate now requires the known0.8 predecessor and normalized0.9 absence.
+The other gate, artifact, publisher and journal mechanics are unchanged from Host0.8.
+These are prospective coordinates, not an availability claim. Root still verifies
+tag/release occupancy, Authority journal15 destination/protection and exact accepted
+source before any invocation. Publication needs its own fresh effect admission, and
+the publisher stays default-false.
+
+Store14 and the receipt ABI are unchanged. Since `74cbd6f0`, `TelemetryStore.fs`
+differs only in the provenance-to-namespace match. `TelemetryStoreApplication`
+(`currentSchemaVersion = 14`, DDL and passive query) is byte-identical, and the release
+manifest still selects only schema14. Claude observations use the existing
+`current_ingest_facts` rows and corrections path, so a Home Store14 workspace can move
+from0.8 to0.9 without migration. The focused passive Host HTTP preflight now requires
+five tests. The new test proves that the actual Host receipt endpoint applies a Claude
+transcript observation and refuses an unknown provenance or a Codex-namespaced identity.
+Home cutover, credential custody and installed acceptance remain separate.
+Published0.8/journal14, 0.7/journal13 and held0.6/journal12 remain unchanged.
+
 ## Prospective Host 0.8 source — Delivery4707, 2026-10-21
 
 [Delivery4707](https://github.com/FS-GG/.github/issues/4707) owns the first installed
