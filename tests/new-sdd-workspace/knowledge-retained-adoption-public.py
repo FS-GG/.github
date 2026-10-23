@@ -147,7 +147,8 @@ def legacy_package(home, key):
     if key == 'legacy-template':
         meta = json.loads((Path(home) / '.templateengine/packages.json').read_text(encoding='utf-8-sig'))
         rows = [r for r in meta['Packages'] if r.get('Details', {}).get('PackageId', '').lower() == pid.lower()]
-        require(len(rows) == 1 and rows[0]['Details']['Version'] == version, 'sole-legacy-template-registration')
+        require(len(rows) == 1 and rows[0]['Details']['Version'] == version
+                and rows[0]['Details']['NuGetSource'] == 'https://api.nuget.org/v3/index.json', 'sole-legacy-template-registration')
         return Path(rows[0]['MountPointUri'])
     name = pid.lower()
     return Path(home) / '.dotnet/tools/.store' / name / version / name / version / f'{name}.{version}.nupkg'
@@ -271,7 +272,9 @@ def qualify(templates, current, legacy, work):
         with C.frozen_probes(templates, runner) as (candidate, public):
             probe = candidate.probe([sdd], root, scratch)
             shared = C.post_private_export(runner, sdd, root, scratch)
+            before_boundary = snapshot(root)
             boundary = public.ordinary_ci_limits(root)
+        require(snapshot(root) == before_boundary, 'checker-boundary-residue')
         require(probe['findings'] == 4 and probe['historyVersions'] == 2 and probe['restoreAuthoredNoClobber'] is True
                 and probe['explicitPrivateStoreExcludedFromShared'] is True and probe['size']['Limit'] == LIMIT, 'adopted-probe')
         require(boundary['exactLimit']['bytes'] == LIMIT and boundary['oneByteOverExit'] != 0, 'checker-boundary')
@@ -423,7 +426,8 @@ class Controls(unittest.TestCase):
 
     def test_inputs_are_sealed_and_a_run_is_never_replayed(self):
         self.assertEqual(sha(Path(__file__).with_name('knowledge-retained-upgrade-public.py')), R3_SHA)
-        self.assertEqual(LEGACY['legacy-producer'][2][:8], 'b950bf4f')  # the insufficient 2.0.3 archive bound in #4708
+        creation = (Path(__file__).with_name('knowledge-creation.py')).read_text()
+        self.assertIn(f"INSUFFICIENT_ARCHIVE_SHA256 = '{LEGACY['legacy-producer'][2]}'", creation)  # the 2.0.3 archive bound in #4708
         root = self.tmp(); (root / 'providers').mkdir(); (root / 'providers/console.providers.yml').write_text('    source: FS.GG.Workspace.Template::0.13.0\n')
         self.refuses('legacy-descriptor', check_legacy_descriptor, root / 'providers/console.providers.yml')
         for key, (pid, version, digest) in LEGACY.items():
