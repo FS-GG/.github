@@ -22,7 +22,9 @@ from new_sdd_workspace_successor_execution import effects, CURRENT_022
 from new_sdd_workspace_successor_provider import WizardProvider, publisher_error
 
 REPOSITORY = "FS-GG/.github"
-REF = "refs/heads/fsgg/v2/journal/release/board-v2-product-creator-022"
+# The first022 journal (board-v2-product-creator-022) is abandoned history: publisher
+# 39925400140 wrote tag intent at generation 2 and was denied before any send (#4811).
+REF = "refs/heads/fsgg/v2/journal/release/board-v2-product-creator-022r1"
 
 
 def require(ok: bool, detail: str) -> None:
@@ -46,7 +48,7 @@ def publication_report(candidate_run, artifact, archive, mode):
             "candidateArchiveSha256": archive, "candidateSourceSha": None,
             "publisherSourceSha": None, "publisherRunId": None,
             "logicalJournalRef": REF, "physicalJournalRef": "refs/heads/main",
-            "physicalJournalDirectory": "state/releases/board-v2-product-creator-022",
+            "physicalJournalDirectory": "state/releases/board-v2-product-creator-022r1",
             "classifiedPhysicalHead": None, "fresh": None, "startingJournal": None,
             "lastObservedJournal": None, "journalMutationMayHaveOccurred": False,
             "lastDispatch": None, "iterationsAttempted": 0, "complete": False,
