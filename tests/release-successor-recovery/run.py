@@ -1486,18 +1486,36 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
             self.assertTrue(guarded.send_consumed)
             with self.assertRaises(RuntimeError):guarded.dispatch(effect)
 
-    def test_matched_uncertain_cas_and_readback_stop_without_send(self):
-        for mode in ('patch','readback'):
+    def test_matched_uncertain_cas_stops_and_acknowledged_readback_rereads_bounded(self):
+        # A lost PATCH response and a persistently unreadable acknowledged write still stop
+        # without a send. One transient readback failure after an acknowledged PATCH is
+        # re-read (#4753 proposal ii) and settles only on this invocation's own commit.
+        for mode in ('patch','readback-persistent','readback-once'):
             with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temp:
-                root=pathlib.Path(temp);c=self.context(root,True)
+                root=pathlib.Path(temp);c=self.context(root,True);sleeps=[];c[4].journal._sleep=sleeps.append
                 if mode=='patch':c[1].reject_patch=True
                 else:
-                    original=c[1].patch
+                    original_patch,original_get=c[1].patch,c[1].get;failing=[False]
                     def patch_then_unknown(path,body):
-                        result=original(path,body);c[1].fail_at=len(c[1].calls)+1;return result
-                    c[1].patch=patch_then_unknown
-                with self.assertRaises(RuntimeError):self.run_runtime(c,root/'attempt.json')
-                self.assertEqual(c[7].uploads,[]);self.assertTrue(c[3]['journalMutationMayHaveOccurred'])
+                        result=original_patch(path,body)
+                        if mode=='readback-once':c[1].fail_at=len(c[1].calls)+1
+                        else:failing[0]=True
+                        return result
+                    def get(path):
+                        if failing[0]:
+                            c[1].calls.append(('get',path));raise RuntimeError('fixture transport response unknown')
+                        return original_get(path)
+                    c[1].patch=patch_then_unknown;c[1].get=get
+                if mode=='readback-once':
+                    # The matched settlement CAS is re-read once and settles on its own commit.
+                    self.assertEqual(self.run_runtime(c,root/'attempt.json'),'checkpoint')
+                    self.assertEqual(c[7].uploads,[]);self.assertEqual(sleeps,[1.0])
+                    self.assertEqual(c[3]['lastObservedJournal']['effects']['qualification-asset:runtime'],'verified')
+                else:
+                    with self.assertRaises(RuntimeError):self.run_runtime(c,root/'attempt.json')
+                    self.assertEqual(c[7].uploads,[])
+                    self.assertEqual(sleeps,[] if mode=='patch' else [1.0,2.0,4.0])
+                self.assertTrue(c[3]['journalMutationMayHaveOccurred'])
 
     def test_actual_cli_workflow_profile_and_conflicting_flags(self):
         workflow=(ROOT/'.github/workflows/release-successor-publish.yml').read_text()
