@@ -72,6 +72,8 @@ module BoardV2Application =
     /// Linux x64 directory open/fsync after file Flush(true), including new-directory/parent barriers;
     /// unavailable/error barriers refuse before dispatch. Kernel acknowledgements do not establish
     /// physical-filesystem or crash qualification; those remain runtime custody requirements.
+    /// A prepare refusal after it owns NEW_PATH writes private NEW_PATH.prepare-failure.json with stage,
+    /// bounded code, typed class/reason and exception type only; an existing record refuses unchanged.
     /// Apply binds the separately selected exact prepared-file byte digest and a finite planning window.
     /// It reserves ORIGINAL_PATH.invocation-reserved and writes ORIGINAL_PATH.invocation evidence;
     /// reservations and original intent/response files are never overwritten, removed or replayed.
