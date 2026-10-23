@@ -1506,6 +1506,9 @@ class CreatorPublicationTests(unittest.TestCase):
             def __init__(self):
                 self.calls = []; self.writes = []; self.overrides = {}; self.lose_patch = False
                 self.quota_remaining = 5000
+                # Read-after-write staleness: the next N main-ref GETs after one PATCH
+                # serve the pre-PATCH ref, as GitHub replicas briefly may (#4753).
+                self.stale_main_reads = 0; self.stale_left = 0; self.stale_value = None
             def get(self, path):
                 self.calls.append(("get", path))
                 if path in self.overrides:
@@ -1519,6 +1522,9 @@ class CreatorPublicationTests(unittest.TestCase):
                     return policy.get(path)
                 if "/git/ref/heads/fsgg/" in path:
                     raise NotFound(path)
+                if path.endswith("/git/ref/heads/main") and self.stale_left:
+                    self.stale_left -= 1
+                    return copy.deepcopy(self.stale_value)
                 value = real.get(path)
                 if path.endswith("/git/ref/heads/main"):
                     value["object"]["type"] = "commit"
@@ -1528,6 +1534,10 @@ class CreatorPublicationTests(unittest.TestCase):
                 return real.post(path, body)
             def patch(self, path, body):
                 self.calls.append(("patch", path)); self.writes.append(("patch", path, body))
+                if self.stale_main_reads and path.endswith("/git/refs/heads/main"):
+                    before = real.get(path.replace("/git/refs/", "/git/ref/"))
+                    before["object"]["type"] = "commit"
+                    self.stale_value, self.stale_left, self.stale_main_reads = before, self.stale_main_reads, 0
                 value = real.patch(path, body)
                 if self.lose_patch:
                     self.lose_patch = False
@@ -1794,6 +1804,87 @@ class CreatorPublicationTests(unittest.TestCase):
             for _ in range(2):
                 self.assertEqual(advance_effects(self.content, self.ordered, journal, admission, provider), "waiting")
             self.assertEqual(provider.writes, [])
+
+    def test_acknowledged_cas_with_stale_readback_settles_on_own_commit_and_sends_once(self):
+        """#4753 (ii): run 39925400140's shape. The intent PATCH is acknowledged but the
+        immediate readback serves the previous head; a bounded re-read finds this
+        invocation's own commit, so the single admitted tag send proceeds."""
+        for stale_gets, sleeps_expected in ((2, [1.0]), (1, [1.0]), (3, [1.0, 2.0])):
+            with self.subTest(stale_gets=stale_gets), tempfile.TemporaryDirectory() as temporary:
+                _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))
+                self.prepare(counted, journal, api, admission, provider)
+                sleeps = []; journal.journal._sleep = sleeps.append
+                native.stale_main_reads = stale_gets
+                self.assertIn(advance_effects(self.content, self.ordered, journal, admission, provider), ("waiting", "unknown"))
+                self.assertEqual(provider.writes, ["tag"])
+                self.assertEqual(journal.read().effects, {"tag": "intent"})
+                self.assertEqual(sleeps, sleeps_expected)
+                self.assertEqual(sum(1 for call in native.calls if call[0] == "patch"), 2)  # genesis + one intent; never re-PATCHed
+
+    def test_acknowledged_readback_adopts_only_this_invocations_exact_commit(self):
+        import release_successor_journal as journal_module
+        prior = journal_module.Observed("p" * 40, {"generation": 1})
+        expected = {"generation": 2, "effects": {"tag": "intent"}}
+        for observed, won in ((journal_module.Observed("f" * 40, expected), False),            # foreign head
+                              (journal_module.Observed("c" * 40, {**expected, "x": 1}), False),  # own head, other state
+                              (journal_module.Observed("c" * 40, expected), True)):
+            with self.subTest(head=observed.head, won=won):
+                reader = object.__new__(journal_module.ProtectedReleaseJournal)
+                reader._observed, sleeps = prior, []
+                reader._sleep = sleeps.append
+                def read(reader=reader, observed=observed): reader._observed = observed
+                reader.read = read
+                self.assertIs(reader._read_acknowledged_write("c" * 40, expected), won)
+                self.assertEqual(sleeps, [])  # a decisive observation never waits
+
+    def test_acknowledged_readback_failure_then_staleness_is_a_lost_cas_not_an_error(self):
+        import release_successor_journal as journal_module
+        prior = journal_module.Observed("p" * 40, {"generation": 1})
+        reader = object.__new__(journal_module.ProtectedReleaseJournal)
+        reader._observed, sleeps = prior, []
+        reader._sleep = sleeps.append
+        reader.api = object()  # an uncounted transport: never blocked
+        outcomes = [OSError("transient"), None, None, None]
+        def read():
+            outcome = outcomes.pop(0)
+            if outcome is not None: raise outcome
+        reader.read = read
+        # A later successful (still stale) read clears the earlier failure: lost CAS, not re-raise.
+        self.assertIs(reader._read_acknowledged_write("c" * 40, {"generation": 2}), False)
+        self.assertEqual(sleeps, [1.0, 2.0, 4.0])
+
+    def test_blocked_budget_during_acknowledged_readback_reraises_without_waiting(self):
+        import release_successor_journal as journal_module
+        reader = object.__new__(journal_module.ProtectedReleaseJournal)
+        reader._observed, sleeps = journal_module.Observed("p" * 40, {"generation": 1}), []
+        reader._sleep = sleeps.append
+        reader.api = type("Counted", (), {"blocked": {"method": "get", "path": "x"}})()
+        def read(): raise journal_module.Refused("Authority call ceiling exhausted")
+        reader.read = read
+        with self.assertRaisesRegex(journal_module.Refused, "ceiling exhausted"):
+            reader._read_acknowledged_write("c" * 40, {"generation": 2})
+        self.assertEqual(sleeps, [])
+
+    def test_continuation_claim_cas_keeps_its_single_readback(self):
+        source = (ROOT / "scripts/release_successor_journal.py").read_text()
+        body = source[source.index("        except Exception as error:\n            raise Refused(f\"journal CAS response uncertain"):]
+        body = body[:body.index("    def _read_acknowledged_write")]
+        self.assertIn("        if claim:\n            self.read()\n            return self._observed is not None and self._observed.head == commit", body)
+        self.assertEqual(body.count("_read_acknowledged_write("), 1)
+
+    def test_persistently_stale_acknowledged_cas_keeps_lost_cas_refusal_without_send(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))
+            self.prepare(counted, journal, api, admission, provider)
+            sleeps = []; journal.journal._sleep = sleeps.append
+            native.stale_main_reads = 100
+            with self.assertRaisesRegex(Refused, "tag: journal intent CAS conflict"):
+                advance_effects(self.content, self.ordered, journal, admission, provider)
+            self.assertEqual(provider.writes, [])
+            self.assertEqual(sleeps, [1.0, 2.0, 4.0])
+            native.stale_left = 0
+            # The bounded residual remains the pre-change outcome: an unsent intent.
+            self.assertEqual(journal.read().effects, {"tag": "intent"})
 
     def test_delayed_last_effect_exhausts_bound_before_send_and_preserves_intent(self):
         for bound in ("reconciliation", "authority"):

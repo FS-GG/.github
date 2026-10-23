@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import http.client
 import json
 import re
+import time
 from urllib.parse import quote
 from dataclasses import dataclass
 from typing import Protocol
@@ -26,6 +28,9 @@ from release_successor_execution import JournalState
 REPOSITORY = "FS-GG/FS.GG.Coordination.Authority"
 REPOSITORY_ID = 1351660651
 REF = "refs/heads/fsgg/v2/journal/release/utel-rel-19"
+# Acknowledged-write readback: up to four fresh reads, about 7 s in total (#4753).
+WRITE_READBACK_ATTEMPTS = 4
+WRITE_READBACK_BACKOFF_SECONDS = (1.0, 2.0, 4.0)
 PATH = "release-state.json"
 SCHEMA = "fsgg.release-successor-journal/1"
 
@@ -336,7 +341,8 @@ class ProtectedReleaseJournal:
     _MAX_IMMUTABLE_BYTES = 16 * 1024 * 1024
     _MAX_IMMUTABLE_OBJECT_BYTES = 1024 * 1024
 
-    def __init__(self, api: GitAPI, ref: str = REF, *, main_directory: bool = False, suspension=None, continuation_owner=None, ordinary_forward=False):
+    def __init__(self, api: GitAPI, ref: str = REF, *, main_directory: bool = False, suspension=None, continuation_owner=None, ordinary_forward=False, sleep=time.sleep):
+        self._sleep = sleep
         if type(main_directory) is not bool:
             raise Refused("main-directory selection must be explicit boolean")
         if not ref.startswith("refs/heads/fsgg/v2/journal/release/"):
@@ -830,5 +836,39 @@ class ProtectedReleaseJournal:
                 raise Refused("continuation claim PATCH response unconfirmed")
         except Exception as error:
             raise Refused(f"journal CAS response uncertain; reread before further effects: {error}") from error
-        self.read()
-        return self._observed is not None and self._observed.head == commit and self._observed.state == next_state
+        if claim:
+            self.read()
+            return self._observed is not None and self._observed.head == commit and self._observed.state == next_state
+        return self._read_acknowledged_write(commit, next_state)
+
+    def _read_acknowledged_write(self, commit: str, next_state: dict) -> bool:
+        """Bounded fresh re-read after an acknowledged PATCH (#4753 proposal ii).
+
+        GitHub may briefly serve the pre-write ref after a successful PATCH. Only
+        re-read (GET); never re-PATCH. The CAS is won only when this invocation's
+        own created commit is observed with exactly the expected next state. A
+        persistently stale or unreadable journal keeps the original outcome: a
+        lost CAS (False) or the original read refusal. A lost PATCH *response*
+        still refuses above without any re-read; that policy is unchanged.
+        """
+        prior = self._observed
+        failure = None
+        for attempt in range(WRITE_READBACK_ATTEMPTS):
+            if attempt:
+                self._sleep(WRITE_READBACK_BACKOFF_SECONDS[attempt - 1])
+            try:
+                self.read()
+            except (RuntimeError, OSError, ValueError, KeyError, TypeError, http.client.HTTPException) as error:
+                if getattr(self.api, "blocked", None):
+                    raise  # A refused-before-send budget or quota never recovers by waiting.
+                failure = error
+                continue
+            failure = None
+            observed = self._observed
+            if observed is not None and observed.head == commit:
+                return observed.state == next_state
+            if observed is None or prior is None or observed.head != prior.head:
+                return False  # A different head is visible: this CAS did not win.
+        if failure is not None:
+            raise failure
+        return False
