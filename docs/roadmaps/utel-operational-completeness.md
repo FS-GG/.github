@@ -68,6 +68,13 @@ at or before the horizon are suppressed with `pre-horizon-record-suppressed` rat
 Retirement travels in the existing intent, so a crash applies it once. Measured before the change, two
 real transcripts filled the 256-identity index in ten passes and every later pass deferred.
 
+Spool backpressure never drops observations. At 128 ready envelopes or 8 MiB the local enqueue returns
+`spool-overload`; the pass keeps its intent, records `enqueue-deferred-cursor-retained` and the failure,
+and advances no cursor, so capture stops and resumes from the same records after a drain. Ready envelopes
+are never evicted; only applied outcome receipts rotate. A pass emits at most one batch of 24 responses and
+one drain sends at most 16 envelopes, so drain cadence must exceed capture cadence. Data is lost only if a
+source file disappears while capture is held, which is reported as `source-unavailable-cursor-retained`.
+
 Existing `activate-remote --capture-only` is an explicit initial local setup option. It retains
 configuration, permission, conflict and lock checks while skipping credential presence; its result is
 capture-configured/receiver-unverified. Default activation and later credential/receipt checks remain
