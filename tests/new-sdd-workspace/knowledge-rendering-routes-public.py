@@ -98,8 +98,11 @@ def raw_argv(root, row):
     return argv + (['--lifecycle', 'typed-sdd'] if row['typed'] else [])
 
 
-def overlay_argv(typed):
-    return ['dotnet', 'new', OVERLAY_ID] + (['--lifecycle', 'typed-sdd'] if typed else []) + ['--output', '.']
+def overlay_argv(typed, lifecycle=None):
+    """Typed composition, or an omitted row's overlay call without a lifecycle or with its own `sdd`."""
+    require(lifecycle in (None, 'sdd') and not (typed and lifecycle), 'overlay-lifecycle')
+    selected = 'typed-sdd' if typed else lifecycle
+    return ['dotnet', 'new', OVERLAY_ID] + (['--lifecycle', selected] if selected else []) + ['--output', '.']
 
 
 def check_provenance(provenance, row):
@@ -222,7 +225,7 @@ def run_row(runner, row, case, sdd, home, templates, current, overlay_payload):
     if not row['typed']:
         before = snapshot(root)
         runner.call(overlay_argv(False), cwd=root)
-        runner.call(['dotnet', 'new', OVERLAY_ID, '--lifecycle', 'sdd', '--output', '.'], cwd=root)
+        runner.call(overlay_argv(False, 'sdd'), cwd=root)
         entry['overlayWithoutTypedLifecycle'] = check_effect(before, snapshot(root), [])
         entry['final'] = check_knowledge_state(root, store=False, guide=row['route'] == 'provider', ci=False)
         entry['state'] = 'passed'
@@ -361,6 +364,10 @@ class Controls(unittest.TestCase):
         self.assertNotIn('--lifecycle', raw_argv('r', raw[1]))
         self.assertNotIn('--force', overlay_argv(True) + overlay_argv(False))
         self.assertNotIn('--lifecycle', overlay_argv(False))
+        self.assertEqual(overlay_argv(False, 'sdd'), ['dotnet', 'new', OVERLAY_ID, '--lifecycle', 'sdd', '--output', '.'])
+        self.assertEqual(overlay_argv(True)[3:5], ['--lifecycle', 'typed-sdd'])
+        self.refuses('overlay-lifecycle', overlay_argv, False, 'typed-sdd')
+        self.refuses('overlay-lifecycle', overlay_argv, True, 'sdd')
 
     def test_provenance_must_record_route_profile_and_effective_lifecycle(self):
         def value(lifecycle, profile='app', version='2.4.0', provider='rendering'):
