@@ -28,7 +28,7 @@ jobs:
           ref: f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc
           path: templates-probe-source
           persist-credentials: false
-      # The current descriptors (Workspace.Template 0.19.3, UI.Template 0.32.3), hash-verified by the adapter.
+      # Templates 24f3c307 descriptors; the adapter requires the Wizard's runtime main descriptors to equal their pinned hashes.
       - uses: actions/checkout@v7
         with:
           repository: FS-GG/FS.GG.Templates

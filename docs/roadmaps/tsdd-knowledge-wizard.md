@@ -1427,8 +1427,10 @@ Helpers load from the accepted Rendering-routes adapter's sealed bytes.
 
 **Rows**
 
-- **Rendering Wizard default, app and game.** The lifecycle is omitted, so it falls to the descriptor
-  default `sdd`. The provenance records `sdd`, and the created product's heading confirms the sdd lane.
+- **Rendering Wizard default, app and game.** The lifecycle is omitted, so it falls to the Wizard's own
+  `sdd` default for Rendering. Only fable-game takes the descriptor default; the Rendering descriptor
+  default is also `sdd`, so these rows cannot tell the two apart. The provenance records `sdd`, and the
+  created product's heading confirms the sdd lane.
   These rows have no canonical store and no knowledge CI.
 - **fable-game PLAYER and COMPLETE, each with explicit `typed-sdd` and with the lifecycle omitted.** An
   omitted lifecycle resolves to `typed-sdd`, the fable-game descriptor default.
@@ -1441,10 +1443,12 @@ Helpers load from the accepted Rendering-routes adapter's sealed bytes.
   - The ordinary pinned checker accepts 10,485,760 bytes, refuses 10,485,761, and leaves no residue.
   - Every generated product byte and mode is preserved outside the declared knowledge paths.
 - **non-SVG (`svgFoundation=false`).** This is not a Wizard 0.22.0 route. The parser refuses
-  `--svg-foundation` with exit 2 before creating any target, and the run records that refusal as a
-  control. Non-SVG knowledge readiness stays covered by the provider route (#4773) and the raw route (#4769).
+  `--svg-foundation` with exit 2 and `unknown argument: --svg-foundation` before creating any target, and
+  the run records that refusal as a control. Non-SVG knowledge readiness stays covered by the provider route (#4773) and the raw route (#4769).
 
-The installed `fsgg-sdd --version` must read 2.4.0, and `dotnet tool list` must show Wizard 0.22.0. Every
+The descriptors the Wizard fetches from Templates main must be byte-identical to the Templates `24f3c307`
+descriptors: Rendering `ff49732a…`, fable-game `6b3d8f2d…`. Any later change fails the run closed, which is
+why it should be dispatched before the next coherent-set publish. The installed `fsgg-sdd --version` must read 2.4.0, and `dotnet tool list` must show Wizard 0.22.0. Every
 installed or restored archive must equal its pinned SHA-256.
 
 **Scope against the Templates verifier.** The Templates `fable-reference-public` verifier, flipped for

@@ -4,8 +4,9 @@
 Wizard 0.22.0 (#4811) derives an omitted lifecycle from the provider descriptor's default. This qualifies,
 unpinned and on public feeds, with SDD.Cli 2.4.0 / Workspace.Template 0.19.3 / UI.Template 0.32.3:
 
-- Rendering Wizard default, app and game: lifecycle omitted -> descriptor default `sdd`, no canonical
-  knowledge and no knowledge CI (the sdd lane is read from the created product).
+- Rendering Wizard default, app and game: lifecycle omitted -> the Wizard's own `sdd` default for Rendering
+  (only fable-game takes the descriptor default; the Rendering descriptor default is also `sdd`, so these rows
+  cannot distinguish the two), no canonical knowledge and no knowledge CI (lane read from the product).
 - fable-game PLAYER and COMPLETE, explicit typed-sdd and omitted lifecycle: omitted resolves to the fable-game
   descriptor default `typed-sdd`. Every row must carry the canonical store, guide, exact local pins and the
   package-identical owner CI, then pass the normal initial commit, the maintained #4723 typed probe, the
@@ -31,10 +32,15 @@ import sys
 import tempfile
 import types
 import unittest
+import unittest.mock
 import zipfile
 
 RENDERING_ROUTES_SHA = 'f4eb352ed9ee0fc9c4f701089a767fe22a94bb0bbfd0989e4c37882de26663c9'  # accepted (#4836, 3d45db23)
 WIZARD = ('FS.GG.NewSddWorkspace', '0.22.0', 'caa91285e5370edc7a8a14a5a46f6cfef236d1db95f1e186357e6591b9ec7bd5')
+# The Wizard fetches descriptors from FS.GG.Templates main at run time (unpinned). They must be byte-identical to
+# the descriptors at Templates 24f3c307 that the accepted slices pinned; any later change fails closed.
+DESCRIPTOR_SHA = {'rendering': 'ff49732aa5baa4e1b507784c3135ea092b0973c4c4cb3a75197dae0a7a417fc2',
+                  'fable-game': '6b3d8f2dcbdcd429e4f622cfd6e1515c439097147bb79f5d5c7969d36c3b5006'}
 FABLE_TOOLS = {'fable': '5.18.0', 'fantomas': '8.0.5', 'fs.gg.coord.cli': '0.94.0', 'fs.gg.sdd.cli': '2.4.0'}
 ROWS = (
     dict(id='rendering-app-default', template='rendering', profile='app', bundle=None, lifecycle=None, typed=False, product='WzRenderingAppDefault'),
@@ -92,7 +98,9 @@ def check_descriptor_source(root, row):
     text = (Path(root) / '.fsgg/providers.yml').read_text()
     source = V.RENDERING_DESCRIPTOR[0] if row['template'] == 'rendering' else R.DESCRIPTORS['current'][1]
     require(any(line.split('#', 1)[0].strip() == 'source: ' + source for line in text.splitlines()), 'wizard-descriptor-source')
-    return dict(source=source, sha256=sha(Path(root) / '.fsgg/providers.yml'))
+    digest = sha(Path(root) / '.fsgg/providers.yml')
+    require(digest == DESCRIPTOR_SHA[row['template']], 'wizard-descriptor-sha256')
+    return dict(source=source, sha256=digest)
 
 
 def check_tools(root, row):
@@ -107,8 +115,10 @@ def check_tools(root, row):
 
 
 def check_non_svg_refusal(result, target):
-    require(result.returncode == 2 and not Path(target).exists(), 'non-svg-wizard-route-not-refused')
-    return dict(exitCode=result.returncode, targetCreated=False)
+    """The parser itself must reject the option: exit 2, its unknown-argument message, and no target."""
+    require(result.returncode == 2 and 'unknown argument: --svg-foundation' in result.stdout + result.stderr
+            and not Path(target).exists(), 'non-svg-wizard-route-not-refused')
+    return dict(exitCode=result.returncode, reason='unknown argument: --svg-foundation', targetCreated=False)
 
 
 def check_versions(installed, listed):
@@ -278,16 +288,20 @@ class Controls(unittest.TestCase):
 
     def test_non_svg_wizard_route_must_refuse_without_a_target(self):
         root = self.tmp()
-        self.assertEqual(check_non_svg_refusal(types.SimpleNamespace(returncode=2), root / 'absent')['exitCode'], 2)
-        self.refuses('non-svg-wizard-route-not-refused', check_non_svg_refusal, types.SimpleNamespace(returncode=0), root / 'absent')
+        refused = types.SimpleNamespace(returncode=2, stdout='', stderr='error: unknown argument: --svg-foundation\n')
+        self.assertEqual(check_non_svg_refusal(refused, root / 'absent')['exitCode'], 2)
+        self.refuses('non-svg-wizard-route-not-refused', check_non_svg_refusal, types.SimpleNamespace(returncode=0, stdout='', stderr=refused.stderr), root / 'absent')
+        self.refuses('non-svg-wizard-route-not-refused', check_non_svg_refusal, types.SimpleNamespace(returncode=2, stdout='', stderr='error: missing product name'), root / 'absent')
         (root / 'made').mkdir()
-        self.refuses('non-svg-wizard-route-not-refused', check_non_svg_refusal, types.SimpleNamespace(returncode=2), root / 'made')
+        self.refuses('non-svg-wizard-route-not-refused', check_non_svg_refusal, refused, root / 'made')
 
     def test_descriptor_source_must_match_the_template_family(self):
         root = self.tmp(); (root / '.fsgg').mkdir()
         (root / '.fsgg/providers.yml').write_text('    source: FS.GG.Workspace.Template::0.19.3\n')
-        self.assertEqual(check_descriptor_source(root, ROWS[2])['source'], 'FS.GG.Workspace.Template::0.19.3')
+        self.refuses('wizard-descriptor-sha256', check_descriptor_source, root, ROWS[2])  # right source, other bytes
         self.refuses('wizard-descriptor-source', check_descriptor_source, root, ROWS[0])
+        with unittest.mock.patch.dict(DESCRIPTOR_SHA, {'fable-game': sha(root / '.fsgg/providers.yml')}):
+            self.assertEqual(check_descriptor_source(root, ROWS[2])['source'], 'FS.GG.Workspace.Template::0.19.3')
         (root / '.fsgg/providers.yml').write_text('    source: FS.GG.Workspace.Template::0.19.2\n')
         self.refuses('wizard-descriptor-source', check_descriptor_source, root, ROWS[2])
 
