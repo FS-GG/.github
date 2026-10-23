@@ -1,5 +1,17 @@
 # Registry changelog
 
+## 2026-10-23 — reconcile published Workspace.Template 0.19.3 (FS-GG/.github#4710)
+
+Reconcile `fs-gg-workspace-template` source/package **0.19.3** and `fs-gg-templates/v0.19.3` after
+fdev-admitted original publisher [39910502481/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/39910502481)
+from protected `7be0bcf5886d39a8161b186beb8cc06e82415f1e` (FS.GG.Templates#749, carrying #748), following
+fresh occupancy 39910313699 (ABSENT on both feeds). Original artifact 12482995455 (`7610e8a2…`) equals the
+GitHub Packages readback and the release asset; the signed nuget.org archive (`9594ec20…`) matches all 512
+signature-excluded payload entries, and its nuspec names 0.19.3 at `7be0bcf5`. Annotated tag `386e32b7…`
+peels to `7be0bcf5`. 0.19.3 adopts FS.GG.Wasm 0.7.0 in the opt-in Complete WASM example (FS-GG/FS.GG.Game#727)
+with unchanged Rendering 0.32.3 defaults, and is now the newest public default; installed/full Wizard
+qualification of 0.19.3 remains open. 0.19.2 stays historical.
+
 ## 2026-10-22 — flip governance-reference-gate-set 1.7.0 → 1.8.0 (publish-before-flip; FS-GG/.github#4709)
 
 `FS.GG.Governance.ReferenceGateSet` **1.8.0** (content from Governance PR#442 `09a2014`; release-prep merge `432de033`, Governance#464/PR#466) was published by
