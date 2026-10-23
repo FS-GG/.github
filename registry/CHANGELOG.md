@@ -143,6 +143,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-10-23** — CREATOR022 RELEASE ROUTE (.github; #4811): advance only NewSddWorkspace source to0.22.0 (omitted fable-game lifecycle follows the descriptor default, #4813) and add the CURRENT_022 release route over genuine promoted coherent112 dependencies. Published package-version/tag stay0.21.0; no022 candidate, preflight, publication or installed adoption is asserted.
+
 - **2026-10-22** — PROSPECTIVE COHERENT113 SOURCE (.github; #4801): select source 0.113.0 for CLI/Kit/Drivers to carry Claude Code transcript usage capture and corrected packaged guidance. Published112 and installed pins remain unchanged; no candidate or publication is authorized.
 
 - **2026-10-21** — ACCEPTED COHERENT112 PUBLICATION (.github; #4789):

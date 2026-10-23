@@ -16,16 +16,26 @@ import subprocess
 import urllib.request
 
 from creator_source_qualification import SOURCE_020, qualification_version
-from new_sdd_workspace_successor_execution import CURRENT_020, CURRENT_021
+from new_sdd_workspace_successor_execution import CURRENT_020, CURRENT_021, CURRENT_022
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PIN_PATH = pathlib.Path('scripts/creator-current-coord-dependencies.json')
 PIN_021_PATH = pathlib.Path('scripts/creator021-coord-dependencies.json')
+PIN_022_PATH = pathlib.Path('scripts/creator022-coord-dependencies.json')
+# Each release binding selects exactly one fixed promoted coherent pin; none falls back to another.
+RELEASE_PINS = ((CURRENT_020, PIN_PATH, '0.108.0'), (CURRENT_021, PIN_021_PATH, '0.110.0'),
+                (CURRENT_022, PIN_022_PATH, '0.112.0'))
+RELEASE_QUALIFIED = (CURRENT_021, CURRENT_022)  # explicit current-route release qualification profiles
+
+
+def release_pin(binding):
+    rows = [row for row in RELEASE_PINS if row[0] is binding]
+    require(len(rows) == 1, 'unknown Creator dependency binding')
+    return rows[0]
 
 
 def binding_pin_path(binding):
-    require(binding is CURRENT_020 or binding is CURRENT_021, 'unknown Creator dependency binding')
-    return PIN_021_PATH if binding is CURRENT_021 else PIN_PATH
+    return release_pin(binding)[1]
 
 
 old = runpy.run_path(str(ROOT / 'scripts/creator-frozen-coord-dependencies.py'))
@@ -49,8 +59,7 @@ def read_json(body):
 
 
 def validate_pin(pin, *, release_binding=CURRENT_020):
-    binding_pin_path(release_binding)
-    coherent = '0.110.0' if release_binding is CURRENT_021 else '0.108.0'
+    coherent = release_pin(release_binding)[2]
     require(isinstance(pin, dict) and pin.get('schema') == 'fsgg.creator-current-coord-dependencies/1'
             and pin.get('version') == coherent, 'current dependencies require promoted coherent ' + coherent + ' pin')
     for field, size in (('sourceSha', 40), ('archiveSha256', 64), ('promotedManifestSha256', 64)):
@@ -196,10 +205,10 @@ def dependency_metadata(deps, producer, pin):
 
 def package_members(package, pin, *, source_binding=None, release_binding=None):
     """Recompute every producer member and reject alternate DLL shadowing."""
-    require(release_binding is None or (release_binding is CURRENT_021 and source_binding is None),
+    require(release_binding is None or (any(release_binding is item for item in RELEASE_QUALIFIED) and source_binding is None),
             'unknown Creator release qualification binding')
-    version = CURRENT_021.version if release_binding is CURRENT_021 else qualification_version(source_binding)
-    validate_pin(pin, release_binding=CURRENT_021 if release_binding is CURRENT_021 else CURRENT_020)
+    version = release_binding.version if release_binding is not None else qualification_version(source_binding)
+    validate_pin(pin, release_binding=release_binding if release_binding is not None else CURRENT_020)
     with zipfile.ZipFile(package) as archive:
         entries = archive.infolist()
         names = [row.filename for row in entries]
@@ -231,12 +240,12 @@ def package_members(package, pin, *, source_binding=None, release_binding=None):
 
 def evidence(package, source_sha, pin, *, fixtures_passed, source_binding=None, release_binding=None):
     require(fixtures_passed is True, 'published dependency compiled fixtures not accepted')
-    require(release_binding is None or (release_binding is CURRENT_021 and source_binding is None),
+    require(release_binding is None or (any(release_binding is item for item in RELEASE_QUALIFIED) and source_binding is None),
             'unknown Creator release qualification binding')
-    version = CURRENT_021.version if release_binding is CURRENT_021 else qualification_version(source_binding)
-    if source_binding is SOURCE_020 or release_binding is CURRENT_021:
+    version = release_binding.version if release_binding is not None else qualification_version(source_binding)
+    if source_binding is SOURCE_020 or release_binding is not None:
         checker = runpy.run_path(str(ROOT / 'scripts/new-sdd-workspace-release.py'))
-        require(checker['package_identity'](package) == (CURRENT_021.package if release_binding is CURRENT_021 else SOURCE_020.package, version, source_sha),
+        require(checker['package_identity'](package) == (release_binding.package if release_binding is not None else SOURCE_020.package, version, source_sha),
                 'Creator020 source qualification package/source identity differs')
     members = package_members(package, pin, source_binding=source_binding, release_binding=release_binding)
     result = {'schema': SCHEMA, 'mode': MODE, 'version': version, 'sourceSha': source_sha,
@@ -260,16 +269,18 @@ def verify_evidence(body, package, manifest, pin, *, source_binding=None):
 
 
 def release_evidence(package, source_sha, pin, *, fixtures_passed, release_binding=CURRENT_020):
-    """Recompute a closed020 or021 qualification, never upgrade an old receipt.
+    """Recompute a closed020, 021 or 022 qualification, never upgrade an old receipt.
 
     The successful original candidate workflow supplies the compiled fixture verdict;
     its authenticated run/archive is checked independently by the artifact reader.
     Neither this evidence nor its eligibility field grants publication authority.
     """
-    require(release_binding is CURRENT_020 or release_binding is CURRENT_021, 'unknown Creator release qualification binding')
+    require(release_binding is CURRENT_020 or any(release_binding is item for item in RELEASE_QUALIFIED),
+            'unknown Creator release qualification binding')
     result = evidence(package, source_sha, pin, fixtures_passed=fixtures_passed,
-                      **({'release_binding': CURRENT_021} if release_binding is CURRENT_021 else {'source_binding': SOURCE_020}))
-    return {**result, 'schema': 'fsgg.creator' + ('021' if release_binding is CURRENT_021 else '020') + '-release-qualification/1',
+                      **({'release_binding': release_binding} if release_binding is not CURRENT_020 else {'source_binding': SOURCE_020}))
+    schema = 'fsgg.creator0' + release_binding.version.split('.')[1] + '-release-qualification/1'
+    return {**result, 'schema': schema,
             'releaseBinding': release_binding.tag, 'sourceQualificationOnly': False, 'releaseEligible': True}
 
 
@@ -292,13 +303,13 @@ if __name__ == '__main__':
     parser.add_argument('--package', type=pathlib.Path)
     parser.add_argument('--source-sha')
     args = parser.parse_args()
-    pin = load_pin(release_binding=CURRENT_021)
+    pin = load_pin(release_binding=CURRENT_022)
     if args.command == 'preflight':
         print(json.dumps({'mode': MODE, 'dependencyPinSha256': pin_digest(pin)}))
     elif args.command == 'acquire':
         print(json.dumps(acquire(args.package, pin), sort_keys=True))
     elif args.command == 'verify-package':
-        print(json.dumps(release_evidence(args.package, args.source_sha, pin, fixtures_passed=True, release_binding=CURRENT_021), sort_keys=True))
+        print(json.dumps(release_evidence(args.package, args.source_sha, pin, fixtures_passed=True, release_binding=CURRENT_022), sort_keys=True))
     else:
         require(args.producer_source is not None, 'isolated producer source required')
         if args.command == 'verify-source':
