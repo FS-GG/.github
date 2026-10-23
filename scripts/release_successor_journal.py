@@ -859,6 +859,8 @@ class ProtectedReleaseJournal:
             try:
                 self.read()
             except (RuntimeError, OSError, ValueError, KeyError, TypeError, http.client.HTTPException) as error:
+                if getattr(self.api, "blocked", None):
+                    raise  # A refused-before-send budget or quota never recovers by waiting.
                 failure = error
                 continue
             failure = None

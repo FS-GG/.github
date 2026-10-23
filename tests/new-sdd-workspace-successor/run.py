@@ -1837,6 +1837,41 @@ class CreatorPublicationTests(unittest.TestCase):
                 self.assertIs(reader._read_acknowledged_write("c" * 40, expected), won)
                 self.assertEqual(sleeps, [])  # a decisive observation never waits
 
+    def test_acknowledged_readback_failure_then_staleness_is_a_lost_cas_not_an_error(self):
+        import release_successor_journal as journal_module
+        prior = journal_module.Observed("p" * 40, {"generation": 1})
+        reader = object.__new__(journal_module.ProtectedReleaseJournal)
+        reader._observed, sleeps = prior, []
+        reader._sleep = sleeps.append
+        reader.api = object()  # an uncounted transport: never blocked
+        outcomes = [OSError("transient"), None, None, None]
+        def read():
+            outcome = outcomes.pop(0)
+            if outcome is not None: raise outcome
+        reader.read = read
+        # A later successful (still stale) read clears the earlier failure: lost CAS, not re-raise.
+        self.assertIs(reader._read_acknowledged_write("c" * 40, {"generation": 2}), False)
+        self.assertEqual(sleeps, [1.0, 2.0, 4.0])
+
+    def test_blocked_budget_during_acknowledged_readback_reraises_without_waiting(self):
+        import release_successor_journal as journal_module
+        reader = object.__new__(journal_module.ProtectedReleaseJournal)
+        reader._observed, sleeps = journal_module.Observed("p" * 40, {"generation": 1}), []
+        reader._sleep = sleeps.append
+        reader.api = type("Counted", (), {"blocked": {"method": "get", "path": "x"}})()
+        def read(): raise journal_module.Refused("Authority call ceiling exhausted")
+        reader.read = read
+        with self.assertRaisesRegex(journal_module.Refused, "ceiling exhausted"):
+            reader._read_acknowledged_write("c" * 40, {"generation": 2})
+        self.assertEqual(sleeps, [])
+
+    def test_continuation_claim_cas_keeps_its_single_readback(self):
+        source = (ROOT / "scripts/release_successor_journal.py").read_text()
+        body = source[source.index("        except Exception as error:\n            raise Refused(f\"journal CAS response uncertain"):]
+        body = body[:body.index("    def _read_acknowledged_write")]
+        self.assertIn("        if claim:\n            self.read()\n            return self._observed is not None and self._observed.head == commit", body)
+        self.assertEqual(body.count("_read_acknowledged_write("), 1)
+
     def test_persistently_stale_acknowledged_cas_keeps_lost_cas_refusal_without_send(self):
         with tempfile.TemporaryDirectory() as temporary:
             _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))

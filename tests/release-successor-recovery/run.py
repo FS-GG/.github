@@ -1486,7 +1486,7 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
             self.assertTrue(guarded.send_consumed)
             with self.assertRaises(RuntimeError):guarded.dispatch(effect)
 
-    def test_matched_uncertain_cas_and_readback_stop_without_send(self):
+    def test_matched_uncertain_cas_stops_and_acknowledged_readback_rereads_bounded(self):
         # A lost PATCH response and a persistently unreadable acknowledged write still stop
         # without a send. One transient readback failure after an acknowledged PATCH is
         # re-read (#4753 proposal ii) and settles only on this invocation's own commit.
