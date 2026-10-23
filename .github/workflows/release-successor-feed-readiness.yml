@@ -9,9 +9,9 @@ on:
         description: Closed read-only observation; no candidate or publication effects
         type: choice
         required: true
-        default: coherent-0112-absence
+        default: coherent-0113-absence
         options:
-          - coherent-0112-absence
+          - coherent-0113-absence
           - host-080-org-artifact
 
 permissions:
@@ -36,7 +36,7 @@ jobs:
       - name: Verify the exact protected source and offline refusal controls
         env:
           SOURCE_SHA: ${{ github.sha }}
-          OBSERVATION: ${{ inputs.observation || 'coherent-0112-absence' }}
+          OBSERVATION: ${{ inputs.observation || 'coherent-0113-absence' }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = FS-GG/.github
@@ -47,14 +47,14 @@ jobs:
           python3 scripts/telemetry-host-published-org-read.py --check-selection
           python3 tests/release-successor-candidate/run.py
           python3 tests/telemetry-host-published-org-read/run.py
-      - name: Observe both feeds for 0.112.0 against published 0.111.0
-        if: inputs.observation == 'coherent-0112-absence' || inputs.observation == ''
+      - name: Observe both feeds for 0.113.0 against published 0.112.0
+        if: inputs.observation == 'coherent-0113-absence' || inputs.observation == ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python3 scripts/check-release-candidate-uniqueness.py \
-            --version 0.112.0 --predecessor 0.111.0
+            --version 0.113.0 --predecessor 0.112.0
       - name: Observe the published Host 0.8 org archive once
         id: host-org
         if: inputs.observation == 'host-080-org-artifact'
