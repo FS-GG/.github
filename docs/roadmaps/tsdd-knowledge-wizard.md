@@ -1388,12 +1388,12 @@ lifecycle.
 - The caller composes `fs-gg-project-knowledge --lifecycle typed-sdd` without `--force`. It adds exactly the
   two CI files with package bytes.
 - On a copy that has an owner-authored knowledge workflow, the overlay refuses with exit 73 and changes
-  nothing.
+  nothing. A raw typed row checks the same refusal.
 
 **Raw typed.**
 - `dotnet new fs-gg-ui --lifecycle typed-sdd` creates neither `.fsgg/` nor `.config/`, and no knowledge.
 - The caller applies the overlay, then creates a local tool manifest pinning only SDD 2.4.0.
-- The emitted checker refuses before initialization without changing bytes.
+- The emitted checker refuses before initialization, for the missing guide, without changing bytes.
 - An explicit `knowledge initialize` follows; running it again changes nothing. This is standalone knowledge
   readiness, not a Typed SDD skeleton.
 
@@ -1404,10 +1404,13 @@ lifecycle.
 - Every product byte and mode survives except the declared knowledge paths, and the product `.gitignore`
   keeps its prefix.
 
-**Omitted rows.** These record `sdd`: the provider value comes from the descriptor default, and the raw value
-from the packed `lifecycle` default read from the archive. They have no canonical store and no knowledge CI.
-The overlay without a typed lifecycle emits nothing. Provider rows still carry the capture guide that SDD
-initialization seeds for every lifecycle.
+**Omitted rows.** These yield the `sdd` lane, with no canonical store and no knowledge CI. The overlay emits
+nothing, whether called without `--lifecycle` or with `--lifecycle sdd`. Provider rows still carry the
+capture guide that SDD initialization seeds for every lifecycle.
+
+**Lane evidence.** In every row, the effective lane is read from the created product's own
+`lifecycle-scaffolding-pending.md` heading, not from the flag passed in. Provider provenance also records it.
+Only the provider's own scaffold installs UI.Template, and the raw rows reuse that registration.
 
 Every installed or restored archive must equal its pinned SHA-256: SDD.Cli 2.4.0, UI.Template 0.32.3
 `747f33eb…`, Workspace.Template 0.19.3 and Coord.Cli 0.94.0. A source merge establishes no runtime result,

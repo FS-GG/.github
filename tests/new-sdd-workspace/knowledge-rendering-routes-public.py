@@ -58,6 +58,8 @@ require, sha, snapshot, changed_paths = R.require, R.sha, R.snapshot, R.changed_
 LIMIT, CI_FILES = R.LIMIT, R.CI_FILES
 CURRENT_REVISION = R.CURRENT_REVISION
 DESCRIPTOR_SHA = 'ff49732aa5baa4e1b507784c3135ea092b0973c4c4cb3a75197dae0a7a417fc2'  # providers/rendering.providers.yml at Templates 24f3c307
+# The created product records the lane it actually generated; flags and packed defaults are not evidence of it.
+LANE_HEADINGS = {True: '# Typed SDD lifecycle scaffolding pending', False: '# Lifecycle scaffolding pending (sdd lane)'}
 KNOWLEDGE_CANONICAL = ('.fsgg/knowledge-guide.md', '.fsgg/knowledge/schema.json', '.fsgg/knowledge/records/project-knowledge.json')
 
 
@@ -107,6 +109,20 @@ def check_provenance(provenance, row):
     require(effective.get('lifecycle') == ('typed-sdd' if row['typed'] else 'sdd') and effective.get('profile') == row['profile']
             and effective.get('productName') == row['product'], 'provider-effective-parameters')
     return effective
+
+
+def check_lane(root, typed):
+    """The effective lifecycle the template actually emitted, from the product's own pending-lifecycle file."""
+    path = Path(root) / 'lifecycle-scaffolding-pending.md'
+    heading = path.read_text().splitlines()[0].strip() if path.is_file() else None
+    require(heading == LANE_HEADINGS[typed], 'effective-lane:' + str(heading))
+    return dict(lane='typed-sdd' if typed else 'sdd', heading=heading)
+
+
+def check_pre_init_refusal(result, before, after):
+    require(result.returncode != 0 and 'Missing .fsgg/knowledge-guide.md' in result.stdout + result.stderr, 'checker-pre-init-reason')
+    require(before == after, 'checker-pre-init-changed-bytes')
+    return dict(exitCode=result.returncode, reason='missing-knowledge-guide')
 
 
 def check_knowledge_state(root, *, store, guide, ci):
@@ -199,17 +215,19 @@ def run_row(runner, row, case, sdd, home, templates, current, overlay_payload):
         runner.call(raw_argv(root, row), cwd=case, timeout=180)
         require(not (root / '.fsgg').exists() and not (root / '.config').exists(), 'raw-template-created-sdd-workspace')
         entry['created'] = check_knowledge_state(root, store=False, guide=False, ci=False)
+    entry['lane'] = check_lane(root, row['typed'])
     entry['uiTemplate'] = dict(version=UI[1], sha256=sha(ui_package(home)))
     created_tree = snapshot(root)
     gitignore = (root / '.gitignore').read_bytes() if (root / '.gitignore').is_file() else None
     if not row['typed']:
         before = snapshot(root)
         runner.call(overlay_argv(False), cwd=root)
+        runner.call(['dotnet', 'new', OVERLAY_ID, '--lifecycle', 'sdd', '--output', '.'], cwd=root)
         entry['overlayWithoutTypedLifecycle'] = check_effect(before, snapshot(root), [])
         entry['final'] = check_knowledge_state(root, store=False, guide=row['route'] == 'provider', ci=False)
         entry['state'] = 'passed'
         return entry
-    if row['id'] == 'provider-app-typed':
+    if row['id'] in ('provider-app-typed', 'raw-game-typed'):
         collision = case / 'collision'
         shutil.copytree(root, collision, symlinks=True)
         (collision / CI_FILES[0]).parent.mkdir(parents=True, exist_ok=True)
@@ -227,8 +245,7 @@ def run_row(runner, row, case, sdd, home, templates, current, overlay_payload):
         entry['localTool'] = check_raw_manifest(C.read_json(root / '.config/dotnet-tools.json'))
         check_effect(before, snapshot(root), ['.config/dotnet-tools.json'])
         before = snapshot(root)
-        runner.call(checker_argv(root), cwd=root, success=False)
-        require(snapshot(root) == before, 'checker-pre-init-changed-bytes')
+        entry['checkerBeforeInitialize'] = check_pre_init_refusal(runner.call(checker_argv(root), cwd=root, success=False), before, snapshot(root))
         initialized = json.loads(runner.call([sdd, 'knowledge', 'initialize', '--root', root], cwd=root).stdout)
         require(initialized['Limit'] == LIMIT, 'initialize-size')
         once = snapshot(root)
@@ -276,15 +293,18 @@ def qualify(templates, current, work):
         require(runner.call([sdd, '--version']).stdout.strip() == R.PACKAGES['producer'][1], 'producer-version')
         report['packages'] = {'producer': R.identity(home, 'producer', R.tool_package(home, 'producer'))}
         runner.call(['dotnet', 'new', 'install', R.DESCRIPTORS['current'][1]], cwd=work)
-        runner.call(['dotnet', 'new', 'install', RENDERING_DESCRIPTOR[0]], cwd=work)
         report['packages']['template'] = R.identity(home, 'template', R.template_package(home, 'template'))
-        report['packages']['ui'] = dict(package=UI[0], version=UI[1], sha256=sha(ui_package(home)), match=True)
-        report['packedDefaults'] = packed_defaults(ui_package(home))
-        require(report['packedDefaults']['lifecycle'] == 'sdd', 'raw-lifecycle-default')
+        meta = json.loads((home / '.templateengine/packages.json').read_text(encoding='utf-8-sig'))
+        require(not [r for r in meta['Packages'] if r.get('Details', {}).get('PackageId', '').lower() == UI[0].lower()], 'ui-template-preinstalled')
         with zipfile.ZipFile(R.template_package(home, 'template')) as archive:
             overlay_payload = {n: archive.read(f'content/templates/{OVERLAY_ID}/' + n) for n in CI_FILES}
+        require(ROWS[0]['route'] == 'provider', 'provider-installs-ui-template-first')
         for row in ROWS:
             report['rows'].append(run_row(runner, row, work / row['id'], sdd, home, templates, current, overlay_payload)); save()
+            if row is ROWS[0]:
+                report['packages']['ui'] = dict(package=UI[0], version=UI[1], sha256=sha(ui_package(home)), match=True, installedBy='provider-scaffold')
+                report['packedDefaults'] = packed_defaults(ui_package(home))
+                require(report['packedDefaults']['lifecycle'] == 'sdd', 'raw-lifecycle-default')
         report['packages']['restored-producer'] = R.identity(home, 'producer', R.restored_package(home, 'producer'))
         report['packages']['coord'] = R.identity(home, 'coord', R.restored_package(home, 'coord'))
         require(ui_package(home) and R.template_package(home, 'template'), 'final-registrations')
@@ -372,6 +392,24 @@ class Controls(unittest.TestCase):
         self.refuses('unexpected-effect', check_effect, before, after, [])
         self.refuses('unexpected-effect', check_effect, before, dict(after, a=['y', 0o644]), list(CI_FILES), payload)
         self.refuses('payload-mismatch:' + CI_FILES[0], check_effect, before, after, list(CI_FILES), dict(payload, **{CI_FILES[0]: b'x'}))
+
+    def test_effective_lane_comes_from_the_created_product(self):
+        root = self.tmp()
+        (root / 'lifecycle-scaffolding-pending.md').write_text(LANE_HEADINGS[True] + '\n\nbody\n')
+        self.assertEqual(check_lane(root, True)['lane'], 'typed-sdd')
+        self.refuses('effective-lane:' + LANE_HEADINGS[True], check_lane, root, False)
+        (root / 'lifecycle-scaffolding-pending.md').write_text(LANE_HEADINGS[False] + '\n')
+        self.assertEqual(check_lane(root, False)['lane'], 'sdd')
+        self.refuses('effective-lane:' + LANE_HEADINGS[False], check_lane, root, True)
+        (root / 'lifecycle-scaffolding-pending.md').unlink()
+        self.refuses('effective-lane:None', check_lane, root, True)
+
+    def test_pre_initialization_checker_refuses_for_the_missing_guide(self):
+        ok = types.SimpleNamespace(returncode=1, stdout='', stderr='project-knowledge: Missing .fsgg/knowledge-guide.md; initialize')
+        self.assertEqual(check_pre_init_refusal(ok, {}, {})['reason'], 'missing-knowledge-guide')
+        self.refuses('checker-pre-init-reason', check_pre_init_refusal, types.SimpleNamespace(returncode=2, stdout='', stderr='Traceback'), {}, {})
+        self.refuses('checker-pre-init-reason', check_pre_init_refusal, types.SimpleNamespace(returncode=0, stdout='', stderr=ok.stderr), {}, {})
+        self.refuses('checker-pre-init-changed-bytes', check_pre_init_refusal, ok, {'a': 1}, {'a': 2})
 
     def test_raw_manifest_pins_exactly_the_published_producer(self):
         ok = {'isRoot': True, 'tools': {'fs.gg.sdd.cli': {'version': '2.4.0', 'commands': ['fsgg-sdd']}}}
