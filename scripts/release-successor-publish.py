@@ -598,10 +598,20 @@ def authority_protection():
     }
 
 
+# Admission is GET-only: suspension, publisher identity/source and Authority protection
+# reads. A transient read failure (an exception, never an explicit False) is retried a
+# bounded number of times with a short backoff before it denies (#4811). Writes are not
+# part of admission and are never retried here; a persistent failure still denies.
+ADMISSION_READ_ATTEMPTS = 3
+ADMISSION_READ_BACKOFF_SECONDS = (0.5, 1.5)
+
+
 class ProtectedPublisherAdmission:
     """Compose exact publisher admission with fresh main/retirement protections."""
 
-    def __init__(self, publisher, ledger_api, logical_ref, *, suspension=None):
+    def __init__(self, publisher, ledger_api, logical_ref, *, suspension=None, sleep=time.sleep):
+        self.sleep = sleep
+        self.read_failures = 0
         self.publisher = publisher
         self.ledger_api = ledger_api
         self.logical_ref = logical_ref
@@ -611,17 +621,22 @@ class ProtectedPublisherAdmission:
         self.protection, self.binding = authority_protection()
 
     def authorize(self, content_id, effect, action, request_digest):
-        try:
-            if self.suspension is not None:
-                self.suspension.authorize(self.logical_ref)
-            if not self.publisher.authorize(content_id, effect, action, request_digest):
-                return False
-            self.protection(self.ledger_api, self.binding, [self.logical_ref])
-            return True
-        except AuthorityQuotaWaiting:
-            raise  # Selected pre-send budget waiting is an incomplete checkpoint.
-        except (KeyError, TypeError, ValueError, OSError, RuntimeError):
-            return False
+        for attempt in range(ADMISSION_READ_ATTEMPTS):
+            try:
+                if self.suspension is not None:
+                    self.suspension.authorize(self.logical_ref)
+                if not self.publisher.authorize(content_id, effect, action, request_digest):
+                    return False  # An explicit denial is final; only failed reads are retried.
+                self.protection(self.ledger_api, self.binding, [self.logical_ref])
+                return True
+            except AuthorityQuotaWaiting:
+                raise  # Selected pre-send budget waiting is an incomplete checkpoint.
+            except (KeyError, TypeError, ValueError, OSError, RuntimeError):
+                self.read_failures += 1
+                if attempt + 1 == ADMISSION_READ_ATTEMPTS:
+                    return False
+                self.sleep(ADMISSION_READ_BACKOFF_SECONDS[attempt])
+        return False
 
 
 def authority_main(api):

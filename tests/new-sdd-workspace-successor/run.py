@@ -749,7 +749,10 @@ class WizardReleaseTests(unittest.TestCase):
 
     def test_fresh_journal_and_version_cut_retain_the_existing_boundary(self):
         publisher = (ROOT / "scripts/new-sdd-workspace-successor-publish.py").read_text()
-        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/board-v2-product-creator-022"', publisher)
+        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/board-v2-product-creator-022r1"', publisher)
+        # The abandoned022 journal holds an unsent tag intent; it is never selected again.
+        self.assertNotIn('REF = "refs/heads/fsgg/v2/journal/release/board-v2-product-creator-022"\n', publisher)
+        self.assertIn('"physicalJournalDirectory": "state/releases/board-v2-product-creator-022r1"', publisher)
         self.assertNotIn('REF = "refs/heads/fsgg/v2/journal/release/svg-d5-wizard-012"', publisher)
         self.assertIn('"version": "0.22.0"', publisher)
         self.assertEqual([e.identity for e in self.ordered],
@@ -1561,6 +1564,83 @@ class CreatorPublicationTests(unittest.TestCase):
     def prepare(self, counted, journal, api, admission, provider, preflight=False, source="a"*40):
         return self.caller.prepare_publication(self.primitives, journal, counted, admission, provider, api,
                     self.intent, self.ordered, source, preflight, self.report)
+
+    def admission_with_reads(self, outcomes, *, publisher_result=True):
+        """Real ProtectedPublisherAdmission over scripted GET-only read outcomes."""
+        primitives = self.primitives
+        reads, sleeps = [], []
+        class Publisher:
+            calls = 0
+            def authorize(self, *args):
+                Publisher.calls += 1
+                return publisher_result
+        def protection(api, binding, refs):
+            outcome = outcomes.pop(0) if outcomes else None
+            reads.append(outcome)
+            if isinstance(outcome, BaseException):
+                raise outcome
+        with patch.object(primitives, "authority_protection", return_value=(protection, {})):
+            admission = primitives.ProtectedPublisherAdmission(Publisher(), object(), self.caller.REF, sleep=sleeps.append)
+        return admission, Publisher, reads, sleeps
+
+    def test_transient_admission_read_failure_is_retried_bounded_then_admits(self):
+        for failure in (OSError("connection reset"), self.primitives.Refused("GitHub GET returned HTTP 502"),
+                        ValueError("malformed read"), KeyError("object")):
+            with self.subTest(failure=type(failure).__name__):
+                admission, publisher, reads, sleeps = self.admission_with_reads([failure, None])
+                self.assertTrue(admission.authorize("sha256:" + "c"*64, "tag", "dispatch", "d"*64))
+                self.assertEqual(len(reads), 2)
+                self.assertEqual(sleeps, [self.primitives.ADMISSION_READ_BACKOFF_SECONDS[0]])
+                self.assertEqual(admission.read_failures, 1)
+                self.assertEqual(publisher.calls, 2)  # every attempt re-reads the full admission
+
+    def test_persistent_admission_read_failure_still_denies_after_bound(self):
+        admission, publisher, reads, sleeps = self.admission_with_reads([OSError("down")] * 10)
+        self.assertFalse(admission.authorize("sha256:" + "c"*64, "tag", "dispatch", "d"*64))
+        self.assertEqual(len(reads), self.primitives.ADMISSION_READ_ATTEMPTS)
+        self.assertEqual(sleeps, list(self.primitives.ADMISSION_READ_BACKOFF_SECONDS))
+        self.assertLessEqual(sum(sleeps), 5)
+
+    def test_explicit_denial_and_quota_waiting_are_never_retried(self):
+        admission, publisher, reads, sleeps = self.admission_with_reads([None], publisher_result=False)
+        self.assertFalse(admission.authorize("sha256:" + "c"*64, "tag", "dispatch", "d"*64))
+        self.assertEqual((publisher.calls, reads, sleeps), (1, [], []))
+        waiting = self.primitives.AuthorityQuotaWaiting("pre-send budget")
+        admission, publisher, reads, sleeps = self.admission_with_reads([waiting, None])
+        with self.assertRaises(self.primitives.AuthorityQuotaWaiting):
+            admission.authorize("sha256:" + "c"*64, "tag", "dispatch", "d"*64)
+        self.assertEqual((len(reads), sleeps), (1, []))
+
+    def test_one_transient_read_at_dispatch_no_longer_strands_a_written_intent(self):
+        """Replays run 39925400140's shape: intent admitted and written, dispatch read fails once."""
+        from release_successor_execution import Effect, Observation, Dispatch, JournalState, full_transition
+        effect = Effect("tag", "a"*40, "sha256:" + "c"*64)
+        class Journal:
+            state = JournalState(1, "sha256:" + "c"*64, {})
+            def read(self): return self.state
+            def compare_and_swap(self, expected, identity, value):
+                assert expected == self.state
+                self.state = JournalState(expected.generation + 1, expected.content_id, {**expected.effects, identity: value})
+                return True
+        class Provider:
+            sends = []
+            def observe(self, effect): return Observation("absent")
+            def dispatch(self, effect):
+                Provider.sends.append(effect.identity); return Dispatch("applied")
+        # Reads: intent admission ok, then the dispatch re-authorization fails once and recovers.
+        for outcomes, sent in (([None, OSError("Authority read reset"), None], ["tag"]),
+                               ([None] + [OSError("Authority down")] * 5, [])):
+            with self.subTest(sent=sent):
+                Provider.sends = []
+                journal = Journal()
+                admission, _, _, sleeps = self.admission_with_reads(list(outcomes))
+                if sent:
+                    full_transition("sha256:" + "c"*64, (effect,), journal, admission, Provider())
+                else:
+                    with self.assertRaisesRegex(Refused, "tag: dispatch admission denied"):
+                        full_transition("sha256:" + "c"*64, (effect,), journal, admission, Provider())
+                self.assertEqual(Provider.sends, sent)
+                self.assertEqual(journal.state.effects, {"tag": "intent"})
 
     def test_inert_checkout_import_and_legacy_default(self):
         with patch("subprocess.run", side_effect=AssertionError("import must be inert")):
