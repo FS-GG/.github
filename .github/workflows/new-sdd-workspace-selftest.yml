@@ -100,7 +100,7 @@ jobs:
       - name: Run the new-sdd-workspace parse fixture
         run: |
           python3 tests/new-sdd-workspace-successor/run.py WizardReleaseTests.test_current_source_flows_keep_one_isolated_producer
-          export FSGG_CREATOR_SOURCE_ARTIFACTS="$RUNNER_TEMP/creator021-source-build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          export FSGG_CREATOR_SOURCE_ARTIFACTS="$RUNNER_TEMP/creator022-source-build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           echo "FSGG_CREATOR_SOURCE_ARTIFACTS=$FSGG_CREATOR_SOURCE_ARTIFACTS" >> "$GITHUB_ENV"
           bash tests/new-sdd-workspace/run.sh
 
@@ -113,24 +113,24 @@ jobs:
             --reference:"$FSGG_CREATOR_SOURCE_ARTIFACTS/bin/NewSddWorkspace/release/FS.GG.Coord.Core.dll" \
             --exec tests/new-sdd-workspace/product-board.fsx
 
-      - name: Qualify Creator 0.21 normal-source package closure
+      - name: Qualify Creator 0.22 normal-source package closure
         env:
           SOURCE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          package_dir="$RUNNER_TEMP/creator021-source-qualification"
+          package_dir="$RUNNER_TEMP/creator022-source-qualification"
           mkdir "$package_dir"
           dotnet pack scripts/NewSddWorkspace/NewSddWorkspace.fsproj -c Release --no-build \
             --artifacts-path "$FSGG_CREATOR_SOURCE_ARTIFACTS" \
             -p:RepositoryCommit="$SOURCE_SHA" -o "$package_dir"
-          package="$package_dir/FS.GG.NewSddWorkspace.0.21.0.nupkg"
+          package="$package_dir/FS.GG.NewSddWorkspace.0.22.0.nupkg"
           manifest="$package_dir/manifest.json"
           python3 scripts/new-sdd-workspace-release.py prepare --package "$package" \
-            --source-sha "$SOURCE_SHA" --version 0.21.0 \
-            --tag new-sdd-workspace/v0.21.0 --output "$manifest"
+            --source-sha "$SOURCE_SHA" --version 0.22.0 \
+            --tag new-sdd-workspace/v0.22.0 --output "$manifest"
           python3 scripts/new-sdd-workspace-release.py verify --manifest "$manifest" --package "$package"
-          python3 tests/new-sdd-workspace-successor/run.py --source-qualification-021 \
+          python3 tests/new-sdd-workspace-successor/run.py --source-qualification-022 \
             --board-package "$package" --source-sha "$SOURCE_SHA" --release-manifest "$manifest" \
             --build-artifacts "$FSGG_CREATOR_SOURCE_ARTIFACTS" \
             > "$package_dir/package-evidence.json"

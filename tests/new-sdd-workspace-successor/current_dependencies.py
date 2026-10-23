@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from new_sdd_workspace_successor_execution import CURRENT_021, CURRENT_020, CURRENT_019, ReleaseBinding
+from new_sdd_workspace_successor_execution import CURRENT_022, CURRENT_021, CURRENT_020, CURRENT_019, ReleaseBinding
 from creator_source_qualification import SOURCE_020
 
 CURRENT = runpy.run_path(str(ROOT / 'scripts/creator-current-coord-dependencies.py'))
@@ -247,8 +247,8 @@ class CurrentDependencies(unittest.TestCase):
                 output.mkdir()
                 (output / 'manifest.json').write_text(json.dumps(manifest))
                 (output / 'package-evidence.json').write_text(json.dumps(body))
-                # Ordinary021 must reject even a historical020 package renamed to its expected slot.
-                (output / 'FS.GG.NewSddWorkspace.0.21.0.nupkg').write_bytes(self.package.read_bytes())
+                # Ordinary022 must reject even a historical020 package renamed to its expected slot.
+                (output / 'FS.GG.NewSddWorkspace.0.22.0.nupkg').write_bytes(self.package.read_bytes())
                 return subprocess.CompletedProcess(command, 0)
             argv = ['publisher', '--publish', '--candidate-run-id', '1', '--candidate-artifact-id', '2',
                     '--candidate-archive-sha256', 'd' * 64, '--workdir', str(root / 'work')]
@@ -265,7 +265,7 @@ class CurrentDependencies(unittest.TestCase):
             authority.assert_not_called()
             provider.assert_not_called()
             journal.assert_not_called()
-            summary = json.loads((root / 'creator021-publication-summary.json').read_text())
+            summary = json.loads((root / 'creator022-publication-summary.json').read_text())
             self.assertEqual(summary['firstCause']['kind'], 'ValueError')
             self.assertFalse(summary['journalMutationMayHaveOccurred'])
             self.assertFalse(summary['preflightPassed'])
@@ -459,7 +459,7 @@ class CurrentDependencies(unittest.TestCase):
         source = (ROOT / '.github/workflows/release-new-sdd-workspace-successor-candidate.yml').read_text()
         def validate(workflow):
             required = ('FSGG_CREATOR_DEPENDENCY_MODE: published-dependency',
-                        '--release-qualification-021 --board-package',
+                        '--release-qualification-022 --board-package',
                         'bash "$work/creator/tests/new-sdd-workspace/run.sh"',
                         '-p:FsggCurrentCoordDependencies=true -p:BuildProjectReferences=false',
                         '-p:CompileUsingReferenceAssemblies=false',
@@ -476,7 +476,7 @@ class CurrentDependencies(unittest.TestCase):
                     or workflow.index('creator-current-coord-dependencies.py preflight') > workflow.index('actions/setup-dotnet')):
                 raise ValueError('published candidate preflight/output route differs')
         validate(source)
-        for original, changed in (('--release-qualification-021', '--source-qualification-021'),
+        for original, changed in (('--release-qualification-022', '--source-qualification-022'),
                                   ('published-dependency', 'source-only'),
                                   ('-p:BuildProjectReferences=false', '-p:BuildProjectReferences=true'),
                                   ('--no-build', '--artifacts-path stale'),
@@ -494,7 +494,7 @@ class CurrentDependencies(unittest.TestCase):
         spec.loader.exec_module(publisher)
         argv = ['publisher', '--preflight-only', '--candidate-run-id', '1', '--candidate-artifact-id', '2',
                 '--candidate-archive-sha256', 'd' * 64, '--workdir', str(self.root / 'uncreated')]
-        injected = {**CURRENT, 'load_pin': lambda **kwargs: CURRENT['load_pin'](self.root, release_binding=CURRENT_021)}
+        injected = {**CURRENT, 'load_pin': lambda **kwargs: CURRENT['load_pin'](self.root, release_binding=CURRENT_022)}
         with patch.object(sys, 'argv', argv), patch.object(runpy, 'run_path', return_value=injected), \
                 patch.object(publisher, 'GitHubAPI') as api, \
                 patch.object(publisher, 'WizardProvider') as provider, \
@@ -506,7 +506,7 @@ class CurrentDependencies(unittest.TestCase):
         provider.assert_not_called()
         journal.assert_not_called()
         self.assertFalse((self.root / 'uncreated').exists())
-        summary = json.loads((self.root / 'creator021-publication-summary.json').read_text())
+        summary = json.loads((self.root / 'creator022-publication-summary.json').read_text())
         self.assertFalse(summary['preflightPassed'])
         self.assertFalse(summary['journalMutationMayHaveOccurred'])
         self.assertEqual(summary['firstCause']['kind'], 'ValueError')
@@ -543,7 +543,7 @@ class CurrentDependencies(unittest.TestCase):
 
 
 class Current021Dependencies(unittest.TestCase):
-    """Separate current021 release proof; inherited020 fixtures remain historical."""
+    """Retained published021 release proof; the current route selects022 below."""
     def setUp(self):
         self.fixture = CurrentDependencies()
         self.fixture.setUp()
@@ -687,10 +687,10 @@ class Current021Dependencies(unittest.TestCase):
             with self.subTest(defect=defect), patch.object(verifier.runpy, 'run_path', side_effect=load), \
                     patch.object(verifier.subprocess, 'run') as checker:
                 if defect is None:
-                    self.assertEqual(verifier.verify(observed_artifact, observed_run, archive, output, 'a' * 40), manifest)
+                    self.assertEqual(verifier.verify(observed_artifact, observed_run, archive, output, 'a' * 40, release_binding=CURRENT_021), manifest)
                     checker.assert_called_once()
                 else:
-                    with self.assertRaises(ValueError): verifier.verify(observed_artifact, observed_run, archive, output, 'a' * 40)
+                    with self.assertRaises(ValueError): verifier.verify(observed_artifact, observed_run, archive, output, 'a' * 40, release_binding=CURRENT_021)
                     checker.assert_not_called(); self.assertFalse(output.exists())
 
     def test021_ordinary_authority_excludes020_and_source_bindings(self):
@@ -764,10 +764,234 @@ class Current021Dependencies(unittest.TestCase):
                 real_run(str(ROOT / 'tests/new-sdd-workspace-successor/run.py'), run_name='__main__')
             self.assertEqual(ended.exception.code, 2)
 
-    def test021_compiled_product_fixture_joins_same_current_pin(self):
+
+class Current022Dependencies(unittest.TestCase):
+    """Separate current022 release proof over genuine promoted112; retained021 stays historical."""
+    def setUp(self):
+        self.fixture = CurrentDependencies()
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+        f = self.fixture
+        # Explicit synthetic unexecutable112 producer, not a public receipt.
+        f.pin = json.loads(json.dumps(f.pin).replace('0.108.0', '0.112.0'))
+        f.producer = json.loads(json.dumps(f.producer).replace('0.108.0', '0.112.0'))
+        f.members['fsgg-coord-engine.deps.json'] = json.dumps(f.producer).encode()
+        f.pin['members'] = {name: hashlib.sha256(body).hexdigest() for name, body in f.members.items()}
+        f.deps = json.loads(json.dumps(f.deps).replace('0.108.0', '0.112.0').replace('0.19.0', '0.22.0'))
+        f.package = f.root / 'FS.GG.NewSddWorkspace.0.22.0.nupkg'
+        self.nuspec = (b'<package><metadata><id>FS.GG.NewSddWorkspace</id><version>0.22.0</version>'
+                       b'<repository commit="' + b'a' * 40 + b'"/></metadata></package>')
+        self.write()
+
+    def write(self, **kwargs):
+        self.fixture.write(extra={'FS.GG.NewSddWorkspace.nuspec': self.nuspec}, **kwargs)
+
+    def proof(self):
+        f = self.fixture
+        return CURRENT['release_evidence'](f.package, 'a' * 40, f.pin,
+                                          fixtures_passed=True, release_binding=CURRENT_022)
+
+    def test022_release_recomputed_and_source_or_prior_evidence_never_upgraded(self):
+        f = self.fixture
+        proof = self.proof()
+        manifest = {'packageId': CURRENT_022.package, 'version': CURRENT_022.version,
+                    'tag': CURRENT_022.tag, 'sourceSha': 'a' * 40, 'archiveSha256': proof['archiveSha256']}
+        self.assertEqual((proof['version'], proof['coherentVersion']), ('0.22.0', '0.112.0'))
+        self.assertEqual(proof['schema'], 'fsgg.creator022-release-qualification/1')
+        self.assertEqual(proof['dependencyMembers'], f.pin['members'])
+        self.assertFalse(proof['sourceQualificationOnly'])
+        self.assertTrue(proof['releaseEligible'])
+        verify = CURRENT['verify_release_evidence']
+        self.assertEqual(verify(proof, f.package, manifest, f.pin, release_binding=CURRENT_022), proof)
+        for body in ({**proof, 'schema': 'fsgg.creator021-release-qualification/1'},
+                     {**proof, 'sourceQualificationOnly': True}, {**proof, 'releaseEligible': False},
+                     {**proof, 'coherentVersion': '0.110.0'}, {**proof, 'fixturesPassed': False},
+                     {**proof, 'dependencyMembers': {}}, {**proof, 'dependencyPinSha256': '0' * 64},
+                     {**proof, 'publishedDependencySourceSha': 'c' * 40}, {**proof, 'unknown': True}):
+            with self.subTest(body=body), self.assertRaises(ValueError):
+                verify(body, f.package, manifest, f.pin, release_binding=CURRENT_022)
+        from creator_source_qualification import SOURCE_021, SOURCE_022
+        for binding in (SOURCE_020, SOURCE_021, SOURCE_022, ReleaseBinding(CURRENT_022.package, CURRENT_022.version, CURRENT_022.tag)):
+            with self.subTest(binding=binding), self.assertRaises(ValueError):
+                CURRENT['release_evidence'](f.package, 'a' * 40, f.pin, fixtures_passed=True, release_binding=binding)
+        with self.assertRaises(ValueError):
+            CURRENT['evidence'](f.package, 'a' * 40, f.pin, fixtures_passed=True, source_binding=SOURCE_022)
+        with self.assertRaises(ValueError):
+            CURRENT['release_evidence'](f.package, 'a' * 40, f.pin, fixtures_passed=False, release_binding=CURRENT_022)
+        for key, value in (('tag', CURRENT_021.tag), ('version', CURRENT_021.version), ('packageId', 'foreign'),
+                           ('sourceSha', 'b' * 40), ('archiveSha256', '0' * 64)):
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                verify(proof, f.package, {**manifest, key: value}, f.pin, release_binding=CURRENT_022)
+
+    def test022_missing_changed_shadow_and_stale_metadata_are_causal(self):
+        f = self.fixture
+        for defect in ('missing', 'changed', 'shadow', 'old-coherent', 'wrong-own-version'):
+            members = dict(f.members); deps = json.loads(json.dumps(f.deps)); extra = {}
+            if defect == 'missing': members.pop('FS.GG.Coord.GitHub.dll')
+            if defect == 'changed': members['FS.GG.Coord.GitHub.dll'] += b' mutation'
+            if defect == 'shadow': extra['foreign/FS.GG.Coord.GitHub.dll'] = b' shadow'
+            if defect == 'old-coherent': deps = json.loads(json.dumps(deps).replace('0.112.0', '0.110.0'))
+            if defect == 'wrong-own-version': deps = json.loads(json.dumps(deps).replace('0.22.0', '0.21.0'))
+            f.write(members=members, deps=deps, extra={**extra, 'FS.GG.NewSddWorkspace.nuspec': self.nuspec})
+            with self.subTest(defect=defect), self.assertRaises(ValueError): self.proof()
+        self.write()
+        self.proof()
+
+    def test022_fixed_pin_cannot_select110_or_arbitrary_input(self):
+        f = self.fixture
+        with self.assertRaises(ValueError): CURRENT['load_pin'](f.root, release_binding=CURRENT_022)
+        old = f.root / CURRENT['PIN_021_PATH']; old.parent.mkdir(); old.write_text(json.dumps(f.pin))
+        with self.assertRaises(ValueError): CURRENT['load_pin'](f.root, release_binding=CURRENT_022)
+        new = f.root / CURRENT['PIN_022_PATH']; new.write_text(json.dumps(f.pin))
+        self.assertEqual(CURRENT['load_pin'](f.root, release_binding=CURRENT_022), f.pin)
+        for wrong in (CURRENT_021, CURRENT_020, SOURCE_020, ReleaseBinding(CURRENT_022.package, CURRENT_022.version, CURRENT_022.tag)):
+            with self.subTest(binding=wrong), self.assertRaises(ValueError):
+                CURRENT['validate_pin'](f.pin, release_binding=wrong)
+
+    def test022_genuine_fixed_coordinates_and_complete_source_census(self):
+        pin = CURRENT['load_pin'](release_binding=CURRENT_022)
+        self.assertEqual((pin['version'], pin['sourceSha'], pin['releaseId'], pin['assetId'], pin['promotedManifestAssetId']),
+                         ('0.112.0', 'd5af6a987e915bd0a1b572bcc09ad0d4b2e798b5', 419781177, 663223337, 663236885))
+        self.assertEqual(pin['archiveSha256'], '7f65b2d6ef2bcb1241b1868916d32f168f9937b5f825b93105c556d50c9d7b1f')
+        self.assertEqual(pin['promotedManifestSha256'], '0c9efdcc85cc7137c81b456bf8e536dcd45d7017c07f8a6409984e82fe2c4aa5')
+        self.assertEqual((len(pin['members']), len(pin['projects']), len(pin['sourceLeaves'])), (81, 11, 293))
+        # Census the immutable producer, never require current main to remain d5af.
+        producer = self.fixture.root / 'genuine112-producer-source'
+        subprocess.run(['git', 'clone', '--shared', '--no-checkout', str(ROOT), str(producer)],
+                       check=True, capture_output=True, timeout=15)
+        subprocess.run(['git', 'config', 'core.sparseCheckout', 'true'], cwd=producer,
+                       check=True, capture_output=True, timeout=10)
+        (producer / '.git/info/sparse-checkout').write_text(''.join('/' + row['path'] + '\n' for row in pin['sourceLeaves']))
+        subprocess.run(['git', 'checkout', '--detach', pin['sourceSha']], cwd=producer,
+                       check=True, capture_output=True, timeout=15)
+        self.assertEqual(CURRENT['old']['source_projects'](ROOT, pin, producer), pin['projects'])
+        # The fixed retained021 pin remains a separate genuine110 document.
+        historical = CURRENT['load_pin'](release_binding=CURRENT_021)
+        self.assertEqual(historical['version'], '0.110.0')
+        self.assertNotEqual(CURRENT['pin_digest'](historical), CURRENT['pin_digest'](pin))
+
+
+    def test022_artifact_native_and_evidence_joins_before_package_checker(self):
+        f = self.fixture
+        proof = self.proof()
+        manifest = {'packageId': CURRENT_022.package, 'version': CURRENT_022.version,
+                    'tag': CURRENT_022.tag, 'sourceSha': 'a' * 40, 'archiveSha256': proof['archiveSha256']}
+        spec = importlib.util.spec_from_file_location('current022_artifact', ROOT / 'scripts/new-sdd-workspace-successor-artifact.py')
+        verifier = importlib.util.module_from_spec(spec); spec.loader.exec_module(verifier)
+        run = {'id': 1, 'path': verifier.WORKFLOW, 'head_sha': 'a' * 40, 'head_branch': 'main',
+               'event': 'workflow_dispatch', 'conclusion': 'success', 'run_attempt': 1,
+               'repository': {'id': verifier.REPOSITORY_ID}}
+        artifact = {'id': 2, 'name': 'new-sdd-workspace-successor-candidate-' + 'a' * 40 + '-1',
+                    'expired': False, 'workflow_run': {'id': 1, 'head_sha': 'a' * 40, 'head_branch': 'main',
+                    'repository_id': verifier.REPOSITORY_ID, 'head_repository_id': verifier.REPOSITORY_ID}}
+        def protected(source, *, release_binding):
+            self.assertEqual(source, 'a' * 40); self.assertIs(release_binding, CURRENT_022)
+            return f.pin
+        original = runpy.run_path
+        def load(path, *args, **kwargs):
+            if str(path).endswith('creator-current-coord-dependencies.py'):
+                return {**CURRENT, 'protected_pin': protected}
+            return original(path, *args, **kwargs)
+        for index, defect in enumerate((None, 'source-only', 'historical-proof', 'rerun', 'source', 'workflow', 'expired')):
+            body = dict(proof); observed_run = dict(run); observed_artifact = dict(artifact)
+            if defect == 'source-only': body.update(sourceQualificationOnly=True, releaseEligible=False)
+            if defect == 'historical-proof': body['schema'] = 'fsgg.creator021-release-qualification/1'
+            if defect == 'rerun': observed_run['run_attempt'] = 2
+            if defect == 'source': observed_run['head_sha'] = 'b' * 40
+            if defect == 'workflow': observed_run['path'] = 'other.yml'
+            if defect == 'expired': observed_artifact['expired'] = True
+            archive = f.root / f'022-candidate-{index}.zip'
+            with zipfile.ZipFile(archive, 'w') as z:
+                z.writestr('manifest.json', json.dumps(manifest))
+                z.writestr('package-evidence.json', json.dumps(body))
+                z.writestr(f.package.name, f.package.read_bytes())
+            observed_artifact['digest'] = 'sha256:' + hashlib.sha256(archive.read_bytes()).hexdigest()
+            output = f.root / f'022-output-{index}'
+            with self.subTest(defect=defect), patch.object(verifier.runpy, 'run_path', side_effect=load), \
+                    patch.object(verifier.subprocess, 'run') as checker:
+                if defect is None:
+                    self.assertEqual(verifier.verify(observed_artifact, observed_run, archive, output, 'a' * 40), manifest)
+                    checker.assert_called_once()
+                else:
+                    with self.assertRaises(ValueError): verifier.verify(observed_artifact, observed_run, archive, output, 'a' * 40)
+                    checker.assert_not_called(); self.assertFalse(output.exists())
+
+    def test022_ordinary_authority_excludes_retained021(self):
+        from new_sdd_workspace_successor_admission import WizardAdmission
+        from new_sdd_workspace_successor_execution import effects
+        class NoReads:
+            def get(self, path): raise AssertionError('historical identity must refuse before native reads')
+        historical = {'schema': 'fsgg.new-sdd-workspace-release/1', 'packageId': CURRENT_021.package,
+                      'version': CURRENT_021.version, 'tag': CURRENT_021.tag, 'sourceSha': 'a' * 40,
+                      'archiveSha256': 'b' * 64, 'producerPayloadSha256': 'sha256:' + 'c' * 64}
+        # Retained descriptors/eight-effect readback do not admit ordinary publication.
+        self.assertEqual(len(effects(historical, binding=CURRENT_021)[1]), 8)
+        admission = WizardAdmission(NoReads(), historical, 'a' * 40, 1, 'EHotwagner', 'refs/heads/main', release_binding=CURRENT_021)
+        self.assertFalse(admission.authorize(admission.content_id, 'journal', 'intent', admission.content_id))
+
+
+    def test022_actual_qualification_cli_and_source_only_boundary(self):
+        f = self.fixture
+        creator = f.root / 'creator'
+        output = creator / 'scripts/NewSddWorkspace/bin/Release/net10.0'
+        output.mkdir(parents=True)
+        with zipfile.ZipFile(f.package, 'a') as z:
+            z.writestr(PREFIX + 'new-sdd-workspace.dll', b'explicit inert creator output')
+            z.writestr(PREFIX + 'new-sdd-workspace.runtimeconfig.json', b'{}')
+        with zipfile.ZipFile(f.package) as z:
+            for name in z.namelist():
+                if name.startswith(PREFIX):
+                    target = output / name[len(PREFIX):]
+                    target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(z.read(name))
+        checker = runpy.run_path(str(ROOT / 'scripts/new-sdd-workspace-release.py'))
+        manifest = checker['build_manifest'](type('Args', (), {'package': str(f.package),
+            'version': CURRENT_022.version, 'tag': CURRENT_022.tag, 'source_sha': 'a' * 40})())
+        manifest_path = f.root / 'manifest.json'
+        real_run = runpy.run_path
+        def protected(source, *, release_binding):
+            self.assertIs(release_binding, CURRENT_022); self.assertEqual(source, 'a' * 40)
+            return f.pin
+        injected = {**CURRENT, 'protected_pin': protected,
+                    'old': {**CURRENT['old'], 'layout': lambda *args: {'currentCreatorSourceSha': 'a' * 40}}}
+        def load(path, *args, **kwargs):
+            return injected if str(path).endswith('creator-current-coord-dependencies.py') else real_run(path, *args, **kwargs)
+        argv = ['qualification', '--release-qualification-022', '--board-package', str(f.package),
+                '--source-sha', 'a' * 40, '--release-manifest', str(manifest_path),
+                '--published-coord-source', str(f.root / 'producer'),
+                '--published-coord-dependencies', str(f.root / 'dependencies'), '--creator-source', str(creator)]
+        own = output / 'new-sdd-workspace.dll'; original = own.read_bytes()
+        for defect in (None, 'missing-output', 'changed-output', 'changed-source', 'archive', 'payload'):
+            own.write_bytes(original); body = dict(manifest)
+            injected['old']['layout'] = lambda *args: {'currentCreatorSourceSha': 'b' * 40 if defect == 'changed-source' else 'a' * 40}
+            if defect == 'missing-output': own.unlink()
+            if defect == 'changed-output': own.write_bytes(b'changed inert compiled output')
+            if defect == 'archive': body['archiveSha256'] = '0' * 64
+            if defect == 'payload': body['producerPayloadSha256'] = 'sha256:' + '0' * 64
+            manifest_path.write_text(json.dumps(body)); captured = io.StringIO()
+            with self.subTest(defect=defect), patch.object(sys, 'argv', argv), \
+                    patch.object(runpy, 'run_path', side_effect=load), contextlib.redirect_stdout(captured):
+                if defect is None:
+                    with self.assertRaises(SystemExit) as ended:
+                        real_run(str(ROOT / 'tests/new-sdd-workspace-successor/run.py'), run_name='__main__')
+                    self.assertEqual(ended.exception.code, 0)
+                    proof = json.loads(captured.getvalue())
+                    self.assertEqual((proof['version'], proof['coherentVersion']), ('0.22.0', '0.112.0'))
+                    self.assertEqual(proof['schema'], 'fsgg.creator022-release-qualification/1')
+                    self.assertTrue(proof['releaseEligible']); self.assertFalse(proof['sourceQualificationOnly'])
+                else:
+                    with self.assertRaises(ValueError):
+                        real_run(str(ROOT / 'tests/new-sdd-workspace-successor/run.py'), run_name='__main__')
+        # Missing published roots refuse through the actual CLI before any input or compiler read.
+        with patch.object(sys, 'argv', argv[:6]), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as ended:
+                real_run(str(ROOT / 'tests/new-sdd-workspace-successor/run.py'), run_name='__main__')
+            self.assertEqual(ended.exception.code, 2)
+
+    def test022_compiled_product_fixture_joins_same_current_pin(self):
         text = (ROOT / 'tests/new-sdd-workspace/product-board.fsx').read_text()
         published = text.split('| Some "published-dependency" ->', 1)[1].split('| None | Some "source-only" ->', 1)[0]
-        self.assertIn('"scripts/creator021-coord-dependencies.json"', published)
+        self.assertIn('"scripts/creator022-coord-dependencies.json"', published)
+        self.assertNotIn('"scripts/creator021-coord-dependencies.json"', published)
         self.assertNotIn('"scripts/creator-current-coord-dependencies.json"', published)
         historical = text.split('| None | Some "source-only" ->', 1)[1].split('| Some _ ->', 1)[0]
         self.assertIn('"scripts/creator-frozen-coord-dependencies.json"', historical)

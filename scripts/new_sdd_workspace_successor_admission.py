@@ -11,7 +11,7 @@ import pathlib
 import re
 
 from release_successor_provider import GitHubAPI, MetadataRequestBudget
-from new_sdd_workspace_successor_execution import effects, CURRENT_020, CURRENT_021, HISTORICAL_013
+from new_sdd_workspace_successor_execution import effects, CURRENT_020, CURRENT_021, CURRENT_022, HISTORICAL_013
 
 REPOSITORY = "FS-GG/.github"
 REPOSITORY_ID = 1269292704
@@ -29,7 +29,7 @@ class Refused(RuntimeError):
 # policy module seals itself against its executing bytes to avoid a self-hash cycle.
 REPORT_DIRECTORY = "docs/reports/progressReports"
 POLICY_PATH = "scripts/new_sdd_workspace_successor_admission.py"
-KNOWN_GRAPH_SEAL = "72f3d8bd4bdae9d255d879ba584302d2bc964eb581a8a36327a6d854ad91d1ad"
+KNOWN_GRAPH_SEAL = "5ea9fa63ba5fde306f4509d87612d93a3259319db826007fc277b607c683c80e"
 TREE_ENTRY_LIMIT = 10000
 TREE_JSON_LIMIT = 2 * 1024 * 1024
 REPORT_BYTE_LIMIT = 1024 * 1024
@@ -203,7 +203,7 @@ def candidate_guard():
 
 class WizardAdmission:
     def __init__(self, api: GitHubAPI, manifest: dict, publisher_sha: str, run_id: int, actor: str, ref: str,
-                 *, release_binding=CURRENT_021):
+                 *, release_binding=CURRENT_022):
         self.api = api
         self.publisher_sha = publisher_sha
         self.candidate_sha = manifest.get("sourceSha")
@@ -218,7 +218,7 @@ class WizardAdmission:
 
     def authorize(self, content_id: str, effect: str, action: str, request_digest: str) -> bool:
         if (
-            self.release_binding is not CURRENT_021
+            self.release_binding is not CURRENT_022
             or content_id != self.content_id
             or self.requests.get(effect) != request_digest
             or action not in {"intent", "dispatch", "settle"}
