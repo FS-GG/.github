@@ -2113,3 +2113,24 @@ The closed coherent observation choice is`coherent-0112-absence`; only its liter
 advance in the shared Host observer. Accepted Host0.8 source/assets/pins, independent
 read behavior and application-custody acceptance remain unchanged. Source publication
 updates111 package/tag metadata only after the actual accepted future operation.
+
+## Selected Claude Code usage coherent113 source window — 2026-10-23
+
+Source0.113.0 was composed by [PR4802](https://github.com/FS-GG/.github/pull/4802) (merge`61526e94`)
+to carry Claude Code transcript usage capture under parent [Outcome4640](https://github.com/FS-GG/.github/issues/4640).
+This window rebinds only the release route. The genuine promoted predecessor is112, immutable
+source`d5af6a987e915bd0a1b572bcc09ad0d4b2e798b5`, content
+`sha256:1a6f0e3a80f1554819dc8c4185a35ab9fd9894c6b8d6ae97d85f4f3282259adb`, promoted
+2026-10-21T17:12:52Z ([release419781177](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.112.0)
+stable-channel asset). Current source selects logical ref
+`refs/heads/fsgg/v2/journal/release/coord113-claude-usage-20261023-01` and directory
+`state/releases/coord113-claude-usage-20261023-01`. The closed coherent observation choice
+becomes`coherent-0113-absence`.
+
+This is reversible source composition, not namespace allocation, a candidate, a main hold,
+publication or installation. Consumed112 and every earlier journal, original attempt and
+recovery constant are unchanged. The existing45-minute candidate, exact seven-member archive,
+60-minute publisher, Authority-entry ceiling and quota floor contracts are unchanged. Candidate,
+publish=false preflight and publish=true each need their own admission on the same immutable
+source and archive. Host`claude-local-transcript/1` admission needs a separately released Host
+built from at least`61526e94`; this coherent route does not change Host0.8.
