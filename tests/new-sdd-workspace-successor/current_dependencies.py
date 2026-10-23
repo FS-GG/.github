@@ -916,7 +916,7 @@ class Current022Dependencies(unittest.TestCase):
                     with self.assertRaises(ValueError): verifier.verify(observed_artifact, observed_run, archive, output, 'a' * 40)
                     checker.assert_not_called(); self.assertFalse(output.exists())
 
-    def test022_ordinary_authority_excludes021_and_source_bindings(self):
+    def test022_ordinary_authority_excludes_retained021(self):
         from new_sdd_workspace_successor_admission import WizardAdmission
         from new_sdd_workspace_successor_execution import effects
         class NoReads:

@@ -246,7 +246,7 @@ def evidence(package, source_sha, pin, *, fixtures_passed, source_binding=None, 
     if source_binding is SOURCE_020 or release_binding is not None:
         checker = runpy.run_path(str(ROOT / 'scripts/new-sdd-workspace-release.py'))
         require(checker['package_identity'](package) == (release_binding.package if release_binding is not None else SOURCE_020.package, version, source_sha),
-                'Creator020 source qualification package/source identity differs')
+                'Creator source/release qualification package/source identity differs')
     members = package_members(package, pin, source_binding=source_binding, release_binding=release_binding)
     result = {'schema': SCHEMA, 'mode': MODE, 'version': version, 'sourceSha': source_sha,
             'publishedDependencySourceSha': pin['sourceSha'], 'coherentVersion': pin['version'],
@@ -285,13 +285,13 @@ def release_evidence(package, source_sha, pin, *, fixtures_passed, release_bindi
 
 
 def verify_release_evidence(body, package, manifest, pin, *, release_binding=CURRENT_020):
-    require(isinstance(body, dict), 'Creator020 release qualification body missing')
+    require(isinstance(body, dict), 'Creator release qualification body missing')
     expected = release_evidence(package, manifest['sourceSha'], pin, fixtures_passed=True,
                                 release_binding=release_binding)
-    require(body == expected, 'Creator020 release qualification differs or is source-only')
+    require(body == expected, 'Creator release qualification differs or is source-only')
     require(manifest.get('packageId') == release_binding.package and manifest.get('version') == release_binding.version
             and manifest.get('tag') == release_binding.tag and manifest.get('archiveSha256') == expected['archiveSha256'],
-            'Creator020 release manifest/package join differs')
+            'Creator release manifest/package join differs')
     return expected
 
 

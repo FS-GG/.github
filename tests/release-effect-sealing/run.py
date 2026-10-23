@@ -159,7 +159,8 @@ def verify_creator022_profile(document, source):
         "previousHistoricalAttestationsCanonicalSha256": "8424093d1a0bb0d4a3abb1b4154012ce5cdca1b161811260d5eb7be50ff01774",
         "version": "0.22.0", "currentBinding": "CURRENT_022", "retainedBinding": "CURRENT_021",
         "publishedDependencyCoherentVersion": "0.112.0",
-        "freshLogicalJournal": "refs/heads/fsgg/v2/journal/release/board-v2-product-creator-022",
+        "freshLogicalJournal": "board-v2-product-creator-022",
+        "supersededRouteFields": "successorAmendment and bindingIsolationProof.currentBinding retain the accepted021 profile so this route inverts exactly; this amendment selects CURRENT_022 as the current binding.",
         "originalH4Accepted": False, "oldEffectGrantRenewed": False,
         "operationAcceptance": "Source only; no022 candidate, journal initialization, protected preflight, publication, installation or native adoption acceptance.",
     }

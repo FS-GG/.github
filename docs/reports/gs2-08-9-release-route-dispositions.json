@@ -438,7 +438,8 @@
         "currentBinding": "CURRENT_022",
         "retainedBinding": "CURRENT_021",
         "publishedDependencyCoherentVersion": "0.112.0",
-        "freshLogicalJournal": "refs/heads/fsgg/v2/journal/release/board-v2-product-creator-022",
+        "freshLogicalJournal": "board-v2-product-creator-022",
+        "supersededRouteFields": "successorAmendment and bindingIsolationProof.currentBinding retain the accepted021 profile so this route inverts exactly; this amendment selects CURRENT_022 as the current binding.",
         "originalH4Accepted": false,
         "oldEffectGrantRenewed": false,
         "operationAcceptance": "Source only; no022 candidate, journal initialization, protected preflight, publication, installation or native adoption acceptance."
