@@ -13,34 +13,39 @@ indexes this part as WASM-SHARED-01. Its
 separates source extraction, publication and installed adoption. The `.github` roadmap owner
 coordinates the programme; FS.GG.Game is the selected producer.
 
-## Current supplier publication and installed scope — 2026-10-18
+## Current supplier publication and installed scope — 2026-10-23
 
-The accepted published pair and SDK are **0.6.0**, from immutable producer
-P=`8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e`, tree
-`090906c22f0ef0cd3ca453a28ca20ce8686e0753`. [Original publication `39085989107/attempt1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39085989107)
-and [release `416167085`](https://github.com/FS-GG/FS.GG.Game/releases/tag/wasm/v0.6.0)
-were accepted after both-feed and four served-asset readback. Manifest SHA256
-`e40258fe5cf6471c868afe0f6405d482a5a60ccfdb192f8cdb36b36adf08b8ff`, SDK SHA256
-`b06bdd4a75e9f9727f58cdbeb272e42f1c88607f2326152c67feb5dc5aeccd6f` and promotion transaction
-`fa7a48d1b389116b18f00b5ec94dd83e82bfd3fd9e4032fe052eb13eab019119` bind that original.
-The [immutable owning plan at P](https://github.com/FS-GG/FS.GG.Game/blob/8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e/docs/roadmaps/wasm-shared-01.md)
-defines source obligations; the accepted native original establishes publication, rather than
-inferring it from preparation prose.
+The published pair and SDK are **0.7.0**, from immutable producer
+P=`15e287d7c8884f088b7db41140f108f3f0136043`, tree
+`48d23dd8bc8813877ddbbbf039b87087843f3ca6` ([Game#728](https://github.com/FS-GG/FS.GG.Game/pull/728), fixing
+[Game#727](https://github.com/FS-GG/FS.GG.Game/issues/727): the policy deadline starts at Worker readiness with a
+separately bounded Worker startup; the self-contained bundled Worker shipped since 0.5 is retained).
+[Original publication `39894673177/attempt1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39894673177) and
+[release `421418319`](https://github.com/FS-GG/FS.GG.Game/releases/tag/wasm/v0.7.0) completed with org, public and
+asset verification against preparation `39891458102/attempt1`. Manifest SHA256
+`56e585dbffc2941a504aec75c7fe99c63fa166d03a65eb650a65ba1550a53407`, SDK SHA256
+`090658bd29c79500ed6f3f3defe89a14f7b8330b39586cd01880429258a99cb2` and promotion binding
+`4372fe164e9532b9aac2dc33f9c1eda417e2983611f9507eef4988240cbd62f7` bind that original; both nuget.org archives
+were independently re-verified equal to the originals apart from `.signature.p7s`. The
+[immutable owning plan at P](https://github.com/FS-GG/FS.GG.Game/blob/15e287d7c8884f088b7db41140f108f3f0136043/docs/roadmaps/wasm-shared-01.md)
+defines source obligations.
 
-Fresh both-feed installed **0.6** qualification is separately accepted through exact qualifier
-Q=`9a98f5da4043ec5d231acca97edfeebba7d4efb2`, from
-[original installed qualification `39091471055/attempt1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39091471055).
-Both575-member eligible artifacts and served org/public package, manifest, SDK and dependency joins
-were independently verified. Runtime, collection and direct cleanup exited0; descendant absence
-remains unproved. The failed stale-collector original `39088631914/attempt1` stays failed.
-Historical accepted installed0.5 producer `80540027623d9b1a8aa7715d0591de48455403b7` and qualifier
-`c938e9158542e3a0572b62dd09c01ad01cbb344f`, original `39076218708/attempt1`, retain their own finite
-scope. Original0.5 publication `39073209865/attempt1`, release `416092764` and all historical0.4/0.3
-identities and failures remain immutable.
+Installed **0.7** qualification is not accepted. The last accepted both-feed installed profile remains
+**0.6**: exact qualifier Q=`9a98f5da4043ec5d231acca97edfeebba7d4efb2` against producer
+P=`8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e` (tree `090906c22f0ef0cd3ca453a28ca20ce8686e0753`), from
+[original installed qualification `39091471055/attempt1`](https://github.com/FS-GG/FS.GG.Game/actions/runs/39091471055);
+runtime, collection and direct cleanup exited0 and descendant absence remains unproved. Original0.6
+publication `39085989107/attempt1`, release `416167085` (manifest
+`e40258fe5cf6471c868afe0f6405d482a5a60ccfdb192f8cdb36b36adf08b8ff`, SDK
+`b06bdd4a75e9f9727f58cdbeb272e42f1c88607f2326152c67feb5dc5aeccd6f`), the failed stale-collector original
+`39088631914/attempt1`, historical installed0.5 producer `80540027623d9b1a8aa7715d0591de48455403b7` and qualifier
+`c938e9158542e3a0572b62dd09c01ad01cbb344f`, and all historical0.5/0.4/0.3 identities and failures remain immutable.
 
-The shared registry now records source, published and finite installed0.6. Empty consumers remain
+The shared registry now records source and published0.7 with finite installed0.6. Empty consumers remain
 intentional: producer qualification does not establish SC2/BAR/FourD pins, product timing, native
-or image authority, wholeS1, consumer adoption or completion of stages .5–.7.
+or image authority, wholeS1, consumer adoption or completion of stages .5–.7. Workspace.Template 0.19.3
+selecting `[0.7.0]` (FS.GG.Templates#748) and its installed-C run 3 are Templates consumer evidence
+(FS-GG/.github#4710), not producer installed qualification.
 
 ## Inspected source and existing consumers
 
