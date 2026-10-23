@@ -173,7 +173,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `registry-schema` | FS.GG.SDD | `2` | — |
 | `skill-registry` | FS-GG/.github | `3` | — |
 | `game-sim-core` | FS.GG.Game | `0.17.0` | `0.17.0` |
-| `wasm-shared-runtime` | FS.GG.Game | `0.6.0` | `0.6.0` |
+| `wasm-shared-runtime` | FS.GG.Game | `0.7.0` | `0.7.0` |
 | `game-physics-box2d` | FS.GG.Game | `0.17.0` | `0.17.0` |
 | `game-scene-adapter` | FS.GG.Game | `0.17.0` | `0.17.0` |
 | `fs-gg-audio` | FS.GG.Audio | `0.6.0` | `0.6.0` |
