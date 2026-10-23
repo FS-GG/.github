@@ -1415,3 +1415,39 @@ Only the provider's own scaffold installs UI.Template, and the raw rows reuse th
 Every installed or restored archive must equal its pinned SHA-256: SDD.Cli 2.4.0, UI.Template 0.32.3
 `747f33eb…`, Workspace.Template 0.19.3 and Coord.Cli 0.94.0. A source merge establishes no runtime result,
 and acceptance remains fdev's after an independent review of the hosted artifact.
+
+### Published Wizard 0.22.0 knowledge rows (#4822)
+
+Wizard 0.22.0 (#4811, signed archive `caa91285…`) derives an omitted lifecycle from the provider
+descriptor's default. [`knowledge-wizard-default-rows-public.py`](../../tests/new-sdd-workspace/knowledge-wizard-default-rows-public.py)
+qualifies the remaining Wizard rows unpinned, with no `--pinned` and no `--ref`, using public SDD.Cli
+2.4.0, Workspace.Template 0.19.3 and UI.Template 0.32.3. The read-only hosted operation is
+[`wizard-default-rows-public-acceptance.yml`](../../.github/workflows/wizard-default-rows-public-acceptance.yml).
+Helpers load from the accepted Rendering-routes adapter's sealed bytes.
+
+**Rows**
+
+- **Rendering Wizard default, app and game.** The lifecycle is omitted, so it falls to the descriptor
+  default `sdd`. The provenance records `sdd`, and the created product's heading confirms the sdd lane.
+  These rows have no canonical store and no knowledge CI.
+- **fable-game PLAYER and COMPLETE, each with explicit `typed-sdd` and with the lifecycle omitted.** An
+  omitted lifecycle resolves to `typed-sdd`, the fable-game descriptor default.
+  - The provenance records the bundle (an omitted bundle is `player`).
+  - The exact local pins are Fable 5.18.0, Fantomas 8.0.5, Coord 0.94.0 and SDD 2.4.0.
+  - The store and guide are present, and the owner CI equals the 0.19.3 `fs-gg-fable-game` payload.
+  - The Wizard makes no background commit.
+  - Each row passes the normal initial commit, the maintained #4723 probe and the ALL-shared export taken
+    after private capture.
+  - The ordinary pinned checker accepts 10,485,760 bytes, refuses 10,485,761, and leaves no residue.
+  - Every generated product byte and mode is preserved outside the declared knowledge paths.
+- **non-SVG (`svgFoundation=false`).** This is not a Wizard 0.22.0 route. The parser refuses
+  `--svg-foundation` with exit 2 before creating any target, and the run records that refusal as a
+  control. Non-SVG knowledge readiness stays covered by the provider route (#4773) and the raw route (#4769).
+
+The installed `fsgg-sdd --version` must read 2.4.0, and `dotnet tool list` must show Wizard 0.22.0. Every
+installed or restored archive must equal its pinned SHA-256.
+
+**Scope against the Templates verifier.** The Templates `fable-reference-public` verifier, flipped for
+Wizard 0.22.0 in Templates #760, separately runs pinned (`--ref` tag) Wizard COMPLETE and PLAYER creations,
+including product builds. These rows do not repeat that run. They add the unpinned public path and the
+knowledge contract, and they build no product.

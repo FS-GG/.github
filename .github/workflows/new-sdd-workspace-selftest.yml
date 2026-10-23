@@ -154,6 +154,7 @@ jobs:
           python3 -B tests/new-sdd-workspace/knowledge-retained-upgrade-public.py --source-controls
           python3 -B tests/new-sdd-workspace/knowledge-retained-adoption-public.py --source-controls
           python3 -B tests/new-sdd-workspace/knowledge-rendering-routes-public.py --source-controls
+          python3 -B tests/new-sdd-workspace/knowledge-wizard-default-rows-public.py --source-controls
           python3 tests/new-sdd-workspace/knowledge-creation.py \
             --wizard /pure-control --sdd-cli /pure-control --insufficient-cli /pure-control \
             --providers /pure-control --workspace-package /pure-control \
