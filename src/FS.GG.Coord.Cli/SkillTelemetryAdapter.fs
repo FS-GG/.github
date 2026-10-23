@@ -1089,14 +1089,27 @@ module SkillTelemetryAdapter =
     // quiet period. Its cursor moves to a compact retired entry, so a later append resumes continuously, and its
     // response identities leave the index. Retired entries are bounded. Evicting the oldest raises a horizon below which
     // records from an unknown source are suppressed rather than counted twice.
+    // Re-emitting a retired identity would be refused by the receiver as an identity conflict and quarantine its batch,
+    // so every re-read path suppresses instead: an alias (same inode under another path), a closed file that no longer
+    // continues its entry, an active file re-read after a continuity gap (records at or before its high-water mark),
+    // and any record whose identity is in the bounded recently-retired set. Outside those windows, a copy of an old
+    // closed file under a new inode, made before its entry is evicted, can still repeat responses.
     [<Literal>]
     let private maximumRetiredSources = 384
-    // An active Claude transcript retains only its newest completed responses. The Claude writer emits every
-    // content block of one API response before the next response begins, so an older response cannot repeat.
+    // An active Claude transcript retains only its newest completed responses. Observed Claude Code writers (not a
+    // documented contract) emit every content block of one API response before the next response begins; a later
+    // correction to an older response would be suppressed by the recently-retired set and reported as a gap.
     [<Literal>]
     let private claudeRetainedResponsesPerSource = 24
     [<Literal>]
     let private passiveQuietSeconds = 900L
+    // Recently retired identities, as 16-hex prefixes, suppress a later re-read of the same response through a
+    // copy, alias or rewrite. The window is bounded; the horizon covers sources older than the retired entries.
+    [<Literal>]
+    let private maximumRetiredIdentities = 4096
+
+    let private retiredIdentityKey (identity: string) =
+        if identity.StartsWith("passive-", StringComparison.Ordinal) && identity.Length >= 24 then identity.Substring(8, 16) else identity
 
     let private passiveStateDirectory (root: string) = Path.Combine(root, "orchestrator-passive")
 
@@ -1117,7 +1130,8 @@ module SkillTelemetryAdapter =
                || state["responses"].AsObject().Count > maximumPassiveIdentities
                || state["gaps"].AsArray().Count > 32 || requiredInt "sequence" state < 0
                || (not (isNull state["retired"]) && state["retired"].AsObject().Count > maximumRetiredSources)
-               || (not (isNull state["retiredResponses"]) && state["retiredResponses"].GetValue<int64>() < 0L) then
+               || (not (isNull state["retiredResponses"]) && state["retiredResponses"].GetValue<int64>() < 0L)
+               || (not (isNull state["retiredIds"]) && state["retiredIds"].AsArray().Count > maximumRetiredIdentities) then
                 fail "passive producer state exceeds its finite profile"
             state
         else
@@ -1172,6 +1186,11 @@ module SkillTelemetryAdapter =
             state["retired"] <- retired.DeepClone()
             state["retiredHorizon"] <- (if isNull delta["horizon"] then nullNode else delta["horizon"].DeepClone())
             state["retiredResponses"] <- delta["retiredResponses"].DeepClone()
+            // Appended to the persisted pre-state exactly once: the same write clears the intent that carries it.
+            let ids = if isNull state["retiredIds"] then [] else state["retiredIds"].AsArray() |> Seq.map _.GetValue<string>() |> Seq.toList
+            let added = if isNull delta["retiredIdsAdded"] then [] else delta["retiredIdsAdded"].AsArray() |> Seq.map _.GetValue<string>() |> Seq.toList
+            let combined = ids @ added
+            state["retiredIds"] <- combined |> List.skip (max 0 (combined.Length - maximumRetiredIdentities)) |> List.map node |> jsonArray
 
     let private passiveGap (state: JsonObject) (code: string) =
         // One reserved bounded status slot; original distinct reasons survive subsequent passes.
@@ -1284,6 +1303,14 @@ module SkillTelemetryAdapter =
                     let mutable horizon = if isNull state["retiredHorizon"] then None else Some(state["retiredHorizon"].GetValue<string>())
                     let mutable retiredResponses = if isNull state["retiredResponses"] then 0L else state["retiredResponses"].GetValue<int64>()
                     let nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                    let retiredIds =
+                        Collections.Generic.HashSet<string>(
+                            (if isNull state["retiredIds"] then Seq.empty else state["retiredIds"].AsArray() |> Seq.map _.GetValue<string>()),
+                            StringComparer.Ordinal)
+                    let retiredIdsAdded = ResizeArray<string>()
+                    let forget (identity: string) =
+                        let key = retiredIdentityKey identity
+                        if retiredIds.Add key then retiredIdsAdded.Add key
                     let retireInstance (instance: string) (generation: string option) =
                         let doomed =
                             responses |> Seq.filter (fun pair ->
@@ -1291,7 +1318,9 @@ module SkillTelemetryAdapter =
                                 fact["sourceInstance"].GetValue<string>() = instance
                                 && generation |> Option.forall (fun value -> fact["sourceGeneration"].GetValue<string>() = value))
                             |> Seq.map _.Key |> Seq.toList
-                        for identity in doomed do responses.Remove identity |> ignore
+                        for identity in doomed do
+                            responses.Remove identity |> ignore
+                            forget identity
                         retiredResponses <- retiredResponses + int64 doomed.Length
                     // Rotate the finite caller-selected list; no recursive history discovery or starvation.
                     let sequence = requiredInt "sequence" state
@@ -1305,6 +1334,9 @@ module SkillTelemetryAdapter =
                             let closed = if active then null else retired[key]
                             if not active && isNull closed && sources.Count >= NativeUsage.PassiveMaximumFiles then
                                 passiveGap state "source-index-full-capture-deferred"
+                            elif not (isNull closed) && not (isNull closed["x"]) then
+                                // A closed source already found discontinuous is not rescanned on every pass.
+                                passiveGap state "closed-source-discontinuity-skipped"
                             else
                                 let prior = if active then passiveCursor sources[key] elif isNull closed then None else Some(retiredCursor closed)
                                 match NativeUsage.scanPassiveFrom sourceRoot path prior budget (24 - events.Count) with
@@ -1312,6 +1344,9 @@ module SkillTelemetryAdapter =
                                 | Ok raw when not (isNull closed) && List.contains "source-continuity-gap" raw.Diagnostics ->
                                     // A closed source that no longer continues its retained cursor is never re-read from the start.
                                     budget <- budget - raw.ScannedBytes
+                                    let marked = closed.DeepClone()
+                                    marked["x"] <- node true
+                                    retired[key] <- marked
                                     passiveGap state "closed-source-discontinuity-skipped"
                                 | Ok raw when not (isNull closed) && raw.Records.IsEmpty ->
                                     budget <- budget - raw.ScannedBytes
@@ -1320,16 +1355,40 @@ module SkillTelemetryAdapter =
                                     passiveGap state "source-index-full-capture-deferred"
                                 | Ok raw ->
                                     budget <- budget - raw.ScannedBytes
+                                    let instance = raw.Cursor.SourceInstance
+                                    // A hard link or rename of a source this association already owns is the same file
+                                    // under another key; reading it again would re-emit retired identities.
+                                    let alias =
+                                        (sources |> Seq.exists (fun pair -> pair.Key <> key && pair.Value["sourceInstance"].GetValue<string>() = instance))
+                                        || (retired |> Seq.exists (fun pair -> pair.Key <> key && pair.Value["i"].GetValue<string>() = instance))
+                                    if alias then passiveGap state "source-alias-skipped"
+                                    else
+                                    let suppress code (keep: PassiveNativeRecord -> bool) (scan: PassiveScan) =
+                                        let kept = scan.Records |> List.filter keep
+                                        if kept.Length <> scan.Records.Length then passiveGap state code
+                                        { scan with Records = kept }
+                                    let after (limit: string) (row: PassiveNativeRecord) =
+                                        row.OccurredAt |> Option.exists (fun value -> parseInstant value > parseInstant limit)
+                                    let highWater =
+                                        if active && not (isNull (sources[key]["highWater"])) then Some((sources[key]["highWater"]).GetValue<string>()) else None
                                     let scan =
-                                        match horizon with
-                                        | Some limit when isNull closed && not active ->
+                                        raw
+                                        |> (fun scan ->
+                                            match horizon with
                                             // An unknown source may be a closed source whose retired entry was evicted; only
                                             // records after the eviction horizon can be new to this association.
-                                            let limit = parseInstant limit
-                                            let kept = raw.Records |> List.filter (fun row -> row.OccurredAt |> Option.exists (fun value -> parseInstant value > limit))
-                                            if kept.Length <> raw.Records.Length then passiveGap state "pre-horizon-record-suppressed"
-                                            { raw with Records = kept }
-                                        | _ -> raw
+                                            | Some limit when isNull closed && not active -> suppress "pre-horizon-record-suppressed" (after limit) scan
+                                            | _ -> scan)
+                                        |> (fun scan ->
+                                            match highWater with
+                                            // An active source re-read from its start after a continuity gap may repeat responses that
+                                            // already left its window; only records after its high-water mark are new.
+                                            | Some limit when List.contains "source-continuity-gap" scan.Diagnostics ->
+                                                suppress "continuity-replay-suppressed" (after limit) scan
+                                            | _ -> scan)
+                                        |> suppress "retired-response-suppressed" (fun row ->
+                                            let identity = NativeUsage.passiveRecordIdentity row
+                                            responses.ContainsKey identity || not (retiredIds.Contains(retiredIdentityKey identity)))
                                     scan.Diagnostics |> List.iter (passiveGap state)
                                     // Reserve all new response identities before advancing any source cursor.
                                     let fresh =
@@ -1340,8 +1399,9 @@ module SkillTelemetryAdapter =
                                     let crossesCorrection =
                                         scan.Records |> List.exists (fun row ->
                                             let identity = NativeUsage.passiveRecordIdentity row
+                                            let held = responses[identity]
                                             (events |> Seq.exists (fun fact -> fact["identity"].GetValue<string>() = identity))
-                                            && (responses[identity]["digest"]).GetValue<string>() <> row.SourceDigest)
+                                            && (isNull held || held["digest"].GetValue<string>() <> row.SourceDigest))
                                     if responses.Count + fresh.Length > maximumPassiveIdentities then
                                         indexFull <- true
                                         passiveGap state "response-index-full-capture-deferred"
@@ -1367,7 +1427,13 @@ module SkillTelemetryAdapter =
                                                 events.Add(event "diagnostic" (sourceKey + "-gap") None
                                                     [ "code", node "passive-source-continuity-gap"; "severity", node "warning" ])
                                         if not (isNull closed) then retired.Remove key |> ignore
-                                        sources[key] <- cursorNode scan.Cursor
+                                        let cursor = cursorNode scan.Cursor
+                                        let latest =
+                                            raw.Records |> List.choose _.OccurredAt
+                                            |> List.append (Option.toList highWater)
+                                            |> List.sortByDescending parseInstant |> List.tryHead
+                                        latest |> Option.iter (fun value -> cursor["highWater"] <- node value)
+                                        sources[key] <- cursor
                                         let quiescent =
                                             scan.Cursor.Offset = scan.SourceLength && not scan.Cursor.SkippingOversized
                                             && nowUnix - scan.ModifiedAtUnixSeconds >= passiveQuietSeconds
@@ -1389,7 +1455,9 @@ module SkillTelemetryAdapter =
                             |> Seq.sortByDescending (fun entry -> (entry.Value["fact"]["position"]).GetValue<int64>())
                             |> Seq.toList
                         if own.Length > claudeRetainedResponsesPerSource then
-                            for entry in own |> List.skip claudeRetainedResponsesPerSource do responses.Remove entry.Key |> ignore
+                            for entry in own |> List.skip claudeRetainedResponsesPerSource do
+                                responses.Remove entry.Key |> ignore
+                                forget entry.Key
                             retiredResponses <- retiredResponses + int64 (own.Length - claudeRetainedResponsesPerSource)
                     while retired.Count > maximumRetiredSources do
                         let oldest = retired |> Seq.minBy (fun pair -> pair.Value["t"].GetValue<string>(), pair.Key)
@@ -1410,7 +1478,8 @@ module SkillTelemetryAdapter =
                         jsonObject [ "add", (jsonObject added :> JsonNode)
                                      "remove", (jsonArray removed :> JsonNode)
                                      "horizon", (horizon |> Option.map node |> Option.defaultValue nullNode)
-                                     "retiredResponses", node retiredResponses ]
+                                     "retiredResponses", node retiredResponses
+                                     "retiredIdsAdded", (retiredIdsAdded |> Seq.map node |> jsonArray :> JsonNode) ]
                     if events.Count = 0 then
                         // No unretained counters exist: persist complete line boundaries and bounded gaps directly.
                         state["sources"] <- sources

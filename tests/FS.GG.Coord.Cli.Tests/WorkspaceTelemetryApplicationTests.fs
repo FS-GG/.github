@@ -1575,3 +1575,66 @@ module WorkspaceTelemetryApplicationTests =
                 let again = retirementCapture root home ledger [ path ]
                 Assert.Equal(5, ledger.Count)
                 Assert.Equal(5L, again["retiredResponses"].GetValue<int64>())
+
+    let private hardLink (target: string) (link: string) =
+        use linker = Process.Start(ProcessStartInfo("ln", [| target; link |], UseShellExecute = false))
+        linker.WaitForExit()
+        Assert.Equal(0, linker.ExitCode)
+
+    [<Fact>]
+    let ``passive retirement never re-emits a response through an alias copy or rewrite`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture = Runtime.InteropServices.Architecture.X64 then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let home, _ = claudeSource root "unused"
+            let start = DateTimeOffset.UtcNow.AddDays -1.0
+            let ledger = RetirementLedger()
+            let write name count (at: DateTimeOffset) =
+                let _, path = claudeSource root name
+                let text, _ = retirementTurn (Guid.NewGuid().ToString()) name count at
+                File.WriteAllText(path, text)
+                path, text
+            // A hard link to a quiescent file in the same selection, closing in the same pass, is skipped as an alias.
+            let closing, _ = write "closing" 5 start
+            age closing (start.AddSeconds 6.0)
+            let closingLink = Path.Combine(Path.GetDirectoryName closing, "closing-link.jsonl")
+            hardLink closing closingLink
+            let aliased = retirementCapture root home ledger [ closing; closingLink ]
+            Assert.Equal(5, ledger.Count)
+            Assert.Contains("source-alias-skipped", aliased["gaps"].ToJsonString())
+            retirementCapture root home ledger [ closingLink ] |> ignore
+            Assert.Equal(0, ledger.Duplicates)
+            // A rename of the closed file keeps its inode and is still the same source.
+            let renamed = Path.Combine(Path.GetDirectoryName closing, "closing-renamed.jsonl")
+            File.Move(closing, renamed)
+            retirementCapture root home ledger [ renamed ] |> ignore
+            Assert.Equal(5, ledger.Count)
+            Assert.Equal(0, ledger.Duplicates)
+            // A copy of the closed file under a new inode repeats only retired responses.
+            let copied = Path.Combine(Path.GetDirectoryName closing, "closing-copy.jsonl")
+            File.Copy(renamed, copied)
+            let copy = retirementCapture root home ledger [ copied ]
+            Assert.Equal(5, ledger.Count)
+            Assert.Equal(0, ledger.Duplicates)
+            Assert.Contains("retired-response-suppressed", copy["gaps"].ToJsonString())
+            // An active windowed source replaced by a new inode with the same bytes is re-read from its start, and
+            // a hard link to it is an alias; neither repeats a response that left its window.
+            let active, activeText = write "active" 40 (start.AddHours 1.0)
+            for _ in 1..3 do retirementCapture root home ledger [ active ] |> ignore
+            Assert.Equal(45, ledger.Count)
+            let activeLink = Path.Combine(Path.GetDirectoryName active, "active-link.jsonl")
+            hardLink active activeLink
+            retirementCapture root home ledger [ active; activeLink ] |> ignore
+            File.Delete activeLink
+            File.Delete active
+            File.WriteAllText(active, activeText)
+            let replaced = retirementCapture root home ledger [ active ]
+            Assert.Equal(45, ledger.Count)
+            Assert.Equal(0, ledger.Duplicates)
+            Assert.Contains("source-continuity-gap", replaced["gaps"].ToJsonString())
+            // Control: a later response appended to the replaced file is still observed.
+            let tail, _ = retirementTurn (Guid.NewGuid().ToString()) "tail" 1 (start.AddHours 2.0)
+            File.AppendAllText(active, tail)
+            retirementCapture root home ledger [ active ] |> ignore
+            Assert.Equal(46, ledger.Count)
+            Assert.Equal(0, ledger.Duplicates)

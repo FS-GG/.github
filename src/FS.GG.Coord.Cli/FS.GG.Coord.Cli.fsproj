@@ -130,7 +130,7 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.113.0 — Add Claude Code transcript usage capture: `telemetry usage collect claude --session-file` and passive `claude-local-transcript/1` observations through the existing provider-usage path. Passive capture retires finished sources and responses, so one association stays within its bounds over days of transcripts.
+    <PackageReleaseNotes>0.113.0 — Add Claude Code transcript usage capture: `telemetry usage collect claude --session-file` and passive `claude-local-transcript/1` observations through the existing provider-usage path. Passive capture retires finished sources and responses, so one association stays within its bounds over days of transcripts; do not roll an association that 0.113.0 has retired back to 0.112.0, which would re-read closed sources.
 Carry corrected pnext-item/work-roadmap guidance naming the working Claude route. Codex reading is unchanged apart from closed-source retirement; publication, installed adoption and Host ingestion remain separate; published112 is unchanged.
 
 $(FsggStandingAdvisories)
