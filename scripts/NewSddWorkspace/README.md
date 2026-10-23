@@ -62,7 +62,7 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 | Option | Effect |
 |---|---|
 | `--template <name>` | Selects the scaffold provider: `rendering` (the compatibility default when omitted), `console`, `web`, `fable-game`, or `fable-bindings`. This chooses the generated workspace shape; it is not a rendering profile. |
-| `--lifecycle <none\|sdd\|typed-sdd\|spec-kit>` | Selects the root lifecycle and forwards an explicit token unchanged to `fsgg-sdd scaffold`. Omission is `sdd`, except that `fable-game` forwards the `lifecycle` default its fetched descriptor declares (`typed-sdd` from Workspace.Template 0.15.0; `sdd` before). A missing or unrecognized declaration keeps `sdd`. `none` is Freeform; `spec-kit` remains legacy/frozen. |
+| `--lifecycle <none\|sdd\|typed-sdd\|spec-kit>` | Selects the root lifecycle and forwards an explicit token unchanged to `fsgg-sdd scaffold`. Omission is `sdd`, except that `fable-game` forwards the `lifecycle` default its fetched descriptor declares (`typed-sdd` from Workspace.Template 0.15.0; `sdd` before). A missing or unrecognized declaration keeps `sdd` with a warning. `none` is Freeform; `spec-kit` remains legacy/frozen. |
 | `--profile <name>` | Rendering-only `fs-gg-ui` profile: `game` (default — minimal Pong-style starter), `app`, `headless-scene`, `governed`, `sample-pack`. Omitted ⇒ the rendering provider default (`game`); other templates reject it. |
 | `--bundle <player\|studio\|tactical\|arcade\|complete>` | `fable-game` composition only. Omitted selects `player`; unrelated providers reject the flag. The value is forwarded as the provider's `bundle` parameter and does not change lifecycle or Rendering profile selection. |
 | `--npm-package <name>` / `--npm-version <exact>` / `--binding-target <browser\|node\|universal>` | Required together for `--template fable-bindings`, to pin its npm/declaration closure and target runtime. They are rejected for other templates. |
@@ -108,9 +108,11 @@ those public pins. See the [qualification record](../../docs/roadmaps/tsdd-knowl
 
 Version 0.12.0 introduced the selected SVG default, scoped to a descriptor whose exact `source:`
 was `FS.GG.Workspace.Template::0.15.0`. Wizards 0.12.0 to 0.21.0 therefore forwarded `sdd` once
-that pin moved on, contrary to D.5 (FS-GG/.github#4811). From 0.22.0 the omitted `fable-game`
-lifecycle is the `lifecycle` default the fetched descriptor declares: `typed-sdd` for 0.15.0 and
-later, `sdd` for 0.14.0 and earlier. Spelling `--lifecycle` always preserves that selection.
+that pin moved on, contrary to D.5 (FS-GG/.github#4811). The current source, intended for the
+next Wizard release (0.22.0), makes the omitted `fable-game` lifecycle the `lifecycle` default the
+fetched descriptor declares: `typed-sdd` for 0.15.0 and later, `sdd` for 0.14.0 and earlier. A
+descriptor with no readable declaration keeps `sdd` and prints a warning. Spelling `--lifecycle`
+always preserves that selection.
 A source change does not publish the package or activate the registry default.
 
 Before public activation, verify immutable Templates 0.15.0 and wizard 0.12.0 packages and

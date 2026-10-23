@@ -3165,6 +3165,12 @@ let private run (opts: Options) : int =
 
         let declaredDefault = match fetched with Ok (_, declared) -> declared | Error _ -> None
         let lifecycle = selectScaffoldLifecycle opts declaredDefault
+        if not fatal && opts.Template = "fable-game" && not opts.LifecycleExplicit && declaredDefault.IsNone then
+            AnsiConsole.MarkupLine(
+                sprintf
+                    "  [yellow]⚠[/] descriptor declares no readable lifecycle default; using %s"
+                    (Markup.Escape lifecycle)
+            )
         let mutable knowledgeVersion = None
         if not fatal && lifecycle = "typed-sdd" then
             let code, reported = runProcess false "fsgg-sdd" [ "--version" ]

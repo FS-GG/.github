@@ -793,9 +793,19 @@ for lifecycle in sdd typed-sdd none spec-kit; do
   expect_execution "Python forwards explicit $lifecycle without family-specific parameters" python "lifecycle=$lifecycle" --template python --lifecycle "$lifecycle"
 done
 expect_execution "fable-game omission forwards its player default" fable-game "bundle=player" --template fable-game
+if grep -qF 'declares no readable lifecycle default; using sdd' <<<"$OUT"; then
+  ok "an undeclared fable-game lifecycle default warns before keeping Standard SDD"
+else
+  bad "an undeclared fable-game lifecycle default must warn visibly" "$OUT"
+fi
 expect_execution "D.5 fable-game omission selects Typed SDD" fable-game "lifecycle=typed-sdd" --template fable-game --ref d5
 expect_execution "older fable-game source retains Standard SDD" fable-game "lifecycle=sdd" --template fable-game --ref legacy
 expect_execution "current fable-game descriptor omission selects its declared Typed SDD" fable-game "lifecycle=typed-sdd" --template fable-game --ref current
+if ! grep -qF 'declares no readable lifecycle default' <<<"$OUT"; then
+  ok "a declared fable-game lifecycle default does not warn"
+else
+  bad "a declared fable-game lifecycle default must not warn" "$OUT"
+fi
 expect_execution "public 0.19.2 fable-game descriptor omission selects its declared Typed SDD" fable-game "lifecycle=typed-sdd" --template fable-game --ref public
 expect_execution "explicit Standard SDD overrides the current descriptor default" fable-game "lifecycle=sdd" --template fable-game --ref current --lifecycle sdd
 expect_execution "explicit Freeform overrides the current descriptor default" fable-game "lifecycle=none" --template fable-game --ref current --lifecycle none
