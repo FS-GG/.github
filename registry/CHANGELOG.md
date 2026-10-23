@@ -168,6 +168,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-10-23** — CREATOR022 PUBLICATION ACCEPTED (github; #4811, #4825, #4831): record candidate39936317651/artifact12494691636 and original publisher39939741711/a1, all eight effects/final17 on fresh journal022r1, promoted release421718245/source6e6fb9b9. Release asset5a34a5cd and signed public NuGetcaa91285 share producer payloadef06eab2; hosted GitHub-feed observation retained, local GitHub403 remains a limit. Isolated public install and typed-sdd omission behaviour verified; abandoned journal022 (publisher39925400140, unsent tag intent) stays history.
+
 - **2026-10-23** — HOST090 SOURCE (.github; #4640): advance only independent Telemetry Host source to0.9.0 so a Host built from current main admits passive provider-usage-observation/1 with provenance claude-local-transcript/1 (#4802); published Host0.8.0 at74cbd6f0 refuses it. New tag telemetry-host/v0.9.0 and journal15 (utel-host-rel-15) are prospective coordinates over predecessor published0.8/journal14. Store14 and the receipt ABI are unchanged; published package-version/tag stay0.8.0. No candidate, preflight, publication or Home adoption is asserted.
 
 ### 2026-10-23 — `wasm-shared-runtime`: 0.7 publication, separate last installed 0.6 (game; Game#728, Game#727)
