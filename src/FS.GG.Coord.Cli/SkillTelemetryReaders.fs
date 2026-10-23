@@ -126,7 +126,11 @@ module SkillTelemetryReaders =
         { Records: PassiveNativeRecord list
           Cursor: PassiveCursor
           ScannedBytes: int
-          Diagnostics: string list }
+          Diagnostics: string list
+          // Length of the opened descriptor when the pass ended; a cursor at this offset has read the whole file.
+          SourceLength: int64
+          // Modification time of the opened descriptor, in Unix seconds, used only to recognize a quiescent source.
+          ModifiedAtUnixSeconds: int64 }
 
     type NativeCounters =
         {
@@ -1589,11 +1593,18 @@ module SkillTelemetryReaders =
                         if bytesSinceLine > 0 && not skipping then diagnostics.Add (if doneReading then "partial-tail-deferred" else "line-boundary-deferred") |> ignore
                         if not doneReading && records.Count < maximumRecords then diagnostics.Add "scan-pass-budget" |> ignore
                         let finalAnchor = anchor committed
+                        // Quiescence uses the descriptor's state after the read, so an append during this pass keeps it open.
+                        let mutable final = Unchecked.defaultof<NativeFile.Stat>
+                        let modifiedAt =
+                            if NativeFile.fstat(file.SafeFileHandle.DangerousGetHandle().ToInt32(), &final) = 0 then final.ModifySeconds
+                            else DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                         Ok { Records = records |> Seq.toList
                              Cursor = { SourceInstance = instance; Generation = generation; Offset = committed; AnchorDigest = finalAnchor
                                         SkippingOversized = skipping; Context = context }
                              ScannedBytes = scanned
-                             Diagnostics = diagnostics |> Seq.sort |> Seq.toList }
+                             Diagnostics = diagnostics |> Seq.sort |> Seq.toList
+                             SourceLength = source.Length
+                             ModifiedAtUnixSeconds = modifiedAt }
                     with _ -> failure "passive native source read failed; cursor retained"
 
         let scanPassive (codexHome: string) (path: string) (prior: PassiveCursor option) (maximumBytes: int) (maximumRecords: int) =

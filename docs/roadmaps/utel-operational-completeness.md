@@ -56,6 +56,42 @@ a 256-response revision index and 1 MiB private state. Existing spool bounds rem
 envelopes/8 MiB with bounded outcome retention. Partial tails defer; truncation/replacement creates a
 new source generation and continuity gap. Cumulative turn snapshots never become response spend.
 
+Finished-source retirement (2026-10-23, Outcome #4640) keeps one long-running association inside
+these bounds. A source closes when a pass reads its descriptor to the end on a line boundary and the
+file has been unmodified for 15 minutes. Its cursor moves to a compact retired entry and its response
+identities leave the index. A later append resumes from that entry. An active Claude transcript keeps only
+its newest 24 response identities, relying on the observed (undocumented) writer order in which every content
+block of one API response precedes the next response; active Codex rollouts keep the original rule.
+
+Re-emitting a retired identity would be refused by the receiver as an identity conflict and quarantine the
+whole batch, so each re-read path suppresses records instead, with a visible gap:
+`source-alias-skipped` for the same file under another path (same inode and continuing the owning entry's
+anchored cursor, so a reused inode is not mistaken for an alias); `closed-source-discontinuity-skipped` for a
+closed file that no longer continues its entry (marked, and not rescanned); `continuity-replay-suppressed`
+for an active file re-read after a continuity gap, at or before its high-water timestamp;
+`retired-response-suppressed` for any identity in the bounded set of the 4096 most recently retired; and
+`pre-horizon-record-suppressed` for an unknown source's records at or before the eviction horizon, which is
+one second after the modification time of the newest evicted entry (at most 384 entries are kept).
+Records without a timestamp are suppressed wherever a timestamp bound applies. One case remains: a copy of
+an old closed file under a new inode, made after its identities left the recent set but before its entry is
+evicted, can repeat responses and would be quarantined at the receiver. At about 150 transcripts and
+10,000 responses a day, the recent set covers roughly nine hours and the retired entries roughly two and a
+half days, so that window is about two days. A source leaves the active set only when a pass closes it, so
+the caller must keep selecting each active path until it closes; eight abandoned active paths (for example,
+deleted while active) block new sources with `source-index-full-capture-deferred`. Retirement travels in the existing
+intent, so a crash applies it once. Measured before the change, two real transcripts filled the
+256-identity index in ten passes and every later pass deferred.
+
+Spool backpressure never drops queued observations. At 128 ready envelopes or 8 MiB the local enqueue
+returns `spool-overload`; the pass keeps its intent, records `enqueue-deferred-cursor-retained` and the
+failure, and advances no cursor, so capture stops and resumes from the same records after a drain. Ready
+envelopes are never evicted; only settled (applied, rejected or expired) outcome receipts rotate. A pass emits
+at most one batch of 24 responses, while a drain sends at most one envelope of each passive chain, because a
+later envelope waits behind its earliest pending predecessor. Drain must therefore run at least as often as
+capture produces a batch. Observations can still be lost, visibly, when a source file disappears while
+capture is held (`source-unavailable-cursor-retained`), through the suppressions above, or when a conflicting
+batch is quarantined by the receiver.
+
 Existing `activate-remote --capture-only` is an explicit initial local setup option. It retains
 configuration, permission, conflict and lock checks while skipping credential presence; its result is
 capture-configured/receiver-unverified. Default activation and later credential/receipt checks remain
