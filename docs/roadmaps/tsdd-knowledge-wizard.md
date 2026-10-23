@@ -1247,3 +1247,32 @@ are compared byte-for-byte at runtime rather than name-pinned. Opt-in
 controls additionally require the packaged `policy.c` to keep its preprocessor blocks and
 the template to declare literal `**/*.c` and `**/*.h` operations. A re-pin grants no
 runtime acceptance; a fresh finite two-row run needs separate root admission.
+
+### Published Wizard fable-bindings rows (fdev decision, #4642)
+
+The supplier condition for the two deferred `fable-bindings-wizard-*` subjects is met: SDD.Cli
+2.4.0 (source `c1fee66a`, containing #1116 `971e9e78`), Wizard 0.21.0 (`4326f57d…`, carrying the
+`bindingTarget` routing from #4737) and Workspace.Template 0.19.3 are published. The sealed 24-subject
+matrix adapter keeps its 2.2.0 pins, counts and downstream digest chain unchanged; its two deferred
+gaps are carried by the dedicated
+[`knowledge-wizard-bindings-public.py`](../../tests/new-sdd-workspace/knowledge-wizard-bindings-public.py),
+whose read-only hosted operation is
+[`wizard-bindings-public-acceptance.yml`](../../.github/workflows/wizard-bindings-public-acceptance.yml)
+(dispatch-only, `contents: read`, public feeds, isolated HOME, Wizard unpinned, no token in any child).
+
+The run installs Wizard 0.21.0 and the predecessor SDD 2.3.0, so the unpinned Wizard's best-effort
+self-update is exercised and then **read back** (`fsgg-sdd --version` must be 2.4.0; it is not
+assumed). Rows: typed (`--lifecycle typed-sdd`, explicit `--npm-package @babylonjs/core`,
+`--npm-version 9.19.0`, `--binding-target browser`) must preserve those literals byte for byte in the
+recorded effective parameters and `package.json`, pin the root SDD tool at exactly 2.4.0, carry the
+canonical knowledge store and the package-identical owner CI, then pass the maintained #4723 typed
+probe (four captures, retrieval/history/version, cache-free clone, lossless export/restore,
+owner-preserving refusals) and the ordinary pinned checker at 10,485,760 and 10,485,761 bytes; default
+(lifecycle omitted) must record `sdd` with the same literals and no automatic knowledge or CI; the
+control sends the historical wrong key (`target`) and must refuse at the provider edge with no product.
+Workspace.Template 0.19.3 admits only `9.19.0` and `browser` for these symbols, so the explicit values
+equal the defaults; transport is proved by the recorded effective parameters, not by value difference
+(with SDD 2.3.0 the same call fails on `@babylonjs/core` response-file expansion). Every installed
+package archive is hashed in the isolated HOME and must equal its pinned SHA-256. Pure causal controls
+run in the existing selftest; source merge establishes no runtime result, and acceptance remains fdev's
+after one independent review of the hosted artifact.
