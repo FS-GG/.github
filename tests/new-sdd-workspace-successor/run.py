@@ -1584,8 +1584,9 @@ class CreatorPublicationTests(unittest.TestCase):
         return admission, Publisher, reads, sleeps
 
     def test_transient_admission_read_failure_is_retried_bounded_then_admits(self):
+        import http.client
         for failure in (OSError("connection reset"), self.primitives.Refused("GitHub GET returned HTTP 502"),
-                        ValueError("malformed read"), KeyError("object")):
+                        ValueError("malformed read"), KeyError("object"), http.client.IncompleteRead(b"")):
             with self.subTest(failure=type(failure).__name__):
                 admission, publisher, reads, sleeps = self.admission_with_reads([failure, None])
                 self.assertTrue(admission.authorize("sha256:" + "c"*64, "tag", "dispatch", "d"*64))
@@ -1612,7 +1613,11 @@ class CreatorPublicationTests(unittest.TestCase):
         self.assertEqual((len(reads), sleeps), (1, []))
 
     def test_one_transient_read_at_dispatch_no_longer_strands_a_written_intent(self):
-        """Replays run 39925400140's shape: intent admitted and written, dispatch read fails once."""
+        """A written intent followed by one failed dispatch-admission read is no longer stranded.
+
+        Run 39925400140 itself failed one step earlier, in the journal helper's post-PATCH
+        readback (generation 2 landed, the readback GET raised); that site is unchanged here.
+        """
         from release_successor_execution import Effect, Observation, Dispatch, JournalState, full_transition
         effect = Effect("tag", "a"*40, "sha256:" + "c"*64)
         class Journal:
