@@ -9,7 +9,13 @@ passive `provider-usage-observation/1` facts with provenance
 refused. Published Host0.8 was built from `74cbd6f0` and predates that change, so it
 answers a Claude transcript batch with `invalid-request`. The Host takes the parser
 through its Store and Coord.Core project references. It therefore needs a new
-independent package rather than any Host logic change.
+independent package rather than any Host logic change. The packaged closure also carries
+other coherent113 source compiled through those references (the Claude transcript reader
+in `SkillTelemetryReaders.fs` and `Coord.Core/Telemetry.fs`); none of it is reachable from
+Host entry points. Root re-diffs the Host closure against `74cbd6f0` at the dispatch SHA.
+The bump also re-pins `telemetry-host-release.py` in the read-only org observer
+(`scripts/telemetry-host-published-org-read.py`), whose test now runs in the package
+workflow so a stale pin fails at PR time.
 
 This source prepares **0.9.0**, `telemetry-host/v0.9.0` and logical journal15 at
 `state/releases/utel-host-rel-15`. The predecessor is the accepted original Host0.8
