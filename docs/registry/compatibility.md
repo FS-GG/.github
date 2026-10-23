@@ -111,6 +111,13 @@ The same SDD merge advances the emitted `governance-handoff` contract from 1.1.0
 now agree at 1.2.0; source-coherence run 30186679362 first exposed the inseparable drift,
 and the atomic registry merge `a8aa56f47625016085c30ed1d91bcfc820ae2694` resolved it.
 
+Governance runtime release evidence (2026-10-23): `FS.GG.Governance.Cli` **1.15.0** (tag `v1.15.0`
+→ `282741b1`, Governance PR #472, publish run 39928935417) connects explicit provider-mode
+`fsgg-governance verify` to GateExecution held-cwd execution and Governance-observed
+`governance-handoff@2.x` evidence acceptance. It needs Linux-x64 with glibc 2.40 or later; legacy verbs are
+unchanged. Readback run 39935018723 found both 1.15.0 tool archives entry-identical across GitHub Packages
+and nuget.org apart from the signature, both naming `282741b1`.
+
 | Contract | Version | Owner | Surface | Consumers |
 |---|---|---|---|---|
 | `scaffold-provider` | 1.1.0 | SDD | `.fsgg/providers.yml` + invocation protocol (canonical product-name param `name`, ADR-0005). **1.1.0** (2026-07-05, additive; SDD feature 080, [Rendering#142](https://github.com/FS-GG/FS.GG.Rendering/issues/142)): optional **`identifierParameter`** sink — a descriptor can name the param that receives an SDD-derived valid-F# identifier, so a product whose name is an illegal F# identifier (hyphenated `Roquelike-DungeonCrawler`) compiles; `None` ⇒ identical to 1.0.0. Rendering declares `identifierParameter: rootNamespace`. Released in `FS.GG.UI.Template 0.1.66-preview.1` (2026-07-05) — see coherence `scaffold-provider-identifier`. | Templates, Rendering |
