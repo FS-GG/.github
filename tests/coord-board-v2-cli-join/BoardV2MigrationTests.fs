@@ -625,6 +625,86 @@ module BoardV2MigrationTests =
         use report = JsonDocument.Parse(File.ReadAllText path)
         Assert.Contains("lacks project update capability", report.RootElement.GetProperty("ownerActions").GetRawText())
 
+    let private prepareFailure (report: string) =
+        let path = report + ".prepare-failure.json"
+        Assert.True(File.Exists path, "refused prepare must retain its private failure record")
+        Assert.Equal(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode path)
+        let document = JsonDocument.Parse(File.ReadAllText path)
+        let root = document.RootElement
+        Assert.Equal("fs.gg.board-v2.migration-prepare-failure/1", root.GetProperty("schema").GetString())
+        Assert.Equal("RefusedReadOnlyPreparation", root.GetProperty("state").GetString())
+        Assert.False(root.GetProperty("nativeMutationDispatched").GetBoolean())
+        Assert.False(root.GetProperty("automaticRetry").GetBoolean())
+        root
+
+    [<Fact>]
+    let ``actual CLI prepare refusal retains its typed transport reason without a prepared report`` () =
+        use fixture = new Fixture()
+        fixture.Native.Transform <- fun _ _ -> Error(Errors.Transport "synthetic connection reset")
+        let code, path = fixture.Prepare "prepare-transport-refusal"
+        Assert.Equal(3, code)
+        Assert.False(File.Exists path)
+        Assert.False(Directory.Exists(path + ".invocation"))
+        Assert.Empty fixture.Native.Mutations
+        let root = prepareFailure path
+        Assert.Equal("native-preparation", root.GetProperty("stage").GetString())
+        Assert.Equal("transport", root.GetProperty("failureCode").GetString())
+        Assert.Equal("transport", root.GetProperty("errorClass").GetString())
+        Assert.Equal("transport", root.GetProperty("reason").GetString())
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("exceptionType").ValueKind)
+        Assert.False(root.GetProperty("preparedReportPresent").GetBoolean())
+        Assert.DoesNotContain("synthetic connection reset", File.ReadAllText(path + ".prepare-failure.json"))
+
+    [<Fact>]
+    let ``actual CLI prepare drift and unexpected read failure retain bounded stage and class`` () =
+        use drift = new Fixture()
+        let mutable collections = 0
+        drift.Native.BeforeRead <- fun (request: Transport.Request) ->
+            match request.Body with
+            | Transport.Query(document, _) when document.Contains "viewer{id login}" ->
+                collections <- collections + 1
+                if collections = 2 then
+                    let fields =
+                        drift.Native.Snapshot.Fields
+                        |> List.map (fun (field: Field) ->
+                            if field.Id = scope.StatusFieldId then { field with Options = (field.Options |> List.map (fun (option: SelectOption) -> { option with Description = "owner changed descriptor" })) }
+                            else field)
+                    drift.Native.Snapshot <- { drift.Native.Snapshot with Fields = fields }
+            | _ -> ()
+        let code, path = drift.Prepare "prepare-drift"
+        Assert.Equal(3, code)
+        Assert.False(File.Exists path)
+        let root = prepareFailure path
+        Assert.Equal("native-preparation", root.GetProperty("stage").GetString())
+        Assert.Equal("malformed-or-refused", root.GetProperty("errorClass").GetString())
+        use thrown = new Fixture()
+        thrown.Native.BeforeRead <- fun _ -> raise (InvalidOperationException "synthetic private detail /home/secret")
+        let code, path = thrown.Prepare "prepare-exception"
+        Assert.Equal(3, code)
+        Assert.Empty thrown.Native.Mutations
+        let root = prepareFailure path
+        Assert.Equal("native-preparation", root.GetProperty("stage").GetString())
+        Assert.Equal("invocation-io-or-unexpected-failure", root.GetProperty("failureCode").GetString())
+        Assert.Equal("System.InvalidOperationException", root.GetProperty("exceptionType").GetString())
+        Assert.DoesNotContain("/home/secret", File.ReadAllText(path + ".prepare-failure.json"))
+
+    [<Fact>]
+    let ``actual CLI prepare success and unowned output refusals write no failure record`` () =
+        use fixture = new Fixture()
+        let code, path = fixture.Prepare "prepare-success"
+        Assert.Equal(0, code)
+        Assert.False(File.Exists(path + ".prepare-failure.json"))
+        let original = File.ReadAllBytes path
+        let input = Path.Combine(fixture.Directory, "prepare-success-scope.json")
+        Assert.Equal(3, fixture.Run [ "migration-prepare"; "--scope-file"; input; "--report-file"; path ])
+        Assert.Equal<byte>(original, File.ReadAllBytes path)
+        Assert.False(File.Exists(path + ".prepare-failure.json"))
+        let fresh = Path.Combine(fixture.Directory, "prepare-collision-prepared.json")
+        File.WriteAllText(fresh + ".prepare-failure.json", "first retained failure")
+        Assert.Equal(3, fixture.Run [ "migration-prepare"; "--scope-file"; input; "--report-file"; fresh ])
+        Assert.False(File.Exists fresh)
+        Assert.Equal("first retained failure", File.ReadAllText(fresh + ".prepare-failure.json"))
+
     [<Fact>]
     let ``actual dependent view filter refuses an intervening owner edit after create readback`` () =
         use fixture = new Fixture()

@@ -180,6 +180,15 @@ for the read-only report. Apply binds selected prepared bytes, actual executing 
 identities, native principal/capability, exact fresh scope and a finite planning window. Copying
 unchanged prepared bytes to a different path refuses before native reads or a new reservation.
 
+Once preparation owns a new report path, a refusal writes a private `0600`
+`REPORT.prepare-failure.json` beside the absent or partial report
+(`fs.gg.board-v2.migration-prepare-failure/1`). It records the stage, the bounded failure code,
+the typed error class and allowlisted reason, the exception type name only, whether report bytes
+exist, and the injected-clock failure time. Exception messages, paths and response bytes are never
+copied. A pre-existing failure record refuses the new preparation without being rewritten. The
+record does not authorize a retry, and it does not turn a later successful preparation into an
+explanation of this one.
+
 The original path owns its exclusive reservation and private invocation directory. Exact intent and
 request bytes precede each one-shot send; file flush and production Linux x64 directory-entry barriers
 must succeed. Unsupported barriers refuse; source review is not runtime filesystem qualification.

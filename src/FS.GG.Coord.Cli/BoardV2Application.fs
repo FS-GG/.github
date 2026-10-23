@@ -329,6 +329,8 @@ module BoardV2Application =
                 | _ -> Error "unsupported migration command or argument; no effects admitted")
         | [] -> Error "missing migration command"
 
+    /// Private sibling that retains a refused migration-prepare's typed, bounded reason.
+    let private migrationPrepareFailurePath (reportPath: string) = reportPath + ".prepare-failure.json"
     let private migrationDigest (bytes: byte array) = SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
     let private privatePath (path: string) =
         if OperatingSystem.IsWindows() then invalidArg "path" "this private evidence route requires Unix permission verification"
@@ -474,19 +476,35 @@ module BoardV2Application =
         let privateJson = privateJson syncDirectory
         let utf8 = System.Text.UTF8Encoding(false, true)
         let mutable ownsInvocation = false
+        // Prepare is read-only. Once it owns its new output identity, any refusal leaves a bounded
+        // private failure record beside the absent or partial report instead of only an exit code.
+        let mutable ownsPreparedOutput = false
+        let mutable prepareStage = "output-preconditions"
+        let mutable prepareError: Errors.IoError option = None
         let fail () =
             eprintfn "fsgg-coord-engine: board-v2 migration refused or incomplete; inspect private original invocation evidence; no automatic retry"
             3
         let invoke () =
             match command with
             | MigrationPrepare(scopePath, reportPath) ->
-                if scopePath = reportPath || File.Exists reportPath || Directory.Exists(reportPath + ".invocation") then invalidArg "path" "new distinct prepared output required"
+                let failurePath = migrationPrepareFailurePath reportPath
+                if scopePath = reportPath || File.Exists reportPath || Directory.Exists reportPath || Directory.Exists(reportPath + ".invocation")
+                   || File.Exists failurePath || Directory.Exists failurePath then invalidArg "path" "new distinct prepared output required"
+                ownsPreparedOutput <- true
+                let classify (error: Errors.IoError) =
+                    prepareError <- Some error
+                    migrationErrorClass error
+                prepareStage <- "scope-read"
                 let scopeJson = utf8.GetString(privateRead 262144L scopePath)
-                V2Migration.parseScope scopeJson |> Result.mapError migrationErrorClass
+                prepareStage <- "scope-parse"
+                V2Migration.parseScope scopeJson |> Result.mapError classify
                 |> Result.bind (fun scope ->
+                    prepareStage <- "executing-identity"
                     migrationIdentity scope |> Result.bind (fun () ->
-                        migrationStable connection scope |> Result.mapError migrationErrorClass))
+                        prepareStage <- "native-preparation"
+                        migrationStable connection scope |> Result.mapError classify))
                 |> Result.map (fun prepared ->
+                    prepareStage <- "prepared-report-write"
                     privateJson reportPath (V2Migration.encodePrepared ({ prepared with PreparedPath = Some reportPath }))
                     0)
             | MigrationApply(preparedPath, expectedHash, owner, selection, windowUntil) ->
@@ -647,8 +665,25 @@ module BoardV2Application =
                                         match V2Migration.prepare scope final with
                                         | Ok observed when observed.Changes.IsEmpty -> Ok 0
                                         | _ -> Ok 3))))
-        let terminal (failureCode: string) =
+        let terminal (failureCode: string) (exceptionType: string option) =
             match command with
+            | MigrationPrepare(_, reportPath) when ownsPreparedOutput ->
+                try
+                    let bounded (text: string) = if text.Length <= 256 then text else text.Substring(0, 256)
+                    let failureMetadata =
+                        {| schema = "fs.gg.board-v2.migration-prepare-failure/1";
+                           state = "RefusedReadOnlyPreparation";
+                           nativeMutationDispatched = false;
+                           automaticRetry = false;
+                           stage = prepareStage;
+                           failureCode = bounded failureCode;
+                           errorClass = (prepareError |> Option.map migrationErrorClass |> Option.toObj);
+                           reason = (prepareError |> Option.map migrationFailureReason |> Option.toObj);
+                           exceptionType = (exceptionType |> Option.map bounded |> Option.toObj);
+                           preparedReportPresent = File.Exists reportPath;
+                           failedAt = clock.GetUtcNow() |}
+                    privateJson (migrationPrepareFailurePath reportPath) (JsonSerializer.Serialize(failureMetadata))
+                with _ -> () // The exit code and stderr remain; no retry or rewrite follows.
             | MigrationApply(preparedPath, _, _, _, _) ->
                 let directory = preparedPath + ".invocation"
                 if ownsInvocation && Directory.Exists directory then
@@ -666,8 +701,8 @@ module BoardV2Application =
         try
             match invoke() with
             | Ok code -> code
-            | Error code -> terminal code
-        with _ -> terminal "invocation-io-or-unexpected-failure"
+            | Error code -> terminal code None
+        with error -> terminal "invocation-io-or-unexpected-failure" (Some(error.GetType().FullName))
 
     let runMigrationWithCustody (connection: V2MigrationTransport.IConnection) (syncDirectory: string -> unit) (clock: TimeProvider) (arguments: string list) =
         try
