@@ -65,7 +65,8 @@ block of one API response precedes the next response; active Codex rollouts keep
 
 Re-emitting a retired identity would be refused by the receiver as an identity conflict and quarantine the
 whole batch, so each re-read path suppresses records instead, with a visible gap:
-`source-alias-skipped` for the same inode under another path; `closed-source-discontinuity-skipped` for a
+`source-alias-skipped` for the same file under another path (same inode and continuing the owning entry's
+anchored cursor, so a reused inode is not mistaken for an alias); `closed-source-discontinuity-skipped` for a
 closed file that no longer continues its entry (marked, and not rescanned); `continuity-replay-suppressed`
 for an active file re-read after a continuity gap, at or before its high-water timestamp;
 `retired-response-suppressed` for any identity in the bounded set of the 4096 most recently retired; and
@@ -73,7 +74,11 @@ for an active file re-read after a continuity gap, at or before its high-water t
 one second after the modification time of the newest evicted entry (at most 384 entries are kept).
 Records without a timestamp are suppressed wherever a timestamp bound applies. One case remains: a copy of
 an old closed file under a new inode, made after its identities left the recent set but before its entry is
-evicted, can repeat responses and would be quarantined at the receiver. Retirement travels in the existing
+evicted, can repeat responses and would be quarantined at the receiver. At about 150 transcripts and
+10,000 responses a day, the recent set covers roughly nine hours and the retired entries roughly two and a
+half days, so that window is about two days. A source leaves the active set only when a pass closes it, so
+the caller must keep selecting each active path until it closes; eight abandoned active paths (for example,
+deleted while active) block new sources with `source-index-full-capture-deferred`. Retirement travels in the existing
 intent, so a crash applies it once. Measured before the change, two real transcripts filled the
 256-identity index in ten passes and every later pass deferred.
 

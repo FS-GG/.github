@@ -1357,10 +1357,25 @@ module SkillTelemetryAdapter =
                                     budget <- budget - raw.ScannedBytes
                                     let instance = raw.Cursor.SourceInstance
                                     // A hard link or rename of a source this association already owns is the same file
-                                    // under another key; reading it again would re-emit retired identities.
+                                    // under another key; reading it again would re-emit retired identities. The inode
+                                    // alone is not enough, because a deleted transcript's inode can be reused by a new
+                                    // file: the candidate must also continue the owning entry's anchored cursor.
+                                    let owner =
+                                        (sources |> Seq.tryFind (fun pair -> pair.Key <> key && pair.Value["sourceInstance"].GetValue<string>() = instance)
+                                         |> Option.map (fun pair -> (passiveCursor pair.Value).Value))
+                                        |> Option.orElse (
+                                            retired |> Seq.tryFind (fun pair -> pair.Key <> key && pair.Value["i"].GetValue<string>() = instance)
+                                            |> Option.map (fun pair -> retiredCursor pair.Value))
                                     let alias =
-                                        (sources |> Seq.exists (fun pair -> pair.Key <> key && pair.Value["sourceInstance"].GetValue<string>() = instance))
-                                        || (retired |> Seq.exists (fun pair -> pair.Key <> key && pair.Value["i"].GetValue<string>() = instance))
+                                        match owner with
+                                        | None -> false
+                                        | Some cursor ->
+                                            match NativeUsage.scanPassiveFrom sourceRoot path (Some cursor) 16384 1 with
+                                            | Ok probe ->
+                                                budget <- budget - probe.ScannedBytes
+                                                not (List.contains "source-continuity-gap" probe.Diagnostics)
+                                            // An unreadable probe keeps the conservative answer.
+                                            | Error _ -> true
                                     if alias then passiveGap state "source-alias-skipped"
                                     else
                                     let suppress code (keep: PassiveNativeRecord -> bool) (scan: PassiveScan) =

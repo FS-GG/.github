@@ -1626,8 +1626,10 @@ module WorkspaceTelemetryApplicationTests =
             hardLink active activeLink
             retirementCapture root home ledger [ active; activeLink ] |> ignore
             File.Delete activeLink
-            File.Delete active
-            File.WriteAllText(active, activeText)
+            // Rename a fresh file over the original, which guarantees a new inode on every filesystem.
+            let replacement = active + ".replacement"
+            File.WriteAllText(replacement, activeText)
+            File.Move(replacement, active, true)
             let replaced = retirementCapture root home ledger [ active ]
             Assert.Equal(45, ledger.Count)
             Assert.Equal(0, ledger.Duplicates)
