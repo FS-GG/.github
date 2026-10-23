@@ -13,11 +13,14 @@ feeds:
 - **FSharpSurfaceCommand:** org feed `7cecc0a8…`, equal to the run's recorded producer hash, and nuget.org `4c9147d6…` share 38 identical entries; nuget.org adds only `.signature.p7s`.
 - Both nuspecs name `282741b1`.
 
-The nuget.org tools cold-install into an isolated tool path. The installed CLI passed the provider-mode SDD 2.4.0
-journey (FS-GG/FS.GG.SDD#928 C3.1-03 / SDD928-C2.3) in the fdev container on Home (glibc 2.44, local profile). A separate run as `eugen` on Home is admitted on its own:
+Both 1.15.0 tools cold-install from the nuget.org bytes into isolated tool paths. In the fdev container on Home
+(glibc 2.44, `standard` profile), `FS.GG.Governance.Cli` 1.15.0 and `FS.GG.SDD.Cli` 2.4.0, installed from nuget.org
+bytes, passed the provider-mode SDD 2.4.0 journey (FS-GG/FS.GG.SDD#928 C3.1-03 / SDD928-C2.3):
 - the fixture's `run` writes the declared `fsgg.governance-handoff@2.0.0` evidence and Verify exits 0;
 - missing, stale, mismatched and exit-2 runs exit 1;
 - provenance-digest, policy-identity, platform and unrouted-path refusals exit 3.
+
+A separate run of the same journey as `eugen` on Home is admitted on its own and is not recorded here.
 
 Registry text only. No contract version, coherence flag or package pin changes. GOV-423-C2 stays open; its remaining
 assertions live on Governance#423.
