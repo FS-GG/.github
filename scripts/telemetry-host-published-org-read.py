@@ -39,7 +39,7 @@ ASSETS = {"manifest.json": (662076940, 768, MANIFEST_SHA),
 PINS = {"telemetry-host-release.py": "b87002d3192c2cf70d9974a8d7a6b2c3cdca248378c171f04b81519d14c40f7e",
         "release-saga.py": "24bdfa2a4c1491ecc1ddf24f797a072372fdce14881d413d9301b739dc77501c",
         "fsgg_feed.py": "f7650429432417af72168c288cdee347b338328848870cb4f2f18d6b62d0733f"}
-CHOICES = ("coherent-0112-absence", "host-080-org-artifact")
+CHOICES = ("coherent-0113-absence", "host-080-org-artifact")
 FILES = {PACKAGE, "manifest.json", "publication-journal.json", "local-feed-observation.json",
          "native-before.json", "native-after.json", "observation.json"}
 

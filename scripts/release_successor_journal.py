@@ -36,11 +36,11 @@ SCHEMA = "fsgg.release-successor-journal/1"
 
 # One prospective root-selected source composition; no namespace allocation or effect authority.
 # Completed110/observer journal and frozen original cuts remain immutable.
-CURRENT_RELEASE = {"version": "0.112.0", "predecessor": "0.111.0",
-    "logicalRef": "refs/heads/fsgg/v2/journal/release/coord112-skill-routing-20261021-01",
-    "directory": "state/releases/coord112-skill-routing-20261021-01",
-    "predecessorSource": "bd60a97a422c8fc8ca0c17b2a9dea4e504b708d2",
-    "predecessorContentId": "sha256:ea0b66a325ef425510a362e189469c5c6e6936880f455898e78520076737298b"}
+CURRENT_RELEASE = {"version": "0.113.0", "predecessor": "0.112.0",
+    "logicalRef": "refs/heads/fsgg/v2/journal/release/coord113-claude-usage-20261023-01",
+    "directory": "state/releases/coord113-claude-usage-20261023-01",
+    "predecessorSource": "d5af6a987e915bd0a1b572bcc09ad0d4b2e798b5",
+    "predecessorContentId": "sha256:1a6f0e3a80f1554819dc8c4185a35ab9fd9894c6b8d6ae97d85f4f3282259adb"}
 
 
 
