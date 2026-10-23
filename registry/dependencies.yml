@@ -887,14 +887,14 @@ contracts:
         oracle: "tests/Game.Core.Fable.Tests/fixtures/v1/expected.bin — 442 bytes, SHA-256 9c0d7128f7b9558ef7e985618b1165199f83a0bb4af7533b175cc95b340c4a24"
   - id: wasm-shared-runtime
     version: "0.7.0"   # SOURCE/PUBLISHED: original publisher39894673177/a1 at P15e287d7c8884f088b7db41140f108f3f0136043 (Game#728, fixing Game#727); installed0.7 remains unqualified.
-    package-version: "0.7.0"   # Both feeds and release421418319 verified; last accepted installed profile remains0.6 P8a5e/Q9a98.
+    package-version: "0.7.0"   # Both feeds verified by the original publisher's org/public jobs and release421418319; nuget.org independently re-verified (GitHub Packages not independently readable); last accepted installed profile remains0.6 P8a5e/Q9a98.
     package-tag: "wasm/v0.7.0"
     owner: game
     surface: "FS.GG.Wasm.Contracts and FS.GG.Wasm.Browser coherent package set; closed generated-policy Worker, browser lifecycle, terminal Process retirement, portable Fable sources and coupled author SDK archive"
     consumers: []   # Producer/installed qualification does not establish BAR/SC2/FourD product adoption.
     profiles:
       shared-wasm:
-        source-frontier: "0.7.0 at 15e287d7c8884f088b7db41140f108f3f0136043 (Game#728), genuinely published: the policy deadline starts at Worker readiness with a separate bounded Worker startup (WorkerStartTimeout), and the Worker ships as one self-contained bundle. No installed0.7 or consumer acceptance follows; last accepted installed profile remains0.6."
+        source-frontier: "0.7.0 at 15e287d7c8884f088b7db41140f108f3f0136043 (Game#728), genuinely published: the policy deadline starts at Worker readiness with a separately bounded Worker startup (WorkerStartTimeout; Game#727); the self-contained bundled Worker shipped since0.5 is retained. No installed0.7 or consumer acceptance follows; last accepted installed profile remains0.6."
         identity: "wasm/v0.7.0 — genuinely published coherent current set"
         packages: "FS.GG.Wasm.Contracts@0.7.0 / FS.GG.Wasm.Browser@0.7.0; exact same-version Browser-to-Contracts dependency; genuinely published coherent pair. Originals Contracts 6a77863392f371f07e5b5fd7af94bdf45c7c87dea976bbc3b20336b59df70618 / Browser 1d5e9df281357919a1749f0bf28d1786d36192cb768c756d4e4bec3fc7aae89e; nuget.org Contracts 79060cefe7b870e7b5aee6ea5c8342c33c1581f16ad4f94db5aa57d28d22bee7 / Browser bfc28ac97df243aedaae8d913ff555967039b8aef824c48db970d50c14d198cd equal them in every entry except .signature.p7s."
         sdk: "fsgg-wasm-sdk-0.7.0.tar.gz — coupled source archive under wasm/v0.7.0; SHA-256 090658bd29c79500ed6f3f3defe89a14f7b8330b39586cd01880429258a99cb2. Prior immutable0.6 SDK SHA-256 b06bdd4a75e9f9727f58cdbeb272e42f1c88607f2326152c67feb5dc5aeccd6f."
