@@ -168,6 +168,20 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-10-23** — ACCEPTED COHERENT113 PUBLICATION (.github; #4640):
+
+Reconcile CLI/Kit/Drivers publication from immutable source `79db622ff4a51498e22ae5820eeb2b470fc743c5`:
+[candidate39959647376](https://github.com/FS-GG/.github/actions/runs/39959647376),
+[preflight39961075666](https://github.com/FS-GG/.github/actions/runs/39961075666), first publisher
+[39961563619](https://github.com/FS-GG/.github/actions/runs/39961563619) (stopped at generation4 on a transient
+release-list pagination refusal), ordinary forward [39962349653](https://github.com/FS-GG/.github/actions/runs/39962349653)
+(generation14 Kit nuget visibility checkpoint) and ordinary forward
+[39965468132](https://github.com/FS-GG/.github/actions/runs/39965468132) reached generation33/all16 verified effects and
+[release421880935](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.113.0). nuget.org packages match the
+original normalized payloads; org acceptance uses the hosted original receipts and protected journal, preserving the
+local403 Unknown. Advance the canonical source tool manifest to113 and regenerate published inventory digests. This
+metadata reconciliation does not repack113 or establish installed CLI or Claude capture adoption.
+
 - **2026-10-23** — CREATOR022 PUBLICATION ACCEPTED (github; #4811, #4825, #4831): record candidate39936317651/artifact12494691636 and original publisher39939741711/a1, all eight effects/final17 on fresh journal022r1, promoted release421718245/source6e6fb9b9. Release asset5a34a5cd and signed public NuGetcaa91285 share producer payloadef06eab2; hosted GitHub-feed observation retained, local GitHub403 remains a limit. Isolated public install and typed-sdd omission behaviour verified; abandoned journal022 (publisher39925400140, unsent tag intent) stays history.
 
 - **2026-10-23** — HOST090 SOURCE (.github; #4640): advance only independent Telemetry Host source to0.9.0 so a Host built from current main admits passive provider-usage-observation/1 with provenance claude-local-transcript/1 (#4802); published Host0.8.0 at74cbd6f0 refuses it. New tag telemetry-host/v0.9.0 and journal15 (utel-host-rel-15) are prospective coordinates over predecessor published0.8/journal14. Store14 and the receipt ABI are unchanged; published package-version/tag stay0.8.0. No candidate, preflight, publication or Home adoption is asserted.
