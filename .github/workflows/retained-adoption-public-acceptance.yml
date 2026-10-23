@@ -1,0 +1,68 @@
+# Read-only hosted public acceptance run for the retained knowledge adoption R4 (FS-GG/.github#4822).
+#
+# A Typed SDD console workspace created before project knowledge existed (published SDD.Cli 2.0.3 /
+# Workspace.Template 0.13.0) and used by its owner adopts project knowledge on the current published
+# SDD.Cli 2.4.0 / Workspace.Template 0.19.3. Public nuget.org feeds only and an isolated HOME. The job writes
+# nothing to any repository, feed, board or package registry and receives no token: `contents: read` is the
+# only permission and no credential reaches a child process. Its single output is the Actions evidence
+# artifact an independent reviewer checks against the pinned package identities. Dispatch-only.
+name: retained-adoption-public-acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retained-adoption-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Frozen receiver probes, hash-verified by the adapter.
+      - uses: actions/checkout@v7
+        with:
+          repository: FS-GG/FS.GG.Templates
+          ref: f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc
+          path: templates-probe-source
+          persist-credentials: false
+      # The current console descriptor (Workspace.Template 0.19.3), hash-verified by the adapter.
+      - uses: actions/checkout@v7
+        with:
+          repository: FS-GG/FS.GG.Templates
+          ref: 24f3c30790b401d4bc435a1b1c07c07ecfd30d76
+          path: templates-current
+          persist-credentials: false
+      # The pre-knowledge console descriptor (Workspace.Template 0.13.0), hash-verified by the adapter.
+      - uses: actions/checkout@v7
+        with:
+          repository: FS-GG/FS.GG.Templates
+          ref: 908da309c9a52490cf914c3f2d5ce1eaf1188b2e
+          path: templates-legacy
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Run the retained knowledge adoption
+        run: |
+          set -euo pipefail
+          test "$(git -C templates-probe-source rev-parse HEAD)" = f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc
+          test "$(git -C templates-current rev-parse HEAD)" = 24f3c30790b401d4bc435a1b1c07c07ecfd30d76
+          test "$(git -C templates-legacy rev-parse HEAD)" = 908da309c9a52490cf914c3f2d5ce1eaf1188b2e
+          python3 -B tests/new-sdd-workspace/knowledge-retained-adoption-public.py --source-controls
+          python3 -B tests/new-sdd-workspace/knowledge-retained-adoption-public.py --run \
+            --templates "$GITHUB_WORKSPACE/templates-probe-source" --current "$GITHUB_WORKSPACE/templates-current" \
+            --legacy "$GITHUB_WORKSPACE/templates-legacy" --work "$RUNNER_TEMP/retained-adoption-public"
+      - name: Keep the evidence (report, command journal and original outputs)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: retained-adoption-public-acceptance
+          path: |
+            ${{ runner.temp }}/retained-adoption-public/report.json
+            ${{ runner.temp }}/retained-adoption-public/evidence/
+          if-no-files-found: error
+          retention-days: 30
