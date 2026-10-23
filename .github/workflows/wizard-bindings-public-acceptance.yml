@@ -1,0 +1,51 @@
+# Read-only hosted public acceptance run for the two Wizard fable-bindings creation rows (FS-GG/.github#4642).
+#
+# Public nuget.org feeds only, an isolated HOME and the Wizard UNPINNED (no --pinned), on the published
+# cohort Wizard 0.21.0 / SDD.Cli 2.4.0 / Workspace.Template 0.19.3. The job reads published packages and
+# the public Templates source, writes nothing to any repository, feed, board or package registry, and
+# receives no token: `contents: read` is the only permission and no credential reaches a child process.
+# Its single output is the Actions evidence artifact an independent reviewer checks against the pinned
+# package identities. Dispatch-only: it never runs on pull_request, push or schedule.
+name: wizard-bindings-public-acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Frozen receiver probes, hash-verified by the adapter against the console helper's pins.
+      - uses: actions/checkout@v7
+        with:
+          repository: FS-GG/FS.GG.Templates
+          ref: f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc
+          path: templates-probe-source
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Run the public Wizard bindings rows
+        run: |
+          set -euo pipefail
+          test "$(git -C templates-probe-source rev-parse HEAD)" = f5fbd06ed9e6df40f9037c7acddf9eca3c6a14fc
+          python3 -B tests/new-sdd-workspace/knowledge-wizard-bindings-public.py --source-controls
+          python3 -B tests/new-sdd-workspace/knowledge-wizard-bindings-public.py --run \
+            --templates "$GITHUB_WORKSPACE/templates-probe-source" --work "$RUNNER_TEMP/wizard-bindings-public"
+      - name: Keep the evidence (report, command journal, original outputs, receiver file inventories)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: wizard-bindings-public-acceptance
+          path: |
+            ${{ runner.temp }}/wizard-bindings-public/report.json
+            ${{ runner.temp }}/wizard-bindings-public/evidence/
+          if-no-files-found: error
+          retention-days: 30
