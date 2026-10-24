@@ -31,6 +31,8 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-10-24** — PUBLICATION WRITER LOCK GUIDANCE (.github; #4753, ADR-0097): the operator-scope publishing-and-deployment skill gains the one org-wide publication writer lock paragraph; reconcile only its existing driver-manifest/skills-registry digest. No scope, owner, predicate or packaged-skill membership change.
+
 - **2026-10-23** — PUBLISHED113 INVENTORY (.github; #4640): reconcile only the generated publishing-and-deployment operator inventory and its existing driver-manifest/skills-registry digest after accepted coherent113 publication (release421880935, immutable source 79db622f).
 
 - **2026-10-23** — CREATOR022 SOURCE INVENTORY (.github; #4811): regenerate the publishing-and-deployment release inventory and its driver-manifest/skills-registry digest for NewSddWorkspace source0.22.0; published0.21.0 and all release authority boundaries are unchanged.
