@@ -2230,7 +2230,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "169945b2d619a46040e1dd68109e7f151832a72fcd53280ad540339807c65007",
-      "tree-sha256": "919749ecff316ae9720ef5599a39ee40553758d0ae0025063cad947477ff381c",
+      "tree-sha256": "6138d4c302124f4433dd2ed71ffbb560ecc45254f65bb35ad0798855e2e87df9",
       "files": [
         {
           "path": "SKILL.md",
@@ -2264,7 +2264,7 @@
         },
         {
           "path": "references/crash-recovery.md",
-          "sha256": "9dc9d73698f35a84908ff185f35acc0dfb6454095d8c6b08f6c646d86ac78ddd",
+          "sha256": "122ad3a0f66c90a3f4112850fcee7e41102646a645ed5ee8650b77f0edaa3f81",
           "executable": false
         },
         {
@@ -2304,7 +2304,7 @@
         },
         {
           "path": "references/lifecycle-contract.md",
-          "sha256": "b5b41d9a41d99230fdd12f9003878dfdc37412edc2a33b6d856d42aa64077d84",
+          "sha256": "2b068f43c7558b1bd8aad0c3789ac13bb475996fda178df1cf1ab37a8abb8d81",
           "executable": false
         },
         {
@@ -2319,7 +2319,7 @@
         },
         {
           "path": "references/organization-v2-inspection.md",
-          "sha256": "daf2577dcfc55dd7a31c0d7449638ef6153dfbc644197eb7870bf712471be0fc",
+          "sha256": "704f1e5899aaa8d261cf3a56c6061b9d7da5bd6fe2c7638b38a95e974b301db8",
           "executable": false
         },
         {

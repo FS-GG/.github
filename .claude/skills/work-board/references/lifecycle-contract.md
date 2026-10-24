@@ -206,7 +206,7 @@ review or evidence collection while another lane waits. A blocked parent or busy
 by itself exclude independent work; action-specific prerequisites and admission still apply.
 
 Use actual remaining worker, CPU/memory, integrator and hosted-CI capacity after active demand and
-known/Unknown reservations. Free agent slots are not resource capacity. Admit each chosen operation
+known/Unknown reservations. Free agent slots are not resource capacity. Except for ADR-0096 ordinary development verification, admit each chosen operation
 before launch using its supported operation-specific profile; preserve required exclusive writes,
 large-image limits and one integrator for shared surfaces. Do not add blanket serial execution when
 independently qualified operations fit the remaining capacity together.

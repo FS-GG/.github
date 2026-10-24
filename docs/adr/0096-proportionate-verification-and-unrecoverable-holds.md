@@ -4,6 +4,7 @@
 - **Date:** 2026-10-24
 - **Affects:** all FS-GG repositories (coordination process); `.github` work-board, check-board and recovery skills
 - **Decision owner:** repository owner (user ruling), recorded by Programme/root
+- **Amends:** [ADR-0093](0093-original-103-authentication-domain-policy.md) and [ADR-0095](0095-utel-resource-containment-for-fresh-profiles.md) — the "all 439 inherited reservations survive" clauses. The reservations survive as citable history but no longer fence demonstrably isolated fresh operations. Original `.103` stays attempted-unknown and unreplayed, and `.104` stays under its own release gates.
 - **Ruling custody:** [FS-GG/.github#4730 comment 6385546431](https://github.com/FS-GG/.github/issues/4730#issuecomment-6385546431)
 
 ## Context
@@ -79,7 +80,9 @@ B does not:
 - Owning issues stop carrying the 439/46 holds as a blocker. A specific named hold must be
   cited by its own owning record.
 - The work-board lifecycle contract, recovery references and organization inspection contract
-  are updated in the same delivery to state this boundary.
+  state this boundary. The check-board copy of the inspection contract ships in the coordination
+  kit, and its matching sentence follows at the next coherent-set release. Until then this ADR
+  governs where the two copies differ.
 
 ## Alternatives considered
 

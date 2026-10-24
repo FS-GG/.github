@@ -1,6 +1,6 @@
 # ADR-0095: Enforced UTEL resource containment for fresh profiles
 
-- **Status:** Accepted policy; implementation, production budgets and admission pending
+- **Status:** Accepted policy; inherited-hold fencing amended by [ADR-0096](0096-proportionate-verification-and-unrecoverable-holds.md); implementation, production budgets and admission pending
 - **Date:** 2026-10-16
 - **Affects:** `.github`, Coordination and SystemAdmin UTEL integration
 - **Decision owner:** Programme
