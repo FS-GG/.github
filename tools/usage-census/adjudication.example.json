@@ -1,0 +1,16 @@
+{
+  "V": {
+    "FS-GG/.github#4854": "APPROVE (C6385548575)",
+    "FS-GG/.github#4855": "APPROVE (submitted review, state COMMENTED)",
+    "FS-GG/FS.GG.Coordination#1055": "approved (PR body)"
+  },
+  "E": {
+    "FS-GG/.github#4825": "REJECT recorded at an earlier head; no verdict at the final head"
+  },
+  "A": [
+    "FS-GG/FS.GG.Templates#762"
+  ],
+  "NOTE": {
+    "FS-GG/FS.GG.Coordination#1057": "independent exact-source review stated; no explicit verdict"
+  }
+}

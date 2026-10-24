@@ -1,0 +1,13 @@
+{
+  "org": "FS-GG",
+  "project": 3,
+  "issue": "FS-GG/.github#4639",
+  "task": "census-4639-cont",
+  "lo": "2026-10-23T00:00:00Z",
+  "hi": "2026-10-24T18:00:00Z",
+  "coord_version": "61526e94",
+  "reader": "~/.cache/usage-census/reader/fsgg-coord-engine",
+  "receipt_store": "~/.cache/usage-census/receipts",
+  "claude_home": "~/.claude/projects",
+  "codex_home": "~/.codex/sessions"
+}

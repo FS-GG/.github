@@ -31,3 +31,14 @@ nonmaterial observations remain in the review. No routine minted identity, marke
 critic chain or repair-phase round reset is required. Only explicit human selection loads
 `pnext-item/references/independent-review.md` and its scoped heavyweight contract. Use this role only
 where actual runtime/model routing and delegation are authorized.
+
+When the review is posted as a PR comment or a submitted PR review, end it with exactly one final line,
+alone, with nothing after it:
+
+`VERDICT: APPROVE @ <40-hex head>` or `VERDICT: REQUEST_CHANGES @ <40-hex head>`
+
+The head is the full 40-character SHA of the exact candidate you reviewed, the same head the review text
+names. A rejection is `REQUEST_CHANGES`. One review comment carries one verdict line. A re-review at a new
+head is a new comment with its own line; never edit an earlier comment to change it. The line is a
+machine-readable convenience for census and delivery tooling, not an authority: it grants no merge or
+publication authority and does not replace the findings or any strict review-decision record.
