@@ -50,9 +50,40 @@ checks passed, and native merge readback identifies protected commit
 This closes SDD's selected ordinary routine-producer activation assertion. Published typed
 replacement installation, downloaded-only package adoption, native acceptance and administrative
 retirement remain open under their owning gates. [FsQuint #44](https://github.com/FS-GG/FsQuint/pull/44)
-remains source installation only: its protected routine workflow has no genuine run at the
-2026-10-15 readback. The original FsQuint Execution adoption candidate and its reservations
+was source installation only: its protected routine workflow had no genuine run at the
+2026-10-15 readback (activation is recorded in the next section). The original FsQuint Execution adoption candidate and its reservations
 remain held pending accepted producer publication and the existing receiver qualification.
+
+### Selected ordinary receiver activation — FsQuint
+
+The producer installed by [FsQuint #44](https://github.com/FS-GG/FsQuint/pull/44) (merge
+`48cf3075914583f9830e49a2f400678f1546024d`) subsequently admitted a genuine routine source
+change through its unchanged default-branch `pull_request_target` workflow.
+[Run 40120326445, attempt 1](https://github.com/FS-GG/FsQuint/actions/runs/40120326445)
+admitted [FsQuint #46](https://github.com/FS-GG/FsQuint/pull/46) (org-wide publication writer
+lock adoption, FS-GG/.github#4753) at exact head `1690d96b89d872e9cfec6643aa0cc678d1cc6f4a`
+(one changed path), base `48cf3075914583f9830e49a2f400678f1546024d`. The log reports
+`check-claim-generation: OK` with `operation=source-change`. The PR's `qualify` check
+([run 40120326526](https://github.com/FS-GG/FsQuint/actions/runs/40120326526)) and the
+`routine-eligibility` check passed, and native merge readback identifies protected commit
+`9d28d27dad8b3a8d9040deb3fce18dcc7d8f551e`; the main-push `ci` run
+[40120617845](https://github.com/FS-GG/FsQuint/actions/runs/40120617845) also passed. The five producer
+files (`.fsgg/routine-development.json`, `.github/workflows/routine-eligibility.yml`,
+`scripts/check-claim-generation.py`, `scripts/check-routine-eligibility-envelope.py`,
+`scripts/lib/gate.py`) are byte- and mode-identical at the installation merge (which was also #46's base) and at
+the protected merge, and match FS-GG/.github commit `416381bc4da37cb5089da08a45282e2222104c27`.
+
+This closes FsQuint's selected ordinary routine-producer activation assertion
+([FsQuint #45](https://github.com/FS-GG/FsQuint/issues/45)); no synthetic change was needed.
+FsQuint has no repository branch protection, so "required" checks are the policy list in
+`.fsgg/routine-development.json`, not a GitHub-enforced merge gate; of its three names only
+`routine-eligibility` exists as a check run on #46 (beside `qualify`), the other two are
+echoed by the validator but not separate checks. No old FsQuint route is
+established as superseded: the vendored `work-roadmap` skill is an explicitly invoked tool, not
+a gate that the producer replaces, so nothing is retired. The producer is the canonical Python
+eligibility check, not a published typed (F#) replacement; typed replacement installation,
+downloaded-only package adoption, native acceptance and administrative retirement remain open
+under their owning gates.
 
 ### Later outcome outline, not another ready queue
 
