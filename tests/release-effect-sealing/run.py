@@ -204,9 +204,11 @@ def verify_publication_lock_cut(document, source):
     assert set(amendment) == {"unit", "sourceOnly", "previousAcceptedSource", "previousWorkflowSha256",
                               "previousRouteCanonicalSha256", "previousHistoricalAttestationsCanonicalSha256",
                               "decision", "lockAction", "gateStep", "replacedGroup", "writerJobs",
-                              "observationJobs", "operationAcceptance"}
+                              "observationJobs", "operationAcceptance", "jobNameMarker", "timeouts"}
     assert {k: amendment[k] for k in ("unit", "sourceOnly", "decision", "lockAction", "gateStep", "replacedGroup",
-                                      "writerJobs", "observationJobs", "operationAcceptance")} == {
+                                      "writerJobs", "observationJobs", "operationAcceptance", "jobNameMarker", "timeouts")} == {
+        "jobNameMarker": "[org-publication-writer]",
+        "timeouts": {"publish": {"from": 60, "to": 90}, "recovery-complete": {"from": 28, "to": 48}},
         "unit": "PUBLICATION-WRITER-LOCK-4753", "sourceOnly": True, "decision": "ADR-0097",
         "lockAction": ".github/actions/publication-writer-lock", "gateStep": "Acquire org publication writer lock",
         "replacedGroup": "release-new-sdd-workspace-successor-publish",
@@ -231,10 +233,18 @@ def verify_publication_lock_cut(document, source):
     gate = re.compile(re.escape(LOCK_GATE) + r"          max-wait-minutes: [0-9]+\n")
     assert len(gate.findall(source)) == source.count("Acquire org publication writer lock") == 2
     restored = gate.sub("", source)
-    for name in ("publish", "recovery-complete"):
+    marked = " [org-publication-writer]\n"
+    assert restored.count(marked) == 2, "exactly the two writer jobs carry the name marker"
+    restored = restored.replace(marked, "\n")
+    for name, (was, now) in (("publish", (60, 90)), ("recovery-complete", (28, 48))):
         marker = "\n  " + name + ":\n"
         assert restored.count(marker) == 1
-        restored = restored.replace(marker, marker + fence, 1)
+        head, tail = restored.split(marker, 1)
+        body_end = tail.index("\n  recovery-" ) if "\n  recovery-" in tail else len(tail)
+        job, rest = tail[:body_end], tail[body_end:]
+        old_line, new_line = f"    timeout-minutes: {now}\n", f"    timeout-minutes: {was}\n"
+        assert job.count(old_line) == 1, "writer job timeout carries only the declared lock wait"
+        restored = head + marker + fence + job.replace(old_line, new_line, 1) + rest
     assert hashlib.sha256(restored.encode()).hexdigest() == amendment["previousWorkflowSha256"], "lock cut failed whole-workflow inversion"
     historical_document = copy.deepcopy(document)
     historical_document["historicalRouteAttestations"].pop()
@@ -274,7 +284,7 @@ for defect in ("history-pop", "history-status", "amendment-unit", "retained-rout
         row["sha256"] = hashlib.sha256(source.encode()).hexdigest()
     if defect == "ungated-recovery":
         tail = full_workflow.rindex(LOCK_GATE)
-        source = full_workflow[:tail] + full_workflow[tail:].replace(LOCK_GATE + "          max-wait-minutes: 10\n", "", 1)
+        source = full_workflow[:tail] + full_workflow[tail:].replace(LOCK_GATE + "          max-wait-minutes: 20\n", "", 1)
         row["sha256"] = hashlib.sha256(source.encode()).hexdigest()
     try:
         verify_publication_lock_cut(mutated, source)

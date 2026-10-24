@@ -44,6 +44,7 @@ from datetime import datetime, timezone
 sys.dont_write_bytecode = True
 
 GATE_STEP = "Acquire org publication writer lock"
+MARKER = "[org-publication-writer]"
 REGISTRY_REPOSITORY = "FS-GG/.github"
 REGISTRY_PATH = "registry/publication-writers.json"
 API = "https://api.github.com"
@@ -54,6 +55,7 @@ SETTLE_SECONDS = 20.0  # absorb job-listing propagation delay before the first d
 CONFIRM_SECONDS = 10.0  # a second clear scan this much later must also be clear
 POLL_FIRST_SECONDS = 30.0
 POLL_MAX_SECONDS = 90.0
+HTTP_ATTEMPTS = 4  # 1 s, 2 s, 4 s between tries on 5xx and rate limiting
 MAX_CONSECUTIVE_READ_FAILURES = 5
 OWN_JOB_ATTEMPTS = 12
 OWN_JOB_RETRY_SECONDS = 5.0
@@ -70,24 +72,35 @@ class GitHubApi:
         self.token, self.base, self.timeout = token, base, timeout
 
     def get(self, path: str, raw: bool = False):
-        request = urllib.request.Request(
-            self.base + path,
-            headers={
-                "Accept": "application/vnd.github.raw" if raw else "application/vnd.github+json",
-                "Authorization": "Bearer " + self.token,
-                "X-GitHub-Api-Version": "2022-11-28",
-                "User-Agent": "fsgg-publication-writer-lock",
-            },
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - fixed https base
-                body = response.read(8_000_000)
-        except (urllib.error.URLError, OSError, TimeoutError) as error:
-            raise LockError(f"GitHub read failed for {path}: {error}") from error
-        try:
-            return json.loads(body)
-        except ValueError as error:
-            raise LockError(f"GitHub read returned non-JSON for {path}") from error
+        last = None
+        for attempt in range(HTTP_ATTEMPTS):
+            if attempt:
+                time.sleep(2.0 ** (attempt - 1))
+            request = urllib.request.Request(
+                self.base + path,
+                headers={
+                    "Accept": "application/vnd.github.raw" if raw else "application/vnd.github+json",
+                    "Authorization": "Bearer " + self.token,
+                    "X-GitHub-Api-Version": "2022-11-28",
+                    "User-Agent": "fsgg-publication-writer-lock",
+                },
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - fixed https base
+                    body = response.read(8_000_000)
+            except urllib.error.HTTPError as error:
+                last = error
+                if error.code in (429, 500, 502, 503, 504) or (error.code == 403 and error.headers.get("Retry-After")):
+                    continue
+                raise LockError(f"GitHub read failed for {path}: HTTP {error.code}") from error
+            except (urllib.error.URLError, OSError, TimeoutError) as error:
+                last = error
+                continue
+            try:
+                return json.loads(body)
+            except ValueError as error:
+                raise LockError(f"GitHub read returned non-JSON for {path}") from error
+        raise LockError(f"GitHub read failed for {path} after {HTTP_ATTEMPTS} attempts: {last}")
 
 
 def parse_time(value) -> float:
@@ -134,21 +147,16 @@ def load_registry(api) -> dict:
 
 
 def ticket_of(job: dict):
-    """(runner start, job id): fixed by GitHub before any step, so it cannot be renewed."""
-    steps = job.get("steps")
-    first = None
-    if isinstance(steps, list) and steps and isinstance(steps[0], dict):
-        first = steps[0].get("started_at")
-    started = first if isinstance(first, str) else job.get("started_at")
+    """(job started_at, job id): GitHub's clock, fixed when its runner takes the job."""
     job_id = job.get("id")
     if not isinstance(job_id, int) or isinstance(job_id, bool):
         raise LockError("job has no integer id")
-    return (parse_time(started), job_id)
+    return (parse_time(job.get("started_at")), job_id)
 
 
 def participates(job: dict) -> bool:
-    steps = job.get("steps")
-    return isinstance(steps, list) and any(isinstance(s, dict) and s.get("name") == GATE_STEP for s in steps)
+    name = job.get("name")
+    return isinstance(name, str) and MARKER in name
 
 
 def scan(api, registry: dict, now: float, lease: float = LEASE_SECONDS) -> list:
@@ -200,16 +208,16 @@ def find_self(api, repo: str, run_id: int, runner_name: str, sleep) -> dict:
         jobs = api.get(f"/repos/{repo}/actions/runs/{run_id}/jobs?filter=latest&per_page=100")
         items = jobs.get("jobs") if isinstance(jobs, dict) else None
         mine = [j for j in items or [] if j.get("status") == "in_progress" and j.get("runner_name") == runner_name]
-        if len(mine) == 1:
+        if len(mine) == 1 and isinstance(mine[0].get("started_at"), str):
             job = mine[0]
             if not participates(job):
-                raise LockError(f"this job has no step named {GATE_STEP!r}; other publishers cannot see it, so it must not publish")
+                raise LockError(f"this job's name lacks {MARKER!r}; other publishers cannot see it, so it must not publish")
             return {"job": job["id"], "ticket": ticket_of(job)}
         if len(mine) > 1:
             raise LockError("more than one in-progress job matches this runner; refusing to guess")
         if attempt + 1 < OWN_JOB_ATTEMPTS:
             sleep(OWN_JOB_RETRY_SECONDS)
-    raise LockError("this job could not be found in the Actions job list")
+    raise LockError("this job could not be found, started, in the Actions job list")
 
 
 def acquire(api, *, repo: str, run_id: int, runner_name: str, max_wait: float,
@@ -228,7 +236,7 @@ def acquire(api, *, repo: str, run_id: int, runner_name: str, max_wait: float,
     failures, delay, clear_once = 0, poll_first, False
     log(f"publication lock: job {me['job']} ticket {ticket[0]:.0f}/{ticket[1]}; registry {len(registry['writers'])} repositories")
     while True:
-        if clock() - started > max_wait:
+        if clock() - started >= max_wait:
             raise LockError(f"publication lock not acquired within {max_wait:.0f}s; no effect was attempted")
         try:
             participants = scan(api, registry, clock(), lease)
@@ -239,13 +247,13 @@ def acquire(api, *, repo: str, run_id: int, runner_name: str, max_wait: float,
             log(f"publication lock: read failure {failures}/{MAX_CONSECUTIVE_READ_FAILURES}: {error}")
             if failures >= MAX_CONSECUTIVE_READ_FAILURES:
                 raise
-            sleep(poll_first)
+            sleep(max(0.0, min(poll_first, max_wait - (clock() - started))))
             continue
         if not any(p["job"] == me["job"] for p in participants):
             # Our own job disappeared from its own listing: the view is stale or wrong. Never proceed on it.
             clear_once = False
             log("publication lock: own job absent from the scan; rescanning")
-            sleep(poll_first)
+            sleep(max(0.0, min(poll_first, max_wait - (clock() - started))))
             continue
         for ghost in (p for p in participants if p["ghost"]):
             log(f"publication lock: ignoring ghost job {ghost['repo']}#{ghost['run']} job {ghost['job']} (older than lease)")
@@ -257,12 +265,12 @@ def acquire(api, *, repo: str, run_id: int, runner_name: str, max_wait: float,
                 return {"job": me["job"], "ticket": list(ticket), "waitedSeconds": round(waited, 3),
                         "otherLiveParticipants": len(participants) - 1}
             clear_once = True
-            sleep(confirm)
+            sleep(max(0.0, min(confirm, max_wait - (clock() - started))))
             continue
         clear_once = False
         names = ", ".join(f"{p['repo']}#{p['run']}/{p['job']}" for p in ahead)
         log(f"publication lock: waiting for {len(ahead)} older publisher job(s): {names}")
-        sleep(delay)
+        sleep(max(0.0, min(delay, max_wait - (clock() - started))))
         delay = min(poll_max, delay * 1.5)
 
 

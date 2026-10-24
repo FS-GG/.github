@@ -156,8 +156,9 @@ successful preflight and published/installed readback are separate milestones.
 
 Every publishing job, in every repository, takes one serialized lock: a step named exactly
 `Acquire org publication writer lock` using `FS-GG/.github/.github/actions/publication-writer-lock`
-(the local path inside `.github`), placed before the first credential exchange or feed, tag or release
-write, and listed in `registry/publication-writers.json`. GitHub `concurrency` groups are
+(the local path inside `.github`), placed first in the job (only checkout may precede it), with the job
+name containing `[org-publication-writer]` (the API step list is unreliable, so other publishers
+recognise a participant by that name), and listed in `registry/publication-writers.json`. GitHub `concurrency` groups are
 per-repository, so they cannot serialize publishers in different repositories; do not add one as a
 writer exclusion. The oldest live publisher job proceeds; a second dispatch waits in its lock step and
 fails closed after its bounded wait. There is nothing to release: the job's end, however it ends,

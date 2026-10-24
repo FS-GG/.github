@@ -124,6 +124,22 @@ def workflow_files(root: str) -> list[str]:
     return files
 
 
+LOCK_STEP = "Acquire org publication writer lock"
+
+
+def lock_wait_minutes(job: dict) -> int:
+    """Minutes a job may spend waiting in the org publication writer lock step (ADR-0097).
+
+    Waiting for an older publisher is queueing, not work: the job's own budget must not shrink by
+    it, so the ceiling for a job carrying the lock step rises by exactly its declared bounded wait.
+    """
+    for step in job.get("steps") or []:
+        if isinstance(step, dict) and step.get("name") == LOCK_STEP:
+            wait = (step.get("with") or {}).get("max-wait-minutes")
+            return wait if isinstance(wait, int) and not isinstance(wait, bool) and 0 < wait <= 330 else 0
+    return 0
+
+
 def check_timeout(raw: object, max_minutes: int) -> str | None:
     """The reason `timeout-minutes: <raw>` is not a provable bound, or None if it is one.
 
@@ -217,7 +233,7 @@ def main(argv: list[str]) -> int:
                 )
                 continue
 
-            reason = check_timeout(job["timeout-minutes"], args.max_minutes)
+            reason = check_timeout(job["timeout-minutes"], args.max_minutes + lock_wait_minutes(job))
             if reason:
                 findings.append(f"{subject}: {reason}")
             else:

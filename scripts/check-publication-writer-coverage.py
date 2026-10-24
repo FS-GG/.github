@@ -25,9 +25,13 @@ import urllib.request
 sys.dont_write_bytecode = True
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 GATE_STEP = "Acquire org publication writer lock"
+MARKER = "[org-publication-writer]"
 REMOTE_ACTION = re.compile(r"^FS-GG/\.github/\.github/actions/publication-writer-lock@[0-9a-f]{40}(\s+#.*)?$")
 LOCAL_ACTION = "./.github/actions/publication-writer-lock"
-EFFECT = re.compile(r"dotnet nuget push|NuGet/login@|gh release (?:create|upload|edit)|softprops/action-gh-release")
+# Publication tokens decide whether a workflow must be registered; the broader write tokens decide
+# which of a registered workflow's jobs need the gate (a credential exchange or any ref/API write).
+PUBLISH_EFFECT = re.compile(r"dotnet nuget push|NuGet/login@|gh release (?:create|upload|edit|delete)|softprops/action-gh-release|git tag\b|git push[^\n]*(?:--tags|refs/tags|--atomic)")
+EFFECT = re.compile(PUBLISH_EFFECT.pattern + r"|create-github-app-token@|\bgit push\b|gh api[^\n]*(?:-X|--method)[ =](?:POST|PATCH|PUT|DELETE)")
 
 
 def executable_lines(text: str) -> list:
@@ -130,16 +134,19 @@ def check_workflow(text: str, repository: str, observers=()) -> dict:
             continue
         if not gate_ix and not effect_ix and not writes:
             continue
-        if not effect_ix:
-            if not gate_ix:
-                problems.append(f"job {key}: write-capable (permissions) but has no '{GATE_STEP}' step; list it under observationJobs if it is read-only by contract")
-            else:
-                gated.append(key)
+        if not effect_ix and not gate_ix:
+            problems.append(f"job {key}: write-capable (permissions) but has no '{GATE_STEP}' step; list it under observationJobs if it is read-only by contract")
             continue
         if len(gate_ix) != 1:
-            problems.append(f"job {key}: effect steps need exactly one '{GATE_STEP}' step (found {len(gate_ix)})")
+            problems.append(f"job {key}: write-capable jobs need exactly one '{GATE_STEP}' step (found {len(gate_ix)})")
             continue
         gate = steps[gate_ix[0]]
+        before = [x for x in steps[:gate_ix[0]] if not re.search(r"^\s+(?:- )?uses:\s*actions/checkout@", x, re.MULTILINE)]
+        if before:
+            problems.append(f"job {key}: only checkout may precede the lock step (found '{step_name(before[0]) or before[0].strip()[:40]}')")
+        name = re.search(r"^    name:\s*(.+?)\s*$", job, re.MULTILINE)
+        if not name or MARKER not in name.group(1):
+            problems.append(f"job {key}: the job name must contain '{MARKER}' so other publishers can see it (the API step list is unreliable)")
         uses = re.search(r"^\s+(?:- )?uses:\s*(.+?)\s*$", gate, re.MULTILINE)
         action = uses.group(1) if uses else ""
         if repository == "FS-GG/.github":
@@ -150,7 +157,7 @@ def check_workflow(text: str, repository: str, observers=()) -> dict:
             problems.append(f"job {key}: lock step must use the pinned FS-GG/.github lock action (got {action!r})")
         if re.search(r"^\s+if:", gate, re.MULTILINE) or re.search(r"^\s+continue-on-error:", gate, re.MULTILINE):
             problems.append(f"job {key}: lock step must be unconditional and may not continue on error")
-        if gate_ix[0] > min(effect_ix):
+        if effect_ix and gate_ix[0] > min(effect_ix):
             problems.append(f"job {key}: lock step must precede the first effect step '{step_name(steps[min(effect_ix)])}'")
         if re.search(r"^    continue-on-error:", job, re.MULTILINE):
             problems.append(f"job {key}: job-level continue-on-error could hide a refused lock")
@@ -175,7 +182,7 @@ def audit(files: dict, repository: str, registry: dict) -> list:
     errors = []
     for path, text in sorted(files.items()):
         result = check_workflow(text, repository, observers.get(path, ()))
-        has_effect = any(EFFECT.search(line) for line in executable_lines(text))
+        has_effect = any(PUBLISH_EFFECT.search(line) for line in executable_lines(text))
         if path in exempt:
             if result["gated"]:
                 errors.append(f"{repository}:{path}: exempt workflow is gated; move it to writers")

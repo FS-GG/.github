@@ -75,6 +75,8 @@ def writer_lock_scope(source: str) -> dict[str, bool]:
                 raise ValueError("Creator writer lock: gate takes only a bounded wait")
             if "create-github-app-token" in job[:gate] or "Mint" in job[:gate]:
                 raise ValueError("Creator writer lock: gate must precede every credential exchange")
+            if "[org-publication-writer]\n" not in job.split("    if:", 1)[0]:
+                raise ValueError("Creator writer lock: the job name must carry the marker other publishers read")
         gates[match[1]] = bool(expected)
     return gates
 
@@ -307,6 +309,7 @@ class WizardReleaseTests(unittest.TestCase):
             "recovery writer ungated": source.replace(second_block, "", 1),
             "gate renamed so other publishers cannot see it": source.replace("name: " + GATE_NAME, "name: Lock", 1),
             "gate after the credential exchange": source.replace(gate_block, "", 1).replace("      - name: Bind the proved installation\n", gate_block + "      - name: Bind the proved installation\n", 1),
+            "job name without the marker": source.replace(" [org-publication-writer]\n", "\n", 1),
             "unbounded wait": source.replace("          max-wait-minutes: 30\n", "", 1),
             "diagnostic takes the writer lock": source.replace("      - name: Mint the scoped ordinary Authority read token\n", gate_block + "      - name: Mint the scoped ordinary Authority read token\n", 1),
             "new unclassified role": source + "\n  other-writer:\n    runs-on: ubuntu-latest\n",
@@ -2162,7 +2165,7 @@ class CreatorPublicationTests(unittest.TestCase):
         self.assertIn("path: ${{ runner.temp }}/creator022-publication-summary.json", ordinary)
         self.assertIn("if-no-files-found: error", ordinary)
         self.assertNotIn("creator022-publication-summary", historical)
-        self.assertIn("timeout-minutes: 60", ordinary)
+        self.assertIn("timeout-minutes: 90", ordinary)  # 60 plus the bounded 30 minute lock wait
         self.assertIn("uses: ./.github/actions/publication-writer-lock", workflow)
         self.assertIn("promotion_recovery == 'off'", ordinary)
 

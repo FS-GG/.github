@@ -104,10 +104,11 @@ permissions:
 
 jobs:
   publish:
+    name: publish [org-publication-writer]
     if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.install_release_suspension != true
     runs-on: ubuntu-latest
     environment: release-successor
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -280,10 +281,11 @@ jobs:
           fi
 
   install-suspension:
+    name: install-suspension [org-publication-writer]
     if: inputs.install_release_suspension == true
     runs-on: ubuntu-latest
     environment: release-successor
-    timeout-minutes: 15
+    timeout-minutes: 45
     permissions:
       contents: read
       actions: read
@@ -300,7 +302,7 @@ jobs:
       - name: Acquire org publication writer lock
         uses: ./.github/actions/publication-writer-lock
         with:
-          max-wait-minutes: 5
+          max-wait-minutes: 30
       - name: Validate the complete install-only selection before issuer access
         run: python3 scripts/release-successor-publish.py --check-workflow-inputs
       - name: Prepare the fixed suspension and authenticate native owner and Authority state

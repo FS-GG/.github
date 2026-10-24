@@ -25,6 +25,8 @@ on:
       - "tests/publication-writer-lock/**"
       - ".github/workflows/**"
   workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"
 
 permissions:
   contents: read
@@ -35,11 +37,27 @@ concurrency:
 
 jobs:
   controls:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - name: Install test requirements (PyYAML)
+        run: python3 -m pip install -r requirements-test.txt
       - name: Serialization, crash, lease and coverage controls
         run: python3 tests/publication-writer-lock/run.py
       - name: Every registered publisher workflow here is gated
         run: python3 scripts/check-publication-writer-coverage.py --local
+
+  # Weekly drift report: a registered repository whose publisher lost or never gained the lock
+  # step, or an unregistered publisher. Red means an adoption gap, not a broken tree.
+  remote-adoption:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check every registered repository on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/check-publication-writer-coverage.py --remote

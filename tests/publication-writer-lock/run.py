@@ -89,12 +89,12 @@ class FakeGitHub:
     def start_job(self, repo, run, job, workflow=None, gate=True,
                   runner=None, at=None, status="in_progress"):
         workflow = workflow or WORKFLOW_OF.get(repo, ".github/workflows/release.yml")
-        steps = [{"name": "Set up job", "started_at": stamp(self.clock.time() if at is None else at)}]
-        steps.append({"name": lock.GATE_STEP if gate else "Pack", "started_at": None})
+        started = stamp(self.clock.time() if at is None else at)
         with self.guard:
             self.jobs[job] = {"repo": repo, "run": run, "id": job, "status": status, "workflow": workflow,
-                              "runner_name": runner or f"runner-{job}", "steps": steps,
-                              "started_at": steps[0]["started_at"]}
+                              "runner_name": runner or f"runner-{job}", "steps": [],  # the live API often returns no steps
+                              "name": f"publish {lock.MARKER}" if gate else "package-tests",
+                              "started_at": started}
 
     def finish(self, job):
         with self.guard:
@@ -273,6 +273,81 @@ for case in ("unregistered", "no-gate", "no-job", "ambiguous"):
     raise AssertionError("identity refusal accepted: " + case)
 print("identity: unregistered repository, missing gate step, missing job and ambiguous runner all refuse")
 
+# F1: the live Actions API frequently returns NO step list. Identification is by job name, never steps.
+clock = VirtualClock(1)
+api, out = FakeGitHub(clock), Outcome()
+api.start_job("FS-GG/FS.GG.SDD", 1, 11, at=BASE - 120)  # older marked job, steps: [] (see FakeGitHub.start_job)
+assert api.jobs[11]["steps"] == []
+run_threads([publisher(api, clock, out, "waiter", "FS-GG/FS.GG.Net", 2, 12, 0, 1, max_wait=300)])
+assert "not acquired" in out.errors.get("waiter", ""), "an older marked job with an empty step list must still block"
+clock = VirtualClock(1)
+api, out = FakeGitHub(clock), Outcome()
+api.start_job("FS-GG/FS.GG.SDD", 1, 11, at=BASE - 120, gate=False)  # a job without the marker never blocks
+run_threads([publisher(api, clock, out, "w", "FS-GG/FS.GG.Net", 2, 12, 0, 1)])
+assert not out.errors, out.errors
+print("lag: an older marked job with no step list blocks; an unmarked one does not")
+
+# F6: the ticket is the server-side job start only; a job without started_at cannot be ticketed.
+try:
+    lock.ticket_of({"id": 5, "started_at": None, "steps": [{"started_at": "2026-10-24T00:00:00Z"}]})
+except lock.LockError:
+    pass
+else:
+    raise AssertionError("a job with no started_at must not be ticketed from a step clock")
+
+# F2: transient HTTP failures are retried; a client error is not.
+import io, urllib.error, urllib.request
+class Resp(io.BytesIO):
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+calls = {"n": 0}
+def flaky(request, timeout=0):
+    calls["n"] += 1
+    if calls["n"] < 3:
+        raise urllib.error.HTTPError(request.full_url, 502, "bad gateway", {}, None)
+    return Resp(b'{"ok": true}')
+real_urlopen, real_sleep = urllib.request.urlopen, lock.time.sleep
+urllib.request.urlopen, lock.time.sleep = flaky, lambda s: None
+try:
+    assert lock.GitHubApi("t").get("/x") == {"ok": True} and calls["n"] == 3, "two 502s are retried"
+    def denied(request, timeout=0): raise urllib.error.HTTPError(request.full_url, 404, "nf", {}, None)
+    urllib.request.urlopen = denied
+    try:
+        lock.GitHubApi("t").get("/x")
+    except lock.LockError as error:
+        assert "404" in str(error)
+    else:
+        raise AssertionError("a 404 must fail closed immediately")
+    urllib.request.urlopen = lambda request, timeout=0: (_ for _ in ()).throw(urllib.error.HTTPError(request.full_url, 503, "x", {}, None))
+    try:
+        lock.GitHubApi("t").get("/x")
+    except lock.LockError as error:
+        assert "attempts" in str(error)
+    else:
+        raise AssertionError("a persistent 503 must fail closed")
+finally:
+    urllib.request.urlopen, lock.time.sleep = real_urlopen, real_sleep
+print("http: 5xx retried with backoff then fail closed; 4xx fails closed at once")
+
+# The wait can never overshoot max-wait.
+clock = VirtualClock(1)
+api, out = FakeGitHub(clock), Outcome()
+api.start_job("FS-GG/FS.GG.SDD", 1, 11, at=BASE - 60)
+slept = []
+def counting_sleep(seconds):
+    slept.append(seconds); clock.sleep(seconds)
+t0 = clock.time()
+api.start_job("FS-GG/FS.GG.Net", 2, 12, at=BASE)
+try:
+    lock.acquire(api, repo="FS-GG/FS.GG.Net", run_id=2, runner_name="runner-12", max_wait=100, clock=clock.time, sleep=counting_sleep,
+                 log=lambda *_: None, **FAST)
+except lock.LockError:
+    pass
+else:
+    raise AssertionError("must time out")
+assert clock.time() - t0 <= 100, "the wait overshot max-wait"
+print("deadline: the lock wait never overshoots max-wait-minutes")
+
 # Tie-break: identical start second -> lower job id first; non-participants and unregistered workflows never block.
 clock = VirtualClock(2)
 api, out = FakeGitHub(clock), Outcome()
@@ -324,7 +399,7 @@ PINNED = "FS-GG/.github/.github/actions/publication-writer-lock@" + "a" * 40
 
 def workflow(gate="      - name: Acquire org publication writer lock\n        uses: " + PINNED + "\n",
              before="", after="      - name: Push\n        run: dotnet nuget push x.nupkg\n"):
-    return ("name: release\non:\n  workflow_dispatch:\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    steps:\n"
+    return ("name: release\non:\n  workflow_dispatch:\njobs:\n  publish:\n    name: publish " + lock.MARKER + "\n    runs-on: ubuntu-latest\n    steps:\n"
             "      - uses: actions/checkout@v7\n" + before + gate + after)
 
 
@@ -342,16 +417,22 @@ expected_bad = {
     "local-in-producer": workflow(gate="      - name: Acquire org publication writer lock\n        uses: ./.github/actions/publication-writer-lock\n"),
     "duplicate": workflow(gate=("      - name: Acquire org publication writer lock\n        uses: " + PINNED + "\n") * 2),
     "login-first": workflow(before="      - uses: NuGet/login@v1\n"),
+    "app-token-first": workflow(before="      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1\n"),
+    "setup-step-first": workflow(before="      - name: Build\n        run: dotnet build\n"),
+    "unmarked-name": workflow().replace(" " + lock.MARKER, ""),
+    "git-push-after-gate-missing": workflow(gate="", after="      - run: git push origin HEAD:refs/heads/x\n"),
 }
 for label, text in expected_bad.items():
     assert coverage.check_workflow(text, "FS-GG/FS.GG.SDD")["problems"], "coverage defect accepted: " + label
 assert coverage.check_workflow(workflow(gate="", after="      - run: echo ok\n"), "FS-GG/FS.GG.SDD")["problems"] == []
 assert coverage.check_workflow(workflow(gate="", after="      # dotnet nuget push is mentioned in a comment only\n"), "FS-GG/FS.GG.SDD")["problems"] == []
 print(f"coverage checker: valid shapes pass; {len(expected_bad)} unsafe placements refused; comments are not effects")
+assert coverage.audit({".github/workflows/x.yml": workflow(gate="", after="      - run: git tag -a v1 -m x && git push origin refs/tags/v1\n")},
+                      "FS-GG/FS.GG.SDD", {"writers": [{"repo": "FS-GG/FS.GG.SDD", "workflows": [".github/workflows/other.yml"]}], "exempt": []}), "a tag cutter must be registered or exempt"
 
 # Permission-based write capability needs the gate unless the job is declared read-only by contract.
 def perm_workflow(job_perm="", wf_perm="permissions:\n  contents: write\n", extra_job="", gate=""):
-    return ("name: x\non:\n  workflow_dispatch:\n" + wf_perm + "jobs:\n  writer:\n    runs-on: ubuntu-latest\n" + job_perm +
+    return ("name: x\non:\n  workflow_dispatch:\n" + wf_perm + "jobs:\n  writer:\n    name: writer " + lock.MARKER + "\n    runs-on: ubuntu-latest\n" + job_perm +
             "    steps:\n      - uses: actions/checkout@v7\n" + gate + "      - run: python3 publish.py\n" + extra_job)
 
 assert coverage.check_workflow(perm_workflow(), "FS-GG/FS.GG.SDD")["problems"], "inherited contents: write job needs the gate"
@@ -392,3 +473,24 @@ local = {f".github/workflows/{p.name}": p.read_text() for p in sorted((ROOT / ".
 problems = coverage.audit(local, "FS-GG/.github", REGISTRY)
 assert problems == [], problems
 print("this repository: all registered publisher workflows are gated; every other effect workflow is exempt with a reason")
+
+# --- timeout ceiling: the lock wait is queueing, so it raises the per-job ceiling by exactly itself -----------
+try:
+    import yaml  # noqa: F401
+except ImportError:
+    print("timeout ceiling: PyYAML absent, skipped locally (the selftest workflow installs it)")
+else:
+    import subprocess, tempfile
+    def timeouts(timeout, wait):
+        with tempfile.TemporaryDirectory() as root:
+            workflows = pathlib.Path(root, ".github/workflows")
+            workflows.mkdir(parents=True)
+            gate = "" if wait is None else (f"      - name: {lock.GATE_STEP}\n        uses: ./.github/actions/publication-writer-lock\n"
+                                           f"        with:\n          max-wait-minutes: {wait}\n")
+            workflows.joinpath("w.yml").write_text(f"name: w\non: workflow_dispatch\njobs:\n  j:\n    runs-on: ubuntu-latest\n    timeout-minutes: {timeout}\n    steps:\n{gate}      - run: echo ok\n")
+            return subprocess.run([sys.executable, "-B", str(ROOT / "scripts/check-workflow-timeouts.py"), "--root", root],
+                                  capture_output=True, text=True).returncode
+    assert timeouts(60, None) == 0 and timeouts(61, None) == 1, "the unlocked ceiling stays 60"
+    assert timeouts(90, 30) == 0 and timeouts(91, 30) == 1, "the ceiling rises by exactly the declared wait"
+    assert timeouts(90, 0) == 1 and timeouts(90, 999) == 1, "an unbounded or absent wait raises nothing"
+    print("timeout ceiling: 60 unlocked; 60 + declared max-wait with the lock step; nothing for a bogus wait")

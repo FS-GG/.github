@@ -26,11 +26,13 @@ parallel publication and no per-resource reservation.
 The mechanism is a bakery lock over the public Actions job list
 (`scripts/publication_writer_lock.py`, composite action `.github/actions/publication-writer-lock`):
 
-- A *participant* is a job containing a step named exactly `Acquire org publication writer lock`
-  in a workflow listed in `registry/publication-writers.json`, which each job reads live from
-  `FS-GG/.github` `main`.
-- Its *ticket* is the time GitHub started its runner, then the job id. GitHub fixes it before any
-  step runs, so it cannot be renewed or reordered.
+- A *participant* is a job whose display name contains `[org-publication-writer]`, in a workflow
+  listed in `registry/publication-writers.json`, which each job reads live from `FS-GG/.github`
+  `main`. Identification uses job-level fields only (name, status, `started_at`, runner): GitHub's
+  per-step list is often empty even for running jobs, so it must never decide who participates.
+  Each such job also carries a step named `Acquire org publication writer lock`.
+- Its *ticket* is the job's `started_at`, then the job id. GitHub sets it when the runner takes the
+  job, so it cannot be renewed or reordered. A job without `started_at` is never ticketed.
 - A job proceeds only when no other `in_progress` participant, in any registered repository, holds a
   smaller ticket. Waiting is only on strictly older jobs, so the oldest live participant always
   proceeds and a cycle is impossible.
@@ -48,7 +50,7 @@ effect may happen, exactly as before.
 **Why this mechanism.** It is the only one that needs no new credential. A producer's
 `GITHUB_TOKEN` cannot write to another repository, producer workflows cannot move into one repository
 because the nuget.org Trusted Publishing policy binds the workflow's own repository and filename, and
-the ledger App key is held by `.github` alone. The job list is public, already authoritative about
+the ledger App credentials exist only in `.github` and one `FS.GG.Coordination` environment, not in the producer repositories. The job list is public, already authoritative about
 which jobs are alive, and is released by GitHub itself when a job dies.
 
 **Replaced.** The per-repository publisher groups `release-successor-publish`,
@@ -69,14 +71,28 @@ exclusion.
 - A publisher workflow must register in `registry/publication-writers.json` and carry the step
   before its first effect. `scripts/check-publication-writer-coverage.py --local` is a required
   selftest; `--remote` reports unadopted repositories.
-- The wait is bounded below the job timeout, so waiting consumes part of a job's own clock. The
-  publisher's operation clocks start after the lock is held.
+- Waiting is queueing, not work. `scripts/check-workflow-timeouts.py` raises the 60 minute ceiling
+  of a job by exactly its declared `max-wait-minutes`, and the `.github` writer jobs raised their
+  `timeout-minutes` by the same amount (publish 60 to 90, recovery-complete 28 to 48, install-only
+  suspension 15 to 45), so a job keeps its original working budget. The publisher's operation clocks
+  start after the lock is held. Reads retry 5xx and rate limiting with backoff, then fail closed.
 - Visibility lag in the job list is absorbed by a 20 second settle and a second clear scan. If
   GitHub's list lagged by longer than that, two jobs could overlap; the journal CAS and per-effect
   guards remain the fence in that case, as they were before this lock.
-- Not covered until adopted: repositories not yet registered, and `FS.GG.Coordination`, whose
-  Actions allow-list admits only GitHub-owned actions and one `NuGet/login` digest. Its four
-  publishing workflows are exempt in the registry with that reason.
+- Renaming a gated job without the marker removes it from the lock for everyone else.
+  `check-publication-writer-coverage.py` requires the marker, the gate step, and nothing but checkout
+  before the gate, in every write-capable job of a registered workflow; `--local` is a required
+  selftest here and `--remote` (scheduled weekly) reports drift in other repositories.
+- The retired `.104` continuation census in `scripts/release-successor-publish.py`
+  (`continuation_native_census`) refuses while any other run of that workflow is in progress or
+  queued. A second dispatch now waits `in_progress` in its lock step, where the old group left it
+  pending, so an operator must not dispatch a second publisher while using that one-use route. It
+  refuses; it does not publish. The script is authentication-pinned and was not edited.
+- Not covered until adopted: the producer repositories listed in the registry adopt through their
+  own pull requests, repositories not yet registered, and `FS.GG.Coordination`, whose Actions
+  allow-list admits only GitHub-owned actions and one `NuGet/login` digest. Its four publishing
+  workflows are exempt in the registry with that reason. The GS2-08.9 historical `.github` routes
+  are exempt because their publishers are `disabled_manually`, a mutable setting.
 - The live-main equality guard and the "hold `main` stable" practice remain. They bind a candidate to
   its exact source; the lock does not relax them (#4753 clause 1).
 
@@ -87,5 +103,7 @@ exclusion.
   producer repository, which does not exist and which this decision may not mint.
 - **Route every publisher through one central workflow or repository.** Breaks the nuget.org Trusted
   Publishing policy binding and moves each producer's guards; far larger than the lock.
-- **Dispatch to a central queue.** Needs a cross-repository dispatch credential; the shared App is retired.
+- **Dispatch to a central queue.** Needs a cross-repository dispatch credential; `dispatch-sender` is
+  validation-only, though revoking the shared App's installation is recorded as outside this repository
+  and was not verified here.
 - **Aggregate-resource profile for disjoint writers.** The earlier option; replaced by this decision.

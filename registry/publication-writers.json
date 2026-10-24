@@ -87,9 +87,10 @@
         ".github/workflows/release-coord-engine.yml",
         ".github/workflows/release-drivers.yml",
         ".github/workflows/release-kit.yml",
-        ".github/workflows/release-saga-prepare.yml"
+        ".github/workflows/release-saga-prepare.yml",
+        ".github/workflows/release-saga-start.yml"
       ],
-      "reason": "GS2-08.9 historical routes are byte-bound by tests/release-effect-sealing and cannot be edited; the successor route publishes the same artifacts."
+      "reason": "GS2-08.9 historical release saga routes. The publishers (release-coord-engine, release-drivers, release-kit, release-saga-prepare) are disabled_manually in the repository settings, which is mutable and not recorded here; release-saga-start is active but its only publication path is those disabled workflows (it cuts tags and dispatches them). All are byte-bound by tests/release-effect-sealing, so adopting the lock means resealing a retired route. Re-enabling any of them requires adopting the lock first."
     },
     {
       "repo": "FS-GG/FS.GG.Coordination",
@@ -106,7 +107,7 @@
       "workflows": [
         ".github/workflows/release-build.yml"
       ],
-      "reason": "Attaches engine binaries to a GitHub release; it publishes to no package feed."
+      "reason": "Not an FS-GG component: a fork whose workflow attaches engine binaries to its own GitHub releases. It touches no FS-GG package feed, Authority journal or coherent release, which are the shared resources this lock serializes."
     }
   ]
 }

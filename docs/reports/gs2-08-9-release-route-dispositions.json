@@ -31,7 +31,7 @@
     },
     {
       "path": ".github/workflows/release-new-sdd-workspace.yml",
-      "sha256": "37b4ebe5f8cf64f1dcbf7329f6df9e52cb385cf19b5453b8b13a19160cc4224c",
+      "sha256": "d2abb57d660a00c77f5deb3782a24aa4a4e43514c9a264b4c3ad70a2c1ba343e",
       "disposition": "exact-source-protected-journal-successor-only",
       "successorAmendment": {
         "unit": "CREATOR-PUBLIC-021-4741",
@@ -485,6 +485,17 @@
         "lockAction": ".github/actions/publication-writer-lock",
         "gateStep": "Acquire org publication writer lock",
         "replacedGroup": "release-new-sdd-workspace-successor-publish",
+        "jobNameMarker": "[org-publication-writer]",
+        "timeouts": {
+          "publish": {
+            "from": 60,
+            "to": 90
+          },
+          "recovery-complete": {
+            "from": 28,
+            "to": 48
+          }
+        },
         "writerJobs": [
           "publish",
           "recovery-complete"

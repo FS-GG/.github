@@ -63,11 +63,11 @@ permissions:
 
 jobs:
   publish:
-    name: new-sdd-workspace-022-publisher
+    name: new-sdd-workspace-022-publisher [org-publication-writer]
     if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.promotion_recovery == 'off'
     runs-on: ubuntu-latest
     environment: release-successor
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -219,11 +219,11 @@ jobs:
           retention-days: 7
 
   recovery-complete:
-    name: new-sdd-workspace-013-recovery-complete
+    name: new-sdd-workspace-013-recovery-complete [org-publication-writer]
     if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.promotion_recovery == 'complete' && !inputs.publish && !inputs.verify_nuget_login
     runs-on: ubuntu-latest
     environment: release-successor
-    timeout-minutes: 28
+    timeout-minutes: 48
     permissions:
       actions: read
       contents: write
@@ -238,7 +238,7 @@ jobs:
       - name: Acquire org publication writer lock
         uses: ./.github/actions/publication-writer-lock
         with:
-          max-wait-minutes: 10
+          max-wait-minutes: 20
       # Use the existing runner SDK, verified exactly by the finite helper.
       # No setup/download fallback, OIDC exchange or package push in recovery.
       - name: Mint the scoped ordinary Authority write token
