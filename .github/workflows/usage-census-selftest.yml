@@ -1,0 +1,38 @@
+# Offline smoke test of the usage and review census tools (tools/usage-census).
+#
+# The tools produced the #4823 and #4639 census reports from one worker's scratch directory. They are
+# published so the next extension window is a documented run (tools/usage-census/README.md). This suite
+# builds a synthetic work directory and drives every offline tool through its real entry point, so that
+# a change to the run-assignment, review-scoring, deduplication, redaction or evidence-cap rules cannot
+# land unobserved. It reads no credential and calls no network: stdlib only.
+#
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a
+# divergence.
+name: usage-census-selftest
+
+on:
+  pull_request:
+    paths:
+      - "tools/usage-census/**"
+      - "tests/usage-census/**"
+      - ".github/workflows/usage-census-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tools/usage-census/**"
+      - "tests/usage-census/**"
+      - ".github/workflows/usage-census-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the usage and review census smoke test
+        run: python3 tests/usage-census/run.py
