@@ -189,4 +189,5 @@ blocked missing facts/suppliers, completed scope/evidence/native dates and unfil
 existing IDs and orthogonal settings; missing metadata must remain visible. Counts do not imply percentages.
 Instruction source, required CI, publication, actual selected absolute-path discovery, qualified executable,
 field/schema/enrollment/view migration and coordinated consumer acceptance are distinct evidence. Existing
-439 inherited and 46 later original Unknown holds are not released by any of them.
+439 inherited and 46 later original Unknown holds are not released by any of them; only ADR-0096 releases
+them, for demonstrably isolated fresh operations.

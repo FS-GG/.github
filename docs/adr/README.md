@@ -122,6 +122,7 @@ registry like any other, and this org gates its registries.
 | [0093](0093-original-103-authentication-domain-policy.md) | Original .103 authentication domain policy | Accepted policy; implementation and native admission pending |
 | [0094](0094-separate-v3-and-utel-principals-and-custody.md) | Separate V3 and UTEL principals and credential custody | Accepted policy; provisioning and activation pending |
 | [0095](0095-utel-resource-containment-for-fresh-profiles.md) | Enforced resource containment for separately authorized fresh UTEL profiles; legacy physical-copy proof and holds remain unchanged | Accepted policy; implementation, production budgets and admission pending |
+| [0096](0096-proportionate-verification-and-unrecoverable-holds.md) | Ordinary local build/test of unpublished source needs no original-operation admission; the 439/46 unrecoverable inherited holds are released for isolated fresh operations | Accepted |
 
 ## Supersession map
 

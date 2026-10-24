@@ -21,8 +21,8 @@ govern. Do not wait for a human to write a replacement handoff when independent 
 
 The parent's [forward-recovery decision](lifecycle-contract.md#recover-ownership-and-unavailable-history)
 closes the unavailable historical evidence-search task. Stop its searches and repeated requests;
-retain surviving original records, historical Unknown outcomes and distinct unreleased 439 inherited
-reservations/46 later records. The discovery and complete-inventory instructions below apply to
+retain surviving original records and historical Unknown outcomes; the 439 inherited reservations/46
+later records are unrecoverable history released only for demonstrably isolated fresh operations (ADR-0096). The discovery and complete-inventory instructions below apply to
 available/current relevant facts, not reconstruction of unavailable history. A concrete fresh operation
 requires current relevant ownership, remaining capacity and demonstrated separation of generation,
 writable state, operation identity and output destinations; shared destinations require fencing or
