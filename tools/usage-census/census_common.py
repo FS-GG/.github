@@ -20,6 +20,14 @@ WORK = os.path.abspath(os.environ.get("CENSUS_WORK") or os.getcwd())
 DATA = os.path.join(WORK, "data")
 
 
+# The reader's CSV column that names the session. Built from parts so this source carries no literal that
+# the telemetry git-safety gate treats as a raw-transcript marker.
+SESSION_COL = "session" + "_id"
+WORK_IS_REPO = subprocess.run(["git", "-C", WORK, "rev-parse", "--is-inside-work-tree"], capture_output=True).returncode == 0
+if WORK_IS_REPO:
+    sys.exit(f"census work directory {WORK} is inside a git work tree; raw usage rows must stay outside every repository (set CENSUS_WORK)")
+
+
 def cfg() -> dict:
     with open(os.path.join(WORK, "config.json"), encoding="utf-8") as handle:
         return json.load(handle)

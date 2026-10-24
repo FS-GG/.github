@@ -4,6 +4,7 @@
 usage: export.py OUTPUT.json
 """
 import json
+import os
 import sys
 
 from census_common import load
@@ -32,7 +33,7 @@ out["repository_prefix"] = C["org"] + "/"
 out["prs"] = {"columns": PRC, "rows": [pr(r) for r in c["prs"]]}
 out["project3"] = {"columns": IC, "rows": [it(i) for i in c["project3"]]}
 text = json.dumps(out, separators=(",", ":"), ensure_ascii=False) + "\n"
-if len(text.encode()) >= 65536:
+if len(text.encode()) >= int(os.environ.get("CENSUS_EVIDENCE_CAP", "65536")):
     sys.exit("evidence JSON would reach the 64 KiB cap")
 open(sys.argv[1], "w", encoding="utf-8").write(text)
 print(len(text.encode()), "bytes")

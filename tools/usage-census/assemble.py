@@ -95,9 +95,11 @@ for d in issues:
     ir.append({"member": d["repo"] + "#" + str(d["number"]), "title": d["title"], "closedAt": d["closedAt"], "stateReason": d["stateReason"], "projectStatus": d["projectStatus"], "closer": closer, "population_prs_declaring_close": closing.get((d["repo"], d["number"]), [])})
 # Redact private-repository members from the public report: keep only counted metrics.
 pn = 0
+placeholder = {}
 for r in rows:
     if r["member"].split("#")[0] in PRIVATE:
         pn += 1
+        placeholder[r["member"]] = f"private-repository-member-{pn}"
         r.update({"member": f"private-repository-member-{pn}", "title": None, "head": None, "merge": None, "createdAt": None, "mergedAt": None, "required_detail": None,
                   "review": ("independent verdict at exact head: redacted" if r["review_class"] == "V" else "unsampled (redacted)")})
 qn = 0
@@ -105,6 +107,12 @@ for i in ir:
     if i["member"].split("#")[0] in PRIVATE:
         qn += 1
         i.update({"member": f"private-repository-item-{qn}", "title": None, "closedAt": "redacted", "closer": "redacted", "population_prs_declaring_close": []})
+    else:
+        if any(repo in i["closer"] for repo in PRIVATE):
+            i["closer"] = "redacted"
+        i["population_prs_declaring_close"] = [placeholder.get(x, x) for x in i["population_prs_declaring_close"]]
+for a_ in usage["attributed"]:
+    a_[1] = placeholder.get(a_[1], a_[1])
 # Redacted members are listed last so their position does not reveal their timestamps.
 rows.sort(key=lambda r: r["member"].startswith("private-"))
 ir.sort(key=lambda i: i["member"].startswith("private-"))
@@ -122,6 +130,10 @@ res = {"schema": "fsgg.census.usage-review/1", "issue": C["issue"], "window": {"
                    "jobs_with_completed_before_started_counted_as_zero": {"pr_phase": P[4], "merge_push": Q[4], "force_pushed_head": X[4]},
                    "force_pushed_head_pr_runs_not_in_totals": {"runs": len(xids), "members": len(extra), "jobs": X[1], "job_seconds": round(X[0]), "unread": X[2]}},
        "usage": usage, "prs": rows, "project3": ir}
+blob = json.dumps(res)
+for repo in PRIVATE:  # fail closed: no private repository name may reach a published file
+    if repo in blob or repo.split("/", 1)[1] in blob:
+        raise SystemExit(f"private repository {repo} would be published; extend the redaction")
 dump("census.json", res, indent=1, ensure_ascii=False)
 print(json.dumps({k: res[k] for k in ("population", "actions")}, indent=1))
 print(collections.Counter(r["review_class"] for r in rows))

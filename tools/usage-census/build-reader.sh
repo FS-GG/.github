@@ -9,10 +9,10 @@
 # OUT_DIR/fsgg-coord-engine. OUT_DIR must lie outside every repository and the temporary directory.
 set -euo pipefail
 
-out=${1:?usage: build-reader.sh OUT_DIR [COMMIT]}
+mkdir -p "${1:?usage: build-reader.sh OUT_DIR [COMMIT]}" "${HOME}/.cache"
+out=$(cd "$1" && pwd)
 commit=${2:-61526e947ff595c5eb416efd810ce3c1348bedc5}
 repo=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
-mkdir -p "$out"
 src=$(mktemp -d "${HOME}/.cache/usage-census-reader-src.XXXXXX")
 cleanup() { git -C "$repo" worktree remove --force "$src" >/dev/null 2>&1 || rm -rf "$src"; }
 trap cleanup EXIT

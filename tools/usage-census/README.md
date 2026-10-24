@@ -108,7 +108,8 @@ machine-readable line `VERDICT: APPROVE @ <head>` can be matched exactly; older 
   `telemetry` path is capped at 64 KiB; `export.py` refuses to write more.
 - Private-repository members are redacted by `assemble.py` and listed last. Do not publish their
   numbers, titles, SHAs, dates or review comment ids.
-- Re-read the prose of the template against the data. The figures are computed; the sentences about the
+- `--previous` covers one earlier segment. For a third segment, combine the earlier figures by hand in the
+  prose. Re-read the prose of the template against the data. The figures are computed; the sentences about the
   window, the retention boundary and the coordinator-runtime changes are not.
 - One PR with one independent review and green required CI, merged through `tools/routine-delivery.py`.
   Link the owning issue without closing it (`Refs`).

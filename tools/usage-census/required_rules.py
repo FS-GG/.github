@@ -13,7 +13,7 @@ from census_common import cfg, dump, load
 ORG = cfg()["org"]
 pop = load("prs.json")
 repos = sorted({p["repo"] for p in pop["prs"]})
-base = {p["repo"]: p["baseRefName"] for p in pop["prs"]}
+base = {p["repo"]: p["baseRefName"] for p in pop["prs"]}  # fallback when the repository record is unreadable
 
 
 def call(path):
@@ -23,7 +23,8 @@ def call(path):
 
 out = {}
 for repo in repos:
-    branch = base[repo]
+    rc0, so0, _ = call(f"repos/{repo}")
+    branch = json.loads(so0)["default_branch"] if not rc0 else base[repo]
     contexts, readable, notes = set(), True, []
     rc, so, se = call(f"repos/{repo}/rules/branches/{branch}")
     if rc:

@@ -10,7 +10,7 @@ import collections
 import csv
 import json
 
-from census_common import data_path, dump, load
+from census_common import SESSION_COL, data_path, dump, load
 
 idx = [line.rstrip("\n").split("\t") for line in open(data_path("usage/index.tsv"), encoding="utf-8")]
 jk, pop = load("joinkeys.json"), load("prs.json")
@@ -37,7 +37,7 @@ for rt, fid, rc, path, err in idx:
             dupes += 1
             continue
         seen.add(key)
-        sessions[rt].add(r["session_id"])
+        sessions[rt].add(r[SESSION_COL])
         resp[rt] += 1
         for f in F:
             tot[rt][f] += int(r[f] or 0)

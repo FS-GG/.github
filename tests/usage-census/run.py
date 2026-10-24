@@ -88,18 +88,20 @@ with tempfile.TemporaryDirectory(prefix="usage-census-smoke-") as tmp:
         "FS-GG/.github#1": {"commits": {"totalCount": 2, "nodes": [{"commit": {"oid": OLD_A}}, {"commit": {"oid": HEAD_A}}]},
                             "comments": {"totalCount": 1, "nodes": [{"databaseId": 7, "author": {"login": "x"}, "createdAt": "t", "updatedAt": "t",
                                                                      "body": f"Independent review (fsgg-critic-normal) of exact head {HEAD_A}: APPROVE\n\nVERDICT: APPROVE @ {HEAD_A}"}]}, **no_review},
-        "FS-GG/Private.Repo#2": {"commits": {"totalCount": 1, "nodes": [{"commit": {"oid": HEAD_B}}]}, "comments": {"totalCount": 0, "nodes": []}, **no_review}})
+        "FS-GG/Private.Repo#2": {"commits": {"totalCount": 1, "nodes": [{"commit": {"oid": HEAD_B}}]}, "comments": {"totalCount": 1, "nodes": [{"databaseId": 8, "author": {"login": "x"}, "createdAt": "t", "updatedAt": "t", "body": f"earlier head\n\nVERDICT: REQUEST_CHANGES @ {OLD_A}"}]}, **no_review}})
     runs = [run(1, "FS-GG/.github", "pull_request", HEAD_A, "routine/a", "2026-10-23T01:10:00Z"),
             run(2, "FS-GG/.github", "push", MERGE_A, "main", "2026-10-23T02:01:00Z"),
             run(3, "FS-GG/.github", "schedule", MERGE_A, "main", "2026-10-23T02:02:00Z"),
             run(4, "FS-GG/.github", "pull_request", GONE, "routine/a", "2026-10-23T01:30:00Z"),
-            run(5, "FS-GG/Private.Repo", "pull_request", HEAD_B, "routine/b", "2026-10-23T02:40:00Z")]
+            run(5, "FS-GG/Private.Repo", "pull_request", HEAD_B, "routine/b", "2026-10-23T02:40:00Z"),
+            run(6, "FS-GG/.github", "pull_request", HEAD_A, "routine/a", "2026-10-23T02:30:00Z")]  # created after A merged: excluded
     write(data / "runs.json", runs)
     out = tool(work, "match.py")
     match = json.loads((data / "match.json").read_text())
     extra = json.loads((data / "match_extra.json").read_text())
     check(match["FS-GG/.github#1"] == {"pre": [1], "post": [2]}, "PR-phase run and push-on-merge run assigned; the scheduled run on the merge SHA excluded")
     check(match["FS-GG/Private.Repo#2"]["pre"] == [5], "the private member's run is assigned")
+    check(6 not in match["FS-GG/.github#1"]["pre"] and 6 not in [i for v in extra.values() for i in v["pre"]], "a run created after the member's merge is excluded")
     check(extra == {"FS-GG/.github#1": {"pre": [4], "post": []}}, "a run on a force-pushed head is kept out of the match")
 
     t = "2026-10-23T01:"
@@ -118,16 +120,18 @@ with tempfile.TemporaryDirectory(prefix="usage-census-smoke-") as tmp:
     raw = json.loads((data / "review_raw.json").read_text())
     check(bool(raw["FS-GG/.github#1"]["found"]) and not raw["FS-GG/Private.Repo#2"]["found"], "review finder proposes the member with a head-bound verdict only")
     check(raw["FS-GG/.github#1"]["verdict_lines"] == [{"source": "C7", "verdict": "APPROVE", "head": HEAD_A, "final_head": True}], "a final VERDICT line is recorded exactly and bound to the final head")
+    check(raw["FS-GG/Private.Repo#2"]["verdict_lines"] == [{"source": "C8", "verdict": "REQUEST_CHANGES", "head": OLD_A, "final_head": False}], "a VERDICT line naming another head is not bound to the final head")
     write(data / "adjudication.json", {"V": {"FS-GG/.github#1": "APPROVE (C7)"}, "E": {}, "A": [], "NOTE": {}})
 
     claude = Path(tmp) / "claude"
     transcript = claude / "s1.jsonl"
     transcript.parent.mkdir(parents=True)
-    lines = [{"type": "assistant", "sessionId": "S", "gitBranch": b, "message": {"id": m}} for m, b in (("m1", "routine/a"), ("m2", "main"), ("m3", "main"))]
+    lines = [{"type": "assistant", "sessionId": "S", "gitBranch": b, "message": {"id": m}} for m, b in (("m1", "routine/a"), ("m2", "main"), ("m3", "main"), ("m4", "routine/a"), ("m5", "routine/b"))]
     transcript.write_text("".join(json.dumps(x) + "\n" for x in lines), encoding="utf-8")
     ud = data / "usage"
     (ud / "claude").mkdir(parents=True)
-    rows = [csv_row("2026-10-23T01:20:00.000Z", "S", "m1", 100), csv_row("2026-10-23T01:21:00.000Z", "S", "m2", 50), csv_row("2026-10-23T01:22:00.000Z", "S", "m3", 25)]
+    rows = [csv_row("2026-10-23T01:20:00.000Z", "S", "m1", 100), csv_row("2026-10-23T01:21:00.000Z", "S", "m2", 50), csv_row("2026-10-23T01:22:00.000Z", "S", "m3", 25),
+            csv_row("2026-10-23T02:30:00.000Z", "S", "m4", 10), csv_row("2026-10-23T02:45:00.000Z", "S", "m5", 7)]
     (ud / "claude" / "aaaa.csv").write_text(CSV_HEAD + "\n" + "\n".join(rows) + "\n")
     # A resumed session copies m2 into a second transcript: it must be counted once.
     (ud / "claude" / "bbbb.csv").write_text(CSV_HEAD + "\n" + rows[1] + "\n")
@@ -137,8 +141,8 @@ with tempfile.TemporaryDirectory(prefix="usage-census-smoke-") as tmp:
     tool(work, "joinkeys.py")
     tool(work, "usage_summary.py")
     usage = json.loads((data / "usage_summary.json").read_text())
-    check(usage["totals"]["claude"]["total"] == 175 and usage["dupes"] == 1, "usage totals deduplicate the copied response by provider response ID")
-    check([a[1] for a in usage["attributed"]] == ["FS-GG/.github#1"] and usage["attributed"][0][3]["total"] == 100, "only the branch-joined response is attributed to a member")
+    check(usage["totals"]["claude"]["total"] == 192 and usage["dupes"] == 1, "usage totals deduplicate the copied response by provider response ID")
+    check({a[1]: a[3]["total"] for a in usage["attributed"]} == {"FS-GG/.github#1": 100, "FS-GG/Private.Repo#2": 7}, "only branch-joined responses at or before the merge are attributed (a later response on the same branch is not)")
 
     write(data / "project3.json", {"total": 5, "fetched": 5, "closed": [{"content": {"__typename": "Issue", "number": 9, "repository": {"nameWithOwner": "FS-GG/.github"}, "closedAt": "2026-10-23T05:00:00Z"}, "fieldValueByName": {"name": "Done"}}]})
     write(data / "issues.json", [{"repo": "FS-GG/.github", "number": 9, "title": "t", "closedAt": "2026-10-23T05:00:00Z", "stateReason": "COMPLETED", "projectStatus": "Done", "timelineItems": {"nodes": []}}])
@@ -155,7 +159,13 @@ with tempfile.TemporaryDirectory(prefix="usage-census-smoke-") as tmp:
     md = Path(tmp) / "report.md"
     tool(work, "report.py", str(md))
     text = md.read_text() + ev.read_text()
-    check(all(s not in text for s in ("Private.Repo", HEAD_B[:8], MERGE_B[:8], "title 2")), "the private member is redacted in the report and the evidence")
+    text += (data / "census.json").read_text()
+    check(all(s not in text for s in ("Private.Repo", HEAD_B[:8], MERGE_B[:8], "title 2")), "the private member is redacted in the report, the evidence and the census document (attribution included)")
+    check("private-repository-member-1" in json.dumps(census["usage"]["attributed"]), "a private member's token attribution is kept under its placeholder")
+    capped = subprocess.run([sys.executable, str(TOOLS / "export.py"), str(Path(tmp) / "capped.json")], env=dict(os.environ, CENSUS_WORK=str(work), CENSUS_EVIDENCE_CAP="100"), capture_output=True, text=True)
+    check(capped.returncode != 0 and not (Path(tmp) / "capped.json").exists(), "the evidence cap refuses an oversized document")
+    inside = subprocess.run([sys.executable, str(TOOLS / "match.py")], env=dict(os.environ, CENSUS_WORK=str(ROOT)), capture_output=True, text=True)
+    check(inside.returncode != 0 and "inside a git work tree" in inside.stderr + inside.stdout, "a work directory inside a repository is refused")
     check(len(ev.read_bytes()) < 65536 and json.loads(ev.read_text())["prs"]["rows"][0][0] == ".github#1", "evidence JSON is valid, tabular and under the 64 KiB cap")
     check("| .github#1 |" in md.read_text() and "private-repository-member-1" in md.read_text(), "the member tables are rendered, private members last")
     # The continuation template formats with --previous (here: this segment's own evidence stands in).

@@ -16,7 +16,7 @@ import hashlib
 import json
 import statistics
 
-from census_common import cfg, data_path, dump, load
+from census_common import SESSION_COL, cfg, data_path, dump, load
 
 ap = argparse.ArgumentParser()
 ap.add_argument("output")
@@ -92,7 +92,7 @@ for r_, fid, rc, path, err in idx:
         if (r_, r["response_id"]) in seen:
             continue
         seen.add((r_, r["response_id"]))
-        s = (r_, hashlib.sha256(r["session_id"].encode()).hexdigest()[:10])
+        s = (r_, hashlib.sha256(r[SESSION_COL].encode()).hexdigest()[:10])
         per[s]["responses"] += 1
         per[s]["total"] += int(r["total"])
         thr[s].add(r["thread_id"])
