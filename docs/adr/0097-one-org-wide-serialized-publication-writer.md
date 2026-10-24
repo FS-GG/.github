@@ -92,11 +92,17 @@ exclusion.
   queued. A second dispatch now waits `in_progress` in its lock step, where the old group left it
   pending, so an operator must not dispatch a second publisher while using that one-use route. It
   refuses; it does not publish. The script is authentication-pinned and was not edited.
-- Not covered until adopted: the producer repositories listed in the registry adopt through their
-  own pull requests, repositories not yet registered, and `FS.GG.Coordination`, whose Actions
-  allow-list admits only GitHub-owned actions and one `NuGet/login` digest. Its four publishing
-  workflows are exempt in the registry with that reason. The GS2-08.9 historical `.github` routes
-  are exempt because their publishers are `disabled_manually`, a mutable setting.
+- Pinned-script form. `FS.GG.Coordination`'s Actions allow-list admits only GitHub-owned actions and one
+  `NuGet/login` digest, and it is not widened. Its dispatch-only publishers therefore take the same lock with a
+  plain `run:` step that fetches `scripts/publication_writer_lock.py` from `FS-GG/.github` at a pinned commit,
+  verifies a pinned sha256 and executes it (the identical script the composite action runs). The coverage
+  checker accepts, outside this repository, either the pinned composite action or exactly that step, and `--remote` also proves every pinned
+  commit exists and its script has the pinned digest. A pin is moved only by a reviewed change in the adopting
+  repository, so a protocol change to the lock needs a repin there. A gated job in a repository missing from the
+  registry fails closed.
+- Not covered until adopted: repositories not yet registered. The GS2-08.9 historical `.github` saga routes are
+  exempt because their publishers are `disabled_manually`, a mutable setting. `RecoilEngine` is exempt as not an
+  FS-GG component.
 - The live-main equality guard and the "hold `main` stable" practice remain. They bind a candidate to
   its exact source; the lock does not relax them (#4753 clause 1).
 

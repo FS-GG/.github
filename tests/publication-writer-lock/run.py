@@ -437,6 +437,40 @@ print(f"coverage checker: valid shapes pass; {len(expected_bad)} unsafe placemen
 assert coverage.audit({".github/workflows/x.yml": workflow(gate="", after="      - run: git tag -a v1 -m x && git push origin refs/tags/v1\n")},
                       "FS-GG/FS.GG.SDD", {"writers": [{"repo": "FS-GG/FS.GG.SDD", "workflows": [".github/workflows/other.yml"]}], "exempt": []}), "a tag cutter must be registered or exempt"
 
+# A repository that cannot use third-party actions fetches the pinned script instead (Coordination).
+SCRIPT_COMMIT, SCRIPT_SHA = "c" * 40, "d" * 64
+SCRIPT_GATE = ("      - name: Acquire org publication writer lock\n        shell: bash\n        timeout-minutes: 32\n        env:\n"
+               "          GH_TOKEN: ${{ github.token }}\n          LOCK_COMMIT: " + SCRIPT_COMMIT + "\n"
+               "          LOCK_SCRIPT_SHA256: " + SCRIPT_SHA + "\n          LOCK_MAX_WAIT_MINUTES: '30'\n        run: |\n"
+               + "".join("          " + line + "\n" for line in coverage.SCRIPT_GATE_RUN))
+assert coverage.check_workflow(workflow(gate=SCRIPT_GATE), "FS-GG/FS.GG.Coordination") == {"gated": ["publish"], "problems": []}
+script_bad = {
+    "not-pinned-to-a-commit": SCRIPT_GATE.replace(SCRIPT_COMMIT, "main"),
+    "short-digest": SCRIPT_GATE.replace(SCRIPT_SHA, "d" * 63),
+    "digest-not-verified": SCRIPT_GATE.replace("          echo \"${LOCK_SCRIPT_SHA256}  ${lock}\" | sha256sum --check --strict\n", ""),
+    "unverified-execution": SCRIPT_GATE.replace("--check --strict", "--status"),
+    "mutable-url": SCRIPT_GATE.replace("${LOCK_COMMIT}", "main"),
+    "other-repository": SCRIPT_GATE.replace("FS-GG/.github/", "FS-GG/other/"),
+    "extra-command": SCRIPT_GATE.replace("acquire --max", "acquire --skip --max"),
+    "foreign-token": SCRIPT_GATE.replace("${{ github.token }}", "${{ secrets.TOKEN }}"),
+    "step-timeout-below-wait": SCRIPT_GATE.replace("timeout-minutes: 32", "timeout-minutes: 30"),
+    "conditional": SCRIPT_GATE.replace("        shell: bash\n", "        shell: bash\n        if: inputs.publish\n"),
+    "continue": SCRIPT_GATE.replace("        shell: bash\n", "        shell: bash\n        continue-on-error: true\n"),
+}
+for label, gate in script_bad.items():
+    assert coverage.check_workflow(workflow(gate=gate), "FS-GG/FS.GG.Coordination")["problems"], "pinned-script defect accepted: " + label
+assert coverage.check_workflow(workflow(gate=SCRIPT_GATE), "FS-GG/FS.GG.SDD")["problems"] == []
+assert coverage.check_workflow(workflow(gate=SCRIPT_GATE), "FS-GG/.github")["problems"], "this repository uses its local action, not the fetched script"
+import hashlib
+good_script = b"print('lock')\n"
+pinned = {".github/workflows/p.yml": SCRIPT_GATE.replace(SCRIPT_COMMIT, "e" * 40).replace(SCRIPT_SHA, hashlib.sha256(good_script).hexdigest())}
+assert coverage.script_pin_errors(pinned, "FS-GG/FS.GG.Coordination", lambda commit: good_script) == []
+assert coverage.script_pin_errors(pinned, "FS-GG/FS.GG.Coordination", lambda commit: good_script + b"#"), "a script that differs from the pin is unmet"
+def unreadable(commit):
+    raise OSError("404")
+assert coverage.script_pin_errors(pinned, "FS-GG/FS.GG.Coordination", unreadable), "an unreadable pin is unmet"
+print(f"coverage checker: pinned-script gate passes; {len(script_bad)} defects refused; the pin must match the real script")
+
 # Permission-based write capability needs the gate unless the job is declared read-only by contract.
 def perm_workflow(job_perm="", wf_perm="permissions:\n  contents: write\n", extra_job="", gate=""):
     return ("name: x\non:\n  workflow_dispatch:\n" + wf_perm + "jobs:\n  writer:\n    name: writer " + lock.MARKER + "\n    runs-on: ubuntu-latest\n" + job_perm +

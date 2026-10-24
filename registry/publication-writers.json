@@ -23,6 +23,23 @@
       ]
     },
     {
+      "repo": "FS-GG/FS.GG.Coordination",
+      "workflows": [
+        ".github/workflows/callable-cli-release-publish-011.yml",
+        ".github/workflows/callable-cli-release-publish.yml",
+        ".github/workflows/candidate-supply-chain.yml",
+        ".github/workflows/execution-pair-forward-publish.yml"
+      ],
+      "observationJobs": {
+        ".github/workflows/callable-cli-release-publish.yml": [
+          "execution_pair_preflight"
+        ],
+        ".github/workflows/execution-pair-forward-publish.yml": [
+          "preflight"
+        ]
+      }
+    },
+    {
       "repo": "FS-GG/FS.GG.Game",
       "workflows": [
         ".github/workflows/release-skills.yml",
@@ -96,16 +113,6 @@
         ".github/workflows/release-saga-start.yml"
       ],
       "reason": "GS2-08.9 historical release saga routes. The publishers (release-coord-engine, release-drivers, release-kit, release-saga-prepare) are disabled_manually in the repository settings, which is mutable and not recorded here; release-saga-start is active but its only publication path is those disabled workflows (it cuts tags and dispatches them). All are byte-bound by tests/release-effect-sealing, so adopting the lock means resealing a retired route. Re-enabling any of them requires adopting the lock first."
-    },
-    {
-      "repo": "FS-GG/FS.GG.Coordination",
-      "workflows": [
-        ".github/workflows/callable-cli-release-publish-011.yml",
-        ".github/workflows/callable-cli-release-publish.yml",
-        ".github/workflows/candidate-supply-chain.yml",
-        ".github/workflows/execution-pair-forward-publish.yml"
-      ],
-      "reason": "Dispatch-only, byte-pinned by the Coordination admission manifests, and the repository Actions allow-list admits only GitHub-owned actions and one NuGet/login digest, so a lock step cannot be added without an administrator allow-list change and a manifest re-pin. Tracked as a remainder of FS-GG/.github#4753."
     },
     {
       "repo": "FS-GG/RecoilEngine",
