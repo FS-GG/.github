@@ -230,7 +230,7 @@ def verify_publication_lock_cut(document, source):
              "      group: release-new-sdd-workspace-successor-publish\n"
              "      cancel-in-progress: false\n")
     assert "concurrency:" not in source, "the repository-scoped group must be gone"
-    gate = re.compile(re.escape(LOCK_GATE) + r"          max-wait-minutes: [0-9]+\n")
+    gate = re.compile(re.escape(LOCK_GATE) + r"          max-wait-minutes: [0-9]+\n        timeout-minutes: [0-9]+\n")
     assert len(gate.findall(source)) == source.count("Acquire org publication writer lock") == 2
     restored = gate.sub("", source)
     marked = " [org-publication-writer]\n"
@@ -256,7 +256,7 @@ full_report = json.loads((ROOT / "docs/reports/gs2-08-9-release-route-dispositio
 full_workflow = (ROOT / WIZARD_SUCCESSOR).read_text()
 current_report, current_workflow = verify_publication_lock_cut(full_report, full_workflow)
 for old, new in (
-    ("          max-wait-minutes: 30\n", "          max-wait-minutes: 30\n        env:\n          X: 1\n"),
+    ("          max-wait-minutes: 30\n        timeout-minutes: 32\n", "          max-wait-minutes: 30\n        timeout-minutes: 32\n        env:\n          X: 1\n"),
     ("uses: ./.github/actions/publication-writer-lock", "uses: ./.github/actions/other-lock"),
     ("  publish:\n", "  publish:\n    concurrency:\n      group: other\n"),
     ("environment: release-successor", "environment: other"),
@@ -280,11 +280,11 @@ for defect in ("history-pop", "history-status", "amendment-unit", "retained-rout
     if defect == "amendment-unit": row["publicationWriterLockAmendment"]["unit"] = "other"
     if defect == "retained-route": row["disposition"] = "forgiven"
     if defect == "extra-gate":
-        source = full_workflow.replace(LOCK_GATE + "          max-wait-minutes: 30\n", (LOCK_GATE + "          max-wait-minutes: 30\n") * 2, 1)
+        source = full_workflow.replace(LOCK_GATE + "          max-wait-minutes: 30\n        timeout-minutes: 32\n", (LOCK_GATE + "          max-wait-minutes: 30\n        timeout-minutes: 32\n") * 2, 1)
         row["sha256"] = hashlib.sha256(source.encode()).hexdigest()
     if defect == "ungated-recovery":
         tail = full_workflow.rindex(LOCK_GATE)
-        source = full_workflow[:tail] + full_workflow[tail:].replace(LOCK_GATE + "          max-wait-minutes: 20\n", "", 1)
+        source = full_workflow[:tail] + full_workflow[tail:].replace(LOCK_GATE + "          max-wait-minutes: 20\n        timeout-minutes: 22\n", "", 1)
         row["sha256"] = hashlib.sha256(source.encode()).hexdigest()
     try:
         verify_publication_lock_cut(mutated, source)

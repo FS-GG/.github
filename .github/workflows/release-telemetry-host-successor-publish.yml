@@ -52,6 +52,7 @@ jobs:
         uses: ./.github/actions/publication-writer-lock
         with:
           max-wait-minutes: 30
+        timeout-minutes: 32
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json

@@ -397,25 +397,32 @@ print("pile-up: 12 simultaneous publishers all complete, one at a time, no deadl
 PINNED = "FS-GG/.github/.github/actions/publication-writer-lock@" + "a" * 40
 
 
-def workflow(gate="      - name: Acquire org publication writer lock\n        uses: " + PINNED + "\n",
+GATE = ("      - name: Acquire org publication writer lock\n        uses: " + PINNED + "\n"
+        "        with:\n          max-wait-minutes: 30\n        timeout-minutes: 32\n")
+
+
+def workflow(gate=GATE,
              before="", after="      - name: Push\n        run: dotnet nuget push x.nupkg\n"):
     return ("name: release\non:\n  workflow_dispatch:\njobs:\n  publish:\n    name: publish " + lock.MARKER + "\n    runs-on: ubuntu-latest\n    steps:\n"
             "      - uses: actions/checkout@v7\n" + before + gate + after)
 
 
 assert coverage.check_workflow(workflow(), "FS-GG/FS.GG.SDD") == {"gated": ["publish"], "problems": []}
-assert coverage.check_workflow(workflow(gate="      - name: Acquire org publication writer lock\n        uses: ./.github/actions/publication-writer-lock\n"),
+assert coverage.check_workflow(workflow(gate=GATE.replace("FS-GG/.github/.github/actions/publication-writer-lock@" + "a" * 40, "./.github/actions/publication-writer-lock")),
                                "FS-GG/.github")["problems"] == []
 expected_bad = {
     "missing": workflow(gate=""),
     "after-effect": workflow(gate="", after="      - name: Push\n        run: dotnet nuget push x.nupkg\n"
                              "      - name: Acquire org publication writer lock\n        uses: " + PINNED + "\n"),
-    "conditional": workflow(gate="      - name: Acquire org publication writer lock\n        if: inputs.publish\n        uses: " + PINNED + "\n"),
-    "continue": workflow(gate="      - name: Acquire org publication writer lock\n        continue-on-error: true\n        uses: " + PINNED + "\n"),
-    "unpinned": workflow(gate="      - name: Acquire org publication writer lock\n        uses: FS-GG/.github/.github/actions/publication-writer-lock@main\n"),
+    "conditional": workflow(gate=GATE.replace("        uses:", "        if: inputs.publish\n        uses:")),
+    "continue": workflow(gate=GATE.replace("        uses:", "        continue-on-error: true\n        uses:")),
+    "unpinned": workflow(gate=GATE.replace("@" + "a" * 40, "@main")),
     "wrong-name": workflow(gate="      - name: Lock\n        uses: " + PINNED + "\n"),
-    "local-in-producer": workflow(gate="      - name: Acquire org publication writer lock\n        uses: ./.github/actions/publication-writer-lock\n"),
-    "duplicate": workflow(gate=("      - name: Acquire org publication writer lock\n        uses: " + PINNED + "\n") * 2),
+    "local-in-producer": workflow(gate=GATE.replace("FS-GG/.github/.github/actions/publication-writer-lock@" + "a" * 40, "./.github/actions/publication-writer-lock")),
+    "duplicate": workflow(gate=GATE * 2),
+    "no-step-timeout": workflow(gate=GATE.replace("        timeout-minutes: 32\n", "")),
+    "step-timeout-below-wait": workflow(gate=GATE.replace("timeout-minutes: 32", "timeout-minutes: 30")),
+    "marker-only-in-a-comment": workflow().replace(" " + lock.MARKER, " # " + lock.MARKER),
     "login-first": workflow(before="      - uses: NuGet/login@v1\n"),
     "app-token-first": workflow(before="      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1\n"),
     "setup-step-first": workflow(before="      - name: Build\n        run: dotnet build\n"),
@@ -439,10 +446,10 @@ assert coverage.check_workflow(perm_workflow(), "FS-GG/FS.GG.SDD")["problems"], 
 assert coverage.check_workflow(perm_workflow(job_perm="    permissions:\n      packages: write\n", wf_perm="permissions:\n  contents: read\n"), "FS-GG/FS.GG.SDD")["problems"]
 assert coverage.check_workflow(perm_workflow(job_perm="    permissions:\n      contents: read\n"), "FS-GG/FS.GG.SDD")["problems"] == []
 assert coverage.check_workflow(perm_workflow(wf_perm="permissions:\n  contents: read\n"), "FS-GG/FS.GG.SDD")["problems"] == []
-assert coverage.check_workflow(perm_workflow(), "FS-GG/FS.GG.SDD", observers=("writer",))["problems"] == []
-assert coverage.check_workflow(perm_workflow(gate="      - name: Acquire org publication writer lock\n        uses: " + PINNED + "\n"),
+assert coverage.check_workflow(perm_workflow().replace(" " + lock.MARKER, ""), "FS-GG/FS.GG.SDD", observers=("writer",))["problems"] == []
+assert coverage.check_workflow(perm_workflow(gate=GATE),
                                "FS-GG/FS.GG.SDD") == {"gated": ["writer"], "problems": []}
-assert coverage.check_workflow(perm_workflow(gate="      - name: Acquire org publication writer lock\n        uses: " + PINNED + "\n"),
+assert coverage.check_workflow(perm_workflow(gate=GATE),
                                "FS-GG/FS.GG.SDD", observers=("writer",))["problems"], "an observer may not take the lock"
 caller = "name: x\non:\n  workflow_dispatch:\npermissions:\n  contents: write\njobs:\n  call:\n    uses: ./.github/workflows/release.yml\n"
 assert coverage.check_workflow(caller, "FS-GG/FS.GG.SDD")["problems"] == [], "a reusable-workflow caller carries no steps"
@@ -455,6 +462,25 @@ except lock.LockError:
 else:
     raise AssertionError("observationJobs for an unlisted workflow accepted")
 print("coverage checker: write permission (inherited or own) needs the gate; observers and callers are explicit")
+
+# D1: an observer may not hide a publisher; D2/D3 follow below.
+hidden = workflow(gate="").replace(" " + lock.MARKER, "")
+assert coverage.check_workflow(hidden, "FS-GG/FS.GG.SDD", observers=("publish",))["problems"], "an observer with a publication token is a hidden publisher"
+quiet = workflow(gate="", after="      - run: gh api repos/x/y/releases/1\n").replace(" " + lock.MARKER, "")
+assert coverage.check_workflow(quiet, "FS-GG/FS.GG.SDD", observers=("publish",))["problems"] == []
+callers = "name: r\non:\n  workflow_dispatch:\njobs:\n  call:\n    uses: ./.github/workflows/release.yml\n"
+sdd2 = {"writers": [{"repo": "FS-GG/FS.GG.SDD", "workflows": [".github/workflows/release.yml", ".github/workflows/tags.yml"]}], "exempt": []}
+assert coverage.audit({".github/workflows/release.yml": workflow(), ".github/workflows/tags.yml": callers}, "FS-GG/FS.GG.SDD", sdd2) == [], \
+    "a registered caller of a gated reusable workflow is the intended model"
+
+# A marked in-progress peer without started_at poisons the scan: every waiter fails closed.
+clock = VirtualClock(1)
+api, out = FakeGitHub(clock), Outcome()
+api.start_job("FS-GG/FS.GG.SDD", 1, 11, at=BASE - 60)
+api.jobs[11]["started_at"] = None
+run_threads([publisher(api, clock, out, "w", "FS-GG/FS.GG.Net", 2, 12, 0, 1, max_wait=200)])
+assert out.errors.get("w") and not out.entries, "an unticketable peer must block acquisition"
+print("coverage checker: observers cannot hide publishers; callers-only registrations pass; an unticketable peer fails closed")
 
 registry = copy.deepcopy(REGISTRY)
 gated_text = workflow()
@@ -487,10 +513,18 @@ else:
             workflows.mkdir(parents=True)
             gate = "" if wait is None else (f"      - name: {lock.GATE_STEP}\n        uses: ./.github/actions/publication-writer-lock\n"
                                            f"        with:\n          max-wait-minutes: {wait}\n")
-            workflows.joinpath("w.yml").write_text(f"name: w\non: workflow_dispatch\njobs:\n  j:\n    runs-on: ubuntu-latest\n    timeout-minutes: {timeout}\n    steps:\n{gate}      - run: echo ok\n")
+            workflows.joinpath("w.yml").write_text(f"name: w\non: workflow_dispatch\njobs:\n  j:\n    name: j {lock.MARKER}\n    runs-on: ubuntu-latest\n    timeout-minutes: {timeout}\n    steps:\n{gate}      - run: echo ok\n")
             return subprocess.run([sys.executable, "-B", str(ROOT / "scripts/check-workflow-timeouts.py"), "--root", root],
                                   capture_output=True, text=True).returncode
     assert timeouts(60, None) == 0 and timeouts(61, None) == 1, "the unlocked ceiling stays 60"
     assert timeouts(90, 30) == 0 and timeouts(91, 30) == 1, "the ceiling rises by exactly the declared wait"
     assert timeouts(90, 0) == 1 and timeouts(90, 999) == 1, "an unbounded or absent wait raises nothing"
+    assert timeouts(30, 30) == 1, "a timeout that leaves no working budget beyond the wait is refused"
+    assert timeouts(390, 330) == 1 and timeouts(120, 60) == 0 and timeouts(121, 60) == 1, "the raise is capped at 60 minutes"
+    unmarked = tempfile.TemporaryDirectory()
+    pathlib.Path(unmarked.name, ".github/workflows").mkdir(parents=True)
+    pathlib.Path(unmarked.name, ".github/workflows/w.yml").write_text(
+        f"name: w\non: workflow_dispatch\njobs:\n  j:\n    runs-on: ubuntu-latest\n    timeout-minutes: 120\n    steps:\n      - name: {lock.GATE_STEP}\n        uses: ./x\n        with:\n          max-wait-minutes: 30\n      - run: echo ok\n")
+    assert subprocess.run([sys.executable, "-B", str(ROOT / "scripts/check-workflow-timeouts.py"), "--root", unmarked.name], capture_output=True).returncode == 1, \
+        "a job with only the step name (no marker) gets no raised ceiling"
     print("timeout ceiling: 60 unlocked; 60 + declared max-wait with the lock step; nothing for a bogus wait")

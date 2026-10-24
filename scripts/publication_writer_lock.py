@@ -70,12 +70,19 @@ class GitHubApi:
 
     def __init__(self, token: str, base: str = API, timeout: float = 30.0):
         self.token, self.base, self.timeout = token, base, timeout
+        self.deadline = None  # absolute time.time(); set by acquire so retries cannot outlive max-wait
+
+    def _remaining(self):
+        return None if self.deadline is None else self.deadline - time.time()
 
     def get(self, path: str, raw: bool = False):
         last = None
         for attempt in range(HTTP_ATTEMPTS):
             if attempt:
                 time.sleep(2.0 ** (attempt - 1))
+            remaining = self._remaining()
+            if remaining is not None and remaining <= 0:
+                raise LockError(f"GitHub read for {path} abandoned: the lock wait is spent")
             request = urllib.request.Request(
                 self.base + path,
                 headers={
@@ -86,7 +93,7 @@ class GitHubApi:
                 },
             )
             try:
-                with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - fixed https base
+                with urllib.request.urlopen(request, timeout=self.timeout if remaining is None else max(1.0, min(self.timeout, remaining))) as response:  # noqa: S310 - fixed https base
                     body = response.read(8_000_000)
             except urllib.error.HTTPError as error:
                 last = error
@@ -226,6 +233,8 @@ def acquire(api, *, repo: str, run_id: int, runner_name: str, max_wait: float,
             log=print) -> dict:
     """Block until this job holds the lowest live ticket, or raise LockError (never degrade)."""
     started = clock()
+    if hasattr(api, "deadline"):
+        api.deadline = time.time() + max_wait
     registry = load_registry(api)
     if repo not in {row["repo"] for row in registry["writers"]}:
         raise LockError(f"{repo} is not a registered publication writer repository")

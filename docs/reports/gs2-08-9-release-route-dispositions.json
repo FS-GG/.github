@@ -31,7 +31,7 @@
     },
     {
       "path": ".github/workflows/release-new-sdd-workspace.yml",
-      "sha256": "d2abb57d660a00c77f5deb3782a24aa4a4e43514c9a264b4c3ad70a2c1ba343e",
+      "sha256": "5983242c6154d2adfeb62e5d86fc7d9097d42bc5240ed6fb40bb728ec4792068",
       "disposition": "exact-source-protected-journal-successor-only",
       "successorAmendment": {
         "unit": "CREATOR-PUBLIC-021-4741",

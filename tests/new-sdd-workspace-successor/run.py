@@ -71,7 +71,7 @@ def writer_lock_scope(source: str) -> dict[str, bool]:
         if expected:
             gate = job.index(GATE_STEP)
             tail = job[gate + len(GATE_STEP):]
-            if re.match(r"          max-wait-minutes: \d+\n", tail) is None:
+            if re.match(r"          max-wait-minutes: \d+\n        timeout-minutes: \d+\n", tail) is None:
                 raise ValueError("Creator writer lock: gate takes only a bounded wait")
             if "create-github-app-token" in job[:gate] or "Mint" in job[:gate]:
                 raise ValueError("Creator writer lock: gate must precede every credential exchange")
@@ -310,6 +310,7 @@ class WizardReleaseTests(unittest.TestCase):
             "gate renamed so other publishers cannot see it": source.replace("name: " + GATE_NAME, "name: Lock", 1),
             "gate after the credential exchange": source.replace(gate_block, "", 1).replace("      - name: Bind the proved installation\n", gate_block + "      - name: Bind the proved installation\n", 1),
             "job name without the marker": source.replace(" [org-publication-writer]\n", "\n", 1),
+            "no step timeout on the wait": source.replace("        timeout-minutes: 32\n", "", 1),
             "unbounded wait": source.replace("          max-wait-minutes: 30\n", "", 1),
             "diagnostic takes the writer lock": source.replace("      - name: Mint the scoped ordinary Authority read token\n", gate_block + "      - name: Mint the scoped ordinary Authority read token\n", 1),
             "new unclassified role": source + "\n  other-writer:\n    runs-on: ubuntu-latest\n",

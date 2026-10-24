@@ -78,6 +78,7 @@ jobs:
         uses: ./.github/actions/publication-writer-lock
         with:
           max-wait-minutes: 30
+        timeout-minutes: 32
       - name: Refuse absent promoted dependency pin before credentials or effects
         run: python3 scripts/creator-current-coord-dependencies.py preflight
       - uses: actions/setup-dotnet@v6
@@ -239,6 +240,7 @@ jobs:
         uses: ./.github/actions/publication-writer-lock
         with:
           max-wait-minutes: 20
+        timeout-minutes: 22
       # Use the existing runner SDK, verified exactly by the finite helper.
       # No setup/download fallback, OIDC exchange or package push in recovery.
       - name: Mint the scoped ordinary Authority write token

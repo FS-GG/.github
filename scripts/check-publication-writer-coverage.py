@@ -129,8 +129,11 @@ def check_workflow(text: str, repository: str, observers=()) -> dict:
         own = job_permissions(job)
         writes = permission_writes(inherited if own is None else own)
         if key in observers:
-            if gate_ix:
-                problems.append(f"job {key}: declared an observer but takes the lock")
+            name = re.search(r"^    name:\s*(.+?)\s*$", job, re.MULTILINE)
+            if gate_ix or (name and MARKER in name.group(1)):
+                problems.append(f"job {key}: declared an observer but takes the lock or carries the marker")
+            if any(PUBLISH_EFFECT.search(x) for x in steps):
+                problems.append(f"job {key}: declared an observer but carries a publication token")
             continue
         if not gate_ix and not effect_ix and not writes:
             continue
@@ -145,7 +148,8 @@ def check_workflow(text: str, repository: str, observers=()) -> dict:
         if before:
             problems.append(f"job {key}: only checkout may precede the lock step (found '{step_name(before[0]) or before[0].strip()[:40]}')")
         name = re.search(r"^    name:\s*(.+?)\s*$", job, re.MULTILINE)
-        if not name or MARKER not in name.group(1):
+        value = re.sub(r"\s+#.*$", "", name.group(1)).strip("\"'") if name else ""
+        if MARKER not in value:
             problems.append(f"job {key}: the job name must contain '{MARKER}' so other publishers can see it (the API step list is unreliable)")
         uses = re.search(r"^\s+(?:- )?uses:\s*(.+?)\s*$", gate, re.MULTILINE)
         action = uses.group(1) if uses else ""
@@ -155,6 +159,10 @@ def check_workflow(text: str, repository: str, observers=()) -> dict:
             ok = bool(REMOTE_ACTION.fullmatch(action))
         if not ok:
             problems.append(f"job {key}: lock step must use the pinned FS-GG/.github lock action (got {action!r})")
+        wait = re.search(r"max-wait-minutes:\s*(\d+)", gate)
+        limit = re.search(r"^\s+timeout-minutes:\s*(\d+)\s*$", gate, re.MULTILINE)
+        if not wait or not limit or int(limit.group(1)) <= int(wait.group(1)):
+            problems.append(f"job {key}: the lock step needs max-wait-minutes and a larger step timeout-minutes (a degraded API must not outlive the wait)")
         if re.search(r"^\s+if:", gate, re.MULTILINE) or re.search(r"^\s+continue-on-error:", gate, re.MULTILINE):
             problems.append(f"job {key}: lock step must be unconditional and may not continue on error")
         if effect_ix and gate_ix[0] > min(effect_ix):
@@ -190,7 +198,8 @@ def audit(files: dict, repository: str, registry: dict) -> list:
         if path in writers or has_effect or result["gated"]:
             for problem in result["problems"]:
                 errors.append(f"{repository}:{path}: {problem}")
-        if path in writers and not result["gated"] and not result["problems"]:
+        callers_only = bool(re.search(r"^    uses:", text, re.MULTILINE)) and not result["gated"]
+        if path in writers and not result["gated"] and not result["problems"] and not callers_only:
             errors.append(f"{repository}:{path}: registered writer has no gated job (every job is read-only?)")
         if path not in writers and (has_effect or result["gated"]):
             errors.append(f"{repository}:{path}: publishes (or is gated) but is neither registered nor exempt")

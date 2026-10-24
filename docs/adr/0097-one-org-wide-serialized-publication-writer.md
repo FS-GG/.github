@@ -68,7 +68,9 @@ exclusion.
   Game wasm or Rendering) is ordered by its own `needs` chain; another publisher's job may run between
   two of its jobs, as no two write-capable jobs ever overlap. Jobs that are read-only by contract are
   listed under the registry row's `observationJobs` and take no lock.
-- A publisher workflow must register in `registry/publication-writers.json` and carry the step
+- A reusable workflow carries the gate in its own jobs; its callers are registered too (a run's
+  `path` is the caller's) and pass the audit because they hold only `uses:` jobs. A publisher
+  workflow must register in `registry/publication-writers.json` and carry the step
   before its first effect. `scripts/check-publication-writer-coverage.py --local` is a required
   selftest; `--remote` reports unadopted repositories.
 - Waiting is queueing, not work. `scripts/check-workflow-timeouts.py` raises the 60 minute ceiling
@@ -83,8 +85,10 @@ exclusion.
   `check-publication-writer-coverage.py` requires the marker, the gate step, and nothing but checkout
   before the gate, in every write-capable job of a registered workflow; `--local` is a required
   selftest here and `--remote` (scheduled weekly) reports drift in other repositories.
-- The retired `.104` continuation census in `scripts/release-successor-publish.py`
-  (`continuation_native_census`) refuses while any other run of that workflow is in progress or
+- The one-use `.104` continuation route (`continue_original_0104_checkpoint`, still a dispatchable
+  input, gated by the installed release suspension) has a census in
+  `scripts/release-successor-publish.py` (`continuation_native_census`)
+  that refuses while any other run of that workflow is in progress or
   queued. A second dispatch now waits `in_progress` in its lock step, where the old group left it
   pending, so an operator must not dispatch a second publisher while using that one-use route. It
   refuses; it does not publish. The script is authentication-pinned and was not edited.
