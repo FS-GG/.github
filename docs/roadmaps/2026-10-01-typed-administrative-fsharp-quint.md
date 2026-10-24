@@ -70,13 +70,15 @@ lock adoption, FS-GG/.github#4753) at exact head `1690d96b89d872e9cfec6643aa0cc6
 [40120617845](https://github.com/FS-GG/FsQuint/actions/runs/40120617845) also passed. The five producer
 files (`.fsgg/routine-development.json`, `.github/workflows/routine-eligibility.yml`,
 `scripts/check-claim-generation.py`, `scripts/check-routine-eligibility-envelope.py`,
-`scripts/lib/gate.py`) are byte- and mode-identical across the installation merge, the PR base
-and the protected merge, and match the immutable source `416381bc4da37cb5089da08a45282e2222104c27`.
+`scripts/lib/gate.py`) are byte- and mode-identical at the installation merge (which was also #46's base) and at
+the protected merge, and match FS-GG/.github commit `416381bc4da37cb5089da08a45282e2222104c27`.
 
 This closes FsQuint's selected ordinary routine-producer activation assertion
 ([FsQuint #45](https://github.com/FS-GG/FsQuint/issues/45)); no synthetic change was needed.
 FsQuint has no repository branch protection, so "required" checks are the policy list in
-`.fsgg/routine-development.json`, not a GitHub-enforced merge gate. No old FsQuint route is
+`.fsgg/routine-development.json`, not a GitHub-enforced merge gate; of its three names only
+`routine-eligibility` exists as a check run on #46 (beside `qualify`), the other two are
+echoed by the validator but not separate checks. No old FsQuint route is
 established as superseded: the vendored `work-roadmap` skill is an explicitly invoked tool, not
 a gate that the producer replaces, so nothing is retired. The producer is the canonical Python
 eligibility check, not a published typed (F#) replacement; typed replacement installation,
