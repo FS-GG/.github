@@ -28,6 +28,34 @@ GATE_STEP = "Acquire org publication writer lock"
 MARKER = "[org-publication-writer]"
 REMOTE_ACTION = re.compile(r"^FS-GG/\.github/\.github/actions/publication-writer-lock@[0-9a-f]{40}(\s+#.*)?$")
 LOCAL_ACTION = "./.github/actions/publication-writer-lock"
+# A repository whose Actions allow-list admits no third-party action cannot use the composite action. It
+# fetches the lock script from FS-GG/.github at a pinned commit, verifies a pinned sha256 and runs it
+# (the same script the action runs). The whole step must be exactly this text; only the four values vary.
+SCRIPT_GATE_TEMPLATE = (
+    "      - name: Acquire org publication writer lock\n"
+    "        shell: bash\n"
+    "        timeout-minutes: <<timeout>>\n"
+    "        env:\n"
+    "          GH_TOKEN: ${{ github.token }}\n"
+    "          LOCK_COMMIT: <<commit>>\n"
+    "          LOCK_SCRIPT_SHA256: <<digest>>\n"
+    "          LOCK_MAX_WAIT_MINUTES: '<<wait>>'\n"
+    "        run: |\n"
+    "          set -euo pipefail\n"
+    "          lock=\"$RUNNER_TEMP/publication_writer_lock.py\"\n"
+    "          curl --fail --silent --show-error --location --output \"$lock\" \\\n"
+    "            \"https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py\"\n"
+    "          echo \"${LOCK_SCRIPT_SHA256}  ${lock}\" | sha256sum --check --strict\n"
+    "          python3 -I -B \"$lock\" acquire --max-wait-minutes \"$LOCK_MAX_WAIT_MINUTES\""
+)
+SCRIPT_GATE_RE = re.compile(
+    re.escape(SCRIPT_GATE_TEMPLATE)
+    .replace(re.escape("<<timeout>>"), r"(?P<timeout>\d+)")
+    .replace(re.escape("<<commit>>"), r"(?P<commit>[0-9a-f]{40})")
+    .replace(re.escape("<<digest>>"), r"(?P<digest>[0-9a-f]{64})")
+    .replace(re.escape("<<wait>>"), r"(?P<wait>\d+)"))
+# An environment that can redirect the commands the pinned step runs defeats the digest check.
+HIJACK_ENV = re.compile(r"^\s*(?:BASH_ENV|ENV|PATH|LD_PRELOAD|LD_LIBRARY_PATH|BASH_FUNC[A-Za-z0-9_%]*|GITHUB_PATH):", re.MULTILINE)
 # Publication tokens decide whether a workflow must be registered; the broader write tokens decide
 # which of a registered workflow's jobs need the gate (a credential exchange or any ref/API write).
 PUBLISH_EFFECT = re.compile(r"dotnet nuget push|NuGet/login@|gh release (?:create|upload|edit|delete)|softprops/action-gh-release|git push[^\n]*(?:--tags|refs/tags|--atomic)")
@@ -116,6 +144,12 @@ def job_permissions(job: str):
     return None
 
 
+def parse_script_gate(gate: str):
+    """{'timeout','commit','digest','wait'} when `gate` is exactly the pinned-script step, else None."""
+    match = SCRIPT_GATE_RE.fullmatch(gate.strip("\n").rstrip())
+    return match.groupdict() if match else None
+
+
 def check_workflow(text: str, repository: str, observers=()) -> dict:
     """{'gated': [job keys], 'problems': [str]} for one workflow's bytes."""
     problems, gated = [], []
@@ -157,13 +191,23 @@ def check_workflow(text: str, repository: str, observers=()) -> dict:
             ok = action == LOCAL_ACTION or bool(REMOTE_ACTION.fullmatch(action))
         else:
             ok = bool(REMOTE_ACTION.fullmatch(action))
-        if not ok:
+        if not uses and repository != "FS-GG/.github":
+            values = parse_script_gate(gate)
+            ok = values is not None
+            if values is None:
+                problems.append(f"job {key}: the lock step is neither the pinned composite action nor exactly the pinned-script step")
+            elif HIJACK_ENV.search("\n".join(executable_lines(text))):
+                ok = False
+                problems.append(f"job {key}: BASH_ENV, PATH or a loader variable is set in the workflow, which could redirect the pinned-script lock step")
+            wait = re.search(r"LOCK_MAX_WAIT_MINUTES:\s*['\"]?(\d+)", gate)
+        else:
+            wait = re.search(r"max-wait-minutes:\s*(\d+)", gate)
+        if not ok and (uses or repository == "FS-GG/.github"):
             problems.append(f"job {key}: lock step must use the pinned FS-GG/.github lock action (got {action!r})")
-        wait = re.search(r"max-wait-minutes:\s*(\d+)", gate)
         limit = re.search(r"^\s+timeout-minutes:\s*(\d+)\s*$", gate, re.MULTILINE)
         if not wait or not limit or int(limit.group(1)) <= int(wait.group(1)):
             problems.append(f"job {key}: the lock step needs max-wait-minutes and a larger step timeout-minutes (a degraded API must not outlive the wait)")
-        if re.search(r"^\s+if:", gate, re.MULTILINE) or re.search(r"^\s+continue-on-error:", gate, re.MULTILINE):
+        if re.search(r"^\s+[\"']?if[\"']?\s*:", gate, re.MULTILINE) or re.search(r"^\s+[\"']?continue-on-error[\"']?\s*:", gate, re.MULTILINE):
             problems.append(f"job {key}: lock step must be unconditional and may not continue on error")
         if effect_ix and gate_ix[0] > min(effect_ix):
             problems.append(f"job {key}: lock step must precede the first effect step '{step_name(steps[min(effect_ix)])}'")
@@ -216,6 +260,42 @@ def fetch(path: str, token: str = "") -> object:
         return json.loads(response.read())
 
 
+def script_pin_errors(files: dict, repository: str, script_at) -> list:
+    """Every pinned-script gate must name a real FS-GG/.github commit whose lock script has the pinned sha256.
+
+    The pins are taken from the same strict parse that check_workflow accepts, so a quoted or duplicated
+    value cannot be audited as one thing and executed as another."""
+    import hashlib
+    errors = []
+    for path, text in sorted(files.items()):
+        pairs, steps_seen = [], 0
+        for key, job in split_jobs(text).items():
+            for step in split_steps(job):
+                if step_name(step) != GATE_STEP:
+                    continue
+                values = parse_script_gate(step)
+                if values is not None:
+                    pairs.append((values["commit"], values["digest"]))
+        steps_seen = sum(1 for line in executable_lines(text) if re.match(r"^\s+LOCK_COMMIT:", line))
+        if steps_seen != len(pairs):
+            errors.append(f"{repository}:{path}: {steps_seen - len(pairs)} LOCK_COMMIT pin(s) are outside an exact pinned-script gate and are not verified")
+        for commit, digest in sorted(set(pairs)):
+            try:
+                actual = hashlib.sha256(script_at(commit)).hexdigest()
+            except Exception as error:  # noqa: BLE001 - any unreadable pin is unmet
+                errors.append(f"{repository}:{path}: pinned lock commit {commit} is unreadable: {error}")
+                continue
+            if actual != digest:
+                errors.append(f"{repository}:{path}: pinned sha256 {digest} is not the lock script at {commit} ({actual})")
+    return errors
+
+
+def lock_script_at(commit: str, token: str = "") -> bytes:
+    import base64
+    body = fetch(f"/repos/FS-GG/.github/contents/scripts/publication_writer_lock.py?ref={commit}", token)
+    return base64.b64decode(body["content"])
+
+
 def remote_files(repository: str, token: str) -> dict:
     branch = fetch(f"/repos/{repository}", token)["default_branch"]  # not every repository uses main (RecoilEngine: master)
     listing = fetch(f"/repos/{repository}/contents/.github/workflows?ref={branch}", token)
@@ -249,7 +329,9 @@ def main(argv=None) -> int:
         token = os.environ.get("GH_TOKEN", "")
         repos = {row["repo"] for row in registry["writers"]} | {row["repo"] for row in registry["exempt"]}
         for repository in sorted(repos - {"FS-GG/.github"}):
-            errors += audit(remote_files(repository, token), repository, registry)
+            files = remote_files(repository, token)
+            errors += audit(files, repository, registry)
+            errors += script_pin_errors(files, repository, lambda commit: lock_script_at(commit, token))
     for error in errors:
         print("UNMET " + error)
     print(f"publication writer coverage: {len(errors)} unmet")
