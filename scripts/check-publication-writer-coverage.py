@@ -217,11 +217,12 @@ def fetch(path: str, token: str = "") -> object:
 
 
 def remote_files(repository: str, token: str) -> dict:
-    listing = fetch(f"/repos/{repository}/contents/.github/workflows?ref=main", token)
+    branch = fetch(f"/repos/{repository}", token)["default_branch"]  # not every repository uses main (RecoilEngine: master)
+    listing = fetch(f"/repos/{repository}/contents/.github/workflows?ref={branch}", token)
     files = {}
     for item in listing:
         if item["type"] == "file" and item["name"].endswith((".yml", ".yaml")):
-            body = fetch(f"/repos/{repository}/contents/{item['path']}?ref=main", token)
+            body = fetch(f"/repos/{repository}/contents/{item['path']}?ref={branch}", token)
             import base64
             files[item["path"]] = base64.b64decode(body["content"]).decode()
     return files
