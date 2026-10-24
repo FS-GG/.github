@@ -35,23 +35,24 @@ permissions:
   packages: write
   id-token: write
 
-concurrency:
-  group: release-telemetry-host-successor-publish
-  cancel-in-progress: false
-
 jobs:
   publish:
-    name: telemetry-host-090-publisher
+    name: telemetry-host-090-publisher [org-publication-writer]
     if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
     runs-on: ubuntu-latest
     environment: release-successor
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Acquire org publication writer lock
+        uses: ./.github/actions/publication-writer-lock
+        with:
+          max-wait-minutes: 30
+        timeout-minutes: 32
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json

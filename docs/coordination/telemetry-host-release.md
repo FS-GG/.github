@@ -146,7 +146,7 @@ canonical Git trees; inaccessible, malformed, missing-parent and changed-main st
 fresh absence. Existing protected-main nonforced compare/exchange preserves unrelated directories,
 including old journal12. Native caller admission requires the current main source, first attempt,
 expected operator and an in-progress dispatch; a terminal old caller cannot authorize future effects.
-The unchanged workflow concurrency group serializes this route. These gates do not claim zero other writers.
+The org-wide publication writer lock ([ADR-0097](../adr/0097-one-org-wide-serialized-publication-writer.md)) serializes this route against every other publisher. These gates do not claim zero other writers.
 
 The eight ordered effects remain tag, draft release, two feeds, three release assets and promotion.
 Promotion keeps `make_latest=false` and touches no coherent CLI channel. A late0.6 tag cannot satisfy

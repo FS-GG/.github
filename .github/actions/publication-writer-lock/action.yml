@@ -1,0 +1,28 @@
+name: Org publication writer lock
+description: >-
+  Block until this job holds the lowest live ticket among all FS-GG publisher jobs (ADR-0097).
+  Place it in the publishing job as a step named exactly "Acquire org publication writer lock",
+  before the first credential exchange or feed/tag/release write. The lock is the job: it is
+  released when the job ends for any reason, so a crashed publisher cannot deadlock the org.
+inputs:
+  max-wait-minutes:
+    description: Give up (fail closed, no effect attempted) after this many minutes. Keep it below the job timeout.
+    required: false
+    default: "45"
+  github-token:
+    description: Token used only for public read-only Actions metadata.
+    required: false
+    default: ${{ github.token }}
+outputs:
+  waited-seconds:
+    description: Seconds spent waiting for older publisher jobs.
+    value: ${{ steps.lock.outputs.waited-seconds }}
+runs:
+  using: composite
+  steps:
+    - id: lock
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        MAX_WAIT_MINUTES: ${{ inputs.max-wait-minutes }}
+      run: python3 -B "$GITHUB_ACTION_PATH/../../../scripts/publication_writer_lock.py" acquire --max-wait-minutes "$MAX_WAIT_MINUTES"

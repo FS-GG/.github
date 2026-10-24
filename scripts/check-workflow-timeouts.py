@@ -124,6 +124,31 @@ def workflow_files(root: str) -> list[str]:
     return files
 
 
+LOCK_STEP = "Acquire org publication writer lock"
+
+
+MARKER = "[org-publication-writer]"
+MAX_LOCK_WAIT_MINUTES = 60
+
+
+def lock_wait_minutes(job: dict) -> int:
+    """Minutes a job may spend waiting in the org publication writer lock step (ADR-0097).
+
+    Waiting for an older publisher is queueing, not work: the job's own budget must not shrink by
+    it, so the ceiling for a registered publisher job (name carries MARKER and it has the lock
+    step) rises by exactly its declared bounded wait, itself capped. Any other job gets nothing.
+    """
+    name = job.get("name")
+    if not isinstance(name, str) or MARKER not in name:
+        return 0
+    for step in job.get("steps") or []:
+        if isinstance(step, dict) and step.get("name") == LOCK_STEP:
+            wait = (step.get("with") or {}).get("max-wait-minutes")
+            ok = isinstance(wait, int) and not isinstance(wait, bool) and 0 < wait <= MAX_LOCK_WAIT_MINUTES
+            return wait if ok else 0
+    return 0
+
+
 def check_timeout(raw: object, max_minutes: int) -> str | None:
     """The reason `timeout-minutes: <raw>` is not a provable bound, or None if it is one.
 
@@ -217,7 +242,10 @@ def main(argv: list[str]) -> int:
                 )
                 continue
 
-            reason = check_timeout(job["timeout-minutes"], args.max_minutes)
+            wait = lock_wait_minutes(job)
+            reason = check_timeout(job["timeout-minutes"], args.max_minutes + wait)
+            if not reason and wait and job["timeout-minutes"] <= wait:
+                reason = f"`timeout-minutes: {job['timeout-minutes']}` leaves no working budget beyond the {wait} minute lock wait"
             if reason:
                 findings.append(f"{subject}: {reason}")
             else:

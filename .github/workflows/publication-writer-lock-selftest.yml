@@ -1,0 +1,63 @@
+# Controls for the org-wide serialized publication writer (ADR-0097, FS-GG/.github#4753).
+#
+# Credential-free and network-free: a virtual clock drives the real acquire loop over a fake
+# Actions job list (serialization, crashed and ghost holders, fail-closed reads, tie-break),
+# and the static coverage checker proves every registered publisher workflow in this
+# repository carries the lock step before its first effect.
+name: publication-writer-lock-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/publication_writer_lock.py"
+      - "scripts/check-publication-writer-coverage.py"
+      - "registry/publication-writers.json"
+      - ".github/actions/publication-writer-lock/**"
+      - "tests/publication-writer-lock/**"
+      - ".github/workflows/**"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/publication_writer_lock.py"
+      - "scripts/check-publication-writer-coverage.py"
+      - "registry/publication-writers.json"
+      - ".github/actions/publication-writer-lock/**"
+      - "tests/publication-writer-lock/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publication-writer-lock-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  controls:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install test requirements (PyYAML)
+        run: python3 -m pip install -r requirements-test.txt
+      - name: Serialization, crash, lease and coverage controls
+        run: python3 tests/publication-writer-lock/run.py
+      - name: Every registered publisher workflow here is gated
+        run: python3 scripts/check-publication-writer-coverage.py --local
+
+  # Weekly drift report: a registered repository whose publisher lost or never gained the lock
+  # step, or an unregistered publisher. Red means an adoption gap, not a broken tree.
+  remote-adoption:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check every registered repository on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/check-publication-writer-coverage.py --remote

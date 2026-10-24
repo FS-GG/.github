@@ -41,26 +41,44 @@ SOURCE_FLOWS = {
 }
 
 
-def writer_lock_scope(source: str) -> dict[str, str | None]:
-    """Check the actual closed job roles, not a second scheduling implementation."""
+GATE_NAME = "Acquire org publication writer lock"
+GATE_STEP = ("      - name: " + GATE_NAME + "\n"
+             "        uses: ./.github/actions/publication-writer-lock\n"
+             "        with:\n")
+
+
+def writer_lock_scope(source: str) -> dict[str, bool]:
+    """Check the actual closed job roles, not a second scheduling implementation.
+
+    ADR-0097: the per-repository concurrency group is replaced by the org-wide publication
+    writer lock step in exactly the two mutation-capable jobs.
+    """
     if re.search(r"^concurrency:", source, re.MULTILINE):
         raise ValueError("Creator writer lock: workflow-wide observation exclusion")
+    if "    concurrency:" in source:
+        raise ValueError("Creator writer lock: a repository-scoped group cannot serialize other repositories")
     body = source.split("\njobs:\n", 1)[1]
     matches = list(re.finditer(r"^  ([a-z][a-z-]+):\n", body, re.MULTILINE))
     names = [match[1] for match in matches]
     if len(names) != 3 or set(names) != {"publish", "recovery-complete", "recovery-diagnostic"}:
         raise ValueError("Creator writer lock: unknown or repeated job role")
-    fence = ("    concurrency:\n"
-             "      group: release-new-sdd-workspace-successor-publish\n"
-             "      cancel-in-progress: false\n")
-    groups = {}
+    gates = {}
     for index, match in enumerate(matches):
         job = body[match.start():matches[index + 1].start() if index + 1 < len(matches) else None]
         expected = 0 if match[1] == "recovery-diagnostic" else 1
-        if job.count("    concurrency:") != expected or job.count(fence) != expected:
-            raise ValueError("Creator writer lock: exact mutation-role fence differs")
-        groups[match[1]] = "release-new-sdd-workspace-successor-publish" if expected else None
-    return groups
+        if job.count(GATE_NAME) != expected or job.count(GATE_STEP) != expected:
+            raise ValueError("Creator writer lock: exact mutation-role gate differs")
+        if expected:
+            gate = job.index(GATE_STEP)
+            tail = job[gate + len(GATE_STEP):]
+            if re.match(r"          max-wait-minutes: \d+\n        timeout-minutes: \d+\n", tail) is None:
+                raise ValueError("Creator writer lock: gate takes only a bounded wait")
+            if "create-github-app-token" in job[:gate] or "Mint" in job[:gate]:
+                raise ValueError("Creator writer lock: gate must precede every credential exchange")
+            if "[org-publication-writer]\n" not in job.split("    if:", 1)[0]:
+                raise ValueError("Creator writer lock: the job name must carry the marker other publishers read")
+        gates[match[1]] = bool(expected)
+    return gates
 
 
 def source_flow(workflow: str, names: tuple[str, str, str, str]) -> None:
@@ -270,25 +288,31 @@ class Provider:
 class WizardReleaseTests(unittest.TestCase):
     def test_writer_lock_excludes_only_closed_mutation_capable_jobs(self):
         source = (ROOT / ".github/workflows/release-new-sdd-workspace.yml").read_text()
-        groups = writer_lock_scope(source)
-        self.assertEqual(groups["publish"], groups["recovery-complete"])
-        self.assertIsNone(groups["recovery-diagnostic"])
+        gates = writer_lock_scope(source)
+        self.assertEqual(gates, {"publish": True, "recovery-complete": True, "recovery-diagnostic": False})
         # The mixed ordinary job remains fenced even for preflight-only inputs.
         self.assertIn("inputs.promotion_recovery == 'off'", source)
-        self.assertEqual(groups["publish"], "release-new-sdd-workspace-successor-publish")
 
     def test_writer_lock_scope_refuses_actual_workflow_causal_mutants(self):
         source = (ROOT / ".github/workflows/release-new-sdd-workspace.yml").read_text()
-        fence = ("    concurrency:\n"
-                 "      group: release-new-sdd-workspace-successor-publish\n"
-                 "      cancel-in-progress: false\n")
+        local_group = ("    concurrency:\n"
+                       "      group: release-new-sdd-workspace-successor-publish\n"
+                       "      cancel-in-progress: false\n")
+        first_gate = source.index(GATE_STEP)
+        gate_block = source[first_gate:source.index("      - name:", first_gate + 10)]
+        second_gate = source.index(GATE_STEP, first_gate + 10)
+        second_block = source[second_gate:source.index("      - name:", second_gate + 10)]
         mutations = {
             "old workflow observation lock": source.replace("\njobs:\n", "\nconcurrency:\n  group: release-new-sdd-workspace-successor-publish\n  cancel-in-progress: false\n\njobs:\n", 1),
-            "ordinary writer unfenced": source.replace("  publish:\n" + fence, "  publish:\n", 1),
-            "recovery writer unfenced": source.replace("  recovery-complete:\n" + fence, "  recovery-complete:\n", 1),
-            "candidate key permits competing writers": source.replace("group: release-new-sdd-workspace-successor-publish", "group: ${{ inputs.candidate_run_id }}", 1),
-            "cancel owned writer": source.replace("cancel-in-progress: false", "cancel-in-progress: true", 1),
-            "diagnostic takes writer lock": source.replace("\n  recovery-diagnostic:\n", "\n  recovery-diagnostic:\n" + fence, 1),
+            "repository-scoped group instead of the org lock": source.replace("  publish:\n", "  publish:\n" + local_group, 1),
+            "ordinary writer ungated": source.replace(gate_block, "", 1),
+            "recovery writer ungated": source.replace(second_block, "", 1),
+            "gate renamed so other publishers cannot see it": source.replace("name: " + GATE_NAME, "name: Lock", 1),
+            "gate after the credential exchange": source.replace(gate_block, "", 1).replace("      - name: Bind the proved installation\n", gate_block + "      - name: Bind the proved installation\n", 1),
+            "job name without the marker": source.replace(" [org-publication-writer]\n", "\n", 1),
+            "no step timeout on the wait": source.replace("        timeout-minutes: 32\n", "", 1),
+            "unbounded wait": source.replace("          max-wait-minutes: 30\n", "", 1),
+            "diagnostic takes the writer lock": source.replace("      - name: Mint the scoped ordinary Authority read token\n", gate_block + "      - name: Mint the scoped ordinary Authority read token\n", 1),
             "new unclassified role": source + "\n  other-writer:\n    runs-on: ubuntu-latest\n",
         }
         for reason, mutant in mutations.items():
@@ -2142,8 +2166,8 @@ class CreatorPublicationTests(unittest.TestCase):
         self.assertIn("path: ${{ runner.temp }}/creator022-publication-summary.json", ordinary)
         self.assertIn("if-no-files-found: error", ordinary)
         self.assertNotIn("creator022-publication-summary", historical)
-        self.assertIn("timeout-minutes: 60", ordinary)
-        self.assertIn("cancel-in-progress: false", workflow)
+        self.assertIn("timeout-minutes: 90", ordinary)  # 60 plus the bounded 30 minute lock wait
+        self.assertIn("uses: ./.github/actions/publication-writer-lock", workflow)
         self.assertIn("promotion_recovery == 'off'", ordinary)
 
 

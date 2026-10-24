@@ -2769,7 +2769,13 @@ class HostedSuspensionInstallControls(SuspensionFixture):
             with self.subTest(forbidden=forbidden):self.assertNotIn(forbidden,install)
         self.assertIn('repositories: FS.GG.Coordination.Authority',install)
         self.assertIn('permission-contents: write',install)
-        self.assertIn('cancel-in-progress: false',publish)
+        gate='Acquire org publication writer lock'
+        for job in (publish,install):
+            self.assertEqual(job.count(gate),1)
+            self.assertIn('uses: ./.github/actions/publication-writer-lock',job)
+            self.assertLess(job.index(gate),job.index('actions/create-github-app-token@'))
+        self.assertLess(publish.index(gate),publish.index('NuGet/login@'))
+        self.assertNotIn('concurrency:',publish+install)
 
 
 class HostedInstallMetadataHTTPControls(HostedSuspensionInstallControls):
