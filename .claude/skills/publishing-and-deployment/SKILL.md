@@ -152,6 +152,21 @@ separately admitted execution or current hosted CI.
 The workflow retains its existing single-operator and environment restrictions. Source merge, a
 successful preflight and published/installed readback are separate milestones.
 
+### One org-wide publication writer ([ADR-0097](../../../docs/adr/0097-one-org-wide-serialized-publication-writer.md))
+
+Every publishing job, in every repository, takes one serialized lock: a step named exactly
+`Acquire org publication writer lock` using `FS-GG/.github/.github/actions/publication-writer-lock`
+(the local path inside `.github`), placed before the first credential exchange or feed, tag or release
+write, and listed in `registry/publication-writers.json`. GitHub `concurrency` groups are
+per-repository, so they cannot serialize publishers in different repositories; do not add one as a
+writer exclusion. The oldest live publisher job proceeds; a second dispatch waits in its lock step and
+fails closed after its bounded wait. There is nothing to release: the job's end, however it ends,
+frees the lock. The lock grants no authority and replaces no journal, candidate or revocation guard.
+
+- Observe the holder and contenders (read-only): `GH_TOKEN=$(gh auth token) python3 scripts/publication_writer_lock.py observe`.
+- Check adoption: `scripts/check-publication-writer-coverage.py --local` (this repository) or `--remote` (every registered repository on `main`).
+- "Hold `main` stable" below remains only for the candidate/source equality guards. No other publisher needs main held.
+
 Each **producer owns its release workflow**, including `.github` for its two org-level tools
 (ADR-0039 §5). The shape is:
 

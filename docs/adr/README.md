@@ -123,6 +123,7 @@ registry like any other, and this org gates its registries.
 | [0094](0094-separate-v3-and-utel-principals-and-custody.md) | Separate V3 and UTEL principals and credential custody | Accepted policy; provisioning and activation pending |
 | [0095](0095-utel-resource-containment-for-fresh-profiles.md) | Enforced resource containment for separately authorized fresh UTEL profiles; legacy physical-copy proof and holds remain unchanged | Accepted policy; implementation, production budgets and admission pending |
 | [0096](0096-proportionate-verification-and-unrecoverable-holds.md) | Ordinary local build/test of unpublished source needs no original-operation admission; the 439/46 unrecoverable inherited holds are released for isolated fresh operations | Accepted |
+| [0097](0097-one-org-wide-serialized-publication-writer.md) | One org-wide serialized publication writer: every publishing job takes a ticketed lock over the public Actions job list; the job's end releases it | Accepted |
 
 ## Supersession map
 

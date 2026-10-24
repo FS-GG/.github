@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "gateStep": "Acquire org publication writer lock",
+  "writers": [
+    {
+      "repo": "FS-GG/.github",
+      "workflows": [
+        ".github/workflows/release-new-sdd-workspace.yml",
+        ".github/workflows/release-successor-publish.yml",
+        ".github/workflows/release-telemetry-host-successor-publish.yml"
+      ]
+    },
+    {
+      "repo": "FS-GG/FS.GG.Audio",
+      "workflows": [
+        ".github/workflows/release-skills.yml",
+        ".github/workflows/release.yml"
+      ]
+    },
+    {
+      "repo": "FS-GG/FS.GG.Game",
+      "workflows": [
+        ".github/workflows/release-skills.yml",
+        ".github/workflows/release-wasm.yml",
+        ".github/workflows/release.yml"
+      ]
+    },
+    {
+      "repo": "FS-GG/FS.GG.Governance",
+      "workflows": [
+        ".github/workflows/publish.yml"
+      ]
+    },
+    {
+      "repo": "FS-GG/FS.GG.Net",
+      "workflows": [
+        ".github/workflows/release.yml"
+      ]
+    },
+    {
+      "repo": "FS-GG/FS.GG.Rendering",
+      "workflows": [
+        ".github/workflows/release-skills.yml",
+        ".github/workflows/release-tags.yml",
+        ".github/workflows/release.yml"
+      ]
+    },
+    {
+      "repo": "FS-GG/FS.GG.SDD",
+      "workflows": [
+        ".github/workflows/release.yml"
+      ]
+    },
+    {
+      "repo": "FS-GG/FS.GG.Templates",
+      "workflows": [
+        ".github/workflows/release.yml"
+      ]
+    },
+    {
+      "repo": "FS-GG/FsQuint",
+      "workflows": [
+        ".github/workflows/release.yml"
+      ]
+    }
+  ],
+  "exempt": [
+    {
+      "repo": "FS-GG/.github",
+      "workflows": [
+        ".github/workflows/release-coord-engine.yml",
+        ".github/workflows/release-drivers.yml",
+        ".github/workflows/release-kit.yml",
+        ".github/workflows/release-saga-prepare.yml"
+      ],
+      "reason": "GS2-08.9 historical routes are byte-bound by tests/release-effect-sealing and cannot be edited; the successor route publishes the same artifacts."
+    },
+    {
+      "repo": "FS-GG/FS.GG.Coordination",
+      "workflows": [
+        ".github/workflows/callable-cli-release-publish-011.yml",
+        ".github/workflows/callable-cli-release-publish.yml",
+        ".github/workflows/candidate-supply-chain.yml",
+        ".github/workflows/execution-pair-forward-publish.yml"
+      ],
+      "reason": "Dispatch-only, byte-pinned by the Coordination admission manifests, and the repository Actions allow-list admits only GitHub-owned actions and one NuGet/login digest, so a lock step cannot be added without an administrator allow-list change and a manifest re-pin. Tracked as a remainder of FS-GG/.github#4753."
+    },
+    {
+      "repo": "FS-GG/RecoilEngine",
+      "workflows": [
+        ".github/workflows/release-build.yml"
+      ],
+      "reason": "Attaches engine binaries to a GitHub release; it publishes to no package feed."
+    }
+  ]
+}

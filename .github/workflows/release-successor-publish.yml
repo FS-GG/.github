@@ -102,10 +102,6 @@ permissions:
   packages: write
   id-token: write
 
-concurrency:
-  group: release-successor-publish
-  cancel-in-progress: false
-
 jobs:
   publish:
     if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.install_release_suspension != true
@@ -118,6 +114,10 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Acquire org publication writer lock
+        uses: ./.github/actions/publication-writer-lock
+        with:
+          max-wait-minutes: 30
       - name: Validate the complete selected mode before any credential exchange
         env:
           FSGG_RELEASE_INPUTS: ${{ toJSON(inputs) }}
@@ -297,6 +297,10 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Acquire org publication writer lock
+        uses: ./.github/actions/publication-writer-lock
+        with:
+          max-wait-minutes: 5
       - name: Validate the complete install-only selection before issuer access
         run: python3 scripts/release-successor-publish.py --check-workflow-inputs
       - name: Prepare the fixed suspension and authenticate native owner and Authority state

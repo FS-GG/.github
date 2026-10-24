@@ -35,10 +35,6 @@ permissions:
   packages: write
   id-token: write
 
-concurrency:
-  group: release-telemetry-host-successor-publish
-  cancel-in-progress: false
-
 jobs:
   publish:
     name: telemetry-host-090-publisher
@@ -52,6 +48,10 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Acquire org publication writer lock
+        uses: ./.github/actions/publication-writer-lock
+        with:
+          max-wait-minutes: 30
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json

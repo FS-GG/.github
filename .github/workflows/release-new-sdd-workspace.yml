@@ -63,9 +63,6 @@ permissions:
 
 jobs:
   publish:
-    concurrency:
-      group: release-new-sdd-workspace-successor-publish
-      cancel-in-progress: false
     name: new-sdd-workspace-022-publisher
     if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.promotion_recovery == 'off'
     runs-on: ubuntu-latest
@@ -77,6 +74,10 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Acquire org publication writer lock
+        uses: ./.github/actions/publication-writer-lock
+        with:
+          max-wait-minutes: 30
       - name: Refuse absent promoted dependency pin before credentials or effects
         run: python3 scripts/creator-current-coord-dependencies.py preflight
       - uses: actions/setup-dotnet@v6
@@ -218,9 +219,6 @@ jobs:
           retention-days: 7
 
   recovery-complete:
-    concurrency:
-      group: release-new-sdd-workspace-successor-publish
-      cancel-in-progress: false
     name: new-sdd-workspace-013-recovery-complete
     if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.promotion_recovery == 'complete' && !inputs.publish && !inputs.verify_nuget_login
     runs-on: ubuntu-latest
@@ -237,6 +235,10 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Acquire org publication writer lock
+        uses: ./.github/actions/publication-writer-lock
+        with:
+          max-wait-minutes: 10
       # Use the existing runner SDK, verified exactly by the finite helper.
       # No setup/download fallback, OIDC exchange or package push in recovery.
       - name: Mint the scoped ordinary Authority write token

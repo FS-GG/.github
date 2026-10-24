@@ -188,8 +188,101 @@ def verify_creator022_profile(document, source):
     return historical_document, restored
 
 
-current_report = json.loads((ROOT / "docs/reports/gs2-08-9-release-route-dispositions.json").read_text())
-current_workflow = (ROOT / WIZARD_SUCCESSOR).read_text()
+
+# PUBLICATION-WRITER-LOCK-4753 (ADR-0097): the outermost source-only cut replaces the two
+# repository-scoped writer fences with the org-wide publication writer lock step. It inverts
+# only that move, then hands the exact prior document/workflow to the unchanged proofs below.
+LOCK_GATE = ("      - name: Acquire org publication writer lock\n"
+             "        uses: ./.github/actions/publication-writer-lock\n"
+             "        with:\n")
+
+
+def verify_publication_lock_cut(document, source):
+    current = next(row for row in document["routes"] if row["path"] == WIZARD_SUCCESSOR)
+    assert current["sha256"] == hashlib.sha256(source.encode()).hexdigest()
+    amendment = current["publicationWriterLockAmendment"]
+    assert set(amendment) == {"unit", "sourceOnly", "previousAcceptedSource", "previousWorkflowSha256",
+                              "previousRouteCanonicalSha256", "previousHistoricalAttestationsCanonicalSha256",
+                              "decision", "lockAction", "gateStep", "replacedGroup", "writerJobs",
+                              "observationJobs", "operationAcceptance"}
+    assert {k: amendment[k] for k in ("unit", "sourceOnly", "decision", "lockAction", "gateStep", "replacedGroup",
+                                      "writerJobs", "observationJobs", "operationAcceptance")} == {
+        "unit": "PUBLICATION-WRITER-LOCK-4753", "sourceOnly": True, "decision": "ADR-0097",
+        "lockAction": ".github/actions/publication-writer-lock", "gateStep": "Acquire org publication writer lock",
+        "replacedGroup": "release-new-sdd-workspace-successor-publish",
+        "writerJobs": ["publish", "recovery-complete"], "observationJobs": ["recovery-diagnostic"],
+        "operationAcceptance": "Source only; no publication, recovery, credential, installation, observation or adoption operation admitted.",
+    }
+    canonical = lambda value: hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    histories = document["historicalRouteAttestations"]
+    assert canonical(histories[:-1]) == amendment["previousHistoricalAttestationsCanonicalSha256"]
+    assert histories[-1]["acceptedSource"] == amendment["previousAcceptedSource"]
+    assert histories[-1]["status"] == "non-current-history"
+    prior = histories[-1]["route"]
+    assert canonical(prior) == amendment["previousRouteCanonicalSha256"]
+    retained = copy.deepcopy(current)
+    del retained["publicationWriterLockAmendment"]
+    retained["sha256"] = amendment["previousWorkflowSha256"]
+    assert retained == prior, "publication lock cut changed a retained release boundary"
+    fence = ("    concurrency:\n"
+             "      group: release-new-sdd-workspace-successor-publish\n"
+             "      cancel-in-progress: false\n")
+    assert "concurrency:" not in source, "the repository-scoped group must be gone"
+    gate = re.compile(re.escape(LOCK_GATE) + r"          max-wait-minutes: [0-9]+\n")
+    assert len(gate.findall(source)) == source.count("Acquire org publication writer lock") == 2
+    restored = gate.sub("", source)
+    for name in ("publish", "recovery-complete"):
+        marker = "\n  " + name + ":\n"
+        assert restored.count(marker) == 1
+        restored = restored.replace(marker, marker + fence, 1)
+    assert hashlib.sha256(restored.encode()).hexdigest() == amendment["previousWorkflowSha256"], "lock cut failed whole-workflow inversion"
+    historical_document = copy.deepcopy(document)
+    historical_document["historicalRouteAttestations"].pop()
+    historical_document["routes"][document["routes"].index(current)] = copy.deepcopy(prior)
+    return historical_document, restored
+
+
+full_report = json.loads((ROOT / "docs/reports/gs2-08-9-release-route-dispositions.json").read_text())
+full_workflow = (ROOT / WIZARD_SUCCESSOR).read_text()
+current_report, current_workflow = verify_publication_lock_cut(full_report, full_workflow)
+for old, new in (
+    ("          max-wait-minutes: 30\n", "          max-wait-minutes: 30\n        env:\n          X: 1\n"),
+    ("uses: ./.github/actions/publication-writer-lock", "uses: ./.github/actions/other-lock"),
+    ("  publish:\n", "  publish:\n    concurrency:\n      group: other\n"),
+    ("environment: release-successor", "environment: other"),
+    ("github.actor == 'EHotwagner'", "true"),
+):
+    assert old in full_workflow
+    mutant = full_workflow.replace(old, new, 1)
+    repinned = copy.deepcopy(full_report)
+    next(row for row in repinned["routes"] if row["path"] == WIZARD_SUCCESSOR)["sha256"] = hashlib.sha256(mutant.encode()).hexdigest()
+    try:
+        verify_publication_lock_cut(repinned, mutant)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("repinned publication lock mutant accepted: " + old)
+for defect in ("history-pop", "history-status", "amendment-unit", "retained-route", "extra-gate", "ungated-recovery"):
+    mutated, source = copy.deepcopy(full_report), full_workflow
+    row = next(row for row in mutated["routes"] if row["path"] == WIZARD_SUCCESSOR)
+    if defect == "history-pop": mutated["historicalRouteAttestations"].pop()
+    if defect == "history-status": mutated["historicalRouteAttestations"][-1]["status"] = "current"
+    if defect == "amendment-unit": row["publicationWriterLockAmendment"]["unit"] = "other"
+    if defect == "retained-route": row["disposition"] = "forgiven"
+    if defect == "extra-gate":
+        source = full_workflow.replace(LOCK_GATE + "          max-wait-minutes: 30\n", (LOCK_GATE + "          max-wait-minutes: 30\n") * 2, 1)
+        row["sha256"] = hashlib.sha256(source.encode()).hexdigest()
+    if defect == "ungated-recovery":
+        tail = full_workflow.rindex(LOCK_GATE)
+        source = full_workflow[:tail] + full_workflow[tail:].replace(LOCK_GATE + "          max-wait-minutes: 10\n", "", 1)
+        row["sha256"] = hashlib.sha256(source.encode()).hexdigest()
+    try:
+        verify_publication_lock_cut(mutated, source)
+    except (AssertionError, KeyError, IndexError):
+        pass
+    else:
+        raise AssertionError("publication lock document defect accepted: " + defect)
+print("4753 org publication writer lock cut: prior workflow/history recovered by exact inversion; five repinned workflow and six document mutants refused")
 actual_report, actual_workflow = verify_creator022_profile(current_report, current_workflow)
 for old, new in (
     ("    name: new-sdd-workspace-022-publisher", "    name: new-sdd-workspace-021-publisher"),
