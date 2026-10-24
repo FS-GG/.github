@@ -8,7 +8,12 @@
         ".github/workflows/release-new-sdd-workspace.yml",
         ".github/workflows/release-successor-publish.yml",
         ".github/workflows/release-telemetry-host-successor-publish.yml"
-      ]
+      ],
+      "observationJobs": {
+        ".github/workflows/release-new-sdd-workspace.yml": [
+          "recovery-diagnostic"
+        ]
+      }
     },
     {
       "repo": "FS-GG/FS.GG.Audio",
@@ -23,7 +28,13 @@
         ".github/workflows/release-skills.yml",
         ".github/workflows/release-wasm.yml",
         ".github/workflows/release.yml"
-      ]
+      ],
+      "observationJobs": {
+        ".github/workflows/release-wasm.yml": [
+          "inspect",
+          "readback"
+        ]
+      }
     },
     {
       "repo": "FS-GG/FS.GG.Governance",
@@ -55,7 +66,12 @@
       "repo": "FS-GG/FS.GG.Templates",
       "workflows": [
         ".github/workflows/release.yml"
-      ]
+      ],
+      "observationJobs": {
+        ".github/workflows/release.yml": [
+          "occupancy"
+        ]
+      }
     },
     {
       "repo": "FS-GG/FsQuint",

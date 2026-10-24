@@ -40,6 +40,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Serialization, crash, lease and coverage controls
-        run: python3 -B tests/publication-writer-lock/run.py
+        run: python3 tests/publication-writer-lock/run.py
       - name: Every registered publisher workflow here is gated
-        run: python3 -B scripts/check-publication-writer-coverage.py --local
+        run: python3 scripts/check-publication-writer-coverage.py --local

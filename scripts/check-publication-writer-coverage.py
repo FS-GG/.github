@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Static coverage check for the org publication writer lock (ADR-0097).
 
-A workflow job that can write to a package feed or cut a release must contain exactly one
-unconditional lock step, named `GATE_STEP`, using the lock action, positioned before every
-step that carries an effect token. Every workflow with such a job must be registered in
-`registry/publication-writers.json` (or explicitly exempted there with a reason).
+A job of a registered workflow that can write (an effect token, or `contents`/`packages`/
+`id-token: write` permission) must contain exactly one unconditional lock step, named
+`GATE_STEP`, using the lock action, positioned before every effect token. A job that is read-only
+by contract is listed under the registry row's `observationJobs`. Every workflow with such a job
+must be registered in `registry/publication-writers.json` (or exempted there with a reason).
 
   --local            check the workflows of this checkout against the registry (CI gate)
   --remote           also fetch each registered/exempt repository's workflows from `main`
@@ -78,17 +79,62 @@ def step_name(step: str):
     return (match.group(1) or match.group(2)).strip("\"'") if match else None
 
 
-def check_workflow(text: str, repository: str) -> dict:
+def permission_writes(block: str) -> bool:
+    return bool(re.search(r"^\s*(?:contents|packages|id-token):\s*write\b|^\s*permissions:\s*write-all\b|^\s+write-all\b", block, re.MULTILINE))
+
+
+def workflow_permissions(lines: list) -> str:
+    """The top-level `permissions:` block (or the empty string)."""
+    out, inside = [], False
+    for line in lines:
+        if re.fullmatch(r"permissions:\s*(?:write-all)?", line):
+            inside = True
+            out.append(line)
+        elif inside and (line.startswith(" ") or not line):
+            out.append(line)
+        elif inside:
+            break
+    return "\n".join(out)
+
+
+def job_permissions(job: str):
+    """The job's own `permissions:` block, or None when it inherits."""
+    lines = job.splitlines()
+    for i, line in enumerate(lines):
+        if re.fullmatch(r"    permissions:\s*(?:write-all)?", line):
+            block = [line]
+            for follow in lines[i + 1:]:
+                if follow.startswith("      ") or not follow.strip():
+                    block.append(follow)
+                else:
+                    break
+            return "\n".join(block)
+    return None
+
+
+def check_workflow(text: str, repository: str, observers=()) -> dict:
     """{'gated': [job keys], 'problems': [str]} for one workflow's bytes."""
     problems, gated = [], []
+    inherited = workflow_permissions(executable_lines(text))
     for key, job in split_jobs(text).items():
+        if re.search(r"^    uses:", job, re.MULTILINE):
+            continue  # a reusable-workflow caller; the called workflow's jobs carry the gate
         steps = split_steps(job)
         gate_ix = [i for i, s in enumerate(steps) if step_name(s) == GATE_STEP]
         effect_ix = [i for i, s in enumerate(steps) if EFFECT.search(s)]
-        if not gate_ix and not effect_ix:
+        own = job_permissions(job)
+        writes = permission_writes(inherited if own is None else own)
+        if key in observers:
+            if gate_ix:
+                problems.append(f"job {key}: declared an observer but takes the lock")
+            continue
+        if not gate_ix and not effect_ix and not writes:
             continue
         if not effect_ix:
-            gated.append(key)  # a job that writes through a script is gated by choice, not by token
+            if not gate_ix:
+                problems.append(f"job {key}: write-capable (permissions) but has no '{GATE_STEP}' step; list it under observationJobs if it is read-only by contract")
+            else:
+                gated.append(key)
             continue
         if len(gate_ix) != 1:
             problems.append(f"job {key}: effect steps need exactly one '{GATE_STEP}' step (found {len(gate_ix)})")
@@ -122,20 +168,23 @@ def load_registry(path: pathlib.Path) -> dict:
 
 def audit(files: dict, repository: str, registry: dict) -> list:
     """files: workflow path -> text, for one repository."""
-    writers = {w for row in registry["writers"] if row["repo"] == repository for w in row["workflows"]}
+    rows = [row for row in registry["writers"] if row["repo"] == repository]
+    writers = {w for row in rows for w in row["workflows"]}
+    observers = {w: set(jobs) for row in rows for w, jobs in row.get("observationJobs", {}).items()}
     exempt = {w for row in registry.get("exempt", []) if row["repo"] == repository for w in row["workflows"]}
     errors = []
     for path, text in sorted(files.items()):
-        result = check_workflow(text, repository)
+        result = check_workflow(text, repository, observers.get(path, ()))
         has_effect = any(EFFECT.search(line) for line in executable_lines(text))
         if path in exempt:
             if result["gated"]:
                 errors.append(f"{repository}:{path}: exempt workflow is gated; move it to writers")
             continue
-        for problem in result["problems"]:
-            errors.append(f"{repository}:{path}: {problem}")
-        if path in writers and has_effect and not result["gated"] and not result["problems"]:
-            errors.append(f"{repository}:{path}: registered writer has effect steps but no lock step")
+        if path in writers or has_effect or result["gated"]:
+            for problem in result["problems"]:
+                errors.append(f"{repository}:{path}: {problem}")
+        if path in writers and not result["gated"] and not result["problems"]:
+            errors.append(f"{repository}:{path}: registered writer has no gated job (every job is read-only?)")
         if path not in writers and (has_effect or result["gated"]):
             errors.append(f"{repository}:{path}: publishes (or is gated) but is neither registered nor exempt")
     for path in sorted(writers - set(files)):

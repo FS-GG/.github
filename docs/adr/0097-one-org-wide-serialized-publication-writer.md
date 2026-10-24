@@ -62,6 +62,10 @@ exclusion.
 
 - A second publication dispatched while another is running waits inside its lock step, up to its
   bounded wait, instead of being queued or silently replaced by GitHub's single-pending-run rule.
+- The lock fences write-capable *jobs*, not whole releases. A multi-job publication (for example
+  Game wasm or Rendering) is ordered by its own `needs` chain; another publisher's job may run between
+  two of its jobs, as no two write-capable jobs ever overlap. Jobs that are read-only by contract are
+  listed under the registry row's `observationJobs` and take no lock.
 - A publisher workflow must register in `registry/publication-writers.json` and carry the step
   before its first effect. `scripts/check-publication-writer-coverage.py --local` is a required
   selftest; `--remote` reports unadopted repositories.

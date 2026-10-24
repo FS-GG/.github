@@ -349,6 +349,32 @@ assert coverage.check_workflow(workflow(gate="", after="      - run: echo ok\n")
 assert coverage.check_workflow(workflow(gate="", after="      # dotnet nuget push is mentioned in a comment only\n"), "FS-GG/FS.GG.SDD")["problems"] == []
 print(f"coverage checker: valid shapes pass; {len(expected_bad)} unsafe placements refused; comments are not effects")
 
+# Permission-based write capability needs the gate unless the job is declared read-only by contract.
+def perm_workflow(job_perm="", wf_perm="permissions:\n  contents: write\n", extra_job="", gate=""):
+    return ("name: x\non:\n  workflow_dispatch:\n" + wf_perm + "jobs:\n  writer:\n    runs-on: ubuntu-latest\n" + job_perm +
+            "    steps:\n      - uses: actions/checkout@v7\n" + gate + "      - run: python3 publish.py\n" + extra_job)
+
+assert coverage.check_workflow(perm_workflow(), "FS-GG/FS.GG.SDD")["problems"], "inherited contents: write job needs the gate"
+assert coverage.check_workflow(perm_workflow(job_perm="    permissions:\n      packages: write\n", wf_perm="permissions:\n  contents: read\n"), "FS-GG/FS.GG.SDD")["problems"]
+assert coverage.check_workflow(perm_workflow(job_perm="    permissions:\n      contents: read\n"), "FS-GG/FS.GG.SDD")["problems"] == []
+assert coverage.check_workflow(perm_workflow(wf_perm="permissions:\n  contents: read\n"), "FS-GG/FS.GG.SDD")["problems"] == []
+assert coverage.check_workflow(perm_workflow(), "FS-GG/FS.GG.SDD", observers=("writer",))["problems"] == []
+assert coverage.check_workflow(perm_workflow(gate="      - name: Acquire org publication writer lock\n        uses: " + PINNED + "\n"),
+                               "FS-GG/FS.GG.SDD") == {"gated": ["writer"], "problems": []}
+assert coverage.check_workflow(perm_workflow(gate="      - name: Acquire org publication writer lock\n        uses: " + PINNED + "\n"),
+                               "FS-GG/FS.GG.SDD", observers=("writer",))["problems"], "an observer may not take the lock"
+caller = "name: x\non:\n  workflow_dispatch:\npermissions:\n  contents: write\njobs:\n  call:\n    uses: ./.github/workflows/release.yml\n"
+assert coverage.check_workflow(caller, "FS-GG/FS.GG.SDD")["problems"] == [], "a reusable-workflow caller carries no steps"
+bad_observers = copy.deepcopy(REGISTRY)
+bad_observers["writers"][0]["observationJobs"] = {".github/workflows/not-listed.yml": ["x"]}
+try:
+    lock.validate_registry(bad_observers)
+except lock.LockError:
+    pass
+else:
+    raise AssertionError("observationJobs for an unlisted workflow accepted")
+print("coverage checker: write permission (inherited or own) needs the gate; observers and callers are explicit")
+
 registry = copy.deepcopy(REGISTRY)
 gated_text = workflow()
 files = {".github/workflows/release.yml": gated_text}

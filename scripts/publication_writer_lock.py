@@ -110,7 +110,7 @@ def validate_registry(document) -> dict:
         raise LockError("publication writer registry lists no writers")
     seen = set()
     for row in writers:
-        if not isinstance(row, dict) or set(row) != {"repo", "workflows"}:
+        if not isinstance(row, dict) or not {"repo", "workflows"} <= set(row) <= {"repo", "workflows", "observationJobs"}:
             raise LockError("publication writer row is not closed")
         if not isinstance(row["repo"], str) or not REPO_RE.fullmatch(row["repo"]) or row["repo"] in seen:
             raise LockError("publication writer repository is malformed or duplicated")
@@ -120,6 +120,11 @@ def validate_registry(document) -> dict:
             raise LockError("publication writer workflows are empty or duplicated")
         if not all(isinstance(path, str) and WORKFLOW_RE.fullmatch(path) for path in flows):
             raise LockError("publication writer workflow path is malformed")
+        observers = row.get("observationJobs", {})
+        if not isinstance(observers, dict) or not all(
+                path in flows and isinstance(jobs, list) and jobs and all(isinstance(j, str) and j for j in jobs)
+                for path, jobs in observers.items()):
+            raise LockError("publication writer observationJobs is malformed")
     return document
 
 
