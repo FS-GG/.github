@@ -300,6 +300,26 @@ consumers and the late host GPU batch remain open. A Templates reference plannin
 lane can prepare existing-API composition alongside research. No new instance API,
 published package or installed product adoption is inferred from the guard merge.
 
+The first bounded .4 source hotspot, the spatial working-set list storage, was delivered through
+[Rendering #1470](https://github.com/FS-GG/FS.GG.Rendering/pull/1470) (Delivery
+[Rendering #1469](https://github.com/FS-GG/FS.GG.Rendering/issues/1469)) at
+`bd10d241436b5c2809082f8b2f01bbc9d8399a6b` after required exact-head CI (25 checks, including the
+packed Fable/Chromium/Firefox/WebKit browser run) and one independent source review. The existing
+index now retains its validated entries once in private array storage, so selecting an entry by ordinal and
+reporting `TotalEntryCount` no longer traverse the source list. Public types, ordering, counters and refusal
+order are unchanged and an independent linear reference joins the real index on identities, order and counters.
+The isolated CLR before/after comparison (same harness and method, 3 CPUs, one shared development host) at
+300,000 entries measured median query time for 100 late visible entries of 25,637 to 45.9 microseconds, one late
+visible entry 546.6 to 33.6, and the first ordinal 291.8 to 31.6; the first-ordinal change is the removed length
+traversal. No cell regressed beyond noise; create allocation rose about 0.2% and candidate create time was lower at
+the two largest sizes for an unexplained reason that is not claimed as an improvement. The real M9
+extent-near/extent-far hosted gate stayed unchanged (extent cost ratio 0.999) but places visible entries first, so
+it is not evidence of the late-lookup speedup. This is a software result only: no universal timing threshold, Home
+B1-B8 verdict, publication, installed adoption or GPU claim follows, and the other source hotspots
+and the rest of .3/.4 remain open. Raw observations are in `readiness/svg-coherence-1469/` and the report
+`docs/reports/2026-10-24-spatial-index-array-storage.md` in Rendering; the reusable finding is Atlas record
+`rendering/spatial-working-set-ordinal-storage`.
+
 ## 1. Evidence and the missing qualification
 
 Read-only investigation inspected Rendering `16da43f37de9f0eea0f4a65a67e6dee44c36ef1c`,
@@ -453,6 +473,9 @@ checks for geometry, styling, hit policy, layering and export alongside timing.
 - `SpatialWorkingSet` stores entries in an F# list and indexes it per candidate;
   `entries.Length` also traverses it. Profile random-access storage, cached counts,
   construction without repeated list append, and any needed incremental updates.
+  Random-access storage and the count traversal were delivered by Rendering #1470
+  (see Current progress above); construction's repeated per-bucket list append and
+  incremental updates remain unmeasured hypotheses.
 - `SvgDocumentBrowserHost.Replace` exports/parses a complete candidate before
   reconciliation. Measure and separate definition validation from instance deltas.
 - The document reconciler searches sibling arrays for each child. Evaluate keyed
