@@ -914,7 +914,7 @@ Full exact-source hosted qualification remains required after this repair.
 The non-required `telemetry-host-package` source check refused before the toolchain
 census on the newer hosted Ubuntu 24.04 image `20261023.334.3`
 ([run 40121481919](https://github.com/FS-GG/.github/actions/runs/40121481919),
-[run 40118973727](https://github.com/FS-GG/.github/actions/runs/40118973727)):
+[run 40116351123](https://github.com/FS-GG/.github/actions/runs/40116351123)):
 `Unadmitted hosted image`. The closed selection map above correctly refused an unlisted
 image; those failed prerequisites stay retained and are not retried by editing a literal.
 
