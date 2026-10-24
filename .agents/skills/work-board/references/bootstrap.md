@@ -21,8 +21,9 @@ Use the implementation route selected by the skill. Bootstrap is recovery, not f
 
 Follow the parent's [forward-recovery decision](lifecycle-contract.md#recover-ownership-and-unavailable-history).
 The historical evidence-search task is closed as unavailable. Do not reopen its searches or repeated
-requests to satisfy complete-inventory wording below. Preserve known original records, 439 inherited
-reservations and 46 later records, with historical outcomes Unknown and holds unreleased. Recover
+requests to satisfy complete-inventory wording below. Preserve known original records; the 439 inherited
+reservations and 46 later records keep Unknown outcomes and are released only for demonstrably isolated
+fresh operations under ADR-0096. Recover
 current relevant ownership, remaining-after-active capacity and demonstrated separation for the exact
 proposed fresh operation. Separate its generation, writable state, identity and outputs; shared
 destinations require fencing/idempotency against old actors. Missing history is not empty relevant

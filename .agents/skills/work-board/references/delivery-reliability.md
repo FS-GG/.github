@@ -11,6 +11,11 @@ reference does not start development, add gates or authorize protected effects.
 
 ## Final inputs and failure-gated invocation
 
+This section governs original-operation effects. Ordinary development verification under
+[ADR-0096](https://github.com/FS-GG/.github/blob/main/docs/adr/0096-proportionate-verification-and-unrecoverable-holds.md)
+(local build/test/static check of unpublished source in a fresh isolated root, with no credentials,
+shared/remote writes or publication/live-store/Home/VM/native-capability effect) is exempt.
+
 Use the same exact typed values to derive admission, reservation and the operation request: stable
 `sliceId`, attempt, operation, accountable owner, exact PR/head and actual paths/touch-set, plus the
 selected binding/native joins. Reuse the existing owner/attempt and custody; independently assembled

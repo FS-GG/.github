@@ -1,6 +1,6 @@
 # ADR-0093: Original .103 authentication domain policy
 
-- **Status:** Accepted policy; principal/custody selection amended by [ADR-0094](0094-separate-v3-and-utel-principals-and-custody.md); fresh-profile resource scope selected by [ADR-0095](0095-utel-resource-containment-for-fresh-profiles.md); implementation and native admission pending
+- **Status:** Accepted policy; principal/custody selection amended by [ADR-0094](0094-separate-v3-and-utel-principals-and-custody.md); fresh-profile resource scope selected by [ADR-0095](0095-utel-resource-containment-for-fresh-profiles.md); inherited-hold fencing amended by [ADR-0096](0096-proportionate-verification-and-unrecoverable-holds.md); implementation and native admission pending
 - **Date:** 2026-10-15
 - **Affects:** UTEL original `.103` authentication-only operation, external phase authority and native supervisor
 - **Decision owner:** Programme, under the sponsor's explicit delegation

@@ -116,9 +116,11 @@ Bootstrap reads source/native facts, without dispatch, cleanup or remote mutatio
 
 Preserve original outcome/slice/attempt, owner, branch/PR/head and operation identities. A killed parent,
 expired lease, missing artifact or absent PR does not prove cleanup, no effect or reservation release.
-The unavailable historical evidence-search task is closed as unavailable. Stop repeated searches/requests;
-retain surviving records, all 439 inherited reservations and 46 later originals distinctly Unknown and
-unreleased. Never reconstruct receipts or disguise an uncertain-effect retry with a new identity.
+The unavailable historical evidence-search task is closed as unavailable. Stop repeated searches/requests.
+Under [ADR-0096](https://github.com/FS-GG/.github/blob/main/docs/adr/0096-proportionate-verification-and-unrecoverable-holds.md) the 439 inherited reservations and 46 later originals are unrecoverable history,
+released for fresh operations demonstrably isolated from them; their outcomes stay Unknown, they are never
+replayed and a named live hold keeps its own owning scope. Never reconstruct receipts or disguise an
+uncertain-effect retry with a new identity.
 For genuinely fresh work require current relevant ownership, remaining-after-active capacity and
 separation of generation, writable state, operation identity and outputs. Shared destinations require
 fencing/idempotency against old actors. Missing history is not empty relevant coverage; unresolved
@@ -204,7 +206,7 @@ review or evidence collection while another lane waits. A blocked parent or busy
 by itself exclude independent work; action-specific prerequisites and admission still apply.
 
 Use actual remaining worker, CPU/memory, integrator and hosted-CI capacity after active demand and
-known/Unknown reservations. Free agent slots are not resource capacity. Admit each chosen operation
+known/Unknown reservations. Free agent slots are not resource capacity. Except for ADR-0096 ordinary development verification, admit each chosen operation
 before launch using its supported operation-specific profile; preserve required exclusive writes,
 large-image limits and one integrator for shared surfaces. Do not add blanket serial execution when
 independently qualified operations fit the remaining capacity together.
@@ -227,7 +229,12 @@ assembled-candidate checks. Attribute known/Unknown demand to its affected opera
 is not zero and an authentic-runtime supplier gap does not block unrelated authorized source preparation.
 Inspect transitive launch closure: a Python/shell label does not make CLR/native/external execution pure.
 Use existing owned supplier requests and disposition relevant replies/deadlines; do not add another ledger.
-Before invocation apply [final inputs and operation horizons](delivery-reliability.md#final-inputs-and-failure-gated-invocation),
+Ordinary development verification under [ADR-0096](https://github.com/FS-GG/.github/blob/main/docs/adr/0096-proportionate-verification-and-unrecoverable-holds.md) is a local build/test/static check of unpublished
+source in a fresh isolated root, without credentials, shared/remote writes or publication, live-store, Home,
+VM or native-capability effects. It needs no Root runtime admission, original clock, custody packet or pre-run
+peer review: the owner stays within the stated CPU/memory share, keeps first failures and reports results.
+Candidate source review, exact-head required CI and coherent validation are unchanged. For every other effect,
+before invocation apply [final inputs and operation horizons](delivery-reliability.md#final-inputs-and-failure-gated-invocation),
 including complete attribution, prerequisite truth and source/ref stability through final retention.
 The maintained runner rechecks source/resources, reserves, sets a deadline and launches together.
 Never revive expired authority, extend an in-flight operation or send short-lived grants through conversation.

@@ -5,7 +5,7 @@
       "id": "atlas",
       "scope": "driver",
       "sha256": "c18e56fcc56abf80903e2fc6829cd94b44f42947724a26318ebcbf1ac5e1b35b",
-      "tree-sha256": "c7bdee8386ba9dad74f1f51eb50a531cf3fc85e63682db366aba824c6a272313",
+      "tree-sha256": "7facf58d650db2839aaa01af8de38af0510cac08fd4083d11b534e6dd137ee2c",
       "files": [
         {
           "path": "SKILL.md",
@@ -24,7 +24,7 @@
         },
         {
           "path": "assets/seed/catalog.json",
-          "sha256": "f8394d66415f65ed228949f0bf438e9606978a6adc187e754fb81f18de35e0d8",
+          "sha256": "df84a11ccb536260fb5a9c9658345879b48de800e619e893c2095ed4a1679c99",
           "executable": false
         },
         {
@@ -125,6 +125,11 @@
         {
           "path": "assets/seed/records/0c22360d4653eb0f450e4d3d34564875f1660cfcb2d546095d98b3faa3967cbc.json",
           "sha256": "0c22360d4653eb0f450e4d3d34564875f1660cfcb2d546095d98b3faa3967cbc",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/0c7d3f36e3bb4270edbf7abd99cd2dab772df274cad1c27c7e87e302b8eb1c23.json",
+          "sha256": "0c7d3f36e3bb4270edbf7abd99cd2dab772df274cad1c27c7e87e302b8eb1c23",
           "executable": false
         },
         {
@@ -423,6 +428,11 @@
           "executable": false
         },
         {
+          "path": "assets/seed/records/3d642ccf9ca4a0f7f5dde1b41f65c99e9c447cbb9e64883b67e4fdf76f216f52.json",
+          "sha256": "3d642ccf9ca4a0f7f5dde1b41f65c99e9c447cbb9e64883b67e4fdf76f216f52",
+          "executable": false
+        },
+        {
           "path": "assets/seed/records/3dbf6d1c2c8db1a7e3988e2a84b67a4e1d7c8304661652ffa94db3b7eee08edb.json",
           "sha256": "3dbf6d1c2c8db1a7e3988e2a84b67a4e1d7c8304661652ffa94db3b7eee08edb",
           "executable": false
@@ -460,6 +470,11 @@
         {
           "path": "assets/seed/records/444342c21a4743af5961beeebb88088f5d2a0649f76c71973a7706a744f5efd2.json",
           "sha256": "444342c21a4743af5961beeebb88088f5d2a0649f76c71973a7706a744f5efd2",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/4457ab439bc8f212d83442dc7500e9d45ffac849d0f77cb97686d9b0672fc3dc.json",
+          "sha256": "4457ab439bc8f212d83442dc7500e9d45ffac849d0f77cb97686d9b0672fc3dc",
           "executable": false
         },
         {
@@ -623,6 +638,11 @@
           "executable": false
         },
         {
+          "path": "assets/seed/records/55dcc23ce52b3918a60029d9398f262216471c280bfe66421cc63240533a6087.json",
+          "sha256": "55dcc23ce52b3918a60029d9398f262216471c280bfe66421cc63240533a6087",
+          "executable": false
+        },
+        {
           "path": "assets/seed/records/56e7158313357bb145bd98c5f790e569be2203fb2601565a30091a597a7e7ff5.json",
           "sha256": "56e7158313357bb145bd98c5f790e569be2203fb2601565a30091a597a7e7ff5",
           "executable": false
@@ -715,6 +735,11 @@
         {
           "path": "assets/seed/records/66d414618d4283838bddb6b9fd4b5221c280a7f6a715b622143d3bea76bfe1f6.json",
           "sha256": "66d414618d4283838bddb6b9fd4b5221c280a7f6a715b622143d3bea76bfe1f6",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/671168c05789fc651cd961a5a15e10adbb76656b802cb0fcbab468ab76412ca2.json",
+          "sha256": "671168c05789fc651cd961a5a15e10adbb76656b802cb0fcbab468ab76412ca2",
           "executable": false
         },
         {
@@ -1443,6 +1468,11 @@
           "executable": false
         },
         {
+          "path": "assets/seed/records/c65325f807190f7084346376e2f48fc2b6bb946004a1fac1d8d117930e93d462.json",
+          "sha256": "c65325f807190f7084346376e2f48fc2b6bb946004a1fac1d8d117930e93d462",
+          "executable": false
+        },
+        {
           "path": "assets/seed/records/c6752cc3c7ad06d1e9f127365f078919ac46b77f8a8fe413650094d914838ec3.json",
           "sha256": "c6752cc3c7ad06d1e9f127365f078919ac46b77f8a8fe413650094d914838ec3",
           "executable": false
@@ -1460,6 +1490,11 @@
         {
           "path": "assets/seed/records/c77c4d3f536cda10a71fe6a9cd17ea7c1408200e2f7aa7c5325d6915ff250c85.json",
           "sha256": "c77c4d3f536cda10a71fe6a9cd17ea7c1408200e2f7aa7c5325d6915ff250c85",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/c82f38f23e7ed3e1024661b7a22ff694e88d3b268240e2bfc98e630df8a062d0.json",
+          "sha256": "c82f38f23e7ed3e1024661b7a22ff694e88d3b268240e2bfc98e630df8a062d0",
           "executable": false
         },
         {
@@ -2195,7 +2230,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "169945b2d619a46040e1dd68109e7f151832a72fcd53280ad540339807c65007",
-      "tree-sha256": "cd0b40150a68165c989fc3e2e9e92355673a322894504f641c7ea2bf4e1fdfea",
+      "tree-sha256": "6138d4c302124f4433dd2ed71ffbb560ecc45254f65bb35ad0798855e2e87df9",
       "files": [
         {
           "path": "SKILL.md",
@@ -2219,7 +2254,7 @@
         },
         {
           "path": "references/bootstrap.md",
-          "sha256": "db7d27e80cb49a3e19da0205eb57620dbe7596579e27f9919d5657c9ea029416",
+          "sha256": "164cbf8645eb65970784c0022a0bdaec926032f80b57d135c98da902a6d8e9a4",
           "executable": false
         },
         {
@@ -2229,7 +2264,7 @@
         },
         {
           "path": "references/crash-recovery.md",
-          "sha256": "fa45f7267f77a70fe2751f10ddf194f01cb9b6363ee1ff07ab2693a9f6e9124e",
+          "sha256": "122ad3a0f66c90a3f4112850fcee7e41102646a645ed5ee8650b77f0edaa3f81",
           "executable": false
         },
         {
@@ -2239,7 +2274,7 @@
         },
         {
           "path": "references/delivery-reliability.md",
-          "sha256": "7a24dae03ceedf337911d188a3736db217e275aaf548b901d96e6ce8310c5ed5",
+          "sha256": "b046fe3da759d70fbd9a1ad034fc1b31a5e9529e55e1c9c5a79281889313b590",
           "executable": false
         },
         {
@@ -2269,7 +2304,7 @@
         },
         {
           "path": "references/lifecycle-contract.md",
-          "sha256": "1629febebff823ed573968243fb910525f8c3f7486e5f74e143c89715a56fe52",
+          "sha256": "2b068f43c7558b1bd8aad0c3789ac13bb475996fda178df1cf1ab37a8abb8d81",
           "executable": false
         },
         {
