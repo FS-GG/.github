@@ -30,7 +30,7 @@ REMOTE_ACTION = re.compile(r"^FS-GG/\.github/\.github/actions/publication-writer
 LOCAL_ACTION = "./.github/actions/publication-writer-lock"
 # Publication tokens decide whether a workflow must be registered; the broader write tokens decide
 # which of a registered workflow's jobs need the gate (a credential exchange or any ref/API write).
-PUBLISH_EFFECT = re.compile(r"dotnet nuget push|NuGet/login@|gh release (?:create|upload|edit|delete)|softprops/action-gh-release|git tag\b|git push[^\n]*(?:--tags|refs/tags|--atomic)")
+PUBLISH_EFFECT = re.compile(r"dotnet nuget push|NuGet/login@|gh release (?:create|upload|edit|delete)|softprops/action-gh-release|git push[^\n]*(?:--tags|refs/tags|--atomic)")
 EFFECT = re.compile(PUBLISH_EFFECT.pattern + r"|create-github-app-token@|\bgit push\b|gh api[^\n]*(?:-X|--method)[ =](?:POST|PATCH|PUT|DELETE)")
 
 

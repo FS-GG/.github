@@ -463,6 +463,11 @@ else:
     raise AssertionError("observationJobs for an unlisted workflow accepted")
 print("coverage checker: write permission (inherited or own) needs the gate; observers and callers are explicit")
 
+# A local tag is not a publication; pushing one is.
+for read_only in ("git tag --list 'v*'", "git tag -l", "git tag v1", "git tag -a v1 -m x", "git push origin HEAD:refs/heads/x"):
+    assert not coverage.PUBLISH_EFFECT.search(read_only), "not a publication: " + read_only
+for cutting in ("git push origin refs/tags/v1", "git push --tags", "git push --atomic origin main refs/tags/v1"):
+    assert coverage.PUBLISH_EFFECT.search(cutting), "publishes a tag: " + cutting
 # D1: an observer may not hide a publisher; D2/D3 follow below.
 hidden = workflow(gate="").replace(" " + lock.MARKER, "")
 assert coverage.check_workflow(hidden, "FS-GG/FS.GG.SDD", observers=("publish",))["problems"], "an observer with a publication token is a hidden publisher"

@@ -54,7 +54,12 @@
         ".github/workflows/release-skills.yml",
         ".github/workflows/release-tags.yml",
         ".github/workflows/release.yml"
-      ]
+      ],
+      "observationJobs": {
+        ".github/workflows/release-tags.yml": [
+          "plan"
+        ]
+      }
     },
     {
       "repo": "FS-GG/FS.GG.SDD",
