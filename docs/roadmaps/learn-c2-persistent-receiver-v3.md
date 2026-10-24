@@ -908,3 +908,32 @@ metadata handling. Static preflight must launch a fresh second environment and
 prove that both admitted tuples reach the actual downstream required-variable
 read. It must also show that local exports alone do not establish the handoff.
 Full exact-source hosted qualification remains required after this repair.
+
+### Third closed source candidate tuple, 2026-10-24
+
+The non-required `telemetry-host-package` source check refused before the toolchain
+census on the newer hosted Ubuntu 24.04 image `20261023.334.3`
+([run 40121481919](https://github.com/FS-GG/.github/actions/runs/40121481919),
+[run 40118973727](https://github.com/FS-GG/.github/actions/runs/40118973727)):
+`Unadmitted hosted image`. The closed selection map above correctly refused an unlisted
+image; those failed prerequisites stay retained and are not retried by editing a literal.
+
+Admission followed the existing procedure for a closed candidate: the actual image version
+and its official runner-images source must both be named, and the version and source are
+pinned independently. Read from the official repository, not from the failing run:
+tag `ubuntu24/20261023.334` and commit
+[`bf62c713fd9c48247e2a4d3ce99a9f0554cd745e`](https://github.com/actions/runner-images/tree/bf62c713fd9c48247e2a4d3ce99a9f0554cd745e)
+("Updating readme file for ubuntu24 version 20261023.334.3"); the release is marked
+prerelease. Its `Ubuntu2404-Readme.md` differs from the already admitted `20261012.334.1`
+manifest (`7e7dc1bc`) only in the image version and Bazel (9.3.0 to 9.3.1): kernel
+`6.17.0-1022-azure`, GCC 13.3.0, Python 3.12.3, binutils `2.42-4ubuntu2.10`, coreutils
+`9.4-3ubuntu6.3`, sudo `1.9.15p5-3ubuntu5.24.04.4` and .NET SDK `10.0.401` are unchanged.
+These declared versions are not custody evidence.
+
+Only a third literal tuple is added: `20261023.334.3` with `bf62c713...`. The guard remains
+a closed map with no wildcard or latest acceptance, the actual provider/OS/architecture/image
+predicates, the pinned census, SDK normalization, complete toolchain binding, all source
+gates and the default-off protected native inputs are unchanged. Success on one image does
+not qualify another: this image needs its own fresh complete census and full required
+source CI on the exact candidate, which this change does not claim. No native fixture,
+installed custody, publication, receiver acceptance or activation is established.
