@@ -85,6 +85,28 @@ eligibility check, not a published typed (F#) replacement; typed replacement ins
 downloaded-only package adoption, native acceptance and administrative retirement remain open
 under their owning gates.
 
+### Selected ordinary receiver activation — Coordination, Templates and BAR (run IDs recovered 2026-10-25)
+
+These activations were accepted in #4649 without run citations. Read-only `gh run` reads of each
+repository's default-branch `routine-eligibility` workflow (`pull_request_target`, attempt 1) identify
+the earliest genuine admitted and merged routine PR in each. Each log reports
+`check-claim-generation: OK` with `operation=source-change`. At each PR's merge commit the five
+producer files carry the same blobs as FsQuint's installation (`.fsgg/routine-development.json`
+`3d9068fc`, workflow `2a1e192a`, `check-claim-generation.py` `2aed8457`,
+`check-routine-eligibility-envelope.py` `cba30d2d`, `gate.py` `7e3a0627`).
+
+| Receiver | PR (merge) | Admitting run (exact head) |
+|---|---|---|
+| Coordination | [#970](https://github.com/FS-GG/FS.GG.Coordination/pull/970) (`f320e2f8d34ec305c2371b6713f89b52d4726e76`) | [38428826613](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38428826613), head `d8960d25a6cf91e23a4565185159439d764b943b`, base `23e0c8ef` |
+| Templates | [#712](https://github.com/FS-GG/FS.GG.Templates/pull/712) (`d34914bff0c8f4fae1dde805b34f6705761caba4`) | [38444655111](https://github.com/FS-GG/FS.GG.Templates/actions/runs/38444655111), merged head `21ce7d7fe6515a830341a1f12121e3dcc6787a5a`; the first admitting run on this PR was [38440501201](https://github.com/FS-GG/FS.GG.Templates/actions/runs/38440501201) at head `2b655cc1` |
+| BAR (FSBarV2) | [#45](https://github.com/FS-GG/FSBarV2/pull/45) (`7835140573f76a87c2bf3f415b63b3f9c1e0a1cb`) | [38543585646](https://github.com/FS-GG/FSBarV2/actions/runs/38543585646), head `4100ca470000e21abe12027de0443b52c0f9acb9`, base `b21b3284` |
+
+Earlier or interleaved runs on the same PRs include red results on superseded or edited heads
+(Coordination 38428753775; Templates 38442142537 and 38444643307); the cited run is the
+success on the head that merged. This records producer activation only. Published typed
+replacement installation, downloaded-only package adoption, native acceptance and administrative
+retirement remain open for these receivers.
+
 ### Later outcome outline, not another ready queue
 
 **Remaining OPS-TYPED-01.5 administrative-owner migration outline.** The diagnostic source slice above is delivered; its native adoption remains open and does not wait for broad producer adoption. The inventory below stays deferred until its own measured coherent slice is selected. PR/delivery/telemetry/helper rewrites retain their completion authority. The inventory below identifies ownership, not permission to rewrite every script.
