@@ -28,7 +28,8 @@
         ".github/workflows/callable-cli-release-publish-011.yml",
         ".github/workflows/callable-cli-release-publish.yml",
         ".github/workflows/candidate-supply-chain.yml",
-        ".github/workflows/execution-pair-forward-publish.yml"
+        ".github/workflows/execution-pair-forward-publish.yml",
+        ".github/workflows/fourd-native-producer-publish.yml"
       ],
       "observationJobs": {
         ".github/workflows/callable-cli-release-publish.yml": [
