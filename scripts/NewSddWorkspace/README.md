@@ -13,12 +13,11 @@ retired `scripts/new-sdd-fullstack.sh` (see [ADR-0016](https://github.com/FS-GG/
 
 ## Current source and published boundary
 
-Prospective source **0.17.0** packages the canonical work-board product driver cohort against the
-normal coherent **0.107.0** project graph. Its own candidate and publisher use independent journal017;
-a coherent107 release does not publish this tool. Published016 and its frozen099 dependency helper,
-and historical013 recovery profiles, remain immutable. Source package qualification does not establish
-publication or installed product creation. Product coordination retains its explicitly selected V2
-binding and provenance; organization successor hierarchy grammar grants no product authority.
+Prospective source **0.23.0** prepares descriptor-driven catalog creation with stable SDD CLI
+**2.5.3 or newer**. Creation and dry-run admit that runtime before target mutation and recheck the
+exact producer immediately before scaffold. Legacy typed project knowledge retains its 2.1.0 floor;
+list/help require no catalog runtime. Source selection does not establish publication or installed
+support: public producer/template identities and genuine consumer acceptance remain separate gates.
 
 ## Install
 
