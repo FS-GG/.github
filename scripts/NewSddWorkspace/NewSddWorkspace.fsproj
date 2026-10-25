@@ -36,6 +36,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="ProviderCatalog.fsi" />
+    <Compile Include="ProviderCatalog.fs" />
     <Compile Include="ProductBoard.fsi" />
     <Compile Include="ProductBoard.fs" />
     <Compile Include="Program.fs" />

@@ -78,6 +78,64 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 | `--chore-locks <refs>` | `FSGG_COORD_CHORE_LOCKS` for a **non-FS-GG** board's chore queue: comma-separated `owner/repo#n`. Unneeded for the FS-GG board (the engine carries its lock table). |
 | `--no-coordination` | skip wiring the workspace to a coordination board entirely (no kit, no env). |
 
+### Catalog providers (TypeScript, JavaScript, Rust, Go)
+
+Providers that FS.GG.Templates declares in its ref-pinned provider catalog
+(`providers/polyglot.catalog.json`) need no Wizard release to appear: the Wizard reads the catalog
+**before** any selection and renders what it declares. `--list-providers` prints the built-in templates
+and every catalog provider with its language, product shape and typed parameters:
+
+```sh
+new-sdd-workspace --list-providers --ref fs-gg-templates/v0.20.0
+```
+
+```sh
+new-sdd-workspace ./Greeter "Greeter" --template go-cli --ref fs-gg-templates/v0.20.0 \
+  --param packageIdentity=example.org/acme/greeter --param codeIdentifier=greet \
+  --admission-policy ./host-policy.json --no-coordination
+```
+
+- **Catalog and archive.** The catalog is fetched from `FS.GG.Templates@<--ref>` (default `main`;
+  pair a release tag with `--pinned` for a reproducible creation). The template archive is the exact
+  package the provider's `templateSource` names (for example `FS.GG.Workspace.Template::0.20.0`), read from
+  the NuGet flat container. Both are verified by SHA-256 and handed to `fsgg-sdd scaffold --catalog ...`
+  as the exact bytes verified; `--catalog-sha256` and `--template-sha256` pin an expected digest. An
+  unreadable, stale or unknown-ref catalog is a refusal, never a fallback to a previous copy.
+- **Offline.** `--catalog-file <file> --catalog-sha256 <digest>` and `--template-archive <file> --template-sha256 <digest>`
+  select local files; the digest is mandatory because nothing else vouches for them.
+- **Typed values.** Each `--param key=value` is validated against the descriptor (string, enum, exact-version,
+  required, length and allow-list) before any step runs. The parameter the descriptor binds to the raw product
+  name defaults to the product name you typed; no other value is derived and no identifier transform exists, so a
+  Go module path, package name or code identifier is always yours. Values are forwarded to SDD literally.
+- **Admission policy.** `--admission-policy <file>` is required: it is the host owner's independently selected policy
+  for the tools to probe and the archive to admit (SDD#928). The Wizard reads its time budgets and checks that it
+  admits the provider's template source, but never authors or widens it. Author it in SDD's fixed probe
+  environment (`PATH=/usr/bin:/bin`), for example with `eng/polyglot-qualification/make-policy.py` in FS.GG.Templates.
+- **Host.** The first SDD catalog profile is Linux x64 with the qualified glibc, .NET 10.0.12 runtime and
+  SDK 10.0.401 transport; SDD refuses any other host before it writes. The Wizard additionally refuses a provider
+  that does not list the host platform. The target must not exist and its parent must.
+- **No target mutation before SDD commits.** Everything is acquired into a private scratch directory that is removed
+  afterwards; `fsgg-sdd catalog inspect` (read-only) and then `fsgg-sdd scaffold --catalog` compose the workspace in
+  staging and commit it atomically. `--dry-run` stops after SDD's own preparation.
+- **What does not apply.** The .NET Governance overlay is skipped (the catalog declares the provider's capability
+  bindings), `--lifecycle` is accepted only if the descriptor declares a `lifecycle` parameter, and coordination,
+  repository security, doctor and the initialization handoff behave as for any other workspace.
+- **Interactive.** With no arguments the Wizard first asks for the language (built-in templates remain one choice),
+  then the product shape, then each descriptor prompt, then the policy file, and shows the resolved selection
+  before it asks to create.
+
+The catalog route is a source integration candidate. It does not establish the complete
+[#3010 adoption](https://github.com/FS-GG/.github/issues/3010): the published 0.20.0 polyglot payloads
+still require common project-knowledge CI/checker composition, and clean generated-product doctor
+qualification remains outstanding. Every catalog creation initializes the canonical store through the exact
+capable SDD producer, pins that version locally, and requires the guide, schema, CI and checker before
+`knowledge check` and the initialization handoff. Known-missing CI/checker payloads refuse before target
+creation. Missing generated assets or refused knowledge checks fail creation;
+the partially created workspace is retained for diagnosis. The legacy Rendering overlay is not applied to
+catalog providers. Keep coherent registry activation and public Wizard publication separate until those producer
+and consumer checks pass. Future execution inputs can use descriptor-declared parameters; this candidate
+does not claim the accepted Coordination controller is implemented or activated.
+
 ### Typed project knowledge bootstrap
 
 A `typed-sdd` creation requires an actual stable `fsgg-sdd` version of at least 2.1.0

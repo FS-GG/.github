@@ -100,6 +100,9 @@ type Options =
         /// The per-repo chore-lock roster for a NON-FS-GG board (`FSGG_COORD_CHORE_LOCKS`). None for the
         /// FS-GG board, which uses the engine's embedded table. Set with `--chore-locks owner/repo#n,…`.
         ChoreLocks: string option
+        /// The catalog-route inputs: explicit catalog/archive/policy selections, typed `--param` values and
+        /// `--dry-run`. Only a provider the ref-pinned catalog declares uses them (FS-GG/.github#3010).
+        Catalog: ProviderCatalog.Inputs
     }
 
 /// Assemble the no-argument wizard's deliberately small, always-answerable decision set. Facts that
@@ -131,6 +134,7 @@ let assembleWizardOptions (target: string) (product: string) : Options =
         PublicBoard = None
         TrustedWriters = []
         ChoreLocks = None
+        Catalog = ProviderCatalog.emptyInputs
     }
 
 /// Apply the provider-specific answers gathered by the interactive wizard to its stable defaults.
@@ -436,7 +440,15 @@ let private onPath (cmd: string) =
 /// One owned HTTP response: refuse redirects, bound headers/body, and keep the caller's
 /// original cancellation deadline active through stream EOF. The supplied client is disposed
 /// on every outcome; production supplies the fixed handler below, tests supply an inert handler.
-let private readBoundedText (client: HttpClient) (cancellationToken: System.Threading.CancellationToken) (url: string) : Result<string, string> =
+/// Read one response body of at most `maximumBodyBytes` with the original header, length and deadline
+/// controls. The exact bytes are returned, so a digest can be taken over what was actually served.
+let private readBoundedBytes
+    (maximumBodyBytes: int)
+    (limitLabel: string)
+    (client: HttpClient)
+    (cancellationToken: System.Threading.CancellationToken)
+    (url: string)
+    : Result<byte[], string> =
     use ownedClient = client
     try
         use response = ownedClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).GetAwaiter().GetResult()
@@ -448,12 +460,11 @@ let private readBoundedText (client: HttpClient) (cancellationToken: System.Thre
                 |> Seq.sumBy (fun header ->
                     int64 (System.Text.Encoding.UTF8.GetByteCount header.Key + 4)
                     + (header.Value |> Seq.sumBy (fun value -> int64 (System.Text.Encoding.UTF8.GetByteCount value + 2))))
-            let maximumBodyBytes = 256 * 1024
             let contentLength = response.Content.Headers.ContentLength
             if headerBytes response.Headers + headerBytes response.Content.Headers > 16L * 1024L then
                 Error(sprintf "Response headers exceed 16 KiB fetching %s" url)
             elif contentLength.HasValue && (contentLength.Value < 0L || contentLength.Value > int64 maximumBodyBytes) then
-                Error(sprintf "Response body exceeds 256 KiB fetching %s" url)
+                Error(sprintf "Response body exceeds %s fetching %s" limitLabel url)
             else
                 use source = response.Content.ReadAsStreamAsync(cancellationToken).GetAwaiter().GetResult()
                 use body = new MemoryStream()
@@ -467,15 +478,21 @@ let private readBoundedText (client: HttpClient) (cancellationToken: System.Thre
                     elif body.Length + int64 count > int64 maximumBodyBytes then oversized <- true
                     else body.Write(buffer, 0, count)
                 if oversized then
-                    Error(sprintf "Response body exceeds 256 KiB fetching %s" url)
+                    Error(sprintf "Response body exceeds %s fetching %s" limitLabel url)
                 elif contentLength.HasValue && body.Length <> contentLength.Value then
                     Error(sprintf "Response length differs from Content-Length fetching %s" url)
                 else
                     cancellationToken.ThrowIfCancellationRequested()
-                    let bytes = body.ToArray()
-                    // ReadAsStringAsync removed a valid UTF-8 preamble; retain that behavior.
-                    let offset = if bytes.Length >= 3 && bytes.[0] = 0xEFuy && bytes.[1] = 0xBBuy && bytes.[2] = 0xBFuy then 3 else 0
-                    Ok(System.Text.UTF8Encoding(false, true).GetString(bytes, offset, bytes.Length - offset))
+                    Ok(body.ToArray())
+    with ex -> Error ex.Message
+
+let private readBoundedText (client: HttpClient) (cancellationToken: System.Threading.CancellationToken) (url: string) : Result<string, string> =
+    try
+        readBoundedBytes (256 * 1024) "256 KiB" client cancellationToken url
+        |> Result.map (fun bytes ->
+            // ReadAsStringAsync removed a valid UTF-8 preamble; retain that behavior.
+            let offset = if bytes.Length >= 3 && bytes.[0] = 0xEFuy && bytes.[1] = 0xBBuy && bytes.[2] = 0xBFuy then 3 else 0
+            System.Text.UTF8Encoding(false, true).GetString(bytes, offset, bytes.Length - offset))
     with ex -> Error ex.Message
 
 let private createTextClient () =
@@ -493,17 +510,24 @@ let private fetchText (url: string) : Result<string, string> =
         readBoundedText (createTextClient ()) deadline.Token url
     with ex -> Error ex.Message
 
+let private templatesRawBase () =
+    match Environment.GetEnvironmentVariable "FSGG_TEMPLATES_RAW_BASE" with
+    | null
+    | "" -> "https://raw.githubusercontent.com/FS-GG/FS.GG.Templates"
+    | value -> value.TrimEnd('/')
+
+let private nugetFlatContainerBase () =
+    match Environment.GetEnvironmentVariable "FSGG_NUGET_FLAT_BASE" with
+    | null
+    | "" -> "https://api.nuget.org/v3-flatcontainer"
+    | value -> value.TrimEnd('/')
+
 /// Fetch the committed (already concretely pinned) rendering provider descriptor and write it
 /// to <target>/.fsgg/providers.yml. Returns the pinned `source:` line for display and the
 /// descriptor's declared lifecycle default for omission, or an error.
 let private fetchDescriptor (template: string) (gitRef: string) (dest: string) : Result<string option * string option, string> =
     try
-        let baseUrl =
-            match Environment.GetEnvironmentVariable "FSGG_TEMPLATES_RAW_BASE" with
-            | null
-            | "" -> "https://raw.githubusercontent.com/FS-GG/FS.GG.Templates"
-            | value -> value.TrimEnd('/')
-        let url = sprintf "%s/%s/providers/%s.providers.yml" baseUrl gitRef template
+        let url = sprintf "%s/%s/providers/%s.providers.yml" (templatesRawBase ()) gitRef template
         match fetchText url with
         | Error note -> Error note
         | Ok content ->
@@ -515,6 +539,52 @@ let private fetchDescriptor (template: string) (gitRef: string) (dest: string) :
                 |> Option.map (fun l -> l.Trim())
             Ok(pinned, declaredLifecycleDefault content)
     with ex -> Error ex.Message
+
+// ── Provider catalog (FS-GG/.github#3010) ──────────────────────────────────────
+
+/// One bounded fetch under one original deadline; no redirect and no application retry.
+let private fetchBoundedBytes (maximum: int) (limitLabel: string) (seconds: float) (url: string) : Result<byte[], string> =
+    try
+        use deadline = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds seconds)
+        readBoundedBytes maximum limitLabel (createTextClient ()) deadline.Token url
+    with ex -> Error ex.Message
+
+let private readLocalBounded (maximum: int) (path: string) : Result<byte[], string> =
+    try
+        let info = FileInfo path
+        if not info.Exists then Error(sprintf "%s does not exist" path)
+        elif info.Length > int64 maximum then Error(sprintf "%s exceeds its %d-byte bound" path maximum)
+        else
+            let bytes = File.ReadAllBytes path
+            if bytes.Length > maximum then Error(sprintf "%s exceeds its %d-byte bound" path maximum) else Ok bytes
+    with ex -> Error ex.Message
+
+/// Acquire the ref-pinned catalog (or an explicitly selected local one), verify any expected raw digest
+/// and parse it. A failure here has touched no target, and nothing falls back to a previous copy.
+let private loadCatalog (inputs: ProviderCatalog.Inputs) (gitRef: string) : Result<ProviderCatalog.Loaded, string> =
+    let acquired =
+        match inputs.CatalogFile, inputs.CatalogSha256 with
+        | Some _, None -> Error "--catalog-file is an explicit offline selection and requires --catalog-sha256"
+        | Some path, Some _ ->
+            let full = Path.GetFullPath path
+            readLocalBounded (1024 * 1024) full |> Result.map (fun bytes -> bytes, full)
+        | None, _ ->
+            let url = sprintf "%s/%s/%s" (templatesRawBase ()) gitRef ProviderCatalog.catalogRelativePath
+            fetchBoundedBytes (1024 * 1024) "1 MiB" 30.0 url |> Result.map (fun bytes -> bytes, url)
+    acquired
+    |> Result.bind (fun (bytes, source) ->
+        let digest = ProviderCatalog.sha256Digest bytes
+        match inputs.CatalogSha256 with
+        | Some expected when expected <> digest ->
+            Error(sprintf "the catalog at %s has digest %s, not the expected %s" source digest expected)
+        | _ ->
+            ProviderCatalog.parse bytes
+            |> Result.mapError (fun reason -> sprintf "the catalog at %s is refused: %s" source reason)
+            |> Result.map (fun catalog ->
+                { ProviderCatalog.Loaded.Catalog = catalog
+                  ProviderCatalog.Loaded.Bytes = bytes
+                  ProviderCatalog.Loaded.RawDigest = digest
+                  ProviderCatalog.Loaded.Source = source }))
 
 // ── Coordination wiring (the kit + board env into the workspace) ──────────────
 
@@ -1744,7 +1814,7 @@ let private outcomeCell =
     | Skipped reason -> "[grey]⊘ skipped[/]", reason
     | Failed note -> "[red]✗ failed[/]", note
 
-let private header (opts: Options) =
+let private header (catalogProvider: bool) (opts: Options) =
     let grid = Grid()
     grid.AddColumn() |> ignore
     grid.AddColumn() |> ignore
@@ -1755,7 +1825,9 @@ let private header (opts: Options) =
     grid.AddRow("[grey]target[/]", Markup.Escape opts.Target) |> ignore
     grid.AddRow("[grey]template[/]", Markup.Escape opts.Template) |> ignore
     let lifecycleLabel =
-        if opts.Template = "fable-game" && not opts.LifecycleExplicit then
+        if catalogProvider then
+            "declared by the provider catalog"
+        elif opts.Template = "fable-game" && not opts.LifecycleExplicit then
             "selected from published provider"
         else
             opts.Lifecycle
@@ -1780,7 +1852,7 @@ let private header (opts: Options) =
     | Some bindingTarget -> grid.AddRow("[grey]binding target[/]", Markup.Escape bindingTarget) |> ignore
     | None -> ()
 
-    grid.AddRow("[grey]descriptor ref[/]", Markup.Escape opts.Ref) |> ignore
+    grid.AddRow((if catalogProvider then "[grey]catalog ref[/]" else "[grey]descriptor ref[/]"), Markup.Escape opts.Ref) |> ignore
 
     grid.AddRow(
         "[grey]currency[/]",
@@ -1793,7 +1865,9 @@ let private header (opts: Options) =
 
     grid.AddRow(
         "[grey]governance[/]",
-        (if opts.Governance then
+        (if catalogProvider then
+             "bindings declared by the provider catalog"
+         elif opts.Governance then
              "light / non-blocking"
          else
              "[dim]disabled (--no-governance)[/]")
@@ -1914,6 +1988,236 @@ let private hasGameCore (profile: string) =
 let private hasAudio (profile: string) =
     profile = "game" || profile = "sample-pack"
 
+/// What a catalog creation is going to do, decided before anything touches the target.
+type private CatalogPlan =
+    { Loaded: ProviderCatalog.Loaded
+      Provider: ProviderCatalog.Provider
+      /// The explicit parameter values forwarded to SDD, in declared order.
+      Forward: (string * string) list }
+
+/// Resolve a `--template` that no built-in owns against the catalog. Everything that can be refused from
+/// the catalog and the typed values is refused here, so a bad invocation exits before any step runs.
+let private planCatalogProvider (loaded: ProviderCatalog.Loaded) (opts: Options) : Result<CatalogPlan, string> =
+    let builtIn = templates |> List.map fst
+    let providers, _ = ProviderCatalog.selectable builtIn loaded.Catalog
+    match ProviderCatalog.tryFind opts.Template providers with
+    | None ->
+        Error(
+            sprintf
+                "unknown template '%s' (choose one of: %s)"
+                opts.Template
+                (String.Join(", ", builtIn @ (providers |> List.map (fun p -> p.Id))))
+        )
+    | Some provider ->
+        let supplied =
+            // A legacy --lifecycle token is forwarded only to a provider that declares that parameter.
+            match opts.LifecycleExplicit with
+            | true -> opts.Catalog.Params @ [ "lifecycle", opts.Lifecycle ]
+            | false -> opts.Catalog.Params
+        let lifecycleRefusal =
+            if opts.LifecycleExplicit && not (provider.Parameters |> List.exists (fun p -> p.Key = "lifecycle")) then
+                Some(sprintf "%s declares no lifecycle parameter, so --lifecycle does not apply to it" provider.Id)
+            else
+                None
+        match lifecycleRefusal with
+        | Some reason -> Error reason
+        | None ->
+            match ProviderCatalog.resolveParameters provider opts.Product supplied with
+            | Error problems -> Error(String.Join("; ", problems))
+            | Ok forward -> Ok { Loaded = loaded; Provider = provider; Forward = forward }
+
+/// The host's `dotnet` muxer as a fully qualified path: SDD admits it as the template transport.
+let private transportExecutable () : Result<string, string> =
+    let fromHost =
+        match Environment.GetEnvironmentVariable "DOTNET_HOST_PATH" with
+        | null
+        | "" -> None
+        | value when Path.IsPathFullyQualified value && File.Exists value -> Some value
+        | _ -> None
+    let fromPath () =
+        match Environment.GetEnvironmentVariable "PATH" with
+        | null
+        | "" -> None
+        | path ->
+            path.Split(Path.PathSeparator)
+            |> Array.tryPick (fun dir ->
+                if String.IsNullOrWhiteSpace dir then None
+                else
+                    let candidate = Path.Combine(Path.GetFullPath dir, "dotnet")
+                    if File.Exists candidate then Some candidate else None)
+    match fromHost |> Option.orElse (fromPath ()) with
+    | Some path -> Ok path
+    | None -> Error "no dotnet host was found on PATH to use as the template transport"
+
+/// A private scratch directory owned by one catalog creation; removed by its creator only.
+let private createScratch () : string =
+    let root = Path.Combine(Path.GetTempPath(), "fsgg-wizard-" + Guid.NewGuid().ToString "N")
+    Directory.CreateDirectory(root, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+    root
+
+let private removeScratch (root: string) =
+    try
+        if Directory.Exists root && Path.GetFileName(root).StartsWith("fsgg-wizard-", StringComparison.Ordinal) then
+            Directory.Delete(root, true)
+    with _ ->
+        ()
+
+type private Scratch(root: string) =
+    member _.Root = root
+
+    interface IDisposable with
+        member _.Dispose() = removeScratch root
+
+/// The pinned template archive: an explicitly selected local file (digest required) or the exact package
+/// the provider's template source names, from the public flat container. Returns the file, its digest
+/// and where it came from.
+let private acquireArchive (inputs: ProviderCatalog.Inputs) (provider: ProviderCatalog.Provider) (scratch: string) : Result<string * string * string, string> =
+    let bound = 16 * 1024 * 1024
+    match inputs.TemplateArchive, inputs.TemplateSha256 with
+    | Some _, None -> Error "--template-archive is an explicit offline selection and requires --template-sha256"
+    | Some path, Some expected ->
+        let full = Path.GetFullPath path
+        readLocalBounded bound full
+        |> Result.bind (fun bytes ->
+            let digest = ProviderCatalog.sha256Digest bytes
+            if digest <> expected then Error(sprintf "the template archive %s has digest %s, not the expected %s" full digest expected)
+            else Ok(full, digest, full))
+    | None, _ ->
+        ProviderCatalog.parseTemplateSource provider.TemplateSource
+        |> Result.bind (fun (packageId, version) ->
+            let url = ProviderCatalog.flatContainerUrl (nugetFlatContainerBase ()) packageId version
+            fetchBoundedBytes bound "16 MiB" 180.0 url
+            |> Result.bind (fun bytes ->
+                let digest = ProviderCatalog.sha256Digest bytes
+                match inputs.TemplateSha256 with
+                | Some expected when expected <> digest ->
+                    Error(sprintf "the template archive %s has digest %s, not the expected %s" url digest expected)
+                | _ ->
+                    let file = Path.Combine(scratch, packageId.ToLowerInvariant() + "." + version + ".nupkg")
+                    File.WriteAllBytes(file, bytes)
+                    Ok(file, digest, url)))
+
+/// Reject a known-incomplete template payload before SDD can create the target. Template selection
+/// follows dotnet's shortName metadata, never a provider/language name or directory convention.
+let private catalogKnowledgePreflight (archivePath: string) (templateId: string) : Result<unit, string> =
+    try
+        use archive = System.IO.Compression.ZipFile.OpenRead archivePath
+        let candidates =
+            archive.Entries
+            |> Seq.filter (fun entry -> entry.FullName.EndsWith("/.template.config/template.json", StringComparison.Ordinal))
+            |> Seq.filter (fun entry ->
+                if entry.Length > 65536L then raise (InvalidDataException "Template metadata exceeds 64 KiB.")
+                use stream = entry.Open()
+                use document = JsonDocument.Parse(stream)
+                match document.RootElement.TryGetProperty "shortName" with
+                | true, value when value.ValueKind = JsonValueKind.String -> value.GetString() = templateId
+                | true, value when value.ValueKind = JsonValueKind.Array ->
+                    value.EnumerateArray() |> Seq.exists (fun name -> name.ValueKind = JsonValueKind.String && name.GetString() = templateId)
+                | _ -> false)
+            |> Seq.toList
+        match candidates with
+        | [ template ] ->
+            let prefix = template.FullName.Substring(0, template.FullName.Length - ".template.config/template.json".Length)
+            [ ".github/workflows/project-knowledge.yml"; "scripts/check-project-knowledge.py" ]
+            |> List.tryFind (fun relative ->
+                archive.Entries |> Seq.filter (fun entry -> entry.FullName = prefix + relative && entry.Length > 0L) |> Seq.length <> 1)
+            |> function
+                | Some relative -> Error(sprintf "The selected template lacks required project-knowledge asset %s; refuse before target creation." relative)
+                | None -> Ok()
+        | _ -> Error "The archive must declare exactly one selected template before project-knowledge composition."
+    with
+    | :? IOException | :? InvalidDataException | :? JsonException | :? InvalidOperationException ->
+        Error "Cannot verify the selected template's project-knowledge payload."
+
+/// Everything the SDD catalog route is given, plus what to show about it.
+type private PreparedCatalog =
+    { Invocation: ProviderCatalog.Invocation
+      ArchiveSource: string
+      PolicyDigest: string }
+
+/// Decide and acquire every input of a catalog creation without writing to the target. Any refusal
+/// here leaves the target exactly as it was.
+let private prepareCatalogInvocation (opts: Options) (plan: CatalogPlan) (scratch: string) : Result<PreparedCatalog, string> =
+    let target = Path.GetFullPath opts.Target
+    let parent = Path.GetDirectoryName(target.TrimEnd(Path.DirectorySeparatorChar))
+    let host =
+        ProviderCatalog.platformId (if OperatingSystem.IsLinux() then "linux" elif OperatingSystem.IsMacOS() then "osx" elif OperatingSystem.IsWindows() then "windows" else "unknown") (RuntimeInformation.OSArchitecture.ToString())
+    if Directory.Exists target || File.Exists target then
+        Error(sprintf "%s already exists; the catalog route creates a new workspace only and never replaces a target" target)
+    elif String.IsNullOrEmpty parent || not (Directory.Exists parent) then
+        Error(sprintf "the parent directory of %s must exist" target)
+    else
+        match host with
+        | None -> Error "this host's operating system or architecture is not one the provider catalog names"
+        | Some platform ->
+            ProviderCatalog.checkPlatform plan.Provider platform
+            |> Result.bind (fun () ->
+                match opts.Catalog.AdmissionPolicy with
+                | None -> Error "--admission-policy is required: the independently selected policy for the host's tools and the template archive"
+                | Some policyPath -> readLocalBounded (1024 * 1024) (Path.GetFullPath policyPath) |> Result.map (fun bytes -> Path.GetFullPath policyPath, bytes))
+            |> Result.bind (fun (policyPath, policyBytes) ->
+                let policyDigest = ProviderCatalog.sha256Digest policyBytes
+                match opts.Catalog.AdmissionPolicySha256 with
+                | Some expected when expected <> policyDigest ->
+                    Error(sprintf "the admission policy %s has digest %s, not the expected %s" policyPath policyDigest expected)
+                | _ ->
+                    ProviderCatalog.policyBudgets policyBytes plan.Provider
+                    |> Result.map (fun budgets -> platform, policyPath, policyDigest, budgets))
+            |> Result.bind (fun (platform, policyPath, policyDigest, (preflight, scaffold)) ->
+                acquireArchive opts.Catalog plan.Provider scratch
+                |> Result.bind (fun (archivePath, archiveDigest, archiveSource) ->
+                    catalogKnowledgePreflight archivePath plan.Provider.TemplateId
+                    |> Result.bind (fun () -> transportExecutable ())
+                    |> Result.map (fun transport ->
+                        let catalogPath =
+                            match opts.Catalog.CatalogFile with
+                            | Some file -> Path.GetFullPath file
+                            | None ->
+                                let file = Path.Combine(scratch, "catalog.json")
+                                File.WriteAllBytes(file, plan.Loaded.Bytes)
+                                file
+                        { Invocation =
+                            { CatalogPath = catalogPath
+                              CatalogDigest = plan.Loaded.RawDigest
+                              ProviderId = plan.Provider.Id
+                              TargetRoot = target
+                              ArchivePath = archivePath
+                              ArchiveDigest = archiveDigest
+                              PolicyPath = policyPath
+                              PolicyDigest = policyDigest
+                              Platform = platform
+                              TransportExecutable = transport
+                              PreflightSeconds = preflight
+                              ScaffoldSeconds = scaffold
+                              Parameters = plan.Forward
+                              DryRun = opts.Catalog.DryRun }
+                          ArchiveSource = archiveSource
+                          PolicyDigest = policyDigest })))
+
+/// The diagnostics SDD's JSON projections carry: `{code, path, message}` rows and a status word.
+let private catalogVerdict (output: string) : string * string list =
+    let start = output.IndexOf '{'
+    try
+        use document = JsonDocument.Parse(output.Substring(max 0 start))
+        let root = document.RootElement
+        let status =
+            match root.TryGetProperty "status" with
+            | true, value when value.ValueKind = JsonValueKind.String -> value.GetString()
+            | _ -> "unknown"
+        let diagnostics =
+            match root.TryGetProperty "diagnostics" with
+            | true, rows when rows.ValueKind = JsonValueKind.Array ->
+                [ for row in rows.EnumerateArray() ->
+                    let read (name: string) =
+                        match row.TryGetProperty name with
+                        | true, v when v.ValueKind = JsonValueKind.String -> v.GetString()
+                        | _ -> ""
+                    sprintf "%s %s: %s" (read "code") (read "path") (read "message") ]
+            | _ -> []
+        status, diagnostics
+    with _ ->
+        "unreadable", [ "the SDD projection was not valid JSON" ]
+
 let private usage () =
     AnsiConsole.MarkupLine
         "[bold]new-sdd-workspace[/] — scaffold an FS.GG workspace (SDD + Rendering + optional Governance)"
@@ -1965,6 +2269,8 @@ let private usage () =
         "  [green]--template[/] <name>  provider/template (default: rendering; omitted for compatibility)"
 
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", templates |> List.map fst)))
+    AnsiConsole.MarkupLine
+        "                    [dim]or any provider the ref-pinned catalog declares: see --list-providers[/]"
     AnsiConsole.MarkupLine "  [green]--lifecycle[/] <name> representation backend (default: sdd; fable-game: descriptor default)"
     AnsiConsole.MarkupLine "                    [dim]none, sdd, typed-sdd, spec-kit (legacy/frozen)[/]"
     AnsiConsole.MarkupLine "  [green]--profile[/] <name>   rendering-only profile (default: game = provider default)"
@@ -1980,7 +2286,25 @@ let private usage () =
         "  [green]--binding-target[/] <target> fable-bindings runtime target: browser, node, or universal"
 
     AnsiConsole.MarkupLine
-        "  [green]--ref[/] <git-ref>    FS.GG.Templates ref for the descriptor (default: main = newest)"
+        "  [green]--ref[/] <git-ref>    FS.GG.Templates ref for the descriptor or provider catalog (default: main = newest)"
+
+    AnsiConsole.MarkupLine
+        "  [green]--list-providers[/]   print the built-in templates and the catalog providers with their typed parameters, then exit"
+
+    AnsiConsole.MarkupLine
+        "  [green]--param[/] <key=value> a catalog provider's typed value (repeatable; validated against its descriptor)"
+
+    AnsiConsole.MarkupLine
+        "  [green]--admission-policy[/] <file> the independently selected host policy a catalog provider requires"
+
+    AnsiConsole.MarkupLine
+        "  [green]--catalog-file[/] <file> and [green]--catalog-sha256[/] <digest>  an explicitly pinned offline catalog"
+
+    AnsiConsole.MarkupLine
+        "  [green]--template-archive[/] <file> and [green]--template-sha256[/] <digest>  an explicitly pinned offline template archive"
+
+    AnsiConsole.MarkupLine
+        "  [green]--dry-run[/]          catalog providers only: SDD's own preparation, nothing written"
 
     AnsiConsole.MarkupLine
         "  [green]--board[/] <owner/title>  coordination board to wire the workspace to (default: FS-GG/Coordination)"
@@ -2363,41 +2687,105 @@ let private draftView (d: Draft) =
 /// A non-interactive stdin never reaches here (see `main`), so the piped/CI usage-error contract
 /// is unchanged.
 /// Returns None if the user declines the final confirmation.
-let private interactive () : Options option =
-    let mutable draft = emptyDraft
+/// Show the catalog selection the way the interactive preview does: only catalog and resolved values.
+let private catalogPanel (plan: CatalogPlan) =
+    let grid = Grid()
+    grid.AddColumn() |> ignore
+    grid.AddColumn() |> ignore
+    let effective =
+        plan.Forward
+    for label, value in ProviderCatalog.previewRows plan.Provider effective do
+        grid.AddRow(sprintf "[grey]%s[/]" (Markup.Escape label), Markup.Escape value) |> ignore
+    grid.AddRow("[grey]catalog[/]", Markup.Escape(sprintf "%s %s %s" plan.Loaded.Catalog.Id plan.Loaded.Catalog.Revision plan.Loaded.RawDigest))
+    |> ignore
+    grid.AddRow("[grey]catalog source[/]", Markup.Escape plan.Loaded.Source) |> ignore
+    let panel = Panel(grid)
+    panel.Header <- PanelHeader(sprintf "[bold]%s[/] · from the provider catalog" (Markup.Escape plan.Provider.DisplayName))
+    panel.Border <- BoxBorder.Rounded
+    panel.Padding <- Padding(1, 0, 1, 0)
+    AnsiConsole.Write panel
 
-    draftView draft
+/// Ask for one catalog parameter by its declared kind, prompt, default and validation.
+let private promptCatalogParameter (provider: ProviderCatalog.Provider) (product: string) (parameter: ProviderCatalog.Parameter) : string option =
+    let suggested =
+        match parameter.Default with
+        | Some value -> Some value
+        | None when parameter.Key = ProviderCatalog.rawNameKey provider -> Some product
+        | None -> None
+    let title = sprintf "%s (%s)" (Markup.Escape parameter.Prompt) (Markup.Escape parameter.Key)
+    match parameter.Kind with
+    | ProviderCatalog.Choice ->
+        let ordered =
+            match suggested with
+            | Some chosen when List.contains chosen parameter.Values -> chosen :: (parameter.Values |> List.filter ((<>) chosen))
+            | _ -> parameter.Values
+        let choice = AnsiConsole.Prompt(SelectionPrompt<string>().Title(title).AddChoices(ordered))
+        Some choice
+    | _ ->
+        let prompt =
+            TextPrompt<string>(title).Validate(fun (value: string) ->
+                match ProviderCatalog.validateValue parameter value with
+                | Some reason -> ValidationResult.Error(sprintf "[red]%s[/]" (Markup.Escape reason))
+                | None -> ValidationResult.Success())
+        suggested |> Option.iter (fun value -> prompt.DefaultValue value |> ignore)
+        if not parameter.Required then prompt.AllowEmpty() |> ignore
+        let answer = AnsiConsole.Prompt(prompt)
+        if answer = "" && not parameter.Required then None else Some answer
 
-    let product =
+/// The catalog branch of the interactive wizard: language, then product shape, then the descriptor's own
+/// typed prompts, then the independently selected admission policy. Nothing is provider-specific.
+let private interactiveCatalog
+    (loaded: ProviderCatalog.Loaded)
+    (providers: ProviderCatalog.Provider list)
+    (language: string)
+    (target: string)
+    (product: string)
+    : (Options * CatalogPlan) option =
+    let shapes = ProviderCatalog.shapesOf language providers
+    let shapeChoices = shapes |> List.map (fun p -> sprintf "%s — %s (%s)" p.ProductShape p.Help p.Id)
+    let shapeChoice =
+        AnsiConsole.Prompt(
+            SelectionPrompt<string>()
+                .Title(sprintf "Which [green]product shape[/] for %s?" (Markup.Escape language))
+                .PageSize(max 3 shapeChoices.Length)
+                .AddChoices(shapeChoices)
+        )
+    let provider = List.zip shapes shapeChoices |> List.find (fun (_, choice) -> choice = shapeChoice) |> fst
+    let supplied =
+        provider.Parameters
+        |> List.choose (fun parameter ->
+            promptCatalogParameter provider product parameter |> Option.map (fun value -> parameter.Key, value))
+    let policy =
         AnsiConsole
             .Prompt(
-                TextPrompt<string>("[green]Product[/] name?").Validate(fun (s: string) -> required "product name" s)
+                TextPrompt<string>("Admission [green]policy[/] file (the independently selected policy for this host's tools)?")
+                    .Validate(fun (path: string) ->
+                        if File.Exists(path.Trim()) then ValidationResult.Success()
+                        else ValidationResult.Error("[red]the policy file does not exist[/]"))
             )
             .Trim()
+    let opts =
+        { assembleWizardOptions target product with
+            Template = provider.Id
+            Catalog =
+                { ProviderCatalog.emptyInputs with
+                    Params = supplied
+                    AdmissionPolicy = Some policy } }
+    match planCatalogProvider loaded opts with
+    | Error reason ->
+        AnsiConsole.MarkupLine(sprintf "[red]error:[/] %s" (Markup.Escape reason))
+        None
+    | Ok plan ->
+        header true opts
+        catalogPanel plan
+        AnsiConsole.MarkupLine
+            "[yellow]Initialization runs only after you start an agent in the new workspace for the first time; this wizard installs the handoff but does not initialize the repository.[/]"
+        AnsiConsole.WriteLine()
+        if AnsiConsole.Confirm("[bold]Create this scaffold now?[/]", true) then Some(opts, plan) else None
 
-    draft <- { draft with Product = Some product }
-
-    draftView draft
-
-    let target =
-        AnsiConsole
-            .Prompt(
-                TextPrompt<string>("[green]Target[/] directory?")
-                    .DefaultValue("./" + product)
-                    .Validate(fun (s: string) -> required "target directory" s)
-            )
-            .Trim()
-
-    draft <-
-        { draft with
-            Target = Some target
-            Lifecycle = Some "sdd"
-            Governance = Some true
-            Ref = Some "main"
-            Pinned = Some false
-        }
-
-    draftView draft
+/// The established template prompts: unchanged from before the catalog, including their previews.
+let private interactiveBuiltIn (initial: Draft) (target: string) (product: string) : Options option =
+    let mutable draft = initial
 
     let templateChoices =
         templates
@@ -2520,9 +2908,86 @@ let private interactive () : Options option =
     else
         None
 
+let private interactive () : (Options * CatalogPlan option) option =
+    let mutable draft = emptyDraft
+
+    draftView draft
+
+    let product =
+        AnsiConsole
+            .Prompt(
+                TextPrompt<string>("[green]Product[/] name?").Validate(fun (s: string) -> required "product name" s)
+            )
+            .Trim()
+
+    draft <- { draft with Product = Some product }
+
+    draftView draft
+
+    let target =
+        AnsiConsole
+            .Prompt(
+                TextPrompt<string>("[green]Target[/] directory?")
+                    .DefaultValue("./" + product)
+                    .Validate(fun (s: string) -> required "target directory" s)
+            )
+            .Trim()
+
+    draft <-
+        { draft with
+            Target = Some target
+            Lifecycle = Some "sdd"
+            Governance = Some true
+            Ref = Some "main"
+            Pinned = Some false
+        }
+
+    draftView draft
+
+    // The ref-pinned catalog is read before any selection. If it cannot be read, the built-in templates
+    // remain available and the catalog providers are reported as unavailable, never guessed.
+    let loadedCatalog =
+        AnsiConsole
+            .Status()
+            .Start("reading the ref-pinned provider catalog…", fun _ -> loadCatalog ProviderCatalog.emptyInputs "main")
+
+    let catalogProviders =
+        match loadedCatalog with
+        | Ok loaded -> fst (ProviderCatalog.selectable (templates |> List.map fst) loaded.Catalog)
+        | Error note ->
+            AnsiConsole.MarkupLine(
+                sprintf "[yellow]the provider catalog is unavailable; only the built-in templates are offered:[/] %s" (Markup.Escape note)
+            )
+            []
+
+    let builtInLabel = "built-in templates — the established F#, Python and Fable providers"
+
+    let language =
+        if List.isEmpty catalogProviders then
+            builtInLabel
+        else
+            AnsiConsole.Prompt(
+                SelectionPrompt<string>()
+                    .Title("Which [green]language[/] is the product written in?")
+                    .PageSize(catalogProviders.Length + 2)
+                    .AddChoices(builtInLabel :: ProviderCatalog.languages catalogProviders)
+            )
+
+    if language <> builtInLabel then
+        match loadedCatalog with
+        | Ok loaded -> interactiveCatalog loaded catalogProviders language target product |> Option.map (fun (opts, plan) -> opts, Some plan)
+        | Error _ -> None
+    else
+        interactiveBuiltIn draft target product |> Option.map (fun opts -> opts, None)
+
 // ── Arg parsing ──────────────────────────────────────────────────────────────
 
-let private parse (argv: string list) : Result<Options, string> =
+/// The syntactic form of a provider id the catalog may declare; it is checked against the catalog later.
+let private providerIdPattern = System.Text.RegularExpressions.Regex(@"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z")
+
+/// Parse the scaffold grammar. A `--template` the built-ins do not own is accepted only if `resolve`,
+/// which sees the complete options, finds it in the ref-pinned catalog and approves its typed values.
+let private parseWith (resolve: Options -> Result<unit, string>) (argv: string list) : Result<Options, string> =
     let knownProfiles = profiles |> List.map fst
     let knownBundles = bundles |> List.map fst
     let knownTemplates = templates |> List.map fst
@@ -2572,6 +3037,45 @@ let private parse (argv: string list) : Result<Options, string> =
                     Bundle = Some(opts.Bundle |> Option.defaultValue "player")
                 }
         | _ -> Ok opts
+
+    // The catalog route is the only consumer of the catalog options, and it needs the rest of its inputs
+    // up front so a bad invocation is refused before any step runs.
+    let validateCatalogRoute (opts: Options) =
+        let builtIn = List.contains opts.Template knownTemplates
+        let given = opts.Catalog
+        if builtIn then
+            if given <> ProviderCatalog.emptyInputs then
+                Error(
+                    sprintf
+                        "--catalog-file, --catalog-sha256, --template-archive, --template-sha256, --admission-policy, --param and --dry-run apply only to a catalog provider (selected: %s)"
+                        opts.Template
+                )
+            else
+                Ok opts
+        elif given.CatalogFile.IsSome && given.CatalogSha256.IsNone then
+            Error "--catalog-file is an explicit offline selection and requires --catalog-sha256"
+        elif given.TemplateArchive.IsSome && given.TemplateSha256.IsNone then
+            Error "--template-archive is an explicit offline selection and requires --template-sha256"
+        else
+            Ok opts
+
+    // Once the catalog has confirmed the provider, the independently selected policy is mandatory.
+    let requireCatalogInputs (opts: Options) =
+        if opts.Catalog.AdmissionPolicy.IsNone then
+            Error(
+                sprintf
+                    "--template %s is a catalog provider and requires --admission-policy, the independently selected policy for this host's tools and the template archive"
+                    opts.Template
+            )
+        else
+            Ok opts
+
+    let validate (opts: Options) =
+        validate opts
+        |> Result.bind validateCatalogRoute
+        |> Result.bind (fun checkedOptions ->
+            if List.contains checkedOptions.Template knownTemplates then Ok checkedOptions
+            else resolve checkedOptions |> Result.bind (fun () -> requireCatalogInputs checkedOptions))
     // A `--flag`-looking token is a missing value, not a value — the same guard repos.sh's
     // `need_val` applies. Without it, `new-sdd-workspace ./x P --profile --ref v1` swallows
     // `--ref` as the profile and then blames `v1` (`unknown argument: v1`) for a mistake made
@@ -2584,7 +3088,7 @@ let private parse (argv: string list) : Result<Options, string> =
         | "--template" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--template needs a value (got flag '%s')" value)
         | "--template" :: value :: t ->
-            if List.contains value knownTemplates then
+            if List.contains value knownTemplates || providerIdPattern.IsMatch value then
                 flags { acc with Template = value } t
             else
                 Error(sprintf "unknown template '%s' (choose one of: %s)" value (String.Join(", ", knownTemplates)))
@@ -2673,6 +3177,46 @@ let private parse (argv: string list) : Result<Options, string> =
             Error(sprintf "--chore-locks needs a value (got flag '%s')" value)
         | "--chore-locks" :: value :: t -> flags { acc with ChoreLocks = Some value } t
         | [ "--chore-locks" ] -> Error "--chore-locks needs a value"
+        | ("--catalog-file" | "--template-archive" | "--admission-policy" as name) :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "%s needs a value (got flag '%s')" name value)
+        | ("--catalog-sha256" | "--template-sha256" | "--admission-policy-sha256" as name) :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "%s needs a value (got flag '%s')" name value)
+        | "--param" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--param needs a value (got flag '%s')" value)
+        | "--catalog-file" :: value :: t when acc.Catalog.CatalogFile.IsNone ->
+            flags { acc with Catalog = { acc.Catalog with CatalogFile = Some value } } t
+        | "--template-archive" :: value :: t when acc.Catalog.TemplateArchive.IsNone ->
+            flags { acc with Catalog = { acc.Catalog with TemplateArchive = Some value } } t
+        | "--admission-policy" :: value :: t when acc.Catalog.AdmissionPolicy.IsNone ->
+            flags { acc with Catalog = { acc.Catalog with AdmissionPolicy = Some value } } t
+        | ("--catalog-sha256" | "--template-sha256" | "--admission-policy-sha256" as name) :: value :: t ->
+            let current =
+                match name with
+                | "--catalog-sha256" -> acc.Catalog.CatalogSha256
+                | "--template-sha256" -> acc.Catalog.TemplateSha256
+                | _ -> acc.Catalog.AdmissionPolicySha256
+            match current, ProviderCatalog.normalizeDigest value with
+            | Some _, _ -> Error(sprintf "%s may be given only once" name)
+            | None, Error reason -> Error(sprintf "%s: %s" name reason)
+            | None, Ok digest ->
+                let inputs = acc.Catalog
+                let updated =
+                    match name with
+                    | "--catalog-sha256" -> { inputs with CatalogSha256 = Some digest }
+                    | "--template-sha256" -> { inputs with TemplateSha256 = Some digest }
+                    | _ -> { inputs with AdmissionPolicySha256 = Some digest }
+                flags { acc with Catalog = updated } t
+        | ("--catalog-file" | "--template-archive" | "--admission-policy" as name) :: _ :: _ ->
+            Error(sprintf "%s may be given only once" name)
+        | ("--catalog-file" | "--template-archive" | "--admission-policy" | "--catalog-sha256" | "--template-sha256" | "--admission-policy-sha256" | "--param" as name) :: [] ->
+            Error(sprintf "%s needs a value" name)
+        | "--param" :: value :: t ->
+            let split = value.IndexOf '='
+            if split <= 0 then
+                Error(sprintf "--param expects key=value (got '%s')" value)
+            else
+                flags { acc with Catalog = { acc.Catalog with Params = acc.Catalog.Params @ [ value.Substring(0, split), value.Substring(split + 1) ] } } t
+        | "--dry-run" :: t -> flags { acc with Catalog = { acc.Catalog with DryRun = true } } t
         | "--no-coordination" :: t -> flags { acc with Coordinate = false } t
         | "--pinned" :: t -> flags { acc with Pinned = true } t
         | "--upgrade" :: t -> flags { acc with Upgrade = true } t
@@ -2706,6 +3250,7 @@ let private parse (argv: string list) : Result<Options, string> =
                 PublicBoard = None
                 TrustedWriters = []
                 ChoreLocks = None
+                Catalog = ProviderCatalog.emptyInputs
             }
             rest
         |> Result.bind (fun opts ->
@@ -2714,6 +3259,18 @@ let private parse (argv: string list) : Result<Options, string> =
                 Error "--public-board requires an explicit --trusted-writers allowlist"
             | _ -> Ok opts)
     | _ -> Error "target dir and product name are required"
+
+/// The grammar without a catalog: only the built-in templates are known (used where no network is wanted).
+let private parse (argv: string list) : Result<Options, string> =
+    parseWith
+        (fun opts ->
+            Error(
+                sprintf
+                    "unknown template '%s' (choose one of: %s)"
+                    opts.Template
+                    (String.Join(", ", templates |> List.map fst))
+            ))
+        argv
 
 /// Parse `retrofit <target> [options]` — the coordination-retrofit subcommand. Only the coordination
 /// inputs (`--board`/`--repo`/`--chore-locks`/`--ref`) are accepted; the scaffold/render/governance
@@ -3019,7 +3576,7 @@ and private installKnowledgeOverlayPackage () =
             let fallback, fallbackLog = installPackageFromTempConfig true package (nugetOrgConfig ())
             fallback, log + "\n" + fallbackLog
 
-let private bootstrapTypedKnowledge (opts: Options) (version: string) : Outcome =
+let private bootstrapTypedKnowledge (opts: Options) (version: string) (catalogProvider: bool) : Outcome =
     let code, reported = runProcess false "fsgg-sdd" [ "--version" ]
     let selected = if code = 0 then knowledgeProducerVersion reported else Error "Could not re-read the SDD producer version."
     let pinned =
@@ -3031,6 +3588,10 @@ let private bootstrapTypedKnowledge (opts: Options) (version: string) : Outcome 
     | Error note -> Failed note
     | Ok () ->
         let mutable error = None
+        // Catalog providers compose the same public store without selecting a language or lifecycle branch.
+        if catalogProvider then
+            let initialized, _ = runProcess true "fsgg-sdd" [ "knowledge"; "initialize"; "--root"; opts.Target ]
+            if initialized <> 0 then error <- Some "The capable producer refused project-knowledge initialization."
         // Owned templates carry this same central projection. Rendering is an external
         // immutable archive, so compose the owner's explicit overlay after its scaffold.
         if opts.Template = "rendering" then
@@ -3065,10 +3626,36 @@ let pinnedGovernancePreflight (opts: Options) (cacheRoot: string) =
 /// Forward SDD's existing bounded scaffold switch without changing unpinned creation.
 let scaffoldUpdateArgs pinned = if pinned then [ "--no-update" ] else []
 
-let private run (opts: Options) : int =
-    header opts
+/// Read-only rehearsal of a catalog creation: the same acquisition, pins and SDD preparation, with the
+/// target untouched. It runs no coordination, governance or initialization step.
+let private runCatalogDryRun (opts: Options) (plan: CatalogPlan) : int =
+    header true opts
+    catalogPanel plan
+    use scratch = new Scratch(createScratch ())
+    match prepareCatalogInvocation opts plan scratch.Root with
+    | Error reason ->
+        AnsiConsole.MarkupLine(sprintf "[red]catalog preparation refused:[/] %s" (Markup.Escape reason))
+        1
+    | Ok prepared ->
+        let code, output = runProcess false "fsgg-sdd" (ProviderCatalog.scaffoldArguments prepared.Invocation)
+        let status, diagnostics = catalogVerdict output
+        for line in diagnostics do
+            AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape line))
+        if code = 0 && status = "prepared" then
+            AnsiConsole.MarkupLine(
+                sprintf "  [green]✓[/] dry run prepared %s for %s; nothing was written" (Markup.Escape plan.Provider.Id) (Markup.Escape prepared.Invocation.TargetRoot)
+            )
+            0
+        else
+            AnsiConsole.MarkupLine(sprintf "  [red]✗[/] dry run %s (exit %d)" (Markup.Escape status) code)
+            if code = 0 then 1 else code
 
-    let governancePreflight = pinnedGovernancePreflight opts (governanceCacheRoot ())
+let private runScaffold (opts: Options) (plan: CatalogPlan option) : int =
+    header plan.IsSome opts
+    plan |> Option.iter catalogPanel
+
+    let governancePreflight =
+        if plan.IsSome then Ok() else pinnedGovernancePreflight opts (governanceCacheRoot ())
     let authority = ProductBoard.captureOriginAuthority opts.Target
     let freshTarget = ProductBoard.captureFreshScaffoldTarget opts.Target
     let productPreflight =
@@ -3104,17 +3691,46 @@ let private run (opts: Options) : int =
         let mutable fatal = false
         let mutable generatedManifest = None
 
-        // 1 · fetch descriptor (fatal on failure)
-        step 1 "fetch provider descriptor"
+        // 1 · fetch descriptor (fatal on failure). A catalog provider instead acquires its pinned catalog
+        //     selection, template archive and policy into a private scratch directory; the target is not
+        //     touched until the SDD scaffold step, so a refusal here leaves no target behind.
+        let step1Title = if plan.IsSome then "resolve provider catalog" else "fetch provider descriptor"
+        step 1 step1Title
         let descriptorPath = Path.Combine(opts.Target, ".fsgg", "providers.yml")
+        use scratch = new Scratch(if plan.IsSome then createScratch () else "")
+
+        let catalogPrepared: Result<PreparedCatalog, string> option =
+            plan
+            |> Option.map (fun selected ->
+                AnsiConsole
+                    .Status()
+                    .Start(
+                        sprintf "acquiring the pinned template archive for %s…" selected.Provider.Id,
+                        fun _ -> prepareCatalogInvocation opts selected scratch.Root
+                    ))
 
         let fetched =
-            AnsiConsole
-                .Status()
-                .Start(
-                    sprintf "fetching %s descriptor from FS.GG.Templates@%s…" opts.Template opts.Ref,
-                    fun _ -> fetchDescriptor opts.Template opts.Ref descriptorPath
+            match catalogPrepared, plan with
+            | Some(Ok prepared), Some selected ->
+                Ok(
+                    Some(
+                        sprintf
+                            "%s %s · %s · archive %s"
+                            selected.Loaded.Catalog.Id
+                            selected.Loaded.Catalog.Revision
+                            selected.Loaded.RawDigest
+                            prepared.Invocation.ArchiveDigest
+                    ),
+                    None
                 )
+            | Some(Error reason), _ -> Error reason
+            | _ ->
+                AnsiConsole
+                    .Status()
+                    .Start(
+                        sprintf "fetching %s descriptor from FS.GG.Templates@%s…" opts.Template opts.Ref,
+                        fun _ -> fetchDescriptor opts.Template opts.Ref descriptorPath
+                    )
 
         match fetched with
         | Ok (pinned, _) ->
@@ -3124,7 +3740,7 @@ let private run (opts: Options) : int =
 
             results.Add
                 {
-                    Title = "fetch descriptor"
+                    Title = (if plan.IsSome then "resolve catalog" else "fetch descriptor")
                     Outcome = Succeeded
                 }
         | Error e ->
@@ -3132,7 +3748,7 @@ let private run (opts: Options) : int =
 
             results.Add
                 {
-                    Title = "fetch descriptor"
+                    Title = (if plan.IsSome then "resolve catalog" else "fetch descriptor")
                     Outcome = Failed e
                 }
 
@@ -3172,7 +3788,7 @@ let private run (opts: Options) : int =
                     (Markup.Escape lifecycle)
             )
         let mutable knowledgeVersion = None
-        if not fatal && lifecycle = "typed-sdd" then
+        if not fatal && (plan.IsSome || lifecycle = "typed-sdd") then
             let code, reported = runProcess false "fsgg-sdd" [ "--version" ]
             let selected =
                 if code = 0 then knowledgeProducerVersion reported
@@ -3217,18 +3833,40 @@ let private run (opts: Options) : int =
 
             let lifecycleParam = [ "--param"; sprintf "lifecycle=%s" lifecycle ]
 
-            let code, _ =
-                runProcess
-                    true
-                    "fsgg-sdd"
-                    ([ "scaffold"; "--root"; opts.Target; "--provider"; opts.Template ]
-                     @ profileParam
-                     @ bundleParam
-                     @ npmParams
-                     @ bindingTargetParam
-                     @ lifecycleParam
-                     @ [ "--param"; sprintf "productName=%s" opts.Product ]
-                     @ scaffoldUpdateArgs opts.Pinned)
+            let code =
+                match catalogPrepared with
+                | Some(Ok prepared) ->
+                    // The catalog route: SDD inspects the same pins read-only, then composes the workspace in
+                    // a sibling staging directory and commits it atomically. No template update, discovery
+                    // or fallback is possible on this route.
+                    let inspectCode, inspectOutput = runProcess false "fsgg-sdd" (ProviderCatalog.inspectArguments prepared.Invocation)
+                    let inspectStatus, inspectDiagnostics = catalogVerdict inspectOutput
+                    if inspectCode <> 0 || inspectStatus <> "prepared" then
+                        for line in inspectDiagnostics do
+                            AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape line))
+                        if inspectCode <> 0 then inspectCode else 1
+                    else
+                        let scaffoldCode, scaffoldOutput = runProcess false "fsgg-sdd" (ProviderCatalog.scaffoldArguments prepared.Invocation)
+                        let status, diagnostics = catalogVerdict scaffoldOutput
+                        for line in diagnostics do
+                            AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape line))
+                        if scaffoldCode = 0 && status = "succeeded" then 0
+                        elif scaffoldCode <> 0 then scaffoldCode
+                        else 1
+                | _ ->
+                    let code, _ =
+                        runProcess
+                            true
+                            "fsgg-sdd"
+                            ([ "scaffold"; "--root"; opts.Target; "--provider"; opts.Template ]
+                             @ profileParam
+                             @ bundleParam
+                             @ npmParams
+                             @ bindingTargetParam
+                             @ lifecycleParam
+                             @ [ "--param"; sprintf "productName=%s" opts.Product ]
+                             @ scaffoldUpdateArgs opts.Pinned)
+                    code
 
             let capture =
                 if code <> 0 then Error(sprintf "scaffold failed (exit %d)" code)
@@ -3261,7 +3899,13 @@ let private run (opts: Options) : int =
                 fatal <- true
 
         // 4 · governance overlay (non-fatal; best-effort — needs the published template on a reachable feed)
-        if not opts.Governance then
+        if plan.IsSome then
+            results.Add
+                {
+                    Title = "governance overlay"
+                    Outcome = Skipped "the provider catalog declares this provider's capability bindings; the .NET overlay does not apply"
+                }
+        elif not opts.Governance then
             results.Add
                 {
                     Title = "governance overlay"
@@ -3462,7 +4106,7 @@ let private run (opts: Options) : int =
             match knowledgeVersion with
             | Some version ->
                 step 8 "typed project knowledge"
-                let outcome = bootstrapTypedKnowledge opts version
+                let outcome = bootstrapTypedKnowledge opts version plan.IsSome
                 results.Add { Title = "typed project knowledge"; Outcome = outcome }
                 match outcome with
                 | Succeeded -> AnsiConsole.MarkupLine "  [green]✓[/] typed knowledge initialized, exact local tool pinned and common CI composed"
@@ -3501,6 +4145,18 @@ let private run (opts: Options) : int =
 
         summary results opts fatal
         if fatal then 1 else 0
+
+/// Dispatch one creation. A catalog dry run rehearses the SDD preparation and stops; everything else is the
+/// scaffold orchestration, with the catalog route replacing only descriptor, scaffold and overlay steps.
+let private run (opts: Options) (plan: CatalogPlan option) : int =
+    match plan with
+    | Some selected when opts.Catalog.DryRun ->
+        if not (onPath "fsgg-sdd") then
+            AnsiConsole.MarkupLine "[red]fsgg-sdd is not on PATH.[/] Install it first: dotnet tool install --global FS.GG.SDD.Cli"
+            127
+        else
+            runCatalogDryRun opts selected
+    | _ -> runScaffold opts plan
 
 // ── Retrofit orchestration ────────────────────────────────────────────────────
 
@@ -3908,6 +4564,79 @@ let private runSecureProject
         AnsiConsole.MarkupLine "[yellow]pending:[/] unexpected pre-verified Project state"
         1
 
+/// Resolve a `--template` no built-in owns: read the ref-pinned catalog once, find the provider and
+/// approve its typed values. The plan is kept for the run; no step has started and no target exists.
+let private resolveCatalogTemplate (selected: CatalogPlan option ref) (opts: Options) : Result<unit, string> =
+    let builtIn = templates |> List.map fst
+    match loadCatalog opts.Catalog opts.Ref with
+    | Error note ->
+        Error(
+            sprintf
+                "unknown template '%s' (choose one of: %s); the provider catalog is unavailable: %s"
+                opts.Template
+                (String.Join(", ", builtIn))
+                note
+        )
+    | Ok loaded ->
+        planCatalogProvider loaded opts
+        |> Result.map (fun plan -> selected.Value <- Some plan)
+
+/// `--list-providers`: the built-in templates and every provider the ref-pinned catalog declares, with
+/// language, product shape and typed parameters. This is the dynamic provider help.
+let private runListProviders (argv: string list) : int =
+    let rec scan (inputs: ProviderCatalog.Inputs) (gitRef: string) rest =
+        match rest with
+        | [] -> Ok(inputs, gitRef)
+        | "--list-providers" :: t -> scan inputs gitRef t
+        | "--ref" :: value :: t when not (value.StartsWith "--") -> scan inputs value t
+        | "--catalog-file" :: value :: t when not (value.StartsWith "--") -> scan { inputs with CatalogFile = Some value } gitRef t
+        | "--catalog-sha256" :: value :: t when not (value.StartsWith "--") ->
+            match ProviderCatalog.normalizeDigest value with
+            | Ok digest -> scan { inputs with CatalogSha256 = Some digest } gitRef t
+            | Error reason -> Error(sprintf "--catalog-sha256: %s" reason)
+        | other :: _ -> Error(sprintf "--list-providers accepts only --ref, --catalog-file and --catalog-sha256 (got %s)" other)
+    match scan ProviderCatalog.emptyInputs "main" argv with
+    | Error reason ->
+        AnsiConsole.MarkupLine(sprintf "[red]error:[/] %s" (Markup.Escape reason))
+        2
+    | Ok(inputs, gitRef) ->
+        let builtIn = templates |> List.map fst
+        AnsiConsole.MarkupLine "[bold]Built-in templates[/]"
+        for name, description in templates do
+            AnsiConsole.MarkupLine(sprintf "  [green]%s[/]  %s" (Markup.Escape name) (Markup.Escape description))
+        match loadCatalog inputs gitRef with
+        | Error note ->
+            AnsiConsole.MarkupLine(sprintf "[red]the provider catalog is unavailable:[/] %s" (Markup.Escape note))
+            1
+        | Ok loaded ->
+            let providers, shadowed = ProviderCatalog.selectable builtIn loaded.Catalog
+            AnsiConsole.MarkupLine(
+                sprintf "[bold]Catalog providers[/] [grey]%s %s %s[/]" (Markup.Escape loaded.Catalog.Id) (Markup.Escape loaded.Catalog.Revision) (Markup.Escape loaded.RawDigest)
+            )
+            for provider in providers do
+                AnsiConsole.MarkupLine(sprintf "  [green]%s[/]  %s" (Markup.Escape provider.Id) (Markup.Escape(ProviderCatalog.describe provider)))
+                for parameter in provider.Parameters do
+                    let requirement =
+                        if parameter.Key = ProviderCatalog.rawNameKey provider && parameter.Default.IsNone then "defaults to the product name"
+                        elif parameter.Required then "required"
+                        else "optional"
+                    AnsiConsole.MarkupLine(
+                        sprintf
+                            "      [grey]--param %s=<%s>  %s, %s[/]"
+                            (Markup.Escape parameter.Key)
+                            (match parameter.Kind with
+                             | ProviderCatalog.Text -> "text"
+                             | ProviderCatalog.Choice -> String.Join("|", parameter.Values)
+                             | ProviderCatalog.ExactVersion -> "exact-version")
+                            requirement
+                            (Markup.Escape parameter.Prompt)
+                    )
+            if not (List.isEmpty shadowed) then
+                AnsiConsole.MarkupLine(
+                    sprintf "[yellow]ignored (a built-in template owns the name):[/] %s" (Markup.Escape(String.Join(", ", shadowed)))
+                )
+            0
+
 [<EntryPoint>]
 let main argv =
     match List.ofArray argv with
@@ -3920,7 +4649,7 @@ let main argv =
     // contract — prompting there would only hang or throw.
     | [] when AnsiConsole.Profile.Capabilities.Interactive ->
         match interactive () with
-        | Some opts -> run opts
+        | Some(opts, plan) -> run opts plan
         | None ->
             AnsiConsole.MarkupLine "[yellow]aborted[/] — no scaffold created."
             130
@@ -4000,9 +4729,11 @@ let main argv =
             "[red]error:[/] secure requires a workspace target plus --repo owner/repository, or a complete --project recovery route"
 
         2
+    | args when List.contains "--list-providers" args -> runListProviders args
     | args ->
-        match parse args with
-        | Ok opts -> run opts
+        let selected: CatalogPlan option ref = ref None
+        match parseWith (resolveCatalogTemplate selected) args with
+        | Ok opts -> run opts selected.Value
         | Error msg ->
             AnsiConsole.MarkupLine(sprintf "[red]error:[/] %s" (Markup.Escape msg))
             AnsiConsole.WriteLine()

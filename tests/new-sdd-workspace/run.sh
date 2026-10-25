@@ -187,6 +187,9 @@ dotnet fsi --reference:"$DLL" "$BUILD_ROOT/python-wizard-defaults.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/doctor-coherence.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/knowledge-bootstrap.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/pinned-governance.fsx"
+# The consumer side of the ref-pinned provider catalog (FS-GG/.github#3010): typed, over the exact bytes
+# of the published Workspace.Template 0.20.0 catalog and synthetic derivatives. No network or process.
+dotnet fsi --reference:"$DLL" "$HERE/provider-catalog.fsx"
 
 # Scrub `fsgg-sdd` from the child's PATH by handing it only the directory the dotnet muxer lives in
 # (onPath does a non-recursive PATH scan, and fsgg-sdd is a global tool in a *different* dir). On a
@@ -200,6 +203,9 @@ dotnet fsi --reference:"$DLL" "$HERE/pinned-governance.fsx" --prepare-hive "$DOT
 # A target dir that every VALID parse below must leave UNCREATED — proof the Ok leg stopped at the
 # fsgg-sdd preflight and never reached scaffolding (step 1 is the first thing to create it).
 TGT="$WORK/never-created"
+# No parse case below may reach the network: a template the built-ins do not own would read the
+# ref-pinned catalog, so point that read at a closed port. The catalog route has its own harness.
+export FSGG_TEMPLATES_RAW_BASE="http://127.0.0.1:1"
 
 # cli <args…> → rc; combined output in $OUT. stdin from /dev/null so the no-arg case stays on the
 # non-interactive parse path (main only prompts on an interactive terminal), not the wizard.
@@ -315,6 +321,49 @@ done
 for bundle in player studio tactical arcade complete; do
   expect_ok "--bundle $bundle parses for fable-game" -- "$TGT" P --template fable-game --bundle "$bundle"
 done
+
+# ── Catalog providers: parse and plan from an explicitly pinned offline catalog (no network) ──────
+CATALOG="$HERE/catalogs/polyglot-0.20.0.catalog.json"
+CATALOG_DIGEST="sha256:$(sha256sum "$CATALOG" | cut -d' ' -f1)"
+GO_ARGS=(--template go-cli --catalog-file "$CATALOG" --catalog-sha256 "$CATALOG_DIGEST" --param packageIdentity=example.org/explicit/product --param codeIdentifier=explicit_greet)
+expect_ok "a catalog provider parses and plans from a pinned offline catalog" \
+  -- "$TGT" P "${GO_ARGS[@]}" --admission-policy "$CATALOG"
+expect_ok "every published catalog provider is selectable by its id" \
+  -- "$TGT" P --template typescript-cli --catalog-file "$CATALOG" --catalog-sha256 "$CATALOG_DIGEST" --param packageIdentity=a --param codeIdentifier=b --admission-policy "$CATALOG"
+expect_err "an unknown template is refused naming the catalog providers" \
+  "unknown template 'bogus'" -- "$TGT" P --template bogus --catalog-file "$CATALOG" --catalog-sha256 "$CATALOG_DIGEST"
+expect_err "a catalog provider requires the independently selected policy" \
+  "requires --admission-policy" -- "$TGT" P "${GO_ARGS[@]}"
+expect_err "a required typed value cannot be omitted" \
+  "packageIdentity requires a value" -- "$TGT" P --template go-cli --catalog-file "$CATALOG" --catalog-sha256 "$CATALOG_DIGEST" --param codeIdentifier=x --admission-policy "$CATALOG"
+expect_err "an undeclared typed value is refused" \
+  "declares no parameter 'bogus'" -- "$TGT" P "${GO_ARGS[@]}" --param bogus=1 --admission-policy "$CATALOG"
+expect_err "a typed value is validated against its declaration" \
+  "packageIdentity is invalid" -- "$TGT" P --template go-cli --catalog-file "$CATALOG" --catalog-sha256 "$CATALOG_DIGEST" --param packageIdentity= --param codeIdentifier=x --admission-policy "$CATALOG"
+expect_err "an offline catalog file requires its digest" \
+  "--catalog-file is an explicit offline selection" -- "$TGT" P --template go-cli --catalog-file "$CATALOG"
+expect_err "an offline catalog whose bytes differ from the pinned digest is refused" \
+  "provider catalog is unavailable" -- "$TGT" P "${GO_ARGS[@]:0:2}" --catalog-sha256 "sha256:$(printf '0%.0s' $(seq 64))" --catalog-file "$CATALOG" --param packageIdentity=a --param codeIdentifier=b --admission-policy "$CATALOG"
+expect_err "a malformed digest is refused" \
+  "--catalog-sha256: a digest is sha256:" -- "$TGT" P --template go-cli --catalog-sha256 nonsense
+expect_err "an offline template archive requires its digest" \
+  "--template-archive is an explicit offline selection" -- "$TGT" P "${GO_ARGS[@]}" --template-archive "$CATALOG" --admission-policy "$CATALOG"
+expect_err "catalog options are refused for a built-in template" \
+  "apply only to a catalog provider" -- "$TGT" P --template console --param x=1
+expect_err "--param needs key=value" \
+  "--param expects key=value" -- "$TGT" P --param novalue
+expect_err "--param swallowing the next flag is caught" \
+  "--param needs a value (got flag '--ref')" -- "$TGT" P --param --ref v1
+expect_err "a legacy --lifecycle is not accepted by a provider that declares none" \
+  "declares no lifecycle parameter" -- "$TGT" P "${GO_ARGS[@]}" --lifecycle typed-sdd --admission-policy "$CATALOG"
+expect_err "a repeated --catalog-file is refused" \
+  "--catalog-file may be given only once" -- "$TGT" P --catalog-file "$CATALOG" --catalog-file "$CATALOG"
+expect_err "a repeated digest is refused" \
+  "--catalog-sha256 may be given only once" -- "$TGT" P --catalog-sha256 "$CATALOG_DIGEST" --catalog-sha256 "$CATALOG_DIGEST"
+if [ -d "$TGT" ]; then bad "catalog parses must leave the target uncreated" "$TGT exists"; else ok "catalog parses leave the target uncreated"; fi
+# The provider catalog route, end to end against a stub SDD and a local Templates/NuGet: pins, literal
+# forwarding, no-mutation refusals, offline pinning, dry run and the built-in route.
+python3 -B "$HERE/catalog-route.py" "$DLL" "$WORK/catalog-route"
 
 # Historical admitted-administration tests remain available for the future qualified replacement.
 # They are not part of the current production contract because the common admission is unavailable.
