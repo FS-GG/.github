@@ -5,7 +5,7 @@
       "id": "atlas",
       "scope": "driver",
       "sha256": "c18e56fcc56abf80903e2fc6829cd94b44f42947724a26318ebcbf1ac5e1b35b",
-      "tree-sha256": "6ef8e0a0d0232d198358fc928c72a855d1f76d616a5ac204d5e4d6486126d77a",
+      "tree-sha256": "589907f24556537d944fcf76f66523cec0baa230db1c449ba0b6fc698d7f4294",
       "files": [
         {
           "path": "SKILL.md",
@@ -24,7 +24,7 @@
         },
         {
           "path": "assets/seed/catalog.json",
-          "sha256": "d61614f646c056f2c09932ea6c95dc11c2ad1f3bd36d8f543cb67351f2124bf8",
+          "sha256": "869973f998bb46fbb48d4d858cdf5211a028ee3819fdb7253842863f2d7d1d42",
           "executable": false
         },
         {
@@ -445,6 +445,11 @@
         {
           "path": "assets/seed/records/3dfcea4ee3d0d0ed09b1f77bac48b33b64ab4620cbfc74fe0e4201b4cdb81ce6.json",
           "sha256": "3dfcea4ee3d0d0ed09b1f77bac48b33b64ab4620cbfc74fe0e4201b4cdb81ce6",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/3dffc36586e9078f750b0a2b4cc2c70a17a81294903186dbe8cc47cf8055b9bd.json",
+          "sha256": "3dffc36586e9078f750b0a2b4cc2c70a17a81294903186dbe8cc47cf8055b9bd",
           "executable": false
         },
         {
@@ -1143,6 +1148,11 @@
           "executable": false
         },
         {
+          "path": "assets/seed/records/985638a05562bb796911ec231d306b81e36ed6b58219b3bde874559e9600b59f.json",
+          "sha256": "985638a05562bb796911ec231d306b81e36ed6b58219b3bde874559e9600b59f",
+          "executable": false
+        },
+        {
           "path": "assets/seed/records/98a097d6ebb754334250dfd3ccc5f3dfaf5966524758cbfc9e10adf4a0229693.json",
           "sha256": "98a097d6ebb754334250dfd3ccc5f3dfaf5966524758cbfc9e10adf4a0229693",
           "executable": false
@@ -1445,6 +1455,11 @@
         {
           "path": "assets/seed/records/bb7fa81e41820d63d58313460f5a3999a1f9fc2cd2fb10cbb5b41a931d8be6a2.json",
           "sha256": "bb7fa81e41820d63d58313460f5a3999a1f9fc2cd2fb10cbb5b41a931d8be6a2",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/bd3bf6053f4d423ff21f7ffbed9d0e68f3ea64b7292c048e9a37ade342bb7b39.json",
+          "sha256": "bd3bf6053f4d423ff21f7ffbed9d0e68f3ea64b7292c048e9a37ade342bb7b39",
           "executable": false
         },
         {
