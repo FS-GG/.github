@@ -1694,6 +1694,8 @@ def summarize(
     producer_source: str | None = None,
     installation_prior: dict | None = None,
 ) -> tuple[int, Summary]:
+    if producer_source is not None and repo == FOURD_REPOSITORY and merge_method != "squash":
+        raise RuntimeError("FourD producer installation requires the accepted squash merge method")
     if producer_source is not None and (publication_required or not coherent_workflow
                                         or not SHA_RE.fullmatch(producer_source)):
         raise RuntimeError("producer installation requires a pinned source, completed coherent workflow and no publication")

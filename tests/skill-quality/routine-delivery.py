@@ -2306,6 +2306,15 @@ jobs:
                 FOURD_POLICY_COMMENTS={k:hashlib.sha256(v.encode()).hexdigest() for k,v in self.fourd_policy.items()}):
             return self.fsquint_transport(receiver=MODULE.FOURD_REPOSITORY,selector=kwargs.pop('selector','verify.yml'),**kwargs)
 
+    def test_fourd_installation_refuses_non_squash_before_any_native_call(self):
+        for method in ("merge", "rebase"):
+            api = mock.Mock()
+            with self.assertRaisesRegex(RuntimeError, "accepted squash"):
+                MODULE.summarize(api, repo=MODULE.FOURD_REPOSITORY, pr_number=1,
+                    expected_head="a" * 40, merge_method=method, publication_required=False,
+                    apply=True, coherent_workflow="verify.yml", producer_source="b" * 40)
+            self.assertEqual(api.mock_calls, [])
+
     def test_fourd_closed_seven_file_install_requires_both_technical_workflows_and_keeps_activation_pending(self):
         for apply in (False,True):
             code,result,api,reads=self.fourd_transport(apply=apply)

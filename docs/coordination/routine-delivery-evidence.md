@@ -197,7 +197,7 @@ The named FourD adapter applies only to private `FS-GG/FS.GG.FourD` (repository 
 byte. Two additional files must equal closed transforms of their pinned receiver baselines:
 the source-preparation workflow adds the five literal paths to both PR and push filters;
 the workflow-inventory test admits the canonical fourth workflow with exactly one
-`runs-on: ubuntu-latest` line. Existing native-runner guards and the other three hosted
+`runs-on: ubuntu-latest` line. Existing native-runner guards and the other existing hosted
 workflow guards remain intact. Missing files, additional edits or changed baselines refuse.
 
 Both unchanged verification and derived source-preparation workflows must succeed at the
