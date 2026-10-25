@@ -306,7 +306,7 @@ fifth = json.loads(CATALOG)
 extra = json.loads(json.dumps(fifth["providers"][0]))
 extra.update(id="zig-cli", displayName="zig-cli", language="Zig", productShape="library", templateId="fs-gg-zig-cli")
 extra["parameters"].append({"key": "optimize", "kind": "enum", "required": True, "prompt": "Optimization", "help": "Optimization",
-                            "default": "release", "values": ["debug", "release"],
+                            "default": "[release]", "values": ["debug", "[release]"],
                             "validation": {"nonEmpty": True, "minLength": 1, "maxLength": 16, "allowedValues": []}})
 fifth["providers"].append(extra)
 fifth_bytes = json.dumps(fifth).encode()
@@ -406,7 +406,7 @@ check("catalog options are refused for a built-in template", rc == 2 and has(out
 # ── 7. Dynamic help ──────────────────────────────────────────────────────────────────────────────
 rc, out, _, _, _ = run(["--list-providers", "--ref", "fifth"])
 check("--list-providers prints built-ins and every catalog provider with typed parameters",
-      rc == 0 and has(out, "zig-cli") and has(out, "Zig") and has(out, "--param optimize=<debug|release>") and has(out, "go-cli") and has(out, "console"), out)
+      rc == 0 and has(out, "zig-cli") and has(out, "Zig") and has(out, "--param optimize=<debug|[release]>") and has(out, "go-cli") and has(out, "console"), out)
 rc, out, _, _, _ = run(["--list-providers", "--catalog-file", str(catalog_file), "--catalog-sha256", digest(CATALOG)], env_extra=dead)
 check("--list-providers works offline from a pinned file", rc == 0 and has(out, "typescript-cli"), out)
 rc, out, _, _, _ = run(["--list-providers", "--ref", "stale-ref"])
@@ -423,6 +423,15 @@ import time
 interactive_catalog = json.loads(fifth_bytes)
 for provider in interactive_catalog["providers"]:
     if provider["id"] == "go-cli":
+        provider["language"] = "Go [qualified]"
+        provider["help"] += " [safe]"
+        provider["parameters"].append({"key": "channel", "kind": "enum", "required": True,
+                                       "prompt": "Channel [configuration]", "help": "Channel",
+                                       "default": "[stable]", "values": ["[stable]"],
+                                       "validation": {"nonEmpty": True, "minLength": 1, "maxLength": 16, "allowedValues": []}})
+        provider["parameters"].append({"key": "emptyValue", "kind": "string", "required": True,
+                                       "prompt": "Required empty value", "help": "Empty is allowed",
+                                       "values": [], "validation": {"nonEmpty": False, "minLength": 0, "maxLength": 16, "allowedValues": []}})
         next(p for p in provider["parameters"] if p["key"] == "codeIdentifier")["validation"]["allowedValues"] = ["  greet  "]
 server.routes["/main/providers/polyglot.catalog.json"] = json.dumps(interactive_catalog).encode()
 
@@ -495,19 +504,23 @@ screen, code, missing = interactive([
     ("Product name?", "Greeter" + ENTER),
     ("Target directory?", ENTER),
     ("Which language is the product written in?", DOWN + ENTER),            # built-in, Go, ...
-    ("Which product shape for Go?", ENTER),
+    ("Which product shape for Go [qualified]?", ENTER),
     ("Explicit language-valid function identifier (codeIdentifier)", "  greet  " + ENTER),
     ("Required explicit Go module path (packageIdentity)", "x" * 257 + ENTER),          # empty: refused by the descriptor's own bounds
     ("at most 256 characters are allowed", "example.org/acme/greeter" + ENTER),
     ("Human display name (rawName)", ENTER),                                # defaults to the product name
+    ("Channel [configuration] (channel)", ENTER),
+    ("Required empty value (emptyValue)", ENTER),
     ("policy", str(policy) + ENTER),
     ("Create this scaffold now?", "n" + ENTER),
 ], cwd)
 check("the wizard offers the built-in templates and each catalog language as the first choice",
       "built-in templates" in screen and all(language in screen for language in ("Go", "JavaScript", "Rust", "TypeScript", "Zig")), screen[-1500:])
-check("the product shape is a separate prompt", "Which product shape for Go?" in screen and "executable-cli" in screen, screen[-1500:])
+check("the product shape is a separate prompt", "Which product shape for Go [qualified]?" in screen and "executable-cli" in screen, screen[-1500:])
 check("each descriptor-declared prompt is asked in its own words, validated by its own bounds",
       "Required explicit Go module path" in screen and "at most 256 characters are allowed" in screen, screen[-1500:])
+check("catalog languages, help and enum values render as literal text", "Go [qualified]" in screen and "[safe]" in screen and "[stable]" in screen, screen[-2500:])
+check("a required string may explicitly be empty when its declared bounds allow it", "param emptyValue" in screen, screen[-2500:])
 check("interactive descriptor strings preserve surrounding whitespace", "  greet  " in screen, screen[-2500:])
 check("the raw-name prompt defaults to the product name", "Greeter" in screen.split("Human display name (rawName)")[-1], screen[-800:])
 check("the resolved selection is previewed from the catalog before anything is created",

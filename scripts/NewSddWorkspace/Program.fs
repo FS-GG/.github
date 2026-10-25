@@ -2719,7 +2719,7 @@ let private promptCatalogParameter (provider: ProviderCatalog.Provider) (product
             match suggested with
             | Some chosen when List.contains chosen parameter.Values -> chosen :: (parameter.Values |> List.filter ((<>) chosen))
             | _ -> parameter.Values
-        let choice = AnsiConsole.Prompt(SelectionPrompt<string>().Title(title).AddChoices(ordered))
+        let choice = AnsiConsole.Prompt(SelectionPrompt<string>().Title(title).UseConverter(fun value -> Markup.Escape value).AddChoices(ordered))
         Some choice
     | _ ->
         let prompt =
@@ -2728,7 +2728,7 @@ let private promptCatalogParameter (provider: ProviderCatalog.Provider) (product
                 | Some reason -> ValidationResult.Error(sprintf "[red]%s[/]" (Markup.Escape reason))
                 | None -> ValidationResult.Success())
         suggested |> Option.iter (fun value -> prompt.DefaultValue value |> ignore)
-        if not parameter.Required then prompt.AllowEmpty() |> ignore
+        if not parameter.Required || (ProviderCatalog.validateValue parameter "" |> Option.isNone) then prompt.AllowEmpty() |> ignore
         let answer = AnsiConsole.Prompt(prompt)
         if answer = "" && not parameter.Required then None else Some answer
 
@@ -2748,6 +2748,7 @@ let private interactiveCatalog
             SelectionPrompt<string>()
                 .Title(sprintf "Which [green]product shape[/] for %s?" (Markup.Escape language))
                 .PageSize(max 3 shapeChoices.Length)
+                .UseConverter(fun value -> Markup.Escape value)
                 .AddChoices(shapeChoices)
         )
     let provider = List.zip shapes shapeChoices |> List.find (fun (_, choice) -> choice = shapeChoice) |> fst
@@ -2970,6 +2971,7 @@ let private interactive () : (Options * CatalogPlan option) option =
                 SelectionPrompt<string>()
                     .Title("Which [green]language[/] is the product written in?")
                     .PageSize(catalogProviders.Length + 2)
+                    .UseConverter(fun value -> Markup.Escape value)
                     .AddChoices(builtInLabel :: ProviderCatalog.languages catalogProviders)
             )
 
@@ -4626,7 +4628,7 @@ let private runListProviders (argv: string list) : int =
                             (Markup.Escape parameter.Key)
                             (match parameter.Kind with
                              | ProviderCatalog.Text -> "text"
-                             | ProviderCatalog.Choice -> String.Join("|", parameter.Values)
+                             | ProviderCatalog.Choice -> Markup.Escape(String.Join("|", parameter.Values))
                              | ProviderCatalog.ExactVersion -> "exact-version")
                             requirement
                             (Markup.Escape parameter.Prompt)
