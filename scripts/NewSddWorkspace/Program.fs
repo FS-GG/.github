@@ -2129,70 +2129,100 @@ let private catalogKnowledgePreflight (archivePath: string) (templateId: string)
     | :? IOException | :? InvalidDataException | :? JsonException | :? InvalidOperationException ->
         Error "Cannot verify the selected template's project-knowledge payload."
 
-/// Everything the SDD catalog route is given, plus what to show about it.
+/// Stable producer admission is independent of catalog schema and language declarations.
+let private stableProducerVersion (minimum: Version) (capability: string) (reported: string) : Result<string, string> =
+    let exact = reported.Trim()
+    if not (System.Text.RegularExpressions.Regex.IsMatch(exact, @"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")) then
+        Error(sprintf "%s requires an exact stable FS.GG.SDD.Cli version." capability)
+    else
+        match Version.TryParse exact with
+        | true, version when version >= minimum -> Ok exact
+        | _ -> Error(sprintf "%s requires FS.GG.SDD.Cli %O or newer; the installed producer is insufficient." capability minimum)
+
+/// Catalog creation requires the bounded input-revalidation producer in addition to knowledge support.
+let catalogProducerVersion (reported: string) : Result<string, string> =
+    stableProducerVersion (Version(2, 5, 3)) "Catalog creation" reported
+
+let private readCatalogProducerVersion () =
+    let code, reported = runProcess false "fsgg-sdd" [ "--version" ]
+    if code = 0 then catalogProducerVersion reported
+    else Error "Could not read the installed catalog producer version."
+
+let private recheckCatalogProducer (expected: string) =
+    readCatalogProducerVersion ()
+    |> Result.bind (fun actual ->
+        if actual = expected then Ok ()
+        else Error "The SDD producer changed during catalog creation; rerun with one exact capable producer.")
+
+/// Everything the SDD catalog route is given, plus the admitted producer and preview.
 type private PreparedCatalog =
-    { Invocation: ProviderCatalog.Invocation
+    { ProducerVersion: string
+      Invocation: ProviderCatalog.Invocation
       ArchiveSource: string
       PolicyDigest: string }
 
 /// Decide and acquire every input of a catalog creation without writing to the target. Any refusal
 /// here leaves the target exactly as it was.
 let private prepareCatalogInvocation (opts: Options) (plan: CatalogPlan) (scratch: string) : Result<PreparedCatalog, string> =
-    let target = Path.GetFullPath opts.Target
-    let parent = Path.GetDirectoryName(target.TrimEnd(Path.DirectorySeparatorChar))
-    let host =
-        ProviderCatalog.platformId (if OperatingSystem.IsLinux() then "linux" elif OperatingSystem.IsMacOS() then "osx" elif OperatingSystem.IsWindows() then "windows" else "unknown") (RuntimeInformation.OSArchitecture.ToString())
-    if Directory.Exists target || File.Exists target then
-        Error(sprintf "%s already exists; the catalog route creates a new workspace only and never replaces a target" target)
-    elif String.IsNullOrEmpty parent || not (Directory.Exists parent) then
-        Error(sprintf "the parent directory of %s must exist" target)
-    else
-        match host with
-        | None -> Error "this host's operating system or architecture is not one the provider catalog names"
-        | Some platform ->
-            ProviderCatalog.checkPlatform plan.Provider platform
-            |> Result.bind (fun () ->
-                match opts.Catalog.AdmissionPolicy with
-                | None -> Error "--admission-policy is required: the independently selected policy for the host's tools and the template archive"
-                | Some policyPath -> readLocalBounded (1024 * 1024) (Path.GetFullPath policyPath) |> Result.map (fun bytes -> Path.GetFullPath policyPath, bytes))
-            |> Result.bind (fun (policyPath, policyBytes) ->
-                let policyDigest = ProviderCatalog.sha256Digest policyBytes
-                match opts.Catalog.AdmissionPolicySha256 with
-                | Some expected when expected <> policyDigest ->
-                    Error(sprintf "the admission policy %s has digest %s, not the expected %s" policyPath policyDigest expected)
-                | _ ->
-                    ProviderCatalog.policyBudgets policyBytes plan.Provider
-                    |> Result.map (fun budgets -> platform, policyPath, policyDigest, budgets))
-            |> Result.bind (fun (platform, policyPath, policyDigest, (preflight, scaffold)) ->
-                acquireArchive opts.Catalog plan.Provider scratch
-                |> Result.bind (fun (archivePath, archiveDigest, archiveSource) ->
-                    catalogKnowledgePreflight archivePath plan.Provider.TemplateId
-                    |> Result.bind (fun () -> transportExecutable ())
-                    |> Result.map (fun transport ->
-                        let catalogPath =
-                            match opts.Catalog.CatalogFile with
-                            | Some file -> Path.GetFullPath file
-                            | None ->
-                                let file = Path.Combine(scratch, "catalog.json")
-                                File.WriteAllBytes(file, plan.Loaded.Bytes)
-                                file
-                        { Invocation =
-                            { CatalogPath = catalogPath
-                              CatalogDigest = plan.Loaded.RawDigest
-                              ProviderId = plan.Provider.Id
-                              TargetRoot = target
-                              ArchivePath = archivePath
-                              ArchiveDigest = archiveDigest
-                              PolicyPath = policyPath
-                              PolicyDigest = policyDigest
-                              Platform = platform
-                              TransportExecutable = transport
-                              PreflightSeconds = preflight
-                              ScaffoldSeconds = scaffold
-                              Parameters = plan.Forward
-                              DryRun = opts.Catalog.DryRun }
-                          ArchiveSource = archiveSource
-                          PolicyDigest = policyDigest })))
+    match readCatalogProducerVersion () with
+    | Error note -> Error note
+    | Ok producerVersion ->
+        let target = Path.GetFullPath opts.Target
+        let parent = Path.GetDirectoryName(target.TrimEnd(Path.DirectorySeparatorChar))
+        let host =
+            ProviderCatalog.platformId (if OperatingSystem.IsLinux() then "linux" elif OperatingSystem.IsMacOS() then "osx" elif OperatingSystem.IsWindows() then "windows" else "unknown") (RuntimeInformation.OSArchitecture.ToString())
+        if Directory.Exists target || File.Exists target then
+            Error(sprintf "%s already exists; the catalog route creates a new workspace only and never replaces a target" target)
+        elif String.IsNullOrEmpty parent || not (Directory.Exists parent) then
+            Error(sprintf "the parent directory of %s must exist" target)
+        else
+            match host with
+            | None -> Error "this host's operating system or architecture is not one the provider catalog names"
+            | Some platform ->
+                ProviderCatalog.checkPlatform plan.Provider platform
+                |> Result.bind (fun () ->
+                    match opts.Catalog.AdmissionPolicy with
+                    | None -> Error "--admission-policy is required: the independently selected policy for the host's tools and the template archive"
+                    | Some policyPath -> readLocalBounded (1024 * 1024) (Path.GetFullPath policyPath) |> Result.map (fun bytes -> Path.GetFullPath policyPath, bytes))
+                |> Result.bind (fun (policyPath, policyBytes) ->
+                    let policyDigest = ProviderCatalog.sha256Digest policyBytes
+                    match opts.Catalog.AdmissionPolicySha256 with
+                    | Some expected when expected <> policyDigest ->
+                        Error(sprintf "the admission policy %s has digest %s, not the expected %s" policyPath policyDigest expected)
+                    | _ ->
+                        ProviderCatalog.policyBudgets policyBytes plan.Provider
+                        |> Result.map (fun budgets -> platform, policyPath, policyDigest, budgets))
+                |> Result.bind (fun (platform, policyPath, policyDigest, (preflight, scaffold)) ->
+                    acquireArchive opts.Catalog plan.Provider scratch
+                    |> Result.bind (fun (archivePath, archiveDigest, archiveSource) ->
+                        catalogKnowledgePreflight archivePath plan.Provider.TemplateId
+                        |> Result.bind (fun () -> transportExecutable ())
+                        |> Result.map (fun transport ->
+                            let catalogPath =
+                                match opts.Catalog.CatalogFile with
+                                | Some file -> Path.GetFullPath file
+                                | None ->
+                                    let file = Path.Combine(scratch, "catalog.json")
+                                    File.WriteAllBytes(file, plan.Loaded.Bytes)
+                                    file
+                            { ProducerVersion = producerVersion
+                              Invocation =
+                                { CatalogPath = catalogPath
+                                  CatalogDigest = plan.Loaded.RawDigest
+                                  ProviderId = plan.Provider.Id
+                                  TargetRoot = target
+                                  ArchivePath = archivePath
+                                  ArchiveDigest = archiveDigest
+                                  PolicyPath = policyPath
+                                  PolicyDigest = policyDigest
+                                  Platform = platform
+                                  TransportExecutable = transport
+                                  PreflightSeconds = preflight
+                                  ScaffoldSeconds = scaffold
+                                  Parameters = plan.Forward
+                                  DryRun = opts.Catalog.DryRun }
+                              ArchiveSource = archiveSource
+                              PolicyDigest = policyDigest })))
 
 /// The diagnostics SDD's JSON projections carry: `{code, path, message}` rows and a status word.
 let private catalogVerdict (output: string) : string * string list =
@@ -3457,13 +3487,7 @@ let private governanceCacheRoot () =
 
 /// Knowledge is admitted only by a stable producer with the selected capability floor.
 let knowledgeProducerVersion (reported: string) : Result<string, string> =
-    let exact = reported.Trim()
-    if not (System.Text.RegularExpressions.Regex.IsMatch(exact, @"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")) then
-        Error "Typed project knowledge requires an exact stable FS.GG.SDD.Cli version."
-    else
-        match Version.TryParse exact with
-        | true, version when version >= Version(2, 1, 0) -> Ok exact
-        | _ -> Error "Typed project knowledge requires FS.GG.SDD.Cli 2.1.0 or newer; the installed producer is insufficient."
+    stableProducerVersion (Version(2, 1, 0)) "Typed project knowledge" reported
 
 /// Preserve every unrelated tool and refuse an owner-authored SDD pin conflict.
 let pinKnowledgeProducer (target: string) (version: string) : Result<unit, string> =
@@ -3580,7 +3604,9 @@ and private installKnowledgeOverlayPackage () =
 
 let private bootstrapTypedKnowledge (opts: Options) (version: string) (catalogProvider: bool) : Outcome =
     let code, reported = runProcess false "fsgg-sdd" [ "--version" ]
-    let selected = if code = 0 then knowledgeProducerVersion reported else Error "Could not re-read the SDD producer version."
+    let selected =
+        if code = 0 then (if catalogProvider then catalogProducerVersion reported else knowledgeProducerVersion reported)
+        else Error "Could not re-read the SDD producer version."
     let pinned =
         match selected with
         | Ok actual when actual = version -> pinKnowledgeProducer opts.Target actual
@@ -3639,18 +3665,23 @@ let private runCatalogDryRun (opts: Options) (plan: CatalogPlan) : int =
         AnsiConsole.MarkupLine(sprintf "[red]catalog preparation refused:[/] %s" (Markup.Escape reason))
         1
     | Ok prepared ->
-        let code, output = runProcess false "fsgg-sdd" (ProviderCatalog.scaffoldArguments prepared.Invocation)
-        let status, diagnostics = catalogVerdict output
-        for line in diagnostics do
-            AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape line))
-        if code = 0 && status = "prepared" then
-            AnsiConsole.MarkupLine(
-                sprintf "  [green]✓[/] dry run prepared %s for %s; nothing was written" (Markup.Escape plan.Provider.Id) (Markup.Escape prepared.Invocation.TargetRoot)
-            )
-            0
-        else
-            AnsiConsole.MarkupLine(sprintf "  [red]✗[/] dry run %s (exit %d)" (Markup.Escape status) code)
-            if code = 0 then 1 else code
+        match recheckCatalogProducer prepared.ProducerVersion with
+        | Error note ->
+            AnsiConsole.MarkupLine(sprintf "[red]catalog producer refused:[/] %s" (Markup.Escape note))
+            1
+        | Ok () ->
+            let code, output = runProcess false "fsgg-sdd" (ProviderCatalog.scaffoldArguments prepared.Invocation)
+            let status, diagnostics = catalogVerdict output
+            for line in diagnostics do
+                AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape line))
+            if code = 0 && status = "prepared" then
+                AnsiConsole.MarkupLine(
+                    sprintf "  [green]✓[/] dry run prepared %s for %s; nothing was written" (Markup.Escape plan.Provider.Id) (Markup.Escape prepared.Invocation.TargetRoot)
+                )
+                0
+            else
+                AnsiConsole.MarkupLine(sprintf "  [red]✗[/] dry run %s (exit %d)" (Markup.Escape status) code)
+                if code = 0 then 1 else code
 
 let private runScaffold (opts: Options) (plan: CatalogPlan option) : int =
     header plan.IsSome opts
@@ -3793,7 +3824,7 @@ let private runScaffold (opts: Options) (plan: CatalogPlan option) : int =
         if not fatal && (plan.IsSome || lifecycle = "typed-sdd") then
             let code, reported = runProcess false "fsgg-sdd" [ "--version" ]
             let selected =
-                if code = 0 then knowledgeProducerVersion reported
+                if code = 0 then (if plan.IsSome then catalogProducerVersion reported else knowledgeProducerVersion reported)
                 else Error "Could not read the installed SDD producer version."
             match selected with
             | Ok version -> knowledgeVersion <- Some version
@@ -3848,13 +3879,19 @@ let private runScaffold (opts: Options) (plan: CatalogPlan option) : int =
                             AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape line))
                         if inspectCode <> 0 then inspectCode else 1
                     else
-                        let scaffoldCode, scaffoldOutput = runProcess false "fsgg-sdd" (ProviderCatalog.scaffoldArguments prepared.Invocation)
-                        let status, diagnostics = catalogVerdict scaffoldOutput
-                        for line in diagnostics do
-                            AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape line))
-                        if scaffoldCode = 0 && status = "succeeded" then 0
-                        elif scaffoldCode <> 0 then scaffoldCode
-                        else 1
+                        match recheckCatalogProducer prepared.ProducerVersion with
+                        | Error note ->
+                            AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape note))
+                            1
+                        | Ok () ->
+                            let scaffoldCode, scaffoldOutput = runProcess false "fsgg-sdd" (ProviderCatalog.scaffoldArguments prepared.Invocation)
+                            let status, diagnostics = catalogVerdict scaffoldOutput
+                            for line in diagnostics do
+                                AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape line))
+                            if scaffoldCode = 0 && status = "succeeded" then 0
+                            elif scaffoldCode <> 0 then scaffoldCode
+                            else 1
+
                 | _ ->
                     let code, _ =
                         runProcess

@@ -8,6 +8,11 @@ for value in [ "2.0.3"; "1.99.99"; "2.1.0-preview.1"; "2.1"; "2.1.0 extra"; "02.
     knowledgeProducerVersion value |> expectError value
 for value in [ "2.1.0"; "2.1.1"; "3.0.0" ] do
     knowledgeProducerVersion value |> expectOk value |> ignore
+// Catalog runtime admission is stricter without lifting legacy knowledge support.
+for value in [ "2.0.3"; "2.1.0"; "2.5.2"; "2.5.3-preview.1"; "2.5"; "02.5.3"; "latest" ] do
+    catalogProducerVersion value |> expectError ("catalog " + value)
+for value in [ "2.5.3"; "2.5.4"; "3.0.0" ] do
+    catalogProducerVersion value |> expectOk ("catalog " + value) |> ignore
 let root = Path.Combine(Path.GetTempPath(), "wizard-knowledge-manifest-" + Guid.NewGuid().ToString "N")
 Directory.CreateDirectory(Path.Combine(root, ".config")) |> ignore
 let path = Path.Combine(root, ".config", "dotnet-tools.json")

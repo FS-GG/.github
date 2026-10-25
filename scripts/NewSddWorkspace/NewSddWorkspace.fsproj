@@ -19,8 +19,8 @@
     <PackageId>FS.GG.NewSddWorkspace</PackageId>
     <!-- Independent Creator successor: the canonical work-board materializer is packaged here.
          Coherent 0.108 does not publish this tool; its own candidate and publisher qualify each independent successor. -->
-    <Version>0.22.0</Version>
-    <PackageReleaseNotes>0.22.0: an omitted fable-game lifecycle now follows the fetched provider descriptor's declared default, so current Workspace.Template descriptors create typed-sdd (D.5, FS-GG/.github#4811); an explicit --lifecycle and other templates are unchanged. Normal source uses coherent113; the independent release route reuses authenticated published coherent112 dependencies. Published Creator0.21 and its genuine110 dependency/effect identities remain immutable. Publication and installed successor adoption require their own acceptance.</PackageReleaseNotes>
+    <Version>0.23.0</Version>
+    <PackageReleaseNotes>0.23.0 source prepares descriptor-driven catalog creation with stable SDD CLI 2.5.3 or newer, admitted for creation and dry-run and rechecked before target mutation. Legacy typed knowledge retains its 2.1.0 floor; list/help remain independent of the installed catalog runtime. Catalog schema, published Template selection and registry defaults are unchanged. Publication and genuine installed adoption require their own acceptance.</PackageReleaseNotes>
     <AssemblyName>new-sdd-workspace</AssemblyName>
 
     <Description>FS.GG workspace scaffolder — composes a selectable Standard or Typed SDD lifecycle, a runnable provider workspace, and an optional Governance overlay in one command, with a rich Spectre.Console progress UI. Orchestrates existing published machinery; no FS.GG.Templates checkout required.</Description>

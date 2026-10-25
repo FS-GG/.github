@@ -133,7 +133,9 @@ with open(os.environ["STUB_LOG"], "a") as log:
 def option(name):
     return args[args.index(name) + 1] if name in args else None
 if args[:1] == ["--version"]:
-    print(os.environ.get("STUB_VERSION", "2.5.1"))
+    versions = json.loads(os.environ.get("STUB_VERSIONS", "[]"))
+    count = sum(json.loads(line) == ["--version"] for line in pathlib.Path(os.environ["STUB_LOG"]).read_text().splitlines())
+    print(versions[min(count - 1, len(versions) - 1)] if versions else os.environ.get("STUB_VERSION", "2.5.3"))
 elif args[:2] == ["catalog", "inspect"]:
     if os.environ.get("STUB_INSPECT") == "refuse":
         print(json.dumps({"schema": "fsgg.catalog-preview/v1", "status": "refused",
@@ -281,7 +283,7 @@ check("the private scratch directory is removed afterwards", leftovers == [], le
 server.routes[ARCHIVE_PATH] = fixture_archive(False)
 rc, out, no_ci_target, no_ci_calls, _ = run(["@T", "P"] + GO)
 check("known-missing knowledge CI refuses before target mutation",
-      rc != 0 and has(out, "lacks required project-knowledge asset") and not no_ci_target.exists() and not no_ci_calls, out)
+      rc != 0 and has(out, "lacks required project-knowledge asset") and not no_ci_target.exists() and no_ci_calls == [["--version"]], out)
 server.routes[ARCHIVE_PATH] = ARCHIVE
 
 # Every catalog route composes the canonical knowledge store before its first-agent handoff.
@@ -290,16 +292,42 @@ check("catalog creation initializes then checks knowledge through the exact prod
       any(c[:2] == ["knowledge", "initialize"] for c in calls) and any(c[:2] == ["knowledge", "check"] for c in calls), calls)
 manifest = json.loads((target / ".config/dotnet-tools.json").read_text())
 check("catalog creation pins the actual capable knowledge producer",
-      manifest["tools"]["fs.gg.sdd.cli"]["version"] == "2.5.1", manifest)
+      manifest["tools"]["fs.gg.sdd.cli"]["version"] == "2.5.3", manifest)
 for knowledge_case, message in (("missing-ci", "Typed initialization is incomplete"),
                                 ("initialize-refused", "refused project-knowledge initialization"),
                                 ("check-refused", "knowledge check refused")):
     rc, out, failed_target, failed_calls, _ = run(["@T", "P"] + GO, env_extra={"STUB_KNOWLEDGE": knowledge_case})
     check("catalog knowledge %s fails before first-agent handoff" % knowledge_case,
           rc == 1 and has(out, message) and not (failed_target / ".fsgg/workspace-initialization.json").exists(), out)
-rc, out, failed_target, failed_calls, _ = run(["@T", "P"] + GO, env_extra={"STUB_VERSION": "2.0.3"})
-check("an insufficient knowledge producer refuses before catalog scaffold",
-      rc == 1 and not failed_target.exists() and scaffold_call(failed_calls) is None and has(out, "2.1.0 or newer"), out)
+for version in ("2.5.2", "2.1.0", "2.0.3", "2.5.3-preview.1"):
+    for dry_run in (False, True):
+        rc, out, failed_target, failed_calls, leftovers = run(
+            ["@T", "P"] + GO + (["--dry-run"] if dry_run else []), env_extra={"STUB_VERSION": version})
+        check("catalog %s refuses producer %s before target mutation" % ("dry run" if dry_run else "creation", version),
+              rc == 1 and not failed_target.exists() and scaffold_call(failed_calls) is None
+              and not any(call[:2] == ["catalog", "inspect"] for call in failed_calls)
+              and not leftovers and has(out, "requires"), out)
+for final_version in ("2.5.2", "2.5.4", "2.5.3-preview.1"):
+    for dry_run in (False, True):
+        versions = ["2.5.3"] * (1 if dry_run else 2) + [final_version]
+        rc, out, failed_target, failed_calls, leftovers = run(
+            ["@T", "P"] + GO + (["--dry-run"] if dry_run else []),
+            env_extra={"STUB_VERSIONS": json.dumps(versions)})
+        check("catalog %s rechecks producer %s immediately before scaffold" % ("dry run" if dry_run else "creation", final_version),
+              rc == 1 and not failed_target.exists() and scaffold_call(failed_calls) is None and not leftovers
+              and (dry_run or any(call[:2] == ["catalog", "inspect"] for call in failed_calls)), out)
+owned_target = SCRATCH / "owner-target"
+owned_target.mkdir()
+owned_file = owned_target / "owner.txt"
+owned_file.write_bytes(b"retained owner bytes\n")
+rc, out, _, owned_calls, _ = run(["@T", "P"] + GO, env_extra={"STUB_VERSION": "2.5.2"}, target=owned_target)
+check("runtime refusal preserves an existing owner target",
+      rc == 1 and owned_file.read_bytes() == b"retained owner bytes\n"
+      and list(owned_target.iterdir()) == [owned_file] and scaffold_call(owned_calls) is None, out)
+rc, out, _, help_calls, _ = run(["--help"], env_extra={"STUB_VERSION": "2.5.2"})
+check("help remains independent of catalog runtime admission", rc == 0 and not help_calls, out)
+rc, out, _, list_calls, _ = run(["--list-providers", "--ref", REF], env_extra={"STUB_VERSION": "2.5.2"})
+check("provider listing remains independent of catalog runtime admission", rc == 0 and not list_calls, out)
 
 # ── 2. A provider that exists only in the catalog ────────────────────────────────────────────────
 fifth = json.loads(CATALOG)
