@@ -439,7 +439,8 @@ adds a top-level distinction that the current rendering-only path does not need:
 provider. Omission preserves the current rendering behaviour during the compatibility window.
 FS.GG.Templates owns one `FS.GG.Workspace.Template` package (registry `package-version` **0.20.0** —
 the feed's literal newest, per the versions table in §5; published to both feeds and registry-active
-through SVG-COHERENCE-01.8) with eight configurations and seven selectors: the
+through SVG-COHERENCE-01.8) with twelve configurations and eleven selectors (0.20.0 adds the
+four CLI workspace providers `typescript-cli`, `javascript-cli`, `rust-cli` and `go-cli`): the
 current and legacy fable-game configurations share one selector. The existing
 `fs-gg-project-knowledge` overlay and `fs-gg-python` workspace are included alongside
 the following providers. `fs-gg-console` is a minimal

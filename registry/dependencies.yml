@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-10-23"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-10-25"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   fsquint: { name: FsQuint, role: "Independent public Quint–F# decoding, replay and optional tooling" }
@@ -1123,6 +1123,9 @@ contracts:
     consumers: [github]   # the org new-sdd-workspace wizard is the sole intended consumer (ADR-0071 §2 --template selector); registry-active and wizard-selectable through published new-sdd-workspace 0.10.1.
     minimum-fsgg-sdd:
       # Matching published capability floor for all six provider families.
+      # The four CLI providers added in 0.20.0 (typescript-cli, javascript-cli, rust-cli, go-cli) are described by the typed
+      # catalog providers/polyglot.catalog.json and were qualified only through the SDD CLI 2.5.1 catalog scaffold route
+      # (Templates#441); a lower floor is unproven for them and the floor checker does not grade that catalog.
       # This does not advance Workspace package or live descriptor source pins.
       version: "2.1.0"
       requires: "Provider contract 2 hard admission floor, canonical Typed SDD knowledge initialization/checks, and retained lifecycle compilation, provenance, refresh, upgrade and diagnostics"
