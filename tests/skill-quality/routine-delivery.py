@@ -2296,6 +2296,12 @@ jobs:
             MODULE.FOURD_SOURCE: b'on:\n  pull_request:\n    paths:\n      - old/**\n  push:\n    paths:\n      - old/**\n',
             MODULE.FOURD_INVENTORY_TEST: b'                    self.assertIn("runs-on: ubuntu-24.04", text)\n        self.assertEqual(set(self.workflows), {"fourd-native-image-qualification.yml", "portable-workspace-source-preparation.yml", "verify.yml"})\n',
         }
+        if kwargs.pop('large_inventory', False):
+            body = self.fourd_retained[MODULE.FOURD_INVENTORY_TEST]
+            self.fourd_retained[MODULE.FOURD_INVENTORY_TEST] = body + b'#' * (248864 - len(body))
+        inventory = self.fourd_retained[MODULE.FOURD_INVENTORY_TEST]
+        with mock.patch.object(MODULE, 'FOURD_INVENTORY_BASE_SHA256', hashlib.sha256(inventory).hexdigest()):
+            derived_digest = hashlib.sha256(MODULE.installation_fourd_inventory(inventory)).hexdigest()
         self.fourd_policy = {identifier:'synthetic policy '+str(identifier) for identifier in MODULE.FOURD_POLICY_COMMENTS}
         with mock.patch.multiple(MODULE,
                 FOURD_VERIFY_SHA256=hashlib.sha256(self.fourd_retained['.github/workflows/verify.yml']).hexdigest(),
@@ -2303,8 +2309,31 @@ jobs:
                 FOURD_SOURCE_ENTRY_SHA256=hashlib.sha256(self.fourd_retained['tests/portable-workspace/validate-source-preparation.py']).hexdigest(),
                 FOURD_SOURCE_BASE_SHA256=hashlib.sha256(self.fourd_retained[MODULE.FOURD_SOURCE]).hexdigest(),
                 FOURD_INVENTORY_BASE_SHA256=hashlib.sha256(self.fourd_retained[MODULE.FOURD_INVENTORY_TEST]).hexdigest(),
+                FOURD_INVENTORY_DERIVED_SHA256=derived_digest,
                 FOURD_POLICY_COMMENTS={k:hashlib.sha256(v.encode()).hexdigest() for k,v in self.fourd_policy.items()}):
             return self.fsquint_transport(receiver=MODULE.FOURD_REPOSITORY,selector=kwargs.pop('selector','verify.yml'),**kwargs)
+
+    def test_fourd_native_inventory_envelope_above_ordinary_bound_is_closed(self):
+        code, result, api, reads = self.fourd_transport(large_inventory=True)
+        self.assertEqual(code, 0, result.reason)
+        body = self.fourd_retained[MODULE.FOURD_INVENTORY_TEST]
+        self.assertEqual(len(body), 248864)
+        sha = hashlib.sha1(f"blob {len(body)}\0".encode() + body).hexdigest()
+        row = dict(type="blob", mode="100644", sha=sha)
+        envelope = dict(sha=sha, encoding="base64", size=len(body), content=MODULE.base64.b64encode(body).decode())
+        reader = MODULE.GhApi()
+        with mock.patch.object(reader, "installation_read", return_value=envelope):
+            with self.assertRaisesRegex(RuntimeError, "identity/encoding"):
+                reader.installation_blob(MODULE.FOURD_REPOSITORY, row)
+            for repo, path in [("FS-GG/Other", MODULE.FOURD_INVENTORY_TEST), (MODULE.FOURD_REPOSITORY, "other.py")]:
+                with self.assertRaisesRegex(RuntimeError, "path/receiver"):
+                    reader.installation_fourd_inventory_blob(repo, path, row, derived=False)
+            with self.assertRaisesRegex(RuntimeError, "digest"):
+                reader.installation_fourd_inventory_blob(MODULE.FOURD_REPOSITORY, MODULE.FOURD_INVENTORY_TEST, row, derived=False)
+            for size in (262145, True, len(body) + 1):
+                with mock.patch.object(reader, "installation_read", return_value={**envelope, 'size': size}):
+                    with self.assertRaises(RuntimeError):
+                        reader.installation_fourd_inventory_blob(MODULE.FOURD_REPOSITORY, MODULE.FOURD_INVENTORY_TEST, row, derived=False)
 
     def test_fourd_installation_refuses_non_squash_before_any_native_call(self):
         for method in ("merge", "rebase"):

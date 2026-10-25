@@ -5,7 +5,7 @@
       "id": "atlas",
       "scope": "driver",
       "sha256": "c18e56fcc56abf80903e2fc6829cd94b44f42947724a26318ebcbf1ac5e1b35b",
-      "tree-sha256": "b2315cb3636c08bc2ce2f5847dd4dcfe3f652c87d8a488c8c47de314fd1b2329",
+      "tree-sha256": "502ea3d98c6623a51e7a162f05da9daba89c1f8788f6ce4d7639b83dfd7df111",
       "files": [
         {
           "path": "SKILL.md",
@@ -24,7 +24,7 @@
         },
         {
           "path": "assets/seed/catalog.json",
-          "sha256": "c4662aabcfb447e3fd341d5dc00e4a8f3634d35cb372a3509b9441744308b809",
+          "sha256": "f14de833574d7f7d528bc412ca68e5273bb31c9fe67268b1c93a5f5278bc13dd",
           "executable": false
         },
         {
@@ -475,6 +475,11 @@
         {
           "path": "assets/seed/records/4457ab439bc8f212d83442dc7500e9d45ffac849d0f77cb97686d9b0672fc3dc.json",
           "sha256": "4457ab439bc8f212d83442dc7500e9d45ffac849d0f77cb97686d9b0672fc3dc",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/461d34fb1d53849951a7e715e52342372d779299fbcad210794235c610dadf64.json",
+          "sha256": "461d34fb1d53849951a7e715e52342372d779299fbcad210794235c610dadf64",
           "executable": false
         },
         {
@@ -2265,7 +2270,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "169945b2d619a46040e1dd68109e7f151832a72fcd53280ad540339807c65007",
-      "tree-sha256": "6138d4c302124f4433dd2ed71ffbb560ecc45254f65bb35ad0798855e2e87df9",
+      "tree-sha256": "b26260086b0748b0ce3847dc2b03e3b5461a9bb94f295fda6ae0d6884979776b",
       "files": [
         {
           "path": "SKILL.md",
@@ -2309,7 +2314,7 @@
         },
         {
           "path": "references/delivery-reliability.md",
-          "sha256": "b046fe3da759d70fbd9a1ad034fc1b31a5e9529e55e1c9c5a79281889313b590",
+          "sha256": "9098521e4d97e2c7684e523478bbddf34bb53a9584224ca81ab689807050a201",
           "executable": false
         },
         {
@@ -2329,7 +2334,7 @@
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "0c3a34f5086e3039c579a585f32cb3a2d2e9ad47efcf66699b872ff97f7eedf3",
+          "sha256": "41bad74dacc6219e61b2deefb63d23e40899c3c5d02ba3f00f585bf7109bea74",
           "executable": false
         },
         {
@@ -2339,7 +2344,7 @@
         },
         {
           "path": "references/lifecycle-contract.md",
-          "sha256": "2b068f43c7558b1bd8aad0c3789ac13bb475996fda178df1cf1ab37a8abb8d81",
+          "sha256": "c237bca674ec039518c0adb733ba747d838ebab57afea8438cd432aeeb7fd02d",
           "executable": false
         },
         {

@@ -236,6 +236,11 @@ peer review: the owner stays within the stated CPU/memory share, keeps first fai
 Candidate source review, exact-head required CI and coherent validation are unchanged. For every other effect,
 before invocation apply [final inputs and operation horizons](delivery-reliability.md#final-inputs-and-failure-gated-invocation),
 including complete attribution, prerequisite truth and source/ref stability through final retention.
+A Root-reviewed finite sequence may conditionally advance without per-step approval under
+[ADR-0096 section C](https://github.com/FS-GG/.github/blob/main/docs/adr/0096-proportionate-verification-and-unrecoverable-holds.md#decision)
+and [the envelope/isolation guidance](delivery-reliability.md#finite-delegated-sequence-and-isolation).
+Each step retains its own original clock and independent readback; stop on first failure, Unknown,
+determining-input drift or exhausted bound. No automatic retry or replacement-ID replay is admitted.
 The maintained runner rechecks source/resources, reserves, sets a deadline and launches together.
 Never revive expired authority, extend an in-flight operation or send short-lived grants through conversation.
 Observation can have a separate fresh budget for the original identity; expiry is not replay permission.

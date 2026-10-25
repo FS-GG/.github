@@ -271,6 +271,7 @@ FOURD_SOURCE_ID = 371620519
 FOURD_SOURCE_BASE_SHA256 = "1d5e2eef8e1567ea60f50fdbfaa02c3a06c65568635456131759361c01a6941d"
 FOURD_INVENTORY_TEST = "tests/portable-workspace/test_native_image.py"
 FOURD_INVENTORY_BASE_SHA256 = "01e570fb53469c709b09a1e8a0e889097ebbc738a0a5db13babb7f0fa96cf84e"
+FOURD_INVENTORY_DERIVED_SHA256 = "d698f8d0efac398e2b24b3809bea78f60ab94fd41e4d28c22d89a8ff6f093632"
 FOURD_SOURCE_ENTRY_SHA256 = "c3ab08d1509cb9f6aeb227d8476250e85fa3c8579ee4df0a0db40f55a8857be9"
 FOURD_POLICY_ACTOR_ID = 1645484
 FOURD_POLICY_COMMENTS = {
@@ -426,6 +427,16 @@ class GhApi:
             raise RuntimeError("installation blob bytes differ from Git identity")
         return body
 
+    def installation_fourd_inventory_blob(self, repo: str, path: str, row: dict, *, derived: bool) -> bytes:
+        """Bound only the pinned FourD inventory file above the ordinary blob limit."""
+        if repo != FOURD_REPOSITORY or path != FOURD_INVENTORY_TEST or row.get("mode") != "100644":
+            raise RuntimeError("FourD inventory read path/receiver/mode differs")
+        body = self.installation_blob(repo, row, max_bytes=262144)
+        digest = FOURD_INVENTORY_DERIVED_SHA256 if derived else FOURD_INVENTORY_BASE_SHA256
+        if hashlib.sha256(body).hexdigest() != digest:
+            raise RuntimeError("FourD inventory read digest differs")
+        return body
+
     def installation_source(self, repo: str, head: str, base_ref: str, base: str,
                             source: str, *, delivered: bool = False) -> dict:
         """Authenticate the pre-PR source delta."""
@@ -560,7 +571,12 @@ class GhApi:
                         or any(row.get("type") != "blob" or row.get("mode") != "100644"
                                for row in (original, expanded))):
                     raise RuntimeError("installation FourD requires both exact derived regular-file edits")
-                if self.installation_blob(repo, expanded) != derive(self.installation_blob(repo, original)):
+                if path == FOURD_INVENTORY_TEST:
+                    before = self.installation_fourd_inventory_blob(repo, path, original, derived=False)
+                    after = self.installation_fourd_inventory_blob(repo, path, expanded, derived=True)
+                else:
+                    before, after = self.installation_blob(repo, original), self.installation_blob(repo, expanded)
+                if after != derive(before):
                     raise RuntimeError("installation FourD derived bytes differ")
                 expected.add(path)
         if changed != expected:

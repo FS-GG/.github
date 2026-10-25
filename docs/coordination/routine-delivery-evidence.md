@@ -199,6 +199,9 @@ the source-preparation workflow adds the five literal paths to both PR and push 
 the workflow-inventory test admits the canonical fourth workflow with exactly one
 `runs-on: ubuntu-latest` line. Existing native-runner guards and the other existing hosted
 workflow guards remain intact. Missing files, additional edits or changed baselines refuse.
+Only the hash-pinned FourD inventory baseline and derived file use a 256 KiB blob cap;
+their exact path, regular mode, Git envelope and separate digests remain mandatory. Ordinary
+blobs retain 128 KiB and native transport retains 1 MiB.
 
 Both unchanged verification and derived source-preparation workflows must succeed at the
 candidate head on current attempt 1. Complete Actions app 15368 run, job, check and suite
