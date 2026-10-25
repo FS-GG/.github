@@ -2125,10 +2125,10 @@ jobs:
     def fsquint_transport(self, *, apply=False, change=None, drift=None, prior=None,
                            selector="ci.yml", merged=False, uncertain=False, required=None, fresh=None, receiver="FS-GG/FsQuint"):
         repo = receiver
-        repo_id = MODULE.SC2_REPOSITORY_ID if repo == MODULE.SC2_REPOSITORY else MODULE.BAR_REPOSITORY_ID if repo == MODULE.BAR_REPOSITORY else 1375501179
-        workflow_id = MODULE.SC2_VERIFY_ID if repo == MODULE.SC2_REPOSITORY else MODULE.BAR_PREARM_ID if repo == MODULE.BAR_REPOSITORY else 361154226
-        workflow_file = "verify.yml" if repo == MODULE.SC2_REPOSITORY else "prearm-source-controls.yml" if repo == MODULE.BAR_REPOSITORY else "ci.yml"
-        job_name = "verify" if repo == MODULE.SC2_REPOSITORY else "prearm-source-controls" if repo == MODULE.BAR_REPOSITORY else "qualify"
+        repo_id = MODULE.FOURD_REPOSITORY_ID if repo == MODULE.FOURD_REPOSITORY else MODULE.SC2_REPOSITORY_ID if repo == MODULE.SC2_REPOSITORY else MODULE.BAR_REPOSITORY_ID if repo == MODULE.BAR_REPOSITORY else 1375501179
+        workflow_id = MODULE.FOURD_VERIFY_ID if repo == MODULE.FOURD_REPOSITORY else MODULE.SC2_VERIFY_ID if repo == MODULE.SC2_REPOSITORY else MODULE.BAR_PREARM_ID if repo == MODULE.BAR_REPOSITORY else 361154226
+        workflow_file = "verify.yml" if repo in (MODULE.SC2_REPOSITORY, MODULE.FOURD_REPOSITORY) else "prearm-source-controls.yml" if repo == MODULE.BAR_REPOSITORY else "ci.yml"
+        job_name = "verify" if repo in (MODULE.SC2_REPOSITORY, MODULE.FOURD_REPOSITORY) else "prearm-source-controls" if repo == MODULE.BAR_REPOSITORY else "qualify"
         alias = lambda value: json.loads(json.dumps(value).replace("FS-GG/FS.GG.Coordination", repo).replace("1346720714", str(repo_id)))
         fixture = alias(self.fixture)
         responses = fixture["responses"]
@@ -2152,7 +2152,7 @@ jobs:
         head = fixture["head"]
         responses[f"repos/{repo}/git/ref/heads/main"] = dict(ref="refs/heads/main",object=dict(type="commit",sha=fixture['base']))
         metadata = responses[f"repos/{repo}"]
-        metadata.update(private=repo == MODULE.SC2_REPOSITORY, permissions=dict(admin=True, push=True, pull=True))
+        metadata.update(private=repo in (MODULE.SC2_REPOSITORY, MODULE.FOURD_REPOSITORY), permissions=dict(admin=True, push=True, pull=True))
         wf = dict(id=workflow_id, path=".github/workflows/"+workflow_file, state="active",name=workflow_file[:-4])
         responses[f"repos/{repo}/actions/workflows/{workflow_file}"] = wf
         responses[f"repos/{repo}/actions/workflows?per_page=100"] = dict(total_count=1, workflows=[wf])
@@ -2197,6 +2197,45 @@ jobs:
             f"repos/{repo}/rules/branches/main?per_page=100": (0,200,[]),
             f"repos/{repo}/rulesets?includes_parents=true&per_page=100": (0,200,[]),
         }
+        if repo == MODULE.FOURD_REPOSITORY:
+            pr['changed_files'] = after['changed_files'] = 7
+            baseline = self.fourd_retained
+            def install_blob(path, body, revision, mode='100644'):
+                sha = hashlib.sha1(f"blob {len(body)}\0".encode() + body).hexdigest()
+                row = dict(path=path, type='blob', mode=mode, sha=sha)
+                responses[f"repos/{repo}/git/blobs/{sha}"] = dict(sha=sha,encoding='base64',size=len(body),content=MODULE.base64.b64encode(body).decode())
+                tree = responses[f"repos/{repo}/git/commits/{revision}"]['tree']['sha']
+                rows = responses[f"repos/{repo}/git/trees/{tree}?recursive=1"]['tree']
+                rows[:] = [value for value in rows if value['path'] != path] + [row]
+                return row
+            for path,body in baseline.items():
+                for revision in (fixture['base'],head):
+                    selected = (MODULE.installation_fourd_workflow(body) if path == MODULE.FOURD_SOURCE else MODULE.installation_fourd_inventory(body) if path == MODULE.FOURD_INVENTORY_TEST else body) if revision == head else body
+                    install_blob(path,selected,revision,'100755' if path=='scripts/verify.sh' else '100644')
+            tree = responses[f"repos/{repo}/git/commits/{head}"]['tree']['sha']
+            selected_rows = responses[f"repos/{repo}/git/trees/{tree}?recursive=1"]['tree']
+            responses[f"repos/{repo}/pulls/1/files?per_page=100"] = [dict(filename=row['path'],sha=row['sha'],status='modified' if row['path'] in (MODULE.FOURD_SOURCE,MODULE.FOURD_INVENTORY_TEST) else 'added') for row in selected_rows if row['path'] in (*MODULE.PRODUCER_PATHS,MODULE.FOURD_SOURCE,MODULE.FOURD_INVENTORY_TEST)]
+            job['steps'] = [dict(number=i,name=name,status='completed',conclusion='success') for i,name in enumerate((*MODULE.FOURD_VERIFY_STEPS,'Post Set up Node.js','Post Check out the candidate','Complete job'),1)]
+            responses[f"repos/{repo}/actions/runs/7/attempts/1/jobs?per_page=100"]['jobs'] = [copy.deepcopy(job)]
+            checkout = 'e'*40
+            commit = copy.deepcopy(responses[f"repos/{repo}/git/commits/{head}"])
+            commit.update(sha=checkout,parents=[dict(sha=fixture['base']),dict(sha=head)])
+            responses[f"repos/{repo}/git/commits/{checkout}"] = commit
+            responses[f"repos/{repo}/actions/runs/7/artifacts?per_page=100"] = dict(total_count=1,artifacts=[dict(id=11,name=f'fourd-evaluation-candidate-{checkout}-7-1',expired=False,size_in_bytes=100,workflow_run=dict(id=7,head_sha=head))])
+            prep = dict(id=MODULE.FOURD_SOURCE_ID,path=MODULE.FOURD_SOURCE,state='active',name='portable-workspace-source-preparation')
+            responses[f"repos/{repo}/actions/workflows/{MODULE.FOURD_SOURCE.rsplit('/',1)[1]}"] = prep
+            responses[f"repos/{repo}/actions/workflows?per_page=100"] = dict(total_count=2,workflows=[wf,prep])
+            source_run = copy.deepcopy(run);source_run.update(id=17,workflow_id=MODULE.FOURD_SOURCE_ID,path=MODULE.FOURD_SOURCE,check_suite_id=19)
+            responses[f"repos/{repo}/actions/runs/17"] = source_run
+            responses[f"repos/{repo}/actions/workflows/{MODULE.FOURD_SOURCE_ID}/runs?head_sha={head}&per_page=100"] = dict(total_count=1,workflow_runs=[copy.deepcopy(source_run)])
+            source_job = copy.deepcopy(job);source_job.update(id=18,run_id=17,name='source-preparation',check_run_url=f'https://api.github.com/repos/{repo}/check-runs/18',steps=[dict(number=i,name=name,status='completed',conclusion='success') for i,name in enumerate((*MODULE.FOURD_SOURCE_STEPS,*MODULE.FOURD_SOURCE_TAIL),1)])
+            responses[f"repos/{repo}/actions/jobs/18"] = source_job
+            responses[f"repos/{repo}/actions/runs/17/attempts/1/jobs?per_page=100"] = dict(total_count=1,jobs=[copy.deepcopy(source_job)])
+            source_check = copy.deepcopy(responses[f"repos/{repo}/commits/{head}/check-runs?per_page=100"]['check_runs'][0]);source_check.update(id=18,name='source-preparation',details_url=f'https://github.com/{repo}/actions/runs/17/job/18',check_suite=dict(id=19))
+            responses[f"repos/{repo}/commits/{head}/check-runs?per_page=100"] = dict(total_count=2,check_runs=[responses[f"repos/{repo}/commits/{head}/check-runs?per_page=100"]['check_runs'][0],source_check])
+            for identifier,body in self.fourd_policy.items():
+                responses[f"repos/{repo}/issues/comments/{identifier}"] = dict(id=identifier,html_url=f'https://github.com/{repo}/issues/39#issuecomment-{identifier}',user=dict(id=MODULE.FOURD_POLICY_ACTOR_ID,login='EHotwagner'),body=body)
+            policy = {f'repos/{repo}/{route}':(1,403,dict(message=MODULE.FOURD_PLAN_MESSAGE,status='403',documentation_url=url)) for route,url in MODULE.FOURD_POLICY_ROUTES.items()}
         if change: change(responses, policy, pr)
         api = InstallationApi(fixture, [after] if merged else [pr,pr,after], [dict(merged=True,sha=head)])
         original_get_pr=api.get_pr
@@ -2248,6 +2287,145 @@ jobs:
             code,result = MODULE.summarize(api,repo=repo,pr_number=1,expected_head=head,merge_method="squash",
                 publication_required=False,apply=apply,coherent_workflow=selector,producer_source=fixture['source'],installation_prior=prior)
         return code,result,api,reads
+
+    def fourd_transport(self, **kwargs):
+        self.fourd_retained = {
+            '.github/workflows/verify.yml': b'synthetic reviewed FourD verifier\n',
+            'scripts/verify.sh': b'synthetic reviewed FourD verifier entrypoint\n',
+            'tests/portable-workspace/validate-source-preparation.py': b'synthetic reviewed source entrypoint\n',
+            MODULE.FOURD_SOURCE: b'on:\n  pull_request:\n    paths:\n      - old/**\n  push:\n    paths:\n      - old/**\n',
+            MODULE.FOURD_INVENTORY_TEST: b'                    self.assertIn("runs-on: ubuntu-24.04", text)\n        self.assertEqual(set(self.workflows), {"fourd-native-image-qualification.yml", "portable-workspace-source-preparation.yml", "verify.yml"})\n',
+        }
+        self.fourd_policy = {identifier:'synthetic policy '+str(identifier) for identifier in MODULE.FOURD_POLICY_COMMENTS}
+        with mock.patch.multiple(MODULE,
+                FOURD_VERIFY_SHA256=hashlib.sha256(self.fourd_retained['.github/workflows/verify.yml']).hexdigest(),
+                FOURD_VERIFY_ENTRY_SHA256=hashlib.sha256(self.fourd_retained['scripts/verify.sh']).hexdigest(),
+                FOURD_SOURCE_ENTRY_SHA256=hashlib.sha256(self.fourd_retained['tests/portable-workspace/validate-source-preparation.py']).hexdigest(),
+                FOURD_SOURCE_BASE_SHA256=hashlib.sha256(self.fourd_retained[MODULE.FOURD_SOURCE]).hexdigest(),
+                FOURD_INVENTORY_BASE_SHA256=hashlib.sha256(self.fourd_retained[MODULE.FOURD_INVENTORY_TEST]).hexdigest(),
+                FOURD_POLICY_COMMENTS={k:hashlib.sha256(v.encode()).hexdigest() for k,v in self.fourd_policy.items()}):
+            return self.fsquint_transport(receiver=MODULE.FOURD_REPOSITORY,selector=kwargs.pop('selector','verify.yml'),**kwargs)
+
+    def test_fourd_installation_refuses_non_squash_before_any_native_call(self):
+        for method in ("merge", "rebase"):
+            api = mock.Mock()
+            with self.assertRaisesRegex(RuntimeError, "accepted squash"):
+                MODULE.summarize(api, repo=MODULE.FOURD_REPOSITORY, pr_number=1,
+                    expected_head="a" * 40, merge_method=method, publication_required=False,
+                    apply=True, coherent_workflow="verify.yml", producer_source="b" * 40)
+            self.assertEqual(api.mock_calls, [])
+
+    def test_fourd_closed_seven_file_install_requires_both_technical_workflows_and_keeps_activation_pending(self):
+        for apply in (False,True):
+            code,result,api,reads=self.fourd_transport(apply=apply)
+            self.assertEqual((code,api.attempts),(0,int(apply)),result.reason)
+            self.assertEqual(result.reason,'native-policy-unavailable; no-required-contexts-reported')
+            self.assertEqual(result.producerInstallation,'delivered-activation-pending' if apply else 'ready')
+            self.assertEqual(result.routineEligibility,'unavailable-first-install')
+            self.assertTrue(any(f'/actions/workflows/{MODULE.FOURD_VERIFY_ID}/runs?' in c[-1] for c in reads))
+            self.assertTrue(any(f'/actions/workflows/{MODULE.FOURD_SOURCE_ID}/runs?' in c[-1] for c in reads))
+
+    def test_fourd_policy_denial_is_not_empty_or_a_generic_permission_exception(self):
+        repo=MODULE.FOURD_REPOSITORY
+        for required in [(1,b'[]'),(0,b'[]'),(1,b'',b'HTTP 403: denied'),(1,b'',b'no required checks reported on wrong branch\n')]:
+            code,result,api,_=self.fourd_transport(apply=True,required=required)
+            self.assertEqual((code,api.attempts),(2,0),result.reason)
+        for change in [
+            lambda r,p,pr:r[f'repos/{repo}/issues/comments/6335828296'].update(body='changed'),
+            lambda r,p,pr:r[f'repos/{repo}/issues/comments/6335951089']['user'].update(id=1),
+            lambda r,p,pr:p.update({f'repos/{repo}/rules/branches/main?per_page=100':(0,200,[])}),
+            lambda r,p,pr:p.update({f'repos/{repo}/rulesets?includes_parents=true&per_page=100':(1,403,dict(message='Resource not accessible by personal access token',status='403',documentation_url=MODULE.FOURD_POLICY_ROUTES['rulesets?includes_parents=true&per_page=100']))}),
+            lambda r,p,pr:p.update({f'repos/{repo}/rules/branches/main?per_page=100':(1,403,'{"message":"a","message":"b"}')}),
+        ]:
+            code,result,api,_=self.fourd_transport(apply=True,change=change)
+            self.assertEqual((code,api.attempts),(2,0),result.reason)
+
+    def test_fourd_each_technical_workflow_requires_full_native_identity_and_steps(self):
+        repo=MODULE.FOURD_REPOSITORY;head=self.fixture['head']
+        for runid,jobid,wfid,name in [(7,8,MODULE.FOURD_VERIFY_ID,'verify'),(17,18,MODULE.FOURD_SOURCE_ID,'source-preparation')]:
+            population=f'repos/{repo}/actions/workflows/{wfid}/runs?head_sha={head}&per_page=100'
+            for alter in [
+                lambda r,p,pr:r[population].update(total_count=0,workflow_runs=[]),
+                lambda r,p,pr:r[population].update(total_count=2,workflow_runs=r[population]['workflow_runs']*2),
+                lambda r,p,pr:r[population]['workflow_runs'][0].update(run_attempt=2),
+                lambda r,p,pr:r[population]['workflow_runs'][0].update(status='in_progress',conclusion=None),
+                lambda r,p,pr:r[f'repos/{repo}/actions/runs/{runid}'].update(check_suite_id=99),
+                lambda r,p,pr:r[f'repos/{repo}/actions/jobs/{jobid}'].update(run_attempt=2),
+                lambda r,p,pr:r[f'repos/{repo}/actions/runs/{runid}/attempts/1/jobs?per_page=100']['jobs'][0]['steps'][1].update(conclusion='skipped'),
+                lambda r,p,pr:next(x for x in r[f'repos/{repo}/commits/{head}/check-runs?per_page=100']['check_runs'] if x['name']==name)['app'].update(id=42),
+                lambda r,p,pr:r[f'repos/{repo}/commits/{head}/check-runs?per_page=100'].update(total_count=1,check_runs=[x for x in r[f'repos/{repo}/commits/{head}/check-runs?per_page=100']['check_runs'] if x['name']!=name]),
+            ]:
+                code,result,api,_=self.fourd_transport(apply=True,change=alter)
+                self.assertEqual((code,api.attempts),(2,0),(name,result.reason))
+
+    def test_fourd_refuses_extra_missing_or_mutated_seventh_and_wrong_receiver(self):
+        repo=MODULE.FOURD_REPOSITORY;head=self.fixture['head'];tree=self.fixture['responses'][f'repos/FS-GG/FS.GG.Coordination/git/commits/{head}']['tree']['sha'];endpoint=f'repos/{repo}/git/trees/{tree}?recursive=1'
+        for alter in [
+            lambda r,p,pr:pr.update(changed_files=6),
+            lambda r,p,pr:r[f'repos/{repo}'].update(private=False),
+            lambda r,p,pr:r[f'repos/{repo}'].update(id=1390567199),
+            lambda r,p,pr:r[endpoint].update(tree=[x for x in r[endpoint]['tree'] if x['path']!=MODULE.FOURD_INVENTORY_TEST]),
+            lambda r,p,pr:next(x for x in r[endpoint]['tree'] if x['path']==MODULE.FOURD_INVENTORY_TEST).update(mode='100755'),
+            lambda r,p,pr:r[f'repos/{repo}/pulls/1/files?per_page=100'][-1].update(status='added'),
+            lambda r,p,pr:r[f'repos/{repo}/actions/runs/7/artifacts?per_page=100']['artifacts'][0].update(name=f'fourd-evaluation-candidate-{head}-7-1'),
+        ]:
+            code,result,api,_=self.fourd_transport(apply=True,change=alter)
+            self.assertEqual((code,api.attempts),(2,0),result.reason)
+
+    def test_fourd_mutated_derived_blobs_and_unrelated_seventh_do_not_qualify(self):
+        repo=MODULE.FOURD_REPOSITORY;head=self.fixture['head'];base=self.fixture['base']
+        def replace_blob(responses,revision,path,change):
+            tree=responses[f'repos/{repo}/git/commits/{revision}']['tree']['sha']
+            row=next(x for x in responses[f'repos/{repo}/git/trees/{tree}?recursive=1']['tree'] if x['path']==path)
+            value=responses[f"repos/{repo}/git/blobs/{row['sha']}"]
+            body=change(MODULE.base64.b64decode(value['content']))
+            sha=hashlib.sha1(f'blob {len(body)}\0'.encode()+body).hexdigest();row['sha']=sha
+            responses[f'repos/{repo}/git/blobs/{sha}']=dict(sha=sha,encoding='base64',size=len(body),content=MODULE.base64.b64encode(body).decode())
+            if revision==head:
+                for file in responses[f'repos/{repo}/pulls/1/files?per_page=100']:
+                    if file['filename']==path:file['sha']=sha
+        for path in [MODULE.FOURD_SOURCE,MODULE.FOURD_INVENTORY_TEST]:
+            for revision in [base,head]:
+                def change(r,p,pr):replace_blob(r,revision,path,lambda b:b+b'# unrelated edit\n')
+                code,result,api,_=self.fourd_transport(apply=True,change=change)
+                self.assertEqual((code,api.attempts),(2,0),result.reason)
+                self.assertIn('FourD',result.reason)
+        # A readable empty policy is a different capability from the selected unavailable one.
+        for route in MODULE.FOURD_POLICY_ROUTES:
+            for response in [(0,403,dict(message=MODULE.FOURD_PLAN_MESSAGE,status='403',documentation_url=MODULE.FOURD_POLICY_ROUTES[route])),(1,403,dict(message=MODULE.FOURD_PLAN_MESSAGE,status='403',documentation_url='https://wrong.invalid')),(1,404,dict(message='Not Found'))]:
+                code,result,api,_=self.fourd_transport(apply=True,change=lambda r,p,pr:p.update({f'repos/{repo}/{route}':response}))
+                self.assertEqual((code,api.attempts),(2,0),result.reason)
+        code,result,api,_=self.fsquint_transport(apply=True,change=lambda r,p,pr:pr.update(changed_files=7))
+        self.assertEqual((code,api.attempts),(2,0),result.reason)
+
+    def test_fourd_reported_required_contexts_are_additional_and_uncertain_apply_is_not_replayed(self):
+        repo=MODULE.FOURD_REPOSITORY
+        row=dict(name='source-preparation',bucket='pass',state='SUCCESS',completedAt='2026-10-13T00:00:00Z',event='pull_request',workflow='portable-workspace-source-preparation',startedAt='2026-10-13T00:00:00Z',link=f'https://github.com/{repo}/actions/runs/17/job/18')
+        code,result,api,_=self.fourd_transport(required=(0,json.dumps([row]).encode()))
+        self.assertEqual(code,0,result.reason)
+        self.assertEqual(result.reason,'native-policy-unavailable; required-contexts-passed')
+        row['bucket']='pending';row['state']='IN_PROGRESS'
+        code,result,api,_=self.fourd_transport(apply=True,required=(0,json.dumps([row]).encode()))
+        self.assertEqual((code,api.attempts),(2,0),result.reason)
+        code,result,api,_=self.fourd_transport()
+        prior=asdict(result);prior.update(attempts=1,codeDelivery='unknown',outcome='indeterminate',producerInstallation='indeterminate')
+        code,result,api,_=self.fourd_transport(apply=True,prior=prior)
+        self.assertEqual((code,api.attempts,result.attempts),(3,0,1))
+
+    def test_fourd_source_closure_artifact_and_duplicate_roster_refusals(self):
+        repo=MODULE.FOURD_REPOSITORY;head=self.fixture['head'];base=self.fixture['base']
+        for change in [
+            lambda r,p,pr:r[f'repos/{repo}/actions/runs/17'].update(head_branch='wrong'),
+            lambda r,p,pr:r[f'repos/{repo}/commits/{head}/check-runs?per_page=100'].update(total_count=3,check_runs=r[f'repos/{repo}/commits/{head}/check-runs?per_page=100']['check_runs']+[copy.deepcopy(r[f'repos/{repo}/commits/{head}/check-runs?per_page=100']['check_runs'][0])]),
+            lambda r,p,pr:r[f'repos/{repo}/actions/runs/7/artifacts?per_page=100']['artifacts'][0]['workflow_run'].update(head_sha='a'*40),
+            lambda r,p,pr:r[f'repos/{repo}/git/commits/{"e"*40}'].update(parents=[dict(sha=head),dict(sha=base)]),
+            lambda r,p,pr:r[f'repos/{repo}/actions/runs/7/artifacts?per_page=100'].update(total_count=0,artifacts=[]),
+            lambda r,p,pr:r[f'repos/{repo}/actions/runs/17/attempts/1/jobs?per_page=100']['jobs'][0]['steps'][1].update(number=True),
+            lambda r,p,pr:r[f'repos/{repo}/issues/comments/6335828296']['user'].update(id=float(MODULE.FOURD_POLICY_ACTOR_ID)),
+            lambda r,p,pr:r[f'repos/{repo}/commits/{head}/check-runs?per_page=100']['check_runs'][1]['app'].update(id=15368.0),
+        ]:
+            code,result,api,_=self.fourd_transport(apply=True,change=change)
+            self.assertEqual((code,api.attempts),(2,0),result.reason)
 
     def sc2_transport(self, **kwargs):
         return self.fsquint_transport(receiver=MODULE.SC2_REPOSITORY,selector=kwargs.pop('selector','verify.yml'),**kwargs)

@@ -189,3 +189,30 @@ suite uses synthetic receiver blobs, not copied private verifier source. Ordinar
 the 128 KiB limit. The protected helper self-correspondence read alone derives its bound from the exact
 executing helper length, still under the existing 1 MiB transport ceiling and protected byte equality. Private native qualification,
 local Checks-read availability and workflow-write capability remain independently observed gates.
+
+## FourD private-receiver first installation
+
+The named FourD adapter applies only to private `FS-GG/FS.GG.FourD` (repository ID
+1390568106, default branch `main`). It preserves the five canonical producer files byte for
+byte. Two additional files must equal closed transforms of their pinned receiver baselines:
+the source-preparation workflow adds the five literal paths to both PR and push filters;
+the workflow-inventory test admits the canonical fourth workflow with exactly one
+`runs-on: ubuntu-latest` line. Existing native-runner guards and the other existing hosted
+workflow guards remain intact. Missing files, additional edits or changed baselines refuse.
+
+Both unchanged verification and derived source-preparation workflows must succeed at the
+candidate head on current attempt 1. Complete Actions app 15368 run, job, check and suite
+joins, successful technical steps and the verification artifact's synthetic-checkout/tree
+correspondence remain mandatory. Reported required contexts add requirements to this pair.
+
+The adapter authenticates the two accepted private/manual-process policy references and
+recognizes only their exact named native-plan refusal responses. It reports
+`native-policy-unavailable` separately from the required-check reader's exact authenticated
+`no-required-contexts-reported` response. Denied Checks reads, malformed transport and
+unexpected policy responses refuse; unavailable native policy never means empty policy.
+Independent exact-head review remains an integration requirement.
+
+Preflight reuses the bounded source predicates and inert transport/mutation fixtures, including
+paired-workflow absence, provenance, policy and uncertain-apply refusals. This closed adapter
+needs no additional scheduling model. Source delivery precedes receiver installation; installation
+remains activation pending until a genuine subsequent private eligibility event succeeds.
