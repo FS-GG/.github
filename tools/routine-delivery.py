@@ -261,6 +261,67 @@ SC2_VERIFY_ID = 368229845
 SC2_VERIFY_SHA256 = "561cc8b0ce4d0460518b5344dc2e553caee2083c5f23d8cbe5b402c8902ba06b"
 SC2_VERIFY_ENTRY_SHA256 = "5a7228d85f2ca4bcdbf4534fc45cd0c66ed3ed80077d5a15a4ad66bdbcbd176a"
 
+FOURD_REPOSITORY = "FS-GG/FS.GG.FourD"
+FOURD_REPOSITORY_ID = 1390568106
+FOURD_VERIFY_ID = 368233881
+FOURD_VERIFY_SHA256 = "ce73c0de5b7bb12a5ec3e9e5ffd2e872efc86a7193ec0b7319803f5dd7c97a40"
+FOURD_VERIFY_ENTRY_SHA256 = "1b440bf8a390fcfcd3d07f405117e397e27e715a526e48630f3e1b3b337dd4eb"
+FOURD_SOURCE = ".github/workflows/portable-workspace-source-preparation.yml"
+FOURD_SOURCE_ID = 371620519
+FOURD_SOURCE_BASE_SHA256 = "1d5e2eef8e1567ea60f50fdbfaa02c3a06c65568635456131759361c01a6941d"
+FOURD_INVENTORY_TEST = "tests/portable-workspace/test_native_image.py"
+FOURD_INVENTORY_BASE_SHA256 = "01e570fb53469c709b09a1e8a0e889097ebbc738a0a5db13babb7f0fa96cf84e"
+FOURD_SOURCE_ENTRY_SHA256 = "c3ab08d1509cb9f6aeb227d8476250e85fa3c8579ee4df0a0db40f55a8857be9"
+FOURD_POLICY_ACTOR_ID = 1645484
+FOURD_POLICY_COMMENTS = {
+    6335828296: "f016ba866ccd21725fec14ee698b2adbdb5fdc55d2f5701582aca4faf1f6c9de",
+    6335951089: "fddc33a04fb9e0a6d9a871c91649ac5132f39a8b4a7d8c81167cb78d9ffc7326",
+}
+FOURD_PLAN_MESSAGE = "Upgrade to GitHub Pro or make this repository public to enable this feature."
+FOURD_POLICY_ROUTES = {
+    "branches/main/protection/required_status_checks": "https://docs.github.com/rest/branches/branch-protection#get-status-checks-protection",
+    "rules/branches/main?per_page=100": "https://docs.github.com/rest/repos/rules#get-rules-for-a-branch",
+    "rulesets?includes_parents=true&per_page=100": "https://docs.github.com/rest/repos/rules#get-all-repository-rulesets",
+}
+FOURD_VERIFY_STEPS = (
+    "Set up job", "Check out the candidate", "Set up the exact .NET SDK", "Set up Node.js",
+    "Install the locked browser harness and Chromium", "Restore the test project",
+    "Verify .NET, emitted Fable, Node, and Chromium", "Verify retained readers and immutable corpus",
+    "Verify FABLE-ADOPT-01.5a shared-package adapters", "Verify the shared runtime closure controls",
+    "Verify deterministic archive and extracted product", "Verify old saves against the same extracted archive",
+    "Retain the exact qualified evaluation archive",
+)
+FOURD_SOURCE_STEPS = ("Set up job", "Check out candidate source", "Validate FourD portable source preparation")
+FOURD_VERIFY_TAIL = ("Post Set up Node.js", "Post Set up the exact .NET SDK", "Post Check out the candidate", "Complete job")
+FOURD_SOURCE_TAIL = ("Post Check out candidate source", "Complete job")
+
+def installation_fourd_workflow(base: bytes) -> bytes:
+    """Only add the canonical paths to both authenticated FourD trigger filters."""
+    if hashlib.sha256(base).hexdigest() != FOURD_SOURCE_BASE_SHA256:
+        raise RuntimeError("installation FourD source workflow baseline differs")
+    boundary = b"    paths:\n"
+    additions = b"".join(("      - " + path + "\n").encode() for path in PRODUCER_PATHS)
+    if base.count(boundary) != 2 or any(("      - " + path + "\n").encode() in base for path in PRODUCER_PATHS):
+        raise RuntimeError("installation FourD trigger filters are ambiguous")
+    return base.replace(boundary, boundary + additions)
+
+
+def installation_fourd_inventory(base: bytes) -> bytes:
+    """Preserve all guards except the exact canonical fourth workflow allowance."""
+    if hashlib.sha256(base).hexdigest() != FOURD_INVENTORY_BASE_SHA256:
+        raise RuntimeError("installation FourD inventory baseline differs")
+    old, new = b'                    self.assertIn("runs-on: ubuntu-24.04", text)', b'                    if name == ".github/workflows/routine-eligibility.yml":\n                        self.assertEqual([line.strip() for line in text.splitlines() if line.lstrip().startswith("runs-on:")], ["runs-on: ubuntu-latest"])\n                    else:\n                        self.assertIn("runs-on: ubuntu-24.04", text)'
+    if base.count(old) != 1:
+        raise RuntimeError("installation FourD inventory boundary is ambiguous")
+    base = base.replace(old, new, 1)
+    old, new = b'        self.assertEqual(set(self.workflows), {"fourd-native-image-qualification.yml", "portable-workspace-source-preparation.yml", "verify.yml"})', b'        self.assertEqual(set(self.workflows), {"fourd-native-image-qualification.yml", "portable-workspace-source-preparation.yml", "verify.yml", "routine-eligibility.yml"})'
+    if base.count(old) != 1:
+        raise RuntimeError("installation FourD inventory boundary is ambiguous")
+    base = base.replace(old, new, 1)
+    return base
+
+
+
 class GhApi:
     def installation_read(self, endpoint: str) -> Any:
         """Bounded existing transport; permission/transport errors never mean absence."""
@@ -489,6 +550,19 @@ class GhApi:
             expected.add(BAR_PREARM)
         if repo == BAR_REPOSITORY and BAR_PREARM not in changed:
             raise RuntimeError("installation BAR requires the reviewed derived sixth prearm edit")
+        if repo == FOURD_REPOSITORY:
+            if metadata["id"] != FOURD_REPOSITORY_ID or metadata.get("private") is not True or base_ref != "main":
+                raise RuntimeError("installation FourD receiver identity differs")
+            for path, derive in ((FOURD_SOURCE, installation_fourd_workflow),
+                                 (FOURD_INVENTORY_TEST, installation_fourd_inventory)):
+                original, expanded = old.get(path), candidate.get(path)
+                if (path not in changed or original is None or expanded is None
+                        or any(row.get("type") != "blob" or row.get("mode") != "100644"
+                               for row in (original, expanded))):
+                    raise RuntimeError("installation FourD requires both exact derived regular-file edits")
+                if self.installation_blob(repo, expanded) != derive(self.installation_blob(repo, original)):
+                    raise RuntimeError("installation FourD derived bytes differ")
+                expected.add(path)
         if changed != expected:
             raise RuntimeError("installation must add canonical five files with only a receiver-specific derived sixth edit")
         for path in PRODUCER_PATHS:
@@ -526,7 +600,7 @@ class GhApi:
             raise RuntimeError("installation repository identity is unestablished")
         base_ref, base = base_of(pr)
         if (base_ref != metadata["default_branch"] or base is None
-                or head_of(pr) != head or pr.get("changed_files") not in (5, 6)
+                or head_of(pr) != head or pr.get("changed_files") not in ((7,) if repo == FOURD_REPOSITORY else (5, 6))
                 or pr.get("draft") is not False
                 or pr.get("number") != number or (pr.get("base") or {}).get("repo", {}).get("id") != metadata["id"]
                 or type((pr.get("base") or {}).get("repo", {}).get("id")) is not int
@@ -555,7 +629,7 @@ class GhApi:
             raise RuntimeError("installation file count differs from canonical source delta")
         files = self.installation_read(f"repos/{repo}/pulls/{number}/files?per_page=100")
         if (not isinstance(files, list) or len(files) != len(expected)
-                or any(not isinstance(r, dict) or r.get("status") != ("modified" if r.get("filename") in (PRODUCER_REGISTRATION, TEMPLATES_ASSERTION_PIN, BAR_PREARM) else "added")
+                or any(not isinstance(r, dict) or r.get("status") != ("modified" if r.get("filename") in (PRODUCER_REGISTRATION, TEMPLATES_ASSERTION_PIN, BAR_PREARM, FOURD_SOURCE, FOURD_INVENTORY_TEST) else "added")
                        or r.get("previous_filename") is not None for r in files)
                 or {r.get("filename") for r in files} != expected
                 or any(r.get("sha") != candidate[r["filename"]]["sha"] for r in files)):
@@ -598,7 +672,7 @@ class GhApi:
         api = WatchGhApi(time.monotonic() + 31)
         command = ["gh", "pr", "checks", str(number), "--repo", repo,
                    "--required", "--json", WATCH_FIELDS]
-        if repo in ("FS-GG/FsQuint", BAR_REPOSITORY, SC2_REPOSITORY):
+        if repo in ("FS-GG/FsQuint", BAR_REPOSITORY, SC2_REPOSITORY, FOURD_REPOSITORY):
             stderr = bytearray()
             code, raw = bounded_watch_query(command, time.monotonic() + 31, stderr_output=stderr)
             absent = (code == 1 and raw == b"" and bytes(stderr) ==
@@ -613,6 +687,13 @@ class GhApi:
         else:
             code, checks = api._watch_read(command, (0,))
             absent = False
+        if repo == FOURD_REPOSITORY:
+            self.installation_fourd_verify(repo, head, roster, metadata=metadata, base=base,
+                                           candidate=candidate, coherent_workflow=coherent_workflow, branch=branch)
+            self.installation_fourd_policy(repo)
+            if absent:
+                self._installation_policy_fact = "native-policy-unavailable; no-required-contexts-reported"
+                return
         if repo == SC2_REPOSITORY:
             self.installation_sc2_verify(repo, head, roster, metadata=metadata, base=base,
                                          candidate=candidate, coherent_workflow=coherent_workflow, branch=branch)
@@ -658,6 +739,9 @@ class GhApi:
                     or job.get("run_attempt") != run["run_attempt"]):
                 raise RuntimeError("installation required check exact-head/run/attempt differs")
 
+        if repo == FOURD_REPOSITORY:
+            self._installation_policy_fact = "native-policy-unavailable; required-contexts-passed"
+
         if repo == BAR_REPOSITORY:
             self.installation_bar_empty_policy(repo, head, roster, metadata, base, candidate,
                                                coherent_workflow, branch, require_empty=False)
@@ -673,7 +757,10 @@ class GhApi:
             if not match or any(line.lower().startswith("link:") for line in lines[1:]):
                 raise ValueError("unknown HTTP status or paginated policy")
             status = int(match[1])
-            if (status == 200 and code != 0) or (status == 404 and code != 1) or status not in (200, 404):
+            fourd_route = next((route for route in FOURD_POLICY_ROUTES
+                                if endpoint == f"repos/{FOURD_REPOSITORY}/{route}"), None)
+            if ((status == 200 and code != 0) or (status in (404, 403) and code != 1)
+                    or status not in ((200, 404, 403) if fourd_route else (200, 404))):
                 raise ValueError("denied or contradictory HTTP result")
             def unique(pairs):
                 value = {}
@@ -682,7 +769,11 @@ class GhApi:
                         raise ValueError("duplicate policy property")
                     value[key] = item
                 return value
-            return status, json.loads(body, object_pairs_hook=unique)
+            value = json.loads(body, object_pairs_hook=unique)
+            if status == 403 and value != {"message": FOURD_PLAN_MESSAGE, "status": "403",
+                                          "documentation_url": FOURD_POLICY_ROUTES[fourd_route]}:
+                raise ValueError("not the named receiver plan refusal")
+            return status, value
         except (UnicodeError, ValueError, IndexError) as error:
             raise RuntimeError("installation required-policy read is denied, incomplete or unknown") from error
 
@@ -717,6 +808,51 @@ class GhApi:
             raise RuntimeError("installation required policy is not authentically empty")
         self.installation_full_verify(repo, head, roster, metadata=metadata, base=base, candidate=candidate, branch=branch)
 
+    def installation_fourd_policy(self, repo: str) -> None:
+        """Authenticate the accepted process policy; a plan refusal is never empty policy."""
+        if repo != FOURD_REPOSITORY:
+            raise RuntimeError("FourD policy receiver differs")
+        for identifier, digest in FOURD_POLICY_COMMENTS.items():
+            value = self.installation_read(f"repos/{repo}/issues/comments/{identifier}")
+            if (not isinstance(value, dict) or type(value.get("id")) is not int or value.get("id") != identifier
+                    or value.get("html_url") != f"https://github.com/{repo}/issues/39#issuecomment-{identifier}"
+                    or type((value.get("user") or {}).get("id")) is not int
+                    or (value.get("user") or {}).get("id") != FOURD_POLICY_ACTOR_ID
+                    or (value.get("user") or {}).get("login") != "EHotwagner"
+                    or not isinstance(value.get("body"), str)
+                    or hashlib.sha256(value["body"].encode()).hexdigest() != digest):
+                raise RuntimeError("FourD accepted process-policy reference differs")
+        for route in FOURD_POLICY_ROUTES:
+            status, _ = self.installation_policy_read(f"repos/{repo}/{route}")
+            if status != 403:
+                raise RuntimeError("FourD native-policy capability changed; accepted unavailable policy must be reconciled")
+
+    def installation_fourd_verify(self, repo: str, head: str, roster: list[dict], *, metadata: dict,
+                                  base: str, candidate: dict, coherent_workflow: str | None, branch: str) -> None:
+        if (repo != FOURD_REPOSITORY or metadata.get("id") != FOURD_REPOSITORY_ID
+                or metadata.get("private") is not True or metadata.get("default_branch") != "main"
+                or coherent_workflow != "verify.yml"):
+            raise RuntimeError("FourD receiver/coherent identity differs")
+        old = self.installation_tree(repo, base)
+        for path, mode, digest in (("scripts/verify.sh", "100755", FOURD_VERIFY_ENTRY_SHA256),
+                                  ("tests/portable-workspace/validate-source-preparation.py", "100644", FOURD_SOURCE_ENTRY_SHA256)):
+            entry = old.get(path)
+            if (entry is None or entry.get("type") != "blob" or entry.get("mode") != mode
+                    or candidate.get(path) != entry
+                    or hashlib.sha256(self.installation_blob(repo, entry)).hexdigest() != digest):
+                raise RuntimeError("FourD technical entrypoint closure differs")
+        if (not isinstance(roster, list) or len(roster) != 2
+                or {row.get("name") for row in roster} != {"verify", "source-preparation"}
+                or len({row.get("id") for row in roster}) != 2
+                or any(type(row.get("id")) is not int or row["id"] <= 0
+                       or type((row.get("app") or {}).get("id")) is not int
+                       or (row.get("app") or {}).get("id") != 15368
+                       or type((row.get("check_suite") or {}).get("id")) is not int for row in roster)):
+            raise RuntimeError("FourD requires the complete two-workflow technical cohort")
+        for filename, name in (("verify.yml", "verify"), (FOURD_SOURCE.rsplit("/", 1)[1], "source-preparation")):
+            self.installation_full_verify(repo, head, [row for row in roster if row.get("name") == name],
+                metadata=metadata, base=base, candidate=candidate, branch=branch, fourd_workflow=filename)
+
     def installation_sc2_verify(self, repo: str, head: str, roster: list[dict], *, metadata: dict,
                                 base: str, candidate: dict, coherent_workflow: str | None, branch: str) -> None:
         """Require full SC2 verify even without required contexts."""
@@ -732,8 +868,15 @@ class GhApi:
         self.installation_full_verify(repo, head, roster, metadata=metadata, base=base, candidate=candidate, branch=branch)
 
     def installation_full_verify(self, repo: str, head: str, roster: list[dict], *, metadata: dict,
-                                 base: str, candidate: dict, branch: str) -> None:
-        if repo == SC2_REPOSITORY:
+                                 base: str, candidate: dict, branch: str, fourd_workflow: str | None = None) -> None:
+        if repo == FOURD_REPOSITORY:
+            if fourd_workflow == "verify.yml":
+                workflow_file, workflow_id, job_name, workflow_digest = "verify.yml", FOURD_VERIFY_ID, "verify", FOURD_VERIFY_SHA256
+            elif fourd_workflow == FOURD_SOURCE.rsplit("/", 1)[1]:
+                workflow_file, workflow_id, job_name, workflow_digest = fourd_workflow, FOURD_SOURCE_ID, "source-preparation", FOURD_SOURCE_BASE_SHA256
+            else:
+                raise RuntimeError("FourD technical workflow selection differs")
+        elif repo == SC2_REPOSITORY:
             workflow_file, workflow_id, job_name, workflow_digest = "verify.yml", SC2_VERIFY_ID, "verify", SC2_VERIFY_SHA256
         elif repo == "FS-GG/FsQuint":
             workflow_file, workflow_id, job_name = "ci.yml", 361154226, "qualify"
@@ -746,10 +889,19 @@ class GhApi:
             raise RuntimeError("full CI workflow differs")
         path = workflow["path"]
         baseline = self.installation_tree(repo, base).get(path)
-        if baseline is None or candidate.get(path) != baseline:
-            raise RuntimeError("full CI source differs from base")
-        if hashlib.sha256(self.installation_blob(repo, baseline)).hexdigest() != workflow_digest:
+        if baseline is None or baseline.get("type") != "blob":
+            raise RuntimeError("full CI baseline is missing")
+        baseline_bytes = self.installation_blob(repo, baseline)
+        if hashlib.sha256(baseline_bytes).hexdigest() != workflow_digest:
             raise RuntimeError("full CI source is not the reviewed cohort")
+        if repo == FOURD_REPOSITORY and path == FOURD_SOURCE:
+            selected = candidate.get(path)
+            if (selected is None or selected.get("type") != "blob" or selected.get("mode") != "100644"
+                    or baseline.get("mode") != "100644"
+                    or self.installation_blob(repo, selected) != installation_fourd_workflow(baseline_bytes)):
+                raise RuntimeError("FourD technical source workflow differs from exact derived filters")
+        elif candidate.get(path) != baseline:
+            raise RuntimeError("full CI source differs from base")
         population = self.installation_read(f"repos/{repo}/actions/workflows/{workflow_id}/runs?head_sha={head}&per_page=100")
         if (not isinstance(population, dict) or type(population.get("total_count")) is not int or population.get("total_count") != 1
                 or not isinstance(population.get("workflow_runs"), list) or len(population["workflow_runs"]) != 1):
@@ -767,6 +919,8 @@ class GhApi:
         detail = self.installation_read(f"repos/{repo}/actions/runs/{run['id']}")
         if any(detail.get(key) != run.get(key) for key in ("id", "workflow_id", "path", "head_sha", "event", "run_attempt", "status", "conclusion", "check_suite_id", "repository")):
             raise RuntimeError("installation full CI run readback differs")
+        if repo == FOURD_REPOSITORY and detail.get("head_branch") != branch:
+            raise RuntimeError("FourD technical run branch readback differs")
         jobs = self.installation_read(f"repos/{repo}/actions/runs/{run['id']}/attempts/1/jobs?per_page=100")
         if (not isinstance(jobs, dict) or type(jobs.get("total_count")) is not int or jobs.get("total_count") != 1
                 or not isinstance(jobs.get("jobs"), list) or len(jobs["jobs"]) != 1
@@ -788,6 +942,8 @@ class GhApi:
                            "Retain the complete qualified product"] if repo == SC2_REPOSITORY else
                           ["Set up job", "Run actions/checkout@v7", "Run actions/setup-dotnet@v6", "Provision pinned Quint",
                            "Check independent CI preflight example", "Qualify core, tooling and external package consumer"])
+        if repo == FOURD_REPOSITORY:
+            expected_steps = list(FOURD_VERIFY_STEPS if job_name == "verify" else FOURD_SOURCE_STEPS)
         if (not isinstance(steps, list) or not len(expected_steps) <= len(steps) <= 32
                 or any(not isinstance(step, dict) or step.get("status") != "completed"
                        or step.get("conclusion") != "success" for step in steps)
@@ -797,6 +953,13 @@ class GhApi:
                 ["Post Check out the complete product history", "Post Install the pinned Node runtime",
                  "Post Install the pinned .NET SDK", "Complete job"] for step in steps[len(expected_steps):]):
             raise RuntimeError("installation SC2 technical suffix differs")
+        if repo == FOURD_REPOSITORY:
+            tail = FOURD_VERIFY_TAIL if job_name == "verify" else FOURD_SOURCE_TAIL
+            if (steps[-1].get("name") != "Complete job"
+                    or any(step.get("name") not in tail for step in steps[len(expected_steps):])
+                    or len({step.get("name") for step in steps}) != len(steps)
+                    or any(type(step.get("number")) is not int or step["number"] <= 0 for step in steps)):
+                raise RuntimeError("FourD technical suffix differs")
         link = f"https://github.com/{repo}/actions/runs/{run['id']}/job/{cohort.get('id')}"
         job = self.installation_read(f"repos/{repo}/actions/jobs/{cohort.get('id')}")
         if (job != cohort or type(job.get("id")) is not int or job["id"] < 1
@@ -811,20 +974,23 @@ class GhApi:
                 or check.get("status") != "completed" or check.get("conclusion") != "success"):
             raise RuntimeError("full CI check/app/job/run/attempt differs")
 
-        if repo == SC2_REPOSITORY:
+        if repo == SC2_REPOSITORY or (repo == FOURD_REPOSITORY and job_name == "verify"):
             artifacts = self.installation_read(f"repos/{repo}/actions/runs/{run['id']}/artifacts?per_page=100")
             if (not isinstance(artifacts, dict) or type(artifacts.get("total_count")) is not int
                     or not 1 <= artifacts["total_count"] <= 100 or not isinstance(artifacts.get("artifacts"), list)
                     or len(artifacts["artifacts"]) != artifacts["total_count"]
                     or any(not isinstance(row, dict) for row in artifacts["artifacts"])):
                 raise RuntimeError("SC2 artifact population incomplete")
-            pattern = rf"sc2-qualified-product-([0-9a-f]{{40}})-{run['id']}"
+            pattern = (rf"sc2-qualified-product-([0-9a-f]{{40}})-{run['id']}" if repo == SC2_REPOSITORY
+                       else rf"fourd-evaluation-candidate-([0-9a-f]{{40}})-{run['id']}-1")
             selected = [row for row in artifacts["artifacts"] if re.fullmatch(pattern, str(row.get("name", "")))]
             if (len(selected) != 1 or selected[0].get("expired") is not False
                     or type(selected[0].get("size_in_bytes")) is not int or selected[0]["size_in_bytes"] <= 0
                     or (selected[0].get("workflow_run") or {}).get("id") != run["id"]
                     or (selected[0].get("workflow_run") or {}).get("head_sha") != head):
                 raise RuntimeError("SC2 artifact identity differs")
+            if repo == FOURD_REPOSITORY and (type(selected[0].get("id")) is not int or selected[0]["id"] <= 0):
+                raise RuntimeError("FourD artifact native identity differs")
             checkout = re.fullmatch(pattern, selected[0]["name"])[1]
             commit = self.installation_read(f"repos/{repo}/git/commits/{checkout}")
             if (not isinstance(commit, dict) or commit.get("sha") != checkout
@@ -1569,7 +1735,8 @@ def summarize(
                        observedAt=now.isoformat().replace("+00:00", "Z"),
                        routineEligibility=routine_state)
         if producer_source is not None:
-            if result.reason is None and getattr(api, "_installation_policy_fact", None) in ("required-policy-observed-empty", "no-required-contexts-reported"):
+            if result.reason is None and getattr(api, "_installation_policy_fact", None) in ("required-policy-observed-empty", "no-required-contexts-reported",
+                    "native-policy-unavailable; no-required-contexts-reported", "native-policy-unavailable; required-contexts-passed"):
                 result = replace(result, reason=api._installation_policy_fact)
             state = "ready" if result.outcome == "ready" else result.outcome
             if result.codeDelivery == "delivered":
