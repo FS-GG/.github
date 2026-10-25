@@ -1,5 +1,22 @@
 # Registry changelog
 
+## 2026-10-25 — reconcile published Workspace.Template 0.20.0 (FS-GG/FS.GG.Templates#441)
+
+Reconcile `fs-gg-workspace-template` source/package **0.20.0** and `fs-gg-templates/v0.20.0` after the
+fdev-admitted original publisher [40163553390/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/40163553390)
+from protected `1b9b1ca92556eb1acd0e4d1c9cb851a8c7906f86` (FS.GG.Templates#796, carrying #795 and #771), following
+fresh occupancy 40163503192 (ABSENT on both feeds) and under the ADR-0097 publication writer lock. Original
+artifact 12587332479 (`b4cbcc0c…`) equals the GitHub Packages readback and the release asset; the signed nuget.org
+archive (`e12b36d2…`) matches all 589 signature-excluded payload entries, and its nuspec names 0.20.0 at `1b9b1ca9`.
+The CI re-pack reproduced the root-accepted payload identity `825a0815…` (the release gate's key; zip timestamps are
+not byte-reproducible). Annotated tag `2285deef…` peels to `1b9b1ca9`. 0.20.0 is an additive MINOR adding four
+distinct CLI workspace providers (TypeScript, JavaScript, Rust, Go) with a typed catalog and eight product skills,
+with unchanged Rendering 0.32.3 defaults. Genuine same-archive four-product qualification (published SDD CLI 2.5.1
+catalog scaffold and Governance CLI 1.15.0 Verify on a glibc 2.44 carrier; 8/8 catalog cases and 8/8 gates per
+product; npm audit, cargo-audit and govulncheck clean; `go test -race` with gcc) was accepted by root on
+FS-GG/FS.GG.Templates#441 (evidence 6393482621, acceptance 6393489766) with Go pinned at 1.27.3. Installed/full
+Wizard qualification of 0.20.0 remains open. 0.19.3 stays historical.
+
 ## 2026-10-23 — record published Governance CLI 1.15.0 (FS-GG/FS.GG.Governance#423)
 
 Record `FS.GG.Governance.Cli` and `FS.GG.Governance.FSharpSurfaceCommand` **1.15.0**, published from annotated tag

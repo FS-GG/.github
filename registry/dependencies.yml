@@ -554,7 +554,7 @@ contracts:
     # source-complete authoring, input, runtime and presentation surfaces while preserving
     # omitted/default sdd, explicit none, typed-sdd and legacy spec-kit.
     version: "0.32.3"   # SOURCE: original producer 4ec6eafbbbf02264db9b0db4780c590abe0bf9cd (source run 39509314882/a1, artifact 12305198394, custody 7dbd4329); all three 0.32.3 tags converge on it by same-intent settlement 39774890888/a1 (original transport outcome Unknown).
-    package-version: "0.32.3"   # FEED: protected publisher 39817794639/a1 at executor fc2b177e22d66032fe8c2ead4fc3e9845fc2a350; all 19 original archives published to both feeds with matching readbacks; nuget.org entries equal the originals excluding .signature.p7s. Templates source adoption is #728 (2f8d400a); published Workspace 0.19.2 (39845406998/a1) and current 0.19.3 (39910502481/a1) carry it; installed/full Wizard qualification of 0.19.3 remains open (FS-GG/.github#4709).
+    package-version: "0.32.3"   # FEED: protected publisher 39817794639/a1 at executor fc2b177e22d66032fe8c2ead4fc3e9845fc2a350; all 19 original archives published to both feeds with matching readbacks; nuget.org entries equal the originals excluding .signature.p7s. Templates source adoption is #728 (2f8d400a); published Workspace 0.19.2 (39845406998/a1), 0.19.3 (39910502481/a1) and current 0.20.0 (40163553390/a1) carry it; installed/full Wizard qualification of 0.20.0 remains open (FS-GG/.github#4709).
     package-tag: "fs-gg-ui-template/v0.32.3"
     # PRIOR 0.32.1 publication (historical):
     # version: "0.32.1"   # SOURCE: original producer 6c9f766fdd91483c2de6f061e75589e94852a265; all three 0.32.1 tags bind that source.
@@ -1067,9 +1067,13 @@ contracts:
     # The remaining P4 provider implementation ships in FS.GG.Workspace.Template; this wizard identity
     # is published and selectable, not a pending rollout phase.
   - id: fs-gg-workspace-template
-    version: "0.19.3"   # CURRENT SOURCE: protected 7be0bcf5886d39a8161b186beb8cc06e82415f1e (FS.GG.Templates#749, carrying #748); published coherent patch successor adopting FS.GG.Wasm 0.7.0 in the opt-in Complete WASM example (FS-GG/FS.GG.Game#727: policy deadline from Worker readiness, separate startup bound, self-contained bundled Worker; guest SDK 090658bd), with unchanged Rendering 0.32.3 provider/SvgFoundation/Studio defaults.
-    package-version: "0.19.3"   # CURRENT FEED: original release 39910502481/a1, original artifact 12482995455; both feeds match all 512 signature-excluded payload entries. Original/GitHub/release SHA256 7610e8a2030b47c55cce6d71bd9506825db33ad45bbe89898b6fd025bbd9d417; signed NuGet raw SHA256 9594ec204a26f238a06e016d1cfe1e796a07fda23c16589eceb19366cd4a72a2. Fresh occupancy 39910313699 was ABSENT on both feeds before the tag.
-    package-tag: "fs-gg-templates/v0.19.3"   # Annotated unsigned tag 386e32b759f049aa82b37765f91124c3c8b49cb2 peels to 7be0bcf5886d39a8161b186beb8cc06e82415f1e. Prior 0.19.2/0.19.1/0.19.0/0.18.2/0.18.1 releases remain immutable in registry/CHANGELOG.md history.
+    version: "0.20.0"   # CURRENT SOURCE: protected 1b9b1ca92556eb1acd0e4d1c9cb851a8c7906f86 (FS.GG.Templates#796, carrying #795 and #771; issue #441); published additive MINOR adding four distinct CLI workspace providers TypeScript `typescript-cli`, JavaScript `javascript-cli`, Rust `rust-cli` and Go `go-cli` (typed catalog providers/polyglot.catalog.json, eight product skills, pinned Node 24.20.0/npm 11.19.0, Rust 1.98.1, Go 1.27.3), with unchanged Rendering 0.32.3 provider/SvgFoundation/Studio defaults and unchanged FS.GG.Wasm 0.7.0 Complete WASM example. Genuine same-archive four-product qualification (published SDD CLI 2.5.1 catalog scaffold + Governance CLI 1.15.0 Verify on a glibc 2.44 carrier; 8/8 catalog cases and 8/8 gates per product; payload identity 825a0815b295453b85d06c4b13418744bdce432b47acda70cf9c26c124b9b8c0) accepted by root on FS-GG/FS.GG.Templates#441 (evidence 6393482621, acceptance 6393489766).
+    package-version: "0.20.0"   # CURRENT FEED: original release 40163553390/a1, original artifact 12587332479; both feeds match all 589 signature-excluded payload entries and the CI re-pack reproduced the accepted payload identity 825a0815…b8c0. Original/GitHub/release SHA256 b4cbcc0c6cc242d953be4e8123742c529acc3c40f409bb16a6ade9ba72da2067; signed NuGet raw SHA256 e12b36d2d087d0f788894fdec9ba3b3ed1406c1e7237ebee40602c2f7c23355c. Fresh occupancy 40163503192 was ABSENT on both feeds before the tag.
+    package-tag: "fs-gg-templates/v0.20.0"   # Annotated unsigned tag 2285deefa45cc3761b0888dd41f94bb118d6f842 peels to 1b9b1ca92556eb1acd0e4d1c9cb851a8c7906f86. Prior 0.19.3/0.19.2/0.19.1/0.19.0/0.18.2/0.18.1 releases remain immutable in registry/CHANGELOG.md history.
+    # PRIOR 0.19.3 publication evidence (historical):
+    # version: "0.19.3"   # CURRENT SOURCE: protected 7be0bcf5886d39a8161b186beb8cc06e82415f1e (FS.GG.Templates#749, carrying #748); published coherent patch successor adopting FS.GG.Wasm 0.7.0 in the opt-in Complete WASM example (FS-GG/FS.GG.Game#727: policy deadline from Worker readiness, separate startup bound, self-contained bundled Worker; guest SDK 090658bd), with unchanged Rendering 0.32.3 provider/SvgFoundation/Studio defaults.
+    # package-version: "0.19.3"   # CURRENT FEED: original release 39910502481/a1, original artifact 12482995455; both feeds match all 512 signature-excluded payload entries. Original/GitHub/release SHA256 7610e8a2030b47c55cce6d71bd9506825db33ad45bbe89898b6fd025bbd9d417; signed NuGet raw SHA256 9594ec204a26f238a06e016d1cfe1e796a07fda23c16589eceb19366cd4a72a2. Fresh occupancy 39910313699 was ABSENT on both feeds before the tag.
+    # package-tag: "fs-gg-templates/v0.19.3"   # Annotated unsigned tag 386e32b759f049aa82b37765f91124c3c8b49cb2 peels to 7be0bcf5886d39a8161b186beb8cc06e82415f1e. Prior 0.19.2/0.19.1/0.19.0/0.18.2/0.18.1 releases remain immutable in registry/CHANGELOG.md history.
     # PRIOR 0.19.2 publication evidence (historical):
     # version: "0.19.2"   # CURRENT SOURCE: protected d15f085ff4d64b7736e09ff263644b3c86a576a6 (FS.GG.Templates#735, carrying #728/#736); published coherent patch successor adopting Rendering 0.32.3: provider FS.GG.UI.Template 0.32.3 and fable-game SvgFoundation/Studio defaults 0.32.3 (PortalExample keeps its qualified 0.31.0 UI pins), plus the Studio font readiness/disposal repair.
     # package-version: "0.19.2"   # CURRENT FEED: original release 39845406998/a1, original artifact 12455007005; both feeds match all 512 signature-excluded payload entries. Original/GitHub/release SHA256 0af2a10e402a055f0b86c56a28cd5c46e023f185c117741e565ee08eb54cd8fd; signed NuGet raw SHA256 ef5c5c2fb2de372a427c5abaf8bb4cdf91d7776b5628f07c016d4eb9ac87469a. Fresh occupancy 39845263408 was ABSENT before the tag.
@@ -1103,7 +1107,7 @@ contracts:
     # 4/5 (.github#2070); phase 6 completed when .github#2925 published `new-sdd-workspace` 0.10.0
     # with `--template`, and Templates#432 then published this P4 provider family at 0.9.0.
     surface: >
-      FS.GG.Workspace.Template package, eight template configurations and seven `dotnet new` selectors: workspace-provider
+      FS.GG.Workspace.Template package, twelve template configurations and eleven `dotnet new` selectors: workspace-provider
       identities — `fs-gg-console` (provider `console` — minimal F# executable, no npm lane,
       ADR-0072 §2); `fs-gg-web` (provider `web` — F#
       ASP.NET Core + plain TypeScript/Vite website, ADR-0071 §3); `fs-gg-fable-game` (provider
@@ -1114,7 +1118,7 @@ contracts:
       npm package/declaration closure, ADR-0072 §3, first proved by the unreleased
       EHotwagner/babylonjsBindings reference) — plus `fs-gg-governance`, the separately registered
       pre-existing governance overlay template folded into this package at the same rename;
-      `fs-gg-project-knowledge` and `fs-gg-python` are also already packaged. The current
+      `fs-gg-project-knowledge` and `fs-gg-python` are also already packaged; 0.20.0 adds the four distinct executable CLI workspace providers `fs-gg-typescript-cli`, `fs-gg-javascript-cli`, `fs-gg-rust-cli` and `fs-gg-go-cli` (Templates#441). The current
       and legacy fable-game configurations share one selector.
     consumers: [github]   # the org new-sdd-workspace wizard is the sole intended consumer (ADR-0071 §2 --template selector); registry-active and wizard-selectable through published new-sdd-workspace 0.10.1.
     minimum-fsgg-sdd:
@@ -1170,8 +1174,8 @@ dependencies:
   # SELECTED @0.32.3: Templates PR728 merge 2f8d400a6a670568044d607a1ac0eb2c7c655a29 adopts
   # published Rendering 0.32.3 through reviewed source: the provider pin plus the fable-game
   # SvgFoundation/Studio defaults and codec/tactical refs (FS-GG/.github#4709). Published Workspace
-  # 0.19.3 (release 39910502481/a1) carries 0.32.3 and is the newest public default; installed/full
-  # Wizard qualification of 0.19.3 remains open. Historical 0.19.2 also carried 0.32.3; 0.19.1 carried 0.32.1.
+  # 0.20.0 (release 40163553390/a1) carries 0.32.3 and is the newest public default; installed/full
+  # Wizard qualification of 0.20.0 remains open. Historical 0.19.3 and 0.19.2 also carried 0.32.3; 0.19.1 carried 0.32.1.
   # PRIOR (historical) SELECTED @0.32.1: Templates PR673 merge 784c4af52c4f0d426268e554ca58fa97125c2710
   # adopts the published Rendering provider through reviewed source (TSDD-KNOWLEDGE-01.4).
   # Published-feed installed receiver qualification remains open. Packed Fable SVG pins stay
@@ -1403,10 +1407,13 @@ coherence:
       it does not establish receiver adoption. Published Rendering 0.32.1 inputs were
       qualified through source-built Templates 208e and Rendering caller 998f in
       accepted full run 37506865594/a1 (180 provider and 12 browser passes).
-      Current Workspace 0.19.3 from protected 7be0bcf5886d39a8161b186beb8cc06e82415f1e
-      is published on both feeds by original 39910502481/a1; all 512 signature-excluded
+      Current Workspace 0.20.0 from protected 1b9b1ca92556eb1acd0e4d1c9cb851a8c7906f86
+      is published on both feeds by original 40163553390/a1; all 589 signature-excluded
       payload entries match; it keeps the Rendering 0.32.3 provider and SvgFoundation/Studio
-      defaults and adopts FS.GG.Wasm 0.7.0 in the opt-in Complete WASM example (Game#727).
+      defaults and adds the TypeScript, JavaScript, Rust and Go CLI workspace providers
+      (Templates#441; genuine four-product qualification accepted by root).
+      Historical Workspace 0.19.3 (7be0bcf5886d39a8161b186beb8cc06e82415f1e, original
+      39910502481/a1, 512 entries) adopted FS.GG.Wasm 0.7.0 in the opt-in Complete WASM example (Game#727).
       Historical Workspace 0.19.2 (d15f085ff4d64b7736e09ff263644b3c86a576a6, original
       39845406998/a1, 512 entries) adopted Rendering 0.32.3 with the 0.3.0 WASM receiver.
       Historical Workspace 0.19.1 (1e95dddb6326d276773154df1336599907d8dbfe, original
@@ -1423,8 +1430,8 @@ coherence:
       those receivers do not establish arbitrary production checkout or fleet adoption.
       The axis stays incomplete until current protected defaults and actual
       installed receivers qualify that remaining scope. Lifecycle defaults are unchanged.
-    resolved_by: "Selected axis evidence: SDD 2.1.0 promotion 37114843541 / .github #4146; Rendering 0.32.1 publisher 37461402933 and accepted full public-input receiver 37506865594; Current Workspace 0.19.3 source 7be0bcf5886d39a8161b186beb8cc06e82415f1e and original both-feed publisher 39910502481/a1; historical Workspace 0.19.2 source d15f085ff4d64b7736e09ff263644b3c86a576a6 and publisher 39845406998/a1; historical Workspace 0.19.1 source 1e95dddb6326d276773154df1336599907d8dbfe and publisher 39745222454/a1; historical Workspace 0.19.0 source 8952e1c5753b0abc972154c7596ddc8da772b271 and publisher 38489621342/a1; historical Templates 0.18.2 source 20c009bc6728302f9ed06fdf49cb2e8bd19e417d and publisher 38014935496/a1; public direct A accepted (operation932c8bd5; receipt cf966a11). Prior 0.18.1 publisher 37521553159/a1 and protected d9fe65ea8a456f59d663f20c647a38a195e13c2c remain historical. Historical Workspace 0.18.0 release 37138971862 and earlier axis closures remain preserved."
-    impact: "Declared capability floor remains 2.1.0. Workspace source and published package are 0.19.3: the source provider descriptor pins Rendering 0.32.3, the published package carries SvgFoundation/Studio 0.32.3 defaults, and its opt-in Complete WASM example selects FS.GG.Wasm 0.7.0. Scoped public Xantham receivers are accepted for historical 0.19.0; clean installed WASM and broader defaults/retained upgrades remain separate. Fresh installed/default Workspace and full Wizard acceptance remain pending; no complete coherence or installed-use claim follows from publication."
+    resolved_by: "Selected axis evidence: SDD 2.1.0 promotion 37114843541 / .github #4146; Rendering 0.32.1 publisher 37461402933 and accepted full public-input receiver 37506865594; Current Workspace 0.20.0 source 1b9b1ca92556eb1acd0e4d1c9cb851a8c7906f86 and original both-feed publisher 40163553390/a1; historical Workspace 0.19.3 source 7be0bcf5886d39a8161b186beb8cc06e82415f1e and publisher 39910502481/a1; historical Workspace 0.19.2 source d15f085ff4d64b7736e09ff263644b3c86a576a6 and publisher 39845406998/a1; historical Workspace 0.19.1 source 1e95dddb6326d276773154df1336599907d8dbfe and publisher 39745222454/a1; historical Workspace 0.19.0 source 8952e1c5753b0abc972154c7596ddc8da772b271 and publisher 38489621342/a1; historical Templates 0.18.2 source 20c009bc6728302f9ed06fdf49cb2e8bd19e417d and publisher 38014935496/a1; public direct A accepted (operation932c8bd5; receipt cf966a11). Prior 0.18.1 publisher 37521553159/a1 and protected d9fe65ea8a456f59d663f20c647a38a195e13c2c remain historical. Historical Workspace 0.18.0 release 37138971862 and earlier axis closures remain preserved."
+    impact: "Declared capability floor remains 2.1.0. Workspace source and published package are 0.20.0: the source provider descriptor pins Rendering 0.32.3, the published package carries SvgFoundation/Studio 0.32.3 defaults, its opt-in Complete WASM example selects FS.GG.Wasm 0.7.0, and it adds the four CLI workspace providers. Scoped public Xantham receivers are accepted for historical 0.19.0; clean installed WASM and broader defaults/retained upgrades remain separate. Fresh installed/default Workspace and full Wizard acceptance remain pending; no complete coherence or installed-use claim follows from publication."
     tracking: "https://github.com/FS-GG/FS.GG.Templates/pull/676; SVG-COHERENCE-01.8; TSDD-KNOWLEDGE-01; ADR-0008; historical Templates#667/#673, .github#2928, SDD#916, Templates#432 and original .github#85/#87"
 
   - id: governance-overlay-populated
