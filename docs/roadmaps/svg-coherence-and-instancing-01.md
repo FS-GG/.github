@@ -320,6 +320,27 @@ and the rest of .3/.4 remain open. Raw observations are in `readiness/svg-cohere
 `docs/reports/2026-10-24-spatial-index-array-storage.md` in Rendering; the reusable finding is Atlas record
 `rendering/spatial-working-set-ordinal-storage`.
 
+The second bounded .4 source hotspot, the spatial index's per-bucket list append during construction, was delivered
+through [Rendering #1473](https://github.com/FS-GG/FS.GG.Rendering/pull/1473) (Delivery
+[Rendering #1472](https://github.com/FS-GG/FS.GG.Rendering/issues/1472)) at
+`9567e8f8e7d82e11c0e0b36bec97d0c132b0d68b` after 25 required exact-head checks (including the packed
+Fable/Chromium/Firefox/WebKit run) and one independent exact-candidate source review, confirmed on the final test and report delta.
+`SpatialWorkingSet.create` previously copied a chunk's bucket once per member entry, which is quadratic in the population
+of one chunk. It now collects members in one forward pass and adds each chunk key to the map once, in first-appearance
+order, so the private map keeps its shape and contents; public types, ordering, counters, refusal order and the query
+path are unchanged, and an independent differential check over randomized populations found the old and new maps
+identical. The isolated CLR before/after comparison (same harness and method, 3 CPUs, one shared development host)
+measured median `create` for 40,000 entries in one chunk of 4,827 to 36.4 ms (25.7 GB to 65 MB allocated), 20,000
+in one chunk 1,150 to 12.6 ms, a 100,000-entry regular grid 308 to 130 ms, 20,000 mixed chunk-spanning entries 55.9 to
+14.0 ms and 100,000 spread entries 370 to 275 ms; allocation fell in every cell and query cost was unchanged (largest
+median ratio 1.053 over 36 cells). A first design that visited entries last to first changed the map's key insertion
+order and made some queries 10 to 30 percent slower; it was replaced and its observations retained. Construction is paid
+when an index is created, not per frame, and the 250-entry synthetic grid gains 0.13 ms per create, so no product speedup,
+timing threshold, Home B1-B8 verdict, publication, installed adoption or GPU claim follows. Incremental index updates
+and the other source hotspots remain open. Raw observations are in `readiness/svg-coherence-1472/` and the report
+`docs/reports/2026-10-25-spatial-index-bucket-construction.md` in Rendering; the reusable finding is Atlas record
+`rendering/spatial-index-bucket-construction`.
+
 ## 1. Evidence and the missing qualification
 
 Read-only investigation inspected Rendering `16da43f37de9f0eea0f4a65a67e6dee44c36ef1c`,
@@ -473,9 +494,9 @@ checks for geometry, styling, hit policy, layering and export alongside timing.
 - `SpatialWorkingSet` stores entries in an F# list and indexes it per candidate;
   `entries.Length` also traverses it. Profile random-access storage, cached counts,
   construction without repeated list append, and any needed incremental updates.
-  Random-access storage and the count traversal were delivered by Rendering #1470
-  (see Current progress above); construction's repeated per-bucket list append and
-  incremental updates remain unmeasured hypotheses.
+  Random-access storage and the count traversal were delivered by Rendering #1470 and
+  construction's repeated per-bucket list append by Rendering #1473 (see Current
+  progress above); incremental updates remain an unmeasured hypothesis.
 - `SvgDocumentBrowserHost.Replace` exports/parses a complete candidate before
   reconciliation. Measure and separate definition validation from instance deltas.
 - The document reconciler searches sibling arrays for each child. Evaluate keyed
