@@ -7,6 +7,25 @@ admission remain mandatory. Missing facts stay Unknown and retain affected holds
 
 Historical V1 mechanics remain in immutable Git history, not an executable fallback.
 
+## Bounded delegation and runtime observation
+
+Root reviews one concrete finite envelope using [delivery reliability](delivery-reliability.md#finite-delegated-sequence-and-isolation)
+and [ADR-0096](https://github.com/FS-GG/.github/blob/main/docs/adr/0096-proportionate-verification-and-unrecoverable-holds.md#decision).
+The owner advances its ordered steps on verified success without repeated approvals, retaining each
+original clock, substantive review/required CI and independent readback. Stop on first failure,
+Unknown, determining drift or budget exhaustion; no automatic retry or replacement identity.
+
+Use typed running, paused, stopped and reported-but-unverifiable observations with actual
+boot/namespace/source/clock and authentic birth scope. Unknown birth cannot authenticate a witness.
+Cleared current manager metadata does not clear an original failed or uncertain outcome. Preserve
+old shared-store objects and scoped holds; prove isolation before excluding their interference.
+
+Keep runner → genuine bake → registration → first consumer primary. Delegate bounded source work
+only to remove a concrete dependency, retaining its owner through applicable publication/adoption.
+Prepare reusable builder and selected desktop/Orca/IME facilities after the first completed runner
+run; source-bound handoff across different runtimes grants no native qualification. Report changes,
+first failure/Unknown or envelope completion through existing custody, without unchanged approval loops.
+
 ## Own process findings and disposition
 
 Executing agents report material process problems through existing owning issues/PRs and worker returns,

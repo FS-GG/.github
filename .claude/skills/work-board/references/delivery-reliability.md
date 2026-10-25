@@ -62,6 +62,23 @@ replacement identity. Describe these checks as finite cooperative verification a
 not an atomic transaction or server-side compare-and-swap guarantee. They grant no native effect,
 settlement, reservation release or acceptance beyond the selected qualified route.
 
+## Finite delegated sequence and isolation
+
+Apply [ADR-0096 section C](https://github.com/FS-GG/.github/blob/main/docs/adr/0096-proportionate-verification-and-unrecoverable-holds.md#decision)
+for one Root-reviewed finite sequence of protected effects. Bind exact source/inputs, credential and
+runtime context, ordered actions, resources, write/output domains and each step's original identity,
+clock, success and independent readback. Advance only on verified success; no repeated approval is
+needed within that envelope. Closed outputs may feed only reviewed, checked derivations. Otherwise
+end before the unknown input. Stop on first failure, Unknown, determining drift or exhausted bound;
+retain the original without automatic retry, clock renewal or new-ID replay.
+
+Prove engine graphroot/storage, runroot/runtime, temporary/output and actual process isolation,
+including image import/acquisition, backing, engine database, rootless helpers and cleanup. Preserve
+old holds and Unknowns; block only relevant interference. Exercise actual canonical credential/policy,
+workflow/trigger/inventory and runtime preflight early. Keep typed runtime observations and original
+outcomes separate from cleared manager metadata, as described in [host guidance](host-loop.md#bounded-delegation-and-runtime-observation).
+Ordinary isolated tests and authorized read-only diagnostics acquire no new gate from this section.
+
 ## Evidence window and limits
 
 The 2026-10-12 review covered **2026-10-11 18:56:30 UTC through 2026-10-12 18:56:30 UTC**.
