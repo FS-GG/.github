@@ -66,7 +66,7 @@ def validate(document: object, now: datetime, allow_expired: bool = False) -> li
             raise EvidenceError(f"{row['name']}: url must be an HTTPS GitHub Actions run/artifact URL")
         expiry = timestamp(row["expires_at"])
         if expiry <= now and not allow_expired:
-            raise EvidenceError(f"{row['name']}: artifact expired at {row['expires_at']}; rerun the reproduce command and replace this manifest")
+            raise EvidenceError(f"{row['name']}: artifact expired at {row['expires_at']}; obtain newly authorized evidence or record the retention gap; do not replay an original operation")
         summaries.append(f"{row['name']} sha256={row['sha256']} bytes={row['bytes']}")
     return summaries
 
@@ -88,6 +88,10 @@ def create(args: argparse.Namespace) -> dict:
 
 
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] == "verify-delta":
+        import runpy
+        module = runpy.run_path(str(Path(__file__).with_name("evidence-delta.py")))
+        return module["main"](sys.argv[2:])
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="action", required=True)
     make = sub.add_parser("create")

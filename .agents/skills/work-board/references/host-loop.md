@@ -7,6 +7,15 @@ admission remain mandatory. Missing facts stay Unknown and retain affected holds
 
 Historical V1 mechanics remain in immutable Git history, not an executable fallback.
 
+## One primary progress record
+
+Keep the current source identity, accepted scope, blocker, accountable owner and next action in the
+existing primary owning issue. Dependent issues retain their own complete Done when, acceptance,
+Status and dependency, but link to that record for changing prerequisite details. Update them when
+their own assertion or dependency changes, rather than copying every source hash, CI result and
+checkpoint into each parent and consumer. Preserve prior outcomes and evidence through durable
+owning comments and references; a compact current view does not erase history.
+
 ## Bounded delegation and runtime observation
 
 Root reviews one concrete finite envelope using [delivery reliability](delivery-reliability.md#finite-delegated-sequence-and-isolation)
@@ -14,6 +23,10 @@ and [ADR-0096](https://github.com/FS-GG/.github/blob/main/docs/adr/0096-proporti
 The owner advances its ordered steps on verified success without repeated approvals, retaining each
 original clock, substantive review/required CI and independent readback. Stop on first failure,
 Unknown, determining drift or budget exhaustion; no automatic retry or replacement identity.
+Review the complete known conditional sequence once, including collection and retirement, rather
+than requiring success-by-success coordinator approvals. Standing authorization for ordinary isolated
+verification and bounded read-only Home diagnostics remains in force. A changed envelope needs its
+concrete admission reconciled under existing authority, not an automatic new user-permission round trip.
 
 Use typed running, paused, stopped and reported-but-unverifiable observations with actual
 boot/namespace/source/clock and authentic birth scope. Unknown birth cannot authenticate a witness.
@@ -25,6 +38,9 @@ only to remove a concrete dependency, retaining its owner through applicable pub
 Prepare reusable builder and selected desktop/Orca/IME facilities after the first completed runner
 run; source-bound handoff across different runtimes grants no native qualification. Report changes,
 first failure/Unknown or envelope completion through existing custody, without unchanged approval loops.
+Exercise producer → observer custody → worker launch → collection → retirement as the smallest
+complete runtime path before adding full export or bake members. Source constructors and passing
+artifact checks cannot establish callback completion or native cleanup.
 
 ## Own process findings and disposition
 
