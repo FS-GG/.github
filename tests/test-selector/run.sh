@@ -755,6 +755,26 @@ else
   ok "tests/review-critic-succession-wire is still wired to a workflow (.github#2537)"
 fi
 
+# The real policy subject must be directly discoverable, not hidden in another suite's shell body.
+if out="$(python3 - "$REPO_ROOT" <<'PYCONTROL'
+from pathlib import Path
+import runpy,sys
+root=Path(sys.argv[1]); selector=runpy.run_path(str(root/'scripts/test'))
+workflows=selector['discover'](root)
+suite=selector['Suite']('python','tests/evidence-delta/test_controls.py')
+for changed in ['scripts/evidence-delta.py','tools/routine-issue-observer.py','tests/evidence-delta/test_controls.py']:
+    picked=selector['select'](workflows,[changed])
+    assert suite in picked, 'policy subject not selected for '+changed
+    assert any(reason.workflow.endswith('policy.yml') for reason in picked[suite]), 'missing policy selection reason'
+    assert suite.cmd==['python3','tests/evidence-delta/test_controls.py'], 'unexpected subject invocation'
+print('evidence delta direct subject selected for helper, observer and test changes')
+PYCONTROL
+)"; then
+  ok "real policy subject selects delta controls for helper, observer and test changes"
+else
+  bad "real policy subject must directly select delta controls" "$out"
+fi
+
 echo
 echo "test-selector fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::test-selector fixture FAILED"; exit 1; }

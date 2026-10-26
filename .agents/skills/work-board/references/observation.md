@@ -136,6 +136,23 @@ commands and concrete recipe. No automatic reviewer, provider interception or ba
 
 ## Finite original-operation attention
 
+Use one bounded observer for the selected operation or reply window. Reuse its complete cursor and
+report determining change, failure or deadline; do not add duplicate watches or model turns for
+unchanged polls. An expired observation window never renews the operation it observes. After a failed
+or partial read, retain that failure and the last complete cursor; a later successful read clears only
+the current read gap. Reserve the full query and cleanup allowance before starting a read.
+
+For ordinary issue-channel replies, the optional read-only `tools/routine-issue-observer.py` holds one
+cooperative operation lock and emits bounded change/failure/deadline attention. It sends no message,
+starts no job and grants no operation authority. Use the actual canonical channels and standing read
+authorization. This Python helper does not activate the separately qualified installed
+`observe-operation` route below or replace the owning issue.
+
+Record reusable capability observations by endpoint, non-secret credential context and relevant source/policy/
+runtime identity. Recheck on determining change rather than repeating broad permission discussion.
+An unavailable 403 or 404 is not empty policy or source absence; preserve the response and use an
+already qualified working route when one exists.
+
 The additive `observe-operation` source route observes one explicitly admitted, already-running
 GitHub Actions run and attempt. Use it only after its source, coherent publication, physically
 verified installed caller and instruction discovery have been qualified for the selected scope.

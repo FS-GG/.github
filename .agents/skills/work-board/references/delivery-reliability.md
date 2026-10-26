@@ -79,6 +79,27 @@ workflow/trigger/inventory and runtime preflight early. Keep typed runtime obser
 outcomes separate from cleared manager metadata, as described in [host guidance](host-loop.md#bounded-delegation-and-runtime-observation).
 Ordinary isolated tests and authorized read-only diagnostics acquire no new gate from this section.
 
+## Reuse an accepted evidence baseline
+
+Identify an accepted source/evidence bundle once by its immutable identity, verified artifact hashes,
+acceptance scope and durable review reference. For a successor, review changed files and affected
+dependencies against that baseline, reusing unchanged verified bytes. Refresh determining native
+head, policy, workflow, credential and runtime facts when their source or capability changes. Historical
+byte verification does not prove that a current mutable path still contains those bytes.
+
+Retain original run identities, limits, failures and Unknowns when adding later observations. Keep
+artifact integrity, source review, publication, process/writer/namespace settlement and consumer
+acceptance distinct. A changed source inherits neither an earlier test result nor earlier native
+acceptance. Required exact-head CI and coherent validation retain their existing rules.
+
+The optional `scripts/evidence-manifest.py verify-delta` helper provides a compact machine-readable
+view of source identities, original outcomes, artifact hashes, reported acceptance scope and unresolved
+gaps. Select its baseline and receipt by explicit hashes. Its short report distinguishes historical
+proof reuse from current payload reads; neither a manifest nor a receipt creates acceptance or execution
+authority. Keep private evidence in its existing custody, without introducing a mandatory packet or
+second lifecycle ledger. Use the existing primary issue for progress, as described in
+[host guidance](host-loop.md#one-primary-progress-record).
+
 ## Evidence window and limits
 
 The 2026-10-12 review covered **2026-10-11 18:56:30 UTC through 2026-10-12 18:56:30 UTC**.
@@ -185,7 +206,8 @@ independent only where its actual dependencies, touch-sets and resources permit.
 
 ## Priorities and observation
 
-Apply the changes without a new service, CLI, receipt ledger or rollout programme:
+Apply these defaults through the maintained workflow and optional evidence/observation helpers;
+they require no new service, mandatory receipt ledger or rollout programme:
 
 1. Make first failures sufficient to diagnose; independently retain cleanup and reporting outcomes.
 2. Exercise actual execution seams and final inputs before expensive qualification.
@@ -202,6 +224,10 @@ a completed exact-store migration as unfinished merely because a broader operati
 
 Measure first-pass qualification, terminal diagnostic completeness, time to accepted installed behavior,
 actionable-result-to-closure latency and repeated evidence exposure from existing necessary operations.
+Where available, count coordinator interventions per original run, repeated evidence reads and time
+from source readiness to the first genuine native execution. Distinguish locally measured verifier
+reads/reuse from reported operation observations. Missing coverage stays Unknown; token savings remain
+unmeasured without attributed usage. Do not add a measurement workload or gate to obtain these figures.
 Record repair causes and the original item population, including failed/stopped attempts; distinguish
 useful verification from harness repair, external waiting and coordination. Use PR/check timings as
 supporting metrics, not accepted-feature counts or whole-family cost. State denominators, freshness,
