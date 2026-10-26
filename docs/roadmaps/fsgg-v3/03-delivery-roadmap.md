@@ -2,6 +2,8 @@
 
 Status: future proposal, 2026-10-10. This roadmap implements the [clean rewrite design](../2026-10-10-fsgg-v3-clean-rewrite.md) only after completed v2. It creates no active work assignments, board items, publication authority or cutover approval.
 
+See the [reuse and example-driven delivery addendum](04-reuse-and-example-driven-delivery-addendum.md) for the agreed refinements to infrastructure reuse, M1 checkpoints, forge selection, scoped cutover isolation and measurable simplification. This remains a future proposal.
+
 ## Programme shape
 
 Build one integrated replacement, **Specairn**, in one platform monorepo, with self-hosted Forgejo as the proposed primary forge. The [GitHub reservation](https://github.com/FS-GG/specairn) was created on 2026-10-10; the canonical Forgejo instance, URL and version await M1 qualification. Implementation remains deferred until v2 completion. Keep v3 main usable in an isolated environment from the first vertical slice onward. Parallel work converges there continuously; it does not replace parts of production v2. Production adoption happens once, after the complete accepted scope is qualified.

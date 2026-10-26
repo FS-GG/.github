@@ -2,6 +2,8 @@
 
 Status: proposed architecture and future programme, 2026-10-10. Implementation starts only after v2 is complete. This document does not activate work, authorize a cutover, change current policy or declare any proposed capability implemented.
 
+See the [reuse and example-driven delivery addendum](fsgg-v3/04-reuse-and-example-driven-delivery-addendum.md) for the agreed refinements to infrastructure reuse, M1 checkpoints, forge selection, scoped cutover isolation and measurable simplification. This remains a future proposal.
+
 This is a proposal for **version 3 of the development framework**. It is distinct from the [current unified roadmap's third revision](2026-10-07-unified-development-roadmap-v3.md), which organizes existing v2 work.
 
 The recommended design is a dedicated platform monorepo containing a modular control plane, typed-SDD integration, a small durable runtime, Forgejo and execution adapters, and cohesive built-in product packs. Start runtime evaluation with a PostgreSQL-backed .NET worker; choose the smallest implementation that passes the required recovery and workload scenarios. Build a complete replacement with new contracts and storage, then switch once. Preserve the useful behavioral knowledge from v2 without preserving its APIs, command names, schemas or historical process machinery.
