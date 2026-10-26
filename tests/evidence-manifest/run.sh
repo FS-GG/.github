@@ -48,6 +48,3 @@ if python3 "$ROOT/scripts/evidence-manifest.py" verify "$WORK/manifest.json" --n
 fi
 python3 "$ROOT/scripts/evidence-manifest.py" verify "$WORK/manifest.json" --now 2026-11-13T00:00:00Z --allow-expired --artifact "tests=$WORK/result.trx"
 echo 'evidence manifest fixture: ok'
-
-# The existing policy subject also owns the additive delta/issue-observer controls.
-PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/evidence-delta/test_controls.py"

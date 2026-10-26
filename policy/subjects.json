@@ -15,6 +15,10 @@
       "command": ["bash", "tests/evidence-manifest/run.sh"]
     },
     {
+      "id": "evidence-delta-fixture",
+      "command": ["python3", "tests/evidence-delta/test_controls.py"]
+    },
+    {
       "id": "historical-evidence-fixture",
       "command": ["bash", "tests/historical-evidence/run.sh"]
     },

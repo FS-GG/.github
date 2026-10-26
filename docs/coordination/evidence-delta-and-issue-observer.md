@@ -135,7 +135,8 @@ process containment. Exit 0 means a complete snapshot or observed change; exit 3
 failed or reached its bound. Neither means ready, accepted or safe.
 
 Run focused local controls with `python3 tests/evidence-delta/test_controls.py`; the existing
-`tests/evidence-manifest/run.sh` covers schema-v1 behavior and invokes these controls through
-the existing `evidence-manifest-fixture` policy subject. Both policy workflow event filters include
+`tests/evidence-manifest/run.sh` covers schema-v1 behavior. The dedicated `evidence-delta-fixture`
+subject in `policy/subjects.json` invokes these controls once through the existing policy job,
+and the local suite selector discovers the direct subject command. Both policy workflow event filters include
 the helper, observer, controls and usage documentation paths. Apply the coordinator's ordinary
 isolated verification resource share to the test process and its inert children.
