@@ -167,7 +167,7 @@ class Controls(unittest.TestCase):
             with self.assertRaises(D.EvidenceError): D.read_regular(path, 10)
     def cursor(self):
         return {'schema': O.SCHEMA, 'repository': 'FS-GG/.github', 'issues': [4516],
-                'originalRequest': 'original', 'successful': True,
+                'originalRequest': 'original', 'successful': True, 'since': None,
                 'comments': {'4516': [{'id': 1, 'updatedAt': 'then', 'bodySha256': 'a'*64}]}}
     def test_edited_message_and_partial_population_cursor(self):
         base = self.cursor()
@@ -227,6 +227,78 @@ class Controls(unittest.TestCase):
             lock.assert_not_called()
             spawn.assert_not_called()
         self.assertIsNone(json.loads(output.getvalue())['lastCompleteCursor'])
+    def test_since_normalization_and_filtered_pagination_route_scope(self):
+        since = '2026-10-26T13:25:00Z'
+        seen = []
+        def capture(command, deadline):
+            seen.append(command)
+            page = len(seen)
+            rows = [{'id': n+1, 'updated_at': '2026-10-26T13:26:00Z', 'body': 'edited older comment'}
+                    for n in range(100)] if page == 1 else []
+            return json.dumps(rows).encode()
+        with patch.object(O, 'capture', capture):
+            cursor, pages = O.snapshot('FS-GG/.github', [4516], 'original', 30,
+                since='2026-10-26T15:25:00+02:00', clock=lambda: 0)
+        self.assertEqual(cursor['since'], since)
+        self.assertEqual(pages, 2)
+        for page, command in enumerate(seen, 1):
+            self.assertEqual(command[6], 'repos/FS-GG/.github/issues/4516/comments?per_page=100&page=' +
+                str(page) + '&since=2026-10-26T13%3A25%3A00Z')
+        O.validate_cursor(cursor, 'FS-GG/.github', [4516], 'original', since=since)
+        base = copy.deepcopy(cursor)
+        base['comments']['4516'] = [dict(cursor['comments']['4516'][0], bodySha256='a'*64)]
+        def edited(repo, issue, page, deadline, *, since):
+            self.assertEqual(since, cursor['since'])
+            return cursor['comments']['4516'][:1]
+        result = O.observe('FS-GG/.github', [4516], 'original', 30, base,
+                           since=since, read=edited, clock=lambda: 0)
+        self.assertEqual(result['delta']['4516']['changed'], ['1'])
+        self.assertEqual(O.normalize_since('2026-10-26t13:25:00z'), since)
+        for malformed in ('2026-10-26', '2026-10-26T13:25:00', '2026-10-26T13:25:00Z&per_page=1',
+                          '2026-10-26T13:25:00.1234567Z', '2026-10-26T13:25:00+01:99',
+                          '0001-01-01T00:00:00+23:00'):
+            with self.assertRaises(ValueError): O.normalize_since(malformed)
+    def test_since_mismatch_refuses_before_lock_or_get(self):
+        for selected, baseline_since in [('2026-10-26T13:25:00Z', None),
+                                          (None, '2026-10-26T13:25:00Z'),
+                                          ('2026-10-26T13:26:00Z', '2026-10-26T13:25:00Z')]:
+            args = self.observer_args()
+            path = self.root / 'cursor.json'
+            cursor = self.cursor(); cursor['since'] = baseline_since
+            path.write_text(json.dumps(cursor))
+            args[-1] = D.sha(path.read_bytes())
+            if selected: args.extend(['--since', selected])
+            output = io.StringIO()
+            with patch.object(O, 'lock_operation') as lock, patch.object(O.subprocess, 'Popen') as spawn:
+                with contextlib.redirect_stdout(output): self.assertEqual(O.main(args), 3)
+                lock.assert_not_called(); spawn.assert_not_called()
+            self.assertIsNone(json.loads(output.getvalue())['lastCompleteCursor'])
+    def test_same_original_lock_is_held_across_different_since_windows(self):
+        root = self.root / 'private'
+        fd = O.lock_operation(root, 'FS-GG/.github', [4516], 'original')
+        try:
+            # A different window passes baseline validation, but must still hit the same real lock.
+            args = self.observer_args()
+            path = self.root / 'cursor.json'
+            cursor = self.cursor(); cursor['since'] = '2026-10-26T13:25:00Z'
+            path.write_text(json.dumps(cursor))
+            args[-1] = D.sha(path.read_bytes()); args.extend(['--since', cursor['since']])
+            with patch.object(O.subprocess, 'Popen') as spawn, contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(O.main(args), 3)
+                spawn.assert_not_called()
+        finally: os.close(fd)
+    def test_since_population_bound_still_refuses_without_advancing_cursor(self):
+        base = self.cursor(); base['since'] = '2026-10-26T13:25:00Z'
+        reads = []
+        def full(repo, issue, page, deadline, *, since):
+            reads.append((page, since))
+            return [{'id': (page-1)*100+n+1, 'updatedAt': 'then', 'bodySha256': 'a'*64} for n in range(100)]
+        result = O.observe('FS-GG/.github', [4516], 'original', 30, base,
+            since=base['since'], read=full, clock=lambda: 0)
+        self.assertEqual(result['event'], 'observation-failure')
+        self.assertEqual(result['reason'], 'comment pagination bound reached')
+        self.assertEqual(result['lastCompleteCursor'], base)
+        self.assertEqual(len(reads), 4)
     def test_actual_waiting_child_cancelled_and_reaped_before_lock_release(self):
         args = self.observer_args()
         popen, selector_factory, close, acquire = subprocess.Popen, O.selectors.DefaultSelector, os.close, O.lock_operation

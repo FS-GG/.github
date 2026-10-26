@@ -2,6 +2,7 @@
 """Optional bounded GET-only issue-comment observer. No dispatch or native authority."""
 from __future__ import annotations
 import argparse
+from datetime import datetime, timezone
 import fcntl
 import hashlib
 import importlib.util
@@ -15,6 +16,7 @@ import stat
 import subprocess
 import sys
 import time
+from urllib.parse import urlencode
 
 _spec = importlib.util.spec_from_file_location('evidence_delta', Path(__file__).parents[1] / 'scripts/evidence-delta.py')
 assert _spec and _spec.loader
@@ -100,10 +102,27 @@ def capture(command, deadline, *, clock=time.monotonic):
                 except BaseException:
                     pass
 
-def get_page(repo, issue, page, deadline):
+def normalize_since(value):
+    if value is None:
+        return None
+    # Finite datetime precision avoids silently collapsing distinct submicrosecond windows.
+    safe.require(isinstance(value, str) and re.fullmatch(
+        r'[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt](?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]{1,6})?(?:[Zz]|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])', value),
+        'since must be RFC3339 with timezone and at most six fractional digits')
+    parsed = datetime.fromisoformat(value.upper().replace('Z', '+00:00'))
+    try:
+        return parsed.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+    except OverflowError as error:
+        raise ValueError('since lies outside the supported UTC date range') from error
+
+def get_page(repo, issue, page, deadline, *, since=None):
     # Both command and projection are fixed. No caller command, URL, body or credentials are emitted.
+    query = {'per_page': 100, 'page': page}
+    since = normalize_since(since)
+    if since is not None:
+        query['since'] = since
     command = ['gh', 'api', '--hostname', 'github.com', '--method', 'GET',
-               f'repos/{repo}/issues/{issue}/comments?per_page=100&page={page}',
+               f'repos/{repo}/issues/{issue}/comments?{urlencode(query)}',
                '--jq', '[.[] | {id,updated_at,body}]']
     raw = capture(command, deadline)
     try:
@@ -121,7 +140,8 @@ def get_page(repo, issue, page, deadline):
     except (ValueError, UnicodeError) as error:
         raise ObservationError('malformed comment JSON', partial_bytes=len(raw), cleanup='direct-child-reaped; descendants-unverified') from error
 
-def snapshot(repo, issues, request, deadline, *, read=get_page, clock=time.monotonic):
+def snapshot(repo, issues, request, deadline, *, since=None, read=get_page, clock=time.monotonic):
+    since = normalize_since(since)
     comments = {}
     complete_pages = 0
     try:
@@ -130,7 +150,8 @@ def snapshot(repo, issues, request, deadline, *, read=get_page, clock=time.monot
             for page in range(1, MAX_PAGES + 1):
                 if deadline - clock() < READ_SECONDS + CLEANUP_SECONDS:
                     raise Deadline('insufficient original query and cleanup reserve')
-                batch = read(repo, issue, page, deadline)
+                batch = (read(repo, issue, page, deadline) if since is None else
+                         read(repo, issue, page, deadline, since=since))
                 complete_pages += 1
                 rows.extend(batch)
                 safe.require(len({row['id'] for row in rows}) == len(rows), 'duplicate comment identity')
@@ -140,7 +161,7 @@ def snapshot(repo, issues, request, deadline, *, read=get_page, clock=time.monot
                 raise ObservationError('comment pagination bound reached')
             comments[str(issue)] = sorted(rows, key=lambda r: r['id'])
         cursor = {'schema': SCHEMA, 'repository': repo, 'issues': issues, 'originalRequest': request,
-                  'successful': True, 'comments': comments}
+                  'successful': True, 'since': since, 'comments': comments}
         safe.require(len(json.dumps(cursor).encode()) <= 48000, 'cursor population exceeds output budget')
         return cursor, complete_pages
     except (ObservationError, ValueError) as error:
@@ -149,11 +170,12 @@ def snapshot(repo, issues, request, deadline, *, read=get_page, clock=time.monot
         error.complete_pages = complete_pages
         raise error
 
-def validate_cursor(cursor, repo, issues, request):
+def validate_cursor(cursor, repo, issues, request, *, since=None):
     safe.require(len(json.dumps(cursor).encode()) <= 48000, 'baseline cursor exceeds output budget')
     safe.require(cursor.get('schema') == SCHEMA and cursor.get('repository') == repo
                  and safe.same(cursor.get('issues'), issues) and cursor.get('successful') is True
                  and safe.text(cursor.get('originalRequest')) and cursor['originalRequest'] == request
+                 and cursor.get('since') == normalize_since(since)
                  and isinstance(cursor.get('comments'), dict)
                  and set(cursor['comments']) == {str(i) for i in issues}, 'baseline successful cursor identity differs')
     for rows in cursor['comments'].values():
@@ -166,12 +188,12 @@ def validate_cursor(cursor, repo, issues, request):
                          and isinstance(row['bodySha256'], str) and safe.SHA.fullmatch(row['bodySha256']), 'malformed baseline comment identity')
             seen.add(row['id'])
 
-def observe(repo, issues, request, seconds, baseline, *, read=get_page, clock=time.monotonic, sleep=time.sleep):
+def observe(repo, issues, request, seconds, baseline, *, since=None, read=get_page, clock=time.monotonic, sleep=time.sleep):
     deadline = clock() + seconds
     previous = baseline
     while True:
         try:
-            current, pages = snapshot(repo, issues, request, deadline, read=read, clock=clock)
+            current, pages = snapshot(repo, issues, request, deadline, since=since, read=read, clock=clock)
         except ObservationError as error:
             return {'event': 'deadline' if isinstance(error, Deadline) else 'observation-failure',
                     'reason': str(error), 'partialBytes': error.partial_bytes,
@@ -220,10 +242,13 @@ def main(argv=None):
     parser.add_argument('--custody-dir', required=True)
     parser.add_argument('--baseline')
     parser.add_argument('--baseline-sha256')
+    parser.add_argument('--since', help='fixed RFC3339 updated-comment coverage boundary; default unfiltered')
     args = parser.parse_args(argv)
     lock = None
     baseline = None
+    since = None
     try:
+        since = normalize_since(args.since)
         safe.require(re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', args.repo)
                      and all(v not in {'.', '..'} for v in args.repo.split('/')), 'invalid repository')
         safe.require(1 <= len(args.issue) <= 2 and len(set(args.issue)) == len(args.issue)
@@ -234,18 +259,18 @@ def main(argv=None):
         if args.action == 'watch':
             safe.require(args.baseline and args.baseline_sha256, 'explicit successful baseline cursor and SHA256 pin required')
             selected, _ = safe.load(args.baseline, args.baseline_sha256)
-            validate_cursor(selected, args.repo, issues, args.original_request)
+            validate_cursor(selected, args.repo, issues, args.original_request, since=since)
             baseline = selected
         else:
             safe.require(not args.baseline and not args.baseline_sha256, 'snapshot cannot replace an existing baseline')
         lock = lock_operation(args.custody_dir, args.repo, issues, args.original_request)
         if args.action == 'snapshot':
-            cursor, _ = snapshot(args.repo, issues, args.original_request, time.monotonic() + args.seconds)
+            cursor, _ = snapshot(args.repo, issues, args.original_request, time.monotonic() + args.seconds, since=since)
             result = cursor
         else:
             result = {'schema': EVENT, 'repository': args.repo, 'issues': issues,
-                      'originalRequest': args.original_request,
-                      **observe(args.repo, issues, args.original_request, args.seconds, baseline),
+                      'originalRequest': args.original_request, 'since': since,
+                      **observe(args.repo, issues, args.original_request, args.seconds, baseline, since=since),
                       'nativeAcceptance': 'unknown', 'dispatchAuthorized': False}
         raw = json.dumps(result, sort_keys=True, separators=(',', ':'))
         safe.require(len(raw.encode()) <= MAX_EMIT, 'observer output exceeds bound')
@@ -253,7 +278,7 @@ def main(argv=None):
         return 0 if args.action == 'snapshot' or result.get('event') == 'change' else 3
     except (ValueError, OSError, ObservationError, KeyboardInterrupt) as error:
         # Never include response bodies, argv, environment, stderr or credentials.
-        print(json.dumps({'schema': EVENT, 'event': 'observation-failure', 'reason':
+        print(json.dumps({'schema': EVENT, 'event': 'observation-failure', 'since': since, 'reason':
                           str(error) if isinstance(error, (ValueError, ObservationError)) else 'observer interrupted or unavailable',
                           'lastCompleteCursor': baseline, 'partialBytes': getattr(error, 'partial_bytes', 0),
                           'completePagesInFailedSample': getattr(error, 'complete_pages', 0),

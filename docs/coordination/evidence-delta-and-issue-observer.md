@@ -85,17 +85,31 @@ times and body hashes, never comment bodies. Treat its hash as the explicit succ
 ```sh
 python3 tools/routine-issue-observer.py snapshot --repo FS-GG/.github \
   --issue 4516 --issue 4517 --original-request EXISTING_REQUEST_REFERENCE \
+  --since 2026-10-26T13:25:00Z \
   --seconds 60 --custody-dir /private/observer > successful-cursor.json
 python3 tools/routine-issue-observer.py watch --repo FS-GG/.github \
   --issue 4516 --issue 4517 --original-request EXISTING_REQUEST_REFERENCE \
+  --since 2026-10-26T13:25:00Z \
   --seconds 120 --custody-dir /private/observer \
   --baseline successful-cursor.json --baseline-sha256 EXACT_CURSOR_SHA256
 ```
 
+The Home example selects the existing original request's source/reply window, starting at
+`2026-10-26T13:25:00Z`; select the actual agreed UTC boundary for a different request. Optional
+`--since` is a fixed RFC3339 timestamp, normalized to UTC (up to six fractional digits).
+Every page uses the same URL-encoded `since`. GitHub filters by comment update time, so an
+older comment edited inside this window can appear. Cursor/output `since` declares that
+historical coverage boundary; comments neither created nor updated since it are outside the
+sample, and their absence proves nothing about earlier history. Omitting `--since` retains
+unfiltered behavior and the same fail-closed pagination bound. A filtered cursor is never a
+whole-history claim, and this timestamp does not move forward during polling.
+
 These examples are instructions for an explicitly selected future observer; they do not launch
 one as part of source qualification. Both modes hold one nonblocking cooperative `flock` keyed
 by repository, sorted issues and original request until return. The baseline original request must
-match the selected request before lock acquisition or any GET. Use the same private custody
+match the selected request, and its normalized `since` must match the selected window before
+lock acquisition or any GET. The lock key deliberately excludes `since`: selecting a different
+window cannot create a second cooperating observer for the same original request. Use the same private custody
 directory and request identity for cooperating callers. This prevents duplicates among those
 callers, not independent watchers or arbitrary hostile filesystem writers. It creates only a
 lock file, not a status ledger. It cannot coordinate canonical PR watchers.
