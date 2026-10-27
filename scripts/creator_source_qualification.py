@@ -1,10 +1,13 @@
 """Closed Creator023 normal-source qualification; deliberately grants no release effects.
 
-The normal Creator023 source composition is coherent113. Retained Creator020 source qualification
+The normal Creator023 source composition follows the repository coherent-set scalar. Retained Creator020 source qualification
 and its separate genuine108 published-dependency mode keep their identities. Creator021,
 Creator022 and Creator023 are normal-source only; no source binding is an installed/publication receipt.
 """
 from dataclasses import dataclass
+from pathlib import Path
+import re
+from xml.etree import ElementTree
 
 
 @dataclass(frozen=True)
@@ -18,7 +21,24 @@ SOURCE_021 = SourceQualificationBinding("FS.GG.NewSddWorkspace", "0.21.0", "new-
 SOURCE_022 = SourceQualificationBinding("FS.GG.NewSddWorkspace", "0.22.0", "new-sdd-workspace/v0.22.0")
 SOURCE_023 = SourceQualificationBinding("FS.GG.NewSddWorkspace", "0.23.0", "new-sdd-workspace/v0.23.0")
 SOURCE_020_COHERENT_VERSION = "0.110.0"
-SOURCE_COHERENT_VERSION = "0.113.0"
+def source_coherent_version(props):
+    """Read one unconditional stable source scalar; never infer a published dependency."""
+    try:
+        raw = Path(props).read_bytes()
+        if len(raw) > 1048576:
+            raise ValueError("source coherent version input exceeds its bound")
+        nodes = list(ElementTree.fromstring(raw).iter("FsggCoherentSetVersion"))
+    except (OSError, ElementTree.ParseError) as error:
+        raise ValueError("source coherent version is unavailable") from error
+    if len(nodes) != 1 or nodes[0].attrib:
+        raise ValueError("source coherent version requires one unconditional scalar")
+    value = (nodes[0].text or "").strip()
+    if re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", value) is None:
+        raise ValueError("source coherent version must be a literal stable version")
+    return value
+
+
+SOURCE_COHERENT_VERSION = source_coherent_version(Path(__file__).resolve().parents[1] / "Directory.Build.props")
 
 
 def qualification_version(binding):
