@@ -2220,3 +2220,26 @@ installed-reader, currentness and bounded restart/rollback evidence remain neces
 archive bytes alone prove finite custody, not activation, independent-machine backup or disk-loss
 recovery. The existing4516 channel and owning enrollment records carry current supply and
 acceptance; this historical paragraph grants no operation or replay authority.
+
+
+### Recovery and integration corrections — 2026-10-27
+
+The user selected four process corrections for continuing programme execution. Root owns recovery
+and current owning-issue reconciliation; Home retains the durable baseline and same-PR adoption.
+Unadopted private successors need their actual closed packet and independently matching bounded
+Host restore outside managed documentation. Original unavailable bytes and receipts remain unavailable;
+no historical success is reconstructed. The accepted baseline join does not qualify later source.
+
+The existing integrator composes actual roles, wrappers, source/tool pins and selected receiver/lifetime
+early, then freezes one whole candidate for one independent review before publication. Component
+control counts cannot establish that join or transfer an older pass. The selected36-hour terminal
+exposed a current48-hour caller assumption before merge; source compatibility work remains distinct
+from genuine authentication and native qualification. Savings from this process correction are unmeasured.
+
+Missing enrollment fences board-derived selection, while independently authorized issue/PR source and
+the separately qualified scope-snapshot Status route can continue. Preserve the original content-hash
+build failure and repair through an isolated cache with unchanged verified feeds/locks. Current owning
+issues distinguish supplied evidence, independently verified joins, scoped source acceptance and full
+remaining promises. Reconcile stale recovery wording there before handoff; no second status ledger is
+introduced. The canonical [recovery guidance](../../.agents/skills/work-board/references/crash-recovery.md)
+and [parallel-work guidance](../../.agents/skills/intra-repo-parallel-work/SKILL.md) carry these rules.
