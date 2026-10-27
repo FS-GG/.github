@@ -24,14 +24,20 @@ SOURCE_020_COHERENT_VERSION = "0.110.0"
 def source_coherent_version(props):
     """Read one unconditional stable source scalar; never infer a published dependency."""
     try:
-        raw = Path(props).read_bytes()
+        with Path(props).open("rb") as stream:
+            raw = stream.read(1048577)
         if len(raw) > 1048576:
             raise ValueError("source coherent version input exceeds its bound")
-        nodes = list(ElementTree.fromstring(raw).iter("FsggCoherentSetVersion"))
+        root = ElementTree.fromstring(raw)
+        nodes = list(root.iter("FsggCoherentSetVersion"))
     except (OSError, ElementTree.ParseError) as error:
         raise ValueError("source coherent version is unavailable") from error
     if len(nodes) != 1 or nodes[0].attrib:
         raise ValueError("source coherent version requires one unconditional scalar")
+    supported = [node for group in root if group.tag == "PropertyGroup" and not group.attrib
+                 for node in group if node.tag == "FsggCoherentSetVersion"]
+    if root.tag != "Project" or root.attrib or len(supported) != 1 or supported[0] is not nodes[0]:
+        raise ValueError("source coherent version requires unconditional Project/PropertyGroup ancestry")
     value = (nodes[0].text or "").strip()
     if re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", value) is None:
         raise ValueError("source coherent version must be a literal stable version")

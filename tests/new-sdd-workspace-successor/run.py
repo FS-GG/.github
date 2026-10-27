@@ -496,23 +496,35 @@ class WizardReleaseTests(unittest.TestCase):
     def test_source_coherent_scalar_tracks_declared_source_and_refuses_ambiguous_inputs(self):
         with tempfile.TemporaryDirectory() as temporary:
             props = pathlib.Path(temporary) / "Directory.Build.props"
+            def document(value):
+                return "<Project><PropertyGroup><FsggCoherentSetVersion>" + value + "</FsggCoherentSetVersion></PropertyGroup></Project>"
             for version in ("0.114.0", "0.115.0"):
-                props.write_text("<Project><PropertyGroup><FsggCoherentSetVersion>" + version
-                                 + "</FsggCoherentSetVersion></PropertyGroup></Project>")
+                props.write_text(document(version))
                 self.assertEqual(source_coherent_version(props), version)
-            for body in ("<Project/>",
-                         "<Project><FsggCoherentSetVersion>0.114.0</FsggCoherentSetVersion>"
-                         "<FsggCoherentSetVersion>0.115.0</FsggCoherentSetVersion></Project>",
-                         "<Project><FsggCoherentSetVersion Condition='true'>0.114.0</FsggCoherentSetVersion></Project>",
-                         "<Project><FsggCoherentSetVersion>$(OtherVersion)</FsggCoherentSetVersion></Project>",
-                         "<Project><FsggCoherentSetVersion>0.114.0-preview.1</FsggCoherentSetVersion></Project>",
-                         "<Project><FsggCoherentSetVersion>00.114.0</FsggCoherentSetVersion></Project>",
-                         "<Project>"):
-                props.write_text(body)
-                with self.assertRaises(ValueError):
+            for value in ("$(OtherVersion)", "0.114.0-preview.1", "00.114.0"):
+                props.write_text(document(value))
+                with self.assertRaisesRegex(ValueError, "literal stable version"):
                     source_coherent_version(props)
+            for body in ("<Project/>",
+                         document("0.114.0").replace("</PropertyGroup>", "<FsggCoherentSetVersion>0.115.0</FsggCoherentSetVersion></PropertyGroup>"),
+                         document("0.114.0").replace("<FsggCoherentSetVersion>", "<FsggCoherentSetVersion Condition='true'>")):
+                props.write_text(body)
+                with self.assertRaisesRegex(ValueError, "one unconditional scalar"):
+                    source_coherent_version(props)
+            for body in (document("0.114.0").replace("<PropertyGroup>", "<PropertyGroup Condition='false'>"),
+                         "<Project><Choose><When Condition='false'><PropertyGroup><FsggCoherentSetVersion>0.114.0</FsggCoherentSetVersion></PropertyGroup></When></Choose></Project>",
+                         "<Project><FsggCoherentSetVersion>0.114.0</FsggCoherentSetVersion></Project>"):
+                props.write_text(body)
+                with self.assertRaisesRegex(ValueError, "unconditional Project/PropertyGroup ancestry"):
+                    source_coherent_version(props)
+            props.write_text("<Project>")
+            with self.assertRaisesRegex(ValueError, "unavailable"):
+                source_coherent_version(props)
+            props.write_bytes(b" " * 1048577)
+            with self.assertRaisesRegex(ValueError, "exceeds its bound"):
+                source_coherent_version(props)
             props.unlink()
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(ValueError, "unavailable"):
                 source_coherent_version(props)
 
     def test_package_closure_joins_projects_metadata_and_actual_built_bytes(self):
@@ -734,7 +746,7 @@ class WizardReleaseTests(unittest.TestCase):
                 board_package_closure(package, 'a' * 40, source_root=root, release_binding=forged)
             # A different selected source scalar cannot borrow this module checkout's version.
             selected_props = root / 'Directory.Build.props'
-            selected_props.write_text('<Project><FsggCoherentSetVersion>0.115.0</FsggCoherentSetVersion></Project>')
+            selected_props.write_text('<Project><PropertyGroup><FsggCoherentSetVersion>0.115.0</FsggCoherentSetVersion></PropertyGroup></Project>')
             with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
                 board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_023)
             selected_props.unlink()
