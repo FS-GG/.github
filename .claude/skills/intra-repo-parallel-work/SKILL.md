@@ -26,6 +26,15 @@ a similar identifier, expired observation or absent owner is no release. Apply t
 [final-input invocation guidance](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/delivery-reliability.md#final-inputs-and-failure-gated-invocation)
 before launch without introducing a new packet, ledger or scheduler.
 
+Compose the determining interfaces early under that same integrator: actual roles and receiving
+identity, wrappers/entrypoints, source and tool pins, selected operator lifetime, and resource/cleanup
+joins. Exercise a small meaningful joined source path before component-control counts are used to
+judge proximity to a coherent candidate. A changed receiver or lifetime needs a coherent caller/pin
+sweep; earlier component passes do not transfer to it. Freeze the joined candidate and use one
+independent exact-candidate review on the existing PR before adoption/publication. Retain source,
+installed and native acceptance separately. This is a repair direction, not evidence of measured savings
+or permission to invent missing runtime inputs; it adds no review chain or second implementation owner.
+
 Communicate overlap through the [active worker channel](https://github.com/FS-GG/.github/blob/main/docs/coordination/worker-channels.md).
 Pause the affected edits when scope grows or conflicts; have owners/integrator reconcile the touch-set
 before proceeding. Do not overwrite another worker's files or infer release from silence/lease expiry.

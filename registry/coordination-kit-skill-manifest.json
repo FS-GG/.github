@@ -100,11 +100,11 @@
     {
       "id": "intra-repo-parallel-work",
       "supplied-by": ".claude/skills/intra-repo-parallel-work",
-      "tree-sha256": "9bf7069b37d14437e4e54e5caa036d02c76a317deddc45364c84672af9ca2393",
+      "tree-sha256": "3ce57be5ce89c7684fe4d0cac09e1d51fbbf7206ebb7c56d7ec216c8777f664a",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "ecdfd164c4e8ec45272f7d71e0131a87fd3e3d7ef57356a07ec420e4fad60eaa",
+          "sha256": "a15c5a786f5af203ae8296bcab1ef8775b3bf7e4c819f5fdd6f29173c96dbac7",
           "executable": false
         },
         {

@@ -632,8 +632,11 @@
        SOURCE only; published111, original journals and installed pins remain unchanged. -->
   <!-- 0.112.0 -> 0.113.0 (#4801): Claude Code transcript usage capture in the CLI and
        packaged pnext-item/work-roadmap guidance. SOURCE only; published112 and installed pins unchanged. -->
+  <!-- 0.113.0 -> 0.114.0: user-selected recovery custody, early interface composition,
+       scoped binding/cache continuation and current owning-issue guidance change packaged behavior.
+       SOURCE preparation only; published113, installed callers and operational acceptance stay separate. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.113.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.114.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

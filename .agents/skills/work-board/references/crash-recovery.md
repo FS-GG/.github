@@ -32,6 +32,24 @@ coverage, and unresolved relevant conflicts still block the affected operation. 
 Unknowns do not globally block independently admitted fresh work. Preserve original journals/custody;
 no second recovery ledger, implicit release or new-ID retry of an uncertain effect is permitted.
 
+## Preserve private successors and reconcile current owners
+
+Root owns recovery and the complete source/binding join; the existing Home owner retains durable
+baseline custody and same-PR adoption. For a recovered private successor whose original bytes cannot
+be recovered from protected source, keep its closed membership, sizes, hashes and original receipts
+outside managed installation/documentation and disposable workspace roots. Use the existing bounded
+Host custody route and independently compare restored bytes before handing that successor to adoption.
+This applies to the private recovery boundary; it does not add packets or gates to ordinary Git work.
+Unavailable older outputs and receipts stay unavailable. A recreated success record, surviving baseline
+or component result cannot recover them or qualify a different successor.
+
+Read current owner-channel evidence before carrying an old recovery hold forward. Reconcile the
+existing owning issue's Current deliverable, Next action, Blocked on and Acceptance evidence before
+a return or handoff; preserve its complete Done when and original effects. Distinguish reported supply,
+independently verified bytes/source joins, scoped accepted delivery and remaining acceptance. Use that
+owning issue rather than another status ledger. Reconsider a custody hold only for the actual selected
+packet and current source/native joins; matching bytes alone grant no operation or native acceptance.
+
 ## Find surviving references
 
 Resolve the owning `.github` repository and affected repositories from their existing remotes and workspace
@@ -86,6 +104,13 @@ Observe queued and running hosted jobs before opening PRs or dispatching qualifi
 existing PR/check watcher and reconcile original runs before requesting retries; a session restart does
 not restart CI. Admit only independent work within known capacity and disjoint touch-sets. If unknown
 occupancy or ownership could overlap a lane, fence that lane rather than guess resources are free.
+
+A missing enrollment binding withholds board-derived selection; it does not globally withhold
+independently authorized issue/PR source continuation. Guarded Status maintenance has its own qualified
+scope-snapshot route under [Status lifecycle](status-lifecycle.md#guard-the-native-effect), with
+preservation/readback required. Missing facts fence the affected action, not every recovery step.
+Preserve a package content-hash failure before repair. Use an isolated cache with the verified feeds and
+unchanged dependency locks; do not delete a shared cache or weaken lock/content verification to proceed.
 
 Read installed capability and telemetry configuration discovery/status through existing entrypoints;
 compare them with the selected operation's required version and retained installation evidence. Source

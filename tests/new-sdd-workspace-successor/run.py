@@ -29,7 +29,7 @@ from release_successor_journal import Refused as JournalRefused
 import new_sdd_workspace_successor_admission as source_admission
 from new_sdd_workspace_successor_admission import WizardAdmission, SourceCompatibility
 from new_sdd_workspace_successor_execution import effects, CURRENT_017, CURRENT_022, CURRENT_021, CURRENT_020, CURRENT_019, CURRENT_016, CURRENT_015, CURRENT_014, HISTORICAL_013, ReleaseBinding
-from creator_source_qualification import SOURCE_020, SOURCE_021, SOURCE_022, SOURCE_023, SOURCE_020_COHERENT_VERSION, SOURCE_COHERENT_VERSION, qualification_version
+from creator_source_qualification import SOURCE_020, SOURCE_021, SOURCE_022, SOURCE_023, SOURCE_020_COHERENT_VERSION, SOURCE_COHERENT_VERSION, qualification_version, source_coherent_version
 from new_sdd_workspace_successor_provider import WizardProvider, NotFound, output_signals, publisher_error, DIAGNOSTIC_LIMIT
 
 
@@ -154,7 +154,7 @@ def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root
     if checker.package_identity(package) != (release_binding.package, release_binding.version, source_sha):
         raise ValueError("current creator package/source identity differs")
     dependency_pin = json.loads((source_root / "scripts/creator-frozen-coord-dependencies.json").read_text())
-    coherent_version = (SOURCE_COHERENT_VERSION if release_binding is SOURCE_021 or release_binding is SOURCE_022 or release_binding is SOURCE_023 else
+    coherent_version = (source_coherent_version(source_root / "Directory.Build.props") if release_binding is SOURCE_021 or release_binding is SOURCE_022 or release_binding is SOURCE_023 else
                         SOURCE_020_COHERENT_VERSION if release_binding is SOURCE_020 else
                         "0.108.0" if release_binding is CURRENT_019 else dependency_pin["version"])
     if release_binding in (CURRENT_019, SOURCE_020, SOURCE_021, SOURCE_022, SOURCE_023) and (frozen_dependencies is not None or frozen_source is not None):
@@ -493,6 +493,40 @@ class WizardReleaseTests(unittest.TestCase):
                 board_package_closure(package, creator_sha, source_root=creator,
                                       frozen_dependencies=dependencies, frozen_source=producer, release_binding=CURRENT_016)
 
+    def test_source_coherent_scalar_tracks_declared_source_and_refuses_ambiguous_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            props = pathlib.Path(temporary) / "Directory.Build.props"
+            def document(value):
+                return "<Project><PropertyGroup><FsggCoherentSetVersion>" + value + "</FsggCoherentSetVersion></PropertyGroup></Project>"
+            for version in ("0.114.0", "0.115.0"):
+                props.write_text(document(version))
+                self.assertEqual(source_coherent_version(props), version)
+            for value in ("$(OtherVersion)", "0.114.0-preview.1", "00.114.0"):
+                props.write_text(document(value))
+                with self.assertRaisesRegex(ValueError, "literal stable version"):
+                    source_coherent_version(props)
+            for body in ("<Project/>",
+                         document("0.114.0").replace("</PropertyGroup>", "<FsggCoherentSetVersion>0.115.0</FsggCoherentSetVersion></PropertyGroup>"),
+                         document("0.114.0").replace("<FsggCoherentSetVersion>", "<FsggCoherentSetVersion Condition='true'>")):
+                props.write_text(body)
+                with self.assertRaisesRegex(ValueError, "one unconditional scalar"):
+                    source_coherent_version(props)
+            for body in (document("0.114.0").replace("<PropertyGroup>", "<PropertyGroup Condition='false'>"),
+                         "<Project><Choose><When Condition='false'><PropertyGroup><FsggCoherentSetVersion>0.114.0</FsggCoherentSetVersion></PropertyGroup></When></Choose></Project>",
+                         "<Project><FsggCoherentSetVersion>0.114.0</FsggCoherentSetVersion></Project>"):
+                props.write_text(body)
+                with self.assertRaisesRegex(ValueError, "unconditional Project/PropertyGroup ancestry"):
+                    source_coherent_version(props)
+            props.write_text("<Project>")
+            with self.assertRaisesRegex(ValueError, "unavailable"):
+                source_coherent_version(props)
+            props.write_bytes(b" " * 1048577)
+            with self.assertRaisesRegex(ValueError, "exceeds its bound"):
+                source_coherent_version(props)
+            props.unlink()
+            with self.assertRaisesRegex(ValueError, "unavailable"):
+                source_coherent_version(props)
+
     def test_package_closure_joins_projects_metadata_and_actual_built_bytes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
@@ -507,6 +541,7 @@ class WizardReleaseTests(unittest.TestCase):
                         continue
                     copy_project((path.parent / reference.attrib['Include']).resolve())
             copy_project(ROOT / 'scripts/NewSddWorkspace/NewSddWorkspace.fsproj')
+            files[pathlib.Path('Directory.Build.props')] = (ROOT / 'Directory.Build.props').read_bytes()
             files[pathlib.Path('scripts/creator-frozen-coord-dependencies.json')] = (ROOT / 'scripts/creator-frozen-coord-dependencies.json').read_bytes()
             files[pathlib.Path('scripts/new-sdd-workspace-release.py')] = (ROOT / 'scripts/new-sdd-workspace-release.py').read_bytes()
             for relative, body in files.items():
@@ -636,9 +671,9 @@ class WizardReleaseTests(unittest.TestCase):
                     board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_020)
 
 
-            # The selected021 source identity is normal113 only; retained020 above stays exact.
+            # The selected021 source identity is current normal-source coherent set only; retained020 above stays exact.
             nuspec = nuspec.replace(b'0.20.0', b'0.21.0')
-            next_deps = json.loads(json.dumps(source_deps).replace('0.110.0', '0.113.0'))
+            next_deps = json.loads(json.dumps(source_deps).replace('0.110.0', SOURCE_COHERENT_VERSION))
             for target in next_deps['targets'].values():
                 target['new-sdd-workspace/0.21.0'] = target.pop('new-sdd-workspace/0.20.0')
             next_members = {**members, 'new-sdd-workspace.deps.json': json.dumps(next_deps).encode()}
@@ -646,7 +681,7 @@ class WizardReleaseTests(unittest.TestCase):
                 (output / name).write_bytes(body)
             pack(next_members)
             result = board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_021)
-            self.assertEqual((result['version'], result['coherentVersion']), ('0.21.0', '0.113.0'))
+            self.assertEqual((result['version'], result['coherentVersion']), ('0.21.0', SOURCE_COHERENT_VERSION))
             self.assertEqual(result['builtFilesCompared'], len(next_members))
             self.assertEqual(result['mode'], 'source-only')
             self.assertIs(result['releaseEligible'], False)
@@ -657,14 +692,14 @@ class WizardReleaseTests(unittest.TestCase):
             forged = type(SOURCE_021)(SOURCE_021.package, SOURCE_021.version, SOURCE_021.tag)
             with self.assertRaisesRegex(ValueError, 'unknown Creator package binding'):
                 board_package_closure(package, 'a' * 40, source_root=root, release_binding=forged)
-            for stale_version in ('0.112.0', '0.111.0', '0.110.0', '0.109.0', '0.108.0'):
-                stale_metadata = json.dumps(next_deps).replace('0.113.0', stale_version).encode()
+            for stale_version in ('0.113.0', '0.112.0', '0.111.0', '0.110.0', '0.109.0', '0.108.0'):
+                stale_metadata = json.dumps(next_deps).replace(SOURCE_COHERENT_VERSION, stale_version).encode()
                 (output / 'new-sdd-workspace.deps.json').write_bytes(stale_metadata)
                 pack({**next_members, 'new-sdd-workspace.deps.json': stale_metadata})
                 with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
                     board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_021)
 
-            # The selected022 source identity is normal113 too; retained021 above stays exact.
+            # The selected022 source identity is current normal-source coherent set too; retained021 above stays exact.
             nuspec = nuspec.replace(b'0.21.0', b'0.22.0')
             next22_deps = json.loads(json.dumps(next_deps))
             for target in next22_deps['targets'].values():
@@ -674,7 +709,7 @@ class WizardReleaseTests(unittest.TestCase):
                 (output / name).write_bytes(body)
             pack(next22_members)
             result = board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_022)
-            self.assertEqual((result['version'], result['coherentVersion']), ('0.22.0', '0.113.0'))
+            self.assertEqual((result['version'], result['coherentVersion']), ('0.22.0', SOURCE_COHERENT_VERSION))
             self.assertEqual(result['builtFilesCompared'], len(next22_members))
             self.assertEqual(result['mode'], 'source-only')
             self.assertIs(result['releaseEligible'], False)
@@ -684,14 +719,14 @@ class WizardReleaseTests(unittest.TestCase):
             forged = type(SOURCE_022)(SOURCE_022.package, SOURCE_022.version, SOURCE_022.tag)
             with self.assertRaisesRegex(ValueError, 'unknown Creator package binding'):
                 board_package_closure(package, 'a' * 40, source_root=root, release_binding=forged)
-            for stale_version in ('0.112.0', '0.110.0'):
-                stale_metadata = json.dumps(next22_deps).replace('0.113.0', stale_version).encode()
+            for stale_version in ('0.113.0', '0.112.0', '0.110.0'):
+                stale_metadata = json.dumps(next22_deps).replace(SOURCE_COHERENT_VERSION, stale_version).encode()
                 (output / 'new-sdd-workspace.deps.json').write_bytes(stale_metadata)
                 pack({**next22_members, 'new-sdd-workspace.deps.json': stale_metadata})
                 with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
                     board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_022)
 
-            # The selected023 runtime-floor source keeps the normal113 graph too.
+            # The selected023 runtime-floor source keeps the current normal-source graph too.
             nuspec = nuspec.replace(b'0.22.0', b'0.23.0')
             next23_deps = json.loads(json.dumps(next22_deps))
             for target in next23_deps['targets'].values():
@@ -701,7 +736,7 @@ class WizardReleaseTests(unittest.TestCase):
                 (output / name).write_bytes(body)
             pack(next23_members)
             result = board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_023)
-            self.assertEqual((result['version'], result['coherentVersion']), ('0.23.0', '0.113.0'))
+            self.assertEqual((result['version'], result['coherentVersion']), ('0.23.0', SOURCE_COHERENT_VERSION))
             self.assertIs(result['releaseEligible'], False)
             for old_binding in (SOURCE_022, SOURCE_021, SOURCE_020, CURRENT_019):
                 with self.assertRaisesRegex(ValueError, 'current creator package/source identity differs'):
@@ -709,6 +744,14 @@ class WizardReleaseTests(unittest.TestCase):
             forged = type(SOURCE_023)(SOURCE_023.package, SOURCE_023.version, SOURCE_023.tag)
             with self.assertRaisesRegex(ValueError, 'unknown Creator package binding'):
                 board_package_closure(package, 'a' * 40, source_root=root, release_binding=forged)
+            # A different selected source scalar cannot borrow this module checkout's version.
+            selected_props = root / 'Directory.Build.props'
+            selected_props.write_text('<Project><PropertyGroup><FsggCoherentSetVersion>0.115.0</FsggCoherentSetVersion></PropertyGroup></Project>')
+            with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
+                board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_023)
+            selected_props.unlink()
+            with self.assertRaisesRegex(ValueError, 'source coherent version is unavailable'):
+                board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_023)
 
     def test_every_effect_is_admitted_and_read_back_once(self):
         self.assertEqual(len(self.ordered), 8)
@@ -828,7 +871,6 @@ class WizardReleaseTests(unittest.TestCase):
         props = ElementTree.parse(ROOT / 'Directory.Build.props')
         self.assertEqual(next(node.text for node in props.iter('FsggCoherentSetVersion')), SOURCE_COHERENT_VERSION)
         self.assertEqual(SOURCE_020_COHERENT_VERSION, '0.110.0')
-        self.assertEqual(SOURCE_COHERENT_VERSION, '0.113.0')
         self.assertLess(candidate.index("creator-current-coord-dependencies.py preflight"),
                         candidate.index("actions/setup-dotnet"))
         self.assertIn('creator-current-coord-dependencies.py preflight', candidate)

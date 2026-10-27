@@ -130,8 +130,8 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.113.0 — Add Claude Code transcript usage capture: `telemetry usage collect claude --session-file` and passive `claude-local-transcript/1` observations through the existing provider-usage path. Passive capture retires finished sources and responses, so one association stays within its bounds over days of transcripts; do not roll an association that 0.113.0 has retired back to 0.112.0, which would re-read closed sources.
-Board-v2 `migration-prepare` refusals now retain a private typed failure record beside the prepared report (#4812). Carry corrected pnext-item/work-roadmap guidance naming the working Claude route. Codex reading is unchanged apart from closed-source retirement; publication, installed adoption and Host ingestion remain separate; published112 is unchanged.
+    <PackageReleaseNotes>0.114.0 — Refine packaged recovery guidance: preserve private successor custody, compose actual roles/entrypoints/pins/lifetimes early, scope missing-binding and cache failures, and reconcile current owning issues. Kit, Drivers and CLI advance as one coherent set; the CLI command vocabulary is unchanged. Source, installed adoption and native acceptance remain distinct.
+Claude associations retired by 0.113.0 must not be rolled back to 0.112.0: the older reader would re-read closed sources.
 
 $(FsggStandingAdvisories)
 
