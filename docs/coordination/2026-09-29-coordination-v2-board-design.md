@@ -2197,3 +2197,26 @@ organization continuation and protected rollback/restoration/process restart rem
 previously accepted joins. All439 inherited and46later reservation holds and missing original
 journals stay distinctly Unknown/unreleased. Parent execution/benefit and actual client replacement
 or disk-loss recovery assertions remain open.
+
+
+### Managed-document replacement and unpublished-pair recovery — 2026-10-27
+
+Private runtime custody must remain outside installed coordination documentation. The container
+installer replaces its managed `fs-gg/coordination` tree during refresh. A private pair prepared
+there on October27 became unavailable before any protected commitment or activation. The exact
+deleting process was not retained; the observed replacement and inspected installer explain the
+namespace collision without proving that process identity. The fdev owner retains this evidence
+gap. Neither surviving source nor an offline constructor success recovers the missing nonce,
+proves old enrollment equality or settles historical native effects.
+
+The replacement uses a dedicated private namespace outside managed documentation, with a fresh
+complete native scope, reviewed constructor inputs and exactly one retained offline invocation.
+Four completed exclusions remain visible; every non-completed membership is covered. This is a
+prospective replacement, not reconstruction of the lost cohort. Before protected commitment and
+activation, require an ordinary Host-owned closed archive and independently byte-equal restore.
+After protected delivery, change only the final runtime population revision while preserving the
+original generated payload and nonce; retain and qualify that final artifact separately. Actual
+installed-reader, currentness and bounded restart/rollback evidence remain necessary. Matching
+archive bytes alone prove finite custody, not activation, independent-machine backup or disk-loss
+recovery. The existing4516 channel and owning enrollment records carry current supply and
+acceptance; this historical paragraph grants no operation or replay authority.
