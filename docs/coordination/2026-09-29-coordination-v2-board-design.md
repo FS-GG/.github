@@ -2230,11 +2230,21 @@ Unadopted private successors need their actual closed packet and independently m
 Host restore outside managed documentation. Original unavailable bytes and receipts remain unavailable;
 no historical success is reconstructed. The accepted baseline join does not qualify later source.
 
-The existing integrator composes actual roles, wrappers, source/tool pins and selected receiver/lifetime
-early, then freezes one whole candidate for one independent review before publication. Component
-control counts cannot establish that join or transfer an older pass. The selected36-hour terminal
-exposed a current48-hour caller assumption before merge; source compatibility work remains distinct
-from genuine authentication and native qualification. Savings from this process correction are unmeasured.
+The existing integrator owns the complete Home/Root/stage join while component contributions retain
+disjoint touch-sets. Select the actual allocation mechanism and accountable owner before an issuer or
+wrapper whose proof depends on that allocation; an unresolved bootstrap cycle is a supplier gap.
+The first meaningful joined test uses the actual production entry through launch, the real reservation
+interface, sealed input, execution and collection, substituting only genuine external boundaries.
+Replacing an internal production role proves a component seam, not runtime readiness. Compose actual
+roles, wrappers, source/tool pins and receiver/lifetime early, then freeze one candidate for one
+independent review before publication. Earlier component counts or passes do not transfer. The selected
+36-hour terminal exposed a current48-hour caller assumption before merge; source compatibility remains
+distinct from genuine authentication and native qualification. Savings remain unmeasured.
+
+Non-functional documentation uses citation/link/archive checks and existing protected checks. Keep
+known unchanged advisory-format failures visible rather than forcing unrelated repair. For immutable
+citations, fetch the exact Git object and verify actual bytes before asserting path absence; an
+unavailable or unfetched object leaves a retrieval gap, not a source defect or citation-repair obligation.
 
 Missing enrollment fences board-derived selection, while independently authorized issue/PR source and
 the separately qualified scope-snapshot Status route can continue. Preserve the original content-hash
