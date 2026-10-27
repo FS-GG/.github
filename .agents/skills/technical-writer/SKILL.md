@@ -84,8 +84,11 @@ Validate only what can find a defect in the changed prose:
 3. Run focused frontmatter, formatting, or documentation checks when the repository provides them.
 4. Run a targeted parser or recipe check only when the changed text contains the surface it governs.
 
-Do not run a repository-wide suite merely because a broad workflow includes `docs/**`. Required CI
-remains the independent backstop. Run a targeted documentation build when it is relevant and cheap;
+For non-functional prose, use citation, relative-link and applicable archive checks plus existing
+protected checks; do not add product execution merely because a broad workflow includes `docs/**`.
+Fetch and verify immutable cited bytes before claiming source absence, following Atlas retrieval.
+Keep a known unchanged advisory-format failure visible with its original result and classification;
+it does not by itself justify unrelated repair. Required CI remains the independent backstop. Run a targeted documentation build when it is relevant and cheap;
 do not install or build an unrelated product toolchain for non-functional prose. Report skipped or
 interrupted validation accurately.
 

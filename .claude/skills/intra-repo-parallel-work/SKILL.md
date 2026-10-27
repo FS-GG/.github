@@ -26,14 +26,21 @@ a similar identifier, expired observation or absent owner is no release. Apply t
 [final-input invocation guidance](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/delivery-reliability.md#final-inputs-and-failure-gated-invocation)
 before launch without introducing a new packet, ledger or scheduler.
 
-Compose the determining interfaces early under that same integrator: actual roles and receiving
-identity, wrappers/entrypoints, source and tool pins, selected operator lifetime, and resource/cleanup
-joins. Exercise a small meaningful joined source path before component-control counts are used to
-judge proximity to a coherent candidate. A changed receiver or lifetime needs a coherent caller/pin
-sweep; earlier component passes do not transfer to it. Freeze the joined candidate and use one
-independent exact-candidate review on the existing PR before adoption/publication. Retain source,
-installed and native acceptance separately. This is a repair direction, not evidence of measured savings
-or permission to invent missing runtime inputs; it adds no review chain or second implementation owner.
+Compose the determining interfaces early under that same integrator, including Home/Root/stage
+contributions, receiving identities, wrappers/entrypoints, source/tool pins, selected lifetimes and
+cleanup. Where issuer or wrapper proof depends on allocation, first select the actual allocation
+mechanism and its accountable owner; expose a bootstrap dependency cycle rather than designing
+against an allocator that does not exist. Keep component contributions disjoint while the integrator
+owns the complete join.
+
+The first meaningful joined test follows the actual production entry through launch, the real
+reservation interface, sealed input, execution and collection. Substitute only genuine external
+boundaries; replacing an internal production role qualifies a component seam, not this execution path.
+Component-control counts do not establish runtime readiness. A changed receiver or lifetime needs a
+coherent caller/pin sweep; earlier passes do not transfer. Freeze the joined candidate for one
+independent exact-candidate review on the existing PR before adoption/publication. Retain first
+failures, original Unknowns, custody and the running caller pin; source, installed and native acceptance
+stay distinct. This adds no review chain, second implementation owner or claim of measured savings.
 
 Communicate overlap through the [active worker channel](https://github.com/FS-GG/.github/blob/main/docs/coordination/worker-channels.md).
 Pause the affected edits when scope grows or conflicts; have owners/integrator reconcile the touch-set
