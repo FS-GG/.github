@@ -64,3 +64,54 @@ Original failures and unavailable historical observations remain retained at the
 actual scopes. Consult the live owning issues and
 [worker channels](worker-channels.md) for current owners, pending qualification and
 mailbox requests; this decision is not a second operational ledger.
+
+## First bounded execution path — 27 October
+
+The [owning resource Delivery](https://github.com/FS-GG/.github/issues/4778) carries
+one minimal execution contract and one failing end-to-end test. Its first result
+is one bounded rootless workload through launch, reservation, sealed input,
+execution, collection, committed export and cleanup. Full BAR image export,
+runner qualification, reboot and two-machine requirements remain applicable
+later stages. Neither a passing component count nor this bounded path completes
+them. The [consolidated decision](https://github.com/FS-GG/.github/issues/4516#issuecomment-6445277806)
+retains the same integrator and disjoint contributors. Interfaces change only
+when a determining path failure requires repair; updates follow meaningful
+milestones rather than unchanged board reads.
+
+Root selects PID1-owned provisioning before helper release: an exclusive CPU
+partition, locked Guest RAM, fully allocated backing and complete accounting for
+Host and Guest roles. Unknown capacity, complement policy, installed capability
+or input joins refuse native execution. Host authentication infrastructure stays
+separate from genuinely observed Guest roles; selected phase reservations bind
+actual births, sources, scopes and original cuts. A bounded bootstrap may move
+into its actual selected caller scope within the same birth and slot, without
+renewal or ordinary authority during an uncertain transition.
+
+Guest output writers quiesce before clean unmount and complete detach. The
+unchanged export helper reads an exclusively Host-owned read-only view using
+actual Host pins. Its context is materialized from real allocation and produced
+output facts, preserving the preselected original clocks. Retained archive
+custody remains explicitly accounted after VM cleanup; it is not a released
+reservation. These [lifetime decisions](https://github.com/FS-GG/.github/issues/4778#issuecomment-6447191874)
+retain later export adoption, recovery and policy-release acceptance.
+
+The [journal successor](https://github.com/FS-GG/.github/issues/4820) is explicitly
+new source, not reconstruction of unavailable historical bytes. It preserves
+same-original/key/CAS, exact observations, committed cold read, first process-bound
+cleanup permission and observation-only Read. Typed F# policy and executable
+Quint correspondence remain required for accepted delivery. Working artifacts
+and source fixtures do not establish publication, installation or native success.
+
+The test must enter the actual production main, including input, timer and output
+guards. Parent-only OS substitution does not reach independently executing child
+guards. A [bounded source harness](https://github.com/FS-GG/.github/issues/4778#issuecomment-6447294015)
+may control only encountered raw external kernel/transport facts while executing
+actual child startup, policy and collection. It cannot invent successful role
+receipts, workload output or native enforcement. Unassembled child boundaries
+remain source work, not an external supplier excuse.
+
+Known requirements and the actual entrypoint need checking before implementation.
+A completed worker needs an actual runtime resume, not queued mail alone. Preserve
+first failures and narrower earlier test scope when repairing either mistake.
+These are supported process improvements; savings have not been measured. Live
+issues retain execution status and remaining gaps; Atlas records the decisions.
