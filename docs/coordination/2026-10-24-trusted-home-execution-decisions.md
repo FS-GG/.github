@@ -178,3 +178,44 @@ erase an earlier custody gap. Correct causal wording on the existing owning
 issue, preserve first failures and update only when results or suppliers change.
 These decisions do not establish a complete trace, native readiness, publication,
 adoption or measured savings.
+
+## Administrative preparation boundary — 28 October
+
+Root selected [complete preparation retirement before fresh workload admission](https://github.com/FS-GG/.github/issues/4516#issuecomment-6483556011).
+Preparation retains verified protected immutable files after its processes,
+writers, descriptors and units settle. Final execution receives new resources,
+identities and original clocks. Preparation is an administrative operation, not
+a shorter invocation of the final-only execution profile. The consumer review
+found no need for another resident aggregate holder or a production schema change.
+An empty slice enforces resource properties but is not a process lifetime timer.
+
+The independently reviewed [preparation retention decision](https://github.com/FS-GG/.github/issues/4516#issuecomment-6483852472)
+uses standard manager state: `Type=exec`, `ExitType=cgroup`,
+`RemainAfterExit=yes`, `Restart=no` and `CollectMode=inactive`. Successful
+active/exited state and failed state retain metadata for external collection.
+This supersedes the earlier preparation-only demand for a persistent IPC
+reference; final allocator and collector reference guards are unchanged.
+The rejected default `ExitType=main` proposal could enter exited state while
+children remained and disable its runtime timer. That was a source-review
+finding, not an observed Home failure. The [pinned service implementation](https://github.com/systemd/systemd/blob/73612ea502d53baf9b0df4336cfc296a7ee0d524/src/core/service.c)
+and [unit collection rules](https://github.com/systemd/systemd/blob/73612ea502d53baf9b0df4336cfc296a7ee0d524/src/core/unit.c)
+support the narrower mechanism.
+
+The exact command remains unqualified. Relative runtime limits exclude earlier
+queue/start time; the actual owner must enforce the selected absolute preparation
+cut and leave stop plus independent verification time. Late-copy refusal alone
+does not bound a stuck helper. Capture original generation, exit and cold
+settlement evidence before stopping. A matched completed stop job and independent
+settlement may join subsequent inactivity or garbage collection; absence alone
+proves neither success nor cleanup. Lost or late effects retain their original
+custody and forbid final launch. No restart, reset or replacement identity is
+selected by this decision.
+
+Runtime selection must join the actual generated input and all consumers.
+A package-version label or apphost hash does not identify a framework-dependent
+journal producer: its managed assemblies, dependency metadata and selected
+runtime belong to the closure. Preserved source bundles and private artifact
+manifests support custody without becoming publication or installation evidence.
+Owning issues [4778](https://github.com/FS-GG/.github/issues/4778) and
+[4820](https://github.com/FS-GG/.github/issues/4820) retain current supply and
+acceptance. This decision establishes no native trace or broader qualification.
