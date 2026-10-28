@@ -115,3 +115,58 @@ A completed worker needs an actual runtime resume, not queued mail alone. Preser
 first failures and narrower earlier test scope when repairing either mistake.
 These are supported process improvements; savings have not been measured. Live
 issues retain execution status and remaining gaps; Atlas records the decisions.
+
+## Replay, collection and evidence — 28 October
+
+The accepted [development replay decision](https://github.com/FS-GG/.github/issues/4778#issuecomment-6452716961)
+allows reuse of immutable inputs, source and built artifacts with explicit hashes,
+contract versions and prerequisites. Each receipt names the stages actually run.
+A historical input reference is not a claim that those bytes were executed.
+Processes, reservations, leases, clocks and cleanup observations must be fresh;
+stored identities or receipts cannot establish current validity. Periodic full
+runs check interface drift. Final acceptance still needs a fresh production
+entrypoint through launch, reservation, sealed input, execution, collection and
+cleanup, then review of the frozen whole.
+
+Pure reads and publication batches may reuse an exact closed immutable set
+between full validation boundaries. Charge every selected item before effects;
+retain original deadlines, current identity and stable byte/custody checks.
+No result, pin or permission escapes before successful final validation. This
+does not authorize caching live resource, birth, capacity or lease observations.
+Fixture metadata is not a durable journal: the [ephemeral Source-sidecar decision](https://github.com/FS-GG/.github/issues/4778#issuecomment-6458336311)
+preserves atomic locked updates and fresh permissions without changing any
+production data, input, export or journal durability requirement.
+
+The [stream and terminal-custody decision](https://github.com/FS-GG/.github/issues/4778#issuecomment-6454517050)
+selects explicit bounded VM output pipes and an accounted drainer. Retain the
+exact PID1 unit/invocation through terminal observation; observe actual EOF and
+complete holder/group/cgroup settlement independently. Terminal state is not
+EOF. Derive [VM termination and collection reserves](https://github.com/FS-GG/.github/issues/4778#issuecomment-6455426401)
+inside the original controller cutoff, including both stop windows, draining and
+outside wait. The keeper may remain accounted with an archive hold after VM
+cleanup; that is not keeper retirement or full resource release. Source-policy
+budget examples do not qualify native capacity or installed interfaces.
+
+An [outside collector's selected lifetime](https://github.com/FS-GG/.github/issues/4778#issuecomment-6455873828)
+can exceed the retiring Root original only within its independently authenticated
+provider envelope. Bind the exact role, source, scope and current identities;
+retain its own earlier cutoff. Ordinary Root roles and arbitrary scopes gain no
+extension. Actual activation must fit the selected work, TERM, KILL and return
+cuts before release; incompatible clocks refuse rather than renew.
+
+Source harnesses retain actual receiving identities separately from controlled
+Guest observations. A [bounded cross-exec attachment](https://github.com/FS-GG/.github/issues/4778#issuecomment-6457195056)
+executes unchanged selected entrypoints, preserves the one original deadline and
+enforces the modeled Guest permissions. Instrumentation cannot hide extra
+descriptors or unknown participants from production guards. An unimplemented
+adapter or source boundary is owned integration work, not an external supplier
+hold without a determining supplier fact.
+
+Retain actual exit status, raw waits, PIDFD coldness, group absence, pipe EOF and
+cleanup at their separate scopes. Empty command lines after exit do not prove
+argument drift; a kill status alone does not identify its source. Unavailable
+executable or wait observations stay unavailable. A later byte recheck cannot
+erase an earlier custody gap. Correct causal wording on the existing owning
+issue, preserve first failures and update only when results or suppliers change.
+These decisions do not establish a complete trace, native readiness, publication,
+adoption or measured savings.
