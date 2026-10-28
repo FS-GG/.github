@@ -72,16 +72,18 @@ uncertainty without changing the owner's policy readout.
 
 All nineteen original-key authorization GETs returned HTTP400 with the same
 closed classification: `authorization-unproven:m-html:e-unspecified:s-bounded:r-unmatched`.
-The responses were readable, bounded HTML with no declared charset and no match
-to the recognized policy text. This does not identify the HTML producer or prove
-a proxy, firewall, account-policy or Gallery defect. No raw response body, header
+The responses declared HTML media type, had readable bounded payloads with no
+declared charset, and did not match the recognized policy text. The classification
+does not establish HTML document syntax or identify the response producer; Gallery
+can also serve plain error text with an HTML media type. It does not prove a proxy,
+firewall, account-policy or Gallery defect. No raw response body, header
 value or key was retained. The original scope artifact `12858125231` is 789 bytes,
 SHA256 `7b95eebea76b4a39f7e9ef85c7de65394bc076fb4f5d2029e67180d0767bba74`;
 all five original artifacts and their executor binding were independently checked.
 
 [Issue 4817](https://github.com/FS-GG/.github/issues/4817) retains the original
 failures and publication hold. The remaining question is the authenticated
-HTML400 response and supported original-key authorization contract. No repeat
+HTTP400 response with HTML media type and supported original-key authorization contract. No repeat
 probe, derived-key substitution or gate waiver follows from these observations.
 No tag or package publication ran; a matching policy and successful login remain
 separate from the required authorization result.
