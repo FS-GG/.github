@@ -87,13 +87,21 @@ actual births, sources, scopes and original cuts. A bounded bootstrap may move
 into its actual selected caller scope within the same birth and slot, without
 renewal or ordinary authority during an uncertain transition.
 
-Guest output writers quiesce before clean unmount and complete detach. The
+The original block-export route requires Guest output writers to quiesce before clean unmount and complete detach. The
 unchanged export helper reads an exclusively Host-owned read-only view using
 actual Host pins. Its context is materialized from real allocation and produced
 output facts, preserving the preselected original clocks. Retained archive
 custody remains explicitly accounted after VM cleanup; it is not a released
 reservation. These [lifetime decisions](https://github.com/FS-GG/.github/issues/4778#issuecomment-6447191874)
 retain later export adoption, recovery and policy-release acceptance.
+
+The [28 October reuse decisions](2026-10-28-prior-art-incorporation.md)
+supersede this transfer mechanism only for the explicit one-file bounded profile:
+the existing authenticated channel supplies an exclusive reserved Host spool,
+followed by the same cold pins, typed journal, commit and cleanup boundary.
+That profile uses standard managed Host/Guest services and does not qualify the
+wider legacy role graph or full BAR/image export. Current source, image and native
+readiness remain facts to establish at the owning issue.
 
 The [journal successor](https://github.com/FS-GG/.github/issues/4820) is explicitly
 new source, not reconstruction of unavailable historical bytes. It preserves
