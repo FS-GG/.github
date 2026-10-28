@@ -52,19 +52,43 @@ forward route. Older organization-secret and UI observations in the previous
 record were not refreshed by this policy list.
 
 Rendering's entry matches the repository ID and workflow in the
-[delivered release source](https://github.com/FS-GG/FS.GG.Rendering/blob/51d57b200d3779cc748a872c0126c489af53f56d/.github/workflows/release.yml).
+[delivered release source](https://github.com/FS-GG/FS.GG.Rendering/blob/0efc4e5d3356983b2fedc12558fd015053eb1a1c/.github/workflows/release.yml).
 Its exact `FS.GG.UI` selection plus `FS.GG.UI.*` pattern covers the nineteen
 packages in the current publication candidate. The workflow defaults to
 `Paradigma11`, but `NUGET_USER` can override that default; this account readout does
 not identify the effective value used by a job.
 
-The [nonpublishing preflight](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/40770369107)
-still returned HTTP400/`authorization-unproven` for all nineteen packages. Its
-narrow diagnostic did not recognize the known verification-policy message. A
-matching policy list does not explain that response or establish original-key
-authorization. [Issue 4817](https://github.com/FS-GG/.github/issues/4817) retains
-the original failure and the publication hold; no package or tag publication
-followed from this readout.
+The earlier [nonpublishing preflight](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/40770369107)
+returned HTTP400/`authorization-unproven` for all nineteen packages without
+recognizing the known verification-policy message. Its original result is retained.
+
+A subsequent [fresh nonpublishing run, attempt 1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/40781521738)
+at executor `0efc4e5d3356983b2fedc12558fd015053eb1a1c` completed on 28 October
+at 22:41 UTC. The exact-account guard passed before NuGet login, which also passed.
+That establishes the effective `Paradigma11` login input for this invocation; it
+does not inspect secret values, identify the matched server policy or prove
+package authorization. This runtime observation narrows the earlier account
+uncertainty without changing the owner's policy readout.
+
+All nineteen original-key authorization GETs returned HTTP400 with the same
+closed classification: `authorization-unproven:m-html:e-unspecified:s-bounded:r-unmatched`.
+The responses declared HTML media type, had readable bounded payloads with no
+declared charset, and did not match the recognized policy text. The classification
+does not establish HTML document syntax or identify the response producer. Earlier
+credential-free GETs at 21:22 UTC returned text/html with plain text matching
+[Gallery’s missing-key response](https://github.com/NuGet/NuGetGallery/blob/c25bab040e19d24593fc0c298a0cedb51bf57dcb/src/NuGetGallery.Services/Authentication/Providers/ApiKey/ApiKeyAuthenticationHandler.cs#L57).
+The current classification does not prove a proxy, firewall, account-policy or
+Gallery defect. No raw response body, header
+value or key was retained. The original scope artifact `12858125231` is 789 bytes,
+SHA256 `7b95eebea76b4a39f7e9ef85c7de65394bc076fb4f5d2029e67180d0767bba74`;
+all five original artifacts and their executor binding were independently checked.
+
+[Issue 4817](https://github.com/FS-GG/.github/issues/4817) retains the original
+failures and publication hold. The remaining question is the authenticated
+HTTP400 response with HTML media type and supported original-key authorization contract. No repeat
+probe, derived-key substitution or gate waiver follows from these observations.
+No tag or package publication ran; a matching policy and successful login remain
+separate from the required authorization result.
 
 This capture changes knowledge, not account settings, release gates or operating
 authority. Retrieve the active Atlas successor and reconcile current owner and
