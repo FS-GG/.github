@@ -74,9 +74,11 @@ All nineteen original-key authorization GETs returned HTTP400 with the same
 closed classification: `authorization-unproven:m-html:e-unspecified:s-bounded:r-unmatched`.
 The responses declared HTML media type, had readable bounded payloads with no
 declared charset, and did not match the recognized policy text. The classification
-does not establish HTML document syntax or identify the response producer; Gallery
-can also serve plain error text with an HTML media type. It does not prove a proxy,
-firewall, account-policy or Gallery defect. No raw response body, header
+does not establish HTML document syntax or identify the response producer. Earlier
+credential-free GETs at 21:22 UTC returned text/html with plain text matching
+[Gallery’s missing-key response](https://github.com/NuGet/NuGetGallery/blob/c25bab040e19d24593fc0c298a0cedb51bf57dcb/src/NuGetGallery.Services/Authentication/Providers/ApiKey/ApiKeyAuthenticationHandler.cs#L57).
+The current classification does not prove a proxy, firewall, account-policy or
+Gallery defect. No raw response body, header
 value or key was retained. The original scope artifact `12858125231` is 789 bytes,
 SHA256 `7b95eebea76b4a39f7e9ef85c7de65394bc076fb4f5d2029e67180d0767bba74`;
 all five original artifacts and their executor binding were independently checked.
