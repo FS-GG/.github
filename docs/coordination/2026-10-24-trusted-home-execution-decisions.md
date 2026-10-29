@@ -349,3 +349,45 @@ the missing-receipt inference was withdrawn. Inspect complete new and edited
 comment bodies before attributing silence or dispatch failure, and use the
 existing secondary channel when the primary is full. Preserve original reads
 and avoid duplicate effects, reconstructed receipts or another status ledger.
+
+## Scoped recovery and manager pruning — 29 October
+
+The [actual corrected recovery](https://github.com/FS-GG/.github/issues/4517#issuecomment-6488790813)
+completed one matched original Stop, whole failed-base archive rename, parent
+sync/fsync and current scoped helper retirement. Root
+[independently accepted that custody result](https://github.com/FS-GG/.github/issues/4517#issuecomment-6488848535).
+The original preparation remains failed; archive identity, evidence and charges
+remain retained. The earlier recovery parser failed before Stop, and its failure
+is preserved. Corrected recovery is not historical successful preparation,
+continuous historical cleanup or release of storage charges. A separately
+reviewed fresh preparation was admitted; no fresh preparation execution result
+was supplied at this capture.
+
+Pinned [service state transitions](https://github.com/systemd/systemd/blob/73612ea502d53baf9b0df4336cfc296a7ee0d524/src/core/service.c)
+may prune a successful `SERVICE_EXITED` cgroup. The
+[pruning implementation](https://github.com/systemd/systemd/blob/73612ea502d53baf9b0df4336cfc296a7ee0d524/src/core/cgroup.c)
+may forget the stored path even if trimming fails. Empty manager `ControlGroup`
+is therefore neither foreign identity by itself nor kernel-absence proof.
+The preparation-only current-retirement contract joins exact successful original
+metadata/definition/argv with the protected exact cgroup2 name: actual absence or
+recursive emptiness, stable original identity when previously observed, and
+current outside-observer descriptor/cwd/root/maps settlement. Only actual ENOENT
+establishes absence; permission, I/O, type or parent drift stays Unknown. A pruned
+held descriptor is not treated as a live resurrected group. Repeat retirement
+checks after the mandatory matched Stop and refuse reappearance or a replacement
+generation. Failed terminal metadata permits original Stop, never publication.
+Cold-file verification, exclusive custody and finite outside ownership remain
+necessary; this is not a host-wide or historical-completeness census.
+
+Typed hook evidence must use actual properties rather than defaults for omitted
+text rows. The pinned [Service interface](https://github.com/systemd/systemd/blob/73612ea502d53baf9b0df4336cfc296a7ee0d524/src/core/dbus-service.c)
+and [command-array definition](https://github.com/systemd/systemd/blob/73612ea502d53baf9b0df4336cfc296a7ee0d524/src/core/dbus-execute.h)
+provide seven selected arrays: `ExecStop`, `ExecStopPost`, `ExecStartPre`,
+`ExecStartPost`, `ExecCondition`, `ExecReload` and `ExecReloadPost`, each
+`a(sasbttttuii)`. The [Unit interface](https://github.com/systemd/systemd/blob/73612ea502d53baf9b0df4336cfc296a7ee0d524/src/core/dbus-unit.c)
+provides `TriggeredBy` as `as`. Require present, correctly typed empty results;
+missing `systemctl show` rows do not prove emptiness. `Sockets` is not a Service
+property, and no nonexistent `ExecReloadPre` is queried. Preserve generation
+brackets and refuse missing, malformed or nonempty results. These source and
+recovery findings accept no VM, workload, transfer, positive Commit or broader
+qualification.
