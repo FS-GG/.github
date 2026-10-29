@@ -219,3 +219,49 @@ manifests support custody without becoming publication or installation evidence.
 Owning issues [4778](https://github.com/FS-GG/.github/issues/4778) and
 [4820](https://github.com/FS-GG/.github/issues/4820) retain current supply and
 acceptance. This decision establishes no native trace or broader qualification.
+
+## Runtime bootstrap and preparation stop budget — 29 October
+
+The selected .NET 10.0.12 runtime reaches the actual typed decoder in an ordinary
+source check without the optional LTTng provider DSO. The pinned runtime's
+[trace-provider loader](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/runtime/src/coreclr/pal/src/misc/tracepointprovider.cpp)
+permits that omission for this no-tracing path; it is not a general runtime-file
+exclusion rule. Original full supply remains retained. A one-MiB file-size limit
+caused CoreLib startup failure; increasing address space from eight to sixteen
+GiB did not repair it. A 64-MiB file-size limit with the original eight-GiB address
+space and 256-MiB GC heap reached decoding. The pinned
+[double-mapping implementation](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/runtime/src/coreclr/minipal/Unix/doublemapping.cpp)
+and [dependency resolver](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/runtime/src/native/corehost/hostpolicy/deps_resolver.cpp)
+remain part of the selected source evidence. Child limits clamp to inherited
+parent limits, so the parent must permit the selected eight-GiB address space.
+This is bootstrap/decoder evidence only, not a positive journal transaction,
+Home receiving acceptance or native qualification. The 262,144-byte wire cap,
+one-MiB spool and four-GiB physical envelope remain unchanged; the complete
+input branch is still being assembled.
+
+The reviewed [preparation stop correction](https://github.com/FS-GG/.github/issues/4516#issuecomment-6485956818)
+explicitly supersedes the earlier two-times-50-second interpretation without
+rewriting it as historical success. Pinned systemd 262.1 can traverse
+`STOP_SIGTERM`, `STOP_SIGKILL`, `FINAL_SIGTERM` and `FINAL_SIGKILL` even without
+`ExecStopPost`. Preparation therefore selects `TimeoutStopSec=20s`, terminate
+start/stop failure modes, `SendSIGKILL=yes`, `KillMode=control-group` and
+`Restart=no`, with no stop hooks, watchdog or notify-timeout extensions. Four
+nominal 20-second phases leave 20 seconds within the existing 100-second
+retirement budget, followed by 20 seconds of independent observation. The
+1,020-second total and 900-second copy budget remain unchanged. This does not
+change final-workload profiles or establish guaranteed process death.
+
+The actual outside absolute cut remains controlling. Scheduling/coalescing,
+suspend, teardown delays or unkillable survivors retain Unknown results and
+resource charges when settlement misses that cut. A proposed phase-cap timer
+replacement was rejected: manager monotonic time differs from this operation's
+boottime clock, job timeouts also apply to stop jobs, and dispatch/accuracy gaps
+prevent the claimed exact bound. No new timer or 30-second job timeout is selected.
+
+Standard `systemctl --show-transaction stop` watches the matched job, but its
+[wait implementation](https://github.com/systemd/systemd/blob/73612ea502d53baf9b0df4336cfc296a7ee0d524/src/shared/bus-wait-for-jobs.c)
+returns zero for both `done` and `skipped`. Require the matched `done` result and
+independent process/unit/descriptor/writer settlement; command exit zero alone
+is insufficient. The [command implementation](https://github.com/systemd/systemd/blob/73612ea502d53baf9b0df4336cfc296a7ee0d524/src/systemctl/systemctl-start-unit.c)
+and pinned service state machine establish this source boundary, not an observed
+Home cleanup or permission to launch the final workload.
