@@ -314,7 +314,7 @@ aggregate, absolute-cut guard or full qualification is changed by these decision
 
 ## Failed preparation and source-path repair — 29 October
 
-The first actual preparation started at 04:07:41 UTC and its copy body exited 1.
+The first actual preparation started around 04:07:41 UTC and its copy body exited 1.
 The original stderr was discarded, so the secondary observer exception is not
 its cause. That observer misclassified the same failed generation's empty cgroup
 as foreign and withheld Stop. The reviewed observer correction permits only the
@@ -343,7 +343,7 @@ attempt, but cannot recreate the original stderr or grant success. The complete
 64-Host-PID-slot bound under the unchanged cap; encoded size is not genuine pin
 or execution proof.
 
-The secondary channel carried Home's failure receipt on time. Root's
+The secondary channel already carried Home's failure receipt at 04:11 UTC. Root's
 [role-prefix display filter hid it](https://github.com/FS-GG/.github/issues/4517#issuecomment-6487918846);
 the missing-receipt inference was withdrawn. Inspect complete new and edited
 comment bodies before attributing silence or dispatch failure, and use the
