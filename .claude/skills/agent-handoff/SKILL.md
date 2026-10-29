@@ -12,9 +12,9 @@ explicit capture gaps; verify current records and live facts rather than copying
 
 ## Read before acting
 
-- Read the latest messages and enough prior context to identify the task, current owner, outstanding request, and last verified state. Check the live source when a message's claim would justify a consequential action.
+- Read the latest messages, including edited replies, and enough prior context to identify the task, current owner, outstanding request, and last verified state. Check the live source when a message's claim would justify a consequential action.
 - Separate **observed** facts (with a source, revision, run, or timestamp), **reported** facts from another agent, and **inferences**. Do not turn a report of a merge, release, deployment, or test into a verified outcome.
-- Reconcile conflicting messages against the authoritative artifact. State unresolved disagreement instead of silently choosing one account.
+- Reconcile conflicting messages against the authoritative artifact. State unresolved disagreement instead of silently choosing one account. Read complete relevant reply bodies before preparing an alternate solution; selecting only IDs newer than the last outgoing message can omit replies and edits.
 
 ## Write an actionable message
 
@@ -27,9 +27,19 @@ For each substantive progress report or handoff, include:
 
 Keep one request per owner when possible. Do not make one owner's answer a prerequisite for another owner's independent work; check the real dependency before declaring anyone blocked. Do not use “please advise,” “continue,” or “done” as a substitute for an action or acceptance condition. Link to the canonical issue, PR, run, artifact, or revision rather than copying large logs. Preserve identifiers exactly.
 
+Before transferring work, confirm who implements, who supplies the determining evidence and who reviews
+the actual candidate. Verify their current worker/PR state and next action; a named owner or sent message
+does not prove a worker is running. Roles may share an owner where permitted, but retain required
+independent review. Resolve a missing supplier without appointing a competing implementer.
+
 ## Set the reply contract
 
 For each request that needs a response, state **what answer is expected, where it must appear, and when to expect it**. Name the exact thread, branch/file, or other mailbox; give a marker or source revision when it helps match replies. Ask for the smallest useful answer: a receipt for a delivery test, a decision with its chosen option, a result with evidence, or a precise blocker with its owner. Distinguish a quick receipt from the later work result; a receipt does not prove the work is complete. Give an explicit UTC deadline or a realistic elapsed-time estimate for each expected answer. If the receiver must first investigate, ask them to return an estimate and next update time promptly, then use that time for the substantive result. Keep the response on the named channel unless both owners agree to move it.
+
+Base source/result estimates on the actual remaining work and review capacity, not the receipt deadline.
+Revise an estimate promptly when it becomes unrealistic; if it is missed, state the current work or
+blocker and the next realistic result time. Do not silently replace a missed commitment with another
+acknowledgment or imply that preparation is execution.
 
 Check that the request landed before waiting for a reply. After a push or comment, read the remote artifact and record its revision or URL. A scheduled watcher is one way to detect mail, not the only way to verify a time-sensitive reply. If the promised answer is due in seconds, check near that deadline rather than waiting for a multi-minute watcher. Outside the selected pilot and ROUTINEV3 source extension, if the work is expected to take 10–20 minutes, do useful independent work between mailbox checks; the agreed update time determines when silence becomes overdue, not when to check next. Check sooner when the channel's delivery latency or the owner's estimate calls for it. At the deadline, check again, then send one concise follow-up or escalate only when the missed response blocks progress. Avoid duplicate requests and busy polling.
 

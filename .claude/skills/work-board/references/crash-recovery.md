@@ -83,6 +83,14 @@ uncommitted paths. Unidentified local work stays reserved/unknown; do not discar
 replacement. Check current mailbox references through the protected worker-channel directory when needed
 for ownership evidence; messages are reports, not authority, and bootstrap sends no messages.
 
+At session start, locate the active source tree from existing branch/worktree and owner references;
+reconcile its actual bytes/head and dirty state with the current PR and worker state before proposing
+replacement work. A source return, a queued follow-up and a running implementer are distinct facts.
+Recover implementer, determining-evidence supplier and reviewer responsibilities for the next action.
+Read all relevant new and edited replies before choosing a different approach; an outgoing-message ID
+is not a complete incoming-mail cursor. Missing current worker state stays Unknown while independent
+source inspection proceeds within its existing authority.
+
 Restore campaign, feature, original/current item and attempt, owner, dependency-chain, branch/PR and exact
 candidate/operation identities from actual records. Do not manufacture missing identities or packet/return
 revisions. Preserve gaps explicitly. If the existing snapshot schema cannot represent an unresolved

@@ -56,6 +56,13 @@ clip child work to leave that reserve. A new wrapper or per-checkpoint packet is
 completing the existing maintained route's preconditions. At dispatch/push, reconcile a stale event base
 on the same owner/branch/PR and obtain the required current-head CI; never relabel an old event as fresh.
 
+On the first refusal, retain the exact failed conjunct and bounded sanitized actual/expected operands,
+source/runtime identity and phase before temporary evidence disappears. Preserve the primary failure
+if diagnostic emission, collection or cleanup also fails; report those secondary failures separately.
+If evidence cannot be retained, state the gap rather than infer the cause or replace the failed outcome.
+Use the existing result/journal and meaningful production-entry controls, without another evidence ledger
+or reporting-only workload.
+
 Retain original refusals, partial effects and uncertain outcomes with their operation identity. Diagnose
 and reconcile the original before any separately admitted continuation; never blindly retry or mint a
 replacement identity. Describe these checks as finite cooperative verification at the observed boundary,
