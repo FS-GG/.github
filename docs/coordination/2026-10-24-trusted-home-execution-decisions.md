@@ -391,3 +391,55 @@ property, and no nonexistent `ExecReloadPre` is queried. Preserve generation
 brackets and refuse missing, malformed or nonempty results. These source and
 recovery findings accept no VM, workload, transfer, positive Commit or broader
 qualification.
+
+## Accepted cold preparation and immutable supply — 29 October
+
+Root [accepted the fresh preparation](https://github.com/FS-GG/.github/issues/4517#issuecomment-6488995006)
+only for protected immutable staging and current writer/observer retirement.
+The [original result](https://github.com/FS-GG/.github/issues/4517#issuecomment-6488966373)
+joins successful original metadata, typed definition/argv, current protected
+cgroup absence and observer reference closure, matched Stop, no resurrection and
+strict verification of all 495 files, table, marker and complete tree. Completion
+preceded both retained original cuts; the small command/outer-clock offset remains
+explicit. Independent collection settled the relevant helpers. This accepts
+neither historical continuous cleanup nor VM, workload, transfer or positive
+journal Commit. The earlier failed preparation and its archive/evidence retain
+all conservative commitments; lower observed allocation does not release charges.
+
+The [immutable receiver supply](https://github.com/FS-GG/.github/issues/4517#issuecomment-6489213716)
+was separately [accepted after independent verification](https://github.com/FS-GG/.github/issues/4517#issuecomment-6489249543):
+495 staged and 19 Host regular-file pins, protected ancestors and directory
+identities, stable descriptor/named joins and settled reader helpers. This is
+actual immutable input supply, not a future producer identity, final clock,
+lease, process census or aggregate. Preserve the missed supplier checkpoint;
+late delivery grants no renewed window. Consume the selected pin fields rather
+than embedding private reader evidence in the bounded constructor input.
+
+The previously missing outer transaction was an internal implementation gap,
+not missing immutable supply. The final operator/receiving assembler now has
+[independent whole-source approval](https://github.com/FS-GG/.github/issues/4517#issuecomment-6490005837). Its entrypoint joins the aggregate, sealed
+input and allocator reference to the existing sealed retirement receipt,
+retained original control/archive identity, current recursive retirement and
+matched Stop/absence. Root and reviewer matched the complete source manifest;
+selected static input joins the accepted supply. This is source acceptance,
+not an artifact or native readiness claim.
+
+The selected outside account remains 768 MiB of conservative cooperative
+address-space accounting for the operator plus one sequential utility, including
+the inherited 256-MiB pre-child allowance. It is neither `MemoryMax` nor a RAM
+reservation; production four-GiB roles and retained commitments are unchanged.
+Both new manager utilities and the existing native I/O utility observe five
+seconds of work plus one second of settlement inside the original end. Original
+wait, stream and fixture failures remain retained. Receiving Python uses explicit
+`-E -s -S -B -c` with protected cwd, rather than `-I`; static JSON/hash inputs do
+not depend on the user's source tree. The Host PID array is the relevant original
+operator deny-alias set, not a truncated whole-host census. Existing authenticated
+lineage, finite Host ownership and current resources remain actual requirements.
+
+Consume the existing sealed provision-retirement receipt and independently
+observe current scoped retirement and exact empty-slice Stop; no redundant
+collector handshake, wait or PIDFD proof is added. A separately bounded
+[readiness request](https://github.com/FS-GG/.github/issues/4517#issuecomment-6489878561)
+collects current facts without creating final identities or admitting execution.
+Actual live input, fit/admission, VM/workload, result transfer, positive Commit,
+final cleanup and wider BAR/reboot/two-machine/installed acceptance remain open.
