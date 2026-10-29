@@ -16,12 +16,15 @@ their own assertion or dependency changes, rather than copying every source hash
 checkpoint into each parent and consumer. Preserve prior outcomes and evidence through durable
 owning comments and references; a compact current view does not erase history.
 
-Serialize all native board-related writes through the root integrator, including issue-body edits,
-comments, issue creation/closure and membership/field changes. Finish each admitted write and its
-readback before the next writer changes native state; reconcile new or edited replies before composing
-a dependent update. Workers return evidence and proposed text through the existing owner channel.
-Independent coding and read-only review may proceed in parallel within their admitted touch-sets and
-capacity. This adds no lock service, queue, ledger or approval step.
+Within an admitted snapshot/write window, the root integrator serializes participating writers'
+mutations of the selected board and its owning issue inputs, including body edits and comments when
+they change those inputs. Finish each admitted write and readback before the next participating writer
+changes that scope; reconcile new or edited replies before composing a dependent update. Existing
+chosen worker reply channels, independent coding and ordinary independent PR work remain available
+within their admitted scope and capacity; Root need not relay every response. External or human edits
+still cause the guarded route to refuse a stale snapshot. This is scoped coordination among participating
+writers, not global serialization or a server-side compare-and-swap guarantee, and adds no service,
+queue, ledger or approval step.
 
 ## Bounded delegation and runtime observation
 
