@@ -265,3 +265,49 @@ independent process/unit/descriptor/writer settlement; command exit zero alone
 is insufficient. The [command implementation](https://github.com/systemd/systemd/blob/73612ea502d53baf9b0df4336cfc296a7ee0d524/src/systemctl/systemctl-start-unit.c)
 and pinned service state machine establish this source boundary, not an observed
 Home cleanup or permission to launch the final workload.
+
+## Reviewed preparation command boundaries — 29 October
+
+The complete administrative command is source-reviewed; the
+[delivered artifact](https://github.com/FS-GG/.github/issues/4516#issuecomment-6486784470)
+and owning issue retain the exact candidate and subsequent acceptance. This does
+not establish an available operator, executed preparation, protected receiving
+runtime or native workload. Original command/review failures remain preserved.
+Complete generated consumer input must fit its unchanged cap; a fitting mandatory
+subtree alone is not a whole-input proof. No tentative path layout is selected here.
+
+The [scoped settlement decision](https://github.com/FS-GG/.github/issues/4516#issuecomment-6486135708)
+applies only to the exact closed trusted foreground copy body: matched original
+generation/terminal/stop facts, an empty recursive original cgroup, closed relevant
+outside-observer descriptors and maintained exclusive protected stage custody
+replace a host-wide writer/descriptor census. Confinement and reviewed executable
+closure are prerequisites, not inferred from absence of observed escape. Any
+migration, descriptor transfer, outside helper, surviving process or custody drift
+retains Unknown and charges. Final production settlement guards are unchanged.
+The [capability correction](https://github.com/FS-GG/.github/issues/4516#issuecomment-6486217402)
+selects only `CAP_DAC_READ_SEARCH`: UID 0 without it cannot necessarily traverse
+or read the supplied user-owned protected files. No permission widening,
+`DAC_OVERRIDE`, `SYS_ADMIN` or `SYS_PTRACE` is selected for this preparer.
+
+The [single-service mechanism](https://github.com/FS-GG/.github/issues/4516#issuecomment-6486339237)
+uses its own bounded standard service under the existing system slice, without a
+new preparation aggregate, resident holder or separately protected body file.
+Pass the exact reviewed nonsecret body as one literal shell argument, with manager
+environment expansion disabled and exact decoded argv/flags checked. Preserve
+body bytes and argument positions; no evaluation or unquoted interpolation is
+admitted. Fresh stage creation follows service birth under the verified protected
+parent. The [existing operator route](https://github.com/FS-GG/.github/issues/4516#issuecomment-6486589703)
+uses exact reviewed code argv and bounded selection stdin rather than new opaque
+proof files. Actual operator authority, finite ancestor/outside-owner lifetime,
+lineage and custody remain necessary: JSON, selection and source hashes bind
+bytes but cannot create them.
+
+The [cooperative accounting decision](https://github.com/FS-GG/.github/issues/4516#issuecomment-6486388170)
+accepts residual Host-pressure/ENOSPC risk for this separate preparation and a
+two-GiB storage accounting allowance. This is neither a quota nor exclusive
+physical reservation or a guarantee against other actors' growth. Refresh actual
+free blocks/inodes and relevant interference before effects; retain actual
+allocation and output charges afterward. Known conflicts, excessive output or an
+unfitting concrete command still block the operation. Service ceilings and free
+memory are not reservations. No broader filesystem/resource promise, final
+aggregate, absolute-cut guard or full qualification is changed by these decisions.
