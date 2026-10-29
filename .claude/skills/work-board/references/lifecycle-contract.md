@@ -134,7 +134,9 @@ before selecting/admitting work; after dispatch, update Status and verify again.
 returns, CI/runtime completion, reviews, supplier replies and accepted closure, and before yielding or
 handoff. Update the Delivery first, then reassess its parent against its whole remaining promise.
 Apply the six [Status definitions and guarded write procedure](status-lifecycle.md). Workers provide
-evidence; the root integrator owns decisions. A freshness sweep supplements these boundaries.
+evidence; the root integrator owns decisions and serializes all native board-related writes, including
+issue-body edits, through the existing [host loop](host-loop.md#one-primary-progress-record). Independent
+coding may proceed within its admitted scope. A freshness sweep supplements these boundaries.
 Status maintenance grants no dispatch, reservation release, retry, closure or weaker acceptance.
 
 Use the existing owning issue's Owner, Done when, Current deliverable, Next action, Blocked on and

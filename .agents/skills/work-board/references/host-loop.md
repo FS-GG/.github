@@ -16,6 +16,13 @@ their own assertion or dependency changes, rather than copying every source hash
 checkpoint into each parent and consumer. Preserve prior outcomes and evidence through durable
 owning comments and references; a compact current view does not erase history.
 
+Serialize all native board-related writes through the root integrator, including issue-body edits,
+comments, issue creation/closure and membership/field changes. Finish each admitted write and its
+readback before the next writer changes native state; reconcile new or edited replies before composing
+a dependent update. Workers return evidence and proposed text through the existing owner channel.
+Independent coding and read-only review may proceed in parallel within their admitted touch-sets and
+capacity. This adds no lock service, queue, ledger or approval step.
+
 ## Bounded delegation and runtime observation
 
 Root reviews one concrete finite envelope using [delivery reliability](delivery-reliability.md#finite-delegated-sequence-and-isolation)
