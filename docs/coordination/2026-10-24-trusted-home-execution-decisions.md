@@ -311,3 +311,41 @@ allocation and output charges afterward. Known conflicts, excessive output or an
 unfitting concrete command still block the operation. Service ceilings and free
 memory are not reservations. No broader filesystem/resource promise, final
 aggregate, absolute-cut guard or full qualification is changed by these decisions.
+
+## Failed preparation and source-path repair — 29 October
+
+The first actual preparation started around 04:07:41 UTC and its copy body exited 1.
+The original stderr was discarded, so the secondary observer exception is not
+its cause. That observer misclassified the same failed generation's empty cgroup
+as foreign and withheld Stop. The reviewed observer correction permits only the
+matched original stop; it grants neither successful copy nor cold-tree acceptance.
+Original failed state, partial files, evidence and charges remain retained.
+No workload, VM, result transfer, positive journal Commit or cleanup is accepted.
+The [owning issue](https://github.com/FS-GG/.github/issues/4778) retains the original
+attempt and subsequent operation selections separately from earlier source review.
+
+The [first missing destination](https://github.com/FS-GG/.github/issues/4517#issuecomment-6487930635)
+corresponded to a supplied source symlink whose canonical regular target matched
+the selected bytes. This supports the nofollow/source-path inference without
+reconstructing lost stderr. The [complete source audit](https://github.com/FS-GG/.github/issues/4517#issuecomment-6488075017)
+verified all 495 canonical regular files through nofollow opens and full hashes;
+eight source aliases were corrected. Preserve payloads, row order, destination
+names, sizes, modes and hashes; resolve the source path rather than weakening
+nofollow or silently accepting changed content. Root independently verified the
+packet, table and mapping. The canonical-table/bounded-failure-marker command
+successor was selected but remained unreviewed and unexecuted at this capture.
+A cleanup-only recovery design was reviewed, without selection of a native effect.
+
+Keep primary body failure, secondary observation failure and later read-only
+metadata at their actual scopes. A bounded failure marker can aid the next
+attempt, but cannot recreate the original stderr or grant success. The complete
+261,904-byte recipe remains conditional on its declared widths and complete
+64-Host-PID-slot bound under the unchanged cap; encoded size is not genuine pin
+or execution proof.
+
+The secondary channel already carried Home's failure receipt at 04:11 UTC. Root's
+[role-prefix display filter hid it](https://github.com/FS-GG/.github/issues/4517#issuecomment-6487918846);
+the missing-receipt inference was withdrawn. Inspect complete new and edited
+comment bodies before attributing silence or dispatch failure, and use the
+existing secondary channel when the primary is full. Preserve original reads
+and avoid duplicate effects, reconstructed receipts or another status ledger.
