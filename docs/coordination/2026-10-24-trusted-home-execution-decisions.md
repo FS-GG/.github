@@ -360,7 +360,8 @@ The original preparation remains failed; archive identity, evidence and charges
 remain retained. The earlier recovery parser failed before Stop, and its failure
 is preserved. Corrected recovery is not historical successful preparation,
 continuous historical cleanup or release of storage charges. A separately
-reviewed fresh preparation was admitted, but had not run at this capture.
+reviewed fresh preparation was admitted; no fresh preparation execution result
+was supplied at this capture.
 
 Pinned [service state transitions](https://github.com/systemd/systemd/blob/73612ea502d53baf9b0df4336cfc296a7ee0d524/src/core/service.c)
 may prune a successful `SERVICE_EXITED` cgroup. The
