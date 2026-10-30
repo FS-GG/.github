@@ -395,7 +395,7 @@ def is_redirected(cmd: str) -> bool:
 # changes must not silently bypass the whole-fixture producer/caller census.
 # This is a closed source-shape check, not a filename exemption or shell evaluator;
 # any fixture change requires reviewing/resealing that contract and its mutants.
-CREATOR_FIXTURE_SHA256 = "8b2988a2162db4d4b7b90be3ff98374e8e67ef14f9467d7d8f91496f10a4c7c7"
+CREATOR_FIXTURE_SHA256 = "3fa1a8f0b5e1e5a01a422c2bdb58f303ce1c7e292e753a9699c1c6f4f8cd897f"
 CREATOR_PUBLISHED_COMMAND = ('dotnet build "$PROJ" -c Release --no-restore --nologo -v quiet '
     '-p:FsggCurrentCoordDependencies=true -p:BuildProjectReferences=false '
     '-p:CompileUsingReferenceAssemblies=false '

@@ -131,7 +131,67 @@ def verify_publication_writer_scope(document, source):
     return historical_document, restored
 
 
-# CREATOR-PUBLIC-023-3010: the outermost source-only profile cut. It inverts only the closed
+# CREATOR-PUBLIC-0231-4964: the outermost source-only profile cut for the 0.23.1 patch. It inverts only the
+# closed Creator0231 identity tokens, then hands the exact accepted 023 document and workflow to the
+# unchanged 023 cut below. Neither the 023 history nor the published 023 journal is rewritten, reused or reset.
+CREATOR0231_TOKENS = (
+    ("format('Wizard 0.23.1 successor {0}', inputs.candidate_run_id)", "format('Wizard 0.23 successor {0}', inputs.candidate_run_id)"),
+    ("# main-directory Creator 0.23.1 successor. Default publication remains false.",
+     "# main-directory Creator 0.23.0 successor. Default publication remains false."),
+    ("    name: new-sdd-workspace-0231-publisher [org-publication-writer]\n", "    name: new-sdd-workspace-023-publisher [org-publication-writer]\n"),
+    ("          name: creator0231-publication-summary-${{ github.run_id }}\n",
+     "          name: creator023-publication-summary-${{ github.run_id }}\n"),
+    ("          path: ${{ runner.temp }}/creator0231-publication-summary.json\n",
+     "          path: ${{ runner.temp }}/creator023-publication-summary.json\n"),
+)
+
+
+def verify_creator0231_profile(document, source):
+    """Recover the entire accepted 023 route through only the 0.23.1 identity cut."""
+    current = next(row for row in document["routes"] if row["path"] == WIZARD_SUCCESSOR)
+    assert current["sha256"] == hashlib.sha256(source.encode()).hexdigest()
+    amendment = current["creator0231ProfileAmendment"]
+    assert amendment == {
+        "unit": "CREATOR-PUBLIC-0231-4964", "sourceOnly": True,
+        "previousAcceptedSource": "5da304e37e61a335737e1c362919872778fdea60",
+        "previousWorkflowSha256": "127515686883d02e6229d76f4cfcb628bcf148c0e3490f6e8d4c1d4fddc5a787",
+        "previousRouteCanonicalSha256": "c224df9372547e1af94d905c544961f38f8ce96efdb1a89cf64904513a23c7f2",
+        "previousHistoricalAttestationsCanonicalSha256": "02ae05794c38489db83533fefefb8243d9ffa5e194ee02de4ac4b30a0167dcda",
+        "version": "0.23.1", "currentBinding": "CURRENT_0231", "retainedBinding": "CURRENT_023",
+        "publishedDependencyCoherentVersion": "0.113.0",
+        "freshLogicalJournal": "board-v2-product-creator-0231",
+        "retainedJournals": ["board-v2-product-creator-022", "board-v2-product-creator-022r1", "board-v2-product-creator-023"],
+        "supersededRouteFields": "creator023ProfileAmendment and the 023 journal evidence retain the accepted and published 0.23.0 profile so this route inverts exactly; this amendment selects CURRENT_0231 as the current binding. The abandoned 022 journal and the published 022r1 and 023 journals are neither reused nor reset. The 0.23.1 binding reads the same genuine coherent 0.113.0 dependency pin document as 0.23.0.",
+        "originalH4Accepted": False, "oldEffectGrantRenewed": False,
+        "operationAcceptance": "Source only; no0231 candidate, journal initialization, protected preflight, publication, installation or native adoption acceptance.",
+    }
+    canonical = lambda value: hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    histories = document["historicalRouteAttestations"]
+    assert canonical(histories[:-1]) == amendment["previousHistoricalAttestationsCanonicalSha256"]
+    assert histories[-1]["acceptedSource"] == amendment["previousAcceptedSource"]
+    assert histories[-1]["status"] == "non-current-history"
+    prior = histories[-1]["route"]
+    assert canonical(prior) == amendment["previousRouteCanonicalSha256"]
+    assert prior["creator023ProfileAmendment"]["freshLogicalJournal"] == "board-v2-product-creator-023"
+    assert amendment["freshLogicalJournal"] not in (prior["creator023ProfileAmendment"]["freshLogicalJournal"],
+                                                    *prior["creator023ProfileAmendment"]["retainedJournals"])
+    retained = copy.deepcopy(current)
+    del retained["creator0231ProfileAmendment"]
+    retained["sha256"] = amendment["previousWorkflowSha256"]
+    assert retained == prior, "Creator0231 profile amendment changed a retained release boundary"
+    restored = source
+    for new, old in CREATOR0231_TOKENS:
+        assert restored.count(new) == 1 and restored.count(old) == 0, "Creator0231 identity token is not exact: " + new
+        restored = restored.replace(new, old, 1)
+    assert "0.23.1" not in restored and "0231" not in restored
+    assert hashlib.sha256(restored.encode()).hexdigest() == amendment["previousWorkflowSha256"], "Creator0231 profile failed whole-workflow inversion"
+    historical_document = copy.deepcopy(document)
+    historical_document["historicalRouteAttestations"].pop()
+    historical_document["routes"][document["routes"].index(current)] = copy.deepcopy(prior)
+    return historical_document, restored
+
+
+# CREATOR-PUBLIC-023-3010: the retained source-only profile cut. It inverts only the closed
 # Creator023 identity tokens, then hands the exact prior (accepted022 + writer-lock) document and
 # workflow to the unchanged lock and 022 cuts below. Neither the 022 history nor the 022r1 journal
 # is rewritten; the 023 route names its own fresh journal.
@@ -313,8 +373,43 @@ def verify_publication_lock_cut(document, source):
     return historical_document, restored
 
 
-top_report = json.loads((ROOT / "docs/reports/gs2-08-9-release-route-dispositions.json").read_text())
-top_workflow = (ROOT / WIZARD_SUCCESSOR).read_text()
+final_report = json.loads((ROOT / "docs/reports/gs2-08-9-release-route-dispositions.json").read_text())
+final_workflow = (ROOT / WIZARD_SUCCESSOR).read_text()
+top_report, top_workflow = verify_creator0231_profile(final_report, final_workflow)
+for old, new in (
+    ("    name: new-sdd-workspace-0231-publisher [org-publication-writer]", "    name: new-sdd-workspace-023-publisher [org-publication-writer]"),
+    ("creator0231-publication-summary.json", "creator023-publication-summary.json"),
+    ("permission-contents: read", "permission-contents: write"),
+    ("inputs.promotion_recovery == 'off'", "true"),
+    ("environment: release-successor", "environment: other"),
+):
+    assert old in final_workflow
+    mutant = final_workflow.replace(old, new, 1)
+    repinned = copy.deepcopy(final_report)
+    next(row for row in repinned["routes"] if row["path"] == WIZARD_SUCCESSOR)["sha256"] = hashlib.sha256(mutant.encode()).hexdigest()
+    try:
+        verify_creator0231_profile(repinned, mutant)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("repinned Creator0231 profile mutant accepted: " + old)
+for defect in ("history-pop", "history-status", "amendment-version", "retained-route", "reused-023-journal", "reused-022r1-journal", "wrong-binding"):
+    mutated = copy.deepcopy(final_report)
+    row = next(row for row in mutated["routes"] if row["path"] == WIZARD_SUCCESSOR)
+    if defect == "history-pop": mutated["historicalRouteAttestations"].pop()
+    if defect == "history-status": mutated["historicalRouteAttestations"][-1]["status"] = "current"
+    if defect == "amendment-version": row["creator0231ProfileAmendment"]["version"] = "0.23.0"
+    if defect == "retained-route": row["disposition"] = "forgiven"
+    if defect == "reused-023-journal": row["creator0231ProfileAmendment"]["freshLogicalJournal"] = "board-v2-product-creator-023"
+    if defect == "reused-022r1-journal": row["creator0231ProfileAmendment"]["freshLogicalJournal"] = "board-v2-product-creator-022r1"
+    if defect == "wrong-binding": row["creator0231ProfileAmendment"]["currentBinding"] = "CURRENT_023"
+    try:
+        verify_creator0231_profile(mutated, final_workflow)
+    except (AssertionError, KeyError, IndexError):
+        pass
+    else:
+        raise AssertionError("Creator0231 profile document defect accepted: " + defect)
+print("4964 Creator0231 profile cut: whole prior 023 workflow/history recovered; five repinned workflow and seven document mutants refused")
 full_report, full_workflow = verify_creator023_profile(top_report, top_workflow)
 for old, new in (
     ("    name: new-sdd-workspace-023-publisher [org-publication-writer]", "    name: new-sdd-workspace-022-publisher [org-publication-writer]"),
@@ -1008,7 +1103,7 @@ for function, keyword, count in (("effects", "binding", 3), ("WizardAdmission", 
     assert len(selected) == count
     assert all(any(arg.arg == keyword and isinstance(arg.value, ast.Name) and arg.value.id == "HISTORICAL_013"
                    for arg in call.keywords) for call in selected)
-assert "self.release_binding is not CURRENT_023" in admission
+assert "self.release_binding is not CURRENT_0231" in admission
 assert "self.release_binding is not HISTORICAL_013" in admission
 execution = (ROOT / "scripts/new_sdd_workspace_successor_execution.py").read_text()
 assert 'CURRENT_014 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.14.0", "new-sdd-workspace/v0.14.0")' in execution
@@ -1021,8 +1116,9 @@ assert 'CURRENT_019 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.19.0", "new-sdd
 assert 'CURRENT_021 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.21.0", "new-sdd-workspace/v0.21.0")' in execution
 assert 'CURRENT_022 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.22.0", "new-sdd-workspace/v0.22.0")' in execution
 assert 'CURRENT_023 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.23.0", "new-sdd-workspace/v0.23.0")' in execution
+assert 'CURRENT_0231 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.23.1", "new-sdd-workspace/v0.23.1")' in execution
 assert 'CURRENT_020 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.20.0", "new-sdd-workspace/v0.20.0")' in execution
-assert "binding is not CURRENT_023 and binding is not CURRENT_022 and binding is not CURRENT_021 and binding is not CURRENT_020 and binding is not CURRENT_019 and binding is not CURRENT_017 and binding is not CURRENT_016 and binding is not HISTORICAL_013" in execution
+assert "binding is not CURRENT_0231 and binding is not CURRENT_023 and binding is not CURRENT_022 and binding is not CURRENT_021 and binding is not CURRENT_020 and binding is not CURRENT_019 and binding is not CURRENT_017 and binding is not CURRENT_016 and binding is not HISTORICAL_013" in execution
 
 with tempfile.TemporaryDirectory(prefix="gs2-08-9-release-seal.") as temporary:
     work = pathlib.Path(temporary)

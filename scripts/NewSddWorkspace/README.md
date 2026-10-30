@@ -34,18 +34,23 @@ on (the default), Wizard 0.23.0 writes a `securityObligations` key into `.fsgg/s
 belongs to SDD, and SDD 2.5.3 rejects the unknown property: `doctor` reports `isCoherent:false` with
 `scaffold.provenanceMalformed` on all four catalog providers. The default-coordination journey found this (see the
 [#3010 result](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523944130)); the repair is tracked in
-.github#4964 (obligations move to a Wizard-owned file; planned for Wizard 0.23.1) and is not yet published.
+.github#4964 (obligations move to a Wizard-owned file; Wizard 0.23.1) and its source is prepared, but it is not yet published.
 Until 0.23.1, use `--no-coordination` (the configuration the 85/85 result covers). Do not edit
 `.fsgg/scaffold-provenance.json` to make `doctor` pass: that hides the pending security obligations from SDD.
 The obligations were recorded as pending, never claimed satisfied, and `knowledge check` passed on all four products.
 
 Default coordination also fetches the coordination kit over HTTPS from the moving `main` ref of this repository, so
 the materialized kit is not reproducible across fetches. The kit observed in the journey matched `main@a9a6f77f`
-byte for byte; pinning it is part of #4964.
+byte for byte; the 0.23.1 source pins it (see below).
 
 Stated limits remain: the GitHub Packages feed was not read directly (the qualifying token received 403), only
 one Linux x64 carrier was exercised, no reproducibility pack exists, and independent custody of the advisory inputs
 is still owed.
+
+Prospective source **0.23.1** repairs both points (#4964): it keeps the Wizard's state in Wizard-owned files (see
+[Where the security state lives](#where-the-security-state-lives-fsggsecurity-obligationsjson)), migrates
+workspaces that 0.23.0 already created on the next `secure`/`retrofit`/`--upgrade` run, and pins the coordination
+kit. Wizard 0.23.1 itself is not published by this source change; until it is, the guidance above stands.
 
 ## Install
 
@@ -100,7 +105,7 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 | `--board <owner>/<title>` | the coordination board the workspace joins — sets `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT` (default: `FS-GG/Coordination`). An `owner` with no `/title` defaults the title to `Coordination`. |
 | `--repo <owner>/<repo>` | this workspace's own repo — its identity on the board and the basis for its chore-lock ref. In the wizard its owner defaults the board org; on the CLI it drives the non-FS-GG chore-lock next-step hint. Not consumed as env (the engine resolves the repo from the git remote). |
 | `--public-board` / `--private-board` | Explicit desired visibility for a product Project; omitted preserves an existing Project. Public requires `--trusted-writers`. |
-| `--trusted-writers <team-or-user,…>` | Explicit Project writer allowlist. Required with `--public-board`; it is recorded in security provenance, never inferred from viewer permissions. |
+| `--trusted-writers <team-or-user,…>` | Explicit Project writer allowlist. Required with `--public-board`; it is recorded in the Wizard-owned `.fsgg/security-obligations.json`, never inferred from viewer permissions. |
 | `secure <workspace> --project … --verified-base-permission READ --verified-exclusive-writers <ids>` | After checking **Project → Settings → Manage access**, re-validates the supported visibility/requested-grant facts and records both human facts: base `Read` and the exact effective/exclusive writer set. It clears only the matching obligation when both assertions equal the requested allowlist. |
 | `--chore-locks <refs>` | `FSGG_COORD_CHORE_LOCKS` for a **non-FS-GG** board's chore queue: comma-separated `owner/repo#n`. Unneeded for the FS-GG board (the engine carries its lock table). |
 | `--no-coordination` | skip wiring the workspace to a coordination board entirely (no kit, no env). |
@@ -234,6 +239,47 @@ effective-writer read. Its recorded `--verified-base-permission READ
 --verified-exclusive-writers …` resume command rechecks the observable facts and
 converges only when the human-observed exclusive writer set matches the allowlist.
 
+#### Where the security state lives (`.fsgg/security-obligations.json`)
+
+The pending and verified security state belongs to the Wizard, not to SDD. It is stored in
+`.fsgg/security-obligations.json`, never in the SDD-owned `.fsgg/scaffold-provenance.json`: SDD CLI 2.5.3
+validates provenance against a strict schema and reports `scaffold.provenanceMalformed` ("Unknown
+property") for any member it does not define, which made `fsgg-sdd doctor` incoherent for every
+default-coordination creation of Wizard 0.23.0 (#4964). SDD's schema is not widened. Precisely: the Wizard no
+longer writes its own `securityObligations`, `verifiedSecurityReceipts` or `retrofits` members into provenance. The
+selected-product V2 route (`--board-binding`) still records a `productBoard` member there; that route is not part of
+default coordination, it applies to the provenance generation SDD 2.5.3 tolerates, and it was neither changed nor
+re-qualified here.
+
+```json
+{
+  "schema": "fsgg.new-sdd-workspace-security-obligations/1",
+  "securityObligations":      [ { "kind": "...", "target": "...", "state": "pending | pending-human-verification", "resume": "new-sdd-workspace secure ...", "humanVerification": "..." } ],
+  "verifiedSecurityReceipts": [ { "kind": "...", "...": "typed receipt rows" } ]
+}
+```
+
+The row content is the one the provenance members carried: state, target, policy, human-verification
+text and the quoted resume commands. `secure` (the resume route), the step-5b writer and the
+`$initialize-sdd-workspace` skill all read and write only this file. The file is replaced whole through a
+sibling temporary file, and a file that is unreadable, of another schema, or malformed is reported and never
+overwritten.
+
+**Existing workspaces.** A workspace created by Wizard 0.23.0 carries `securityObligations` and
+`verifiedSecurityReceipts` in its provenance and its doctor stays incoherent until they are moved. The next
+Wizard run that touches the workspace migrates them tolerantly: `secure`, `retrofit` (every form) or an
+`--upgrade` run on the existing target. The migration merges the rows into the Wizard-owned file (a row
+already there with the same kind and target wins; nothing is duplicated), writes that file first, then
+removes exactly those two members from the provenance and leaves every other member as SDD wrote it
+semantically (the file is re-serialised: members and values are preserved, whitespace and non-ASCII escaping may
+differ, so it is not byte-for-byte). It is
+idempotent and crash-safe: an interruption leaves the rows in both places and the next run converges. If it
+cannot complete (for example the Wizard-owned file is malformed) the provenance is left untouched, the run
+reports it and the command that triggered it proceeds; a provenance that is not readable JSON is left to
+SDD. Until a workspace has been touched by such a run, `fsgg-sdd doctor` keeps reporting it; running
+`new-sdd-workspace secure <workspace> --repo owner/repository` or `retrofit <workspace>` converges it. The
+`retrofit` log (`retrofits[]`) moved the same way, to `.fsgg/coordination-retrofits.json`.
+
 ### Initialization before coordination
 
 The no-argument wizard does not guess a repository or attach every new product to
@@ -253,8 +299,20 @@ tool manifest — fetched from `FS-GG/.github` over HTTP, no checkout, like the 
 `--no-coordination` skips the step. This opens the product-mirror slice ADR-0019 §Consequences deferred
 (distribution had been framework-repos-only); the engine is env-multi-tenant, so any board works (#1140).
 
-Best-effort and non-blocking, like the governance overlay: a kit file that fails to fetch warns and the
-env still lands. **Note:** `offer`/chores on a **non-FS-GG** board need an engine build that includes
+The kit is **pinned**, not read from the moving `main` of `FS-GG/.github`. The tool embeds
+`coordination-kit-pin.json`: one reviewed `FS-GG/.github` commit plus the sha256 of the generated skill
+manifest (`registry/coordination-kit-skill-manifest.json`, whose rows carry the sha256 of every skill file),
+of the `fsgg-coord` shim and of the engine tool manifest. Every file is read from that commit and verified
+against its digest before anything is written. `scripts/new-sdd-workspace-kit-pin.py write <commit>` records
+a pin and `check` re-derives it from git, so a pin cannot drift from the commit it names.
+
+Two failures are deliberately different. A kit file that **cannot be fetched** (network, HTTP status, size)
+stays best-effort and non-blocking, like the governance overlay: it warns and the env still lands, and
+`retrofit` adds the rest later. A fetched file whose digest **differs from the pin**, a malformed manifest or
+a manifest path outside the fixed layout is a **refusal**: nothing from the kit is written (not even the
+board env), the step is reported `failed` and the run is incomplete (non-zero). An incomplete run skips every
+later step: repository security (5b), `fsgg-sdd doctor`, upgrade, typed knowledge and the initialization handoff.
+The scaffold itself is retained; re-run `new-sdd-workspace retrofit <workspace>` once the pin verifies. **Note:** `offer`/chores on a **non-FS-GG** board need an engine build that includes
 #1140 (post-`0.4.0`); the default FS-GG board works on any engine (embedded lock table), so the
 scaffolder surfaces the caveat only when you retarget the board.
 
@@ -278,18 +336,26 @@ It is **idempotent** and never leaves partial state:
   existing `.config/dotnet-tools.json`) and writes `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT`
   (+ `FSGG_COORD_CHORE_LOCKS`) merged into `.claude/settings.json` — **but writes each piece only if it
   is missing or has drifted**, leaving a coherent kit byte-for-byte untouched;
-- it **records the retrofit** in `.fsgg/scaffold-provenance.json` (an additive `retrofits[]` entry
-  naming what was materialized vs re-emitted as drift; SDD's own provenance keys are preserved and the
-  key is read-safe — System.Text.Json ignores it);
+- it **records the retrofit** in the Wizard-owned `.fsgg/coordination-retrofits.json` (a `retrofits[]` entry
+  naming what was materialized vs re-emitted as drift). It never writes the SDD-owned
+  `.fsgg/scaffold-provenance.json`, whose strict schema rejects unknown members; a `retrofits` member left
+  there by an earlier Wizard is moved into the log first;
+- the **embedded** `initialize-sdd-workspace` skill is authoritative: the pin lists it under `embeddedSkills`, so the
+  kit neither fetches nor vendors it, and creation, `--upgrade` and `retrofit` all install or reconcile it from the
+  tool's own resource. A 0.23.0-era copy is therefore brought forward by `retrofit` (reported as drift), a current copy
+  is left untouched, and the older copy named by the pinned commit can never be restored.
+  `scripts/new-sdd-workspace-kit-pin.py check` fails if a skill the Wizard embeds is neither excluded this way nor
+  byte-equal to the pinned manifest row;
 - run again on an already-wired workspace it **refuses cleanly** ("already wired — no drift to re-emit")
-  and appends no redundant provenance entry; if only some pieces drifted it **re-emits only those**;
+  and appends no redundant log entry; if only some pieces drifted it **re-emits only those**;
 - run against a directory that is **not** a scaffolded workspace (no `.fsgg/`) it refuses with exit `2`
   and names the fix (scaffold one first) — nothing is written.
 
 Options accepted: `--board <owner>/<title>`, `--repo <owner>/<repo>`, `--chore-locks <refs>`, `--ref
-<git-ref>` (the `FS-GG/.github` ref the kit is vendored from; default `main`). Best-effort like the
-scaffold step: a kit file that fails to fetch warns; only when the workspace is unwired **and** every
-fetch fails does it exit non-zero, having written nothing.
+<git-ref>`. The kit is the pinned one (see above), so `--ref` defaults to the pinned commit and only that
+commit verifies: any other value is refused before a byte is fetched. Like the scaffold step, a kit file that
+cannot be fetched warns, and only when the workspace is unwired **and** every fetch fails does it exit
+non-zero, having written nothing; a digest mismatch refuses the whole retrofit (exit `1`), writing nothing.
 
 ### Selected product V2 integration (source preparation)
 
@@ -347,7 +413,7 @@ It orchestrates the commands that already exist, and reports each step's outcome
 2. **update `fsgg-sdd`** — self-update the CLI to the newest build so the scaffold is current (default; `--pinned` skips) — *non-blocking; best-effort* (ADR-0030)
 3. **`fsgg-sdd scaffold`** — SDD skeleton + runnable Rendering app — *fatal on failure*
 4. **governance overlay** (`dotnet new fs-gg-governance`, profile `light`) — *non-blocking; best-effort*
-5. **coordination wiring** — vendor the coordination kit + write the `FSGG_COORD_*` env (default on; `--no-coordination` skips) — *non-blocking; best-effort*
+5. **coordination wiring** — vendor the pinned coordination kit + write the `FSGG_COORD_*` env (default on; `--no-coordination` skips) — *an unfetchable file warns; a digest mismatch refuses*
 6. **`fsgg-sdd doctor`** — read-only coherence check — *non-blocking*
 7. **`fsgg-sdd upgrade`** (only with `--upgrade`) — *fatal on failure*
 8. **initialization handoff** — install the embedded initialize skill, pending marker, and conditional agent warning after all overlays have written — *fatal on failure*

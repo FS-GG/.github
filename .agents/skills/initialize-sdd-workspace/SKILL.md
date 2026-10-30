@@ -27,7 +27,8 @@ these facts.
 ## Initialize
 
 1. Inspect the workspace without changing it:
-   - read `.fsgg/providers.yml`, `.fsgg/scaffold-provenance.json`, and the pending marker;
+   - read `.fsgg/providers.yml`, `.fsgg/scaffold-provenance.json`, `.fsgg/security-obligations.json` (the
+     Wizard-owned pending security state; absent when no coordination was selected) and the pending marker;
    - inspect the git worktree and configured `origin`, if any;
    - check the commands the selected provider actually needs, then run `dotnet tool restore`,
      `fsgg-sdd doctor --root .`, and the provider's cheapest meaningful build or validation;
@@ -63,8 +64,11 @@ these facts.
    requirements. A source fixture or local integration result cannot establish installed adoption.
 6. Re-run the local doctor/build checks and verify any selected coordination by inspecting the
    materialized skills, selected binding and its `productBoard` provenance, `.claude/settings.json`
-   environment, exact tool restore and work-board's read-only `board-v2 inspect` report. Surface warnings from
-   `.fsgg/scaffold-provenance.json`; a pending security obligation is not a verified receipt.
+   environment, exact tool restore and work-board's read-only `board-v2 inspect` report. Surface the pending
+   obligations in `.fsgg/security-obligations.json` (the SDD-owned `.fsgg/scaffold-provenance.json` carries none);
+   a pending security obligation is not a verified receipt. If the doctor reports `scaffold.provenanceMalformed`
+   on a workspace created by Wizard 0.23.0, run `new-sdd-workspace secure . --repo OWNER/REPO` or
+   `new-sdd-workspace retrofit .`, which moves the legacy Wizard members out of the provenance.
 7. On success, replace `.fsgg/workspace-initialization.json` with valid JSON containing at least:
    `schemaVersion: 1`, `status: "initialized"`, an ISO-8601 UTC `initializedAt`, `mode` (`local` or
    `github-coordinated`), and a `checks` object recording the commands and exit codes actually
