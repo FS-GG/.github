@@ -64,6 +64,8 @@ on:
       - "tests/delivery-leading-line/**"
       - "tests/coord-engine-e2e/**"
       - "tests/telemetry-parity/**"
+      - "tools/BoardV2Import/**"
+      - "tests/board-v2-import/**"
       - "tests/coord-engine-parity/**"
       - "tests/coord-engine-mutation/**"
       - "tests/coord-engine-replay/**"
@@ -255,6 +257,20 @@ jobs:
 
       - name: Prove compiled telemetry matches every frozen helper route
         run: python3 tests/telemetry-parity/run.py
+        env:
+          FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
+
+      # #4941: the enrollment and route-preflight roots are dispatch arms of this engine. This step proves, through the real
+      # `scripts/fsgg-coord` shim and the engine just built, that they are reachable and that they run the same code as the
+      # BoardV2Import tool (byte-identical successor outputs). It fails if the test is skipped, so it cannot pass vacuously.
+      - name: Enrollment roots reach the engine and run the same code as the BoardV2Import tool
+        run: |
+          set -euo pipefail
+          dotnet restore tools/BoardV2Import/BoardV2Import.fsproj --locked-mode
+          dotnet build tools/BoardV2Import/BoardV2Import.fsproj --no-restore
+          python3 tests/board-v2-import/run.py --no-build SuccessorEnrollmentTests.test_the_installed_shim_reaches_the_engine_roots_and_the_same_code 2>&1 | tee "$RUNNER_TEMP/enrollment-shim.txt"
+          grep -q "^OK$" "$RUNNER_TEMP/enrollment-shim.txt"
+          if grep -qi "skipped" "$RUNNER_TEMP/enrollment-shim.txt"; then echo "the shim test was skipped; the engine was not found" >&2; exit 1; fi
         env:
           FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
 

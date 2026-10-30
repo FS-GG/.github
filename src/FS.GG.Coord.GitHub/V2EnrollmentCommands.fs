@@ -300,7 +300,7 @@ module V2EnrollmentCommands =
                 let rows = receipt.["rows"]
                 closedKeys rows [ "predecessor"; "appended"; "total" ]
                 let predecessor, appended, total = integer rows "predecessor", integer rows "appended", integer rows "total"
-                require (predecessor >= 1 && appended >= 1 && total = predecessor + appended && total <= 100) "receipt counts"
+                require (predecessor >= 1 && appended >= 1 && total = predecessor + appended && total <= V2Projection.maximumProgrammeRows) "receipt counts"
                 let constructor = receipt.["constructor"]
                 closedKeys constructor [ "revision"; "artifactSha256" ]
                 require (hex40 (s constructor "revision") && hex64 (s constructor "artifactSha256")) "receipt constructor"
@@ -624,12 +624,25 @@ module V2EnrollmentCommands =
                 true
         with _ -> false
 
+    // The checkout's `refs/remotes/origin/main`, trusted as a base only if it equals the live head of main read by GET. The local ref can
+    // be stale, and a stale base carries older, possibly laxer, gates. Offline nothing verifies it, so the answer is never a pass.
+    let private verifiedTrackingRef (repository: string) (slug: string) (online: bool) : Result<string, V2Preflight.GapKind> =
+        match (try Some((gitRun repository [ "rev-parse"; "--verify"; "refs/remotes/origin/main" ] 128).Trim()) with _ -> None) with
+        | None -> Error V2Preflight.Unreadable
+        | Some local ->
+            if not online then Error V2Preflight.NotLive
+            else
+                match V2NativeResolve.readMainHead ghGet slug with
+                | Error _ -> Error V2Preflight.ReadFailed
+                | Ok live -> if live = local then Ok local else Error V2Preflight.NotLive
+
     let private preflightRoutine (stage: V2Preflight.Stage) (values: Collections.Generic.Dictionary<string, string>) (online: bool) : int =
         let repository = programmePath values.["--repository"]
         let slug = slugOf values
         let defaultBranch = "main"
         let unobserved kind = V2Preflight.NotObserved kind
-        let localBase () = observe (fun () -> (gitRun repository [ "rev-parse"; "--verify"; "refs/remotes/origin/main" ] 128).Trim())
+        // Why the base the gates are read from could not be trusted, when it could not.
+        let baseGap = ref V2Preflight.NotEvaluated
         // What the gates read: head ref and sha, base sha, title, body and the commit messages that become the squash message.
         let candidate, baseForGate, title, body, commits =
             match values.TryGetValue "--pr" with
@@ -651,7 +664,12 @@ module V2EnrollmentCommands =
                 let head = observe (fun () -> (gitRun repository [ "rev-parse"; "--abbrev-ref"; "HEAD" ] 256).Trim(), (gitRun repository [ "rev-parse"; "--verify"; "HEAD" ] 128).Trim())
                 let body = try Some(readText 1048576 values.["--body-file"]) with Refused _ -> None
                 let commits = try Some(gitRun repository [ "log"; "--format=%B"; "refs/remotes/origin/main..HEAD" ] 1048576) with Refused _ -> None
-                let baseSha = match localBase () with V2Preflight.Known sha -> Some sha | _ -> None
+                let baseSha =
+                    match verifiedTrackingRef repository slug online with
+                    | Ok sha -> Some sha
+                    | Error kind ->
+                        baseGap.Value <- kind
+                        None
                 (match head with
                  | V2Preflight.Known(ref, sha) -> V2Preflight.Known({ BaseRef = defaultBranch; BaseSha = None; HeadRef = ref; HeadSha = sha; State = None }: V2Preflight.RoutineCandidate)
                  | V2Preflight.NotObserved kind -> unobserved kind), baseSha, Some values.["--title"], body, commits
@@ -690,11 +708,11 @@ module V2EnrollmentCommands =
                             let m = Regex.Match(err, @"FINDING \[([a-z-]{1,40})\]")
                             if m.Success then V2Preflight.Known(V2Preflight.GateFinding m.Groups.[1].Value) else unobserved V2Preflight.Unreadable
                          | None -> unobserved V2Preflight.Unreadable)
-                    | V2Preflight.Known _, _, _ -> unobserved V2Preflight.NotEvaluated
+                    | V2Preflight.Known _, _, _ -> unobserved baseGap.Value
                     | V2Preflight.NotObserved kind, _, _ -> unobserved kind
                 let closing =
                     match title, body, commits with
-                    | Some _, Some _, Some _ when not trustedReady -> unobserved V2Preflight.Unreadable
+                    | Some _, Some _, Some _ when not trustedReady -> unobserved (if baseForGate.IsNone then baseGap.Value else V2Preflight.Unreadable)
                     | Some t, Some _, Some _ ->
                         (match runGate repository [ IO.Path.Combine(trusted, "check-closing-keywords.py"); "--title=" + t; "--body"; bodyFile; "--commits"; commitsFile ] with
                          | Some(0, out, _) ->
@@ -712,7 +730,7 @@ module V2EnrollmentCommands =
         printfn "%s" (V2Preflight.toJson report)
         V2Preflight.exitCode report.Overall
 
-    let private preflightPublication (stage: V2Preflight.Stage) (values: Collections.Generic.Dictionary<string, string>) : int =
+    let private preflightPublication (stage: V2Preflight.Stage) (values: Collections.Generic.Dictionary<string, string>) (online: bool) : int =
         requiredFor values [ "--workflow" ]
         let repository = programmePath values.["--repository"]
         let slug = slugOf values
@@ -725,16 +743,20 @@ module V2EnrollmentCommands =
                 // workflows from its own location, so it cannot be run from base blobs; instead it is observed only when the
                 // checkout's gate bytes equal the trusted base's, and is otherwise Unknown (GateModified).
                 let gateFiles = [ "scripts/check-publication-writer-coverage.py"; "scripts/publication_writer_lock.py" ]
+                // The base is the checkout's tracking ref only if it equals the live head of main; a stale ref would compare the gate
+                // with an older, possibly laxer, copy and call a modified gate unmodified.
                 let matchesBase =
-                    try
-                        let baseSha = (gitRun repository [ "rev-parse"; "--verify"; "refs/remotes/origin/main" ] 128).Trim()
-                        Some(gateFiles |> List.forall (fun relative ->
-                            gitRun repository [ "show"; baseSha + ":" + relative ] 4194304 = strictUtf8.GetString(IO.File.ReadAllBytes(IO.Path.Combine(repository, relative)))))
-                    with _ -> None
+                    match verifiedTrackingRef repository slug online with
+                    | Error kind -> Error kind
+                    | Ok baseSha ->
+                        try
+                            Ok(gateFiles |> List.forall (fun relative ->
+                                gitRun repository [ "show"; baseSha + ":" + relative ] 4194304 = strictUtf8.GetString(IO.File.ReadAllBytes(IO.Path.Combine(repository, relative)))))
+                        with _ -> Error V2Preflight.Unreadable
                 match matchesBase with
-                | None -> V2Preflight.NotObserved V2Preflight.Unreadable
-                | Some false -> V2Preflight.NotObserved V2Preflight.GateModified
-                | Some true ->
+                | Error kind -> V2Preflight.NotObserved kind
+                | Ok false -> V2Preflight.NotObserved V2Preflight.GateModified
+                | Ok true ->
                 try
                     let info = Diagnostics.ProcessStartInfo("python3")
                     for argument in [ "-I"; "-B"; Path.Combine(repository, "scripts", "check-publication-writer-coverage.py"); "--local" ] do info.ArgumentList.Add argument
@@ -783,7 +805,7 @@ module V2EnrollmentCommands =
         match route with
         | V2Preflight.ProgrammeEnrollmentSuccessor -> preflightEnrollment route stage values online
         | V2Preflight.RoutineDelivery when stage = V2Preflight.OpenPullRequest || stage = V2Preflight.MergePullRequest -> preflightRoutine stage values online
-        | V2Preflight.PublicationWriterRegistration when stage = V2Preflight.RegisterWriter || stage = V2Preflight.RunWriter -> preflightPublication stage values
+        | V2Preflight.PublicationWriterRegistration when stage = V2Preflight.RegisterWriter || stage = V2Preflight.RunWriter -> preflightPublication stage values online
         | _ ->
             // A route and stage that do not belong together have no registered checks: an explicit Unknown.
             let report = V2Preflight.unregisteredReport route stage
