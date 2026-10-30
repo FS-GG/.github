@@ -494,8 +494,10 @@ routes are `ProgrammeEnrollmentSuccessor` (stages `PlanSuccessor`, `PrepareSucce
 | `PayloadBound`, `TemplateBound` | computed payload and private binding sizes against the installed reader bounds | either is exceeded | inputs unreadable |
 | `ToolchainLock` | locked FSharp.Core `contentHash` against the cache's `.nupkg.metadata` | they differ (the NU1403 risk) | either unreadable |
 | `MemoryHeadroom` | smallest remaining bytes over the process cgroup chain | below the minimum | cgroup unreadable |
-| `ProjectAutoAdd` | Project items not in the binding's enrolled set | one lacks Status, Track or Work level (named, with the missing fields) | items unobserved |
+| `ProjectAutoAdd` | Project items not in the binding's enrolled set | never: no breaking condition is proven | any lacks Status, Track or Work level (each named with its missing fields), or items unobserved |
 | `AdjacencyChurn` (`BindRuntime`) | unrelated item `updated_at` within the window | never | any unrelated update in the window |
+
+`ProjectAutoAdd` is never `Unsupported`: on 2026-10-30 the installed caller kept working with a bare unenrolled membership (and three legacy partial ones) present, so that such memberships break it is unproven; only a sudden rise in them matched the later refusal, whose code was coarse. They are reported as `Unknown` with each item and its missing fields, and the JSON finding carries a note saying so. No `Unsupported` verdict exists for a condition that is not proven.
 
 The toolchain check compares the lock file with `.nupkg.metadata`, not with the cache's `.nupkg.sha512`, which is a
 different digest of the same package and would report a healthy cache as mismatched. The known-reader table is supplied

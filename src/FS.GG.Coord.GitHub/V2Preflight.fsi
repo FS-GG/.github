@@ -95,8 +95,6 @@ module V2Preflight =
         | BindingOverBound
         | LockedHashDiffersFromCache
         | InsufficientMemoryHeadroom
-        /// Unenrolled Project items without Status, Track or Work level, e.g. from Project 3 auto-add.
-        | UnenrolledItemLacksSchedulingFields
 
     val reasonCode: reason: Reason -> string
 
@@ -130,6 +128,10 @@ module V2Preflight =
         | NotEvaluated
         /// Unrelated Project item updates were observed in the window; their effect on an apply is unknowable.
         | ChurnObserved of count: int
+        /// Unenrolled Project memberships lacking Status, Track or Work level. That any of them breaks the
+        /// installed caller is UNPROVEN: the caller worked with such memberships present on 2026-10-30, and only
+        /// a sudden rise in bare unenrolled memberships matched the later refusal, whose code was coarse.
+        | BareMembershipsObserved of count: int
         | NotRegistered
 
     type Gap = { Input: Input; Kind: GapKind }

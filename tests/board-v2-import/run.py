@@ -1317,9 +1317,11 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         env2, _ = self.fake_gh(items=[bare], name='autoadd')
         unsupported, out = self.preflight(env2, extra=full)
         report, rows = self.verdicts(unsupported)
-        self.assertEqual((10, 'Unsupported'), (unsupported.returncode, report['overall']))
-        self.assertEqual(('Unsupported', 'UnenrolledItemLacksSchedulingFields', 'Root', ['FS-GG/.github#4940[Status,Track,Work level]']),
-                         tuple(rows['ProjectAutoAdd'][k] for k in ['verdict', 'reason', 'supplier', 'subjects']))
+        self.assertEqual((11, 'Unknown'), (unsupported.returncode, report['overall']))
+        self.assertEqual(('Unknown', 'ProjectItems/BareMembershipsObserved:1', ['FS-GG/.github#4940[Status,Track,Work level]']),
+                         tuple(rows['ProjectAutoAdd'][k] for k in ['verdict', 'gap', 'subjects']))
+        self.assertIn('unproven', rows['ProjectAutoAdd']['note'])
+        self.assertNotIn('Unsupported', {row['verdict'] for row in rows.values()})
         self.assert_hygiene(unsupported, out)
         # Causal: the same board with the item seeded (Status, Track and Work level present) is not an offender.
         seeded = self.item_json('I_auto_added', 4940, 'FS-GG/.github')

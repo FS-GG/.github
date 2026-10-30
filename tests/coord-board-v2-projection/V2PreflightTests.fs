@@ -119,10 +119,10 @@ module V2PreflightTests =
         Assert.Equal(3, (routes |> List.map routeCode |> Set.ofList).Count)
         Assert.Equal(3, (stages |> List.map stageCode |> Set.ofList).Count)
         Assert.Equal("ProjectAutoAdd", checkCode ProjectAutoAdd)
-        Assert.Equal("UnenrolledItemLacksSchedulingFields", reasonCode UnenrolledItemLacksSchedulingFields)
         Assert.Equal("Root", supplierCode Root)
         Assert.Equal("InstalledReader/NotInKnownTable", gapCode { Input = InstalledReader; Kind = NotInKnownTable })
         Assert.Equal("ProjectItems/ChurnObserved:3", gapCode { Input = ProjectItems; Kind = ChurnObserved 3 })
+        Assert.Equal("ProjectItems/BareMembershipsObserved:2", gapCode { Input = ProjectItems; Kind = BareMembershipsObserved 2 })
 
     // ---- constructor identity ----
 
@@ -321,7 +321,7 @@ module V2PreflightTests =
     // ---- Project 3 auto-add and adjacency churn ----
 
     [<Fact>]
-    let ``auto-add: unenrolled items without Status, Track or Work level are unsupported and named; each flips independently`` () =
+    let ``auto-add: unenrolled items without Status, Track or Work level are unknown (never unsupported) and named; each flips independently`` () =
         let stamp = now - TimeSpan.FromDays 3.0
         let inputs = healthy 5
         let withItems extra = { inputs with ProjectItems = Known(enrolledItems 5 @ extra) }
@@ -329,7 +329,8 @@ module V2PreflightTests =
         Assert.True(isSupported (verdictOf (runPlan (withItems [ item "FS-GG/.github#4940" "I_unenrolled_a" true true true stamp ])) ProjectAutoAdd))
         for label, status, track, level in [ "Status", false, true, true; "Track", true, false, true; "Work level", true, true, false; "all three", false, false, false ] do
             let report = runPlan (withItems [ item "FS-GG/.github#4940" "I_unenrolled_a" status track level stamp; item "FS-GG/.github#4941" "I_unenrolled_b" true true true stamp ])
-            expectUnsupported ProjectAutoAdd UnenrolledItemLacksSchedulingFields Root report
+            Assert.Equal(Unknown { Input = ProjectItems; Kind = BareMembershipsObserved 1 }, verdictOf report ProjectAutoAdd)
+            Assert.Equal((AnyUnknown, 11), (report.Overall, exitCode report.Overall))
             let expected = [ (if status then None else Some "Status"); (if track then None else Some "Track"); (if level then None else Some "Work level") ] |> List.choose id
             Assert.Equal<string list>([ "FS-GG/.github#4940[" + String.Join(",", expected) + "]" ], (finding report ProjectAutoAdd).Subjects)
         // Causal: the same missing-Track item is not an offender once it is enrolled (its node is in the binding).

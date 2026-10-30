@@ -81,7 +81,7 @@ module V2Preflight =
         | AdjacencyChurn -> "AdjacencyChurn"
 
     // The next stage is the one about to run. Churn matters only where the installed caller is next;
-    // auto-added unseeded items break that caller, so they are checked from the first stage.
+    // bare unenrolled memberships are reported (as Unknown, their effect being unproven) from the first stage.
     let private planChecks =
         [ ConstructorIdentity; PredecessorIntegrity; RuntimeBindingIntegrity; FactsComplete; IssueKind; IssueIdentity
           ProjectMembership; RepositoryInBinding; NotAlreadyEnrolled; RoadmapConflict; PlanGrammar; PlanBlob; RowCap
@@ -137,7 +137,6 @@ module V2Preflight =
         | BindingOverBound
         | LockedHashDiffersFromCache
         | InsufficientMemoryHeadroom
-        | UnenrolledItemLacksSchedulingFields
 
     let reasonCode reason =
         match reason with
@@ -159,14 +158,13 @@ module V2Preflight =
         | BindingOverBound -> "BindingOverBound"
         | LockedHashDiffersFromCache -> "LockedHashDiffersFromCache"
         | InsufficientMemoryHeadroom -> "InsufficientMemoryHeadroom"
-        | UnenrolledItemLacksSchedulingFields -> "UnenrolledItemLacksSchedulingFields"
 
     let private supplierOf reason =
         match reason with
         | ConstructorDiffersFromMain -> ConstructorBuild
         | PredecessorCommitmentMismatch | PredecessorNotSpliceable | RuntimeBindingDiffers -> PredecessorCustody
         | DuplicateRequestIssue | IssueIsPullRequest | NodeIdentityMismatch | RepositoryOutsideBinding | AlreadyEnrolled -> RequestAuthor
-        | NotProjectMember | ConflictingHumanRoadmap | UnenrolledItemLacksSchedulingFields -> Root
+        | NotProjectMember | ConflictingHumanRoadmap -> Root
         | PlanNotAdmitted | PlanBlobAbsentOnMain -> PlanAuthor
         | RowCapExceeded | PayloadOverBound | BindingOverBound -> ProtocolRelease
         | LockedHashDiffersFromCache -> ToolchainCache
@@ -196,6 +194,7 @@ module V2Preflight =
         | NotInKnownTable
         | NotEvaluated
         | ChurnObserved of count: int
+        | BareMembershipsObserved of count: int
         | NotRegistered
 
     type Gap = { Input: Input; Kind: GapKind }
@@ -226,6 +225,7 @@ module V2Preflight =
         | NotInKnownTable -> "NotInKnownTable"
         | NotEvaluated -> "NotEvaluated"
         | ChurnObserved count -> "ChurnObserved:" + string count
+        | BareMembershipsObserved count -> "BareMembershipsObserved:" + string count
         | NotRegistered -> "NotRegistered"
 
     let gapCode (gap: Gap) = inputCode gap.Input + "/" + kindCode gap.Kind
@@ -548,7 +548,8 @@ module V2Preflight =
                 let named (item: ProjectItem) =
                     let missing = [ (if item.HasStatus then None else Some "Status"); (if item.HasTrack then None else Some "Track"); (if item.HasWorkLevel then None else Some "Work level") ] |> List.choose id
                     nameOf item + "[" + String.Join(",", missing) + "]"
-                unsupported ProjectAutoAdd UnenrolledItemLacksSchedulingFields (offenders |> List.map named |> capped)
+                // Unknown, not Unsupported: that these break the installed caller is unproven (see the gap kind).
+                unknown ProjectAutoAdd ProjectItems (BareMembershipsObserved offenders.Length) (offenders |> List.map named |> capped)
 
     let private adjacencyChurn (ctx: Context) =
         match ctx.Inputs.ProjectItems with
@@ -666,6 +667,10 @@ module V2Preflight =
             | Unknown gap ->
                 row.["verdict"] <- JsonValue.Create "Unknown"
                 row.["gap"] <- JsonValue.Create(gapCode gap)
+                match gap.Kind with
+                | BareMembershipsObserved _ ->
+                    row.["note"] <- JsonValue.Create "Unenrolled memberships lacking Status, Track or Work level; that they break the installed caller is unproven (the caller worked with such memberships present on 2026-10-30; a sudden rise in bare unenrolled memberships matched the observed refusal)."
+                | _ -> ()
             row.["subjects"] <- JsonArray(finding.Subjects |> List.map (fun name -> JsonValue.Create name :> JsonNode) |> List.toArray)
             findings.Add row
         root.["findings"] <- findings
