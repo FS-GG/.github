@@ -542,6 +542,63 @@ then ok "the shipped permission-coherence.yml runs caller and App-token checks p
 else bad "the shipped permission-coherence.yml is not the shape this fixture asserts"
 fi
 
+# ---------------------------------------------------------------------------------------------
+# 7. The scheduled live-grant arm, run for real against a fixture installation record (#1026).
+#    The shipped step's own `run:` body executes with `gh` stubbed to print the fixture permissions.
+#    Causal pair: the owner-readback live set matches the shipped pin; the same live set against the
+#    previous pin (no `workflows`) is the drift that kept installation-grants-current red.
+# ---------------------------------------------------------------------------------------------
+LIVE_DIR="$WORK/live-arm"; mkdir -p "$LIVE_DIR/bin"
+cat > "$LIVE_DIR/bin/gh" <<'GH'
+#!/usr/bin/env bash
+# Answers only `gh api orgs/FS-GG/installations --jq ...` with the fixture permissions object.
+[ "$1" = api ] && [ "$2" = orgs/FS-GG/installations ] || { echo "unexpected gh call: $*" >&2; exit 64; }
+cat "$LIVE_FIXTURE"
+GH
+chmod +x "$LIVE_DIR/bin/gh"
+python3 - "$REPO_ROOT/.github/workflows/permission-coherence.yml" "$LIVE_DIR" <<'PY'
+import sys, yaml, pathlib
+d = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
+out = pathlib.Path(sys.argv[2])
+steps = d["jobs"]["installation-grants-current"]["steps"]
+step = next(s for s in steps if s.get("name") == "Assert the pinned App grant inventory is current")
+(out / "step.sh").write_text(step["run"])
+(out / "pin.txt").write_text(step["env"]["FSGG_APP_GRANTS"])
+pr_pin = d["jobs"]["permissions-coherent"]["steps"]
+pr_pin = next(s for s in pr_pin if s.get("id") == "check")["env"]["FSGG_APP_GRANTS"]
+(out / "pr-pin.txt").write_text(pr_pin)
+PY
+# Owner's App settings readback, 2026-10-30, in the API's spelling.
+cat > "$LIVE_DIR/live.json" <<'JSON'
+{"administration":"write","contents":"write","issues":"write","metadata":"read","organization_administration":"read","organization_projects":"write","packages":"read","pull_requests":"write","workflows":"write"}
+JSON
+live_arm() { # <pin> <live-file>: run the shipped step body; echo output, return its exit code
+  PATH="$LIVE_DIR/bin:$PATH" LIVE_FIXTURE="$2" FSGG_APP_GRANTS="$1" bash "$LIVE_DIR/step.sh" 2>&1
+}
+if [ "$(cat "$LIVE_DIR/pin.txt")" = "$(cat "$LIVE_DIR/pr-pin.txt")" ]; then
+  ok "the offline PR inventory and the live-arm inventory are the same pin"
+else bad "the offline PR inventory and the live-arm inventory differ"; fi
+rc=0; out="$(live_arm "$(cat "$LIVE_DIR/pin.txt")" "$LIVE_DIR/live.json")" || rc=$?
+if [ "$rc" -eq 0 ] && grep -qF "live App installation grants match the pinned inventory" <<<"$out"; then
+  ok "the shipped pin matches the owner-readback live installation set (live arm exits 0)"
+else bad "the shipped pin does not match the live installation set (exit $rc)" "$out"; fi
+OLD_PIN="$(sed 's/,workflows:write$//' "$LIVE_DIR/pin.txt")"
+if [ "$OLD_PIN" != "$(cat "$LIVE_DIR/pin.txt")" ]; then
+  rc=0; out="$(live_arm "$OLD_PIN" "$LIVE_DIR/live.json")" || rc=$?
+  if [ "$rc" -eq 1 ] && grep -qF "App grants drifted" <<<"$out" && grep -qF "'workflows': 'write'" <<<"$out"; then
+    ok "causal: the previous pin (no workflows) against the same live set is the drift (exit 1, names workflows)"
+  else bad "the previous pin did not fail as drift (exit $rc)" "$out"; fi
+else bad "the shipped pin has no workflows:write to remove, so the causal control cannot run"; fi
+# A live grant that is narrower than the pin (owner removed one) is also drift, so the pin stays two-sided.
+python3 - "$LIVE_DIR/live.json" "$LIVE_DIR/live-narrow.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); d.pop("workflows"); json.dump(d, open(sys.argv[2], "w"))
+PY
+rc=0; out="$(live_arm "$(cat "$LIVE_DIR/pin.txt")" "$LIVE_DIR/live-narrow.json")" || rc=$?
+if [ "$rc" -eq 1 ] && grep -qF "App grants drifted" <<<"$out"; then
+  ok "an owner removal of workflows against this pin is drift too (exit 1): pin and live move together"
+else bad "owner removal was not reported as drift (exit $rc)" "$out"; fi
+
 echo
 echo "workflow-permissions fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::workflow-permissions fixture FAILED"; exit 1; }

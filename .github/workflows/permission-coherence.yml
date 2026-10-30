@@ -80,8 +80,18 @@ jobs:
           # board — verified live via `gh api orgs/FS-GG/installations --jq '.installations[] | select(.app_slug
           # == "fs-gg-cross-repo-dispatch") | .permissions'`, which returned `organization_projects:"write"`
           # alongside every grant already listed below. Every other value here is unchanged from 2026-08-08.
+          # Live 2026-10-30: `workflows: write` re-pinned. The scheduled installation-grants-current job
+          # (run 41061963291) found the installation holding it while this inventory did not; the owner's
+          # App settings readback relayed by Root for FS-GG/FS.GG.Coordination#1026 gives the full live
+          # set (read: metadata, organization administration, packages; read+write: administration, code
+          # (contents), issues, organization projects, pull requests, workflows), so `workflows` is the
+          # only difference. No
+          # workflow here mints it from this App (callable-isolated-operation-execute.yml requests it from
+          # the distinct callable App), so this records the owner-held grant and does not request a use.
+          # Root decision (#1026): re-pin to the live grant; the owner may still remove it later, at which
+          # point this pin and the live job must be changed together.
           # Hyphens are action input spelling; underscores are GitHub's API spelling.
-          FSGG_APP_GRANTS: administration:write,contents:write,issues:write,metadata:read,organization_administration:read,organization_projects:write,packages:read,pull_requests:write
+          FSGG_APP_GRANTS: administration:write,contents:write,issues:write,metadata:read,organization_administration:read,organization_projects:write,packages:read,pull_requests:write,workflows:write
           # Required contract for the distinct, environment-custodied protected-operation App.
           # This is not a claim that the App exists: authorization observes an exact live
           # installation before issuing a grant, and a missing secret/grant makes token minting fail.
@@ -166,7 +176,7 @@ jobs:
       - name: Assert the pinned App grant inventory is current
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          FSGG_APP_GRANTS: administration:write,contents:write,issues:write,metadata:read,organization_administration:read,organization_projects:write,packages:read,pull_requests:write
+          FSGG_APP_GRANTS: administration:write,contents:write,issues:write,metadata:read,organization_administration:read,organization_projects:write,packages:read,pull_requests:write,workflows:write
         run: |
           live="$(gh api orgs/FS-GG/installations --jq '.installations[] | select(.app_slug == "fs-gg-cross-repo-dispatch") | .permissions')"
           [ -n "$live" ] || { echo '::error title=permission-coherence: no verdict::The App installation was not readable.'; exit 1; }

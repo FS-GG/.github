@@ -572,9 +572,12 @@ for everyone else — rather than naming one that most readers cannot take.
 ### The receiver half is not done in this repository
 
 The hub cannot add `workflow_dispatch` to the seven callers. Those are workflow **files** in the
-receivers, and the App installation token that pushes a materialize commit holds `contents: write`
-and **not** `workflows: write` (#1713) — the same constraint that put the `bump-shape` job in the
-reusable workflow instead of materializing a file into each repo. Each caller therefore needs:
+receivers, and the kit ships no workflow file (#1713) — the same constraint that put the `bump-shape`
+job in the reusable workflow instead of materializing a file into each repo. The `fs-gg-cross-repo-dispatch` installation now holds
+`workflows: write` (live 2026-10-30; owner-held, not needed by any `.github` workflow, and pinned in
+`permission-coherence.yml` so a change in either direction fails the scheduled
+`installation-grants-current` job), but no workflow requests it for the kit. Each caller
+therefore needs:
 
 ```yaml
 on:
