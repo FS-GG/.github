@@ -4,6 +4,11 @@ namespace FS.GG.Coord.Tests.Base
 // (`src/FS.GG.Coord.GitHub/V2Enrollment.fs` at that commit). It exists only so the differential test can
 // compare the current planner against the behaviour PR 1 was reviewed and accepted with. Do not edit it, and
 // do not use it from production code. Drop it only together with `V2EnrollmentDifferentialTests.fs`.
+//
+// ONE DOCUMENTED EDIT: the PR 1 line `let rowCap = 100` is re-pointed at the lifted reader ceiling
+// (`V2Projection.maximumProgrammeRows`), because the row ceiling was lifted from 100 to 250 on purpose (#4941 PR 4) and the
+// differential must compare everything else. The differential test restores that one line and checks the pinned hash of
+// the original body, so any other edit is detected.
 module V2EnrollmentPr1 =
 
     open FS.GG.Coord.GitHub
@@ -14,7 +19,7 @@ module V2EnrollmentPr1 =
     open System.Text.Json.Nodes
     open System.Text.RegularExpressions
 
-    let rowCap = 100
+    let rowCap = V2Projection.maximumProgrammeRows
 
     type Refusal =
         | DuplicateIssue

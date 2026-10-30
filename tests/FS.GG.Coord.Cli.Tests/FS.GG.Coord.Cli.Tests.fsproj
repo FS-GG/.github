@@ -53,6 +53,7 @@
     <Compile Include="ReviewWaitEvidenceTests.fs" />
     <Compile Include="OperationObservationApplicationTests.fs" />
     <Compile Include="ContextViewApplicationTests.fs" />
+    <Compile Include="EnrollmentApplicationTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -878,7 +878,8 @@ class SuccessorEnrollmentTests(unittest.TestCase):
         self.assertEqual(commitment, receipt['commitmentSha256'])
         self.assertEqual(fixture['merge'], receipt['predecessorMergeSha'])
         self.assertEqual({'revision', 'artifactSha256'}, set(receipt['constructor']))
-        self.assertEqual(hashlib.sha256(DLL.read_bytes()).hexdigest(), receipt['constructor']['artifactSha256'])
+        # The constructor is the library that builds the pair (FS.GG.Coord.GitHub), which the tool and the engine share.
+        self.assertEqual(hashlib.sha256((DLL.parent / 'FS.GG.Coord.GitHub.dll').read_bytes()).hexdigest(), receipt['constructor']['artifactSha256'])
         if SOURCE_REVISION:
             self.assertEqual(SOURCE_REVISION, receipt['constructor']['revision'])
         self.assertEqual([True, True, True], [receipt['prefixPreserved'], receipt['headerPreserved'], receipt['recomputedCommitment']])
@@ -980,13 +981,15 @@ class SuccessorEnrollmentTests(unittest.TestCase):
         self.assert_refusal('PartialVisibility', request, self.facts_issue(0, visibility='partial'))
         missing = self.facts(); missing['issues'].pop()
         self.assert_refusal('PartialVisibility', request, missing)
-        # RowCapExceeded: exactly at the installed ceiling is accepted, one beyond refuses
-        full98 = self.make_predecessor('full98', 98)
-        accepted, _ = self.plan(self.request(full98), fixture=full98, name='cap-ok')
-        self.assertEqual(0, accepted.returncode, accepted.stderr)
-        self.assertEqual('successor planned; rows=100 appended=2; offline only\n', accepted.stdout)
-        full99 = self.make_predecessor('full99', 99)
-        self.assert_refusal('RowCapExceeded', self.request(full99), fixture=full99)
+        # RowCapExceeded: the ceiling was lifted from 100 to 250. 98+2 (the old ceiling) and 99+2 (beyond it) are accepted;
+        # 248+2 (the new ceiling) is accepted and 249+2 is refused.
+        for count, total in [(98, 100), (99, 101), (248, 250)]:
+            full = self.make_predecessor(f'full{count}', count)
+            accepted, _ = self.plan(self.request(full), fixture=full, name=f'cap-ok-{count}')
+            self.assertEqual(0, accepted.returncode, accepted.stderr)
+            self.assertEqual(f'successor planned; rows={total} appended=2; offline only\n', accepted.stdout)
+        full249 = self.make_predecessor('full249', 249)
+        self.assert_refusal('RowCapExceeded', self.request(full249), fixture=full249)
         # MalformedInput: unknown, duplicate and missing members
         raw = self.wire(self.request())
         self.assert_refusal('MalformedInput', raw_request=raw[:-1] + b',"extra":1}')
@@ -1357,11 +1360,28 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
 
     def test_preflight_names_each_unsupported_route_check_and_refuses_bad_arguments(self):
         env, _ = self.fake_gh()
-        # The cap: 99 predecessor rows leave room for one request issue, not two.
+        # The cap was lifted from 100 to 250. Up to the old ceiling every reader reads the successor; above it only a reader that
+        # carries the lifted ceiling does, and the table that names such readers is supplied. The new ceiling is a refusal.
+        known = self.dir / 'lifted-readers.txt'
+        known.write_text(hashlib.sha256(DLL.read_bytes()).hexdigest() + '\n')
+        full98 = self.make_predecessor('preflight98', 98)
+        at_old = self.preflight(env, online=False, fixture=full98)[0]
+        self.assertEqual(('SupportedForNextStage', '98+2<=100'), (self.verdicts(at_old)[1]['RowCap']['verdict'], self.verdicts(at_old)[1]['RowCap']['evidence'][:9]))
         full99 = self.make_predecessor('preflight99', 99)
-        result, _ = self.preflight(env, online=False, fixture=full99)
+        beyond = self.preflight(env, online=False, fixture=full99)[0]
+        self.assertEqual('InstalledReader/NotSupplied', self.verdicts(beyond)[1]['RowCap']['gap'])
+        unlisted = self.preflight(env, online=False, fixture=full99, extra=['--installed-reader', DLL, '--known-lifted-cap-readers', self.dir / 'absent-table.txt'])[0]
+        self.assertEqual('KnownReaderTable/NotSupplied', self.verdicts(unlisted)[1]['RowCap']['gap'])
+        other = self.dir / 'other-readers.txt'
+        other.write_text('f' * 64 + '\n')
+        not_in = self.preflight(env, online=False, fixture=full99, extra=['--installed-reader', DLL, '--known-lifted-cap-readers', other])[0]
+        self.assertEqual('InstalledReader/NotInKnownTable', self.verdicts(not_in)[1]['RowCap']['gap'])
+        listed = self.preflight(env, online=False, fixture=full99, extra=['--installed-reader', DLL, '--known-lifted-cap-readers', known])[0]
+        self.assertEqual('SupportedForNextStage', self.verdicts(listed)[1]['RowCap']['verdict'])
+        full249 = self.make_predecessor('preflight249', 249)
+        result, _ = self.preflight(env, online=False, fixture=full249, extra=['--installed-reader', DLL, '--known-lifted-cap-readers', known])
         report, rows = self.verdicts(result)
-        self.assertEqual(('Unsupported', 'RowCapExceeded', 'ProtocolRelease', ['99+2>100']), tuple(rows['RowCap'][k] for k in ['verdict', 'reason', 'supplier', 'subjects']))
+        self.assertEqual(('Unsupported', 'RowCapExceeded', 'ProtocolRelease', ['249+2>250']), tuple(rows['RowCap'][k] for k in ['verdict', 'reason', 'supplier', 'subjects']))
         self.assertEqual(10, result.returncode)
         # A constructor that is not the intended protected main is unsupported, supplied by a rebuild.
         wrong, _ = self.preflight(env, online=False, main='0' * 40)
@@ -1569,30 +1589,155 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         rows = {r['check']: r for r in json.loads(closing.stdout)['findings']}
         self.assertEqual((10, 'ClosingKeywordUndeclared'), (closing.returncode, rows['ClosingLinkDeclared']['reason']))
 
+    def publication_repository(self):
+        """A checkout holding the maintained coverage gate, the registry and the workflows, committed as the trusted base."""
+        repository = self.dir / ('publication-' + str(len(list(self.dir.iterdir()))))
+        (repository / 'scripts').mkdir(parents=True)
+        (repository / 'registry').mkdir()
+        for name in ('check-publication-writer-coverage.py', 'publication_writer_lock.py'):
+            (repository / 'scripts' / name).write_bytes((ROOT / 'scripts' / name).read_bytes())
+        (repository / 'registry' / 'publication-writers.json').write_bytes((ROOT / 'registry' / 'publication-writers.json').read_bytes())
+        shutil.copytree(ROOT / '.github' / 'workflows', repository / '.github' / 'workflows')
+        self.git(repository, 'init', '-q', '-b', 'main')
+        self.git(repository, 'add', '-A')
+        self.git(repository, 'commit', '-q', '-m', 'base')
+        self.git(repository, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+        return repository
+
+    def publication(self, env, stage, repository, workflow):
+        done = subprocess.run(['dotnet', str(DLL), 'preflight', '--route', 'PublicationWriterRegistration', '--stage', stage, '--repository', str(repository), '--workflow', workflow],
+                              capture_output=True, text=True, timeout=180, env=env)
+        return done, {r['check']: r for r in json.loads(done.stdout)['findings']}
+
     def test_publication_writer_route_through_the_cli(self):
         env, _ = self.fake_gh()
-        def run(stage, workflow):
-            done = subprocess.run(['dotnet', str(DLL), 'preflight', '--route', 'PublicationWriterRegistration', '--stage', stage, '--repository', str(ROOT), '--workflow', workflow],
-                                  capture_output=True, text=True, timeout=180, env=env)
-            return done, {r['check']: r for r in json.loads(done.stdout)['findings']}
+        repository = self.publication_repository()
         registered = '.github/workflows/release-successor-publish.yml'
-        done, rows = run('RunWriter', registered)
+        done, rows = self.publication(env, 'RunWriter', repository, registered)
         self.assertEqual(['RegistryReadable', 'WriterRegistered', 'CoverageAudit'], list(rows))
         # The maintained gate is run for real and is authoritative: clean here, so the registered writer is supported.
         self.assertEqual((0, 'SupportedForNextStage'), (done.returncode, rows['CoverageAudit']['verdict']), done.stdout)
-        done, rows = run('RegisterWriter', registered)
+        done, rows = self.publication(env, 'RegisterWriter', repository, registered)
         self.assertEqual((10, 'WriterAlreadyRegistered'), (done.returncode, rows['NotYetRegistered']['reason']))
         self.assertEqual('SupportedForNextStage', rows['WorkflowPublishes']['verdict'])
         plain = '.github/workflows/graphql-monopoly.yml'
-        done, rows = run('RegisterWriter', plain)
+        done, rows = self.publication(env, 'RegisterWriter', repository, plain)
         self.assertEqual((10, 'WorkflowHasNoPublicationEffect'), (done.returncode, rows['WorkflowPublishes']['reason']))
-        done, rows = run('RunWriter', plain)
+        done, rows = self.publication(env, 'RunWriter', repository, plain)
         self.assertEqual((10, 'WriterNotRegistered'), (done.returncode, rows['WriterRegistered']['reason']))
         # A workflow path outside the workflow directory is refused rather than read.
         for bad in ['../../etc/passwd', '.github/workflows/../../x.yml', 'scripts/x.yml']:
-            refused = subprocess.run(['dotnet', str(DLL), 'preflight', '--route', 'PublicationWriterRegistration', '--stage', 'RegisterWriter', '--repository', str(ROOT), '--workflow', bad],
+            refused = subprocess.run(['dotnet', str(DLL), 'preflight', '--route', 'PublicationWriterRegistration', '--stage', 'RegisterWriter', '--repository', str(repository), '--workflow', bad],
                                      capture_output=True, text=True, timeout=60, env=env)
             self.refused(refused, 'MalformedInput')
+
+    def test_the_coverage_gate_is_trusted_only_when_the_checkout_holds_the_base_bytes(self):
+        """Gate trust: a pull request that weakens the audit cannot predict its own pass."""
+        env, _ = self.fake_gh()
+        repository = self.publication_repository()
+        registered = '.github/workflows/release-successor-publish.yml'
+        gate = repository / 'scripts' / 'check-publication-writer-coverage.py'
+        # Make the registry audit fail for a real reason, with the trusted gate: a registered writer whose workflow is absent.
+        (repository / '.github' / 'workflows' / 'release-successor-publish.yml').unlink()
+        self.git(repository, 'add', '-A')
+        self.git(repository, 'commit', '-q', '-m', 'break the audit subject')
+        # Patch the checkout's gate to always report zero unmet (positive leg: the patched gate does say clean).
+        gate.write_text(gate.read_text().replace('def main(argv=None) -> int:', 'def main(argv=None) -> int:\n    print("publication writer coverage: 0 unmet")\n    return 0', 1))
+        patched = subprocess.run(['python3', '-I', '-B', str(gate), '--local'], capture_output=True, text=True, cwd=repository)
+        self.assertEqual((0, True), (patched.returncode, 'coverage: 0 unmet' in patched.stdout))
+        # The preflight does not take that answer: the gate's bytes differ from the trusted base, so the audit is Unknown.
+        done, rows = self.publication(env, 'RunWriter', repository, '.github/workflows/release-new-sdd-workspace.yml')
+        self.assertEqual((11, 'CoverageAudit/GateModified'), (done.returncode, rows['CoverageAudit']['gap']))
+        # Causal pair: restoring the gate's bytes makes the audit observable again, and it now says what is really unmet.
+        self.git(repository, 'checkout', '--', 'scripts/check-publication-writer-coverage.py')
+        done, rows = self.publication(env, 'RunWriter', repository, '.github/workflows/release-new-sdd-workspace.yml')
+        self.assertEqual(('Unsupported', 'CoverageUnmet'), (rows['CoverageAudit']['verdict'], rows['CoverageAudit']['reason']), done.stdout)
+        # No trusted ref to compare with: Unknown, never a pass.
+        self.git(repository, 'update-ref', '-d', 'refs/remotes/origin/main')
+        done, rows = self.publication(env, 'RunWriter', repository, '.github/workflows/release-new-sdd-workspace.yml')
+        self.assertEqual((11, 'CoverageAudit/Unreadable'), (done.returncode, rows['CoverageAudit']['gap']))
+
+    def test_routine_gates_run_from_the_base_blobs_not_the_checkout(self):
+        """Gate trust: patch the checkout's evaluate_routine to always admit; the result must stay refused."""
+        repository, base, head = self.routine_repository()
+        marker_ambiguous = f'<!-- fsgg:routine-development/v1 head=__HEAD__ operation=source-change operation=publish -->'
+        # Patch the checkout's gate on the head commit so that it admits everything.
+        gate = repository / 'scripts' / 'check-claim-generation.py'
+        patched = gate.read_text().replace('def evaluate_routine(args: argparse.Namespace, body: str) -> tuple[str | None, str]:',
+                                           'def evaluate_routine(args: argparse.Namespace, body: str) -> tuple[str | None, str]:\n    return None, "routine delivery admitted by a patched gate"', 1)
+        self.assertNotEqual(gate.read_text(), patched)
+        gate.write_text(patched)
+        closing = repository / 'scripts' / 'check-closing-keywords.py'
+        closing_patched = closing.read_text().replace('def main() -> int:', 'def main() -> int:\n    print("check-closing-keywords: OK — this PR closes no issue.")\n    return 0', 1)
+        self.assertNotEqual(closing.read_text(), closing_patched)
+        closing.write_text(closing_patched)
+        self.git(repository, 'add', '-A')
+        self.git(repository, 'commit', '-q', '-m', 'patch both gates (Refs #4941)')
+        head = self.git(repository, 'rev-parse', 'HEAD')
+        body = f'it Closes #4941 inline\n' + marker_ambiguous.replace('__HEAD__', head)
+        # Positive legs: the patched checkout gates really do admit this body when run from the checkout.
+        body_file = self.dir / 'trust-body.md'
+        body_file.write_text(body)
+        run = lambda *a: subprocess.run(['python3', '-I', '-B', *map(str, a)], capture_output=True, text=True, cwd=repository)
+        admitted = run('scripts/check-claim-generation.py', '--repo', 'FS-GG/.github', '--head-ref', 'routine/synthetic', '--head-sha', head, '--base-sha', base,
+                       '--routine-policy-ref', base, '--body', body_file)
+        self.assertEqual((0, True), (admitted.returncode, 'routine delivery admitted' in admitted.stdout))
+        commits = self.dir / 'trust-commits.txt'
+        commits.write_text('feat: x\n\nRefs #4941\n')
+        silent = run('scripts/check-closing-keywords.py', '--title=feat (Refs #4941)', '--body', body_file, '--commits', commits)
+        self.assertEqual((0, True), (silent.returncode, 'closes no issue' in silent.stdout))
+        # The preflight runs the BASE blobs, so the ambiguous marker and the inline keyword are still refused.
+        env, _ = self.fake_gh(overrides=self.pull_routes(head, base, body=body), name='trust-patched')
+        done = self.routine(env, 'MergePullRequest', repository, '--pr', '7')
+        rows = {r['check']: r for r in json.loads(done.stdout)['findings']}
+        self.assertEqual((10, 'MarkerMissingOrAmbiguous', 'ClosingKeywordUndeclared'), (done.returncode, rows['MarkerSingle']['reason'], rows['ClosingLinkDeclared']['reason']), done.stdout)
+        # Causal pair: only the gate source changed; with unpatched checkout gates the same inputs give the same refusal, and the
+        # patched copy never ran (its admission text appears nowhere in the report).
+        self.assertNotIn('patched gate', done.stdout)
+        # If the base does not hold the gates the preflight cannot be trusted either: Unknown, not a verdict from the checkout.
+        bare = self.dir / 'bare-base'
+        bare.mkdir()
+        self.git(bare, 'init', '-q', '-b', 'main')
+        (bare / 'README').write_text('base without gates\n')
+        self.git(bare, 'add', '-A')
+        self.git(bare, 'commit', '-q', '-m', 'base')
+        bare_base = self.git(bare, 'rev-parse', 'HEAD')
+        self.git(bare, 'checkout', '-q', '-b', 'routine/synthetic')
+        (bare / 'scripts').mkdir()
+        (bare / 'scripts' / 'check-claim-generation.py').write_text(patched)
+        (bare / '.fsgg').mkdir()
+        (bare / '.fsgg' / 'routine-development.json').write_bytes((ROOT / '.fsgg' / 'routine-development.json').read_bytes())
+        self.git(bare, 'add', '-A')
+        self.git(bare, 'commit', '-q', '-m', 'adds a gate that the base does not have')
+        bare_head = self.git(bare, 'rev-parse', 'HEAD')
+        env2, _ = self.fake_gh(overrides=self.pull_routes(bare_head, bare_base, body=f'Refs #4941\n<!-- fsgg:routine-development/v1 head={bare_head} operation=source-change -->'), name='trust-bare')
+        unknown = self.routine(env2, 'MergePullRequest', bare, '--pr', '7')
+        rows = {r['check']: r for r in json.loads(unknown.stdout)['findings']}
+        self.assertEqual((11, 'RoutineGate/Unreadable', 'ClosingGate/Unreadable'), (unknown.returncode, rows['MarkerSingle']['gap'], rows['ClosingLinkDeclared']['gap']))
+
+    def test_the_installed_shim_reaches_the_engine_roots_and_the_same_code(self):
+        """Engine registration. Runs when FSGG_COORD_ENGINE_BIN names a built engine (CI jobs that build it set it); skipped otherwise."""
+        engine = os.environ.get('FSGG_COORD_ENGINE_BIN')
+        if not engine or not pathlib.Path(engine).exists():
+            self.skipTest('no built engine (FSGG_COORD_ENGINE_BIN)')
+        shim = ROOT / 'scripts' / 'fsgg-coord'
+        run = lambda *a: subprocess.run(['bash', str(shim), *map(str, a)], capture_output=True, text=True, timeout=120, env=dict(os.environ, FSGG_COORD_ENGINE_BIN=engine))
+        helped = run('enrollment', '--help')
+        self.assertEqual(0, helped.returncode)
+        self.assertIn('route-preflight', helped.stdout)
+        unregistered = run('route-preflight', '--route', 'RoutineDelivery', '--stage', 'PlanSuccessor', '--repository', self.dir)
+        self.assertEqual((11, 'Unknown'), (unregistered.returncode, json.loads(unregistered.stdout)['overall']))
+        self.refused(run('enrollment', 'apply'), 'MalformedInput')
+        # The same inputs through the engine and through the tool give byte-identical successor outputs: one implementation.
+        result, out = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        via_engine = self.dir / 'via-engine'
+        via_engine.mkdir()
+        done = run('enrollment', 'plan', '--request', out/'request.json', '--native-facts', out/'facts.json', '--repository', self.fixture['repository'],
+                   '--template-output', via_engine/'template.json', '--payload-output', via_engine/'payload.json')
+        self.assertEqual((0, 'successor planned; rows=7 appended=2; offline only\n'), (done.returncode, done.stdout), done.stderr)
+        for name in ('template.json', 'payload.json'):
+            self.assertEqual((out / name).read_bytes(), (via_engine / name).read_bytes())
 
     def test_a_response_over_the_stream_cap_is_a_failed_read_not_a_buffered_one(self):
         out = self.dir / 'huge'

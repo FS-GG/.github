@@ -318,6 +318,7 @@ module V2Preflight =
         | NotVisible
         | BaseMoved
         | ClosingLinkPresent of count: int
+        | GateModified
 
     type Gap = { Input: Input; Kind: GapKind }
 
@@ -366,6 +367,7 @@ module V2Preflight =
         | NotVisible -> "NotVisible"
         | BaseMoved -> "BaseMoved"
         | ClosingLinkPresent count -> "ClosingLinkPresent:" + string count
+        | GateModified -> "GateModified"
 
     let gapCode (gap: Gap) = inputCode gap.Input + "/" + kindCode gap.Kind
 
@@ -429,6 +431,7 @@ module V2Preflight =
           SuccessorPublic: Observed<string>
           InstalledReaderSha256: Observed<string>
           KnownInstalledReaders: Set<string>
+          KnownLiftedCapReaders: Set<string>
           LockedFSharpCoreHash: Observed<string>
           CachedFSharpCoreHash: Observed<string>
           MemoryHeadroomBytes: Observed<int64 option>
@@ -728,9 +731,20 @@ module V2Preflight =
         | Some(input, kind), _ -> unknown RowCap input kind []
         | None, Some(Ok analysis) ->
             let total = analysis.PredecessorRows + ctx.Inputs.Request.Issues.Length
+            let counts = string analysis.PredecessorRows + "+" + string ctx.Inputs.Request.Issues.Length
             if total > V2Enrollment.rowCap then
-                { unsupported RowCap RowCapExceeded [] with Subjects = [ string analysis.PredecessorRows + "+" + string ctx.Inputs.Request.Issues.Length + ">" + string V2Enrollment.rowCap ] }
-            else supported RowCap (string analysis.PredecessorRows + "+" + string ctx.Inputs.Request.Issues.Length + "<=" + string V2Enrollment.rowCap)
+                { unsupported RowCap RowCapExceeded [] with Subjects = [ counts + ">" + string V2Enrollment.rowCap ] }
+            elif total <= V2Enrollment.legacyRowCap then
+                supported RowCap (counts + "<=" + string V2Enrollment.legacyRowCap + ", readable by every reader of the line")
+            else
+                // Above the legacy ceiling the successor is readable only by a reader that carries the lifted one.
+                match ctx.Inputs.InstalledReaderSha256 with
+                | NotObserved kind -> unknown RowCap InstalledReader kind []
+                | Known sha ->
+                    if ctx.Inputs.KnownLiftedCapReaders.IsEmpty then unknown RowCap KnownReaderTable NotSupplied []
+                    elif ctx.Inputs.KnownLiftedCapReaders.Contains sha then
+                        supported RowCap (counts + "<=" + string V2Enrollment.rowCap + " and the installed reader is known to carry the lifted ceiling")
+                    else unknown RowCap InstalledReader NotInKnownTable []
         | None, _ -> unknown RowCap PredecessorPrivate NotEvaluated []
 
     // Sizes are computed from the request, the facts and the predecessor, not from a built successor: a

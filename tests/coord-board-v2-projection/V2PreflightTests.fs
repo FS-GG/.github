@@ -39,7 +39,7 @@ module V2PreflightTests =
     /// Healthy inputs over a real predecessor pair. Every control below changes one thing.
     let private healthy (count: int) : EnrollmentInputs =
         let privateJson, publicJson, _ = predecessor count ""
-        let successorPrivate, successorPublic = if count <= 97 then successorPair privateJson publicJson else privateJson, publicJson
+        let successorPrivate, successorPublic = if count <= 247 then successorPair privateJson publicJson else privateJson, publicJson
         { Request = request
           Facts = Known(facts, Live)
           ConstructorRevision = Known main
@@ -53,6 +53,7 @@ module V2PreflightTests =
           SuccessorPublic = Known successorPublic
           InstalledReaderSha256 = Known reader
           KnownInstalledReaders = Set.ofList [ reader ]
+          KnownLiftedCapReaders = Set.ofList [ reader ]
           LockedFSharpCoreHash = Known hash
           CachedFSharpCoreHash = Known hash
           MemoryHeadroomBytes = Known(Some 4294967296L)
@@ -284,12 +285,22 @@ module V2PreflightTests =
     // ---- row cap and size bounds ----
 
     [<Fact>]
-    let ``row cap boundary: 98 plus 2 is supported and 99 plus 2 is unsupported with the counts named`` () =
-        let ok = runPlan (healthy 98)
-        Assert.Equal(SupportedForNextStage "98+2<=100", verdictOf ok RowCap)
-        let over = runPlan (healthy 99)
+    let ``row cap: the legacy ceiling needs no reader, the lifted range needs a known reader, the new ceiling is a refusal`` () =
+        // At the legacy ceiling every reader reads the successor.
+        let legacy = runPlan { healthy 98 with InstalledReaderSha256 = NotObserved NotSupplied; KnownLiftedCapReaders = Set.empty }
+        Assert.True(isSupported (verdictOf legacy RowCap))
+        Assert.StartsWith("98+2<=100", (match verdictOf legacy RowCap with SupportedForNextStage e -> e | _ -> ""))
+        // 99+2 = 101 is above it: supported only by a reader named in the lifted-cap table.
+        let beyond = healthy 99
+        Assert.StartsWith("99+2<=250", (match verdictOf (runPlan beyond) RowCap with SupportedForNextStage e -> e | other -> failwithf "%A" other))
+        expectUnknown RowCap KnownReaderTable NotSupplied (runPlan { beyond with KnownLiftedCapReaders = Set.empty })
+        expectUnknown RowCap InstalledReader NotInKnownTable (runPlan { beyond with KnownLiftedCapReaders = Set.ofList [ String.replicate 64 "c" ] })
+        expectUnknown RowCap InstalledReader NotSupplied (runPlan { beyond with InstalledReaderSha256 = NotObserved NotSupplied })
+        // The new ceiling: 248+2 = 250 passes, 249+2 = 251 is unsupported with the counts named.
+        Assert.StartsWith("248+2<=250", (match verdictOf (runPlan (healthy 248)) RowCap with SupportedForNextStage e -> e | other -> failwithf "%A" other))
+        let over = runPlan (healthy 249)
         expectUnsupported RowCap RowCapExceeded ProtocolRelease over
-        Assert.Equal<string list>([ "99+2>100" ], (finding over RowCap).Subjects)
+        Assert.Equal<string list>([ "249+2>250" ], (finding over RowCap).Subjects)
         expectUnknown RowCap PredecessorPrivate Unreadable (runPlan { healthy 98 with PredecessorPrivate = NotObserved Unreadable })
 
     [<Fact>]

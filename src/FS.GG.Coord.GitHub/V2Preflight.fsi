@@ -203,6 +203,9 @@ module V2Preflight =
         | BaseMoved
         /// Closing keywords naming issues are present; they must be a declared fulfilment, which is not decidable here.
         | ClosingLinkPresent of count: int
+        /// A maintained gate's bytes in the checkout differ from the trusted base's, so the checkout's gate cannot be trusted
+        /// to predict CI.
+        | GateModified
 
     type Gap = { Input: Input; Kind: GapKind }
 
@@ -276,6 +279,9 @@ module V2Preflight =
           InstalledReaderSha256: Observed<string>
           /// Artifact shas of installed readers whose plan grammar is known to equal the source grammar.
           KnownInstalledReaders: Set<string>
+          /// Artifact shas of installed readers known to accept more than the legacy 100 rows. A population above 100
+          /// is readable only by such a reader; the table is supplied and empty by default.
+          KnownLiftedCapReaders: Set<string>
           /// FSharp.Core `contentHash` locked in the constructor's lock file.
           LockedFSharpCoreHash: Observed<string>
           /// FSharp.Core `contentHash` recorded in the package cache's `.nupkg.metadata`.

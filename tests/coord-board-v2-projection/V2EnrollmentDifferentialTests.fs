@@ -18,7 +18,8 @@ module V2EnrollmentDifferentialTests =
     let ``the retained PR 1 base copy is byte-identical to the merged PR 1 planner`` () =
         let text = IO.File.ReadAllText(IO.Path.Combine(__SOURCE_DIRECTORY__, "V2EnrollmentPr1Base.fs"))
         let marker = "    open FS.GG.Coord.GitHub\n"
-        let body = text.Substring(text.IndexOf marker + marker.Length)
+        // Undo the one documented edit (the lifted row ceiling) and the file is the PR 1 body again.
+        let body = text.Substring(text.IndexOf marker + marker.Length).Replace("let rowCap = V2Projection.maximumProgrammeRows", "let rowCap = 100")
         let digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes body)).ToLowerInvariant()
         Assert.Equal("efe9b8feb3d9dc29085563c05f0ad8dff3fcaf02b2136732cbbb2df8d48d0e10", digest)
 
@@ -110,14 +111,17 @@ module V2EnrollmentDifferentialTests =
               if i < j then yield "enrolled-row+" + n1 + "+" + n2, enrolledRequest, (enrolledFact >> f1 >> f2)
           for n1, r1 in requestMutations do yield "enrolled-row+" + n1, (enrolledRequest >> r1), enrolledFact ]
 
-    /// Cap boundary (98+2 ok, 99+2 over), the ordinary shape, a non-spliceable payload, and cap-over together with non-spliceable.
-    let private shapes = [ "five", 5, ""; "cap-ok", 98, ""; "cap-over", 99, ""; "newline", 5, "\n"; "cap-over-newline", 99, "\n" ]
+    /// The ordinary shape, both sides of the old ceiling (98+2, 99+2) and of the lifted one (248+2, 249+2), a non-spliceable payload,
+    /// and the lifted cap exceeded together with a non-spliceable payload.
+    let private shapes =
+        [ "five", 5, ""; "old-cap-edge", 98, ""; "beyond-old-cap", 99, ""; "new-cap-edge", 248, ""; "new-cap-over", 249, ""
+          "newline", 5, "\n"; "new-cap-over-newline", 249, "\n" ]
 
     [<Fact>]
     let ``the scenario set has the stated size`` () =
         Assert.Equal(307, scenarios.Length)
-        Assert.Equal(5, shapes.Length)
-        Assert.Equal(1535, scenarios.Length * shapes.Length)
+        Assert.Equal(7, shapes.Length)
+        Assert.Equal(2149, scenarios.Length * shapes.Length)
 
     [<Fact>]
     let ``current planner and the PR 1 planner agree on every enumerated scenario`` () =
@@ -137,6 +141,6 @@ module V2EnrollmentDifferentialTests =
                 | Error c, Error b -> Assert.True((codeOf c = Base.refusalCode b), $"{shapeName}/{name}: {codeOf c} vs {Base.refusalCode b}")
                 | Ok _, Error b -> failwithf "%s/%s: current accepts, PR 1 refuses %s" shapeName name (Base.refusalCode b)
                 | Error c, Ok _ -> failwithf "%s/%s: current refuses %s, PR 1 accepts" shapeName name (codeOf c)
-        Assert.Equal(1535, compared)
-        // Non-vacuity: the set exercises both outcomes (accepted: the unmutated scenario on the ordinary and cap-boundary shapes).
-        Assert.Equal(2, accepted)
+        Assert.Equal(2149, compared)
+        // Non-vacuity: the set exercises both outcomes (accepted: the unmutated scenario on the four shapes within the ceiling).
+        Assert.Equal(4, accepted)

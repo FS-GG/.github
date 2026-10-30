@@ -77,7 +77,7 @@
     {"path":"scripts/release-saga-ci.sh","disposition":"publish-writer","sinkKinds":["gh-release-write","package-publish"],"sha256":"cca3f68dd6693e8dff5e8bc750578d28ad3a430a643821ae05ce681ea27841c1"},
     {"path":"scripts/release-saga-promote-release.sh","disposition":"publish-writer","sinkKinds":["gh-release-write"],"sha256":"a7cb6b6a80b02173ccec140433ea525aa15e22b971018397d4aad9322993ea4d"},
     {"path":"src/FS.GG.Coord.Cli.Kernel/Options.fs","disposition":"typed-command-catalogue","sinkKinds":[],"sha256":"a50a8b3d46ed0781e63b2eff6450bea7a53869678f38d4171b52c5d9402ab796"},
-    {"path":"src/FS.GG.Coord.Cli/Program.fs","disposition":"typed-command-catalogue","sinkKinds":[],"sha256":"5e74ac6975beb3e8ccd34c73b89048735c02441d9afd376c69f2e7cb77b79f7b"},
+    {"path":"src/FS.GG.Coord.Cli/Program.fs","disposition":"typed-command-catalogue","sinkKinds":[],"sha256":"88a2ed91dd1c211e5b535ff8d02ff561b2207bdc3ad9b6f0d7615a09ae809bfa"},
     {"path":"src/FS.GG.Coord.Cli/TelemetryApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"04e5c25cf898524108e7b862409a4a04fb21927cac048a4679cfe22604d14555"},
     {"path":"src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"dde16e740ccbc081c8442de66369f1766db71faaa7562fc9ddb8d0a631bc564c"},
     {"path":"src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"a7eca3888fc4fb7a1c3160d4e01ec8cd1b90daa8fee17db1f61c6fcd46d65ba1"},

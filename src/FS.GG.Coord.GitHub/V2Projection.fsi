@@ -101,6 +101,13 @@ module V2Projection =
             VerifiedAt: DateTimeOffset
         }
 
+    /// The programme enrollment row ceiling the reader enforces, for both the private payload rows and the binding's
+    /// selected issues. Lifted from 100 in the coordinated #4941 release; readers older than that refuse more than 100.
+    val maximumProgrammeRows: int
+
+    /// The ceiling before the lift. Any population at or below it is readable by every reader of the line.
+    val legacyProgrammeRowCap: int
+
     /// Validate the reviewed binding without performing IO.
     val validateBinding: binding: Binding -> IoResult<unit>
 

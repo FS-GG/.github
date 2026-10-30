@@ -449,7 +449,7 @@ closing `]}`: a raw-byte splice, never a re-serialization, so the prefix is exac
 again independently after the pair exists (`prefixPreserved`, `headerPreserved`, `recomputedCommitment`). A
 Roadmap is generated only from `programmeIssue3008` or `protectedDoc{repo,path}` and must pass the installed
 reader's own plan grammar (`V2ProjectionSource.programmePlanBlobGrammar`, now shared by the reader), which refuses an
-Outcome issue URL before anything is constructed. The planner mirrors the installed 100-row ceiling and does not lift it.
+Outcome issue URL before anything is constructed. The programme row ceiling is one value, `V2Projection.maximumProgrammeRows`, shared by the reader and the planner (see "Row ceiling" below).
 
 Refusals print one closed code on stderr and never payload, nonce, path or input text: `DuplicateIssue`,
 `AlreadyEnrolled`, `IsPullRequest`, `NodeIdMismatch`, `NotProjectMember`, `RepositoryOutsideBinding`,
@@ -502,7 +502,7 @@ from the successor's own appended rows (a sha-pinned reference is immutable and 
 | `FactsComplete`, `IssueKind`, `IssueIdentity`, `ProjectMembership`, `RepositoryInBinding`, `NotAlreadyEnrolled`, `RoadmapConflict` | the planner's own per-row findings, all of them rather than the first | a row fails the check (the row is named) | facts partial or unobserved |
 | `PlanGrammar` | the installed plan grammar; the installed artifact sha against a known table | a plan reference is not admitted | the installed artifact is not in the known table |
 | `PlanBlob` | plan documents on `main` now | a document is absent in a readable repository | facts were supplied rather than read now, or the repository may be invisible (`PlanBlob/NotVisible`) |
-| `RowCap` | predecessor rows plus request rows against 100 | the total exceeds the cap | predecessor unreadable |
+| `RowCap` | predecessor rows plus request rows against 100 (readable by every reader) and 250 (readable only by a reader named in `--known-lifted-cap-readers`) | the total exceeds 250 | above 100: the installed reader is unnamed, not in the table, or the table is not supplied; or the predecessor is unreadable |
 | `PayloadBound`, `TemplateBound` | computed payload and private binding sizes against the installed reader bounds | either is exceeded | inputs unreadable |
 | `ToolchainLock` | locked FSharp.Core `contentHash` against the cache's `.nupkg.metadata` | they differ (the NU1403 risk) | either unreadable |
 | `MemoryHeadroom` | smallest remaining bytes over the process cgroup chain, and host `MemAvailable` (the smaller of the two; alone when no cgroup limit applies) | below the minimum | cgroup unreadable, or `MemAvailable` unreadable (a known cgroup limit does not bound the host) |
@@ -521,3 +521,27 @@ different digest of the same package and would report a healthy cache as mismatc
 installed artifact is listed. Without `--online` or `--main-revision` the intended main is the checkout's local `refs/remotes/origin/main`, which may be stale. The preflight grants no authority, performs no mutation and prints no payload, nonce, private
 binding content or content node id (`I_...`); it prints issue references, and the Project item id (`PVTI_...`) only for a
 non-issue item, which has no reference. Engine registration and lifting the row cap remain later deliveries of the same issue.
+
+## Row ceiling, gate trust and the engine surface ([#4941](https://github.com/FS-GG/.github/issues/4941), PR 4)
+
+**Row ceiling.** The programme population ceiling was 100 rows and is now 250, as the coordinated reader and engine release the
+design called for. It is one constant, `V2Projection.maximumProgrammeRows`, enforced by the reader for both the private payload
+rows and the binding's selected issues, and used by the planner and the preflight, so the three cannot disagree. The byte bounds
+(128 KiB payload, 256 KiB binding) are unchanged and still refuse fat rows long before 250 (the current 93 rows are about 17 KiB).
+A reader older than this release refuses more than 100 rows, so the preflight treats 101 to 250 as readable only by a reader named
+in the supplied `--known-lifted-cap-readers` table (empty by default: `Unknown`), and treats more than 250 as unsupported. The
+choice of 250 is a bound chosen for headroom, not derived from the design; it is a single constant if Root wants another.
+
+**Gate trust.** The routine gates (`check-claim-generation.py` with `lib/gate.py`, and `check-closing-keywords.py`) run from the
+exact base commit's blobs (`git show <base>:<path>`), the way `routine-eligibility.yml` does, never from the checkout, so a pull
+request that edits a gate cannot predict its own pass; if the base does not hold them the result is `Unknown`. The publication
+coverage gate audits the checkout's own workflows from its own location and cannot be run from base blobs, so it is observed only
+when the checkout's gate bytes equal the trusted base's (`refs/remotes/origin/main`) and is otherwise `Unknown`
+(`CoverageAudit/GateModified`, or `/Unreadable` with no trusted ref).
+
+**Engine surface.** The commands are registered in the coordination engine as the roots `enrollment` (`plan`, `prepare`,
+`bind-runtime`, `render-carrier`, `resolve-issues`) and `route-preflight`, reaching the installed tool through the `fsgg-coord` shim, which execs the engine (`fsgg-coord-engine enrollment ...` and
+`fsgg-coord-engine route-preflight ...`). Both are dispatch arms ahead of the typed handler table, like `context-view`, and are
+classified in the V1 writer census (`outOfCatalogueRoots`, `writes: never`: they write only local files and read GitHub by `GET`).
+`preflight` is not a root because the engine already answers a skill `preflight` root. The constructor identity in a receipt is now
+the `FS.GG.Coord.GitHub` assembly (revision and sha256) that both surfaces share, not the `BoardV2Import` executable.

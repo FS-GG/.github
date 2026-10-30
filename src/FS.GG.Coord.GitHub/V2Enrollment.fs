@@ -8,7 +8,8 @@ module V2Enrollment =
     open System.Text.Json.Nodes
     open System.Text.RegularExpressions
 
-    let rowCap = 100
+    let rowCap = V2Projection.maximumProgrammeRows
+    let legacyRowCap = V2Projection.legacyProgrammeRowCap
 
     type Refusal =
         | DuplicateIssue

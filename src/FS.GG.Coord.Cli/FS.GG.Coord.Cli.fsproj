@@ -275,6 +275,8 @@ the standing safety advisories carry forward.
     <Compile Include="OperationObservationApplication.fs" />
     <Compile Include="ContextViewApplication.fsi" />
     <Compile Include="ContextViewApplication.fs" />
+    <Compile Include="EnrollmentApplication.fsi" />
+    <Compile Include="EnrollmentApplication.fs" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
