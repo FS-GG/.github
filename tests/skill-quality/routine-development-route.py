@@ -251,7 +251,7 @@ routine_workflow = (ROOT / ".github/workflows/routine-eligibility.yml").read_tex
 selftest_workflow = (ROOT / ".github/workflows/routine-eligibility-selftest.yml").read_text()
 require("evaluate_routine" in gate and "ROUTINE_NOT_REQUIRED" in gate, "required check does not enforce routine policy")
 require('--routine-policy-ref' not in workflow, "candidate-controlled coherence workflow still decides routine eligibility")
-for phrase in ("pull_request_target:", "contents: read", 'show "$BASE_SHA:scripts/check-claim-generation.py"', "Repository writers are trusted"):
+for phrase in ("pull_request_target:", "contents: read", 'show "$observed_base:scripts/check-claim-generation.py"', "Repository writers are trusted"):
     require(phrase in routine_workflow, f"trusted routine workflow omitted {phrase!r}")
 require("actions/checkout" not in routine_workflow and "GITHUB_TOKEN" not in routine_workflow, "trusted routine workflow can execute candidate bytes or exposes a token")
 require("pull_request:" in selftest_workflow and "routine-eligibility-fixture" in selftest_workflow, "ordinary fixture workflow is absent")
