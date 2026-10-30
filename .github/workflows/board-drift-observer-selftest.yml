@@ -5,7 +5,7 @@
 # report issue is left alone when the finding set is unchanged and closed when it is empty, and proves a
 # fetch error, a partial page, an incomplete search or an unreadable snapshot yields no snapshot, no
 # findings and a non-zero exit. It also reads board-drift-observer.yml and asserts the credential split
-# (read App token in `observe`, `issues: write` only in `report`) and that nothing in the workflow can
+# (read App token in `board-drift-read`, `issues: write` only in `board-drift-report`) and that nothing in the workflow can
 # turn a failed read into a green "no drift".
 #
 # No schedule: the subject is entirely git-tracked files in this repo, and the fixture uses a recording

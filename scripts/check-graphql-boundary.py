@@ -14,6 +14,31 @@ PY_SELECTOR = re.compile(r'(?:\[|\.get\()["\'](data|errors|pageInfo|hasNextPage|
 TRANSPORT = re.compile(r'gh(?:["\'],\s*["\']|\s+)api(?:["\'],\s*["\']|\s+)graphql')
 
 
+# EXPLICIT, NAMED, OWNED EXEMPTIONS. A file listed here is still read by this check, but its raw
+# selectors are not findings. Each record must name a reason, an owner and a tracking reference, and the
+# exemption is itself a finding when the file is missing or no longer needs it (a stale exemption would
+# silently widen the boundary). Remove the record when the file moves behind the typed boundary.
+EXEMPTIONS = {
+    "scripts/board-drift-fetch.py": {
+        "reason": "App-token workflow observer; its Track, Work level, per-field timestamp and repository "
+                  "visibility fields are not exposed by the typed archive-scan",
+        "owner": "Programme/root",
+        "tracking": "Refs #4730 (follow-up: move the read to a typed OperationalGraphQl verb)",
+    },
+}
+
+
+def exemption_problems(exemptions: dict) -> list[str]:
+    problems = []
+    for path, record in exemptions.items():
+        for field in ("reason", "owner", "tracking"):
+            if not str(record.get(field, "")).strip():
+                problems.append(f"{path}: exemption lacks a {field}")
+        if "#" not in str(record.get("tracking", "")):
+            problems.append(f"{path}: exemption tracking must reference an issue")
+    return problems
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path.cwd())
@@ -42,11 +67,28 @@ def main() -> int:
     ):
         if retired.exists():
             findings.append((retired.relative_to(args.root), 1, "retired compatibility boundary still exists"))
-    for path in production:
+    for problem in exemption_problems(EXEMPTIONS):
+        findings.append((Path("scripts/check-graphql-boundary.py"), 1, problem))
+    exempt_seen: dict[str, int] = {}
+    for path in production + [args.root / name for name in EXEMPTIONS]:
+        relative = path.relative_to(args.root).as_posix()
+        if not path.exists():
+            if relative in EXEMPTIONS:
+                findings.append((Path(relative), 1, "exempt file is missing (stale exemption)"))
+                continue
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             match = PY_SELECTOR.search(line) or TRANSPORT.search(line)
             if match and not line.lstrip().startswith("#"):
+                if relative in EXEMPTIONS:
+                    exempt_seen[relative] = exempt_seen.get(relative, 0) + 1
+                    continue
                 findings.append((path.relative_to(args.root), number, match.group(1) if match.lastindex else "transport"))
+    for relative, record in EXEMPTIONS.items():
+        if relative not in exempt_seen and (args.root / relative).exists():
+            findings.append((Path(relative), 1, "exemption is stale: the file has no raw GraphQL handling left"))
+        elif relative in exempt_seen:
+            print(f"graphql-boundary: EXEMPT {relative} ({exempt_seen[relative]} raw selector(s)); "
+                  f"owner {record['owner']}; {record['tracking']}")
 
     for path, number, field in findings:
         print(

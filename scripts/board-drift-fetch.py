@@ -5,10 +5,17 @@ READ-ONLY, BOUNDED, FAIL-CLOSED. This is the only place the board observer touch
 read. It issues:
 
   * one paginated Projects v2 `items(first: 100)` query (about 1 GraphQL point per page; the board is
-    ~100 cards after archiving, capped here at --max-pages pages);
+    ~100 cards after archiving, capped here at --max-pages pages), including each card's repository
+    `isPrivate`;
   * one org-wide search for open PRs (REST, search budget), capped at 1,000 results by GitHub and
-    refused when that cap is reached;
-  * one REST comments read per open, non-Done issue card, since that card's last Status change.
+    refused when that cap is reached, plus one `repos/{repo}` read per PR repository the board does not
+    already tell us the visibility of (a failed read is "unknown", never a fetch failure);
+  * one REST comments read per card that could carry a finding (every card except a Done, closed one
+    with all its fields), since that card's last Status change.
+
+The snapshot holds private-repository titles and PR bodies. It lives only in a private scratch
+directory and is never uploaded or printed; the observer publishes placeholders for anything private
+or of unknown visibility (see board-drift-observer.py, PRIVACY).
 
 It writes the snapshot only when every read completed: a GraphQL error, a missing `data`, a page that
 says `hasNextPage` after --max-pages, `incomplete_results` from search, an item count different from
@@ -16,10 +23,11 @@ says `hasNextPage` after --max-pages, `incomplete_results` from search, an item 
 never "no drift" (.github#266).
 
 The GraphQL here runs as the workflow's App installation, which has its own rate limit and spends none
-of the fleet's shared user budget (docs/coordination/graphql-budget.md scopes the monopoly to worker
-recipes). It sits outside `check-graphql-boundary.py`'s production list because that list names the
-files whose raw `data`/`pageInfo` handling is policed; this file is a new reader and keeps the query,
-the pagination and the response checks in this one module.
+of the fleet's shared user budget. It is NOT behind the typed `OperationalGraphQl` boundary: the typed
+`archive-scan` does not expose the Track, Work level, per-field timestamps and visibility this observer
+needs. `scripts/check-graphql-boundary.py` therefore covers this file under a named, owned exemption
+(owner Programme/root, tracking `Refs #4730`). Moving the read to a typed `OperationalGraphQl` verb is the
+tracked follow-up; until then the query, pagination and response checks stay in this one module.
 
 Environment: GH_TOKEN must carry organization Projects v2 read, issues read and pull requests read.
 `BOARD_DRIFT_GH` overrides the `gh` binary (tests).
@@ -52,8 +60,8 @@ query($owner:String!,$number:Int!,$cursor:String){
         workLevel: fieldValueByName(name:"Work level"){ ... on ProjectV2ItemFieldSingleSelectValue{ name } }
         content{
           __typename
-          ... on Issue{ number title state updatedAt closedAt repository{ nameWithOwner } }
-          ... on PullRequest{ number title state updatedAt closedAt repository{ nameWithOwner } }
+          ... on Issue{ number title state updatedAt closedAt repository{ nameWithOwner isPrivate } }
+          ... on PullRequest{ number title state updatedAt closedAt repository{ nameWithOwner isPrivate } }
           ... on DraftIssue{ title }
         }
       }
@@ -145,6 +153,8 @@ def normalize_item(node: dict) -> dict:
     if kind in ("Issue", "PullRequest"):
         item.update(
             repo=(content.get("repository") or {}).get("nameWithOwner"),
+            # Missing or null stays None: unknown visibility is treated as private downstream.
+            repoPrivate=(content.get("repository") or {}).get("isPrivate"),
             number=content.get("number"),
             state=content.get("state"),
             closedAt=content.get("closedAt"),
@@ -157,7 +167,17 @@ def normalize_item(node: dict) -> dict:
     return item
 
 
-def fetch_prs(org: str) -> list[dict]:
+def repo_visibility(repo: str) -> bool | None:
+    """True when private, False when public, None when it cannot be told (treated as private)."""
+    try:
+        value = json.loads(gh(["api", f"repos/{repo}", "--jq", ".private"]) or "null")
+    except (FetchError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, bool) else None
+
+
+def fetch_prs(org: str, known: dict[str, bool | None] | None = None) -> list[dict]:
+    known = dict(known or {})
     prs: list[dict] = []
     page, total = 1, None
     while True:
@@ -178,6 +198,7 @@ def fetch_prs(org: str) -> list[dict]:
                 raise FetchError("PR search item lacks repository_url or number")
             prs.append({
                 "repo": repo, "number": raw["number"], "draft": bool(raw.get("draft")),
+                "title": raw.get("title") or "",
                 "state": raw.get("state"), "updatedAt": raw.get("updated_at"),
                 "url": raw.get("html_url"), "body": raw.get("body") or "",
             })
@@ -188,6 +209,12 @@ def fetch_prs(org: str) -> list[dict]:
             raise FetchError("PR search needs more than 10 pages")
     if len(prs) != total:
         raise FetchError(f"read {len(prs)} PR(s) but search reports {total}")
+    # Visibility of each PR's repository: from the board's own cards where known, else one REST read per
+    # repository. A failed read is None, which the analysis treats as private (never published).
+    for pr in prs:
+        if pr["repo"] not in known:
+            known[pr["repo"]] = repo_visibility(pr["repo"])
+        pr["repoPrivate"] = known[pr["repo"]]
     return prs
 
 
@@ -214,14 +241,19 @@ def main(argv: list[str] | None = None) -> int:
         started = dt.datetime.now(dt.timezone.utc)
         project, nodes = fetch_items(args.owner, args.project, args.max_pages)
         items = [normalize_item(n) for n in nodes]
-        prs = fetch_prs(args.owner)
+        board_visibility = {i["repo"]: i.get("repoPrivate") for i in items if i.get("repo")}
+        prs = fetch_prs(args.owner, board_visibility)
         fallback = (started - dt.timedelta(days=args.fallback_comment_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
         for item in items:
-            if item.get("unreadable") or item.get("type") != "Issue":
+            if item.get("unreadable") or item.get("type") not in ("Issue", "PullRequest"):
                 continue
-            if item.get("state") != "OPEN" or item.get("status") == "Done":
+            # A card that is Done and closed with all its fields can carry no finding, so it needs no
+            # comments (rule (e) and every ack route read them). Everything else does.
+            finished = item.get("state") in ("CLOSED", "MERGED") and item.get("status") == "Done"
+            if finished and item.get("track") and item.get("workLevel"):
                 continue
-            item["comments"] = fetch_comments(item["repo"], item["number"], item.get("statusUpdatedAt") or fallback)
+            since = item.get("statusUpdatedAt") or item.get("itemUpdatedAt") or fallback
+            item["comments"] = fetch_comments(item["repo"], item["number"], since)
     except FetchError as exc:
         print(f"board-drift-fetch: FAILED (no snapshot written): {exc}", file=sys.stderr)
         return 1

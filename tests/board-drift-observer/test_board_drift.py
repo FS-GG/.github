@@ -45,7 +45,7 @@ def item(number=100, status="Ready", state="OPEN", repo=REPO, **kw):
     base = {
         "itemId": f"PVTI_{number}", "status": status, "statusUpdatedAt": hours_ago(48), "track": "Active delivery",
         "workLevel": "Delivery", "itemUpdatedAt": hours_ago(48), "type": "Issue", "title": f"card {number}",
-        "repo": repo, "number": number, "state": state, "closedAt": None, "contentUpdatedAt": hours_ago(48),
+        "repo": repo, "repoPrivate": False, "number": number, "state": state, "closedAt": None, "contentUpdatedAt": hours_ago(48),
         "comments": [],
     }
     base.update(kw)
@@ -53,7 +53,7 @@ def item(number=100, status="Ready", state="OPEN", repo=REPO, **kw):
 
 
 def pr(number=900, body="Refs #100", repo=REPO, draft=False, updated=1.0, **kw):
-    base = {"repo": repo, "number": number, "draft": draft, "state": "open", "updatedAt": hours_ago(updated),
+    base = {"repo": repo, "repoPrivate": False, "title": "feat: change", "number": number, "draft": draft, "state": "open", "updatedAt": hours_ago(updated),
             "url": f"https://github.com/{repo}/pull/{number}", "body": body}
     base.update(kw)
     return base
@@ -157,7 +157,10 @@ class RuleD(unittest.TestCase):
     def test_draft_issue_without_status_is_named_by_item_id(self):
         draft = {"itemId": "PVTI_draft", "status": None, "track": "Follow-up", "workLevel": "Delivery",
                  "type": "DraftIssue", "title": "d", "comments": []}
-        self.assertEqual(rules([draft]), [("d", "draft:PVTI_draft")])
+        found = rules([draft])
+        self.assertEqual([r for r, _ in found], ["d"])
+        self.assertTrue(found[0][1].startswith("private:"), "a draft card is never published by name")
+        self.assertEqual(rules([draft], reveal_private=True), [("d", "draft:PVTI_draft")])
 
 
 class RuleE(unittest.TestCase):
@@ -180,11 +183,11 @@ class RuleE(unittest.TestCase):
         self.assertEqual(rules([item(status="Blocked", comments=[comment(author="stranger")])]), [])
 
     def test_negative_acknowledged_by_a_later_root_comment(self):
-        ack = comment(2, hours=1, body="[board-drift-ack] no Status change is owed; still Blocked on the supplier.")
+        ack = comment(2, hours=1, body="[board-drift-ack] e:* no Status change is owed; still Blocked on the supplier.")
         self.assertEqual(rules([item(status="Blocked", comments=[comment(1, hours=2), ack])]), [])
 
     def test_ack_before_the_ruling_does_not_clear_it(self):
-        ack = comment(1, hours=3, body="[board-drift-ack] earlier")
+        ack = comment(1, hours=3, body="[board-drift-ack] e:* earlier")
         self.assertEqual(rules([item(status="Blocked", comments=[ack, comment(2, hours=2)])]), [("e", f"{REPO}#100")])
 
     def test_one_finding_per_card_keyed_by_newest_ruling(self):
@@ -214,7 +217,10 @@ class Unreadable(unittest.TestCase):
     def test_null_content_is_a_finding_not_silence(self):
         node = {"itemId": "PVTI_x", "status": "Ready", "track": "Follow-up", "workLevel": "Delivery",
                 "unreadable": True, "comments": []}
-        self.assertEqual(rules([node]), [("x", "draft:PVTI_x")])
+        found = rules([node])
+        self.assertEqual([r for r, _ in found], ["x"])
+        self.assertTrue(found[0][1].startswith("private:"))
+        self.assertEqual(rules([node], reveal_private=True), [("x", "draft:PVTI_x")])
 
 
 class FailClosedAnalysis(unittest.TestCase):
@@ -286,9 +292,23 @@ class ReportPlan(unittest.TestCase):
         f = self.findings(1)
         self.assertEqual(OBS.plan_report([], self.existing(f, state="closed"), self.META)["action"], "noop")
 
-    def test_reopens_a_closed_issue_when_drift_returns(self):
+    def test_does_not_reopen_an_issue_root_closed_while_the_digest_is_unchanged(self):
         f = self.findings(1)
-        self.assertEqual(OBS.plan_report(f, self.existing(f, state="closed"), self.META)["action"], "reopen")
+        plan = OBS.plan_report(f, self.existing(f, state="closed"), self.META)
+        self.assertEqual(plan["action"], "noop")
+        self.assertIn("not reopened", plan["reason"])
+
+    def test_reopens_a_closed_issue_only_when_the_digest_changes(self):
+        plan = OBS.plan_report(self.findings(1, 2), self.existing(self.findings(1), state="closed"), self.META)
+        self.assertEqual(plan["action"], "reopen")
+
+    def test_closing_for_empty_findings_records_the_empty_set_so_recurrence_reopens(self):
+        f = self.findings(1)
+        close = OBS.plan_report([], self.existing(f), self.META)
+        self.assertEqual(close["action"], "close")
+        closed_by_us = {"number": 77, "state": "closed", "body": close["body"]}
+        self.assertEqual(OBS.parse_marker(close["body"])["digest"], OBS.digest([]))
+        self.assertEqual(OBS.plan_report(f, closed_by_us, self.META)["action"], "reopen")
 
     def test_a_hand_edited_body_without_the_marker_is_rewritten(self):
         f = self.findings(1)
@@ -329,7 +349,17 @@ if args[:2] == ["api", "graphql"]:
             cursor = args[i + 1][7:]
     out(pages[0 if cursor is None else int(cursor)])
 if args[0] == "api" and args[1].startswith("search/issues"):
+    if "search_pages" in state:
+        import re
+        page = int(re.search(r"&page=(\d+)", args[1]).group(1))
+        out(state["search_pages"][min(page, len(state["search_pages"])) - 1])
     out(state["search"])
+if args[0] == "api" and args[1].startswith("repos/") and args[1].count("/") == 2 and "--jq" in args:
+    visibility = state.get("visibility", {}).get(args[1][len("repos/"):])
+    if visibility == "error":
+        sys.stderr.write("HTTP 404")
+        sys.exit(1)
+    out(json.dumps(visibility))
 if args[0] == "api" and "/comments?since=" in args[1]:
     key = args[1].split("/issues/")[1].split("/")[0]
     out("\n".join(json.dumps(c) for c in state["comments"].get(key, [])))
@@ -341,13 +371,14 @@ sys.exit(2)
 '''
 
 
-def gh_item(item_id, number, status, status_at, state="OPEN", track="Active delivery", level="Delivery", repo=REPO):
+def gh_item(item_id, number, status, status_at, state="OPEN", track="Active delivery", level="Delivery", repo=REPO,
+            private=False):
     return {
         "id": item_id, "updatedAt": status_at,
         "status": {"name": status, "updatedAt": status_at} if status else None,
         "track": {"name": track} if track else None, "workLevel": {"name": level} if level else None,
         "content": {"__typename": "Issue", "number": number, "title": f"t{number}", "state": state,
-                    "updatedAt": status_at, "closedAt": None, "repository": {"nameWithOwner": repo}},
+                    "updatedAt": status_at, "closedAt": None, "repository": {"nameWithOwner": repo, "isPrivate": private}},
     }
 
 
@@ -388,13 +419,18 @@ class GhStub:
         return [c for c in self.calls if "-X" in c or "--input" in c]
 
 
-class FetchFailClosed(unittest.TestCase):
+class FetchHelper:
     def fetch(self, extra=()):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d, "snapshot.json")
-            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            err = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
                 rc = FETCH.main(["--out", str(out), *extra])
+            self.stderr = err.getvalue()
             return rc, out.exists(), (json.loads(out.read_text()) if out.exists() else None)
+
+
+class FetchFailClosed(FetchHelper, unittest.TestCase):
 
     def test_success_builds_a_complete_snapshot_with_comments_since_the_status_change(self):
         nodes = [gh_item("I1", 100, "Blocked", hours_ago(5)), gh_item("I2", 101, "Done", hours_ago(5), state="CLOSED")]
@@ -452,6 +488,293 @@ class FetchFailClosed(unittest.TestCase):
         rc, exists, snap = self.fetch()
         self.assertEqual((rc, exists), (0, True))
         self.assertTrue(snap["items"][0]["unreadable"])
+
+
+class FetchMutantsAndVisibility(FetchHelper, unittest.TestCase):
+    """Kills the surviving mutants (PR count below total, total over the cap, errors beside partial data)
+    and proves visibility is fetched, with unknown kept unknown."""
+
+    def search_doc(self, total, items):
+        return json.dumps({"incomplete_results": False, "total_count": total, "items": items})
+
+    @staticmethod
+    def raw_pr(n, repo="FS-GG/.github", title="t"):
+        return {"repository_url": f"https://api.github.com/repos/{repo}", "number": n, "draft": False, "state": "open",
+                "updated_at": hours_ago(1), "html_url": "u", "body": f"Refs #{n}", "title": title}
+
+    def board(self):
+        return [gql_page([gh_item("I1", 100, "Ready", hours_ago(5))], 1)]
+
+    def test_a_pr_count_below_total_count_is_refused(self):
+        GhStub(self, graphql_pages=self.board(),
+               search_pages=[self.search_doc(2, [self.raw_pr(1)]), self.search_doc(2, [])])
+        self.assertEqual(self.fetch()[:2], (1, False))
+
+    def test_a_search_total_over_the_1000_cap_is_refused(self):
+        GhStub(self, graphql_pages=self.board(), search=self.search_doc(1001, [self.raw_pr(1)]))
+        self.assertEqual(self.fetch()[:2], (1, False))
+        self.assertIn("cap is 1000", self.stderr)  # refused by the cap itself, not by the later count check
+        GhStub(self, graphql_pages=self.board(), search=self.search_doc(1000, [self.raw_pr(1)]))
+        self.fetch()
+        self.assertNotIn("cap is 1000", self.stderr)  # exactly 1000 is within the cap
+
+    def test_errors_beside_partial_data_are_refused(self):
+        page = json.loads(self.board()[0])
+        page["errors"] = [{"message": "partial: some nodes resolved to null"}]
+        GhStub(self, graphql_pages=[json.dumps(page)])
+        self.assertEqual(self.fetch()[:2], (1, False))
+
+    def test_a_search_that_pages_collects_every_pr(self):
+        GhStub(self, graphql_pages=self.board(),
+               search_pages=[self.search_doc(2, [self.raw_pr(1)]), self.search_doc(2, [self.raw_pr(2)])])
+        rc, exists, snap = self.fetch()
+        self.assertEqual((rc, exists, [p["number"] for p in snap["pullRequests"]]), (0, True, [1, 2]))
+
+    def test_repository_visibility_and_pr_titles_reach_the_snapshot(self):
+        nodes = [gh_item("I1", 100, "Ready", hours_ago(5), private=True, repo="FS-GG/Secret"),
+                 gh_item("I2", 101, "Ready", hours_ago(5))]
+        prs = [self.raw_pr(1, "FS-GG/Secret", "docs: x"), self.raw_pr(2, "FS-GG/.github"), self.raw_pr(3, "FS-GG/Other"),
+               self.raw_pr(4, "FS-GG/Broken")]
+        stub = GhStub(self, graphql_pages=[gql_page(nodes, 2)], search=self.search_doc(4, prs),
+                      visibility={"FS-GG/Other": True, "FS-GG/Broken": "error"})
+        rc, exists, snap = self.fetch()
+        self.assertEqual((rc, exists), (0, True))
+        self.assertEqual([i["repoPrivate"] for i in snap["items"]], [True, False])
+        by = {p["number"]: p for p in snap["pullRequests"]}
+        self.assertEqual((by[1]["repoPrivate"], by[2]["repoPrivate"], by[3]["repoPrivate"], by[4]["repoPrivate"]),
+                         (True, False, True, None))
+        self.assertEqual(by[1]["title"], "docs: x")
+        # visibility came from the board where known: only the two unknown repositories were read
+        reads = [c[1] for c in stub.calls if c[1].startswith("repos/") and c[1].count("/") == 2]
+        self.assertEqual(sorted(reads), ["repos/FS-GG/Broken", "repos/FS-GG/Other"])
+
+    def test_closed_done_complete_cards_get_no_comment_read_but_incomplete_ones_do(self):
+        nodes = [gh_item("I1", 100, "Done", hours_ago(5), state="CLOSED"),
+                 gh_item("I2", 101, "Done", hours_ago(5), state="CLOSED", track=None)]
+        stub = GhStub(self, graphql_pages=[gql_page(nodes, 2)])
+        self.assertEqual(self.fetch()[:2], (0, True))
+        reads = [c[1] for c in stub.calls if "/comments?since=" in c[1]]
+        self.assertEqual(len(reads), 1)
+        self.assertIn("/issues/101/", reads[0])
+
+
+SECRET_REPO, SECRET_TITLE, SECRET_PR_TITLE = "FS-GG/Secret.Repo", "SECRET-CARD-TITLE", "SECRET-PR-TITLE"
+
+
+def private_board(visibility):
+    """Every rule fires on a card in a repo whose visibility is `visibility` (False public, True, or absent)."""
+    def card(number, **kw):
+        base = dict(repo=SECRET_REPO, title=SECRET_TITLE, **kw)
+        if visibility != "absent":
+            base["repoPrivate"] = visibility
+        else:
+            base["repoPrivate"] = None
+        return item(number, **base)
+    items = [
+        card(100, status="Blocked"),                                              # a
+        card(101, status="Ready", state="CLOSED"),                                # b
+        card(102, status="In progress", statusUpdatedAt=hours_ago(24 * 9), contentUpdatedAt=hours_ago(24 * 9)),  # c
+        card(103, track=None),                                                    # d
+        card(104, status="Blocked", comments=[comment(55)]),                      # e
+        card(105, unreadable=True),                                               # x
+    ]
+    items[5].pop("repo"); items[5].pop("number")
+    prs = [pr(900, body=f"Refs {SECRET_REPO}#100", repo=SECRET_REPO, title=SECRET_PR_TITLE, repoPrivate=visibility if visibility != "absent" else None)]
+    return snapshot(items, prs)
+
+
+class Privacy(unittest.TestCase):
+    """.github is public; Project 3 holds private cards. Nothing private may reach findings, body, logs."""
+
+    def published(self, snap, **kw):
+        found = OBS.analyze(snap, NOW, **kw)
+        with tempfile.TemporaryDirectory() as d:
+            sp, out = Path(d, "s.json"), Path(d, "f.json")
+            sp.write_text(json.dumps(snap))
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                OBS.main(["check", "--snapshot", str(sp), "--out", str(out), "--now", iso_now()])
+            artifact = out.read_text()
+        body = OBS.render_body(found, OBS.snapshot_meta(snap))
+        plan = OBS.plan_report(found, None, OBS.snapshot_meta(snap))
+        return found, "\n".join([json.dumps(found), body, artifact, buf.getvalue(), plan["body"]])
+
+    def test_private_repo_publishes_only_opaque_placeholders_for_every_rule(self):
+        found, text = self.published(private_board(True))
+        self.assertEqual(sorted({f["rule"] for f in found}), ["a", "b", "c", "d", "e", "x"])
+        for secret in (SECRET_REPO, "Secret.Repo", SECRET_TITLE, SECRET_PR_TITLE, "pull/900"):
+            self.assertNotIn(secret, text)
+        self.assertNotRegex(text, r"FS-GG/Secret")
+        for f in found:
+            self.assertTrue(f["ref"].startswith("private:"), f)
+            self.assertNotIn("title", f)
+            self.assertTrue(f.get("private"))
+
+    def test_unknown_visibility_counts_as_private(self):
+        found, text = self.published(private_board("absent"))
+        self.assertEqual(len(found), 6)
+        for secret in (SECRET_REPO, SECRET_TITLE, SECRET_PR_TITLE):
+            self.assertNotIn(secret, text)
+
+    def test_a_missing_visibility_key_is_unknown_not_public(self):
+        node = item(100, status=None, repo=SECRET_REPO, title=SECRET_TITLE)
+        del node["repoPrivate"]
+        found, text = self.published(snapshot([node]))
+        self.assertNotIn(SECRET_TITLE, text)
+        self.assertTrue(found[0]["ref"].startswith("private:"))
+
+    def test_draft_cards_are_never_published_by_title(self):
+        draft = {"itemId": "PVTI_draft", "status": None, "track": "Follow-up", "workLevel": "Delivery",
+                 "type": "DraftIssue", "title": SECRET_TITLE, "comments": []}
+        found, text = self.published(snapshot([draft]))
+        self.assertNotIn(SECRET_TITLE, text)
+        self.assertNotIn("PVTI_draft", text)
+        self.assertTrue(found[0]["ref"].startswith("private:"))
+
+    def test_public_card_keeps_its_name_but_a_private_or_unknown_pr_is_masked(self):
+        for pr_visibility in (True, None):
+            snap = snapshot([item(100, status="Blocked", title="public title")],
+                            [pr(900, body="Refs FS-GG/.github#100", repo=SECRET_REPO, title=SECRET_PR_TITLE,
+                                repoPrivate=pr_visibility)])
+            found, text = self.published(snap)
+            self.assertEqual(found[0]["ref"], f"{REPO}#100")
+            self.assertEqual(found[0]["title"], "public title")
+            self.assertNotIn(SECRET_REPO, text)
+            self.assertNotIn(SECRET_PR_TITLE, text)
+            self.assertTrue(found[0]["prs"][0].startswith("private:"))
+
+    def test_public_repo_is_published_in_full(self):
+        found, text = self.published(private_board(False))
+        self.assertIn(SECRET_REPO, text)
+        self.assertIn(SECRET_TITLE, text)
+
+    def test_placeholders_are_stable_so_the_finding_set_dedupes(self):
+        a = [f["key"] for f in OBS.analyze(private_board(True), NOW)]
+        b = [f["key"] for f in OBS.analyze(private_board(True), NOW + dt.timedelta(minutes=5))]
+        self.assertEqual(a, b)
+
+    def test_reveal_private_is_an_explicit_local_switch(self):
+        found = OBS.analyze(private_board(True), NOW, reveal_private=True)
+        self.assertIn(f"{SECRET_REPO}#100", [f["ref"] for f in found])
+        self.assertIn(SECRET_TITLE, [f.get("title") for f in found])
+
+    def test_the_workflow_never_passes_reveal_private(self):
+        self.assertNotIn("reveal", (ROOT / ".github/workflows/board-drift-observer.yml").read_text())
+
+
+def iso_now() -> str:
+    return iso_time(NOW)
+
+
+def iso_time(value: dt.datetime) -> str:
+    return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class Dispositions(unittest.TestCase):
+    """F2/F3: every rule has a recorded-disposition route, newer than the evidence it covers."""
+
+    def ack(self, text, hours=0.5, author="EHotwagner", cid=900):
+        return comment(cid, hours=hours, body=f"[board-drift-ack] {text} reason recorded", author=author)
+
+    def test_an_ack_comment_is_never_itself_a_ruling(self):
+        only_ack = comment(9, hours=1, body="Root/fdev ruling, disposition: [board-drift-ack] e:1 no Status change owed")
+        self.assertTrue(OBS.RULING_MARKER.search(only_ack["body"]), "the fixture must otherwise look like a ruling")
+        self.assertEqual(rules([item(status="Blocked", comments=[only_ack])]), [])
+
+    def test_a_disposition_written_with_the_ack_clears_itself_and_does_not_fire_forever(self):
+        ruling = comment(1, hours=3)
+        ack = self.ack("e:1", hours=2)
+        self.assertEqual(rules([item(status="Blocked", comments=[ruling, ack])]), [])
+        later = comment(2, hours=1, body="Root/fdev ruling: a second decision")
+        self.assertEqual(rules([item(status="Blocked", comments=[ruling, ack, later])]), [("e", f"{REPO}#100")])
+
+    def test_rule_a_ack_covers_the_acked_pr_set_and_a_subset_of_it(self):
+        both = [pr(900), pr(901)]
+        card = lambda ack: item(status="Blocked", comments=[ack])
+        self.assertEqual(rules([card(self.ack(f"a:{REPO}#900+{REPO}#901"))], both), [])
+        self.assertEqual(rules([card(self.ack(f"a:{REPO}#900+{REPO}#901"))], [pr(900)]), [])
+        self.assertEqual(rules([card(self.ack(f"a:{REPO}#900"))], both), [("a", f"{REPO}#100")])
+        self.assertEqual(rules([card(self.ack("a:*"))], both), [])
+
+    def test_ack_must_be_newer_than_the_evidence_it_covers(self):
+        old = self.ack("a:*", hours=60)
+        self.assertEqual(rules([item(status="Blocked", statusUpdatedAt=hours_ago(2), comments=[old])], [pr()]),
+                         [("a", f"{REPO}#100")])
+
+    def test_ack_routes_for_b_c_d_and_x(self):
+        closed = item(status="Ready", state="CLOSED", closedAt=hours_ago(10), comments=[self.ack("b:closed")])
+        self.assertEqual(rules([closed]), [])
+        open_done = item(status="Done", state="OPEN", comments=[self.ack("b:open-done")])
+        self.assertEqual(rules([open_done]), [])
+        idle = dict(status="In progress", statusUpdatedAt=hours_ago(24 * 9), contentUpdatedAt=hours_ago(24 * 9))
+        self.assertEqual(rules([item(**idle, comments=[self.ack("c:idle", hours=24)])]), [])
+        self.assertEqual(rules([item(**idle, comments=[self.ack("c:idle", hours=24 * 8)])]), [("c", f"{REPO}#100")])
+        self.assertEqual(rules([item(track=None, comments=[self.ack("d:Track")])]), [])
+        node = {"itemId": "I", "status": "Ready", "track": "Follow-up", "workLevel": "Delivery", "unreadable": True,
+                "repo": REPO, "repoPrivate": False, "number": 7, "itemUpdatedAt": hours_ago(48),
+                "comments": [self.ack("x:unreadable")]}
+        self.assertEqual(rules([node]), [])
+
+    def test_the_ack_key_is_the_one_printed_on_the_report_line(self):
+        f = OBS.analyze(snapshot([item(track=None)]), NOW)[0]
+        self.assertEqual(f["ack"], "[board-drift-ack] d:Track")
+        self.assertIn("[board-drift-ack] d:Track", OBS.render_body([f], OBS.snapshot_meta(snapshot([item()]))))
+
+    def test_wrong_rule_wrong_key_or_non_root_ack_does_not_clear(self):
+        for text, author in (("d:Track", "EHotwagner"), ("b:closed", "EHotwagner"), ("d:Status", "EHotwagner"),
+                             ("d:*", "stranger")):
+            hit = rules([item(track=None, comments=[self.ack(text, author=author)])])
+            if text in ("d:Track",):
+                self.assertEqual(hit, [])
+            else:
+                self.assertEqual(hit, [("d", f"{REPO}#100")], text)
+
+    def test_a_prose_word_after_the_token_is_not_an_ack(self):
+        c = comment(5, hours=0.5, body="[board-drift-ack] a stale note without a rule key")
+        self.assertEqual(rules([item(track=None, comments=[c])]), [("d", f"{REPO}#100")])
+
+
+class DownRankAndTruncation(unittest.TestCase):
+    META = {"number": 3, "fetchedAt": "2026-10-30T18:00:00Z", "items": 1}
+
+    def test_docs_titled_prs_rank_low_and_are_listed_apart(self):
+        docs = [pr(900, title="docs(atlas): record"), pr(901, title="docs: more")]
+        found = OBS.analyze(snapshot([item(status="Blocked")], docs), NOW)
+        self.assertEqual([f["rank"] for f in found], ["low"])
+        body = OBS.render_body(found, self.META)
+        self.assertIn("lower confidence", body.lower())
+
+    def test_one_non_docs_pr_keeps_normal_rank_and_documentation_is_not_docs(self):
+        mixed = OBS.analyze(snapshot([item(status="Blocked")], [pr(900, title="docs: x"), pr(901, title="fix: y")]), NOW)
+        self.assertEqual(mixed[0]["rank"], "normal")
+        word = OBS.analyze(snapshot([item(status="Blocked")], [pr(900, title="documentation overhaul")]), NOW)
+        self.assertEqual(word[0]["rank"], "normal")
+
+    def big(self, n):
+        return OBS.analyze(snapshot([item(1000 + i, status=None, title="t" * 200) for i in range(n)]), NOW)
+
+    def test_a_huge_finding_set_is_truncated_under_the_issue_limit_with_an_n_more_line(self):
+        found = self.big(1000)
+        body = OBS.render_body(found, self.META)
+        self.assertLess(len(body), 65536)
+        self.assertRegex(body, r"\.\.\. \d+ more finding\(s\) not shown")
+        shown = body.count("\n- `")
+        self.assertEqual(int(re.search(r"(\d+) more finding", body).group(1)), len(found) - shown)
+        marker = OBS.parse_marker(body)
+        self.assertEqual(marker["digest"], OBS.digest(found))
+        self.assertEqual(marker["count"], len(found))
+
+    def test_a_truncated_set_still_dedupes_and_plans_without_failing(self):
+        found = self.big(1000)
+        existing = {"number": 7, "state": "open", "body": OBS.render_body(found, self.META)}
+        self.assertEqual(OBS.plan_report(found, existing, self.META)["action"], "noop")
+        plan = OBS.plan_report(self.big(999), existing, self.META)
+        self.assertEqual(plan["action"], "update")
+        self.assertLess(len(plan["body"]), 65536)
+        self.assertLess(len(plan["comment"]), 65536)
+
+    def test_a_small_set_is_not_truncated(self):
+        self.assertNotIn("more finding", OBS.render_body(self.big(3), self.META))
 
 
 class ReportApply(unittest.TestCase):
@@ -563,6 +886,14 @@ class WorkflowShape(unittest.TestCase):
                 self.assertIn("set -euo pipefail", step["run"], step.get("name"))
         names = [s.get("name", "") for s in steps]
         self.assertLess(names.index("Read Project 3 (read-only)"), names.index("Evaluate the drift rules"))
+
+    def test_download_artifact_is_pinned_with_its_version_and_the_selftest_names_real_jobs(self):
+        self.assertRegex(self.text, r"actions/download-artifact@[0-9a-f]{40} # v\d")
+        header = (ROOT / ".github/workflows/board-drift-observer-selftest.yml").read_text().split("name:", 1)[0]
+        self.assertNotIn("`observe`", header)
+        self.assertNotIn("`report`", header)
+        for job in self.doc["jobs"]:
+            self.assertIn(f"`{job}`", header)
 
     def test_the_workflow_writes_no_board_field(self):
         for forbidden in ("item-edit", "updateProjectV2", "mutation", "set-field", "projects: write", "permission-organization-projects: write"):
