@@ -3299,7 +3299,7 @@ if __name__ == "__main__":
             executable, command, cwd, _env = args
             if (executable == GIT_FIXTURE_EXECUTABLE and isinstance(command, list)
                     and command[:3] == [GIT_FIXTURE_EXECUTABLE, "-c", "core.hooksPath=/dev/null"]
-                    and command[3] in ("init", "add", "commit", "rev-parse", "ls-tree", "cat-file", "show", "diff")
+                    and command[3] in ("init", "add", "commit", "rev-parse", "ls-tree", "cat-file", "show", "diff", "merge-base")
                     and str(cwd) in GIT_FIXTURE_ROOTS):
                 return
         if event in ("socket.connect", "subprocess.Popen", "os.system", "os.exec"):
