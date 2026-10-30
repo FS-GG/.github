@@ -49,7 +49,11 @@ classes retain their own adoption and authority.
 polyglot provider architecture. Its [implementation design](design/polyglot-workspace-providers.md) assigns
 catalog, naming, capability, skill and publication boundaries to SDD, Governance, Templates and the wizard.
 Generated product languages remain independent of F# orchestration and NuGet template transport;
-source design delivery does not establish the new providers' public installed support.
+source design delivery alone did not establish the new providers' public installed support. That support is
+now established for the TypeScript, JavaScript, Rust and Go CLI providers: the four-provider public installed journeys passed
+on Linux x64 through Wizard 0.23.0, SDD 2.5.3 and Governance 1.15.0 over Templates 0.20.1
+([#3010](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523620705)), with the limits recorded there
+(GitHub Packages not read directly, one carrier, advisory-input custody owed).
 
 This page is a map. Authoritative detail lives in each component repository and in
 the decision records linked throughout.

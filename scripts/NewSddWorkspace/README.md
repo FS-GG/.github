@@ -13,15 +13,22 @@ retired `scripts/new-sdd-fullstack.sh` (see [ADR-0016](https://github.com/FS-GG/
 
 ## Current source and published boundary
 
-Prospective source **0.23.0** prepares descriptor-driven catalog creation with stable SDD CLI
+Wizard **0.23.0** is published: tag `new-sdd-workspace/v0.23.0` (release 429016553) and nuget.org
+`FS.GG.NewSddWorkspace` 0.23.0. It provides descriptor-driven catalog creation with stable SDD CLI
 **2.5.3 or newer**. Creation and dry-run admit that runtime before target mutation and recheck the
 exact producer immediately before scaffold. Legacy typed project knowledge retains its 2.1.0 floor;
-list/help require no catalog runtime. Source selection does not establish publication or installed
-support: public producer/template identities and genuine consumer acceptance remain separate gates.
-The catalog route described below is written against FS.GG.Templates **0.20.1**
-(published tag `fs-gg-templates/v0.20.1`, package `FS.GG.Workspace.Template::0.20.1`), the release that carries the
-common project-knowledge composition for the TypeScript, JavaScript, Rust and Go providers. Wizard 0.23.0 itself is
-not published by this source change.
+list/help require no catalog runtime.
+The catalog route described below describes the published FS.GG.Templates **0.20.1**
+(tag `fs-gg-templates/v0.20.1`, package `FS.GG.Workspace.Template::0.20.1`), the release that carries the
+common project-knowledge composition for the TypeScript, JavaScript, Rust and Go providers.
+The four-product public-tool journeys passed on Linux x64: the public Wizard 0.23.0, SDD 2.5.3 and
+Governance 1.15.0 installed from nuget.org created TypeScript, JavaScript, Rust and Go CLI workspaces against
+`fs-gg-templates/v0.20.1`, and 85 of 85 checks passed (creation, knowledge, Doctor, Governance Verify with all
+eight gates, and five refusal controls per product); see the
+[#3010 Step 3 result](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523620705).
+Stated limits remain: the GitHub Packages feed was not read directly (the qualifying token received 403), only
+one Linux x64 carrier was exercised, no reproducibility pack exists, and independent custody of the advisory inputs
+is still owed. The cited result does not establish default-on coordination for a catalog provider.
 
 ## Install
 
@@ -127,16 +134,15 @@ new-sdd-workspace ./Greeter "Greeter" --template go-cli --ref fs-gg-templates/v0
   then the product shape, then each descriptor prompt, then the policy file, and shows the resolved selection
   before it asks to create.
 
-The catalog route is a source integration candidate. It does not establish the complete
-[#3010 adoption](https://github.com/FS-GG/.github/issues/3010): the published 0.20.0 polyglot payloads
-lack the common project-knowledge CI/checker composition that the published Templates 0.20.1 carries; Wizard 0.23.0
-publication and the public-tool journeys on the published packages remain outstanding. Every catalog creation initializes the canonical store through the exact
+The catalog route is published with Wizard 0.23.0 over Templates 0.20.1 and its public-tool journeys are
+recorded in [#3010](https://github.com/FS-GG/.github/issues/3010) (the limits are stated in the first section).
+The published Templates 0.20.0 polyglot payloads lack the common project-knowledge CI/checker composition that
+0.20.1 carries. Every catalog creation initializes the canonical store through the exact
 capable SDD producer, pins that version locally, and requires the guide, schema, CI and checker before
 `knowledge check` and the initialization handoff. Known-missing CI/checker payloads refuse before target
 creation. Missing generated assets or refused knowledge checks fail creation;
 the partially created workspace is retained for diagnosis. The legacy Rendering overlay is not applied to
-catalog providers. Keep coherent registry activation and public Wizard publication separate until those producer
-and consumer checks pass. Future execution inputs can use descriptor-declared parameters; this candidate
+catalog providers. Future execution inputs can use descriptor-declared parameters; this release
 does not claim the accepted Coordination controller is implemented or activated.
 
 ### Typed project knowledge bootstrap
