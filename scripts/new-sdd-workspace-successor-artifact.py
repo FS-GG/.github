@@ -16,11 +16,11 @@ import tempfile
 import runpy
 import zipfile
 
-from new_sdd_workspace_successor_execution import CURRENT_023, CURRENT_022, CURRENT_021, CURRENT_020, CURRENT_019, CURRENT_017, CURRENT_016
+from new_sdd_workspace_successor_execution import CURRENT_0231, CURRENT_023, CURRENT_022, CURRENT_021, CURRENT_020, CURRENT_019, CURRENT_017, CURRENT_016
 
 REPOSITORY_ID = 1269292704
 WORKFLOW = ".github/workflows/release-new-sdd-workspace-successor-candidate.yml"
-VERSION = CURRENT_023.version
+VERSION = CURRENT_0231.version
 PACKAGE = f"FS.GG.NewSddWorkspace.{VERSION}.nupkg"
 MEMBERS = {PACKAGE, "manifest.json", "package-evidence.json"}
 
@@ -31,12 +31,12 @@ def require(ok: bool, detail: str) -> None:
 
 
 def verify(artifact: dict, run: dict, archive_path: pathlib.Path, output: pathlib.Path, source_sha: str,
-           *, release_binding=CURRENT_023) -> dict:
-    require(any(release_binding is item for item in (CURRENT_023, CURRENT_022, CURRENT_021, CURRENT_020, CURRENT_019, CURRENT_017, CURRENT_016)), "unknown Creator artifact binding")
+           *, release_binding=CURRENT_0231) -> dict:
+    require(any(release_binding is item for item in (CURRENT_0231, CURRENT_023, CURRENT_022, CURRENT_021, CURRENT_020, CURRENT_019, CURRENT_017, CURRENT_016)), "unknown Creator artifact binding")
     current = runpy.run_path(str(pathlib.Path(__file__).with_name("creator-current-coord-dependencies.py")))
-    pin = (current["protected_pin"](source_sha, release_binding=release_binding) if release_binding in (CURRENT_023, CURRENT_022, CURRENT_021) else
+    pin = (current["protected_pin"](source_sha, release_binding=release_binding) if release_binding in (CURRENT_0231, CURRENT_023, CURRENT_022, CURRENT_021) else
            current["protected_pin"](source_sha) if release_binding in (CURRENT_020, CURRENT_019) else None)
-    # Explicit retained readers are inert; the publisher selects only CURRENT_023.
+    # Explicit retained readers are inert; the publisher selects only CURRENT_0231.
     VERSION = release_binding.version
     PACKAGE = f"FS.GG.NewSddWorkspace.{VERSION}.nupkg"
     MEMBERS = {PACKAGE, "manifest.json", "package-evidence.json"}
@@ -88,7 +88,7 @@ def verify(artifact: dict, run: dict, archive_path: pathlib.Path, output: pathli
             for name in names:
                 with archive.open(name) as source, (work / name).open("xb") as target:
                     shutil.copyfileobj(source, target)
-            if release_binding in (CURRENT_023, CURRENT_022, CURRENT_021, CURRENT_020):
+            if release_binding in (CURRENT_0231, CURRENT_023, CURRENT_022, CURRENT_021, CURRENT_020):
                 current["verify_release_evidence"](current["read_json"](archive.read("package-evidence.json")),
                                                    work / PACKAGE, manifest, pin, release_binding=release_binding)
             elif release_binding is CURRENT_019:

@@ -23,7 +23,8 @@
 /// It also carries a `retrofit <target>` subcommand — the INVERSE of step 5's scaffold-time wiring:
 /// run inside an ALREADY-scaffolded workspace (one made --no-coordination, or before the wiring
 /// existed), it idempotently materializes the coordination kit + board env onto it, re-emitting only
-/// what drifted and recording the event in scaffold-provenance.json. It is the precondition work-board
+/// what drifted and recording the event in .fsgg/coordination-retrofits.json (the SDD-owned
+/// scaffold-provenance.json is never written). It is the precondition work-board
 /// (ADR-0064) documents but cannot itself satisfy.
 module NewSddWorkspace.Program
 
@@ -588,15 +589,30 @@ let private loadCatalog (inputs: ProviderCatalog.Inputs) (gitRef: string) : Resu
 
 // ── Coordination wiring (the kit + board env into the workspace) ──────────────
 
-/// Legacy fallback for refs predating the v2 directory manifest. Once all supported refs publish
-/// `coordination-kit-skill-manifest.json`, this list can retire in the reader-removal phase.
-let private legacyCoordinationSkills =
-    [
-        "cross-repo-coordination"
-        "intra-repo-parallel-work"
-        "check-board"
-        "pnext-item"
-    ]
+/// Fetch one kit file as its exact bytes with the same bounded, redirect-free, 30-second-deadline
+/// transport as every other Wizard fetch. The digest in `CoordinationKit` is taken over these bytes.
+let private fetchKitBytes (url: string) : Result<byte[], string> =
+    try
+        use deadline = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds 30.0)
+        readBoundedBytes (256 * 1024) "256 KiB" (createTextClient ()) deadline.Token url
+    with ex -> Error ex.Message
+
+/// Where the pinned kit is read from. `FSGG_COORDINATION_KIT_RAW_BASE` only relocates the host (the
+/// fixtures serve the pinned revision's files from a local server); the pinned revision path and
+/// every sha256 are still enforced, so redirecting the base cannot change what is accepted.
+let private coordinationKitRawBase () =
+    match Environment.GetEnvironmentVariable "FSGG_COORDINATION_KIT_RAW_BASE" with
+    | null
+    | "" -> "https://raw.githubusercontent.com"
+    | value -> value.TrimEnd('/')
+
+/// Fetch and verify the pinned coordination kit (see `CoordinationKit`).
+let private fetchPinnedKit () : Result<CoordinationKit.Kit, string list> =
+    match CoordinationKit.embeddedPin () with
+    | Error reason -> Error [ reason ]
+    | Ok pin ->
+        let rawBase = coordinationKitRawBase ()
+        CoordinationKit.fetchVerified pin (fun path -> fetchKitBytes (CoordinationKit.rawUrl rawBase pin path))
 
 /// `owner/title` → (owner, title). No `/` ⇒ that owner's default `Coordination` board.
 let private parseBoard (value: string) : string * string =
@@ -614,18 +630,18 @@ let private parseRepository (value: string) : Result<string * string, string> =
 
 /// A repository-policy result is deliberately separate from the orchestration outcome: a failed
 /// read is a no-verdict, never evidence that issue intake is restricted.
-type private RepositoryPolicyReceipt =
+type RepositoryPolicyReceipt =
     | RepositorySecured of repository: string * prior: string * actor: string
     | RepositoryPending of repository: string * reason: string
 
-type private ResolvedProjectWriter =
+type ResolvedProjectWriter =
     {
         Requested: string
         ActorKind: string
         ActorId: string
     }
 
-type private ProjectAccessReceipt =
+type ProjectAccessReceipt =
     | ProjectObserved of project: string * projectId: string * isPublic: bool * actor: string
     | ProjectPartiallyVerified of
         project: string *
@@ -635,7 +651,7 @@ type private ProjectAccessReceipt =
         writers: ResolvedProjectWriter list
     | ProjectPending of project: string * reason: string
 
-type private SecurityReport =
+type SecurityReport =
     {
         Repository: RepositoryPolicyReceipt option
         Project: ProjectAccessReceipt
@@ -1123,25 +1139,62 @@ let private projectBaseAccessObligation (workspace: string) (project: string) (w
     obligation.["state"] <- JsonValue.Create "pending-human-verification"
     obligation
 
-/// Persist the security facts that could not be established. This lives beside the scaffold's
-/// provenance rather than in console prose so a later operator has one exact recovery target.
-/// The Project obligation is retained even after repository policy succeeds: GitHub's ordinary
-/// ProjectV2 read does not expose an effective/base access verdict, so visibility or
-/// `viewerCanUpdate` cannot safely clear it.
-let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
-    let dest = Path.Combine(opts.Target, ".fsgg", "scaffold-provenance.json")
+/// Tolerant migration of Wizard-owned state that Wizard 0.23.0 and earlier wrote into the SDD-owned
+/// `.fsgg/scaffold-provenance.json` (`securityObligations`, `verifiedSecurityReceipts`, `retrofits`).
+/// SDD CLI 2.5.3 reports `scaffold.provenanceMalformed` for those unknown members, so the first Wizard
+/// run that touches an existing workspace (`secure`, `retrofit`, or an existing-target run) moves them
+/// into the Wizard-owned files and removes exactly those members. Rows are merged, never overwritten,
+/// and an already-migrated or never-affected workspace is a silent no-op. Failure to migrate never
+/// blocks the command that triggered it: it is reported and the next run retries.
+let private migrateLegacyWizardState (target: string) =
+    let note (message: string) = AnsiConsole.MarkupLine message
 
+    match SecurityObligations.migrateLegacy target with
+    | SecurityObligations.Migrated(obligations, receipts) ->
+        note (
+            sprintf
+                "  [green]✓[/] moved %d security obligation(s) and %d receipt(s) from the SDD-owned scaffold-provenance.json to %s"
+                obligations
+                receipts
+                SecurityObligations.relativePath
+        )
+    | SecurityObligations.Incomplete reason ->
+        note (
+            sprintf
+                "  [yellow]⚠[/] legacy security state in scaffold-provenance.json was not migrated (will retry next run): %s"
+                (Markup.Escape reason)
+        )
+    | SecurityObligations.NothingToMigrate -> ()
+
+    match RetrofitLog.migrateLegacy target with
+    | Ok 0 -> ()
+    | Ok moved ->
+        note (
+            sprintf
+                "  [green]✓[/] moved %d retrofit entr(ies) from the SDD-owned scaffold-provenance.json to %s"
+                moved
+                RetrofitLog.relativePath
+        )
+    | Error reason ->
+        note (
+            sprintf
+                "  [yellow]⚠[/] legacy retrofit log in scaffold-provenance.json was not migrated (will retry next run): %s"
+                (Markup.Escape reason)
+        )
+
+/// Persist the security facts that could not be established into the Wizard-owned
+/// `.fsgg/security-obligations.json`, never into the SDD-owned provenance (SDD's strict schema rejects
+/// unknown members). It lives in the workspace rather than in console prose so a later operator has
+/// one exact recovery target. The Project obligation is retained even after repository policy
+/// succeeds: GitHub's ordinary ProjectV2 read does not expose an effective/base access verdict, so
+/// visibility or `viewerCanUpdate` cannot safely clear it.
+let recordSecurityObligations (opts: Options) (report: SecurityReport) =
     try
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest))
-        |> ignore
-
         let root =
-            if File.Exists dest then
-                match JsonNode.Parse(File.ReadAllText dest) with
-                | :? JsonObject as o -> o
-                | _ -> JsonObject()
-            else
-                JsonObject()
+            match SecurityObligations.load opts.Target with
+            | Ok(Some state) -> state
+            | Ok None -> SecurityObligations.emptyState ()
+            | Error reason -> invalidOp reason
 
         let obligations = JsonArray()
         let repo = JsonObject()
@@ -1220,11 +1273,14 @@ let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
             obligations.Add project
 
         root.["securityObligations"] <- obligations
-        File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+
+        match SecurityObligations.save opts.Target root with
+        | Ok() -> ()
+        | Error reason -> invalidOp reason
     with ex ->
         raise (
             InvalidOperationException(
-                "security provenance persistence failed; no verified or pending security state was recorded",
+                "security obligation persistence failed; no verified or pending security state was recorded",
                 ex
             )
         )
@@ -1292,20 +1348,27 @@ let private embeddedText (name: string) =
     use reader = new StreamReader(stream)
     reader.ReadToEnd()
 
+/// The skills this tool embeds, with their files. An embedded skill is authoritative: the pinned coordination
+/// kit excludes it (`coordination-kit-pin.json` `embeddedSkills`), and creation, `--upgrade` and `retrofit`
+/// all install or reconcile it from these resources, so the pinned kit's older copy can never be restored.
+let embeddedSkills () : (string * (string * string) list) list =
+    [
+        "initialize-sdd-workspace",
+        [
+            "SKILL.md", embeddedText "NewSddWorkspace.InitializeSkill.SKILL.md"
+            "agents/openai.yaml", embeddedText "NewSddWorkspace.InitializeSkill.agents.openai.yaml"
+        ]
+    ]
+
 /// Materialize the bootstrap skill without a network dependency, record the pending state, and add
 /// conditional instructions to both agent entrypoints. An initialized marker is never downgraded by
 /// a later explicit reconcile/upgrade run.
 let private installInitializationHandoff (opts: Options) : Outcome =
     try
-        let files =
-            [
-                "SKILL.md", embeddedText "NewSddWorkspace.InitializeSkill.SKILL.md"
-                "agents/openai.yaml", embeddedText "NewSddWorkspace.InitializeSkill.agents.openai.yaml"
-            ]
-
         for root in [ ".claude/skills"; ".agents/skills" ] do
-            for rel, content in files do
-                writeUnder opts.Target (sprintf "%s/initialize-sdd-workspace/%s" root rel) content
+            for id, files in embeddedSkills () do
+                for rel, content in files do
+                    writeUnder opts.Target (sprintf "%s/%s/%s" root id rel) content
 
         let markerPath = Path.Combine(opts.Target, initializationMarker)
 
@@ -1380,24 +1443,6 @@ let private isExecutable (dest: string) =
 
         (File.GetUnixFileMode(dest) &&& executeBits) <> enum<UnixFileMode> 0
 
-/// Fetch the generated closed-set directory index. Old refs have no index, so they retain the
-/// SKILL.md-only reader during publish-before-flip.
-let private coordinationSkillFiles (raw: string -> string) =
-    match fetchText (raw "registry/coordination-kit-skill-manifest.json") with
-    | Error _ -> false, (legacyCoordinationSkills |> List.map (fun id -> id, "SKILL.md", false))
-    | Ok json ->
-        true,
-        (JsonNode.Parse(json).AsObject().["skills"].AsArray()
-         |> Seq.collect (fun skill ->
-             let row = skill.AsObject()
-             let id = row.["id"].GetValue<string>()
-
-             row.["files"].AsArray()
-             |> Seq.map (fun file ->
-                 let f = file.AsObject()
-                 id, f.["path"].GetValue<string>(), f.["executable"].GetValue<bool>()))
-         |> List.ofSeq)
-
 /// Merge the `fs.gg.coord.cli` tool into the workspace's `.config/dotnet-tools.json`, preserving any
 /// tools already there (the SDD scaffold may have written one). `manifestJson` is the fetched
 /// `dist/dotnet/.config/dotnet-tools.json` — we lift only the coord entry out of it.
@@ -1466,64 +1511,67 @@ let private writeCoordinationEnv (target: string) (owner: string) (title: string
 
     File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
 
-/// Vendor the coordination kit from FS-GG/.github@<ref> into the workspace and write the board env.
-/// Best-effort (mirrors governance): a file that 404s becomes a Warning — the env still lands, and the
-/// rest is fetchable by hand — never a fatal that would strand a good scaffold.
-let private wireLegacyCoordination (kitRef: string) (opts: Options) : Outcome =
-    let raw p =
-        sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" kitRef p
-
-    let problems = ResizeArray<string>()
-    let _, skillFiles = coordinationSkillFiles raw
-    // 1 · complete skill directories → every agent-skill root, byte- and mode-identical.
-    //     union into .claude/.agents (ADR-0065 as amended by ADR-0067 §5), so the coordination kit
-    //     joins both — a Codex-driven agent in the workspace sees the same skills a Claude one does,
-    //     because `.agents/skills` is Codex's OWN native root and needs no pointing.
-    for s, rel, executable in skillFiles do
-        match fetchText (raw (sprintf ".claude/skills/%s/%s" s rel)) with
-        | Ok content ->
+/// Vendor the PINNED coordination kit (FS-GG/.github at the revision named in `coordination-kit-pin.json`)
+/// into the workspace and write the board env.
+///
+/// Two failures are deliberately different. A kit file that cannot be fetched (network, HTTP status) is
+/// still a Warning: the env lands, the scaffold stays usable, and `retrofit` adds the rest later. A
+/// fetched file whose sha256 differs from the pin, or a malformed manifest, is a refusal: nothing from
+/// the kit, and no env, is written, and the step is `Failed`.
+let wireLegacyCoordination (opts: Options) : Outcome =
+    match fetchPinnedKit () with
+    | Error refusals ->
+        Failed(
+            sprintf
+                "coordination kit refused, nothing vendored (pinned kit verification failed): %s"
+                (String.Join("; ", refusals))
+        )
+    | Ok kit ->
+        let problems = ResizeArray<string>(kit.Unavailable)
+        // 1 · complete skill directories → every agent-skill root, byte- and mode-identical.
+        //     union into .claude/.agents (ADR-0065 as amended by ADR-0067 §5), so the coordination kit
+        //     joins both — a Codex-driven agent in the workspace sees the same skills a Claude one does,
+        //     because `.agents/skills` is Codex's OWN native root and needs no pointing.
+        for file in kit.Skills do
             for root in [ ".claude/skills"; ".agents/skills" ] do
-                let destRel = sprintf "%s/%s/%s" root s rel
-                writeUnder opts.Target destRel content
+                let destRel = sprintf "%s/%s/%s" root file.Skill file.Path
+                writeUnder opts.Target destRel file.Content
 
                 try
-                    setExecutableState (Path.Combine(opts.Target, destRel)) executable
+                    setExecutableState (Path.Combine(opts.Target, destRel)) file.Executable
                 with _ ->
                     ()
-        | Error e -> problems.Add e
-    // 2 · the fsgg-coord shim (executable)
-    (match fetchText (raw "scripts/fsgg-coord") with
-     | Ok content ->
-         writeUnder opts.Target "scripts/fsgg-coord" content
+        // 2 · the fsgg-coord shim (executable)
+        kit.Shim
+        |> Option.iter (fun content ->
+            writeUnder opts.Target "scripts/fsgg-coord" content
 
-         try
-             setExecutable (Path.Combine(opts.Target, "scripts", "fsgg-coord"))
-         with _ ->
-             ()
-     | Error e -> problems.Add e)
-    // 3 · the engine tool manifest (merge the coord tool)
-    (match fetchText (raw "dist/dotnet/.config/dotnet-tools.json") with
-     | Ok content ->
-         try
-             mergeToolManifest opts.Target content
+            try
+                setExecutable (Path.Combine(opts.Target, "scripts", "fsgg-coord"))
+            with _ ->
+                ())
+        // 3 · the engine tool manifest (merge the coord tool)
+        kit.ToolManifest
+        |> Option.iter (fun content ->
+            try
+                mergeToolManifest opts.Target content
+            with ex ->
+                problems.Add ex.Message)
+        // 4 · the board env (no network — always writable)
+        (try
+            writeCoordinationEnv opts.Target opts.BoardOwner opts.BoardTitle opts.ChoreLocks
          with ex ->
-             problems.Add ex.Message
-     | Error e -> problems.Add e)
-    // 4 · the board env (no network — always writable)
-    (try
-        writeCoordinationEnv opts.Target opts.BoardOwner opts.BoardTitle opts.ChoreLocks
-     with ex ->
-         problems.Add ex.Message)
+             problems.Add ex.Message)
 
-    if problems.Count = 0 then
-        Succeeded
-    else
-        Warned(
-            sprintf
-                "%d kit file(s) not vendored (env written) — add later from FS-GG/.github: %s"
-                problems.Count
-                (problems.[problems.Count - 1])
-        )
+        if problems.Count = 0 then
+            Succeeded
+        else
+            Warned(
+                sprintf
+                    "%d kit file(s) not vendored (env written) — add later with `new-sdd-workspace retrofit`: %s"
+                    problems.Count
+                    (problems.[problems.Count - 1])
+            )
 
 // ── Coordination RETROFIT (the inverse of #1142's scaffold-time wiring) ───────
 //
@@ -1531,8 +1579,15 @@ let private wireLegacyCoordination (kitRef: string) (opts: Options) : Outcome =
 // writes unconditionally. `retrofit` runs LATER, INSIDE an already-scaffolded workspace that was
 // created `--no-coordination` (or before #1142 landed), and must be IDEMPOTENT: it materializes only
 // what is missing or has drifted, leaves a coherent kit untouched, and records the event in
-// `scaffold-provenance.json`. It is the precondition `work-board` (ADR-0064) documents but cannot
+// `.fsgg/coordination-retrofits.json`. It is the precondition `work-board` (ADR-0064) documents but cannot
 // itself satisfy. Same kit, same board env, same HTTP fetch (no checkout) as the scaffold path.
+
+/// The reviewed kit revision embedded in this tool (`coordination-kit-pin.json`). A build without a
+/// valid embedded pin cannot run the kit wiring at all.
+let private pinnedKitRevision () =
+    match CoordinationKit.embeddedPin () with
+    | Ok pin -> pin.Revision
+    | Error reason -> failwith reason
 
 /// The retrofit invocation surface. A subset of `Options` — only the coordination inputs are
 /// meaningful here; the SDD/render/governance steps do not re-run on an existing workspace.
@@ -1540,7 +1595,8 @@ type RetrofitOptions =
     {
         Preview: bool
         Target: string
-        /// The FS-GG/.github ref to vendor the kit from (default `main`). Mirrors `--ref` on scaffold.
+        /// The FS-GG/.github revision to vendor the kit from. It defaults to the pinned revision and
+        /// only the pinned revision verifies: any other value is refused before a byte is fetched.
         Ref: string
         WorkspaceRepo: string option
         BoardOwner: string
@@ -1686,20 +1742,20 @@ type private RetrofitReport =
         Wrote: (string * bool) list // (rel, wasMissing) — wasMissing=true ⇒ fresh; false ⇒ drift repair
         Kept: string list
         Problems: string list
+        /// Verification refusals (sha256 differs from the pin, malformed manifest, unpinned `--ref`).
+        /// When non-empty nothing was fetched-and-written and nothing existing was modified.
+        Refused: string list
     }
 
-/// Idempotently materialize the coordination kit + board env into an already-scaffolded workspace,
-/// touching ONLY what is missing or drifted. Same fetch surface as `wireCoordination` (the four skills
-/// into all three agent-skill roots, the `fsgg-coord` shim, the `fs.gg.coord.cli` tool manifest, the
+/// Idempotently materialize the PINNED coordination kit + board env into an already-scaffolded
+/// workspace, touching ONLY what is missing or drifted. Same fetch surface as `wireCoordination` (the
+/// skills into both agent-skill roots, the `fsgg-coord` shim, the `fs.gg.coord.cli` tool manifest, the
 /// board env) — but every write goes through a reconcile so a coherent kit is left byte-for-byte intact.
-let private retrofitCoordination (opts: RetrofitOptions) : RetrofitReport =
-    let raw p =
-        sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" opts.Ref p
-
+/// The kit is verified against the pin before any reconcile: a mismatch refuses the whole retrofit.
+let private reconcileVerifiedKit (opts: RetrofitOptions) (kit: CoordinationKit.Kit) : RetrofitReport =
     let wrote = ResizeArray<string * bool>()
     let kept = ResizeArray<string>()
-    let problems = ResizeArray<string>()
-    let hasDirectoryManifest, skillFiles = coordinationSkillFiles raw
+    let problems = ResizeArray<string>(kit.Unavailable)
 
     let record =
         function
@@ -1707,18 +1763,23 @@ let private retrofitCoordination (opts: RetrofitOptions) : RetrofitReport =
         | Kept rel -> kept.Add rel
         | Errored d -> problems.Add d
     // 1 · complete skill directories → every agent-skill root (reconciled per file and mode).
-    for s, rel, executable in skillFiles do
-        match fetchText (raw (sprintf ".claude/skills/%s/%s" s rel)) with
-        | Ok content ->
-            for root in [ ".claude/skills"; ".agents/skills" ] do
-                record (reconcileFile opts.Target (sprintf "%s/%s/%s" root s rel) content executable)
-        | Error e -> problems.Add e
+    for file in kit.Skills do
+        for root in [ ".claude/skills"; ".agents/skills" ] do
+            record (reconcileFile opts.Target (sprintf "%s/%s/%s" root file.Skill file.Path) file.Content file.Executable)
 
-    if hasDirectoryManifest then
-        let expected = skillFiles |> Seq.map (fun (id, rel, _) -> id, rel) |> Set.ofSeq
+    // The embedded skills are authoritative (the pinned kit excludes them): reconcile them against this
+    // tool's own resources, so a 0.23.0-era copy is brought forward and a current one is left untouched.
+    for id, files in embeddedSkills () do
+        for root in [ ".claude/skills"; ".agents/skills" ] do
+            for rel, content in files do
+                record (reconcileFile opts.Target (sprintf "%s/%s/%s" root id rel) content false)
+
+    // The verified manifest closes the skill set: files outside it are stale kit remnants.
+    if kit.HasSkillManifest then
+        let expected = Set.ofList kit.Listed
 
         for root in [ ".claude/skills"; ".agents/skills" ] do
-            for id in skillFiles |> Seq.map (fun (id, _, _) -> id) |> Seq.distinct do
+            for id in kit.Listed |> Seq.map fst |> Seq.distinct do
                 let dir = Path.Combine(opts.Target, root, id)
 
                 if Directory.Exists dir then
@@ -1732,13 +1793,9 @@ let private retrofitCoordination (opts: RetrofitOptions) : RetrofitReport =
                             with ex ->
                                 problems.Add ex.Message
     // 2 · the fsgg-coord shim (executable)
-    (match fetchText (raw "scripts/fsgg-coord") with
-     | Ok content -> record (reconcileFile opts.Target "scripts/fsgg-coord" content true)
-     | Error e -> problems.Add e)
+    kit.Shim |> Option.iter (fun content -> record (reconcileFile opts.Target "scripts/fsgg-coord" content true))
     // 3 · the engine tool manifest (merge the coord tool)
-    (match fetchText (raw "dist/dotnet/.config/dotnet-tools.json") with
-     | Ok content -> record (reconcileToolManifest opts.Target content)
-     | Error e -> problems.Add e)
+    kit.ToolManifest |> Option.iter (fun content -> record (reconcileToolManifest opts.Target content))
     // 4 · the board env (no network — always reconcilable)
     record (reconcileEnv opts.Target opts.BoardOwner opts.BoardTitle opts.ChoreLocks)
 
@@ -1746,33 +1803,26 @@ let private retrofitCoordination (opts: RetrofitOptions) : RetrofitReport =
         Wrote = List.ofSeq wrote
         Kept = List.ofSeq kept
         Problems = List.ofSeq problems
+        Refused = []
     }
 
-/// Append a `coordination` entry to the `retrofits` array in `.fsgg/scaffold-provenance.json`, naming
-/// what was freshly materialized vs re-emitted as drift. Additive and read-safe: a `retrofits` key is
-/// unknown to SDD's provenance schema, and System.Text.Json ignores unknown members on read, so a
-/// `doctor`/`verify` parse is unaffected. Merges into an existing document (never rewriting SDD's own
-/// keys); if none exists (a workspace with no provenance at all) it writes a minimal one carrying only
-/// the retrofit log.
+let private retrofitCoordination (opts: RetrofitOptions) : RetrofitReport =
+    let refused (reasons: string list) =
+        { Wrote = []; Kept = []; Problems = []; Refused = reasons }
+
+    match CoordinationKit.embeddedPin () |> Result.bind (fun pin -> CoordinationKit.selectRevision pin opts.Ref) with
+    | Error reason -> refused [ reason ]
+    | Ok _ ->
+        match fetchPinnedKit () with
+        | Error reasons -> refused reasons
+        | Ok kit -> reconcileVerifiedKit opts kit
+
+/// Append a `coordination` entry to the Wizard-owned retrofit log `.fsgg/coordination-retrofits.json`,
+/// naming what was freshly materialized vs re-emitted as drift. SDD CLI 2.5.3's strict provenance
+/// schema rejects unknown members, so the Wizard never writes into `.fsgg/scaffold-provenance.json`;
+/// a `retrofits` member left there by an earlier Wizard is moved into the log first (`RetrofitLog`).
+/// A log that cannot be written is a failed retrofit record, reported by the caller.
 let private recordRetrofit (target: string) (opts: RetrofitOptions) (materialized: string list) (drift: string list) =
-    let dest = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
-
-    let root =
-        if File.Exists dest then
-            match JsonNode.Parse(File.ReadAllText dest) with
-            | :? JsonObject as o -> o
-            | _ -> JsonObject()
-        else
-            JsonObject()
-
-    let retrofits =
-        match root.["retrofits"] with
-        | :? JsonArray as a -> a
-        | _ ->
-            let a = JsonArray()
-            root.["retrofits"] <- a
-            a
-
     let entry = JsonObject()
     entry.["kind"] <- JsonValue.Create "coordination"
     entry.["tool"] <- JsonValue.Create "new-sdd-workspace"
@@ -1793,12 +1843,7 @@ let private recordRetrofit (target: string) (opts: RetrofitOptions) (materialize
 
     entry.["materialized"] <- arrOf materialized
     entry.["reMaterializedDrift"] <- arrOf drift
-    retrofits.Add entry
-
-    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest))
-    |> ignore
-
-    File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+    RetrofitLog.append target entry
 
 // ── Rendering (presentation edge) ────────────────────────────────────────────
 
@@ -2278,7 +2323,7 @@ let private usage () =
         "                        inverse of the scaffold-time step): vendor the kit + write the board"
 
     AnsiConsole.MarkupLine
-        "                        env, re-emit only what drifted, and record it in scaffold-provenance.json"
+        "                        env, re-emit only what drifted, and record it in .fsgg/coordination-retrofits.json"
 
     AnsiConsole.MarkupLine
         "  [aqua]secure[/] --repo <owner/repo>  apply and verify collaborator-only repository issue intake"
@@ -3348,7 +3393,7 @@ let private parseRetrofit (argv: string list) : Result<RetrofitOptions, string> 
             {
                 RetrofitOptions.Target = target
                 Preview = false
-                Ref = "main"
+                Ref = pinnedKitRevision ()
                 WorkspaceRepo = None
                 BoardOwner = "FS-GG"
                 BoardTitle = "Coordination"
@@ -3377,8 +3422,8 @@ let private prepareProductBoard generatedManifest retained authority scaffoldSuc
         with error -> Error error.Message
     | _ -> Error "V2 integration requires --repo, --board-binding and --board-kit-ref together"
 
-let private wireCoordination generatedManifest authority kitRef (opts: Options) =
-    if opts.BoardBinding.IsNone && opts.BoardKitRef.IsNone then wireLegacyCoordination kitRef opts
+let private wireCoordination generatedManifest authority (opts: Options) =
+    if opts.BoardBinding.IsNone && opts.BoardKitRef.IsNone then wireLegacyCoordination opts
     else
         prepareProductBoard generatedManifest false authority true opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef
         |> Result.bind (ProductBoard.apply opts.Target)
@@ -3724,6 +3769,11 @@ let private runScaffold (opts: Options) (plan: CatalogPlan option) : int =
         let mutable fatal = false
         let mutable generatedManifest = None
 
+        // An `--upgrade` run reconciles an EXISTING workspace: move Wizard 0.23.0-era members out of the
+        // SDD-owned provenance before `fsgg-sdd` reads it, or doctor/upgrade report it malformed.
+        if opts.Upgrade && Directory.Exists(Path.Combine(opts.Target, ".fsgg")) then
+            migrateLegacyWizardState opts.Target
+
         // 1 · fetch descriptor (fatal on failure). A catalog provider instead acquires its pinned catalog
         //     selection, template archive and policy into a private scratch directory; the target is not
         //     touched until the SDD scaffold step, so a refusal here leaves no target behind.
@@ -4046,7 +4096,7 @@ let private runScaffold (opts: Options) (plan: CatalogPlan option) : int =
                     .Status()
                     .Start(
                         sprintf "vendoring the coordination kit for %s/%s…" opts.BoardOwner opts.BoardTitle,
-                        fun _ -> wireCoordination generatedManifest authority "main" opts
+                        fun _ -> wireCoordination generatedManifest authority opts
                     )
 
             (match outcome with
@@ -4072,6 +4122,12 @@ let private runScaffold (opts: Options) (plan: CatalogPlan option) : int =
                     Title = "coordination"
                     Outcome = outcome
                 }
+
+            // A refused (digest-mismatched) kit leaves the scaffold without coordination and the run
+            // incomplete: never continue to security obligations for a board that was not wired.
+            (match outcome with
+             | Failed _ -> fatal <- true
+             | _ -> ())
 
         // 5b · repository issue-intake policy. This is intentionally a distinct, typed step from
         // board wiring: a board can be readable while its repository has not been created yet, and
@@ -4225,11 +4281,17 @@ let private retrofitHeader (opts: RetrofitOptions) =
 /// Retrofit the coordination kit + board env onto an already-scaffolded workspace. Idempotent: it
 /// materializes only what is missing, repairs only what has drifted, and no-ops cleanly on a coherent
 /// workspace. Refuses (exit 2) a directory that is not a scaffolded workspace (no `.fsgg/`). Exit 1
-/// only when the kit could not be materialized AT ALL (every fetch failed on an unwired workspace);
-/// otherwise 0, mirroring the best-effort contract of the scaffold-time coordination step.
+/// when the kit could not be materialized AT ALL (every fetch failed on an unwired workspace) or when
+/// the pinned-kit verification refuses it (digest mismatch, malformed manifest, unpinned `--ref`),
+/// in which case nothing is written; otherwise 0, mirroring the best-effort contract of the
+/// scaffold-time coordination step for files that merely cannot be fetched.
 let private runRetrofit (opts: RetrofitOptions) : int =
     retrofitHeader opts
     let fsggDir = Path.Combine(opts.Target, ".fsgg")
+    // The next Wizard run on a workspace created by Wizard 0.23.0 moves its members out of the
+    // SDD-owned provenance before anything else reads or guards it.
+    if Directory.Exists fsggDir then
+        migrateLegacyWizardState opts.Target
 
     if opts.BoardBinding.IsSome || opts.BoardKitRef.IsSome then
         if not (Directory.Exists fsggDir) then
@@ -4300,9 +4362,24 @@ let private runRetrofit (opts: RetrofitOptions) : int =
         for p in report.Problems do
             AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s" (Markup.Escape p))
 
-        if changed then
-            // Fresh materialization and/or drift repair happened → record it in the provenance log.
-            recordRetrofit opts.Target opts materialized drift
+        if not (List.isEmpty report.Refused) then
+            // Pinned-kit verification failed: nothing from the kit was written and no kit-owned file was modified
+            // (a legacy-state migration, which precedes the kit fetch, may already have run).
+            let panel =
+                Panel(
+                    sprintf
+                        "[red]the coordination kit failed pinned verification[/] — nothing from the kit was written.\n\n%s"
+                        (String.Join("\n", report.Refused |> List.map (fun r -> "  • " + Markup.Escape r)))
+                )
+
+            panel.Header <- PanelHeader "[red]retrofit refused[/]"
+            panel.Border <- BoxBorder.Rounded
+            panel.Padding <- Padding(1, 0, 1, 0)
+            AnsiConsole.Write panel
+            1
+        elif changed then
+            // Fresh materialization and/or drift repair happened → record it in the retrofit log.
+            let recorded = recordRetrofit opts.Target opts materialized drift
 
             if not (List.isEmpty materialized) then
                 AnsiConsole.MarkupLine(
@@ -4325,12 +4402,19 @@ let private runRetrofit (opts: RetrofitOptions) : int =
                     sprintf "  [grey]· %d piece(s) already coherent — left untouched[/]" report.Kept.Length
                 )
 
-            AnsiConsole.MarkupLine(
-                sprintf
-                    "  [green]✓[/] recorded retrofit in [grey].fsgg/scaffold-provenance.json[/] — board [aqua]%s/%s[/]"
-                    (Markup.Escape opts.BoardOwner)
-                    (Markup.Escape opts.BoardTitle)
-            )
+            match recorded with
+            | Ok() ->
+                AnsiConsole.MarkupLine(
+                    sprintf
+                        "  [green]✓[/] recorded retrofit in [grey]%s[/] — board [aqua]%s/%s[/]"
+                        RetrofitLog.relativePath
+                        (Markup.Escape opts.BoardOwner)
+                        (Markup.Escape opts.BoardTitle)
+                )
+            | Error reason ->
+                AnsiConsole.MarkupLine(
+                    sprintf "  [yellow]⚠[/] the retrofit log %s could not be written: %s" RetrofitLog.relativePath (Markup.Escape reason)
+                )
 
             if opts.BoardOwner.ToLowerInvariant() <> "fs-gg" then
                 AnsiConsole.MarkupLine
@@ -4347,7 +4431,7 @@ let private runRetrofit (opts: RetrofitOptions) : int =
             0
         elif not (List.isEmpty report.Kept) then
             // Nothing written, but pieces are present → already wired. Refuse cleanly (no partial state):
-            // the kit is coherent, so the retrofit is a no-op and no provenance entry is appended.
+            // the kit is coherent, so the retrofit is a no-op and no retrofit-log entry is appended.
             AnsiConsole.MarkupLine(
                 sprintf "  [green]✓[/] already wired — %d kit piece(s) coherent, no drift to re-emit" report.Kept.Length
             )
@@ -4370,7 +4454,7 @@ let private runRetrofit (opts: RetrofitOptions) : int =
             // was materialized, so there is no partial state; report the failure and exit non-zero.
             let panel =
                 Panel(
-                    "[red]could not vendor the coordination kit[/] — every fetch from FS-GG/.github failed.\n\nCheck network reachability and re-run; nothing was written, so the workspace is unchanged."
+                    "[red]could not vendor the coordination kit[/] — every fetch from FS-GG/.github failed.\n\nCheck network reachability and re-run; nothing from the kit was written."
                 )
 
             panel.Header <- PanelHeader "[red]retrofit failed[/]"
@@ -4388,13 +4472,11 @@ let private clearRepositorySecurityObligation
     (prior: string)
     (actor: string)
     : Result<unit, string> =
-    let path = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
-
     try
-        if not (File.Exists path) then
-            Error(sprintf "security provenance is missing at %s" path)
-        else
-            let root = JsonNode.Parse(File.ReadAllText path).AsObject()
+        match SecurityObligations.load target with
+        | Error reason -> Error("security obligations are unreadable: " + reason)
+        | Ok None -> Error(sprintf "security obligations are missing at %s" (SecurityObligations.filePath target))
+        | Ok(Some root) ->
             let kept = JsonArray()
 
             match root.["securityObligations"] with
@@ -4422,10 +4504,9 @@ let private clearRepositorySecurityObligation
             receipt.["actor"] <- JsonValue.Create actor
             receipt.["source"] <- JsonValue.Create "GitHub GraphQL repository.issueCreationPolicy re-read"
             upsertSecurityReceipt root "repository-issue-policy" "repository" repository receipt
-            File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
-            Ok()
+            SecurityObligations.save target root
     with ex ->
-        Error("security provenance persistence failed: " + ex.Message)
+        Error("security obligation persistence failed: " + ex.Message)
 
 let private persistProjectSecurityReceipt
     (target: string)
@@ -4437,13 +4518,11 @@ let private persistProjectSecurityReceipt
     (basePermission: string option)
     (effectiveWriters: string list option)
     : Result<unit, string> =
-    let path = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
-
     try
-        if not (File.Exists path) then
-            Error(sprintf "security provenance is missing at %s" path)
-        else
-            let root = JsonNode.Parse(File.ReadAllText path).AsObject()
+        match SecurityObligations.load target with
+        | Error reason -> Error("security obligations are unreadable: " + reason)
+        | Ok None -> Error(sprintf "security obligations are missing at %s" (SecurityObligations.filePath target))
+        | Ok(Some root) ->
             let kept = JsonArray()
 
             match root.["securityObligations"] with
@@ -4476,12 +4555,13 @@ let private persistProjectSecurityReceipt
                 project
                 (projectReceiptJson project projectId isPublic actor writers basePermission effectiveWriters)
 
-            File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
-            Ok()
+            SecurityObligations.save target root
     with ex ->
-        Error("security provenance persistence failed: " + ex.Message)
+        Error("security obligation persistence failed: " + ex.Message)
 
 let private runSecure (target: string option) (repository: string) : int =
+    target |> Option.iter migrateLegacyWizardState
+
     match secureRepository repository with
     | RepositorySecured(repo, prior, actor) ->
         match target with
@@ -4529,6 +4609,7 @@ let private runSecureProject
     (verifiedExclusiveWriters: string list option)
     : int =
     let owner, title = parseBoard board
+    migrateLegacyWizardState target
 
     match applyProjectVisibility owner title visibility with
     | ProjectPending(project, reason) ->
