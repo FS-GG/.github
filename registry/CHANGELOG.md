@@ -1,5 +1,41 @@
 # Registry changelog
 
+## 2026-10-30 — reconcile published NewSddWorkspace 0.23.0 (FS-GG/.github#3010)
+
+Flip `new-sdd-workspace` `package-version` and `package-tag` to **0.23.0** and `new-sdd-workspace/v0.23.0`. The `version` line already read 0.23.0 as source/release-route preparation; it now records accepted publication, with the preparation text kept as a PRIOR chain. The tag points at source `5da304e37e61a335737e1c362919872778fdea60`.
+
+- **Candidate:** [41055024001/a1](https://github.com/FS-GG/.github/actions/runs/41055024001), artifact 12976324106 (raw zip `c2770241…`). The package is `e81657fb…` (93 entries) with producer payload `8c31c973…`, under release qualification `fsgg.creator023-release-qualification/1` over genuine promoted coherent 0.113.0.
+- **Preflight:** [41055967892](https://github.com/FS-GG/.github/actions/runs/41055967892) with `publish=false` and `verify_nuget_login=true` passed: fresh journal, no mutation, NuGet OIDC exchange worked.
+- **Publication:** [41056332123/a1](https://github.com/FS-GG/.github/actions/runs/41056332123) verified all eight effects (tag, draft, github, nuget, package-asset, manifest-asset, publication-journal-asset, promote) at final generation 17 on the fresh journal `board-v2-product-creator-023`. Release 429016553 is promoted but not latest; `coherent-set/v0.113.0` keeps that. Recorded executor-side deviation: the run used `verify_nuget_login=false` instead of the admitted same inputs, after the preflight had proven the login. It changes no effect identity.
+- **Readback:** the release asset is byte-identical to the candidate. The signed nuget.org archive (`39d17aeb…`) holds the same 93 entries plus only `.signature.p7s`, shares producer payload `8c31c973…`, and its nuspec names 0.23.0 at `5da304e3`. The GitHub feed returned 403 to root's token, so it rests on the hosted journal observation (`preparedArchiveEqual` and `producerPayloadEqual` true) plus the identical release asset.
+
+Installed and consumer adoption of Wizard 0.23.0 (public install, four-product creation against `fs-gg-templates/v0.20.1`, build, test, Doctor and knowledge on public tools) remains open under #3010 Step 3. Published 0.22.0 and its journals stay historical.
+
+## 2026-10-30 — reconcile published Workspace.Template 0.20.1 (FS-GG/.github#3010)
+
+Reconcile `fs-gg-workspace-template` source/package **0.20.1** and `fs-gg-templates/v0.20.1`. The annotated tag
+`ff5caa76…` peels to register commit `df896c4bd587b5ef8dd990bc39c0dcb661bf2193` (FS.GG.Templates#815), which sits on
+qualified Templates main `fe24d30872c84d4c1c92afd7a05c5cf22d00bb10` (carrying #812, #814 and #806).
+
+- **Publication:** [release run 41042757474/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/41042757474) succeeded: route, pack, the release-route gate (register at `df896c4b` accepted payload `7c48b222…`) and `publish [org-publication-writer]` under the ADR-0097 lock. The run archive `e9775e14…` equals the run's `SHA256SUMS` and the GitHub Release asset.
+- **Readback:** the release asset's payload identity is `7c48b222…` with 620 entries. The signed nuget.org archive (`e84d5188…`) has the same 620 entries byte-for-byte plus only `.signature.p7s`, and its nuspec names 0.20.1 at `df896c4b`. The workflow receipts report `payloadExact: true` on both feeds. Root's token cannot read GitHub Packages directly, so that feed rests on the receipt plus the identical release asset.
+- **Qualification:** accepted by root on [FS-GG/.github#3010 comment 6520252958](https://github.com/FS-GG/.github/issues/3010#issuecomment-6520252958) on fdev (glibc 2.44 carrier). The archive was packed once; the TypeScript, JavaScript, Rust and Go CLI products each passed 8/8 scaffold controls and Governance Verify with all 8 gates, with zero scan findings and `doctor isCoherent:true`. Wizard 0.23.0 built from source passed 64 of 65 controls; the one FAIL is a driver-literal harness defect that root accepted as satisfied by host readback.
+- **Content:** 0.20.1 is a PATCH successor to 0.20.0. It adopts Rendering 0.32.4 in the fable-game defaults and root README (#806), and adds the comment-aware fable-bindings closure scanner with current BabylonJS bindings (#812) and the curated PixiJS 8.22.0 2D corpus (#814). The four CLI product sources and the typed catalog are unchanged.
+- **Edge:** the `templates` -> `rendering` edge now reads `fs-gg-ui-template@0.32.4`: the published package's provider pin and SvgFoundation/Studio defaults select 0.32.4 (verified in the published nuget.org archive).
+
+Installed and full Wizard qualification of 0.20.1 remains open under #3010 (Wizard 0.23.0 publication is .github#4951). 0.20.0 stays historical.
+
+## 2026-10-30 — reconcile published FS.GG.UI 0.32.4 (FS-GG/.github#4817)
+
+Flip `fs-gg-ui-template` source, package and tag to **0.32.4**. The retained original producer is `4ede04be66cedffc8551cd14045bab714aa358a7` (candidate run 40737624380/a1, artifact 12838338215, custody `89ea6424…`).
+
+- **Tag settlement:** the three lightweight tags were created by fenced App-token settlement [40997578723/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/40997578723), with sameIntentConvergence Verified and the workflows restored.
+- **Publication:** the ADR-0097-locked publisher [40997955966/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/40997955966) ran at executor `f8f23a7a`. It pushed the canary FS.GG.UI.Build, then 19/19 to both feeds, with `feedSplit: none`.
+- **Readback:** an independent readback found 19/19 nuget.org nuspecs, and the BOM pins `[0.32.4]`. nuget.org entries equal the originals excluding `.signature.p7s`.
+- **Adoption:** Templates source adoption is FS.GG.Templates#806 (`fe24d308`), and Release C public-producer qualification passed on public 0.32.4 (run 41034550000).
+
+This closes the `feed` coherence drift, where the registry declared 0.32.3 while both feeds served 0.32.4. Installed and participant AT journeys remain open under #4817. 0.32.3 stays historical.
+
 ## 2026-10-25 — reconcile published Workspace.Template 0.20.0 (FS-GG/FS.GG.Templates#441)
 
 Reconcile `fs-gg-workspace-template` source/package **0.20.0** and `fs-gg-templates/v0.20.0` after the
@@ -184,6 +220,16 @@ review M4). The typed validator (`fsgg-sdd registry validate`) never saw that co
 no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
+
+- **2026-10-30** — — CREATOR0231 RELEASE ROUTE (.github; #4964, under #3010): add the CURRENT_0231 release route for NewSddWorkspace source 0.23.1, which repairs default-coordination creations of the published 0.23.0 (the Wizard no longer writes `securityObligations`, `verifiedSecurityReceipts` or `retrofits` into the SDD-owned `.fsgg/scaffold-provenance.json`, whose strict SDD CLI 2.5.3 schema rejected them; they live in Wizard-owned `.fsgg/security-obligations.json` and `.fsgg/coordination-retrofits.json` and are migrated on the next `secure`/`retrofit`/`--upgrade` run) and pins the coordination kit to FS-GG/.github a9a6f77f32bd by sha256 anchors instead of the moving `main`. The route keeps the genuine promoted coherent 0.113.0 dependency pin (release 421880935, immutable source 79db622f) shared with 0.23.0 and uses the fresh journal board-v2-product-creator-0231. The published 0.23.0 route, its 023 journal, and the 022r1 and abandoned 022 journals stay immutable history. Published package-version/tag stay 0.23.0; no 0.23.1 candidate, preflight, publication or installed adoption is asserted.
+
+- **2026-10-30** — — CREATOR023 RELEASE ROUTE (.github; #3010): add the CURRENT_023 release route for NewSddWorkspace source 0.23.0 (typed provider catalog creation with stable SDD CLI 2.5.3 or newer, describing the published Templates 0.20.1) over genuine promoted coherent 0.113.0 (release 421880935, immutable source 79db622f) with the fresh journal board-v2-product-creator-023. The published 022 route, its 022r1 journal and the abandoned 022 journal stay immutable history. Published package-version/tag stay 0.22.0; no 023 candidate, preflight, publication or installed adoption is asserted, and Templates 0.20.1 is already published and reconciled separately.
+
+- **2026-10-30** — CREATOR023 PUBLICATION ACCEPTED (github; #3010): record candidate 41055024001/a1 (package e81657fb, 93 entries, producer payload 8c31c973…) and original publisher 41056332123/a1, all eight effects/final17 on fresh journal board-v2-product-creator-023, promoted release 429016553 (not latest) with tag new-sdd-workspace/v0.23.0 -> 5da304e3. Release asset and signed public NuGet 39d17aeb… share the producer payload (nuget.org adds only .signature.p7s); hosted GitHub-feed observation retained, local GitHub 403 remains a limit. Executor set verify_nuget_login=false on the publish run after a passing login preflight 41055967892 (recorded deviation, no effect identity change). Advances package-version/tag from 0.22.0; installed adoption remains separate; see the dated section above.
+
+- **2026-10-30** — RECONCILE PUBLISHED WORKSPACE.TEMPLATE 0.20.1 (fs-gg-workspace-template; .github#3010): register commit df896c4bd587b5ef8dd990bc39c0dcb661bf2193 (Templates#815) on qualified main fe24d308, original publisher 41042757474/a1 on both feeds (payload 7c48b222…, 620 entries; nuget.org adds only .signature.p7s), tag fs-gg-templates/v0.20.1 -> ff5caa76… peels to the register commit; adopts Rendering 0.32.4 (Templates#806) so the templates -> rendering edge advances to 0.32.4; four-product qualification accepted by root (#3010 comment 6520252958); see the dated section above.
+
+- **2026-10-30** — RECONCILE PUBLISHED FS.GG.UI 0.32.4 (fs-gg-ui-template; .github#4817): retained original producer 4ede04be66cedffc8551cd14045bab714aa358a7, tags settled by fenced App-token settlement 40997578723/a1, ADR-0097-locked publisher 40997955966/a1 at executor f8f23a7a pushed 19/19 to both feeds (canary FS.GG.UI.Build, feedSplit none, nuget.org readback 19/19); Templates adoption #806 (fe24d308); closes the feed-coherence drift (registry 0.32.3 vs feeds 0.32.4); see the dated section above.
 
 - **2026-10-25** — — RECONCILE PUBLISHED WORKSPACE.TEMPLATE 0.20.0 (Workspace.Template 0.20.0 (Templates#441)): source 1b9b1ca92556eb1acd0e4d1c9cb851a8c7906f86, original publisher 40163553390/a1 on both feeds (589 signature-excluded entries), tag fs-gg-templates/v0.20.0 -> 2285deef…; adds the TypeScript, JavaScript, Rust and Go CLI workspace providers qualified through SDD CLI 2.5.1 / Governance CLI 1.15.0 (payload 825a0815…); see the dated section above for the full evidence.
 

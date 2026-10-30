@@ -428,3 +428,79 @@ archive, closure or issue-body operation ran. The retired lifecycle writer and s
 archive/bootstrap boundaries are unchanged. This supersedes only the pending native notice gate;
 remaining approved carryover and unselected outcome/consumer authority keep .4 open. No additional
 identity, including SDD#935, is selected. Publication .5 remains complete and .6 separate.
+
+## Batched programme successor preparation — offline planner ([#4941](https://github.com/FS-GG/.github/issues/4941), PR 1)
+
+`tools/BoardV2Import` gains four offline subcommands that replace the per-cohort cloned wrapper scripts. The
+decision logic is the pure planner `FS.GG.Coord.GitHub/V2Enrollment`; the subcommands only read files, call it
+and write outputs with the same exclusive `CreateNew` 0600 custody, directory fsync and readback as
+`prepare-programme`. None performs a native read or write, and none grants enrollment, admission or
+implementation authority.
+
+| Subcommand | Reads | Writes |
+|---|---|---|
+| `plan-successor --request --native-facts --repository --template-output --payload-output` | closed request, read-only native facts, predecessor private pair, protected public blob at the merge sha | successor binding template and payload (private custody) |
+| `prepare-successor --request --template --payload --private-output --public-output --receipt-output` | request, template, payload, predecessor private pair | the successor pair and a closed non-secret `receipt.json` |
+| `bind-runtime --private-binding --repository --merge-sha --runtime-output` | successor private binding, public blob at the merge | runtime binding differing only in the 40 hex bytes of `populationRevision` |
+| `render-carrier --receipt --output` | `receipt.json` only | fixed-template carrier document |
+
+The successor payload is the predecessor payload bytes before its closing `]}`, a comma, the appended rows and the
+closing `]}`: a raw-byte splice, never a re-serialization, so the prefix is exact by construction and is verified
+again independently after the pair exists (`prefixPreserved`, `headerPreserved`, `recomputedCommitment`). A
+Roadmap is generated only from `programmeIssue3008` or `protectedDoc{repo,path}` and must pass the installed
+reader's own plan grammar (`V2ProjectionSource.programmePlanBlobGrammar`, now shared by the reader), which refuses an
+Outcome issue URL before anything is constructed. The planner mirrors the installed 100-row ceiling and does not lift it.
+
+Refusals print one closed code on stderr and never payload, nonce, path or input text: `DuplicateIssue`,
+`AlreadyEnrolled`, `IsPullRequest`, `NodeIdMismatch`, `NotProjectMember`, `RepositoryOutsideBinding`,
+`PredecessorCommitmentMismatch`, `PrefixNotPreserved`, `PlanNotAdmitted`, `PlanBlobAbsentOnMain`, `RowCapExceeded`,
+`ConflictingHumanValue`, `PartialVisibility`, `OutputExists`, `MalformedInput` and, split by cause (PR 2),
+`InputUnreadable` (an input file is absent, linked, oversize or unreadable), `CustodyUnavailable` (an output could not be
+created, synced or read back), `GitReadFailed` (the protected public blob could not be read through git; a blob that is read
+and does not authenticate stays `PredecessorCommitmentMismatch`), `NativeReadFailed` (a read-only GET failed or returned an
+unusable body) and `SuccessorNotRederived`. A `CreateNew` that loses a race is `OutputExists`, not a custody failure.
+
+## Supported-route preflight and online resolution ([#4941](https://github.com/FS-GG/.github/issues/4941), PR 2)
+
+`prepare-successor` now takes `--native-facts` and `--repository` as well and re-derives the successor from the request,
+the predecessor and the facts before the constructor sees anything. The supplied template and payload must be exactly
+that: a hand-edited appended Roadmap that the installed constructor would accept refuses as `PlanNotAdmitted`, a node id the
+facts do not support as `NodeIdMismatch`, a changed prefix as `PrefixNotPreserved` and any other difference as
+`SuccessorNotRederived`, all before any output exists.
+
+`resolve-issues --request --native-facts-output` is the online half of `plan-successor`. It is read-only by construction:
+the only effect is a `GET` of an `/orgs/` or `/repos/` path through the GitHub CLI with a fixed argument vector (`--method
+GET`, never a field, input or GraphQL endpoint). It reads the Project, its fields and every item, each request issue and
+each protected plan document on `main`, and writes the `fsgg.board-v2-native-facts/1` document the planner consumes. A clean
+404 on an issue is reported as partial visibility and refused by the planner; any other failed read is `NativeReadFailed` and
+writes nothing.
+
+`preflight --route --stage --request --repository (--online | --native-facts)` returns a typed verdict per registered check
+for the next stage of a closed route: `SupportedForNextStage` (with evidence), `Unsupported` (an exact reason and who can
+supply what is missing) or `Unknown` (an exact gap). The exit code is 0 only when every check is supported, 10 when any is
+unsupported and 11 when none is unsupported but any is unknown; unknown is never 0, and 2 stays a refusal to run. Registered
+routes are `ProgrammeEnrollmentSuccessor` (stages `PlanSuccessor`, `PrepareSuccessor`, `BindRuntime`),
+`RoutineDelivery` and `PublicationWriterRegistration`; the latter two have no checks yet and report `Unknown`.
+
+| Check | Decided from | Unsupported when | Unknown when |
+|---|---|---|---|
+| `ConstructorIdentity` | running constructor source revision, intended protected main | they differ | either unreadable |
+| `PredecessorIntegrity` | private pair, public blob at the recorded merge | the commitment differs, or the payload cannot be spliced | either unreadable |
+| `RuntimeBindingIntegrity` | runtime binding against the private pair | it differs in anything but `populationRevision`, or that is not the recorded merge | not supplied |
+| `FactsComplete`, `IssueKind`, `IssueIdentity`, `ProjectMembership`, `RepositoryInBinding`, `NotAlreadyEnrolled`, `RoadmapConflict` | the planner's own per-row findings, all of them rather than the first | a row fails the check (the row is named) | facts partial or unobserved |
+| `PlanGrammar` | the installed plan grammar; the installed artifact sha against a known table | a plan reference is not admitted | the installed artifact is not in the known table |
+| `PlanBlob` | plan documents on `main` now | a document is absent | facts were supplied rather than read now |
+| `RowCap` | predecessor rows plus request rows against 100 | the total exceeds the cap | predecessor unreadable |
+| `PayloadBound`, `TemplateBound` | computed payload and private binding sizes against the installed reader bounds | either is exceeded | inputs unreadable |
+| `ToolchainLock` | locked FSharp.Core `contentHash` against the cache's `.nupkg.metadata` | they differ (the NU1403 risk) | either unreadable |
+| `MemoryHeadroom` | smallest remaining bytes over the process cgroup chain | below the minimum | cgroup unreadable |
+| `ProjectAutoAdd` | Project items not in the binding's enrolled set | never: no breaking condition is proven | any lacks Status, Track or Work level (each named with its missing fields), or items unobserved |
+| `AdjacencyChurn` (`BindRuntime`) | unrelated item `updated_at` within the window | never | any unrelated update in the window |
+
+`ProjectAutoAdd` is never `Unsupported`: on 2026-10-30 the installed caller kept working with a bare unenrolled membership (and three legacy partial ones) present, so that such memberships break it is unproven; only a sudden rise in them matched the later refusal, whose code was coarse. They are reported as `Unknown` with each item and its missing fields, and the JSON finding carries a note saying so. No `Unsupported` verdict exists for a condition that is not proven.
+
+The toolchain check compares the lock file with `.nupkg.metadata`, not with the cache's `.nupkg.sha512`, which is a
+different digest of the same package and would report a healthy cache as mismatched. The known-reader table is supplied
+(`--known-readers`, one sha256 per line) and is empty by default, so the installed grammar is `Unknown` until a verified
+installed artifact is listed. The intended protected main defaults to the checkout's local `refs/remotes/origin/main`, so fetch first or pass `--main-revision`. The preflight grants no authority, performs no mutation and prints no payload, nonce, private
+binding content or node id; engine registration and lifting the row cap remain later deliveries of the same issue.

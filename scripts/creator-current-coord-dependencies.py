@@ -16,16 +16,19 @@ import subprocess
 import urllib.request
 
 from creator_source_qualification import SOURCE_020, qualification_version
-from new_sdd_workspace_successor_execution import CURRENT_020, CURRENT_021, CURRENT_022
+from new_sdd_workspace_successor_execution import CURRENT_020, CURRENT_021, CURRENT_022, CURRENT_023, CURRENT_0231
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PIN_PATH = pathlib.Path('scripts/creator-current-coord-dependencies.json')
 PIN_021_PATH = pathlib.Path('scripts/creator021-coord-dependencies.json')
 PIN_022_PATH = pathlib.Path('scripts/creator022-coord-dependencies.json')
+PIN_023_PATH = pathlib.Path('scripts/creator023-coord-dependencies.json')
 # Each release binding selects exactly one fixed promoted coherent pin; none falls back to another.
 RELEASE_PINS = ((CURRENT_020, PIN_PATH, '0.108.0'), (CURRENT_021, PIN_021_PATH, '0.110.0'),
-                (CURRENT_022, PIN_022_PATH, '0.112.0'))
-RELEASE_QUALIFIED = (CURRENT_021, CURRENT_022)  # explicit current-route release qualification profiles
+                (CURRENT_022, PIN_022_PATH, '0.112.0'), (CURRENT_023, PIN_023_PATH, '0.113.0'),
+                # 0.23.1 keeps the coherent 0.113.0 dependency pin: one genuine promoted pin file, two bindings.
+                (CURRENT_0231, PIN_023_PATH, '0.113.0'))
+RELEASE_QUALIFIED = (CURRENT_021, CURRENT_022, CURRENT_023, CURRENT_0231)  # explicit current-route release qualification profiles
 
 
 def release_pin(binding):
@@ -269,7 +272,7 @@ def verify_evidence(body, package, manifest, pin, *, source_binding=None):
 
 
 def release_evidence(package, source_sha, pin, *, fixtures_passed, release_binding=CURRENT_020):
-    """Recompute a closed020, 021 or 022 qualification, never upgrade an old receipt.
+    """Recompute a closed020, 021, 022, 023 or 0231 qualification, never upgrade an old receipt.
 
     The successful original candidate workflow supplies the compiled fixture verdict;
     its authenticated run/archive is checked independently by the artifact reader.
@@ -279,7 +282,9 @@ def release_evidence(package, source_sha, pin, *, fixtures_passed, release_bindi
             'unknown Creator release qualification binding')
     result = evidence(package, source_sha, pin, fixtures_passed=fixtures_passed,
                       **({'release_binding': release_binding} if release_binding is not CURRENT_020 else {'source_binding': SOURCE_020}))
-    schema = 'fsgg.creator0' + release_binding.version.split('.')[1] + '-release-qualification/1'
+    # The profile id is patch-aware: 0.23.0 keeps fsgg.creator023-..., 0.23.1 is fsgg.creator0231-...
+    parts = release_binding.version.split('.')
+    schema = 'fsgg.creator0' + parts[1] + ('' if parts[2] == '0' else parts[2]) + '-release-qualification/1'
     return {**result, 'schema': schema,
             'releaseBinding': release_binding.tag, 'sourceQualificationOnly': False, 'releaseEligible': True}
 
@@ -303,13 +308,13 @@ if __name__ == '__main__':
     parser.add_argument('--package', type=pathlib.Path)
     parser.add_argument('--source-sha')
     args = parser.parse_args()
-    pin = load_pin(release_binding=CURRENT_022)
+    pin = load_pin(release_binding=CURRENT_0231)
     if args.command == 'preflight':
         print(json.dumps({'mode': MODE, 'dependencyPinSha256': pin_digest(pin)}))
     elif args.command == 'acquire':
         print(json.dumps(acquire(args.package, pin), sort_keys=True))
     elif args.command == 'verify-package':
-        print(json.dumps(release_evidence(args.package, args.source_sha, pin, fixtures_passed=True, release_binding=CURRENT_022), sort_keys=True))
+        print(json.dumps(release_evidence(args.package, args.source_sha, pin, fixtures_passed=True, release_binding=CURRENT_0231), sort_keys=True))
     else:
         require(args.producer_source is not None, 'isolated producer source required')
         if args.command == 'verify-source':

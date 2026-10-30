@@ -107,7 +107,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-10-24"
+updated: "2026-10-30"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -317,12 +317,23 @@ skills:
   # editing their `materializes-when` here — the producer's manifest is authoritative and check 6
   # would red on the divergence.
   # ------------------------------------------------------------------------------------------------
-  - { id: fable-bindings,         scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-bindings/SKILL.md, sha256: ddc040fd17342b30ef84523c5b7ccd2d974278d7704f09e7357495dead5fccd5, materializes-when: "template in [fable-bindings]" }
+  - { id: fable-bindings,         scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-bindings/SKILL.md, sha256: 8473e1792cba6589d36d87cc491e7597c503156d0e007f1b26225bfc83ec35ff, materializes-when: "template in [fable-bindings]" }
   - { id: fable-interop,          scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-interop/SKILL.md, sha256: f24a1daa9fd9828f9299062413a1fcd9598527165b13b6a608ddd9d15dce55b0, materializes-when: "template in [fable-game, fable-bindings]" }
   - { id: fable-project,          scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-project/SKILL.md, sha256: 3513c6c6b9c754b8ff5063204d0d254a98533dba76439ff42b945e2c3bf67b91, materializes-when: "template in [fable-game, fable-bindings]" }
   - { id: fable-http-codecs,      scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-http-codecs/SKILL.md, sha256: 0966388c4db9350d96c246f1d280e5830220dc8589ee95684597046f91f1d776, materializes-when: "template in [fable-game]" }
   - { id: fable-signalr,          scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-signalr/SKILL.md, sha256: d02815368cdf32296d061d4755a683e1c30bbed5186fe7d9d1cf78d747eee3c8, materializes-when: "template in [fable-game]" }
   - { id: fable-testing,          scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-testing/SKILL.md, sha256: 5d170adb4637b65b05e0574c5d69dc7e2aa7807729e8c3498c40f6051c14a16c, materializes-when: "template in [fable-game, fable-bindings]" }
+  # CLI-product skills (.github#4730): FS.GG.Templates#771 added these eight with the typed CLI provider
+  # catalog (Templates#441), each `template in [<lang>-cli]`; reconciled verbatim from its manifest by
+  # `--write`. Their `template` axis is the same producer-resolved vocabulary as the six rows above.
+  - { id: go-testing,             scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/go-testing/SKILL.md, sha256: ec475ed662f2d10dfad5159a86c4a4eea15b3c5507532a1192a2a0ec9da2d239, materializes-when: "template in [go-cli]" }
+  - { id: go-workspace,           scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/go-workspace/SKILL.md, sha256: abdba33dc1c8885cefe069b14a623e7bbd4b44478c1975ef0efcf7b1645d42e4, materializes-when: "template in [go-cli]" }
+  - { id: javascript-project,     scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/javascript-project/SKILL.md, sha256: 6c350fb6a092c02f686e90c2550ab88884819f8d516417bffbfac5e098ac5a8d, materializes-when: "template in [javascript-cli]" }
+  - { id: node-testing,           scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/node-testing/SKILL.md, sha256: 15df45cff80e8d0564fee331093d19fda0f573f9bc565c2ae31568451f83a853, materializes-when: "template in [typescript-cli, javascript-cli]" }
+  - { id: node-workspace,         scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/node-workspace/SKILL.md, sha256: 289b7d8933e59ddb9b1ed063e55bd857b26cee00c1359fcffbff2a5962672cd8, materializes-when: "template in [typescript-cli, javascript-cli]" }
+  - { id: rust-safety,            scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/rust-safety/SKILL.md, sha256: b782f41b759c7182e20bfb1626292b819ae42ff6a7657e0ff994f3d30c3b165a, materializes-when: "template in [rust-cli]" }
+  - { id: rust-workspace,         scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/rust-workspace/SKILL.md, sha256: b72aad43af4147f2ba32210cf869b66044866963ba2fb0c2e2e02556f4f5587b, materializes-when: "template in [rust-cli]" }
+  - { id: typescript-project,     scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/typescript-project/SKILL.md, sha256: 9cc7f4d1fab814352f45634a20122c615b623b1ddfeea2888868f5300182cb1d, materializes-when: "template in [typescript-cli]" }
 
   # ------------------------------------------------------------------------------------------------
   # DRIVER skills — `.github`-AUTHORED, product-materialized (ADR-0054, resolves #1224; ADR-0053).
@@ -347,7 +358,7 @@ skills:
   # ------------------------------------------------------------------------------------------------
   - { id: work-roadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: 48ee31933a1eb4114cf177bda85d8b7bb5bf0310b396b3915ebb85c214ac3f2e, materializes-when: "always" }
   # Canonical coordinator recovery/routine closure (.github#4641); old programme is a redirect only.
-  - { id: agent-handoff, scope: driver, owner: .github, source: .github/.claude/skills/agent-handoff/SKILL.md, sha256: 72fb44aaa4b5a4ee5b38e0cd07c7b4e9a7b0d2baf17b835dbe20eaaf046fd133, materializes-when: always }
+  - { id: agent-handoff, scope: driver, owner: .github, source: .github/.claude/skills/agent-handoff/SKILL.md, sha256: dd69bc096848ce58d865c785b0fa48a6a049d8d701c00b178d2109739d5b2121, materializes-when: always }
   - { id: continue-from-handoff, scope: driver, owner: .github, source: .github/.claude/skills/continue-from-handoff/SKILL.md, sha256: ee06790ca7a7238d401d61a2dc50ec214ce40a21193e694b60df2ec9bfd66939, materializes-when: always }
   - { id: routine-decisions, scope: driver, owner: .github, source: .github/.claude/skills/routine-decisions/SKILL.md, sha256: 7e7aa6e73d158b9bab2f69c873da502180951289c728669d3bae0620698592f4, materializes-when: always }
   - { id: stop-with-handoff, scope: driver, owner: .github, source: .github/.claude/skills/stop-with-handoff/SKILL.md, sha256: 0405c82818f7640c23e675813eb5b8c876c03e1c05a94da288131b6246edae05, materializes-when: always }
@@ -372,7 +383,7 @@ skills:
   # atlas — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: atlas,                  scope: driver,  owner: .github,         source: .github/.claude/skills/atlas/SKILL.md, sha256: c18e56fcc56abf80903e2fc6829cd94b44f42947724a26318ebcbf1ac5e1b35b, materializes-when: always }
+  - { id: atlas,                  scope: driver,  owner: .github,         source: .github/.claude/skills/atlas/SKILL.md, sha256: a1383a9a8029f91930798e7624f5de87db68b0b6f575ea4d899761449e9fa423, materializes-when: always }
 
   # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
   #
@@ -398,7 +409,7 @@ skills:
   # publishing-and-deployment — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: c02aaeffe3383a740fbf8e0983b9a448c6357cfa20e08cdb40d0f9b97b93f1fc, materializes-when: "false" }
+  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 762d9d2bf5972dc4d8d17c7bcd4148f1dc2d80f7d53baa77821ff6f71c53854d, materializes-when: "false" }
   # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.

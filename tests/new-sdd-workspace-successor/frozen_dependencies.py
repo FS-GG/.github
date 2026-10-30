@@ -152,7 +152,7 @@ class FrozenDependencyControls(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/release-new-sdd-workspace-successor-candidate.yml").read_text()
         # The exact historical pin/helper remain qualified above; the current 0.18
         # candidate selects the separate current adapter, never rebinds this pin.
-        self.assertIn('test "$version" = 0.22.0', workflow)
+        self.assertIn('test "$version" = 0.23.1', workflow)
         self.assertIn('bash "$work/creator/tests/new-sdd-workspace/run.sh"', workflow)
         self.assertNotIn(pin["downloadUrl"], workflow)
         self.assertIn("FsggCurrentCoordDependencies=true", workflow)

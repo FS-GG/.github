@@ -739,3 +739,42 @@ Any one of these, and the decision is re-opened rather than eroded:
   change three required gates on the strength of a documentation sentence either.
 * A required verdict is measurably moved by a hub commit again, as in #1584. One instance is a
   measurement; a second is this decision being wrong.
+
+## A second worked instance: `materialize / closing-keywords`
+
+The PR-body closing-keyword lint ([#4730](https://github.com/FS-GG/.github/issues/4730)) is the same
+route again: a job in `kit-materialize.yml`, so every receiver that calls that file at `@main` reports it
+with no receiver-side edit. That is six of the seven: FS.GG.Templates calls it at the pinned commit
+`941a82c0e06c9afe9db4c88fc29997d7627a5895`, which predates the job, so Templates does not report it until
+its pin moves. GitHub binds a closing keyword next to an issue reference and ignores the
+words around it, so a body saying a PR does *not* close an issue closes it; FS.GG.Game#731 did exactly
+that to FS.GG.Game#730.
+
+**The context string is `materialize / closing-keywords`**, and like `kit-bump-shape` it is required in
+zero repositories: a red is visible in the check list and blocks nothing. Arm it the way this page
+arms any context (dry run, watch it report, then `repos.sh require-context`), never first.
+
+| | |
+| --- | --- |
+| Rule | [`scripts/check-closing-keywords.py`](../../scripts/check-closing-keywords.py), the hub's own, fetched at the reusable workflow's own commit (`github.job_workflow_sha`) |
+| Subject | the PR body as raw text, and the PR **title** (plain text, no opt-in: under `COMMIT_OR_PR_TITLE` it becomes the squash commit subject, as .github#4963 showed). Live read first, event payload as fallback, so a re-run after an edit or retitle judges the edit. Commit subjects are read through the API and only **warn** |
+| Fails | any of the nine GitHub keywords next to `#N`, `GH-N`, `owner/repo#N` or an issue URL, negated or not, in prose, a code span, a fence or an indented block |
+| Passes | `Refs #N`; a keyword with no reference after it; `resolving`/`closing`/`fixing` (not GitHub keywords); the **opt-in** declaration line, `Closes #N.` alone on a line |
+| Reach | six of seven on opened, synchronize and reopened: SDD, Rendering, Governance, Game, Audio and Net. **Templates is excluded** (pinned to `941a82c0…`, before the job existed). A caller re-checks an edit or retitle only if it lists `edited`: SDD and Rendering did already; Governance, Game, Audio and Net were adopted by one PR each adding `edited` to the `pull_request` types |
+| Proof | [`tests/closing-keywords/product-lint.sh`](../../tests/closing-keywords/product-lint.sh): the keyword matrix, the code-span and fence decision, and the real job step run against a stub `gh` |
+
+**Before arming `materialize / closing-keywords` as required**, all of these must hold:
+
+1. **Move the Templates pin** past a commit that carries the job. Until then the context never reports on
+   Templates, and requiring it holds every Templates pull request at "Expected" (#1508).
+2. **Merge the four `edited` adoption PRs** (Governance, Game, Audio, Net), or accept that a body edit or
+   retitle there is only re-checked by the next push or a manual re-run.
+3. **Resolve the Renovate pattern.** Some Renovate bodies close an issue in prose, for example
+   "Coordinated migration: Closes #254; parent ..." (FS.GG.Audio#251, FS.GG.Net#69). The rule flags it,
+   correctly, because it will close the issue. Either the coordinated-migration template declares the close
+   on a line of its own, or an explicit exemption is decided. Otherwise a required context reds those
+   bot pull requests. A 696-pull-request backtest (2026-10-30) found 5 findings, 2 of them Renovate.
+4. The usual dry run and a period of observed real reports.
+
+Not covered, by design: whole commit messages beyond their subject line (the hub's own check reads them;
+a receiver check would need a full-depth checkout on every pull request).

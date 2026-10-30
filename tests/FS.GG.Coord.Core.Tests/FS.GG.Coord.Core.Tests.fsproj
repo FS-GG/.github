@@ -82,6 +82,7 @@
          file is a suite that runs nowhere. -->
     <Compile Include="ChurnReadingTests.fs" />
     <Compile Include="OperationObservationTests.fs" />
+    <Compile Include="ContextViewTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -89,6 +90,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="fixtures/context-view/github-4753.issue.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="fixtures/structured-decisions/active-migration.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- .github#2737: real packets, lifted field by field from the live registers. Each file is named
          for the GitHub comment id it came from, so the lift is checkable against the original. -->
