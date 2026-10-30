@@ -18,6 +18,10 @@ Prospective source **0.23.0** prepares descriptor-driven catalog creation with s
 exact producer immediately before scaffold. Legacy typed project knowledge retains its 2.1.0 floor;
 list/help require no catalog runtime. Source selection does not establish publication or installed
 support: public producer/template identities and genuine consumer acceptance remain separate gates.
+The catalog route described below is written against FS.GG.Templates **0.20.1**
+(published tag `fs-gg-templates/v0.20.1`, package `FS.GG.Workspace.Template::0.20.1`), the release that carries the
+common project-knowledge composition for the TypeScript, JavaScript, Rust and Go providers. Wizard 0.23.0 itself is
+not published by this source change.
 
 ## Install
 
@@ -85,18 +89,18 @@ Providers that FS.GG.Templates declares in its ref-pinned provider catalog
 and every catalog provider with its language, product shape and typed parameters:
 
 ```sh
-new-sdd-workspace --list-providers --ref fs-gg-templates/v0.20.0
+new-sdd-workspace --list-providers --ref fs-gg-templates/v0.20.1
 ```
 
 ```sh
-new-sdd-workspace ./Greeter "Greeter" --template go-cli --ref fs-gg-templates/v0.20.0 \
+new-sdd-workspace ./Greeter "Greeter" --template go-cli --ref fs-gg-templates/v0.20.1 \
   --param packageIdentity=example.org/acme/greeter --param codeIdentifier=greet \
   --admission-policy ./host-policy.json --no-coordination
 ```
 
 - **Catalog and archive.** The catalog is fetched from `FS.GG.Templates@<--ref>` (default `main`;
   pair a release tag with `--pinned` for a reproducible creation). The template archive is the exact
-  package the provider's `templateSource` names (for example `FS.GG.Workspace.Template::0.20.0`), read from
+  package the provider's `templateSource` names (for example `FS.GG.Workspace.Template::0.20.1`), read from
   the NuGet flat container. Both are verified by SHA-256 and handed to `fsgg-sdd scaffold --catalog ...`
   as the exact bytes verified; `--catalog-sha256` and `--template-sha256` pin an expected digest. An
   unreadable, stale or unknown-ref catalog is a refusal, never a fallback to a previous copy.
@@ -125,8 +129,8 @@ new-sdd-workspace ./Greeter "Greeter" --template go-cli --ref fs-gg-templates/v0
 
 The catalog route is a source integration candidate. It does not establish the complete
 [#3010 adoption](https://github.com/FS-GG/.github/issues/3010): the published 0.20.0 polyglot payloads
-still require common project-knowledge CI/checker composition, and clean generated-product doctor
-qualification remains outstanding. Every catalog creation initializes the canonical store through the exact
+lack the common project-knowledge CI/checker composition that the published Templates 0.20.1 carries; Wizard 0.23.0
+publication and the public-tool journeys on the published packages remain outstanding. Every catalog creation initializes the canonical store through the exact
 capable SDD producer, pins that version locally, and requires the guide, schema, CI and checker before
 `knowledge check` and the initialization handoff. Known-missing CI/checker payloads refuse before target
 creation. Missing generated assets or refused knowledge checks fail creation;

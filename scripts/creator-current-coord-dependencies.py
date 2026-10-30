@@ -16,16 +16,17 @@ import subprocess
 import urllib.request
 
 from creator_source_qualification import SOURCE_020, qualification_version
-from new_sdd_workspace_successor_execution import CURRENT_020, CURRENT_021, CURRENT_022
+from new_sdd_workspace_successor_execution import CURRENT_020, CURRENT_021, CURRENT_022, CURRENT_023
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PIN_PATH = pathlib.Path('scripts/creator-current-coord-dependencies.json')
 PIN_021_PATH = pathlib.Path('scripts/creator021-coord-dependencies.json')
 PIN_022_PATH = pathlib.Path('scripts/creator022-coord-dependencies.json')
+PIN_023_PATH = pathlib.Path('scripts/creator023-coord-dependencies.json')
 # Each release binding selects exactly one fixed promoted coherent pin; none falls back to another.
 RELEASE_PINS = ((CURRENT_020, PIN_PATH, '0.108.0'), (CURRENT_021, PIN_021_PATH, '0.110.0'),
-                (CURRENT_022, PIN_022_PATH, '0.112.0'))
-RELEASE_QUALIFIED = (CURRENT_021, CURRENT_022)  # explicit current-route release qualification profiles
+                (CURRENT_022, PIN_022_PATH, '0.112.0'), (CURRENT_023, PIN_023_PATH, '0.113.0'))
+RELEASE_QUALIFIED = (CURRENT_021, CURRENT_022, CURRENT_023)  # explicit current-route release qualification profiles
 
 
 def release_pin(binding):
@@ -269,7 +270,7 @@ def verify_evidence(body, package, manifest, pin, *, source_binding=None):
 
 
 def release_evidence(package, source_sha, pin, *, fixtures_passed, release_binding=CURRENT_020):
-    """Recompute a closed020, 021 or 022 qualification, never upgrade an old receipt.
+    """Recompute a closed020, 021, 022 or 023 qualification, never upgrade an old receipt.
 
     The successful original candidate workflow supplies the compiled fixture verdict;
     its authenticated run/archive is checked independently by the artifact reader.
@@ -303,13 +304,13 @@ if __name__ == '__main__':
     parser.add_argument('--package', type=pathlib.Path)
     parser.add_argument('--source-sha')
     args = parser.parse_args()
-    pin = load_pin(release_binding=CURRENT_022)
+    pin = load_pin(release_binding=CURRENT_023)
     if args.command == 'preflight':
         print(json.dumps({'mode': MODE, 'dependencyPinSha256': pin_digest(pin)}))
     elif args.command == 'acquire':
         print(json.dumps(acquire(args.package, pin), sort_keys=True))
     elif args.command == 'verify-package':
-        print(json.dumps(release_evidence(args.package, args.source_sha, pin, fixtures_passed=True, release_binding=CURRENT_022), sort_keys=True))
+        print(json.dumps(release_evidence(args.package, args.source_sha, pin, fixtures_passed=True, release_binding=CURRENT_023), sort_keys=True))
     else:
         require(args.producer_source is not None, 'isolated producer source required')
         if args.command == 'verify-source':

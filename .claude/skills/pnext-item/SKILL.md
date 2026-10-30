@@ -56,7 +56,8 @@ For an admitted routine item, the board is an asynchronous view rather than merg
    the repository's routine eligibility and protected-boundary checks. Put exactly one
    `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` marker in
    the PR body. Use a native closing link only when that merge fulfills the issue's entire declared promise.
-   Otherwise link the issue without closing it and retain its remaining assertions. A moved head must be reviewed and rebound. A routine refusal blocks the affected delivery until repaired; it does not select heavyweight
+   Otherwise link the issue without closing it and retain its remaining assertions. Waits, scratch files and body files follow the
+   [hosted-wait rule](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#qualify-the-actual-path-and-deliver-exact-source). A moved head must be reviewed and rebound. A routine refusal blocks the affected delivery until repaired; it does not select heavyweight
    process or authorize weakening or bypassing the gate.
 4. Repair on the same PR. Recurring same-class failures require investigating relevant callers,
    shared assumptions, failure and cleanup paths before another coherent repair. Governing/code changes

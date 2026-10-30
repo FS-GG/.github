@@ -5,7 +5,7 @@
       "id": "atlas",
       "scope": "driver",
       "sha256": "a1383a9a8029f91930798e7624f5de87db68b0b6f575ea4d899761449e9fa423",
-      "tree-sha256": "19c10017a15b7587e590c3d6f26be2f47006025955b3385c90ba9d008eaa45d7",
+      "tree-sha256": "c75b0f4f258e1c4a98decf74e14df1c1b83b8372311b21b8be4839fb72ccbb0c",
       "files": [
         {
           "path": "SKILL.md",
@@ -24,7 +24,7 @@
         },
         {
           "path": "assets/seed/catalog.json",
-          "sha256": "9c7ab87796d2bd0014e9665efd2433cda0e2fc475b5c340adedbdf4e087a77a8",
+          "sha256": "2f2342c4d17b5bbf3dfa99943ea5baa95ee843930e68996fa0bfd9abddca2db7",
           "executable": false
         },
         {
@@ -2268,6 +2268,11 @@
           "executable": false
         },
         {
+          "path": "assets/seed/records/f260b4b268e85a8f1b04b2fc69ffc0bca473d2e42de6f2f70128bedc16558201.json",
+          "sha256": "f260b4b268e85a8f1b04b2fc69ffc0bca473d2e42de6f2f70128bedc16558201",
+          "executable": false
+        },
+        {
           "path": "assets/seed/records/f379a1b9e29aa7fc25c4c0c897eaa3c0e90d66a201a0ade8cbf523a5cdc8cf50.json",
           "sha256": "f379a1b9e29aa7fc25c4c0c897eaa3c0e90d66a201a0ade8cbf523a5cdc8cf50",
           "executable": false
@@ -2650,7 +2655,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "169945b2d619a46040e1dd68109e7f151832a72fcd53280ad540339807c65007",
-      "tree-sha256": "aeabc9062394deab9bdf0f345c6d956dbe5455e17edd83b862549db5b387769b",
+      "tree-sha256": "0679bfec55b5d6133fc206b4540ee56a48b8ce39172e54b8244d5974e01b03b3",
       "files": [
         {
           "path": "SKILL.md",
@@ -2724,7 +2729,7 @@
         },
         {
           "path": "references/lifecycle-contract.md",
-          "sha256": "f8c6342e03180a346eea13ce09d8f5a5abf22ac94fb5388dd2e5a122f704ac89",
+          "sha256": "2316a57537fd1dcf6ff48eaceab0c1c01b2477c34f4b63459a25090aa8702479",
           "executable": false
         },
         {
@@ -3029,12 +3034,12 @@
     {
       "id": "publishing-and-deployment",
       "scope": "operator",
-      "sha256": "0ce4093c63e42a35a21de0cab747f28076eab4dc87286eca1ebd91336accd3b5",
-      "tree-sha256": "15af237343623b04c13d86e8dfce3c630a5045410e97d2a10851ff46ab783b0c",
+      "sha256": "8ad41ddbcc5acc419e1bafe7dd424b9354ff47e8e6025dbeea6aee9ff54ec85d",
+      "tree-sha256": "d5f4c3fa26d3d1a8e2c39b1aaaad823d2a274f9fbdc22fc9af5c991cbe2ae003",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "0ce4093c63e42a35a21de0cab747f28076eab4dc87286eca1ebd91336accd3b5",
+          "sha256": "8ad41ddbcc5acc419e1bafe7dd424b9354ff47e8e6025dbeea6aee9ff54ec85d",
           "executable": false
         },
         {
