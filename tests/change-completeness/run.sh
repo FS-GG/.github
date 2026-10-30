@@ -59,7 +59,7 @@ mode = os.environ.get("MOCK_MODE", "good")
 if args == ["--version"]:
     if mode == "missing-tool": sys.exit(127)
     if mode == "malformed-sdk": print("not-an-sdk")
-    elif mode != "empty-sdk": print("10.0.401")
+    elif mode != "empty-sdk": print("10.0.403")
     sys.exit(0)
 verb, project = args[:2]
 if verb == "msbuild":
