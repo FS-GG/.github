@@ -154,6 +154,19 @@ title_rc_empty
 printf 'Refs #3010' > "$WORK/refs-body.md"
 set +e; python3 -I "$GATE" --title "docs: close #3010 items" --body "$WORK/refs-body.md" >/dev/null 2>&1; RC=$?; set -e
 [ "$RC" = 1 ] && ok "T12 a clean body does not excuse a closing title (body Refs #3010, title closes it)" || bad "T12 (rc=$RC)"
+# CR in a title: the echoed excerpt must be inert, and detection must still see through it.
+title_on $'docs: close #3010 items\r::error::forged'
+if [ "$RC" = 1 ] && ! grep -q $'\r' <<<"$OUT" && ! grep -q '^::' <<<"$OUT" && ! grep -q '^ *::error::forged' <<<"$OUT"; then
+  ok "T14 a CR plus ::error:: in a title stays inert in the rule's output (no CR byte, no line starts a command)"
+else bad "T14 (rc=$RC)" "$(od -c <<<"$OUT")"; fi
+title_on $'docs: close\r#3010 items'
+[ "$RC" = 1 ] && ok "T15 a CR between keyword and reference still binds, so stripping it from the echo never changes a verdict" || bad "T15 (rc=$RC)" "$OUT"
+body_on_cr=$'Refs #1\nthis does not close #730\r::error::forged\n'
+rule_on "$body_on_cr"
+if [ "$RC" = 1 ] && ! grep -q $'\r' <<<"$OUT" && ! grep -q '^::' <<<"$OUT"; then
+  ok "T16 a lone CR inside a BODY file reads as a line break (Python text mode), so it cannot reach the log either"
+else bad "T16 (rc=$RC)" "$(od -c <<<"$OUT")"; fi
+
 title_on "docs: close #3010 items"
 if grep -q 'PR TITLE' <<<"$OUT" && grep -q 'close #3010' <<<"$OUT"; then ok "T13 the finding names the title and the phrase"; else bad "T13" "$OUT"; fi
 
@@ -364,6 +377,13 @@ else bad "B21 (rc=$RC)" "$OUT"; fi
 COMMIT_SUBJECTS="tidy the kit"
 job_on 'Refs #4730' 'Refs #4730'
 if [ "$RC" = 0 ] && ! grep -q 'a commit subject has' <<<"$OUT"; then ok "B22 a clean commit subject warns nothing"; else bad "B22 (rc=$RC)" "$OUT"; fi
+
+LIVE_TITLE=$'docs: close #3010 items\r::error::forged\r::stop-commands::x'; EVENT_TITLE="$LIVE_TITLE"; COMMIT_SUBJECTS="tidy the kit"
+job_on 'Refs #3010' 'Refs #3010'
+leaked="$(printf '%s\n' "$OUT" | grep -E '^::' | grep -v -E '^::(error|warning) title=closing-keywords' || true)"
+if [ "$RC" = 1 ] && [ -z "$leaked" ] && ! grep -q $'\r' <<<"$OUT"; then
+  ok "B23 a title carrying CR plus ::error:: fails the job and stays inert in the log (no CR, no forged command)"
+else bad "B23 (rc=$RC)" "$leaked"; fi
 
 echo
 echo "closing-keywords product-lint: $pass passed, $failcount failed"

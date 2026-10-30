@@ -1394,9 +1394,11 @@ jobs:
   # said "does not close" an issue and, on merge, closed FS.GG.Game#730; FS.GG.Game#733 repeated the
   # sentence and was caught by a reviewer. The hub's own `closing-keywords` check never reached a
   # product repo, because a product repo cannot carry a copy of it (ADR-0067 §5 forbids a new copy and
-  # the kit's push token holds no `workflows: write`). Every receiver already calls THIS file, ungated,
-  # on `pull_request`, so a job added here reaches all seven with zero receiver-side edits — the route
-  # `bump-shape` and `receiver-validate` above take for the same reason.
+  # the kit's push token holds no `workflows: write`). Six of the seven receivers call THIS file at
+  # `@main`, ungated, on `pull_request`, so a job added here reaches those six with zero receiver-side
+  # edits — the route `bump-shape` and `receiver-validate` above take for the same reason. THE SEVENTH,
+  # FS.GG.Templates, calls it at `@941a82c0e06c9afe9db4c88fc29997d7627a5895` (measured live in its
+  # kit-materialize.yml caller on 2026-10-30), a commit that predates this job, so Templates does NOT run it until its pin moves.
   #
   # THE CONTEXT IS `materialize / closing-keywords`. Like `kit-bump-shape` it is REQUIRED IN ZERO
   # REPOSITORIES by this change: a red here is visible in the check list and blocks no merge. Arming it
@@ -1433,12 +1435,22 @@ jobs:
   # the live read fails the payload body — the body at event time — is used and the log says so; a body
   # is never skipped.
   #
-  # WHEN IT RUNS: whenever the caller's `pull_request` (or `pull_request_target`) trigger fires. Every
-  # receiver fires on opened / synchronize / reopened. Only FS.GG.SDD, Rendering and Templates also
-  # list `edited` in their caller, so only they re-run automatically when the body is edited; Governance,
-  # Game, Audio and Net need a one-word caller edit (`types: [opened, synchronize, reopened, edited]`)
-  # for that, and until then a body edit is picked up by the next push or a manual re-run. The kit
-  # cannot supply it: a caller is a workflow file and the push token cannot write workflows.
+  # WHEN IT RUNS: whenever the caller's `pull_request` (or `pull_request_target`) trigger fires, in six
+  # receivers (Templates: see above). A caller must list `edited` to re-check a body edit or a retitle.
+  # SDD and Rendering already did; Governance, Game, Audio and Net needed the one-word caller edit
+  # (`types: [opened, synchronize, reopened, edited]`), delivered as one adoption PR each (#4730). The kit
+  # cannot supply it: a caller is a workflow file and the push token cannot write workflows. A receiver
+  # whose caller lacks `edited` picks an edit up on the next push or a manual re-run.
+  #
+  # BEFORE THIS CONTEXT IS ARMED AS REQUIRED, all of these must hold (docs/coordination/
+  # reusable-workflow-contract.md): Templates' pin has moved past this job; every adoption PR above has
+  # merged; and the Renovate-body pattern is resolved (below). Arming earlier either holds Templates'
+  # pull requests at "Expected" or blocks Renovate PRs the lint reds.
+  #
+  # RENOVATE: some Renovate bodies close an issue in prose ("Coordinated migration: Closes #254; parent
+  # ..." on FS.GG.Audio#251 and FS.GG.Net#69). The rule flags that, correctly: it WILL close the issue.
+  # Whether that is a defect in the coordinated-migration template (declare it on a line of its own) or an
+  # accepted pattern needing an exemption is undecided; it must be decided before arming.
   #
   # THE `if:` IS TRUE ON EVERY PULL REQUEST (#1508): narrowing it by branch, author, label or path would
   # make the check run vanish for the pull requests it skips, which branch protection cannot tell from
@@ -1494,7 +1506,9 @@ jobs:
           lint_rc=0
           out="$(python3 -I fsgg-hub/scripts/check-closing-keywords.py --body "$body" --title="$(cat "$title")" 2>&1)" || lint_rc=$?
           # Indented so that no line of attacker-controlled body text can open a workflow command.
-          [ -z "$out" ] || printf '%s\n' "$out" | sed 's/^/| /'
+          # A lone CR (also in a title) is a line start to the runner, so it is turned into a space before
+          # the prefix is added; detection above ran on the original text.
+          [ -z "$out" ] || printf '%s\n' "$out" | tr '\r' ' ' | sed 's/^/| /'
           # COMMIT SUBJECTS: WARNING ONLY. A single-commit pull request squashes to its commit subject, and
           # a branch cannot be repaired by editing a field, so this never fails the job (the hub's own
           # check reads whole commit messages and does fail). Best effort: a failed read says nothing.

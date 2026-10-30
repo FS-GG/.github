@@ -360,13 +360,27 @@ def line_of(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
+_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+
+def inert(text: str) -> str:
+    """`text` with every control character (CR, ESC, ...) replaced by a SPACE, for echoing into a log.
+
+    A lone carriage return in an echoed line is a line start to a viewer and to the runner's command
+    parser, so `x<CR>::error::forged` would print a workflow command from attacker-controlled text.
+    A space and not a deletion: DETECTION always runs on the original text, where a CR is whitespace
+    and `close<CR>#5` still binds, so removing it from the echo must not change a verdict.
+    """
+    return _CONTROL.sub(" ", text)
+
+
 def excerpt(text: str, offset: int) -> str:
     """The body's real line at `offset` — from the ORIGINAL text, not the blanked copy."""
     start = text.rfind("\n", 0, offset) + 1
     end = text.find("\n", offset)
     if end == -1:
         end = len(text)
-    return text[start:end].strip()
+    return inert(text[start:end]).strip()
 
 
 def line_text(prose: str, offset: int) -> str:
@@ -504,7 +518,7 @@ def audit_title(title: str) -> tuple[list[str], list[str]]:
         findings.append(
             f"title: {what} is in the PR TITLE{note}. Under COMMIT_OR_PR_TITLE the title becomes the "
             f"squash commit subject and GitHub WILL CLOSE {ref} when it lands on the default branch. "
-            f"Retitle without the keyword, e.g. `(Refs {ref})`.\n      {title.strip()}"
+            f"Retitle without the keyword, e.g. `(Refs {ref})`.\n      {inert(title).strip()}"
         )
     return findings, []
 
