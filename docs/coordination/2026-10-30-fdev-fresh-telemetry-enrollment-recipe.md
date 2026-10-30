@@ -129,3 +129,20 @@ Producer side, as `developer`:
 Rollback: set the entry `Revoked` and run `enroll-producer ... --revoked` after the same stop (`Program.fs:1333`),
 or restore the saved `host.json` and restart; restore the retired client directory name; remove the trust anchor.
 The legacy queue and its recorded gap are never touched.
+
+## Corrections found while executing J0 and J1 (2026-10-30)
+
+- The receiver runs as in-container user `telemetry` under supervisor program `telemetry-home` in container
+  `fsgg-store`. Run the Host commands with `podman exec -i` as `fsgg-store-dev`. Stopping only that program
+  (`supervisorctl -c /etc/supervisor/store.conf stop telemetry-home`) releases the service lock and is a narrower
+  window than stopping `fsgg-store.service`.
+- Without `-i`, `podman exec` drops stdin. A first attempt to install the new `host.json` through a pipe therefore
+  wrote an empty file and the rollback wrote it empty again. It was restored from an in-container copy made with
+  `cp -p` before the first write. Verify the installed hash before continuing, and make the rollback copy inside the
+  container so it never depends on stdin.
+- `activate-remote` refuses with `configuration-directory-unsafe` unless the configuration directory is exactly mode
+  0700 (`WorkspaceTelemetryApplication.fs:1296-1306`). `~/.config/fs-gg` was 0755 and needed `chmod 700`.
+- `SSL_CERT_FILE` is honoured by the .NET runtime on fdev (TLS failure without it, HTTP 401 with it). The engine's
+  own TLS path is exercised only by the first real submit or drain of a ready file, because `activate-remote` and an
+  empty drain make no network call.
+- `init` on an already provisioned store returns `already-provisioned` with exit 0, so a retry after a rollback is safe.
