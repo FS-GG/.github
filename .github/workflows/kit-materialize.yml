@@ -59,9 +59,11 @@
 # one is forbidden:
 #   * hand-copying a workflow into seven repos is the defect class #1507/#1510/#1515/#1528/#1538
 #     closed, and ADR-0067 §5 forbids adding a new copy while the copying is being retired;
-#   * materializing a workflow FILE through the kit cannot work — the App installation token that
-#     pushes the materialize commit has `contents: write` and not `workflows: write`, so the push
-#     that carried it would be rejected;
+#   * materializing a workflow FILE through the kit is not an admitted route. The dispatch App
+#     installation now holds `workflows: write` (live 2026-10-30; owner-held, not needed by any workflow
+#     in this repository, and pinned in permission-coherence.yml so a change in either direction fails
+#     the scheduled installation-grants-current job; Coordination #1026), but no workflow here requests
+#     it for the materialize push, and the kit's contract is unchanged: it ships no workflow file;
 #   * a receiver cannot add a step to a `uses:` job (a caller job that invokes a reusable workflow
 #     takes no steps at all).
 # All seven receivers ALREADY call this workflow, ungated, on `pull_request` into `main`. A job added
@@ -766,8 +768,8 @@ jobs:
   # (`.github#2342`), both of which are hub-local and run only on `FS-GG/.github`'s own pull requests.
   # Every route to a receiver but one is forbidden — hand-copying is the defect class #1507/#1510/
   # #1515/#1528/#1538 closed and ADR-0067 §5 forbids re-opening; the kit cannot ship a workflow FILE
-  # because the App installation token that pushes the materialize commit has `contents: write` and
-  # not `workflows: write`; and a receiver cannot add a step to a `uses:` job. All seven receivers
+  # because the kit ships no workflow file (the App installation holds an owner-held `workflows: write`
+  # that no workflow here requests; see the permission-coherence.yml pin); and a receiver cannot add a step to a `uses:` job. All seven receivers
   # ALREADY call this workflow, ungated, on `pull_request` into `main`, so a job added here reaches
   # all seven with ZERO receiver-side edits. That is the same route `bump-shape` above takes and the
   # same one §5.3 names. ZERO RECEIVER EDITS IS A HARD CONSTRAINT, not a convenience: the design chose
@@ -1394,7 +1396,7 @@ jobs:
   # said "does not close" an issue and, on merge, closed FS.GG.Game#730; FS.GG.Game#733 repeated the
   # sentence and was caught by a reviewer. The hub's own `closing-keywords` check never reached a
   # product repo, because a product repo cannot carry a copy of it (ADR-0067 §5 forbids a new copy and
-  # the kit's push token holds no `workflows: write`). Six of the seven receivers call THIS file at
+  # the kit ships no workflow file; the owner-held `workflows: write` on the App is not requested here). Six of the seven receivers call THIS file at
   # `@main`, ungated, on `pull_request`, so a job added here reaches those six with zero receiver-side
   # edits — the route `bump-shape` and `receiver-validate` above take for the same reason. THE SEVENTH,
   # FS.GG.Templates, calls it at `@941a82c0e06c9afe9db4c88fc29997d7627a5895` (measured live in its
