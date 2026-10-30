@@ -224,14 +224,31 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
             "arm with a trailing comment after the arrow": (board_arm, '            | "commented" :: _ -> // looks harmless\n                ExitError\n' + board_arm, '"commented" :: _'),
             "arm at an unexpected indent": (board_arm, '        | "shallow" :: _ ->\n            ExitError\n' + board_arm, "unexpected indent"),
             "stacked or-pattern arm": (board_arm, '            | "stacked-a" :: _\n            | "stacked-b" :: _ ->\n                ExitError\n' + board_arm, '"stacked-a" :: _ | "stacked-b" :: _'),
-            "different dispatcher method name": (skill_dispatch, "                match QuietApplication.tryExecute arguments with\n                | Some code -> code\n                | None ->\n" + skill_dispatch, "QuietApplication.tryExecute"),
-            "dispatcher named run": (skill_dispatch, "                match QuietApplication.run arguments with\n                | Some code -> code\n                | None ->\n" + skill_dispatch, "QuietApplication.run"),
-            "parenthesised dispatcher": (skill_dispatch, "                match (QuietApplication.tryRun) arguments with\n                | Some code -> code\n                | None ->\n" + skill_dispatch, "QuietApplication.tryRun"),
-            "piped dispatcher": (skill_dispatch, "                match arguments |> QuietApplication.tryRun with\n                | Some code -> code\n                | None ->\n" + skill_dispatch, "QuietApplication.tryRun"),
-            "dispatcher on a different argument name": (skill_dispatch, "                match QuietApplication.tryRun argv with\n                | Some code -> code\n                | None ->\n" + skill_dispatch, "QuietApplication.tryRun"),
+            "different dispatcher method name": (skill_dispatch, "                match QuietApplication.tryExecute arguments with\n                | Some exitCode -> exitCode\n                | None ->\n" + skill_dispatch, "QuietApplication.tryExecute"),
+            "dispatcher named run": (skill_dispatch, "                match QuietApplication.run arguments with\n                | Some exitCode -> exitCode\n                | None ->\n" + skill_dispatch, "QuietApplication.run"),
+            "parenthesised dispatcher": (skill_dispatch, "                match (QuietApplication.tryRun) arguments with\n                | Some exitCode -> exitCode\n                | None ->\n" + skill_dispatch, "QuietApplication.tryRun"),
+            "piped dispatcher": (skill_dispatch, "                match arguments |> QuietApplication.tryRun with\n                | Some exitCode -> exitCode\n                | None ->\n" + skill_dispatch, "QuietApplication.tryRun"),
+            "dispatcher on a different argument name": (skill_dispatch, "                match QuietApplication.tryRun argv with\n                | Some exitCode -> exitCode\n                | None ->\n" + skill_dispatch, "QuietApplication.tryRun"),
             "if-then dispatch before the match": (outer_match, "            if List.contains \"--quiet\" arguments then QuietApplication.run arguments else\n" + outer_match, "QuietApplication.run"),
             "function-keyword dispatch": (outer_match, "            let route = function | [ \"x\" ] -> 1 | _ -> 0\n" + outer_match, "function"),
         }
+        wrap = "                | Some exitCode -> exitCode\n                | None ->\n"
+        for method in ("Process", "Go", "Start", "Send", "Post", "Apply", "Main", "Operate", "Call", "Perform"):
+            refused[f"unlisted Evil.{method} dispatcher"] = (
+                skill_dispatch, f"                match Evil.{method} arguments with\n" + wrap + skill_dispatch, f"Evil.{method}")
+        refused["renamed match argument (refused until the allow-list is updated)"] = (outer_match, "            match args with\n", "`args`")
+        refused["open-module bare call"] = (skill_dispatch, "                match go arguments with\n" + wrap + skill_dispatch, "`go`")
+        refused["let-bound call"] = (
+            skill_dispatch, "                let routed = arguments\n                match routed arguments with\n" + wrap + skill_dispatch, "`routed`")
+        refused["lambda"] = (skill_dispatch, "                match (fun a -> Some 1) arguments with\n" + wrap + skill_dispatch, "`fun`")
+        refused["GoAsync(...).Result"] = (
+            skill_dispatch, "                match Some(GoAsync(arguments).Result) with\n" + wrap + skill_dispatch, "`GoAsync`")
+        refused["nested arm under the wildcard"] = (
+            skill_dispatch, skill_dispatch + '                | "evil" :: _ -> ExitError\n', "nested arm under the wildcard")
+        refused["property access on a call result"] = (
+            skill_dispatch, "                match arguments.Head.Length with\n" + wrap + skill_dispatch, "`arguments.Head.Length`")
+        refused["interpolated-string hole"] = (
+            outer_match, '            eprint $"{Evil.Go arguments}"\n' + outer_match, "Evil.Go")
         for label, (old, replacement, needle) in refused.items():
             message = guard(real_program.replace(old, replacement, 1))
             if message is not None and needle in message:
@@ -242,7 +259,6 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
         accepted = {
             "unchanged Program.fs": real_program,
             "comment-only edits are not dispatch": real_program.replace(board_arm, '            // | "ghost" :: _ -> GhostApplication.tryRun arguments\n            (* QuietApplication.run arguments *)\n' + board_arm, 1),
-            "a different argument name on the outer match": real_program.replace(outer_match, "            match args with\n", 1),
             "the whole dispatch reindented": reindent(real_program, 4),
         }
         for label, program_text in accepted.items():
@@ -251,12 +267,6 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
                 ok(f"arm guard accepts: {label}")
             else:
                 bad(f"arm guard accepts: {label}", message)
-        renamed = real_program.replace(outer_match, "            match args with\n", 1)
-        message = guard(renamed.replace(board_arm, '            | "renamed-arm" :: _ -> NewApplication.run args\n' + board_arm, 1))
-        if message is not None and '"renamed-arm" :: _' in message:
-            ok("arm guard refuses a new same-line arm under a renamed match argument")
-        else:
-            bad("arm guard refuses a new same-line arm under a renamed match argument", repr(message))
         message = guard(reindent(real_program.replace(board_arm, '            | "late" :: _ -> NewApplication.run arguments\n' + board_arm, 1), 4))
         if message is not None and '"late" :: _' in message:
             ok("arm guard refuses a new arm in a reindented dispatch")
@@ -326,7 +336,7 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
                 encoding="utf-8")
             expect_red(run("--structural", root=clone), '"new-writer" :: _', "new pre-handler dispatch arm added unlisted reds")
             program.write_text(
-                original_program.replace(skill, "                match QuietApplication.tryRun arguments with\n                | Some code -> code\n                | None ->\n" + skill),
+                original_program.replace(skill, "                match QuietApplication.tryRun arguments with\n                | Some exitCode -> exitCode\n                | None ->\n" + skill),
                 encoding="utf-8")
             expect_red(run("--structural", root=clone), "QuietApplication.tryRun", "new pre-handler tryRun dispatcher added unlisted reds")
             program.write_text(original_program, encoding="utf-8")

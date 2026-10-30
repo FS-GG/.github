@@ -4,7 +4,9 @@ Shared by the v1 writer census (scripts/check-v1-writer-census.py), which pins t
 deliberately structural rather than a single regex: arms are read at the column of the first arm after the
 outermost `match`; same-line bodies, `when` guards, trailing comments and stacked or-patterns are accepted;
 and every dispatch-shaped call is cross-checked, so an unfamiliar spelling cannot slip past an arm-only
-reader. Anything dispatch-shaped that it cannot place is an error, not a pass.
+reader. Outside a listed arm the scan is an allow-list: every token must be a known-safe construct below or a
+census-listed dispatcher, so an unfamiliar call, a bare or let-bound call, a lambda or a nested arm is an error,
+not a pass.
 """
 
 from __future__ import annotations
@@ -21,6 +23,41 @@ HANDLER_DISPATCH = "commandHandlers[opts.Command]"
 # A call into another module that runs or dispatches something: X.tryRun, X.run, X.tryExecute, X.executeWithContext ...
 DISPATCH_REFERENCE = re.compile(r"\b(?P<module>[A-Za-z_][\w]*(?:\.[A-Za-z_]\w*)*)\.(?P<method>(?:try)?(?:run|execute|dispatch|handle|invoke|exec)\w*)", re.I)
 MATCH_LINE = re.compile(r"^(?P<indent> *)(?:.*\b)?match\b.*\bwith\s*$")
+
+
+# Tokens that may appear in `main` outside a listed arm (before the first arm and in the wildcard arm), each with
+# the reason it is safe. Anything else must be a census-listed dispatcher or the scan refuses. Adding a token
+# here is a review decision: it is the only way new code can run in this region without a census row.
+SAFE_TOKENS = {
+    "let": "binding keyword for the two bindings below",
+    "mutable": "the invoked-name cell",
+    "main": "the entry point's own name",
+    "argv": "the process arguments",
+    "arguments": "the argument list bound once from argv",
+    "invoked": "the telemetry name cell assigned by each arm",
+    "List.ofArray": "converts argv; no effect",
+    "try": "the enclosing try/with",
+    "with": "the enclosing match/try/with and record-with",
+    "match": "dispatch on the argument list and on tryRun/parse results",
+    "Some": "option pattern of a tryRun result",
+    "None": "option pattern of a tryRun result",
+    "Ok": "result pattern of Options.parse",
+    "Error": "result pattern of Options.parse",
+    "exitCode": "the exit code returned by a tryRun dispatcher",
+    "message": "the parse error text printed to stderr",
+    "opts": "the parsed options",
+    "opts.Command": "the parsed command used for the invoked name and the handler lookup",
+    "Options.parse": "pure argument parser",
+    "Options.usage": "constant usage text",
+    "Options.commandName": "pure command-name lookup",
+    "eprint": "writes to stderr",
+    "ExitError": "exit-code constant",
+    "commandHandlers": "the typed handler table the guard protects",
+    "_": "the wildcard pattern of the outer match",
+}
+# Patterns of the arms that may be nested under the wildcard arm: results of the dispatchers and of the parse.
+ALLOWED_NESTED_PATTERNS = {"Some exitCode", "None", "Error message", "Ok opts"}
+TOKEN = re.compile(r"\.?[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*")
 
 
 def _strip_fsharp_comments(text: str) -> str:
@@ -72,6 +109,44 @@ def _strip_fsharp_comments(text: str) -> str:
     return "".join(out)
 
 
+def _code_without_strings(text: str) -> str:
+    """The text with string literals emptied; the `{expr}` holes of interpolated strings stay as code."""
+    out: list[str] = []
+    index, length = 0, len(text)
+    while index < length:
+        char = text[index]
+        if char != '"':
+            out.append(char)
+            index += 1
+            continue
+        interpolated = bool(out) and out[-1] == "$"
+        triple = text[index:index + 3] == '"""'
+        end = index + (3 if triple else 1)
+        out.append('""')
+        while end < length:
+            if triple and text.startswith('"""', end):
+                end += 3
+                break
+            if not triple and text[end] == "\\":
+                end += 2
+                continue
+            if not triple and text[end] == '"':
+                end += 1
+                break
+            if interpolated and text[end] == "{":
+                if text.startswith("{{", end):
+                    end += 2
+                    continue
+                close = text.find("}", end)
+                close = length if close < 0 else close
+                out.append(" " + text[end + 1:close] + " ")
+                end = close + 1
+                continue
+            end += 1
+        index = end
+    return "".join(out)
+
+
 def _arrow_index(line: str) -> int:
     """Index of the first `->` outside a string literal, or -1."""
     inside = False
@@ -88,8 +163,10 @@ def _arrow_index(line: str) -> int:
     return -1
 
 
-def pre_handler_dispatch(text: str) -> list[str]:
-    """Every dispatch arm and dispatcher of `main` that precedes the typed handler table."""
+def pre_handler_dispatch(text: str, listed: set[str] | frozenset[str] = frozenset()) -> list[str]:
+    """Every dispatch arm and dispatcher of `main` that precedes the typed handler table.
+
+    `listed` is the set of census rows; a token that equals one is an allowed dispatcher."""
     start = text.find(MAIN_START)
     end = text.find(HANDLER_DISPATCH, start)
     if start < 0 or end < 0:
@@ -145,17 +222,36 @@ def pre_handler_dispatch(text: str) -> list[str]:
     if pending:
         raise DispatchScanError(f"main ends with an arm that has no `->`: {pending[-1]}")
 
-    # Cross-check every dispatch-shaped call. Inside a named arm it belongs to that arm's row; anywhere else
-    # (the wildcard arm, the lines before the first arm, a later `if ... then X.run`) it is a dispatcher.
+    # Outside a named arm (before the first arm, the wildcard arm and anything nested in it) only an allow-list is
+    # accepted: a known-safe token, a census-listed dispatcher, or a dispatcher-shaped call that the caller then
+    # reports as unlisted. Any other call, bare call, let-bound call, lambda or nested arm is refused.
     named = {(low, high) for low, high, key in spans if key != "_"}
     dispatchers: list[str] = []
-    for i, line in enumerate(lines):
-        if any(low <= i < high for low, high in named):
-            continue
-        for match in DISPATCH_REFERENCE.finditer(line):
-            reference = f"{match.group('module')}.{match.group('method')}"
-            if reference not in dispatchers:
-                dispatchers.append(reference)
+    region = [i for i in range(len(lines)) if not any(low <= i < high for low, high in named)]
+    for i in region:
+        stripped = lines[i].strip()
+        if stripped.startswith("|") and indent(lines[i]) != arm_column:
+            arrow = _arrow_index(stripped)
+            pattern = re.sub(r"\s+", " ", stripped[1:arrow if arrow >= 0 else None]).strip()
+            if pattern not in ALLOWED_NESTED_PATTERNS:
+                raise DispatchScanError(f"main has a nested arm under the wildcard that is not an allowed result pattern: {pattern}")
+    code = _code_without_strings("\n".join(lines[i] for i in region))
+    unknown: list[str] = []
+    for token in TOKEN.findall(code):
+        if token in SAFE_TOKENS or token in listed:
+            if token in listed and token not in dispatchers:
+                dispatchers.append(token)
+        elif DISPATCH_REFERENCE.fullmatch(token):
+            if token not in dispatchers:
+                dispatchers.append(token)
+        elif token not in unknown:
+            unknown.append(token)
+    # An unlisted dispatcher-shaped call is reported by name as a missing census row; otherwise unknown is fatal.
+    if unknown and all(d in listed for d in dispatchers):
+        raise DispatchScanError(
+            "main has " + ", ".join(f"`{token}`" for token in unknown) + " outside every listed arm; only the known-safe "
+            "tokens in SAFE_TOKENS or a census-listed dispatcher may run there. List it as an arm or dispatcher, or add it "
+            "to SAFE_TOKENS with a reason")
     arms = keys + dispatchers
     if not arms:
         raise DispatchScanError("main shows no pre-handler dispatch; the guard cannot read it")
