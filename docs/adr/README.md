@@ -124,6 +124,7 @@ registry like any other, and this org gates its registries.
 | [0095](0095-utel-resource-containment-for-fresh-profiles.md) | Enforced resource containment for separately authorized fresh UTEL profiles; legacy physical-copy proof and holds remain unchanged | Accepted policy; implementation, production budgets and admission pending |
 | [0096](0096-proportionate-verification-and-unrecoverable-holds.md) | Ordinary local build/test of unpublished source needs no original-operation admission; the 439/46 unrecoverable inherited holds are released for isolated fresh operations | Accepted |
 | [0097](0097-one-org-wide-serialized-publication-writer.md) | One org-wide serialized publication writer: every publishing job takes a ticketed lock over the public Actions job list; the job's end releases it | Accepted |
+| [0098](0098-per-resource-publication-claims-for-disjoint-writers.md) | Per-resource publication claims for disjoint writers: capacity-N lock plus epoch-fenced Authority claim refs per package/tag/release/journal key; proposal only, ADR-0097 stays in force | Proposed |
 
 ## Supersession map
 
@@ -133,6 +134,7 @@ Which record currently rules, and where a decision was amended. Every edge below
 | Amended | § | By | What changed |
 |---|---|---|---|
 | [0093](0093-original-103-authentication-domain-policy.md) | §Decision, principal and private-custody selection | [0094](0094-separate-v3-and-utel-principals-and-custody.md) | Names prospective descriptor, phase-proof and ACK principals and custodians; actual provisioning, enrollment and original-effect admission remain pending. |
+| [0097](0097-one-org-wide-serialized-publication-writer.md) | §Decision, "no parallel publication and no per-resource reservation" | [0098](0098-per-resource-publication-claims-for-disjoint-writers.md) | **NOT in force — Proposed:** would let disjoint-key writers overlap under a capacity-N lock once implemented and qualified; the global lock stays the rule until a reviewed registry change. |
 | [0093](0093-original-103-authentication-domain-policy.md) | Resource acceptance, fresh profiles only | [0095](0095-utel-resource-containment-for-fresh-profiles.md) | Selects enforced resource containment for new profiles; the original 65,536-byte universal property remains unproved and all original-effect safeguards remain. |
 | [0093](0093-original-103-authentication-domain-policy.md) | Inherited 439-reservation fencing | [0096](0096-proportionate-verification-and-unrecoverable-holds.md) | The reservations remain history but no longer fence demonstrably isolated fresh operations; `.103` stays attempted-unknown and unreplayed. |
 | [0095](0095-utel-resource-containment-for-fresh-profiles.md) | "All 439 inherited reservations survive" | [0096](0096-proportionate-verification-and-unrecoverable-holds.md) | Same scope as the 0093 row. |

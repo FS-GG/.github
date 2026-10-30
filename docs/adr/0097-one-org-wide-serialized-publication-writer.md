@@ -5,6 +5,7 @@
 - **Affects:** every FS-GG repository that publishes a package, tag or release; `.github` publishing workflows
 - **Decision owner:** repository owner (delegation recorded by Programme/root)
 - **Decision custody:** [FS-GG/.github#4753 comment 6385677196](https://github.com/FS-GG/.github/issues/4753#issuecomment-6385677196)
+- **Amended by:** [ADR-0098](0098-per-resource-publication-claims-for-disjoint-writers.md) (Proposed 2026-10-30; not in force. This record's "no parallel publication" rule governs until ADR-0098 is accepted and qualified.)
 
 ## Context
 
@@ -117,3 +118,5 @@ exclusion.
   validation-only, though revoking the shared App's installation is recorded as outside this repository
   and was not verified here.
 - **Aggregate-resource profile for disjoint writers.** The earlier option; replaced by this decision.
+  *2026-10-30 note:* [ADR-0098](0098-per-resource-publication-claims-for-disjoint-writers.md) proposes reopening
+  it as per-resource claims layered on this lock. It is Proposed only; nothing here changes until it is accepted.
