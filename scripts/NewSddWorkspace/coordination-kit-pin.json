@@ -1,0 +1,13 @@
+{
+  "schema": "fsgg.new-sdd-workspace-coordination-kit-pin/1",
+  "repository": "FS-GG/.github",
+  "revision": "a9a6f77f32bda1138af35981bd5fffee5f0f6594",
+  "anchors": {
+    "registry/coordination-kit-skill-manifest.json": "479096944fc58fd8546c2984fab6f557f84a311931364c8b0de1bc9394b1385f",
+    "scripts/fsgg-coord": "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf",
+    "dist/dotnet/.config/dotnet-tools.json": "e4a77d618117cd670b95e1e6653cdffabd135b88646dd75734e8812393550a11"
+  },
+  "embeddedSkills": [
+    "initialize-sdd-workspace"
+  ]
+}

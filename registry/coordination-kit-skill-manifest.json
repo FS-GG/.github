@@ -83,11 +83,11 @@
     {
       "id": "initialize-sdd-workspace",
       "supplied-by": ".claude/skills/initialize-sdd-workspace",
-      "tree-sha256": "76cdd92dfe347004b40258eca2d5552d8f5849041e432b299190fa290c4fcd70",
+      "tree-sha256": "b03c1d60b7c737ebde095ada5e8b0dff65ae3e1cfa9514b256a260620ffc2909",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "7c19d93267d4033e6ce2c2ea95c3d277c4f2d50d57426790e9a06149eacfd634",
+          "sha256": "d4f788450f681bd2de06bd4b6666864790bacfb3f57ae4fe50e2252b2393d070",
           "executable": false
         },
         {
