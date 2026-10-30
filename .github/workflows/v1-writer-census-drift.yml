@@ -1,0 +1,27 @@
+# Early warning that docs/coordination/v1-writer-census.json has drifted from the tracked tree.
+#
+# WHY THIS EXISTS. scripts/check-v1-writer-census.py gates the coordination engine release
+# (release-coord-engine.yml, the `--candidate` step) and nothing else: tests/v1-writer-census is
+# DELIBERATELY_UNWIRED from scripts/test under ADR-0091, and the fixture is the only other caller.
+# From 2026-09-28 to 2026-10-30 the census therefore drifted (21 identities, 5 new sources, 2
+# vanished sinks) without any red, and surfaced only when a release was owed (#4730).
+#
+# WHY IT IS NOT A PULL REQUEST CHECK. ADR-0091 removed backward-validity proofs from ordinary source
+# delivery, and a required or per-PR census would put them back. This job reports on a schedule and on
+# demand, is required nowhere, and costs one checkout and one structural run (no build). A red run
+# means: reconcile the census before the next engine release, not before the next merge.
+name: v1-writer-census-drift
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  structural:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Census every tracked v1 writer source (structural, no build)
+        run: python3 scripts/check-v1-writer-census.py --structural
