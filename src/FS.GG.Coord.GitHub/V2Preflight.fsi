@@ -76,6 +76,8 @@ module V2Preflight =
         | MarkerHeadBound
         | MarkerOperationAllowed
         | ClosingLinkDeclared
+        | PullRequestOpen
+        | ChangesPresent
         | SinglePullRequest
         | BaseCurrent
         // PublicationWriterRegistration
@@ -139,6 +141,9 @@ module V2Preflight =
         | WriterAlreadyRegistered
         | WriterNotRegistered
         | CoverageUnmet
+        | PullRequestNotOpen
+        | NoChangedPaths
+        | ClosingKeywordUndeclared
 
     val reasonCode: reason: Reason -> string
 
@@ -165,7 +170,8 @@ module V2Preflight =
         | PullRequestFact
         | OpenPullRequestFact
         | BaseHead
-        | RoutinePolicy
+        | RoutineGate
+        | ClosingGate
         | WorkflowText
         | WriterRegistryText
         | CoverageGate
@@ -295,12 +301,6 @@ module V2Preflight =
     /// Same as `run` with the planner's grammar replaced, for causal controls only.
     val runWith: seams: V2Enrollment.Seams -> route: Route -> stage: Stage -> inputs: EnrollmentInputs -> Report
 
-    /// The routine-delivery policy fields the route reads (`.fsgg/routine-development.json`).
-    type RoutinePolicy =
-        { BranchPrefix: string
-          AllowedOperations: string list
-          ProtectedOperations: string list }
-
     /// The pull request, or the candidate about to become one.
     type RoutineCandidate =
         { BaseRef: string
@@ -308,17 +308,35 @@ module V2Preflight =
           BaseSha: string option
           HeadRef: string
           HeadSha: string
-          Title: string
-          Body: string }
+          /// The pull request state (`open`, `closed`); `None` before it is opened.
+          State: string option }
+
+    /// Result of the maintained routine-eligibility gate (`scripts/check-claim-generation.py` with a routine
+    /// head and the base-trusted policy). `Finding` carries the gate's own finding kind, e.g. `routine-ambiguous`.
+    type RoutineGateResult =
+        | Admitted
+        | GateFinding of kind: string
+
+    /// Result of the maintained closing-keyword gate (`scripts/check-closing-keywords.py`) over the title, the body
+    /// and the commit messages. Its grammar is not re-derived here.
+    type ClosingGateResult =
+        /// Exit 0, "this PR closes no issue".
+        | NoClosing
+        /// Exit 0, and the PR declares that it closes these references on a line of its own.
+        | DeclaredClosing of references: string list
+        /// Exit 1: a closing keyword next to a reference that is not declared. GitHub will close it on merge.
+        | UndeclaredClosing
 
     type RoutineInputs =
         { DefaultBranch: string
           Candidate: Observed<RoutineCandidate>
-          Policy: Observed<RoutinePolicy>
           /// Live head of the default branch.
           LiveBaseSha: Observed<string>
           /// Open pull requests whose head branch is the candidate's.
-          OpenPullRequests: Observed<int> }
+          OpenPullRequests: Observed<int>
+          /// The maintained marker/branch/operation/changed-path gate. Marker grammar is not re-derived here.
+          RoutineGate: Observed<RoutineGateResult>
+          ClosingGate: Observed<ClosingGateResult> }
 
     /// Result of the maintained coverage gate (`scripts/check-publication-writer-coverage.py --local`).
     type CoverageAuditResult =
@@ -336,7 +354,9 @@ module V2Preflight =
     /// The explicit `Unknown(Registry/NotRegistered)` report for a route and stage that do not belong together.
     val unregisteredReport: route: Route -> stage: Stage -> Report
 
-    /// Evaluate the routine-delivery route for `OpenPullRequest` or `MergePullRequest`. Total.
+    /// Evaluate the routine-delivery route for `OpenPullRequest` or `MergePullRequest`. Total. The head branch is
+    /// matched with the gate's own pattern; every marker, operation, changed-path and closing-keyword verdict comes
+    /// from the maintained gates, whose results are inputs.
     val runRoutine: stage: Stage -> inputs: RoutineInputs -> Report
 
     /// Evaluate the publication-writer route for `RegisterWriter` or `RunWriter`. Total. The coverage gate

@@ -19,84 +19,112 @@ module V2RoutesTests =
 
     let private head = String.replicate 40 "a"
     let private baseSha = String.replicate 40 "b"
-    let private policy = { BranchPrefix = "routine/"; AllowedOperations = [ "source-change"; "internal-docs" ]; ProtectedOperations = [ "publish"; "deploy" ] }
-    let private marker (headSha: string) (operation: string) = $"<!-- fsgg:routine-development/v1 head={headSha} operation={operation} -->"
 
     let private candidate : RoutineCandidate =
-        { BaseRef = "main"; BaseSha = Some baseSha; HeadRef = "routine/coord-synthetic"; HeadSha = head
-          Title = "feat: synthetic (Refs #4941)"; Body = "Refs #4941\n\n" + marker head "source-change" + "\n" }
+        { BaseRef = "main"; BaseSha = Some baseSha; HeadRef = "routine/coord-synthetic"; HeadSha = head; State = Some "open" }
 
     let private routine : RoutineInputs =
-        { DefaultBranch = "main"; Candidate = Known candidate; Policy = Known policy; LiveBaseSha = Known baseSha; OpenPullRequests = Known 0 }
+        { DefaultBranch = "main"; Candidate = Known candidate; LiveBaseSha = Known baseSha; OpenPullRequests = Known 0
+          RoutineGate = Known Admitted; ClosingGate = Known NoClosing }
 
     let private opened = { routine with OpenPullRequests = Known 1 }
     let private withCandidate change (inputs: RoutineInputs) = { inputs with Candidate = Known(change candidate) }
+    let private gate kind (inputs: RoutineInputs) = { inputs with RoutineGate = Known(GateFinding kind) }
 
     [<Fact>]
     let ``routine delivery: healthy open and merge candidates are fully supported with the registered checks`` () =
         let open' = runRoutine OpenPullRequest routine
         Assert.Equal<Check list>(checksFor RoutineDelivery OpenPullRequest, open'.Findings |> List.map _.Check)
-        Assert.Equal((AllSupported, 0), (open'.Overall, exitCode open'.Overall))
-        Assert.Equal(7, open'.Findings.Length)
+        Assert.Equal((AllSupported, 0, 7), (open'.Overall, exitCode open'.Overall, open'.Findings.Length))
         let merge = runRoutine MergePullRequest opened
         Assert.Equal<Check list>(checksFor RoutineDelivery MergePullRequest, merge.Findings |> List.map _.Check)
-        Assert.Equal(8, merge.Findings.Length)
-        Assert.Equal((AllSupported, 0), (merge.Overall, exitCode merge.Overall))
-        Assert.DoesNotContain(BaseCurrent, checksFor RoutineDelivery OpenPullRequest)
+        Assert.Equal((AllSupported, 0, 10), (merge.Overall, exitCode merge.Overall, merge.Findings.Length))
+        // The base ref and the pull request state exist only once there is a pull request: at open they would be tautologies.
+        for check in [ BaseIsDefaultBranch; PullRequestOpen; BaseCurrent ] do
+            Assert.DoesNotContain(check, checksFor RoutineDelivery OpenPullRequest)
+            Assert.Contains(check, checksFor RoutineDelivery MergePullRequest)
 
     [<Fact>]
-    let ``routine delivery: each check has its own negative control with the exact reason and supplier`` () =
+    let ``routine delivery: the head branch is matched with the gate's own pattern`` () =
+        let branch name = verdictOf (runRoutine OpenPullRequest (withCandidate (fun c -> { c with HeadRef = name }) routine)) RoutineBranch
+        let valid = [ "routine/a"; "routine/coord-eff-02c-pr3"; "routine/a.b-c_d"; "routine/0x" ]
+        let invalid = [ "routine/"; "routine/Upper"; "routine/-x"; "routine/.x"; "routine/a b"; "routine//x"; "routine/a/b"; "xroutine/a"; "routine"; "feature/x"; "routine/a\n" ]
+        for name in valid do Assert.True(isSupported (branch name), name)
+        for name in invalid do Assert.Equal(Unsupported(BranchNotRoutine, PullRequestOwner), branch name)
+        Assert.Equal((4, 11), (valid.Length, invalid.Length))
+
+    [<Fact>]
+    let ``routine delivery: each gate finding decides exactly the check it names, earlier checks passed, later ones were not reached`` () =
+        let phases = [ MarkerSingle; MarkerHeadBound; MarkerOperationAllowed; ChangesPresent ]
+        let expect kind failing reason supplier =
+            let report = runRoutine OpenPullRequest (gate kind routine)
+            let at = phases |> List.findIndex ((=) failing)
+            phases |> List.iteri (fun i check ->
+                let verdict = verdictOf report check
+                if i < at then Assert.True(isSupported verdict, kind + " " + checkCode check)
+                elif i = at then Assert.Equal(Unsupported(reason, supplier), verdict)
+                else Assert.Equal(Unknown { Input = RoutineGate; Kind = NotEvaluated }, verdict))
+            Assert.Equal((AnyUnsupported, 10), (report.Overall, exitCode report.Overall))
+        expect "routine-missing" MarkerSingle MarkerMissingOrAmbiguous PullRequestOwner
+        // The gate refuses a repeated field (`operation=source-change operation=publish`) as ambiguous.
+        expect "routine-ambiguous" MarkerSingle MarkerMissingOrAmbiguous PullRequestOwner
+        expect "routine-changed-head" MarkerHeadBound MarkerHeadDiffers PullRequestOwner
+        expect "routine-protected-operation" MarkerOperationAllowed OperationNotAllowed Root
+        expect "routine-empty" ChangesPresent NoChangedPaths PullRequestOwner
+        // A finding kind this core does not know is a gap, not a verdict.
+        let strange = runRoutine OpenPullRequest (gate "routine-future-kind" routine)
+        for check in phases do Assert.Equal(Unknown { Input = RoutineGate; Kind = Unreadable }, verdictOf strange check)
+        // Gate not run or failed: unknown, never supported.
+        for kind in [ NotSupplied; Unreadable; NotEvaluated ] do
+            let report = runRoutine OpenPullRequest { routine with RoutineGate = NotObserved kind }
+            for check in phases do Assert.Equal(Unknown { Input = RoutineGate; Kind = kind }, verdictOf report check)
+            Assert.Equal(11, exitCode report.Overall)
+
+    [<Fact>]
+    let ``routine delivery causal controls: only the gate's finding changes between supported and unsupported`` () =
+        let ambiguous = runRoutine OpenPullRequest (gate "routine-ambiguous" routine)
+        Assert.Equal(Unsupported(MarkerMissingOrAmbiguous, PullRequestOwner), verdictOf ambiguous MarkerSingle)
+        Assert.True(isSupported (verdictOf (runRoutine OpenPullRequest routine) MarkerSingle))
+        // The branch alone: the same inputs under a branch outside the pattern.
+        Assert.Equal(AnyUnsupported, (runRoutine OpenPullRequest (withCandidate (fun c -> { c with HeadRef = "routine/Upper" }) routine)).Overall)
+
+    [<Fact>]
+    let ``routine delivery: pull request facts, state and the single pull request`` () =
         let unsupported check reason supplier report = Assert.Equal(Unsupported(reason, supplier), verdictOf report check)
-        unsupported BaseIsDefaultBranch PullRequestBaseNotDefault PullRequestOwner (runRoutine OpenPullRequest (withCandidate (fun c -> { c with BaseRef = "release" }) routine))
-        unsupported RoutineBranch BranchNotRoutine PullRequestOwner (runRoutine OpenPullRequest (withCandidate (fun c -> { c with HeadRef = "feature/x" }) routine))
-        let none = runRoutine OpenPullRequest (withCandidate (fun c -> { c with Body = "Refs #4941" }) routine)
-        unsupported MarkerSingle MarkerMissingOrAmbiguous PullRequestOwner none
-        let two = runRoutine OpenPullRequest (withCandidate (fun c -> { c with Body = c.Body + marker head "source-change" }) routine)
-        unsupported MarkerSingle MarkerMissingOrAmbiguous PullRequestOwner two
-        let stale = runRoutine OpenPullRequest (withCandidate (fun c -> { c with Body = "Refs #4941\n" + marker (String.replicate 40 "c") "source-change" }) routine)
-        unsupported MarkerHeadBound MarkerHeadDiffers PullRequestOwner stale
-        for operation in [ "publish"; "unknown-operation" ] do
-            unsupported MarkerOperationAllowed OperationNotAllowed Root (runRoutine OpenPullRequest (withCandidate (fun c -> { c with Body = "Refs #4941\n" + marker head operation }) routine))
+        unsupported BaseIsDefaultBranch PullRequestBaseNotDefault PullRequestOwner (runRoutine MergePullRequest (withCandidate (fun c -> { c with BaseRef = "release" }) opened))
+        unsupported PullRequestOpen PullRequestNotOpen PullRequestOwner (runRoutine MergePullRequest (withCandidate (fun c -> { c with State = Some "closed" }) opened))
+        Assert.Equal(Unknown { Input = PullRequestFact; Kind = NotSupplied }, verdictOf (runRoutine MergePullRequest (withCandidate (fun c -> { c with State = None }) opened)) PullRequestOpen)
+        Assert.True(isSupported (verdictOf (runRoutine MergePullRequest opened) PullRequestOpen))
         unsupported SinglePullRequest PullRequestAlreadyOpen PullRequestOwner (runRoutine OpenPullRequest opened)
         unsupported SinglePullRequest PullRequestNotSingle PullRequestOwner (runRoutine MergePullRequest routine)
         unsupported SinglePullRequest PullRequestNotSingle PullRequestOwner (runRoutine MergePullRequest { routine with OpenPullRequests = Known 2 })
-        // Every refusal is a non-zero exit, and Unsupported is 10.
-        Assert.Equal(10, exitCode (runRoutine OpenPullRequest (withCandidate (fun c -> { c with HeadRef = "feature/x" }) routine)).Overall)
+        Assert.True(isSupported (verdictOf (runRoutine OpenPullRequest routine) SinglePullRequest))
+        Assert.True(isSupported (verdictOf (runRoutine MergePullRequest opened) SinglePullRequest))
 
     [<Fact>]
-    let ``routine delivery causal controls: restoring the one changed thing restores support`` () =
-        let broken = withCandidate (fun c -> { c with Body = "Refs #4941\n" + marker (String.replicate 40 "c") "source-change" }) routine
-        Assert.Equal(AnyUnsupported, (runRoutine OpenPullRequest broken).Overall)
-        // The same candidate bound to its real head is supported: the head binding alone caused the refusal.
-        let bound = withCandidate (fun c -> { c with Body = "Refs #4941\n" + marker c.HeadSha "source-change" }) routine
-        Assert.Equal(AllSupported, (runRoutine OpenPullRequest bound).Overall)
-        // The branch prefix is read from the policy: the same branch under another prefix flips the verdict.
-        let other = { routine with Policy = Known { policy with BranchPrefix = "wip/" } }
-        Assert.Equal(Unsupported(BranchNotRoutine, PullRequestOwner), verdictOf (runRoutine OpenPullRequest other) RoutineBranch)
+    let ``routine delivery: the closing-keyword gate result is not re-derived, and an undeclared keyword is unsupported`` () =
+        let closing result = verdictOf (runRoutine OpenPullRequest { routine with ClosingGate = result }) ClosingLinkDeclared
+        Assert.True(isSupported (closing (Known NoClosing)))
+        Assert.Equal(Unsupported(ClosingKeywordUndeclared, PullRequestOwner), closing (Known UndeclaredClosing))
+        // A properly declared line is the gate's accepted way to close; whether it fulfils the issue is not decidable here.
+        Assert.Equal(Unknown { Input = ClosingGate; Kind = ClosingLinkPresent 2 }, closing (Known(DeclaredClosing [ "#4941"; "#12" ])))
+        for kind in [ NotSupplied; Unreadable ] do Assert.Equal(Unknown { Input = ClosingGate; Kind = kind }, closing (NotObserved kind))
+        let declared = runRoutine OpenPullRequest { routine with ClosingGate = Known(DeclaredClosing [ "#4941" ]) }
+        Assert.Equal<string list>([ "#4941" ], (findingOf declared ClosingLinkDeclared).Subjects)
+        Assert.Equal((AnyUnknown, 11), (declared.Overall, exitCode declared.Overall))
+        Assert.Equal(10, exitCode (runRoutine OpenPullRequest { routine with ClosingGate = Known UndeclaredClosing }).Overall)
 
     [<Fact>]
-    let ``routine delivery: closing keywords are unknown and named, references are supported, and the base race is unknown`` () =
-        let closing = runRoutine OpenPullRequest (withCandidate (fun c -> { c with Body = c.Body + "\nCloses #4941 and fixes FS-GG/.github#12" }) routine)
-        Assert.Equal(Unknown { Input = PullRequestFact; Kind = ClosingLinkPresent 2 }, verdictOf closing ClosingLinkDeclared)
-        Assert.Equal<string list>([ "Closes #4941"; "fixes FS-GG/.github#12" ], (findingOf closing ClosingLinkDeclared).Subjects)
-        Assert.Equal((AnyUnknown, 11), (closing.Overall, exitCode closing.Overall))
-        // Title is scanned too, and a mere reference is not a closing keyword.
-        let titled = runRoutine OpenPullRequest (withCandidate (fun c -> { c with Title = "resolve #7" }) routine)
-        Assert.Equal(Unknown { Input = PullRequestFact; Kind = ClosingLinkPresent 1 }, verdictOf titled ClosingLinkDeclared)
-        Assert.True(isSupported (verdictOf (runRoutine OpenPullRequest (withCandidate (fun c -> { c with Body = c.Body + "\nRefs #4941, see also #12, unresolved" }) routine)) ClosingLinkDeclared))
-        // The routine-eligibility race: the recorded base is no longer the live head.
+    let ``routine delivery: the base race is unknown and unobserved inputs name themselves`` () =
         let moved = runRoutine MergePullRequest { opened with LiveBaseSha = Known(String.replicate 40 "d") }
         Assert.Equal(Unknown { Input = BaseHead; Kind = BaseMoved }, verdictOf moved BaseCurrent)
         Assert.True(isSupported (verdictOf (runRoutine MergePullRequest opened) BaseCurrent))
-
-    [<Fact>]
-    let ``routine delivery: unobserved inputs are unknown with their own input named`` () =
         let gap input kind report check = Assert.Equal(Unknown { Input = input; Kind = kind }, verdictOf report check)
         let unread = runRoutine MergePullRequest { opened with Candidate = NotObserved ReadFailed }
-        gap PullRequestFact ReadFailed unread MarkerSingle
+        gap PullRequestFact ReadFailed unread BaseIsDefaultBranch
+        gap PullRequestFact ReadFailed unread PullRequestOpen
+        gap PullRequestFact ReadFailed unread RoutineBranch
         gap PullRequestFact ReadFailed unread BaseCurrent
-        gap RoutinePolicy NotSupplied (runRoutine OpenPullRequest { routine with Policy = NotObserved NotSupplied }) RoutineBranch
-        gap RoutinePolicy NotSupplied (runRoutine OpenPullRequest { routine with Policy = NotObserved NotSupplied }) MarkerOperationAllowed
         gap OpenPullRequestFact ReadFailed (runRoutine OpenPullRequest { routine with OpenPullRequests = NotObserved ReadFailed }) SinglePullRequest
         gap BaseHead ReadFailed (runRoutine MergePullRequest { opened with LiveBaseSha = NotObserved ReadFailed }) BaseCurrent
         // A candidate not yet opened records no base, so the race cannot be assessed.
@@ -211,21 +239,25 @@ module V2RoutesTests =
     // ---- disposition 2: ConstructorIdentity freshness ----
 
     [<Fact>]
-    let ``ConstructorIdentity: a difference is unsupported against a live or asserted main and only unknown against a local ref`` () =
+    let ``ConstructorIdentity: only a live or asserted main can support or refuse, a local tracking ref is unknown either way`` () =
         let privateJson, publicJson, successorPrivate, successorPublic = healthyBind ()
-        let inputs = { bindInputs successorPrivate successorPublic privateJson publicJson with ConstructorRevision = Known(String.replicate 40 "2") }
-        let verdict freshness = verdictOf (run ProgrammeEnrollmentSuccessor PlanSuccessor { inputs with ProtectedMainFreshness = freshness }) ConstructorIdentity
-        Assert.Equal(Unsupported(ConstructorDiffersFromMain, ConstructorBuild), verdict LiveMain)
-        Assert.Equal(Unsupported(ConstructorDiffersFromMain, ConstructorBuild), verdict AssertedMain)
-        Assert.Equal(Unknown { Input = ProtectedMain; Kind = NotLive }, verdict LocalTrackingRef)
-        // Equal: supported in every case, and the evidence says where the reference came from.
-        let equal freshness = verdictOf (run ProgrammeEnrollmentSuccessor PlanSuccessor { inputs with ConstructorRevision = inputs.ProtectedMain; ProtectedMainFreshness = freshness }) ConstructorIdentity
-        match equal LocalTrackingRef, equal LiveMain with
-        | SupportedForNextStage local, SupportedForNextStage live ->
-            Assert.Contains("may be stale", local)
+        let inputs = bindInputs successorPrivate successorPublic privateJson publicJson
+        let differing = { inputs with ConstructorRevision = Known(String.replicate 40 "2") }
+        let verdict (changed: EnrollmentInputs) freshness = verdictOf (run ProgrammeEnrollmentSuccessor PlanSuccessor { changed with ProtectedMainFreshness = freshness }) ConstructorIdentity
+        Assert.Equal(Unsupported(ConstructorDiffersFromMain, ConstructorBuild), verdict differing LiveMain)
+        Assert.Equal(Unsupported(ConstructorDiffersFromMain, ConstructorBuild), verdict differing AssertedMain)
+        // A stale checkout can equal a stale tracking ref, so a match proves nothing offline, and neither does a difference.
+        Assert.Equal(Unknown { Input = ProtectedMain; Kind = NotLive }, verdict differing LocalTrackingRef)
+        Assert.Equal(Unknown { Input = ProtectedMain; Kind = NotLive }, verdict inputs LocalTrackingRef)
+        let local = run ProgrammeEnrollmentSuccessor PlanSuccessor { inputs with ProtectedMainFreshness = LocalTrackingRef }
+        Assert.Equal(AnyUnknown, (findingOf local ConstructorIdentity |> fun f -> overallOf [ f ]))
+        // Equal against a live or asserted main is supported, and the evidence says where the reference came from.
+        match verdict inputs LiveMain, verdict inputs AssertedMain with
+        | SupportedForNextStage live, SupportedForNextStage asserted ->
             Assert.Contains("live remote head", live)
-            Assert.DoesNotContain("stale", live)
+            Assert.Contains("asserted", asserted)
         | other -> failwithf "%A" other
+        Assert.Equal(0, exitCode (run ProgrammeEnrollmentSuccessor BindRuntime { inputs with ProtectedMainFreshness = LiveMain }).Overall)
 
     // ---- disposition 4: a 404 that may be invisibility ----
 
@@ -275,7 +307,8 @@ module V2RoutesTests =
         // With a limit, the tighter of the two bounds: a roomy cgroup does not hide a starved host.
         Assert.Equal(Unsupported(InsufficientMemoryHeadroom, HostCapacity), memory (Known(Some 4294967296L)) (Known 1024L))
         Assert.True(isSupported (memory (Known(Some 4294967296L)) (Known 8589934592L)))
-        Assert.True(isSupported (memory (Known(Some 4294967296L)) (NotObserved Unreadable)))
+        // A known cgroup limit does not bound the host: with MemAvailable unobserved the tighter bound is unknown.
+        Assert.Equal(Unknown { Input = HostMemory; Kind = Unreadable }, memory (Known(Some 4294967296L)) (NotObserved Unreadable))
         // An unreadable cgroup stays unknown whatever the host reports: it may be the tighter bound.
         Assert.Equal(Unknown { Input = CgroupMemory; Kind = Unreadable }, memory (NotObserved Unreadable) (Known 8589934592L))
 
@@ -320,3 +353,19 @@ module V2RoutesTests =
         Assert.Equal(Unknown { Input = PlanBlobFact; Kind = NotVisible }, verdictOf hidden PlanBlob)
         Assert.Equal(Unknown { Input = NativeFacts; Kind = NotLive }, verdictOf (run ProgrammeEnrollmentSuccessor BindRuntime { inputs with Facts = Known(facts, Supplied) }) PlanBlob)
         Assert.Equal(Unknown { Input = NativeFacts; Kind = Incomplete }, verdictOf (run ProgrammeEnrollmentSuccessor BindRuntime { inputs with Facts = Known({ facts with PlanBlobs = [] }, Live) }) PlanBlob)
+
+    [<Fact>]
+    let ``BindRuntime plan blobs: a sha-pinned reference is not checked against main and is reported as not evaluated`` () =
+        let privateJson, publicJson, successorPrivate, successorPublic = healthyBind ()
+        let inputs = bindInputs successorPrivate successorPublic privateJson publicJson
+        let built = plan privateJson publicJson request facts |> get
+        let pinned = "https://github.com/FS-GG/.github/blob/" + String.replicate 40 "a" + "/docs/pinned.md"
+        let edited = Text.Encoding.UTF8.GetBytes((Text.Encoding.UTF8.GetString built.Payload).Replace("https://github.com/FS-GG/.github/blob/main/" + planPath, pinned))
+        Assert.NotEqual<byte array>(built.Payload, edited)
+        let pinnedPrivate, pinnedPublic = V2Projection.prepareProgrammeBinding built.TemplateJson edited (fun () -> Array.create 32 9uy) |> getIo
+        let report = run ProgrammeEnrollmentSuccessor BindRuntime { inputs with SuccessorPrivate = Known pinnedPrivate; SuccessorPublic = Known pinnedPublic }
+        // Not Supported: an immutable reference says nothing about main now, and its text must not claim otherwise.
+        Assert.Equal(Unknown { Input = PlanBlobFact; Kind = NotEvaluated }, verdictOf report PlanBlob)
+        Assert.Equal<string list>([ request.Issues.[1].Ref ], (findingOf report PlanBlob).Subjects)
+        // Causal pair: the same successor with the main reference restored is supported again.
+        Assert.True(isSupported (verdictOf (run ProgrammeEnrollmentSuccessor BindRuntime inputs) PlanBlob))

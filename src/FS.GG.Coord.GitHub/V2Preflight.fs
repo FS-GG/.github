@@ -72,6 +72,8 @@ module V2Preflight =
         | MarkerHeadBound
         | MarkerOperationAllowed
         | ClosingLinkDeclared
+        | PullRequestOpen
+        | ChangesPresent
         | SinglePullRequest
         | BaseCurrent
         | WorkflowReadable
@@ -111,6 +113,8 @@ module V2Preflight =
         | MarkerHeadBound -> "MarkerHeadBound"
         | MarkerOperationAllowed -> "MarkerOperationAllowed"
         | ClosingLinkDeclared -> "ClosingLinkDeclared"
+        | PullRequestOpen -> "PullRequestOpen"
+        | ChangesPresent -> "ChangesPresent"
         | SinglePullRequest -> "SinglePullRequest"
         | BaseCurrent -> "BaseCurrent"
         | WorkflowReadable -> "WorkflowReadable"
@@ -133,10 +137,14 @@ module V2Preflight =
         [ ConstructorIdentity; SuccessorIntegrity; SuccessorExtendsPredecessor; PlanGrammar; PlanBlob; ToolchainLock
           MemoryHeadroom; ProjectAutoAdd; AdjacencyChurn ]
 
+    // A candidate that is not yet a pull request has no base ref of its own to check, so `BaseIsDefaultBranch` and
+    // `PullRequestOpen` are merge-stage checks; at open they would be tautologies.
     let private routineOpenChecks =
-        [ BaseIsDefaultBranch; RoutineBranch; MarkerSingle; MarkerHeadBound; MarkerOperationAllowed; ClosingLinkDeclared; SinglePullRequest ]
+        [ RoutineBranch; MarkerSingle; MarkerHeadBound; MarkerOperationAllowed; ChangesPresent; ClosingLinkDeclared; SinglePullRequest ]
 
-    let private routineMergeChecks = routineOpenChecks @ [ BaseCurrent ]
+    let private routineMergeChecks =
+        [ BaseIsDefaultBranch; PullRequestOpen; RoutineBranch; MarkerSingle; MarkerHeadBound; MarkerOperationAllowed; ChangesPresent
+          ClosingLinkDeclared; SinglePullRequest; BaseCurrent ]
 
     let private registerChecks = [ WorkflowReadable; WorkflowPublishes; RegistryReadable; NotYetRegistered ]
     let private runWriterChecks = [ RegistryReadable; WriterRegistered; CoverageAudit ]
@@ -210,6 +218,9 @@ module V2Preflight =
         | WriterAlreadyRegistered
         | WriterNotRegistered
         | CoverageUnmet
+        | PullRequestNotOpen
+        | NoChangedPaths
+        | ClosingKeywordUndeclared
 
     let reasonCode reason =
         match reason with
@@ -244,6 +255,9 @@ module V2Preflight =
         | WriterAlreadyRegistered -> "WriterAlreadyRegistered"
         | WriterNotRegistered -> "WriterNotRegistered"
         | CoverageUnmet -> "CoverageUnmet"
+        | PullRequestNotOpen -> "PullRequestNotOpen"
+        | NoChangedPaths -> "NoChangedPaths"
+        | ClosingKeywordUndeclared -> "ClosingKeywordUndeclared"
 
     let private supplierOf reason =
         match reason with
@@ -259,6 +273,7 @@ module V2Preflight =
         | PullRequestBaseNotDefault | BranchNotRoutine | MarkerMissingOrAmbiguous | MarkerHeadDiffers | PullRequestAlreadyOpen | PullRequestNotSingle -> PullRequestOwner
         | OperationNotAllowed -> Root
         | WorkflowHasNoPublicationEffect | WriterAlreadyRegistered | WriterNotRegistered | CoverageUnmet -> WriterRegistry
+        | PullRequestNotOpen | NoChangedPaths | ClosingKeywordUndeclared -> PullRequestOwner
 
     type Input =
         | SourceRevision
@@ -282,7 +297,8 @@ module V2Preflight =
         | PullRequestFact
         | OpenPullRequestFact
         | BaseHead
-        | RoutinePolicy
+        | RoutineGate
+        | ClosingGate
         | WorkflowText
         | WriterRegistryText
         | CoverageGate
@@ -327,7 +343,8 @@ module V2Preflight =
         | PullRequestFact -> "PullRequest"
         | OpenPullRequestFact -> "OpenPullRequests"
         | BaseHead -> "BaseHead"
-        | RoutinePolicy -> "RoutinePolicy"
+        | RoutineGate -> "RoutineGate"
+        | ClosingGate -> "ClosingGate"
         | WorkflowText -> "Workflow"
         | WriterRegistryText -> "WriterRegistry"
         | CoverageGate -> "CoverageAudit"
@@ -424,25 +441,29 @@ module V2Preflight =
           Now: DateTimeOffset
           ChurnWindow: TimeSpan }
 
-    type RoutinePolicy =
-        { BranchPrefix: string
-          AllowedOperations: string list
-          ProtectedOperations: string list }
-
     type RoutineCandidate =
         { BaseRef: string
           BaseSha: string option
           HeadRef: string
           HeadSha: string
-          Title: string
-          Body: string }
+          State: string option }
+
+    type RoutineGateResult =
+        | Admitted
+        | GateFinding of kind: string
+
+    type ClosingGateResult =
+        | NoClosing
+        | DeclaredClosing of references: string list
+        | UndeclaredClosing
 
     type RoutineInputs =
         { DefaultBranch: string
           Candidate: Observed<RoutineCandidate>
-          Policy: Observed<RoutinePolicy>
           LiveBaseSha: Observed<string>
-          OpenPullRequests: Observed<int> }
+          OpenPullRequests: Observed<int>
+          RoutineGate: Observed<RoutineGateResult>
+          ClosingGate: Observed<ClosingGateResult> }
 
     type CoverageAuditResult =
         | Clean
@@ -542,12 +563,12 @@ module V2Preflight =
                 | LiveMain -> "live remote head"
                 | AssertedMain -> "revision asserted by the operator"
                 | LocalTrackingRef -> "local tracking ref; it may be stale"
-            if built = main then supported ConstructorIdentity ("constructor source revision equals the intended protected main (" + source + ")")
-            else
-                match ctx.Inputs.ProtectedMainFreshness with
-                // A difference from a ref that may be stale does not establish that the constructor is behind.
-                | LocalTrackingRef -> unknown ConstructorIdentity ProtectedMain NotLive []
-                | LiveMain | AssertedMain -> unsupported ConstructorIdentity ConstructorDiffersFromMain []
+            match ctx.Inputs.ProtectedMainFreshness with
+            // A stale checkout can equal a stale tracking ref, so neither a match nor a difference is evidence offline.
+            | LocalTrackingRef -> unknown ConstructorIdentity ProtectedMain NotLive []
+            | LiveMain | AssertedMain ->
+                if built = main then supported ConstructorIdentity ("constructor source revision equals the intended protected main (" + source + ")")
+                else unsupported ConstructorIdentity ConstructorDiffersFromMain []
 
     let private predecessorIntegrity (ctx: Context) =
         match predecessorGap ctx, ctx.Analysis with
@@ -685,16 +706,19 @@ module V2Preflight =
                 let absent = ResizeArray<string>()
                 let hidden = ResizeArray<string>()
                 let unread = ResizeArray<string>()
+                let pinned = ResizeArray<string>()
                 for issue, repository, reference, path in docs do
                     match facts.PlanBlobs |> List.tryFind (fun blob -> blob.Repository = repository && blob.Path = path) with
-                    | _ when reference <> "main" -> ()
+                    // A sha-pinned reference is immutable and says nothing about main now; it is not checked here.
+                    | _ when reference <> "main" -> pinned.Add issue
                     | None -> unread.Add issue
                     | Some blob when blob.OnMain -> ()
                     | Some _ -> if ctx.Inputs.InvisibleRepositories.Contains repository then hidden.Add issue else absent.Add issue
                 if absent.Count > 0 then unsupported PlanBlob PlanBlobAbsentOnMain (List.ofSeq absent |> capped)
                 elif hidden.Count > 0 then unknown PlanBlob PlanBlobFact NotVisible (List.ofSeq hidden |> capped)
                 elif unread.Count > 0 then unknown PlanBlob NativeFacts Incomplete (List.ofSeq unread |> capped)
-                else supported PlanBlob "every appended protected document exists on main now"
+                elif pinned.Count > 0 then unknown PlanBlob PlanBlobFact NotEvaluated (List.ofSeq pinned |> capped)
+                else supported PlanBlob "every appended main-branch protected document exists on main now"
         | Ok _, None, _ -> unknown PlanBlob SuccessorPrivate Unreadable []
 
     let private planBlob (ctx: Context) = if ctx.Stage = BindRuntime then bindingPlanBlob ctx else planningPlanBlob ctx
@@ -773,7 +797,8 @@ module V2Preflight =
             match ctx.Inputs.MemoryHeadroomBytes, ctx.Inputs.HostMemAvailableBytes with
             | NotObserved kind, _ -> Error(CgroupMemory, kind)
             | Known(Some limit), Known host -> Ok(min limit host)
-            | Known(Some limit), NotObserved _ -> Ok limit
+            // A known cgroup limit does not bound the host: with MemAvailable unobserved the tighter bound is unknown.
+            | Known(Some _), NotObserved kind -> Error(HostMemory, kind)
             | Known None, Known host -> Ok host
             | Known None, NotObserved kind -> Error(HostMemory, kind)
         match effective with
@@ -911,66 +936,60 @@ module V2Preflight =
 
     // ---- routine delivery ----
 
-    let private markerPattern = Text.RegularExpressions.Regex(@"<!--\s*fsgg:routine-development/v1\s+(?<fields>.*?)-->", Text.RegularExpressions.RegexOptions.Singleline ||| Text.RegularExpressions.RegexOptions.CultureInvariant)
-    let private markerField (fields: string) (name: string) =
-        fields.Split([| ' '; '\t'; '\r'; '\n' |], StringSplitOptions.RemoveEmptyEntries)
-        |> Array.tryPick (fun token -> if token.StartsWith(name + "=", StringComparison.Ordinal) then Some(token.Substring(name.Length + 1)) else None)
+    // The gate's own branch pattern (`ROUTINE_BRANCH_RE` in scripts/check-claim-generation.py).
+    let private routineBranch = Text.RegularExpressions.Regex(@"\Aroutine/[a-z0-9][a-z0-9._-]*\z", Text.RegularExpressions.RegexOptions.CultureInvariant)
 
-    // A GitHub native closing keyword, then optionally a colon, then an issue reference.
-    let private closingPattern =
-        Text.RegularExpressions.Regex(
-            @"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+",
-            Text.RegularExpressions.RegexOptions.IgnoreCase ||| Text.RegularExpressions.RegexOptions.CultureInvariant)
+    // The routine gate evaluates in this order and stops at the first finding, so a check is decided only if the
+    // gate got that far: earlier checks passed, later ones were not evaluated.
+    let private gatePhase (kind: string) =
+        match kind with
+        | "routine-missing" | "routine-ambiguous" -> 0
+        | "routine-changed-head" -> 1
+        | "routine-protected-operation" -> 2
+        | "routine-empty" -> 3
+        | _ -> -1
 
     let private routineFinding (check: Check) (inputs: RoutineInputs) : Finding =
-        let candidate = inputs.Candidate
         let withCandidate (decide: RoutineCandidate -> Finding) =
-            match candidate with
+            match inputs.Candidate with
             | Known value -> decide value
             | NotObserved kind -> unknown check PullRequestFact kind []
-        let markers (value: RoutineCandidate) = markerPattern.Matches value.Body |> Seq.toList
-        let singleMarker (value: RoutineCandidate) =
-            match markers value with
-            | [ one ] when value.Body.Split([| "fsgg:routine-development" |], StringSplitOptions.None).Length = 2 -> Some one.Groups.["fields"].Value
-            | _ -> None
+        let gated (phase: int) (reason: Reason) (evidence: string) =
+            match inputs.RoutineGate with
+            | NotObserved kind -> unknown check RoutineGate kind []
+            | Known Admitted -> supported check evidence
+            | Known(GateFinding kind) ->
+                let failing = gatePhase kind
+                if failing < 0 then unknown check RoutineGate Unreadable []
+                elif phase < failing then supported check evidence
+                elif phase = failing then unsupported check reason []
+                else unknown check RoutineGate NotEvaluated []
         match check with
         | BaseIsDefaultBranch ->
             withCandidate (fun value ->
                 if value.BaseRef = inputs.DefaultBranch then supported check "the pull request targets the default branch"
                 else unsupported check PullRequestBaseNotDefault [])
+        | PullRequestOpen ->
+            withCandidate (fun value ->
+                match value.State with
+                | Some "open" -> supported check "the pull request is open"
+                | Some _ -> unsupported check PullRequestNotOpen []
+                | None -> unknown check PullRequestFact NotSupplied [])
         | RoutineBranch ->
-            match inputs.Policy with
-            | NotObserved kind -> unknown check RoutinePolicy kind []
-            | Known policy ->
-                withCandidate (fun value ->
-                    if value.HeadRef.StartsWith(policy.BranchPrefix, StringComparison.Ordinal) && policy.BranchPrefix.Length > 0 then supported check "head branch carries the routine prefix"
-                    else unsupported check BranchNotRoutine [])
-        | MarkerSingle ->
             withCandidate (fun value ->
-                match singleMarker value with
-                | Some _ -> supported check "exactly one complete routine-development marker"
-                | None -> unsupported check MarkerMissingOrAmbiguous [])
-        | MarkerHeadBound ->
-            withCandidate (fun value ->
-                match singleMarker value |> Option.bind (fun fields -> markerField fields "head") with
-                | Some head when hex40 head && head = value.HeadSha -> supported check "the marker names the exact head"
-                | Some _ -> unsupported check MarkerHeadDiffers []
-                | None -> unsupported check MarkerMissingOrAmbiguous [])
-        | MarkerOperationAllowed ->
-            match inputs.Policy with
-            | NotObserved kind -> unknown check RoutinePolicy kind []
-            | Known policy ->
-                withCandidate (fun value ->
-                    match singleMarker value |> Option.bind (fun fields -> markerField fields "operation") with
-                    | Some operation when List.contains operation policy.AllowedOperations && not (List.contains operation policy.ProtectedOperations) ->
-                        supported check "the marker operation is allowed and not protected"
-                    | Some _ -> unsupported check OperationNotAllowed []
-                    | None -> unsupported check MarkerMissingOrAmbiguous [])
+                if routineBranch.IsMatch value.HeadRef then supported check "head branch matches the gate's routine branch pattern"
+                else unsupported check BranchNotRoutine [])
+        | MarkerSingle -> gated 0 MarkerMissingOrAmbiguous "the gate finds exactly one complete marker with no repeated field"
+        | MarkerHeadBound -> gated 1 MarkerHeadDiffers "the gate finds the marker bound to the exact head"
+        | MarkerOperationAllowed -> gated 2 OperationNotAllowed "the gate finds the marker operation allowed and not protected"
+        | ChangesPresent -> gated 3 NoChangedPaths "the exact base and head differ in at least one path"
         | ClosingLinkDeclared ->
-            withCandidate (fun value ->
-                let found = [ closingPattern.Matches value.Title; closingPattern.Matches value.Body ] |> List.collect (fun matches -> matches |> Seq.map _.Value |> Seq.toList)
-                if found.IsEmpty then supported check "no native closing keyword names an issue (references only)"
-                else unknown check PullRequestFact (ClosingLinkPresent found.Length) (found |> List.map (fun text -> Text.RegularExpressions.Regex.Replace(text, @"\s+", " ")) |> capped))
+            match inputs.ClosingGate with
+            | NotObserved kind -> unknown check ClosingGate kind []
+            | Known NoClosing -> supported check "the closing-keyword gate finds no closing reference in the title, body or commit messages"
+            // A declared closing line is the gate's accepted way to close; whether that fulfils the issue is not decidable here.
+            | Known(DeclaredClosing references) -> unknown check ClosingGate (ClosingLinkPresent references.Length) (capped references)
+            | Known UndeclaredClosing -> unsupported check ClosingKeywordUndeclared []
         | SinglePullRequest ->
             match inputs.OpenPullRequests with
             | NotObserved kind -> unknown check OpenPullRequestFact kind []

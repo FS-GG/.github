@@ -60,24 +60,64 @@ module V2EnrollmentDifferentialTests =
           "outside", (fun r -> { r with Issues = { r.Issues.[0] with Ref = "FS-GG/Other#9" } :: r.Issues.Tail })
           "grammar", (fun r -> { r with Issues = r.Issues.Head :: [ { r.Issues.[1] with Plan = V2Enrollment.ProtectedDoc("FS-GG/.github", "issues/4930") } ] }) ]
 
-    /// The unmutated request and facts, 8 + 8*8 fact scenarios, 3 + 3*8 request scenarios: 100 per predecessor shape.
+    /// Per predecessor shape: the unmutated scenario (1); every single fact mutation and every ordered pair of them, 8 + 8*8 (72);
+    /// every single request mutation and each combined with one fact mutation, 3 + 3*8 (27) - these are the 100 PR 2 enumerated;
+    /// and, for refusal ORDERING beyond a pair, every unordered triple of fact mutations C(8,3) (56), every request mutation
+    /// with an unordered pair of fact mutations 3*C(8,2) (84), every pair of request mutations C(3,2) (3), and each such
+    /// request pair with one fact mutation 3*8 (24): 100 + 56 + 84 + 3 + 24 = 267. Then a row that really is already enrolled
+    /// (its request ref and fact are the predecessor's first row), alone, with each fact mutation, with each pair of fact
+    /// mutations and with each request mutation: 1 + 8 + 28 + 3 = 40, so that AlreadyEnrolled is ordered against the
+    /// checks around it. 267 + 40 = 307.
     let private scenarios =
+        let facts' = List.indexed factMutations
+        let requests' = List.indexed requestMutations
+        let combine (fs: (string * (V2Enrollment.NativeFacts -> V2Enrollment.NativeFacts)) list) = (fs |> List.map fst |> String.concat "+"), (fs |> List.map snd |> List.reduce (>>))
         [ yield "none", id, id
           for n1, f1 in factMutations do
             yield n1, id, f1
             for n2, f2 in factMutations do yield n1 + "+" + n2, id, (f1 >> f2)
           for n1, r1 in requestMutations do
             yield n1, r1, id
-            for n2, f2 in factMutations do yield n1 + "+" + n2, r1, f2 ]
+            for n2, f2 in factMutations do yield n1 + "+" + n2, r1, f2
+          // triples of distinct fact mutations, in definition order
+          for i, a in facts' do
+            for j, b in facts' do
+              for k, c in facts' do
+                if i < j && j < k then
+                    let name, f = combine [ a; b; c ]
+                    yield name, id, f
+          // one request mutation with two distinct fact mutations
+          for n1, r1 in requestMutations do
+            for i, a in facts' do
+              for j, b in facts' do
+                if i < j then
+                    let name, f = combine [ a; b ]
+                    yield n1 + "+" + name, r1, f
+          // pairs of request mutations, alone and with one fact mutation
+          for i, (n1, r1) in requests' do
+            for j, (n2, r2) in requests' do
+              if i < j then
+                  yield n1 + "+" + n2, (r1 >> r2), id
+                  for n3, f3 in factMutations do yield n1 + "+" + n2 + "+" + n3, (r1 >> r2), f3
+          // a genuinely enrolled row: the request names the predecessor's first row, and so does its fact
+          let enrolledRequest (r: V2Enrollment.Request) = { r with Issues = { r.Issues.[0] with Ref = "FS-GG/.github#70001" } :: r.Issues.Tail }
+          let enrolledFact (f: V2Enrollment.NativeFacts) =
+              { f with Issues = { f.Issues.[0] with Ref = "FS-GG/.github#70001"; NodeId = "I_synthetic_" + sentinel + "_0" } :: f.Issues.Tail }
+          yield "enrolled-row", enrolledRequest, enrolledFact
+          for n1, f1 in factMutations do yield "enrolled-row+" + n1, enrolledRequest, (enrolledFact >> f1)
+          for i, (n1, f1) in facts' do
+            for j, (n2, f2) in facts' do
+              if i < j then yield "enrolled-row+" + n1 + "+" + n2, enrolledRequest, (enrolledFact >> f1 >> f2)
+          for n1, r1 in requestMutations do yield "enrolled-row+" + n1, (enrolledRequest >> r1), enrolledFact ]
 
-    /// Cap boundary (98+2 ok, 99+2 over), the ordinary shape, and a non-spliceable payload.
-    let private shapes = [ "five", 5, ""; "cap-ok", 98, ""; "cap-over", 99, ""; "newline", 5, "\n" ]
+    /// Cap boundary (98+2 ok, 99+2 over), the ordinary shape, a non-spliceable payload, and cap-over together with non-spliceable.
+    let private shapes = [ "five", 5, ""; "cap-ok", 98, ""; "cap-over", 99, ""; "newline", 5, "\n"; "cap-over-newline", 99, "\n" ]
 
     [<Fact>]
     let ``the scenario set has the stated size`` () =
-        Assert.Equal(100, scenarios.Length)
-        Assert.Equal(4, shapes.Length)
-        Assert.Equal(400, scenarios.Length * shapes.Length)
+        Assert.Equal(307, scenarios.Length)
+        Assert.Equal(5, shapes.Length)
+        Assert.Equal(1535, scenarios.Length * shapes.Length)
 
     [<Fact>]
     let ``current planner and the PR 1 planner agree on every enumerated scenario`` () =
@@ -97,6 +137,6 @@ module V2EnrollmentDifferentialTests =
                 | Error c, Error b -> Assert.True((codeOf c = Base.refusalCode b), $"{shapeName}/{name}: {codeOf c} vs {Base.refusalCode b}")
                 | Ok _, Error b -> failwithf "%s/%s: current accepts, PR 1 refuses %s" shapeName name (Base.refusalCode b)
                 | Error c, Ok _ -> failwithf "%s/%s: current refuses %s, PR 1 accepts" shapeName name (codeOf c)
-        Assert.Equal(400, compared)
+        Assert.Equal(1535, compared)
         // Non-vacuity: the set exercises both outcomes (accepted: the unmutated scenario on the ordinary and cap-boundary shapes).
         Assert.Equal(2, accepted)

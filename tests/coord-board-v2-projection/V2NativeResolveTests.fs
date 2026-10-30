@@ -151,13 +151,14 @@ module V2NativeResolveTests =
           "/repos/FS-GG/.github", false
           "/repos/FS-GG/.github/issues/80001", false
           "/repos/FS-GG/.github/pulls/4956", false
+          "/repos/FS-GG/.github/pulls/4956/commits?per_page=100", true
           "/repos/FS-GG/.github/pulls?state=open&per_page=100", true
           "/repos/FS-GG/.github/git/ref/heads/main", false
           "/repos/FS-GG/.github/contents/docs/roadmaps/plan.md?ref=main", false ]
 
     [<Fact>]
-    let ``the allowlist admits exactly the nine endpoints the resolvers use`` () =
-        Assert.Equal(9, allowedEndpoints.Length)
+    let ``the allowlist admits exactly the ten endpoints the resolvers use`` () =
+        Assert.Equal(10, allowedEndpoints.Length)
         for path, paginated in allowedEndpoints do
             Assert.True((getArguments path paginated).IsSome, path)
             // Pagination must match what the endpoint needs, in both directions.
@@ -167,7 +168,7 @@ module V2NativeResolveTests =
     let ``anything off the allowlist has no argument vector, including every near miss`` () =
         let refused =
             [ // not an allowlisted endpoint, although inside /repos or /orgs
-              "/repos/FS-GG/.github/issues/80001/comments"; "/repos/FS-GG/.github/issues"; "/repos/FS-GG/.github/pulls/4956/files"
+              "/repos/FS-GG/.github/issues/80001/comments"; "/repos/FS-GG/.github/issues"; "/repos/FS-GG/.github/pulls/4956/files"; "/repos/FS-GG/.github/pulls/4956/commits"; "/repos/FS-GG/.github/pulls/4956/commits?per_page=1"
               "/repos/FS-GG/.github/git/ref/heads/other"; "/repos/FS-GG/.github/git/ref/tags/v1"; "/repos/FS-GG/.github/actions/runs"
               "/orgs/FS-GG/members"; "/orgs/FS-GG/projectsV2"; "/orgs/FS-GG/projectsV2/3/items"; "/orgs/FS-GG/projectsV2/3/views"
               // query near misses
@@ -239,3 +240,18 @@ module V2NativeResolveTests =
         Assert.Equal(Error NativeReadFailed, readMainHead (fun _ _ -> Body "{\"object\":{\"sha\":\"abc\"}}") "FS-GG/.github")
         Assert.Equal(Error NativeReadFailed, readPullRequest transport "FS-GG/.github" 99 |> Result.map ignore)
         Assert.Equal(Error NativeReadFailed, readMainHead transport "not a slug")
+
+    [<Fact>]
+    let ``pull request commit messages are read through the allowlisted paginated GET`` () =
+        let calls = ResizeArray<string * bool>()
+        let transport : Get =
+            fun path paginated ->
+                calls.Add((path, paginated))
+                if path = "/repos/FS-GG/.github/pulls/7/commits?per_page=100" then Body "[[{\"commit\":{\"message\":\"feat: a\\n\\nRefs #1\"}}],[{\"commit\":{\"message\":\"fix: b\"}}]]"
+                elif path = "/repos/FS-GG/.github/pulls/8/commits?per_page=100" then Body "[[]]"
+                else NotFound
+        Assert.Equal(Ok "feat: a\n\nRefs #1\n\nfix: b", readPullRequestCommits transport "FS-GG/.github" 7)
+        for path, paginated in calls do Assert.True((getArguments path paginated).IsSome, path)
+        // No commits is a failed read (the closing gate treats empty commit messages as no verdict), as is a missing pull request.
+        Assert.Equal(Error NativeReadFailed, readPullRequestCommits transport "FS-GG/.github" 8)
+        Assert.Equal(Error NativeReadFailed, readPullRequestCommits transport "FS-GG/.github" 9)

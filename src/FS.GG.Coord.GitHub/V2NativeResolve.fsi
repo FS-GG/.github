@@ -59,7 +59,7 @@ module V2NativeResolve =
 
     /// `GET`-only argument vector for the GitHub CLI, or `None` unless `path` is exactly one allowlisted
     /// endpoint with the pagination that endpoint needs: project metadata, fields and items; a repository,
-    /// one issue, one pull request, the open pull requests, the `main` ref; and a document on `main`.
+    /// one issue, one pull request and its commits, the open pull requests, the `main` ref; and a document on `main`.
     /// A path segment is a name (`[A-Za-z0-9_.-]`, never `%`, never exactly `.` or `..`). Always contains
     /// `--method GET` and never a field, body or input flag.
     val getArguments: path: string -> paginated: bool -> string list option
@@ -80,6 +80,9 @@ module V2NativeResolve =
 
     /// One pull request of `repository`, by a read-only GET.
     val readPullRequest: get: Get -> repository: string -> number: int -> Result<PullRequest, V2Enrollment.Refusal>
+
+    /// The commit messages of one pull request, joined by blank lines, by a read-only paginated GET. Empty is a failed read.
+    val readPullRequestCommits: get: Get -> repository: string -> number: int -> Result<string, V2Enrollment.Refusal>
 
     /// Every open pull request of `repository` whose head branch is `headRef`, by a read-only paginated GET.
     val openPullRequestsFor: get: Get -> repository: string -> headRef: string -> Result<PullRequest list, V2Enrollment.Refusal>

@@ -73,6 +73,8 @@ module V2NativeResolve =
             | [ "repos"; owner; repository ] -> isName owner && isName repository && noQuery && not paginated
             | [ "repos"; owner; repository; "issues"; number ] -> isName owner && isName repository && numberPattern.IsMatch number && noQuery && not paginated
             | [ "repos"; owner; repository; "pulls"; number ] -> isName owner && isName repository && numberPattern.IsMatch number && noQuery && not paginated
+            | [ "repos"; owner; repository; "pulls"; number; "commits" ] ->
+                isName owner && isName repository && numberPattern.IsMatch number && query = Some "per_page=100" && paginated
             | [ "repos"; owner; repository; "pulls" ] -> isName owner && isName repository && query = Some "state=open&per_page=100" && paginated
             | [ "repos"; owner; repository; "git"; "ref"; "heads"; "main" ] -> isName owner && isName repository && noQuery && not paginated
             // A document on main: one to twelve path segments.
@@ -346,5 +348,18 @@ module V2NativeResolve =
             | Body body ->
                 use document = parse body
                 Ok(flatten document |> List.map pullRequestOf |> List.filter (fun pr -> pr.HeadRef = headRef))
+            | _ -> fail ()
+        with _ -> Error V2Enrollment.NativeReadFailed
+
+    // The commit messages of a pull request, which are what a squash merge turns into its message.
+    let readPullRequestCommits (get: Get) (repository: string) (number: int) : Result<string, V2Enrollment.Refusal> =
+        try
+            if not (validRepository repository) || number < 1 then fail ()
+            match get' get ($"/repos/{repository}/pulls/{number}/commits?per_page=100") true with
+            | Body body ->
+                use document = parse body
+                let messages = flatten document |> List.map (fun commit -> str "message" (commit.GetProperty "commit"))
+                if messages.IsEmpty || messages.Length > 250 then fail ()
+                Ok(String.Join("\n\n", messages))
             | _ -> fail ()
         with _ -> Error V2Enrollment.NativeReadFailed

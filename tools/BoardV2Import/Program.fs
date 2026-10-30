@@ -1165,49 +1165,105 @@ module private Successor =
         | true, slug -> if Regex.IsMatch(slug, @"\A[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}\z") then slug else refuse V2Enrollment.MalformedInput
         | _ -> protectedMainRepository
 
+    // Runs a maintained gate script from the checkout and returns (exit code, stdout, stderr), or None if it could not run.
+    let private runGate (repository: string) (arguments: string list) : (int * string * string) option =
+        try
+            let info = Diagnostics.ProcessStartInfo("python3")
+            for argument in [ "-I"; "-B" ] @ arguments do info.ArgumentList.Add argument
+            info.WorkingDirectory <- repository
+            info.RedirectStandardOutput <- true
+            info.RedirectStandardError <- true
+            info.UseShellExecute <- false
+            use proc = Diagnostics.Process.Start info
+            let output = proc.StandardOutput.ReadToEndAsync()
+            let errors = proc.StandardError.ReadToEndAsync()
+            if not (proc.WaitForExit 120000) then
+                (try proc.Kill() with _ -> ())
+                None
+            else
+                output.Wait()
+                errors.Wait()
+                Some(proc.ExitCode, output.Result, errors.Result)
+        with _ -> None
+
     let private preflightRoutine (stage: V2Preflight.Stage) (values: Collections.Generic.Dictionary<string, string>) (online: bool) : int =
-        let repository = values.["--repository"]
+        let repository = programmePath values.["--repository"]
         let slug = slugOf values
         let defaultBranch = "main"
-        let candidate : V2Preflight.Observed<V2Preflight.RoutineCandidate> =
+        let unobserved kind = V2Preflight.NotObserved kind
+        let localBase () = observe (fun () -> (gitRun repository [ "rev-parse"; "--verify"; "refs/remotes/origin/main" ] 128).Trim())
+        // What the gates read: head ref and sha, base sha, title, body and the commit messages that become the squash message.
+        let candidate, baseForGate, title, body, commits =
             match values.TryGetValue "--pr" with
             | true, number ->
-                // An opened pull request: read from native state, which needs the online source.
-                if not online then V2Preflight.NotObserved V2Preflight.NotSupplied
+                if not online then unobserved V2Preflight.NotSupplied, None, None, None, None
                 else
                     let mutable parsed = 0
                     if not (Int32.TryParse(number, Globalization.NumberStyles.None, Globalization.CultureInfo.InvariantCulture, &parsed)) || parsed < 1 then refuse V2Enrollment.MalformedInput
                     match V2NativeResolve.readPullRequest ghGet slug parsed with
-                    | Ok pr -> V2Preflight.Known { BaseRef = pr.BaseRef; BaseSha = Some pr.BaseSha; HeadRef = pr.HeadRef; HeadSha = pr.HeadSha; Title = pr.Title; Body = pr.Body }
-                    | Error _ -> V2Preflight.NotObserved V2Preflight.ReadFailed
+                    | Error _ -> unobserved V2Preflight.ReadFailed, None, None, None, None
+                    | Ok pr ->
+                        let commits = match V2NativeResolve.readPullRequestCommits ghGet slug parsed with Ok text -> Some text | Error _ -> None
+                        V2Preflight.Known({ BaseRef = pr.BaseRef; BaseSha = Some pr.BaseSha; HeadRef = pr.HeadRef; HeadSha = pr.HeadSha; State = Some pr.State }: V2Preflight.RoutineCandidate),
+                        Some pr.BaseSha, Some pr.Title, Some pr.Body, commits
             | _ ->
-                // A candidate not yet opened: the checkout's branch and head, with the supplied title and body file.
+                // A candidate not yet opened: the checkout's branch and head, the supplied title and body file, and the
+                // commits between the local tracking ref and the head.
                 requiredFor values [ "--title"; "--body-file" ]
-                observe (fun () ->
-                    { BaseRef = defaultBranch
-                      BaseSha = None
-                      HeadRef = (gitRun repository [ "rev-parse"; "--abbrev-ref"; "HEAD" ] 256).Trim()
-                      HeadSha = (gitRun repository [ "rev-parse"; "--verify"; "HEAD" ] 128).Trim()
-                      Title = values.["--title"]
-                      Body = readText 1048576 values.["--body-file"] })
-        let policy : V2Preflight.Observed<V2Preflight.RoutinePolicy> =
-            observe (fun () ->
-                let node = JsonNode.Parse(readText 1048576 (Path.Combine(programmePath repository, ".fsgg", "routine-development.json")))
-                let strings (name: string) = node.[name].AsArray() |> Seq.map (fun item -> item.GetValue<string>()) |> Seq.toList
-                { BranchPrefix = node.["branchPrefix"].GetValue<string>(); AllowedOperations = strings "allowedOperations"; ProtectedOperations = strings "protectedOperations" })
-        let live, open' =
+                let head = observe (fun () -> (gitRun repository [ "rev-parse"; "--abbrev-ref"; "HEAD" ] 256).Trim(), (gitRun repository [ "rev-parse"; "--verify"; "HEAD" ] 128).Trim())
+                let body = try Some(readText 1048576 values.["--body-file"]) with Refused _ -> None
+                let commits = try Some(gitRun repository [ "log"; "--format=%B"; "refs/remotes/origin/main..HEAD" ] 1048576) with Refused _ -> None
+                let baseSha = match localBase () with V2Preflight.Known sha -> Some sha | _ -> None
+                (match head with
+                 | V2Preflight.Known(ref, sha) -> V2Preflight.Known({ BaseRef = defaultBranch; BaseSha = None; HeadRef = ref; HeadSha = sha; State = None }: V2Preflight.RoutineCandidate)
+                 | V2Preflight.NotObserved kind -> unobserved kind), baseSha, Some values.["--title"], body, commits
+        let live, openCount =
             if online then
-                let live = match V2NativeResolve.readMainHead ghGet slug with Ok sha -> V2Preflight.Known sha | Error _ -> V2Preflight.NotObserved V2Preflight.ReadFailed
+                let live = match V2NativeResolve.readMainHead ghGet slug with Ok sha -> V2Preflight.Known sha | Error _ -> unobserved V2Preflight.ReadFailed
                 let count =
                     match candidate with
                     | V2Preflight.Known value ->
                         (match V2NativeResolve.openPullRequestsFor ghGet slug value.HeadRef with
                          | Ok list -> V2Preflight.Known list.Length
-                         | Error _ -> V2Preflight.NotObserved V2Preflight.ReadFailed)
+                         | Error _ -> unobserved V2Preflight.ReadFailed)
                     | V2Preflight.NotObserved kind -> V2Preflight.NotObserved kind
                 live, count
-            else V2Preflight.NotObserved V2Preflight.NotSupplied, V2Preflight.NotObserved V2Preflight.NotSupplied
-        let report = V2Preflight.runRoutine stage { DefaultBranch = defaultBranch; Candidate = candidate; Policy = policy; LiveBaseSha = live; OpenPullRequests = open' }
+            else unobserved V2Preflight.NotSupplied, unobserved V2Preflight.NotSupplied
+        // The maintained gates are observed, never re-derived. Their inputs go through a private temp directory.
+        let scratch = IO.Directory.CreateTempSubdirectory("v2preflight-")
+        let routineGate, closingGate =
+            try
+                let bodyFile = IO.Path.Combine(scratch.FullName, "body.md")
+                let commitsFile = IO.Path.Combine(scratch.FullName, "commits.txt")
+                (match body with Some text -> IO.File.WriteAllText(bodyFile, text) | None -> ())
+                (match commits with Some text -> IO.File.WriteAllText(commitsFile, text) | None -> ())
+                let routine =
+                    match candidate, baseForGate, body with
+                    | V2Preflight.Known value, Some baseSha, Some _ when Regex.IsMatch(value.HeadRef, @"\Aroutine/[a-z0-9][a-z0-9._-]*\z") ->
+                        (match runGate repository [ "scripts/check-claim-generation.py"; "--repo"; slug; "--head-ref"; value.HeadRef; "--head-sha"; value.HeadSha; "--base-sha"; baseSha; "--routine-policy-ref"; baseSha; "--body"; bodyFile ] with
+                         | Some(0, out, _) when out.Contains "routine delivery admitted" -> V2Preflight.Known V2Preflight.Admitted
+                         | Some(_, _, err) ->
+                            let m = Regex.Match(err, @"FINDING \[([a-z-]{1,40})\]")
+                            if m.Success then V2Preflight.Known(V2Preflight.GateFinding m.Groups.[1].Value) else unobserved V2Preflight.Unreadable
+                         | None -> unobserved V2Preflight.Unreadable)
+                    | V2Preflight.Known _, _, _ -> unobserved V2Preflight.NotEvaluated
+                    | V2Preflight.NotObserved kind, _, _ -> unobserved kind
+                let closing =
+                    match title, body, commits with
+                    | Some t, Some _, Some _ ->
+                        (match runGate repository [ "scripts/check-closing-keywords.py"; "--title=" + t; "--body"; bodyFile; "--commits"; commitsFile ] with
+                         | Some(0, out, _) ->
+                            let declared = Regex.Match(out, @"will close: ([^\r\n]+)")
+                            if declared.Success then V2Preflight.Known(V2Preflight.DeclaredClosing(declared.Groups.[1].Value.Split([| ", " |], StringSplitOptions.RemoveEmptyEntries) |> Array.toList))
+                            elif out.Contains "closes no issue" then V2Preflight.Known V2Preflight.NoClosing
+                            else unobserved V2Preflight.Unreadable
+                         | Some(1, _, _) -> V2Preflight.Known V2Preflight.UndeclaredClosing
+                         | _ -> unobserved V2Preflight.Unreadable)
+                    | _ -> unobserved V2Preflight.Unreadable
+                routine, closing
+            finally
+                (try scratch.Delete true with _ -> ())
+        let report = V2Preflight.runRoutine stage { DefaultBranch = defaultBranch; Candidate = candidate; LiveBaseSha = live; OpenPullRequests = openCount; RoutineGate = routineGate; ClosingGate = closingGate }
         printfn "%s" (V2Preflight.toJson report)
         V2Preflight.exitCode report.Overall
 
