@@ -35,11 +35,9 @@ belongs to SDD, and SDD 2.5.3 rejects the unknown property: `doctor` reports `is
 `scaffold.provenanceMalformed` on all four catalog providers. The default-coordination journey found this (see the
 [#3010 result](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523944130)); the repair is tracked in
 .github#4964 (obligations move to a Wizard-owned file; planned for Wizard 0.23.1) and is not yet published.
-Until 0.23.1, pass `--no-coordination` (the configuration the 85/85 result covers), or accept that default-coordination
-creations need the `securityObligations` key removed from `.fsgg/scaffold-provenance.json`, which restored
-`isCoherent:true` in that journey. The security obligations were recorded as pending, never claimed satisfied, and
-`knowledge check` passed on all four products. The key removal was observed by the qualification run, not
-a Wizard-supported operation; the pending obligations it carries are then not visible to SDD.
+Until 0.23.1, use `--no-coordination` (the configuration the 85/85 result covers). Do not edit
+`.fsgg/scaffold-provenance.json` to make `doctor` pass: that hides the pending security obligations from SDD.
+The obligations were recorded as pending, never claimed satisfied, and `knowledge check` passed on all four products.
 
 Default coordination also fetches the coordination kit over HTTPS from the moving `main` ref of this repository, so
 the materialized kit is not reproducible across fetches. The kit observed in the journey matched `main@a9a6f77f`
