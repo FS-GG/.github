@@ -20,8 +20,11 @@ class DispatchScanError(RuntimeError):
 
 MAIN_START = "let main argv"
 HANDLER_DISPATCH = "commandHandlers[opts.Command]"
+# The end marker is located in the code view of the file (comments and string contents blanked), so a comment or
+# a string that merely spells it cannot truncate the scanned segment before an evil call.
+HANDLER_DISPATCH_CODE = re.compile(r"commandHandlers\s*\[\s*opts\s*\.\s*Command\s*\]")
 # A call into another module that runs or dispatches something: X.tryRun, X.run, X.tryExecute, X.executeWithContext ...
-DISPATCH_REFERENCE = re.compile(r"\b(?P<module>[A-Za-z_][\w]*(?:\.[A-Za-z_]\w*)*)\.(?P<method>(?:try)?(?:run|execute|dispatch|handle|invoke|exec)\w*)", re.I)
+DISPATCH_REFERENCE = re.compile(r"\b(?P<module>[^\W\d]\w*(?:\.[^\W\d]\w*)*)\.(?P<method>(?:try)?(?:run|execute|dispatch|handle|invoke|exec)\w*)", re.I)
 MATCH_LINE = re.compile(r"^(?P<indent> *)(?:.*\b)?match\b.*\bwith\s*$")
 
 
@@ -47,17 +50,28 @@ SAFE_TOKENS = {
     "message": "the parse error text printed to stderr",
     "opts": "the parsed options",
     "opts.Command": "the parsed command used for the invoked name and the handler lookup",
-    "Options.parse": "pure argument parser",
+    "Options.parse": "argument parser with no remote effect: it reads one environment variable and checks whether file options are present",
     "Options.usage": "constant usage text",
     "Options.commandName": "pure command-name lookup",
     "eprint": "writes to stderr",
     "ExitError": "exit-code constant",
-    "commandHandlers": "the typed handler table the guard protects",
     "_": "the wildcard pattern of the outer match",
 }
 # Patterns of the arms that may be nested under the wildcard arm: results of the dispatchers and of the parse.
 ALLOWED_NESTED_PATTERNS = {"Some exitCode", "None", "Error message", "Ok opts"}
-TOKEN = re.compile(r"\.?[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*")
+# Identifiers are Unicode-aware: F# accepts non-ASCII letters, so `Δ.Σ arguments` is a call, not nothing.
+IDENTIFIER = r"\.?[^\W\d][\w']*(?:\.[^\W\d][\w']*)*"
+# Operators are tokens too: a custom operator such as `|>!` can run any code defined elsewhere.
+OPERATOR = r"[!%&*+\-/<=>?@^|~:]+"
+TOKEN = re.compile(IDENTIFIER + "|" + OPERATOR)
+# Operators that may appear outside a listed arm, each with the reason it is safe.
+SAFE_OPERATORS = {
+    "=": "binding and comparison; no call",
+    "<-": "assignment to the invoked-name cell",
+    "->": "match arm arrow",
+    "::": "list cons in patterns",
+    "|": "match arm bar",
+}
 
 
 def _strip_fsharp_comments(text: str) -> str:
@@ -147,6 +161,34 @@ def _code_without_strings(text: str) -> str:
     return "".join(out)
 
 
+def _blank_strings(text: str) -> str:
+    """Length-preserving: string literal contents (and their interpolation holes) become spaces."""
+    out: list[str] = []
+    index, length = 0, len(text)
+    while index < length:
+        if text[index] != '"':
+            out.append(text[index])
+            index += 1
+            continue
+        triple = text.startswith('"""', index)
+        end = index + (3 if triple else 1)
+        while end < length:
+            if triple and text.startswith('"""', end):
+                end += 3
+                break
+            if not triple and text[end] == "\\":
+                end += 2
+                continue
+            if not triple and text[end] == '"':
+                end += 1
+                break
+            end += 1
+        end = min(end, length)
+        out.append("".join("\n" if c == "\n" else " " for c in text[index:end]))
+        index = end
+    return "".join(out)
+
+
 def _arrow_index(line: str) -> int:
     """Index of the first `->` outside a string literal, or -1."""
     inside = False
@@ -167,11 +209,17 @@ def pre_handler_dispatch(text: str, listed: set[str] | frozenset[str] = frozense
     """Every dispatch arm and dispatcher of `main` that precedes the typed handler table.
 
     `listed` is the set of census rows; a token that equals one is an allowed dispatcher."""
-    start = text.find(MAIN_START)
-    end = text.find(HANDLER_DISPATCH, start)
-    if start < 0 or end < 0:
+    # Locate `main` and its end marker in the code view (comments and strings blanked, length preserved), and take
+    # the LAST real code occurrence of the marker: a comment or string that spells it, or an earlier dead use, must
+    # not truncate the segment ahead of a call.
+    without_comments = _strip_fsharp_comments(text)
+    code_view = _blank_strings(without_comments)
+    start = code_view.find(MAIN_START)
+    ends = [m.start() for m in HANDLER_DISPATCH_CODE.finditer(code_view, max(start, 0))]
+    if start < 0 or not ends:
         raise DispatchScanError(f"main no longer has the main/{HANDLER_DISPATCH} shape this guard reads")
-    lines = _strip_fsharp_comments(text[start:end]).splitlines()
+    end = ends[-1]
+    lines = without_comments[start:end].splitlines()
     if any(re.search(r"\bfunction\b", line) for line in lines):
         raise DispatchScanError("main uses a `function` dispatch this guard does not read; extend the guard")
 
@@ -238,6 +286,8 @@ def pre_handler_dispatch(text: str, listed: set[str] | frozenset[str] = frozense
     code = _code_without_strings("\n".join(lines[i] for i in region))
     unknown: list[str] = []
     for token in TOKEN.findall(code):
+        if token in SAFE_OPERATORS:
+            continue
         if token in SAFE_TOKENS or token in listed:
             if token in listed and token not in dispatchers:
                 dispatchers.append(token)

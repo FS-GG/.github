@@ -98,7 +98,10 @@ concurrency:
 jobs:
   change-completeness:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # The whole-script budget in scripts/change-completeness is 420 s (a measured cold restore and build is
+    # about 3m39s; see that file). The job cap sits above it by the three fixture steps below, so the
+    # script's own diagnosable exit 124 fires before the runner cancels the job.
+    timeout-minutes: 10
     outputs:
       engine_changed: ${{ steps.gate.outputs.engine_changed }}
     steps:
@@ -108,8 +111,17 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-          cache: true
-          cache-dependency-path: "**/packages.lock.json"
+      # The package cache is restored and saved explicitly, not through setup-dotnet's `cache: true`, because
+      # that post-step saves only when the job succeeds: a job that failed cold stayed cold on every rerun
+      # (#4730: three consecutive exit-124 attempts on one head). The save below runs even when a gate fails.
+      - name: Restore the NuGet package cache
+        id: nuget-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.nuget/packages
+          key: change-completeness-nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: |
+            change-completeness-nuget-${{ runner.os }}-
       - name: Run bounded structural and focused production-route checks
         id: gate
         env:
@@ -135,6 +147,12 @@ jobs:
         run: bash tests/change-completeness/run.sh
       - name: Prove every authority slice retains parity and an effective inversion
         run: bash tests/change-risk-compatibility/run.sh
+      - name: Save the NuGet package cache even when a gate failed
+        if: ${{ always() && steps.nuget-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
 
   engine:
     needs: change-completeness

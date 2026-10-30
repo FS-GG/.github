@@ -237,6 +237,23 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
             refused[f"unlisted Evil.{method} dispatcher"] = (
                 skill_dispatch, f"                match Evil.{method} arguments with\n" + wrap + skill_dispatch, f"Evil.{method}")
         refused["renamed match argument (refused until the allow-list is updated)"] = (outer_match, "            match args with\n", "`args`")
+        marker = "commandHandlers[opts.Command] opts"
+        refused["end marker spelled in a comment before an evil call"] = (
+            skill_dispatch, f"                // {marker}\n                match Evil.Go arguments with\n" + wrap + skill_dispatch, "Evil.Go")
+        refused["end marker spelled in a block comment before an evil call"] = (
+            skill_dispatch, f"                (* {marker} *)\n                match Evil.Go arguments with\n" + wrap + skill_dispatch, "Evil.Go")
+        refused["end marker spelled in a string before an evil call"] = (
+            skill_dispatch, f'                eprint "{marker}"\n                match Evil.Go arguments with\n' + wrap + skill_dispatch, "Evil.Go")
+        refused["commandHandlers is not a safe token"] = (
+            skill_dispatch, "                match commandHandlers with\n" + wrap + skill_dispatch, "`commandHandlers`")
+        refused["non-ASCII module and method (Δ.Σ)"] = (
+            skill_dispatch, "                match Δ.Σ arguments with\n" + wrap + skill_dispatch, "`Δ.Σ`")
+        refused["non-ASCII bare call"] = (
+            skill_dispatch, "                match Σ arguments with\n" + wrap + skill_dispatch, "`Σ`")
+        refused["custom operator |>!"] = (
+            skill_dispatch, "                match arguments |>! Some with\n" + wrap + skill_dispatch, "`|>!`")
+        refused["custom operator <|>"] = (
+            skill_dispatch, "                match arguments <|> Some with\n" + wrap + skill_dispatch, "`<|>`")
         refused["open-module bare call"] = (skill_dispatch, "                match go arguments with\n" + wrap + skill_dispatch, "`go`")
         refused["let-bound call"] = (
             skill_dispatch, "                let routed = arguments\n                match routed arguments with\n" + wrap + skill_dispatch, "`routed`")
@@ -259,6 +276,7 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
         accepted = {
             "unchanged Program.fs": real_program,
             "comment-only edits are not dispatch": real_program.replace(board_arm, '            // | "ghost" :: _ -> GhostApplication.tryRun arguments\n            (* QuietApplication.run arguments *)\n' + board_arm, 1),
+            "the end marker spelled in a comment inside a named arm": real_program.replace(board_arm, board_arm + "                // commandHandlers[opts.Command] opts\n", 1),
             "the whole dispatch reindented": reindent(real_program, 4),
         }
         for label, program_text in accepted.items():
