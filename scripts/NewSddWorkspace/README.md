@@ -19,9 +19,9 @@ exact producer immediately before scaffold. Legacy typed project knowledge retai
 list/help require no catalog runtime. Source selection does not establish publication or installed
 support: public producer/template identities and genuine consumer acceptance remain separate gates.
 The catalog route described below is written against FS.GG.Templates **0.20.1**
-(`fs-gg-templates/v0.20.1`, package `FS.GG.Workspace.Template::0.20.1`), the release qualified for the TypeScript,
-JavaScript, Rust and Go providers. Its publication is a separate Templates effect: until that tag exists, pair
-the examples with the published `fs-gg-templates/v0.20.0` instead.
+(published tag `fs-gg-templates/v0.20.1`, package `FS.GG.Workspace.Template::0.20.1`), the release that carries the
+common project-knowledge composition for the TypeScript, JavaScript, Rust and Go providers. Wizard 0.23.0 itself is
+not published by this source change.
 
 ## Install
 
@@ -129,8 +129,8 @@ new-sdd-workspace ./Greeter "Greeter" --template go-cli --ref fs-gg-templates/v0
 
 The catalog route is a source integration candidate. It does not establish the complete
 [#3010 adoption](https://github.com/FS-GG/.github/issues/3010): the published 0.20.0 polyglot payloads
-lack the common project-knowledge CI/checker composition that Templates 0.20.1 carries, and the 0.20.1
-publication, registry adoption and public-tool journeys remain outstanding. Every catalog creation initializes the canonical store through the exact
+lack the common project-knowledge CI/checker composition that the published Templates 0.20.1 carries; Wizard 0.23.0
+publication and the public-tool journeys on the published packages remain outstanding. Every catalog creation initializes the canonical store through the exact
 capable SDD producer, pins that version locally, and requires the guide, schema, CI and checker before
 `knowledge check` and the initialization handoff. Known-missing CI/checker payloads refuse before target
 creation. Missing generated assets or refused knowledge checks fail creation;

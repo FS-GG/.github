@@ -277,11 +277,12 @@ module V2ProjectionSource =
             | :? UriFormatException
             | :? ArgumentException -> Error(Malformed(subject, "unreadable native dependency snapshot"))
 
-    // This URL comes only from the exact protected enrollment row. Repository scope and
-    // path grammar are closed here; the URL itself never authenticates an enrollment.
-    let private readDeclaredPlan (transport: IGitHubTransport) (binding: Binding) (url: string) : IoResult<NativeObservation option * string> =
-        let subject = "enrolled native owning plan"
-        let refuse detail = Error(Malformed(subject, detail))
+    // The single hard-coded programme issue URL admitted as an owning plan (see readPlan).
+    let programmePlanIssueUrl = "https://github.com/FS-GG/.github/issues/3008"
+
+    // Pure grammar of a declared owning-plan blob URL: repository scope and path grammar are closed
+    // here. The batched enrollment planner shares it verbatim; it performs no transport and no native read.
+    let programmePlanBlobGrammar (repositories: Set<string>) (url: string) : Result<string * string * string, string> =
         let hex (value: string) = value.Length = 40 && (value |> Seq.forall Uri.IsHexDigit)
         let mutable uri = Unchecked.defaultof<Uri>
         let rawPath = url.Split('#').[0]
@@ -289,13 +290,13 @@ module V2ProjectionSource =
            || uri.Scheme <> "https" || uri.Host <> "github.com" || uri.Port <> 443
            || uri.UserInfo <> "" || uri.Query <> "" || rawPath.Contains('%')
            || rawPath.Contains('\\') || (url |> Seq.exists Char.IsControl) then
-            refuse "plan URL must be an exact HTTPS github.com repository blob URL"
+            Error "plan URL must be an exact HTTPS github.com repository blob URL"
         else
             let parts = uri.AbsolutePath.TrimStart('/').Split('/')
             let segments = rawPath.Substring("https://github.com/".Length).Split('/')
             let repository =
                 if parts.Length >= 5 then
-                    binding.Repositories |> Seq.tryFind (fun repository ->
+                    repositories |> Seq.tryFind (fun repository ->
                         String.Equals(repository, parts.[0] + "/" + parts.[1], StringComparison.OrdinalIgnoreCase))
                 else None
             let path = if parts.Length >= 5 then String.Join("/", parts |> Array.skip 4) else ""
@@ -309,13 +310,22 @@ module V2ProjectionSource =
                || (parts.[3] <> "main" && not (hex parts.[3])) || not allowedPath
                || (segments |> Array.exists (fun part -> part = "" || part = "." || part = ".." || part.Contains(':')))
                || String.Join("/", segments) <> String.Join("/", parts) then
-                refuse "plan repository/ref/path is outside the exact enrolled source grammar"
-            else
-                let repository = repository.Value
+                Error "plan repository/ref/path is outside the exact enrolled source grammar"
+            else Ok(repository.Value, parts.[3], path)
+
+    // This URL comes only from the exact protected enrollment row. Repository scope and
+    // path grammar are closed in programmePlanBlobGrammar; the URL itself never authenticates an enrollment.
+    let private readDeclaredPlan (transport: IGitHubTransport) (binding: Binding) (url: string) : IoResult<NativeObservation option * string> =
+        let subject = "enrolled native owning plan"
+        let refuse detail = Error(Malformed(subject, detail))
+        let hex (value: string) = value.Length = 40 && (value |> Seq.forall Uri.IsHexDigit)
+        match programmePlanBlobGrammar binding.Repositories url with
+        | Error detail -> refuse detail
+        | Ok(repository, gitRef, path) ->
                 let split = repository.Split('/')
                 let variables = [ "owner", VString split.[0]; "repo", VString split.[1] ]
                 let revision =
-                    if parts.[3] <> "main" then Ok parts.[3]
+                    if gitRef <> "main" then Ok gitRef
                     else
                         let document = "query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){nameWithOwner ref(qualifiedName:\"refs/heads/main\"){target{oid}}}}"
                         GraphQl.read transport (query document variables subject) (fun data ->
@@ -347,7 +357,7 @@ module V2ProjectionSource =
                     let emptyDigest = System.Security.Cryptography.SHA256.HashData(Array.empty<byte>) |> Convert.ToHexStringLower
                     if native.BodySha256 = emptyDigest then Error(Malformed("owning plan", "selected native plan body is empty"))
                     else Ok(Some native, $"{native.NodeId}@{native.UpdatedAt}:{native.Url}:{native.BodySha256}"))
-        elif path = "https://github.com/FS-GG/.github/issues/3008" && binding.Repositories.Contains "FS-GG/.github" then
+        elif path = programmePlanIssueUrl && binding.Repositories.Contains "FS-GG/.github" then
             readIssue transport { Owner = "FS-GG"; Repository = ".github"; Number = 3008 } |> Result.bind (fun native ->
                 let emptyDigest = System.Security.Cryptography.SHA256.HashData(Array.empty<byte>) |> Convert.ToHexStringLower
                 if native.Url <> path || native.BodySha256 = emptyDigest then Error(Malformed("programme issue", "native URL/body is unreadable or mismatched"))

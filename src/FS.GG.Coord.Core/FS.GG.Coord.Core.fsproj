@@ -186,6 +186,8 @@
     <Compile Include="Kit.fs" />
     <Compile Include="OperationObservation.fsi" />
     <Compile Include="OperationObservation.fs" />
+    <Compile Include="ContextView.fsi" />
+    <Compile Include="ContextView.fs" />
   </ItemGroup>
 
   <ItemGroup>

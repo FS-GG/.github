@@ -937,3 +937,43 @@ gates and the default-off protected native inputs are unchanged. Success on one 
 not qualify another: this image needs its own fresh complete census and full required
 source CI on the exact candidate, which this change does not claim. No native fixture,
 installed custody, publication, receiver acceptance or activation is established.
+
+### Fourth closed source candidate tuple, 2026-10-30
+
+The non-required `telemetry-host-package` source check again refused before the toolchain
+census, now on the newer hosted Ubuntu 24.04 image `20261026.354.1`
+([run 41035557653](https://github.com/FS-GG/.github/actions/runs/41035557653) on PR #4948,
+[run 41035865253](https://github.com/FS-GG/.github/actions/runs/41035865253) on PR #4950):
+`Unadmitted hosted image: 20261026.354.1`. The closed selection map correctly refused an
+unlisted image; those failed prerequisites stay retained and are not retried by editing a
+literal.
+
+Admission follows the same procedure as the earlier tuples: the actual image version and its
+official runner-images source are named, and the version and source are pinned independently.
+Read from the official repository (GitHub API), not from the failing run: tag
+`ubuntu24/20261026.354` (release "Ubuntu 24.04 (20261026) Image Update", published
+2026-10-26, not draft, not prerelease) and commit
+[`ac85c71971895cd6234578d6b11f49f7c27ff0c4`](https://github.com/actions/runner-images/tree/ac85c71971895cd6234578d6b11f49f7c27ff0c4)
+("Updating readme file for ubuntu24 version 20261026.354.1"). The release's
+`target_commitish` is that commit, and its `Ubuntu2404-Readme.md` at that commit and the
+release notes both state `Image Version: 20261026.354.1`.
+
+Its manifest differs from the already admitted `20261023.334.3` (`bf62c713`) in many
+unrelated entries. Relevant to the census: kernel `6.17.0-1022-azure` becomes
+`7.0.0-1017-azure` and the preinstalled .NET SDK `10.0.401` becomes `10.0.403`; the
+non-census-relevant remainder is routine tool and package churn. Bazel 9.3.1, GCC
+(`4:13.2.0-7ubuntu1`, 13.3.0 toolchain), Python 3.12.3,
+binutils `2.42-4ubuntu2.10`, coreutils `9.4-3ubuntu6.3` and sudo
+`1.9.15p5-3ubuntu5.24.04.4` are unchanged. The kernel change is the first across the closed
+candidates and is not assumed harmless: whether the fresh complete census accepts it is
+decided only by that census. These declared versions are not custody evidence.
+
+Only a fourth literal tuple is added: `20261026.354.1` with `ac85c719...`, as an env constant
+`FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE_20261026` plus a `case` arm with an independent `test`
+equality on the source. The guard remains a closed map with no wildcard or latest acceptance,
+the actual provider/OS/architecture/image predicates, the pinned census, SDK normalization,
+complete toolchain binding, all source gates and the default-off protected native inputs are
+unchanged. Success on one image does not qualify another: this image needs its own fresh
+complete census and full required source CI on the exact candidate, which this change does
+not claim. No native fixture, installed custody, publication, receiver acceptance or
+activation is established.

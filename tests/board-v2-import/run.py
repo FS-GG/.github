@@ -712,6 +712,380 @@ class OutcomeDeliveryProgrammePreparationTests(ProgrammePreparationTests):
         self.assertFalse(self.private_path.exists())
         self.assertFalse(self.public_path.exists())
 
+class SuccessorEnrollmentTests(unittest.TestCase):
+    """Actual offline batched-successor subcommands. Synthetic identities only; every private value is a sentinel."""
+    DOMAIN = b'fsgg.coordination-board-v2-enrollment/v3\x00'
+    SENTINEL = 'SYNTHETIC_PRIVATE_SENTINEL_9f310'
+    PLAN_PATH = 'docs/roadmaps/synthetic-plan-' + SENTINEL + '.md'
+    PROJECT = 'PVT_kwDOEYAWY84Bldpa'
+    MANIFEST = 'docs/coordination/board-v2-import-manifest.json'
+    GIT = ['git', '-c', 'user.name=synthetic', '-c', 'user.email=synthetic@example.invalid', '-c', 'commit.gpgsign=false']
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.dir = pathlib.Path(self.temp.name)
+        self.fixture = self.make_predecessor('base', 5)
+
+    @staticmethod
+    def wire(value):
+        return json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+
+    def git(self, repository, *args):
+        env = dict(os.environ, GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull)
+        return subprocess.run([*self.GIT, '-C', str(repository), *args], capture_output=True, text=True, check=True, env=env).stdout.strip()
+
+    def commit_manifest(self, repository, public_bytes):
+        target = repository / self.MANIFEST
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(public_bytes)
+        self.git(repository, 'add', '-A')
+        self.git(repository, 'commit', '-q', '-m', 'synthetic manifest')
+        return self.git(repository, 'rev-parse', 'HEAD')
+
+    def run_cli(self, *args):
+        return subprocess.run(['dotnet', str(DLL), *map(str, args)], capture_output=True, text=True, timeout=60)
+
+    def make_predecessor(self, name, count, trailing=b''):
+        """A real predecessor pair built by the existing constructor, plus a git repository holding its public blob."""
+        base = self.dir / name
+        base.mkdir()
+        repositories = ['FS-GG/.github', 'FS-GG/FS.GG.Templates']
+        rows = [{'issue': f'FS-GG/.github#{70001+i}', 'nodeId': f'I_synthetic_{self.SENTINEL}_{i}',
+                 'roadmap': f'https://github.com/FS-GG/.github/blob/main/docs/roadmaps/old-{self.SENTINEL}-{i}.md'} for i in range(count)]
+        def field(label, options):
+            return {'id': 'synthetic-' + label, 'options': {value: f'synthetic-{label}-{i}' for i, value in enumerate(options)}}
+        template = {
+            'bindingVersion': 5, 'schemaVersion': 3, 'importRecipeRevision': 'a'*40, 'importArtifactSha256': 'b'*64,
+            'selectedIssues': {row['nodeId']: row['issue'] for row in rows},
+            'recipeRevision': 'c'*40, 'populationRevision': 'e'*40, 'organizationId': 'O_kgDOEYAWYw', 'artifactSha256': 'd'*64,
+            'ownerKind': 'organization', 'owner': 'FS-GG', 'projectNumber': 3, 'projectTitle': 'Coordination V2', 'projectId': self.PROJECT,
+            'status': field('status', ['Backlog', 'Ready', 'In progress', 'In review', 'Blocked', 'Done']),
+            'roadmapFieldId': 'synthetic-roadmap', 'track': field('track', ['Active delivery', 'Follow-up']),
+            'observation': field('observation', ['Verified', 'Stale', 'Unknown']),
+            'workLevel': {'id': 'synthetic-work-level', 'options': {'Outcome': 'synthetic-level-outcome', 'Delivery': 'synthetic-level-delivery'}},
+            'repositories': repositories}
+        payload = {'schema': 'fsgg.coordination-board-v2-enrollment-payload/v1',
+                   'target': {'owner': 'FS-GG', 'organizationId': template['organizationId'], 'projectId': template['projectId'], 'projectNumber': 3, 'schemaVersion': 3},
+                   'binding': {'recipeRevision': template['importRecipeRevision'], 'artifactSha256': template['importArtifactSha256'], 'repositories': repositories},
+                   'items': rows}
+        raw = self.wire(payload) + trailing
+        (base / 'template.json').write_bytes(self.wire(template))
+        (base / 'payload.json').write_bytes(raw)
+        done = self.run_cli('prepare-programme', '--binding-template', base/'template.json', '--payload', base/'payload.json',
+                            '--private-output', base/'private.json', '--public-output', base/'public.json')
+        self.assertEqual(0, done.returncode, done.stderr)
+        repository = base / 'repository'
+        repository.mkdir()
+        self.git(repository, 'init', '-q')
+        merge = self.commit_manifest(repository, (base / 'public.json').read_bytes())
+        return {'base': base, 'private': base / 'private.json', 'public': base / 'public.json', 'payload': raw, 'rows': rows,
+                'template': template, 'repository': repository, 'merge': merge}
+
+    def request(self, fixture=None, **changes):
+        fixture = fixture or self.fixture
+        value = {'schema': 'fsgg.board-v2-successor-request/1', 'cohort': 'cohort-synthetic',
+                 'predecessor': {'privatePath': str(fixture['private']), 'mergeSha': fixture['merge']},
+                 'issues': [
+                     {'ref': 'FS-GG/.github#80001', 'slice': 'synthetic-outcome', 'plan': {'kind': 'programmeIssue3008'}, 'classification': 'Outcome'},
+                     {'ref': 'FS-GG/FS.GG.Templates#80002', 'slice': 'synthetic-delivery',
+                      'plan': {'kind': 'protectedDoc', 'repo': 'FS-GG/.github', 'path': self.PLAN_PATH}, 'classification': 'Delivery'}]}
+        value.update(changes)
+        return value
+
+    def facts(self, **changes):
+        def issue(ref, node, repository, **extra):
+            row = {'ref': ref, 'nodeId': node, 'kind': 'Issue', 'repository': repository, 'projectMember': True, 'visibility': 'complete', 'humanRoadmap': None}
+            row.update(extra)
+            return row
+        value = {'schema': 'fsgg.board-v2-native-facts/1', 'projectId': self.PROJECT,
+                 'issues': [issue('FS-GG/.github#80001', f'I_synthetic_{self.SENTINEL}_new1', 'FS-GG/.github'),
+                            issue('FS-GG/FS.GG.Templates#80002', f'I_synthetic_{self.SENTINEL}_new2', 'FS-GG/FS.GG.Templates')],
+                 'planBlobs': [{'repository': 'FS-GG/.github', 'path': self.PLAN_PATH, 'onMain': True}]}
+        value.update(changes)
+        return value
+
+    def plan(self, request=None, facts=None, fixture=None, name='plan', raw_request=None):
+        fixture = fixture or self.fixture
+        out = self.dir / name
+        out.mkdir(exist_ok=True)
+        (out / 'request.json').write_bytes(raw_request if raw_request is not None else self.wire(request or self.request(fixture)))
+        (out / 'facts.json').write_bytes(self.wire(facts or self.facts()))
+        result = self.run_cli('plan-successor', '--request', out/'request.json', '--native-facts', out/'facts.json', '--repository', fixture['repository'],
+                              '--template-output', out/'template.json', '--payload-output', out/'payload.json')
+        return result, out
+
+    def refused(self, result, code):
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        self.assertEqual('', result.stdout)
+        self.assertEqual(f'board-v2 successor refused: {code}\n', result.stderr)
+        self.assertNotIn(self.SENTINEL, result.stdout + result.stderr)
+
+    def prepare(self, out, fixture=None, request=None, name='pair'):
+        fixture = fixture or self.fixture
+        (out / 'request.json').write_bytes(self.wire(request or self.request(fixture)))
+        return self.run_cli('prepare-successor', '--request', out/'request.json', '--template', out/'template.json', '--payload', out/'payload.json',
+                            '--private-output', out/(name+'-private.json'), '--public-output', out/(name+'-public.json'), '--receipt-output', out/(name+'-receipt.json'))
+
+    def expected_fragment(self, fixture):
+        return [(f'FS-GG/.github#80001', f'I_synthetic_{self.SENTINEL}_new1', 'https://github.com/FS-GG/.github/issues/3008'),
+                (f'FS-GG/FS.GG.Templates#80002', f'I_synthetic_{self.SENTINEL}_new2', 'https://github.com/FS-GG/.github/blob/main/' + self.PLAN_PATH)]
+
+    def test_actual_plan_prepare_bind_and_carrier_with_independent_oracle(self):
+        fixture = self.fixture
+        result, out = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual('successor planned; rows=7 appended=2; offline only\n', result.stdout)
+        self.assertEqual('', result.stderr)
+        # Independent oracle: the successor payload is the predecessor bytes minus the closing, plus the rows.
+        fragment = b','.join(self.wire({'issue': i, 'nodeId': n, 'roadmap': r}) for i, n, r in self.expected_fragment(fixture))
+        expected = fixture['payload'][:-2] + b',' + fragment + b']}'
+        self.assertEqual(expected, (out / 'payload.json').read_bytes())
+        self.assertEqual(fixture['payload'][:-2], (out / 'payload.json').read_bytes()[:len(fixture['payload']) - 2])
+        template = json.loads((out / 'template.json').read_bytes())
+        self.assertNotIn('programmeEnrollment', template)
+        self.assertEqual(fixture['merge'], template['populationRevision'])
+        self.assertEqual(7, len(template['selectedIssues']))
+        for key in fixture['template']:
+            if key not in ('selectedIssues', 'populationRevision'):
+                self.assertEqual(fixture['template'][key], template[key])
+        if os.name != 'nt':
+            self.assertEqual(0o600, (out / 'payload.json').stat().st_mode & 0o777)
+            self.assertEqual(0o600, (out / 'template.json').stat().st_mode & 0o777)
+        prepared = self.prepare(out)
+        self.assertEqual(0, prepared.returncode, prepared.stderr)
+        self.assertEqual('successor pair prepared; offline only\n', prepared.stdout)
+        self.assertEqual('', prepared.stderr)
+        private_bytes, public_bytes = (out / 'pair-private.json').read_bytes(), (out / 'pair-public.json').read_bytes()
+        envelope = json.loads(private_bytes)['programmeEnrollment']
+        nonce = bytes.fromhex(envelope['nonceHex'])
+        self.assertEqual(expected, base64.b64decode(envelope['payloadBase64'], validate=True))
+        commitment = hashlib.sha256(self.DOMAIN + nonce + len(expected).to_bytes(8, 'big') + expected).hexdigest()
+        self.assertEqual(commitment, json.loads(public_bytes)['commitmentSha256'])
+        previous = json.loads(fixture['private'].read_bytes())['programmeEnrollment']['nonceHex']
+        self.assertNotEqual(previous, envelope['nonceHex'])
+        receipt_bytes = (out / 'pair-receipt.json').read_bytes()
+        receipt = json.loads(receipt_bytes)
+        self.assertEqual({'schema', 'cohort', 'predecessorMergeSha', 'rows', 'privateSha256', 'publicSha256', 'commitmentSha256', 'constructor',
+                          'prefixPreserved', 'headerPreserved', 'recomputedCommitment'}, set(receipt))
+        self.assertEqual({'predecessor': 5, 'appended': 2, 'total': 7}, receipt['rows'])
+        self.assertEqual(hashlib.sha256(private_bytes).hexdigest(), receipt['privateSha256'])
+        self.assertEqual(hashlib.sha256(public_bytes).hexdigest(), receipt['publicSha256'])
+        self.assertEqual(commitment, receipt['commitmentSha256'])
+        self.assertEqual(fixture['merge'], receipt['predecessorMergeSha'])
+        self.assertEqual({'revision', 'artifactSha256'}, set(receipt['constructor']))
+        self.assertEqual(hashlib.sha256(DLL.read_bytes()).hexdigest(), receipt['constructor']['artifactSha256'])
+        if SOURCE_REVISION:
+            self.assertEqual(SOURCE_REVISION, receipt['constructor']['revision'])
+        self.assertEqual([True, True, True], [receipt['prefixPreserved'], receipt['headerPreserved'], receipt['recomputedCommitment']])
+        if os.name != 'nt':
+            for name in ['pair-private.json', 'pair-public.json', 'pair-receipt.json']:
+                self.assertEqual(0o600, (out / name).stat().st_mode & 0o777)
+        # The fixed carrier is a pure function of the receipt.
+        carrier = self.run_cli('render-carrier', '--receipt', out/'pair-receipt.json', '--output', out/'carrier.md')
+        self.assertEqual(0, carrier.returncode, carrier.stderr)
+        text = (out / 'carrier.md').read_text()
+        for needle in [commitment, receipt['publicSha256'], fixture['merge'], 'cohort-synthetic', '5 rows']:
+            if needle != '5 rows':
+                self.assertIn(needle, text)
+        self.assertIn('appends 2 row(s) to the 5 rows', text)
+        other = self.run_cli('render-carrier', '--receipt', out/'pair-receipt.json', '--output', out/'carrier2.md')
+        self.assertEqual(text, (out / 'carrier2.md').read_text())
+        # Bind: the delivered public blob at the merge authenticates the pair; only populationRevision changes.
+        successor_repository = self.dir / 'successor-repository'
+        successor_repository.mkdir()
+        self.git(successor_repository, 'init', '-q')
+        merge = self.commit_manifest(successor_repository, public_bytes)
+        bound = self.run_cli('bind-runtime', '--private-binding', out/'pair-private.json', '--repository', successor_repository,
+                             '--merge-sha', merge, '--runtime-output', out/'runtime.json')
+        self.assertEqual(0, bound.returncode, bound.stderr)
+        runtime_bytes = (out / 'runtime.json').read_bytes()
+        self.assertEqual(len(private_bytes), len(runtime_bytes))
+        differing = [i for i in range(len(private_bytes)) if private_bytes[i] != runtime_bytes[i]]
+        needle = private_bytes.index(b'"populationRevision":"') + len(b'"populationRevision":"')
+        self.assertTrue(differing and all(needle <= i < needle + 40 for i in differing))
+        self.assertEqual(merge, json.loads(runtime_bytes)['populationRevision'])
+        # The pair does not authenticate at the predecessor's merge, and an existing output is never overwritten.
+        self.refused(self.run_cli('bind-runtime', '--private-binding', out/'pair-private.json', '--repository', fixture['repository'],
+                                  '--merge-sha', fixture['merge'], '--runtime-output', out/'runtime-wrong.json'), 'PredecessorCommitmentMismatch')
+        self.assertFalse((out / 'runtime-wrong.json').exists())
+        self.refused(self.run_cli('bind-runtime', '--private-binding', out/'pair-private.json', '--repository', successor_repository,
+                                  '--merge-sha', merge, '--runtime-output', out/'runtime.json'), 'OutputExists')
+        self.assertEqual(runtime_bytes, (out / 'runtime.json').read_bytes())
+        # No private value reaches any output stream, receipt or carrier.
+        visible = result.stdout + result.stderr + prepared.stdout + prepared.stderr + carrier.stdout + carrier.stderr + bound.stdout + bound.stderr + receipt_bytes.decode() + text
+        for secret in [self.SENTINEL, envelope['nonceHex'], envelope['payloadBase64'], 'I_synthetic', '80001', '70001', self.PLAN_PATH]:
+            self.assertNotIn(secret, visible)
+
+    def assert_refusal(self, code, request=None, facts=None, fixture=None, raw_request=None):
+        result, out = self.plan(request, facts, fixture, name='refusal-' + code.lower() + str(len(list(self.dir.iterdir()))), raw_request=raw_request)
+        self.refused(result, code)
+        self.assertFalse((out / 'template.json').exists())
+        self.assertFalse((out / 'payload.json').exists())
+
+    def facts_issue(self, index, **changes):
+        facts = self.facts()
+        facts['issues'][index].update(changes)
+        return facts
+
+    def test_one_negative_control_per_refusal_code(self):
+        request = self.request()
+        # DuplicateIssue
+        duplicate = self.request(); duplicate['issues'].append(copy.deepcopy(duplicate['issues'][0]))
+        self.assert_refusal('DuplicateIssue', duplicate)
+        # AlreadyEnrolled: the same ref and node as a predecessor row
+        enrolled = self.request(); enrolled['issues'][0]['ref'] = self.fixture['rows'][0]['issue']
+        self.assert_refusal('AlreadyEnrolled', enrolled, self.facts_issue(0, ref=self.fixture['rows'][0]['issue'], nodeId=self.fixture['rows'][0]['nodeId']))
+        # IsPullRequest
+        self.assert_refusal('IsPullRequest', request, self.facts_issue(0, kind='PullRequest'))
+        # NodeIdMismatch: a node id already enrolled for a different ref, a foreign repository fact and a duplicated node
+        self.assert_refusal('NodeIdMismatch', request, self.facts_issue(0, nodeId=self.fixture['rows'][1]['nodeId']))
+        self.assert_refusal('NodeIdMismatch', request, self.facts_issue(0, repository='FS-GG/FS.GG.Templates'))
+        self.assert_refusal('NodeIdMismatch', request, self.facts_issue(1, nodeId=self.facts()['issues'][0]['nodeId']))
+        # NotProjectMember
+        self.assert_refusal('NotProjectMember', request, self.facts_issue(1, projectMember=False))
+        wrong_project = self.facts(); wrong_project['projectId'] = 'PVT_other'
+        self.assert_refusal('NotProjectMember', request, wrong_project)
+        # RepositoryOutsideBinding
+        outside = self.request(); outside['issues'][0]['ref'] = 'FS-GG/Other#80001'
+        self.assert_refusal('RepositoryOutsideBinding', outside)
+        # PredecessorCommitmentMismatch: the blob at the supplied merge is a different commitment
+        other = self.make_predecessor('other', 5)
+        mismatch = self.request(); mismatch['predecessor']['mergeSha'] = other['merge']
+        result, out = self.plan(mismatch, name='mismatch')
+        self.assertEqual(2, result.returncode)  # same working repository does not contain that commit either way
+        self.assertEqual('board-v2 successor refused: PredecessorCommitmentMismatch\n', result.stderr)
+        swapped = self.request(); swapped['predecessor']['privatePath'] = str(other['private'])
+        self.assert_refusal('PredecessorCommitmentMismatch', swapped)
+        # PrefixNotPreserved: a predecessor payload that cannot be spliced (trailing newline after the closing)
+        newline = self.make_predecessor('newline', 5, trailing=b'\n')
+        self.assert_refusal('PrefixNotPreserved', self.request(newline), fixture=newline)
+        # PlanNotAdmitted: the r1 cohort-89 failure mode, an Outcome issue URL as Roadmap, is not constructible and refuses first
+        issue_plan = self.request(); issue_plan['issues'][1]['plan'] = {'kind': 'protectedDoc', 'repo': 'FS-GG/.github', 'path': 'issues/4930'}
+        self.assert_refusal('PlanNotAdmitted', issue_plan, self.facts())
+        for repo, path in [('FS-GG/.github', 'roadmaps/not-docs.md'), ('FS-GG/.github', 'docs/../escape.md'), ('FS-GG/.github', 'docs//double.md'),
+                           ('FS-GG/Other', 'docs/x.md')]:
+            with self.subTest(repo=repo, path=path):
+                bad = self.request(); bad['issues'][1]['plan'] = {'kind': 'protectedDoc', 'repo': repo, 'path': path}
+                self.assert_refusal('PlanNotAdmitted', bad, self.facts())
+        # PlanBlobAbsentOnMain: offline plan-existence fact absent or false
+        self.assert_refusal('PlanBlobAbsentOnMain', request, self.facts(planBlobs=[]))
+        self.assert_refusal('PlanBlobAbsentOnMain', request, self.facts(planBlobs=[{'repository': 'FS-GG/.github', 'path': self.PLAN_PATH, 'onMain': False}]))
+        # ConflictingHumanValue (an equal value is accepted below)
+        self.assert_refusal('ConflictingHumanValue', request, self.facts_issue(0, humanRoadmap='https://github.com/FS-GG/.github/issues/4930'))
+        # PartialVisibility: partial fact and missing fact
+        self.assert_refusal('PartialVisibility', request, self.facts_issue(0, visibility='partial'))
+        missing = self.facts(); missing['issues'].pop()
+        self.assert_refusal('PartialVisibility', request, missing)
+        # RowCapExceeded: exactly at the installed ceiling is accepted, one beyond refuses
+        full98 = self.make_predecessor('full98', 98)
+        accepted, _ = self.plan(self.request(full98), fixture=full98, name='cap-ok')
+        self.assertEqual(0, accepted.returncode, accepted.stderr)
+        self.assertEqual('successor planned; rows=100 appended=2; offline only\n', accepted.stdout)
+        full99 = self.make_predecessor('full99', 99)
+        self.assert_refusal('RowCapExceeded', self.request(full99), fixture=full99)
+        # MalformedInput: unknown, duplicate and missing members
+        raw = self.wire(self.request())
+        self.assert_refusal('MalformedInput', raw_request=raw[:-1] + b',"extra":1}')
+        self.assert_refusal('MalformedInput', raw_request=raw[:-1] + b',"cohort":"again"}')
+        self.assert_refusal('MalformedInput', raw_request=b'{"schema":"fsgg.board-v2-successor-request/1"}')
+
+    def test_equal_human_roadmap_value_is_accepted(self):
+        facts = self.facts()
+        facts['issues'][0]['humanRoadmap'] = 'https://github.com/FS-GG/.github/issues/3008'
+        result, out = self.plan(facts=facts)
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_outputs_exist_refuses_and_never_overwrites(self):
+        result, out = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        originals = [(out / n).read_bytes() for n in ['template.json', 'payload.json']]
+        again = self.run_cli('plan-successor', '--request', out/'request.json', '--native-facts', out/'facts.json', '--repository', self.fixture['repository'],
+                             '--template-output', out/'template.json', '--payload-output', out/'payload.json')
+        self.refused(again, 'OutputExists')
+        self.assertEqual(originals, [(out / n).read_bytes() for n in ['template.json', 'payload.json']])
+        for retained in ['pair-private.json', 'pair-public.json', 'pair-receipt.json']:
+            with self.subTest(retained=retained):
+                for name in ['pair-private.json', 'pair-public.json', 'pair-receipt.json']:
+                    if (out / name).exists(): (out / name).unlink()
+                (out / retained).write_bytes(self.SENTINEL.encode())
+                self.refused(self.prepare(out), 'OutputExists')
+                self.assertEqual(self.SENTINEL.encode(), (out / retained).read_bytes())
+                self.assertEqual({retained}, {n for n in ['pair-private.json', 'pair-public.json', 'pair-receipt.json'] if (out / n).exists()})
+
+    def test_prefix_mutations_are_detected_by_independent_receipt_booleans(self):
+        result, out = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        original = (out / 'payload.json').read_bytes()
+        prefix_end = len(self.fixture['payload']) - 2
+        positions = {'first old roadmap': original.index(b'old-') + 1, 'last old roadmap': original.rindex(b'old-', 0, prefix_end) + 1,
+                     'last prefix byte before the closing object': prefix_end - 3}
+        for label, position in positions.items():
+            with self.subTest(mutation=label):
+                mutated = bytearray(original)
+                self.assertLess(position, prefix_end)
+                mutated[position] = ord('Q') if mutated[position] != ord('Q') else ord('R')
+                (out / 'payload.json').write_bytes(bytes(mutated))
+                for name in ['pair-private.json', 'pair-public.json', 'pair-receipt.json']:
+                    if (out / name).exists(): (out / name).unlink()
+                # Every mutation stays a valid enrollment, so only the independent prefix check can catch it.
+                self.refused(self.prepare(out), 'PrefixNotPreserved')
+                receipt = json.loads((out / 'pair-receipt.json').read_bytes())
+                self.assertEqual([False, True, True], [receipt['prefixPreserved'], receipt['headerPreserved'], receipt['recomputedCommitment']])
+        # A repository reorder keeps the payload valid: header bytes differ, rows are identical.
+        reordered = original.replace(b'"repositories":["FS-GG/.github","FS-GG/FS.GG.Templates"]', b'"repositories":["FS-GG/FS.GG.Templates","FS-GG/.github"]')
+        self.assertNotEqual(original, reordered)
+        (out / 'payload.json').write_bytes(reordered)
+        for name in ['pair-private.json', 'pair-public.json', 'pair-receipt.json']:
+            if (out / name).exists(): (out / name).unlink()
+        self.refused(self.prepare(out), 'PrefixNotPreserved')
+        receipt = json.loads((out / 'pair-receipt.json').read_bytes())
+        self.assertEqual([False, False, True], [receipt['prefixPreserved'], receipt['headerPreserved'], receipt['recomputedCommitment']])
+        # A template that drifts any binding field other than the selected issues and population revision.
+        (out / 'payload.json').write_bytes(original)
+        template = json.loads((out / 'template.json').read_bytes())
+        template['status']['options']['Ready'] = 'synthetic-drifted-option-id'
+        (out / 'template.json').write_bytes(self.wire(template))
+        for name in ['pair-private.json', 'pair-public.json', 'pair-receipt.json']:
+            if (out / name).exists(): (out / name).unlink()
+        self.refused(self.prepare(out), 'PrefixNotPreserved')
+        receipt = json.loads((out / 'pair-receipt.json').read_bytes())
+        self.assertEqual([True, False, True], [receipt['prefixPreserved'], receipt['headerPreserved'], receipt['recomputedCommitment']])
+
+    def test_carrier_refuses_open_or_foreign_receipts_and_never_echoes_them(self):
+        result, out = self.plan()
+        self.assertEqual(0, self.prepare(out).returncode)
+        receipt = json.loads((out / 'pair-receipt.json').read_bytes())
+        cases = []
+        extra = copy.deepcopy(receipt); extra['note'] = self.SENTINEL; cases.append(extra)
+        injected = copy.deepcopy(receipt); injected['cohort'] = 'cohort\n# ' + self.SENTINEL; cases.append(injected)
+        short = copy.deepcopy(receipt); short['commitmentSha256'] = self.SENTINEL; cases.append(short)
+        counts = copy.deepcopy(receipt); counts['rows']['total'] = 99; cases.append(counts)
+        flag = copy.deepcopy(receipt); flag['prefixPreserved'] = self.SENTINEL; cases.append(flag)
+        for index, case in enumerate(cases):
+            with self.subTest(case=index):
+                path = out / f'bad-{index}.json'
+                path.write_bytes(self.wire(case))
+                self.refused(self.run_cli('render-carrier', '--receipt', path, '--output', out / f'bad-{index}.md'), 'MalformedInput')
+                self.assertFalse((out / f'bad-{index}.md').exists())
+
+    def test_argument_and_path_custody_refuse(self):
+        result, out = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.refused(self.run_cli('plan-successor', '--nonce', self.SENTINEL), 'MalformedInput')
+        self.refused(self.run_cli('prepare-successor'), 'MalformedInput')
+        self.refused(self.run_cli('render-carrier', '--receipt', out/'request.json'), 'MalformedInput')
+        # outputs may not alias inputs
+        self.refused(self.run_cli('plan-successor', '--request', out/'request.json', '--native-facts', out/'facts.json', '--repository', self.fixture['repository'],
+                                  '--template-output', out/'request.json', '--payload-output', out/'new-payload.json'), 'MalformedInput')
+        if os.name != 'nt':
+            link = out / 'link-facts.json'
+            link.symlink_to(out / 'facts.json')
+            self.refused(self.run_cli('plan-successor', '--request', out/'request.json', '--native-facts', link, '--repository', self.fixture['repository'],
+                                      '--template-output', out/'t2.json', '--payload-output', out/'p2.json'), 'MalformedInput')
+            self.assertFalse((out / 't2.json').exists())
+
+
 if __name__ == '__main__':
     if '--no-build' in sys.argv:
         sys.argv.remove('--no-build')

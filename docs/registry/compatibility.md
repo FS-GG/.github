@@ -175,7 +175,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `governance-descriptor` | FS.GG.Governance | `1` | — |
 | `governance-config` | FS.GG.Governance | `0.3.0` | `0.3.0` |
 | `governance-reference-gate-set` | FS.GG.Governance | `1.8.0` | `1.8.0` |
-| `fs-gg-ui-template` | FS.GG.Rendering | `0.32.3` | `0.32.3` |
+| `fs-gg-ui-template` | FS.GG.Rendering | `0.32.4` | `0.32.4` |
 | `shared-build-config` | FS-GG/.github | `1.1.0` | — |
 | `registry-schema` | FS.GG.SDD | `2` | — |
 | `skill-registry` | FS-GG/.github | `3` | — |
@@ -189,7 +189,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `coord-engine` | FS-GG/.github | `0.113.0` | `0.113.0` |
 | `telemetry-host` | FS-GG/.github | `0.9.0` | `0.8.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.23.0` | `0.22.0` |
-| `fs-gg-workspace-template` | FS.GG.Templates | `0.20.0` | `0.20.0` |
+| `fs-gg-workspace-template` | FS.GG.Templates | `0.20.1` | `0.20.1` |
 | `game-skills` | FS.GG.Game | `0.9.0` | `0.9.0` |
 | `rendering-skills` | FS.GG.Rendering | `0.2.0` | `0.2.0` |
 | `audio-skills` | FS.GG.Audio | `0.1.0` | `0.1.0` |
