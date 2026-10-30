@@ -29,7 +29,7 @@ class Refused(RuntimeError):
 # policy module seals itself against its executing bytes to avoid a self-hash cycle.
 REPORT_DIRECTORY = "docs/reports/progressReports"
 POLICY_PATH = "scripts/new_sdd_workspace_successor_admission.py"
-KNOWN_GRAPH_SEAL = "eead7cad318344a4a86d0229454ee3917767000ba0ad875e2dff2cd8c39f179b"
+KNOWN_GRAPH_SEAL = "4eb5a936b2a8e5472be9e2388d25fc2a4cdaa5b7e95fac3b7718908fa5d86542"
 TREE_ENTRY_LIMIT = 10000
 TREE_JSON_LIMIT = 2 * 1024 * 1024
 REPORT_BYTE_LIMIT = 1024 * 1024
