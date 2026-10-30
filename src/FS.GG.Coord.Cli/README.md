@@ -92,6 +92,40 @@ These are the **engine's**, not the client's — the client translates them.
 
 An unreachable answer is not a negative one. That rule is the whole point.
 
+## Scoped context view (`context-view`)
+
+`context-view` is an optional, read-only command that projects the facts a worker needs for one
+selected action into one typed, versioned, bounded JSON document (`fsgg.coord.context-view/1`). It is
+generated from the six-field owning issue, the native pull request and its check runs, the optional
+`observe-operation` cursor and a local checkout. It replaces hand-assembled repeated summaries; it is
+not a packet, a required worker return, a status table or a ledger, and it grants no authority:
+applicable governing instructions remain complete and higher priority.
+
+```bash
+fsgg-coord-engine context-view --issue OWNER/REPO#N --report-file /NEW/view.json \
+  [--pr N] [--action implement|repair|review|merge|accept|resume] \
+  [--cap-bytes N] [--custody CURSOR_FILE] [--workspace DIR]
+```
+
+`GITHUB_TOKEN`, falling back to `GH_TOKEN`, supplies read credentials. Every native request is a bodyless
+`GET`. The only write is the new `--report-file` (exclusive create, owner-only permissions); it writes
+nothing to GitHub, Status or any ledger. One compact `fsgg.coord.context-view-result/1` line is printed;
+exit `0` means a view was written (its `status` may be `incomplete`), `3` means a refusal and no file.
+
+The view carries, verbatim and never summarised: the complete `Done when`, `Owner`, `Blocked on`, `Next action` and
+`Current deliverable` sections; the attempt and the original Unknown effects from `--custody` (without it the view
+makes no claim about original effects); the `Paths:` touch-set; the current PR, head, routine-marker binding and
+check counts (failing and pending checks are listed); the phase; and the applicable governing instruction files and
+Atlas IDs verified against `--workspace`. `Acceptance evidence` is a history and is carried only as a handle.
+
+Bounding: the default cap is 12288 bytes (`--cap-bytes` accepts 4096..262144). If the rendered view would exceed it,
+whole sections are omitted from the lowest priority up; each is listed in `omissions` with its size, digest and a
+retrieval pointer, `fullViewBytes` says what a complete view needs, and `status` is `incomplete`. No section is cut
+mid-text. A cap too small for even the header, gaps and omission records is refused. A missing or unreadable input
+is a typed entry in `gaps` (`obligation` when it weakens the Done when, owner, issue or a mandatory pull request;
+otherwise `context`), never an absent field that reads as "nothing to report". Replaying the same observations
+yields identical bytes.
+
 ## Telemetry, qualification, and roadmap closure (0.82.0)
 
 The engine owns the deterministic telemetry boundary. `telemetry usage collect codex|claude` emits the
