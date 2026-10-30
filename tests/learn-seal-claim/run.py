@@ -404,10 +404,14 @@ with tempfile.TemporaryDirectory() as tmp:
     os.unlink(os.path.join(e.root, 'admissions', 'op-one.admit'))
     refused(lambda: L.void(**vk()), 'no admission file', 'a void with no admission to check the pins against is refused')
     admit(e, 'op-one', ident)
-    vres = L.void(**vk())
+    refused(lambda: L.void(**vk(observed_exit_code=0)), 'observed exit code 0 differs', 'an observed exit code that differs from the RESULT is refused')
+    refused(lambda: L.void(**vk(observed_exit_code=True)), 'not an integer', 'a boolean observed exit code is refused')
+    refused(lambda: L.void(**vk(observed_exit_code='5')), 'not an integer', 'a string observed exit code is refused')
+    vres = L.void(**vk(observed_exit_code=5))
     vr, _ = L.read_json(os.path.join(e.root, 'claims', f'{ident}.void-op-one.json'))
     check(vr['operatorResultSha256'] == H('1') and vr['finalizerRecordSha256'] == H('2') and vr['claimSha256'] == vres['claimSha256'], 'the void record carries the evidence hashes')
     check('never mounted' in vr['proves'] and 'never read' in vr['doesNotProve'], 'the void record states what it proves and does not prove')
+    check(vr['observedExitCode'] == 5, 'the void record carries the observed exit code Root captured')
     check(vr['rootCorroborationRef'] == URL and vr['rootCorroborationVerifiedByTool'] is False, 'the void record carries Root\'s corroboration reference and says the tool did not verify it')
     check('written by the operator account' in vr['attestation'] and 'not independent' in vr['attestation'], 'the void record says the artifacts come from the operator account')
     check('compromised' not in json.dumps(vr).lower(), 'the void record does not claim to detect a compromised operator account')
@@ -432,7 +436,17 @@ with tempfile.TemporaryDirectory() as tmp:
     check(L.status(ident, e.root)['state'] == 'unclaimed', 'status starts unclaimed')
     claim(e, ident, 'op-two', 'snap-1', sealed)
     check(L.status(ident, e.root)['state'] == 'claimed', 'status reports claimed')
-    refused(lambda: L.supersede(**kws()), 'no signal that the claim was consumed', 'a claim with no consumption signal cannot be superseded')
+    refused(lambda: L.supersede(**kws()), 'no positive evidence', 'a claim with no consumption evidence cannot be superseded')
+    # F2b: supersede needs POSITIVE evidence; a junk or incomplete finalizer record is not evidence of consumption
+    for what, rec in (('only an opId', {'opId': 'op-two'}), ('inputRead missing and no containers field', fin('op-two')),
+                      ('inputRead false', fin('op-two', inputRead=False)), ('inputRead the string "true"', fin('op-two', inputRead='true')),
+                      ('inputRead 1', fin('op-two', inputRead=1)), ('an empty containers list', fin('op-two', inputRead=None, containersStartedWithInput=[])),
+                      ('containers not a list', fin('op-two', inputRead=None, containersStartedWithInput='feed'))):
+        if what == 'inputRead missing and no containers field':
+            rec = {k: v for k, v in rec.items() if k not in ('inputRead', 'containersStartedWithInput')}
+        refused(lambda r=rec: L.supersede(**kws(old_finalizer=r)), 'no positive evidence', f'supersede refuses a finalizer record with {what}')
+    check(os.path.isfile(os.path.join(e.root, 'claims', ident + '.claim')) and not [f for f in os.listdir(os.path.join(e.root, 'claims')) if 'supersede' in f],
+          'refused supersedes on junk records write and rename nothing')
     os.makedirs(os.path.join(e.markers, 'op-two'))
     open(os.path.join(e.markers, 'op-two', 'input-read'), 'w').close()
     for key, bad, needle, what in (('decision_ref', 'no', 'decision reference', 'a malformed decision reference'),
@@ -480,6 +494,12 @@ with tempfile.TemporaryDirectory() as tmp:
     check(st['state'] == 'supersede-pending' and st['live'] is True and st['pending'][0]['kind'] == 'intent-without-successor', 'an intent-only crash is reported as supersede-pending')
     check(any('supersede --old-op-id op-five --new-op-id op-six' in r for r in st['resumeWith']), 'status says how to resume')
     refused(lambda: claim(e, ident, 'op-seven', 'snap-1', sealed), 'unfinished supersede', 'claim refuses while a supersede is pending')
+    # F2a: a competing supersede while an intent is pending is refused and names the resumable one (it would strand the first)
+    os.makedirs(os.path.join(e.markers, 'op-nine'), exist_ok=True)
+    competing = lambda: L.supersede(**kws(old_op='op-five', new_op='op-nine', precheck=precheck('op-nine'), old_finalizer=fin('op-five')))
+    refused(competing, 'supersede --old-op-id op-five --new-op-id op-six', 'a competing supersede during a pending intent is refused and names the resumable one')
+    check(not os.path.lexists(os.path.join(e.root, 'claims', f'{ident}.supersede-op-five-to-op-nine.json')), 'the refused competing supersede wrote no intent')
+    check(L.status(ident, e.root)['state'] == 'supersede-pending' and L.status(ident, e.root)['live'] is True, 'the pending state is unchanged by the refused competing supersede')
     refused(lambda: L.supersede(**k5(reason='another reason')), 'different decision, reason or evidence', 'resuming with another reason is refused')
     refused(lambda: L.supersede(**k5(old_fin_sha=H('0'))), 'different decision, reason or evidence', 'resuming with other evidence is refused')
     rres = L.supersede(**k5())
@@ -488,10 +508,27 @@ with tempfile.TemporaryDirectory() as tmp:
     st = L.status(ident, e.root)
     check(st['state'] == 'claimed' and st['pending'] == [], 'after the resume the state is claimed with nothing pending')
     refused(lambda: L.supersede(**k5()), 'already completed', 'a completed supersede cannot be repeated')
-    # crash after the rename but before the successor claim exists
-    os.makedirs(os.path.join(e.markers, 'op-six'))
+    # a rename-only crash (the old claim moved, no successor) resumes too, and a competing supersede is refused there as well
+    os.makedirs(os.path.join(e.markers, 'op-six'), exist_ok=True)
     open(os.path.join(e.markers, 'op-six', 'input-read'), 'w').close()
-    k6 = lambda **o: kws(old_op='op-six', new_op='op-eight', precheck=precheck('op-eight'), old_finalizer=fin('op-six'), **o)
+    def after_rename(a, b):
+        os.rename(a, b)
+        raise OSError('crash right after the rename')
+    k6b = lambda **o: kws(old_op='op-six', new_op='op-six2', precheck=precheck('op-six2'), old_finalizer=fin('op-six'), **o)
+    try:
+        L.supersede(**k6b(rename=after_rename))
+    except OSError:
+        pass
+    st = L.status(ident, e.root)
+    check(st['state'] == 'supersede-pending' and st['live'] is False, 'a rename-only crash leaves no live claim and reports supersede-pending')
+    refused(lambda: L.supersede(**kws(old_op='op-six', new_op='op-other', precheck=precheck('op-other'), old_finalizer=fin('op-six'))),
+            'supersede --old-op-id op-six --new-op-id op-six2', 'a competing supersede after a rename-only crash is refused and names the resumable one')
+    check(L.supersede(**k6b())['resumed'] is True, 'a rename-only crash resumes to the successor claim')
+    check(L.status(ident, e.root)['state'] == 'claimed', 'after the resume the state is claimed')
+    # crash after the rename but before the successor claim exists
+    os.makedirs(os.path.join(e.markers, 'op-six2'), exist_ok=True)
+    open(os.path.join(e.markers, 'op-six2', 'input-read'), 'w').close()
+    k6 = lambda **o: kws(old_op='op-six2', new_op='op-eight', precheck=precheck('op-eight'), old_finalizer=fin('op-six2'), **o)
     real_claim = L.claim
     L.claim = lambda *a, **k: (_ for _ in ()).throw(OSError('crash before the successor claim'))
     try:
@@ -512,6 +549,22 @@ with tempfile.TemporaryDirectory() as tmp:
     check(ss['state'] == 'supersede-pending' and ss['pending'][0]['kind'] == 'consumed-without-successor', 'a consumed claim with no successor is reported')
     refused(lambda: claim(e, ident, 'op-ten', 'snap-1', sealed), 'unfinished supersede', 'claim refuses when a consumed claim has no successor')
 
+# ============================================================ F2b: each kind of positive evidence lets a supersede through
+for label, rec_over, marker in (('inputRead true', dict(inputRead=True), False), ('a container started with the input', dict(inputRead=None, containersStartedWithInput=['feed']), False),
+                                ('the input-read marker alone', {}, True)):
+    with tempfile.TemporaryDirectory() as tmp:
+        e = Env(tmp)
+        m1, q, res = e.seal('snap-1')
+        ident, sealed = L.source_identity(m1), res['sealedManifest' + 'Sha256']
+        claim(e, ident, 'op-a', 'snap-1', sealed)
+        fr = {k: v for k, v in dict(fin('op-a'), **rec_over).items() if v is not None}
+        if marker:
+            os.makedirs(os.path.join(e.markers, 'op-a'))
+            open(os.path.join(e.markers, 'op-a', 'input-read'), 'w').close()
+            fr = {'opId': 'op-a'}                              # a bare record plus the marker is positive evidence
+        out = L.supersede(ident, 'op-a', 'op-b', 'snap-1', sealed, precheck('op-b'), H('e'), fr, H('f'), URL, 'root decision', marker_root=e.markers, **e.kw())
+        check(out['generation'] == 2, f'supersede is allowed on positive evidence: {label}')
+
 # ============================================================ F7: admission reader
 with tempfile.TemporaryDirectory() as tmp:
     e = Env(tmp)
@@ -525,36 +578,50 @@ with tempfile.TemporaryDirectory() as tmp:
     refused(lambda: L.admit(**adm, **e.kw()), 'already exists', 'a second admission for the same op is refused')
     chk = dict(path_root=e.root, op_id='op-adm', argv_sha=H('1'), ident=ident, operator_sha=H('2'), finalizer_sha=H('3'),
                image_ids=[H('4'), H('5')], chain_start=e.services, owner_uid=UID, now=now + timedelta(seconds=10))
-    check(L.check_admission(**chk) == [], 'a matching, unexpired admission passes')
-    for key, bad in (('argv_sha', H('9')), ('ident', H('9')), ('operator_sha', H('9')), ('finalizer_sha', H('9')), ('image_ids', [H('4')])):
-        check(len(L.check_admission(**dict(chk, **{key: bad}))) == 1, f'a different {key} is refused')
-    check('expired' in ' '.join(L.check_admission(**dict(chk, now=now + timedelta(seconds=301)))), 'an expired admission is refused')
-    check(L.check_admission(**dict(chk, op_id='op-nope')) != [], 'an absent admission is refused')
 
-    def hand(op, issued, expires, naive=False):
+    def hand(op, issued, expires, naive=False, raw=None):
         body = dict(schema='learn-pod-admission/1', opId=op, argvJsonSha256=H('1'), sourceIdentity=ident, operatorSha256=H('2'), finalizerSha256=H('3'),
                     imageIds=[H('4')], issuedUtc=issued.replace(tzinfo=None).isoformat() if naive else issued.isoformat(),
                     expiresUtc=expires.replace(tzinfo=None).isoformat() if naive else expires.isoformat())
-        d = os.path.join(e.root, 'admissions')
-        p = os.path.join(d, op + '.admit')
-        open(p, 'w').write(json.dumps(body))
+        if raw:
+            body.update(raw)
+        p = os.path.join(e.root, 'admissions', op + '.admit')
+        open(p, 'w').write(json.dumps({k: v for k, v in body.items() if v is not None}))
         os.chmod(p, 0o644)
-        return dict(chk, op_id=op, image_ids=[H('4')])
-    c = hand('op-year', now - timedelta(days=300), now + timedelta(days=300))
-    check('lifetime exceeds 600 seconds' in ' '.join(L.check_admission(**c)), 'an admission written by hand with a one-year lifetime is refused')
-    c = hand('op-601', now, now + timedelta(seconds=601))
-    check('lifetime exceeds' in ' '.join(L.check_admission(**dict(c, now=now + timedelta(seconds=5)))), 'a 601 s lifetime is refused')
-    c = hand('op-600', now, now + timedelta(seconds=600))
-    check(L.check_admission(**dict(c, now=now + timedelta(seconds=5))) == [], 'a 600 s lifetime is accepted')
-    c = hand('op-future', now + timedelta(seconds=60), now + timedelta(seconds=300))
-    check('dated in the future' in ' '.join(L.check_admission(**c)), 'an admission issued in the future is refused')
-    c = hand('op-back', now, now - timedelta(seconds=5))
-    check('expires before it was issued' in ' '.join(L.check_admission(**dict(c, now=now + timedelta(seconds=1)))), 'an admission that expires before it was issued is refused')
-    c = hand('op-naive', now, now + timedelta(seconds=300), naive=True)
-    check('no time zone' in ' '.join(L.check_admission(**dict(c, now=now + timedelta(seconds=1)))), 'an admission with naive times is refused')
+        return dict(chk, op_id=op, image_ids=[H('4')], now=now + timedelta(seconds=5))
+
+    # F7 conformance vectors for the pod operator's copy of the reader: (id, name, kwargs builder, expected reason substring or None)
+    VECTORS = [
+        ('A01', 'match-passes', lambda: chk, None),
+        ('A02', 'argv-differs', lambda: dict(chk, argv_sha=H('9')), 'argvJsonSha256 differs'),
+        ('A03', 'source-identity-differs', lambda: dict(chk, ident=H('9')), 'sourceIdentity differs'),
+        ('A04', 'operator-differs', lambda: dict(chk, operator_sha=H('9')), 'operatorSha256 differs'),
+        ('A05', 'finalizer-differs', lambda: dict(chk, finalizer_sha=H('9')), 'finalizerSha256 differs'),
+        ('A06', 'image-set-differs', lambda: dict(chk, image_ids=[H('4')]), 'imageIds differs'),
+        ('A07', 'expired', lambda: dict(chk, now=now + timedelta(seconds=301)), 'has expired'),
+        ('A08', 'absent', lambda: dict(chk, op_id='op-nope'), 'absent or unreadable'),
+        ('A09', 'lifetime-one-year', lambda: hand('op-year', now - timedelta(days=300), now + timedelta(days=300)), 'lifetime exceeds 600 seconds'),
+        ('A10', 'lifetime-601s', lambda: hand('op-601', now, now + timedelta(seconds=601)), 'lifetime exceeds 600 seconds'),
+        ('A11', 'lifetime-600s-ok', lambda: hand('op-600', now, now + timedelta(seconds=600)), None),
+        ('A12', 'issued-in-future', lambda: hand('op-future', now + timedelta(seconds=60), now + timedelta(seconds=300)), 'dated in the future'),
+        ('A13', 'expires-before-issued', lambda: dict(hand('op-back', now, now - timedelta(seconds=5)), now=now + timedelta(seconds=1)), 'expires before it was issued'),
+        ('A14', 'naive-times', lambda: hand('op-naive', now, now + timedelta(seconds=300), naive=True), 'no time zone'),
+        ('A15', 'unparsable-times', lambda: hand('op-junk', now, now, raw={'issuedUtc': 'yesterday'}), 'no valid issue or expiry time'),
+        ('A16', 'missing-times', lambda: hand('op-nots', now, now, raw={'issuedUtc': None, 'expiresUtc': None}), 'no valid issue or expiry time'),
+    ]
+    for vid, name, build, expect in VECTORS:
+        got = L.check_admission(**build())
+        if expect is None:
+            check(got == [], f'conformance vector {vid} {name}: passes ({got})')
+        else:
+            check(any(expect in r for r in got), f'conformance vector {vid} {name}: refused with "{expect}" (got {got})')
     os.chmod(e.root, 0o777)
-    check('not root-safe' in ' '.join(L.check_admission(**chk)), 'an admission under a world-writable directory is refused')
+    check('not root-safe' in ' '.join(L.check_admission(**chk)), 'conformance vector A17 world-writable-directory: refused')
     os.chmod(e.root, 0o755)
+    check('not root-safe' in ' '.join(L.check_admission(**dict(chk, owner_uid=UID + 1))), 'conformance vector A18 foreign-owner-chain: refused')
+    readme_text = open(os.path.join(os.path.dirname(TOOL), 'README.md')).read()
+    ids = [v[0] for v in VECTORS] + ['A17', 'A18']
+    check(all(i in readme_text for i in ids) and len(ids) == 18, 'the README lists all 18 admission conformance vectors by id')
     # the read-only subcommands need no root; the write commands still do
     if os.geteuid() != 0:
         with contextlib.redirect_stdout(io.StringIO()) as out:
@@ -574,5 +641,9 @@ check(L._args(['claim', '--op-id', 'a', '--image-id', 's1', '--image-id', 's2'])
 refused(lambda: L._args(['claim', '--op-id', 'a', '--op-id', 'b']), 'given twice', 'a repeated single argument is refused')
 refused(lambda: L._args(['claim', 'oops']), 'bad arguments', 'a stray argument is refused')
 check(not any(a in open(TOOL).read().split('def main')[1] for a in ("'--subtree'", "'--base'")), 'the CLI takes no subtree or base argument: the source is pinned')
+
+src_all = open(TOOL).read()
+check('a consumed claim exists; supersede it' not in src_all and '_consumed_signals' not in src_all, 'the unreachable consumed guard in claim is removed')
+check('--operator-exit-code' in src_all, 'the CLI offers --operator-exit-code')
 
 print(f'learn-seal-claim: {n} assertions passed')

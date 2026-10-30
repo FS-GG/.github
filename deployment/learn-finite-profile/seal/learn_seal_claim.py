@@ -10,6 +10,7 @@ One self-contained file, because root tools run as `python3 -I <file>` and -I dr
     seal       --m1 FILE --quiesce FILE --snapshot-id ID [--timer-asserted-stopped yes]
     claim      --source-identity HEX --op-id ID --snapshot-id ID --sealed-manifest-sha256 HEX --precheck-result FILE
     void       --source-identity HEX --op-id ID --operator-result FILE --finalizer-record FILE --corroboration-ref URL
+               [--operator-exit-code N]
     supersede  --source-identity HEX --old-op-id ID --new-op-id ID --snapshot-id ID --sealed-manifest-sha256 HEX
                --precheck-result FILE --old-finalizer-record FILE --decision-ref URL --reason TEXT
     admit      --op-id ID --argv-json-sha256 HEX --source-identity HEX --operator-sha256 HEX --finalizer-sha256 HEX
@@ -546,8 +547,6 @@ def claim(ident, op_id, snapshot_id, sealed_sha, precheck, precheck_sha, source_
         if d['pending']:
             refuse('an unfinished supersede or a consumed claim without a successor exists; resume the supersede: ' +
                    '; '.join(f"{p['kind']} {p['old']}->{p['new']}" for p in d['pending']))
-        if d['state'] == 'consumed':
-            refuse('a consumed claim exists; supersede it')
     _check_seal(f'{source_root}/inputs', snapshot_id, ident, sealed_sha)
     generation = d['nextGeneration']
     body = {'schema': 'learn-input-claim/1', 'generation': generation, 'sourceIdentity': ident, 'opId': op_id,
@@ -559,8 +558,8 @@ def claim(ident, op_id, snapshot_id, sealed_sha, precheck, precheck_sha, source_
 
 
 # ---------------------------------------------------------------- void
-def _consumed_signals(op_id, finalizer_record, marker_root):
-    """Reasons to believe the op consumed (read or mounted) the input. Empty means no such signal in these artifacts."""
+def _void_blockers(op_id, finalizer_record, marker_root):
+    """FAIL-CLOSED, for void: reasons the claim may have consumed the input. A missing or odd field counts as a reason."""
     why = []
     if os.path.lexists(f'{marker_root}/{op_id}/input-read'):
         why.append('the input-read marker exists')
@@ -571,10 +570,24 @@ def _consumed_signals(op_id, finalizer_record, marker_root):
     return why
 
 
+def _positive_consumption(op_id, finalizer_record, marker_root):
+    """POSITIVE evidence, for supersede: the marker exists, inputRead is exactly True, or a container started with the input.
+    A missing field, a junk record or an unrelated schema is NOT evidence of consumption."""
+    ev = []
+    if os.path.lexists(f'{marker_root}/{op_id}/input-read'):
+        ev.append('the input-read marker exists')
+    if finalizer_record.get('inputRead') is True:
+        ev.append('the finalizer record states inputRead true')
+    started = finalizer_record.get('containersStartedWithInput')
+    if isinstance(started, list) and started:
+        ev.append('the finalizer record lists containers started with the input')
+    return ev
+
+
 def _evidence_contract(op_id, operator_result, finalizer_record, marker_root, admission=None):
     """Return a list of reasons the claim is NOT voidable; empty means it is. These artifacts are written by the operator
     account; this check makes them consistent with each other and with the admission, it does not authenticate them."""
-    why = _consumed_signals(op_id, finalizer_record, marker_root)
+    why = _void_blockers(op_id, finalizer_record, marker_root)
     if operator_result.get('schema') != OPERATOR_RESULT_SCHEMA or operator_result.get('opId') != op_id:
         why.append('operator RESULT is for another schema or op')
     if operator_result.get('mode') != '--run':
@@ -607,7 +620,7 @@ def _evidence_contract(op_id, operator_result, finalizer_record, marker_root, ad
 
 
 def void(ident, op_id, operator_result, op_sha, finalizer_record, fin_sha, corroboration_ref, source_root, view_root, services,
-         marker_root=MARKER_ROOT, owner_uid=0):
+         marker_root=MARKER_ROOT, owner_uid=0, observed_exit_code=None):
     _check_ids(ident, op_id)
     if not COMMENT_URL.match(corroboration_ref or ''):
         refuse('a Root corroboration reference (a GitHub issue or pull request comment URL) is required')
@@ -625,11 +638,18 @@ def void(ident, op_id, operator_result, op_sha, finalizer_record, fin_sha, corro
     except (OSError, ValueError, Refuse):
         adm = None
     why = _evidence_contract(op_id, operator_result, finalizer_record, marker_root, adm)
+    if observed_exit_code is not None:
+        # Root's own capture of the operator process exit status (for example from the shell): it must match the RESULT
+        if isinstance(observed_exit_code, bool) or not isinstance(observed_exit_code, int):
+            why.append('the observed exit code is not an integer')
+        elif observed_exit_code != operator_result.get('exitCode'):
+            why.append(f"the observed exit code {observed_exit_code} differs from the RESULT's {operator_result.get('exitCode')}")
     if why:
         refuse('not voidable (the claim is consumed): ' + '; '.join(why))
     rec = {'schema': 'learn-input-claim-void/1', 'sourceIdentity': ident, 'opId': op_id, 'generation': c.get('generation', 1),
            'claimSha256': csha, 'operatorResultSha256': op_sha, 'finalizerRecordSha256': fin_sha,
-           'rootCorroborationRef': corroboration_ref, 'rootCorroborationVerifiedByTool': False, 'voidedUtc': utc(),
+           'rootCorroborationRef': corroboration_ref, 'rootCorroborationVerifiedByTool': False, 'observedExitCode': observed_exit_code,
+           'voidedUtc': utc(),
            'proves': 'the input was never mounted into any container of this op, as the operator account reports it',
            'doesNotProve': 'that the input was never read',
            'attestation': ('the operator RESULT, the finalizer record and the marker are written by the operator account '
@@ -664,6 +684,12 @@ def supersede(ident, old_op, new_op, snapshot_id, sealed_sha, precheck, precheck
     consumed = next((i for i in items if i['kind'] == 'consumed' and i['opId'] == old_op), None)
     successor = next((i for i in items if i['opId'] == new_op), None)
     resuming = os.path.lexists(intent_path)
+    pending = _pending(items, intents)
+    others = [p for p in pending if not (p['old'] == old_op and p['new'] == new_op)]
+    if others:
+        # another supersede is unfinished: a second one would strand the first. Name what must be resumed.
+        refuse('another supersede is unfinished; resume it first: ' +
+               '; '.join(f"supersede --old-op-id {p['old']} --new-op-id {p['new']}" for p in others))
     if old_finalizer.get('opId') != old_op:
         refuse('the finalizer record is for another op')
     if resuming:
@@ -676,8 +702,9 @@ def supersede(ident, old_op, new_op, snapshot_id, sealed_sha, precheck, precheck
         # a voidable claim must be voided, not superseded: supersede is only for a consumed claim
         if not live or live['opId'] != old_op:
             refuse('the live claim names another op' if live else 'no live claim to supersede')
-        if not _consumed_signals(old_op, old_finalizer, marker_root):
-            refuse('no signal that the claim was consumed; void it instead of superseding it')
+        if not _positive_consumption(old_op, old_finalizer, marker_root):
+            refuse('no positive evidence that the claim was consumed (marker, inputRead true, or a container started with the input); '
+                   'a claim without it is voided, not superseded')
         old = live
         rec = {'schema': 'learn-input-claim-supersede/1', 'sourceIdentity': ident, 'oldOpId': old_op, 'newOpId': new_op,
                'oldClaimSha256': old['sha256'], 'oldFinalizerRecordSha256': old_fin_sha, 'decisionRef': decision_ref,
@@ -809,7 +836,8 @@ def main(argv):
         elif cmd == 'void':
             o, osha = read_json(a['--operator-result'])
             f, fsha = read_json(a['--finalizer-record'])
-            R.update(void(a['--source-identity'], a['--op-id'], o, osha, f, fsha, a['--corroboration-ref'], sr, vr, sv))
+            oc = int(a['--operator-exit-code']) if '--operator-exit-code' in a else None
+            R.update(void(a['--source-identity'], a['--op-id'], o, osha, f, fsha, a['--corroboration-ref'], sr, vr, sv, observed_exit_code=oc))
         elif cmd == 'supersede':
             pr, psha = read_json(a['--precheck-result'])
             f, fsha = read_json(a['--old-finalizer-record'])
