@@ -136,6 +136,7 @@ jobs:
       FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE_20261012: 7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe
       FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE_20261018: b4067e48bd9bd803e958bfe1503ea0a06a3a127f
       FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE_20261023: bf62c713fd9c48247e2a4d3ce99a9f0554cd745e
+      FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE_20261026: ac85c71971895cd6234578d6b11f49f7c27ff0c4
     steps:
       - uses: actions/checkout@v7
       - name: Retain the image SDK tree before exact SDK setup
@@ -253,6 +254,11 @@ jobs:
               export FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION=20261023.334.3
               export FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE="$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE_20261023"
               test "$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE" = bf62c713fd9c48247e2a4d3ce99a9f0554cd745e
+              ;;
+            20261026.354.1)
+              export FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION=20261026.354.1
+              export FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE="$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE_20261026"
+              test "$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE" = ac85c71971895cd6234578d6b11f49f7c27ff0c4
               ;;
             *) echo "Unadmitted hosted image: $ImageVersion" >&2; exit 1 ;;
           esac
