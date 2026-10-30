@@ -12,12 +12,17 @@
 # A filter can agree with itself and still omit the subject's own dependencies.
 name: skill-union-selftest
 
+# The fixture asserts current truth about the skills themselves (tests/skill-union/check-current-truth.py), so a
+# skill edit must run it: #4680/#4711 changed skills without touching a listed path and the fixture sat red on
+# main until this repair (#4730).
 on:
   pull_request:
     paths:
       - "scripts/skill-union-assert.sh"
       - "scripts/lib/**"
       - "tests/skill-union/**"
+      - ".agents/skills/**"
+      - ".claude/skills/**"
       - ".github/workflows/skill-union-selftest.yml"
   push:
     branches: [main]
@@ -25,6 +30,8 @@ on:
       - "scripts/skill-union-assert.sh"
       - "scripts/lib/**"
       - "tests/skill-union/**"
+      - ".agents/skills/**"
+      - ".claude/skills/**"
       - ".github/workflows/skill-union-selftest.yml"
   workflow_dispatch:
 
