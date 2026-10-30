@@ -1,5 +1,19 @@
 # Registry changelog
 
+## 2026-10-30 — reconcile published Workspace.Template 0.20.1 (FS-GG/.github#3010)
+
+Reconcile `fs-gg-workspace-template` source/package **0.20.1** and `fs-gg-templates/v0.20.1`. The annotated tag
+`ff5caa76…` peels to register commit `df896c4bd587b5ef8dd990bc39c0dcb661bf2193` (FS.GG.Templates#815), which sits on
+qualified Templates main `fe24d30872c84d4c1c92afd7a05c5cf22d00bb10` (carrying #812, #814 and #806).
+
+- **Publication:** [release run 41042757474/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/41042757474) succeeded: route, pack, the release-route gate (register at `df896c4b` accepted payload `7c48b222…`) and `publish [org-publication-writer]` under the ADR-0097 lock. The run archive `e9775e14…` equals the run's `SHA256SUMS` and the GitHub Release asset.
+- **Readback:** the release asset's payload identity is `7c48b222…` with 620 entries. The signed nuget.org archive (`e84d5188…`) has the same 620 entries byte-for-byte plus only `.signature.p7s`, and its nuspec names 0.20.1 at `df896c4b`. The workflow receipts report `payloadExact: true` on both feeds. Root's token cannot read GitHub Packages directly, so that feed rests on the receipt plus the identical release asset.
+- **Qualification:** accepted by root on [FS-GG/.github#3010 comment 6520252958](https://github.com/FS-GG/.github/issues/3010#issuecomment-6520252958) on fdev (glibc 2.44 carrier). The archive was packed once; the TypeScript, JavaScript, Rust and Go CLI products each passed 8/8 scaffold controls and Governance Verify with all 8 gates, with zero scan findings and `doctor isCoherent:true`. Wizard 0.23.0 built from source passed 64 of 65 controls; the one FAIL is a driver-literal harness defect that root accepted as satisfied by host readback.
+- **Content:** 0.20.1 is a PATCH successor to 0.20.0. It adopts Rendering 0.32.4 in the fable-game defaults and root README (#806), and adds the comment-aware fable-bindings closure scanner with current BabylonJS bindings (#812) and the curated PixiJS 8.22.0 2D corpus (#814). The four CLI product sources and the typed catalog are unchanged.
+- **Edge:** the `templates` -> `rendering` edge now reads `fs-gg-ui-template@0.32.4`: the published package's provider pin and SvgFoundation/Studio defaults select 0.32.4 (verified in the published nuget.org archive).
+
+Installed and full Wizard qualification of 0.20.1 remains open under #3010 (Wizard 0.23.0 publication is .github#4951). 0.20.0 stays historical.
+
 ## 2026-10-30 — reconcile published FS.GG.UI 0.32.4 (FS-GG/.github#4817)
 
 Flip `fs-gg-ui-template` source, package and tag to **0.32.4**. The retained original producer is `4ede04be66cedffc8551cd14045bab714aa358a7` (candidate run 40737624380/a1, artifact 12838338215, custody `89ea6424…`).
@@ -195,6 +209,8 @@ review M4). The typed validator (`fsgg-sdd registry validate`) never saw that co
 no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
+
+- **2026-10-30** — RECONCILE PUBLISHED WORKSPACE.TEMPLATE 0.20.1 (fs-gg-workspace-template; .github#3010): register commit df896c4bd587b5ef8dd990bc39c0dcb661bf2193 (Templates#815) on qualified main fe24d308, original publisher 41042757474/a1 on both feeds (payload 7c48b222…, 620 entries; nuget.org adds only .signature.p7s), tag fs-gg-templates/v0.20.1 -> ff5caa76… peels to the register commit; adopts Rendering 0.32.4 (Templates#806) so the templates -> rendering edge advances to 0.32.4; four-product qualification accepted by root (#3010 comment 6520252958); see the dated section above.
 
 - **2026-10-30** — RECONCILE PUBLISHED FS.GG.UI 0.32.4 (fs-gg-ui-template; .github#4817): retained original producer 4ede04be66cedffc8551cd14045bab714aa358a7, tags settled by fenced App-token settlement 40997578723/a1, ADR-0097-locked publisher 40997955966/a1 at executor f8f23a7a pushed 19/19 to both feeds (canary FS.GG.UI.Build, feedSplit none, nuget.org readback 19/19); Templates adoption #806 (fe24d308); closes the feed-coherence drift (registry 0.32.3 vs feeds 0.32.4); see the dated section above.
 
