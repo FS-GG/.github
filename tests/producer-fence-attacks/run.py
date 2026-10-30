@@ -81,8 +81,8 @@ def validate_kit_read_only_successor(historical: dict[str, object], successor: d
         fail("Kit successor can obtain a token beyond contents:read")
     jobs = block("jobs:")
     job_names = re.findall(r"(?m)^  ([a-z][a-z0-9-]*):\s*$", "\n".join(jobs))
-    if job_names != ["bump-shape", "bump-mechanical", "receiver-validate"]:
-        fail("Kit successor changed the three read-only job identities")
+    if job_names != ["bump-shape", "bump-mechanical", "receiver-validate", "closing-keywords"]:
+        fail("Kit successor changed the four read-only job identities")
     if any(re.match(r"^    (?:permissions|uses):", line) for line in jobs):
         fail("Kit successor adds a job permission override or reusable callee")
     active = "\n".join(lines)
@@ -90,7 +90,7 @@ def validate_kit_read_only_successor(historical: dict[str, object], successor: d
         fail("Kit successor can read an App or repository secret")
     uses = [match.group(1) or match.group(2) for match in re.finditer(
         r"(?m)^        uses:\s*(\S+)\s*$|^      - uses:\s*(\S+)\s*$", "\n".join(jobs))]
-    if sorted(uses) != sorted(["actions/checkout@v7", "actions/checkout@v7",
+    if sorted(uses) != sorted(["actions/checkout@v7", "actions/checkout@v7", "actions/checkout@v7",
                              "actions/setup-dotnet@v6", "actions/setup-python@v7"]):
         fail("Kit successor introduces an unreviewed action")
     forbidden = (
