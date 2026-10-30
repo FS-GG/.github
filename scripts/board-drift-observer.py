@@ -35,6 +35,13 @@ THE RULES (a finding carries the letter)
      positives (a progress note that opens "Root/fdev ... decision") and false negatives (a ruling
      phrased without those words, or a ruling made outside a comment on the card). A comment that
      carries ACK_TOKEN is a disposition and is never itself a ruling.
+  s  A watched workflow's cron has stopped firing (SCHEDULE_WATCH): the nightly main-health observer has no
+     `schedule` run newer than 2 days, or this observer's own PREVIOUS scheduled run is older than 2 hours.
+     Not a card rule: it reads schedule.json (board-drift-schedule-fetch.py), the mutual half of the
+     main-health observer's freshness check. Reported in the same issue, with no ack route (nothing on a
+     card to comment on): it clears when the schedule fires again. LIMIT: the self-check is reported by a
+     run, so it can only appear when a run happens; a total stop of this workflow is caught by the
+     main-health observer's freshness check, which reads this workflow's schedule from outside.
   x  The card's content could not be read (null content). Not a rule of the spec: "I could not look" is
      never "no drift" (.github#266), and a silent skip would hide exactly the card that needs a look.
 
@@ -120,6 +127,7 @@ import sys
 from pathlib import Path
 
 SNAPSHOT_SCHEMA = "fsgg:board-drift-snapshot/v1"
+SCHEDULE_SCHEMA = "fsgg:board-drift-schedule/v1"
 FINDINGS_SCHEMA = "fsgg:board-drift-findings/v1"
 REPORT_TITLE = "Board findings: Project 3"
 # The issue's title before drift and board-currency findings converged (design §4, Root decision 3:
@@ -132,6 +140,14 @@ REPORT_REPO = "FS-GG/.github"
 MARKER_PREFIX = "fsgg:board-drift/v1"
 
 NO_VERDICT = 2
+
+# Rule s: workflow file -> (longest allowed gap since its newest `schedule` run, why).
+# Two days for the nightly main-health observer (2x its cadence, and a missed night is not paged at once);
+# two hours for this observer itself (2x its hourly cadence). Strictly greater than is a finding.
+SCHEDULE_WATCH: dict[str, tuple[dt.timedelta, str]] = {
+    "main-health-observer.yml": (dt.timedelta(days=2), "peer"),
+    "board-drift-observer.yml": (dt.timedelta(hours=2), "self"),
+}
 
 HMAC_KEY_ENV = "BOARD_DRIFT_HMAC_KEY"
 MIN_KEY_BYTES = 16
@@ -312,6 +328,7 @@ def analyze(
     root_logins: tuple[str, ...] = DEFAULT_ROOT_LOGINS,
     reveal_private: bool = False,
     hmac_key: bytes | None = None,
+    schedule: dict | None = None,
 ) -> list[dict]:
     """PURE. Findings for a validated snapshot at `now`, in a stable order.
 
@@ -433,13 +450,67 @@ def analyze(
                             reveal=rv, key=hk, status=status, commentUrl=last.get("url"))
                 )
 
-    order = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "x": 5}
+    if schedule is not None:
+        out += schedule_findings(schedule, now)
+
+    order = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "s": 5, "x": 6}
     return sorted(out, key=lambda f: (order[f["rule"]], f["ref"], f["key"]))
 
 
 def key_rule(key: str) -> str:
     """The rule of a finding key (`<rule>|<ref>|<extra>`)."""
     return key.split("|", 1)[0]
+
+
+def validate_schedule(doc: object) -> dict:
+    if not isinstance(doc, dict) or doc.get("schema") != SCHEDULE_SCHEMA:
+        raise NoVerdict(f"schedule document schema is not {SCHEDULE_SCHEMA}")
+    if not isinstance(doc.get("workflows"), list):
+        raise NoVerdict("schedule document lacks its workflows array")
+    return doc
+
+
+def schedule_finding(file: str, kind: str, text: str, role: str) -> dict:
+    """A rule-s finding. Workflow files are public repository paths: nothing here is private, and there
+    is no card to comment on, so there is no ack token. The key excludes ages so it dedupes."""
+    ref = f"workflow:{file}"
+    return {"rule": "s", "ref": ref, "key": f"s|{ref}|{kind}", "text": text, "rank": "normal", "role": role}
+
+
+def schedule_findings(doc: object, now: dt.datetime) -> list[dict]:
+    """PURE. Rule s: a watched workflow whose newest `schedule` run is too old, never ran, is absent or
+    disabled, or could not be read. A watched workflow missing from the document counts as unreadable."""
+    validate_schedule(doc)
+    entries = {e.get("file"): e for e in doc["workflows"] if isinstance(e, dict)}
+    out: list[dict] = []
+    for file, (limit, role) in SCHEDULE_WATCH.items():
+        who = "this observer's previous scheduled run" if role == "self" else "the scheduled run"
+        entry = entries.get(file)
+        state = (entry or {}).get("state")
+        if state == "absent":
+            out.append(schedule_finding(file, "absent", f"workflow file not found on the default branch ({who} cannot exist)", role))
+            continue
+        created, newest = parse_time((entry or {}).get("createdAt")), parse_time((entry or {}).get("newestScheduleRunAt"))
+        if state != "ok" or created is None or (entry or {}).get("newestScheduleRunAt") and newest is None:
+            out.append(schedule_finding(file, "unreadable", "schedule history could not be read (no verdict on this schedule)", role))
+            continue
+        if entry.get("workflowState") != "active":
+            out.append(schedule_finding(file, "disabled", f"workflow state is {entry.get('workflowState')!r}: a disabled workflow does not fire", role))
+            continue
+        if newest is None:
+            if now - created > limit:
+                out.append(schedule_finding(file, "never-ran", f"no scheduled run since the workflow was registered {iso(created)} "
+                                            f"(more than {format_limit(limit)})", role))
+            continue
+        if now - newest > limit:
+            out.append(schedule_finding(file, "stale", f"newest scheduled run {iso(newest)} is older than {format_limit(limit)}; "
+                                        f"{who} is overdue", role))
+    return out
+
+
+def format_limit(limit: dt.timedelta) -> str:
+    hours = limit.total_seconds() / 3600
+    return f"{hours / 24:g} days" if hours >= 48 else f"{hours:g} hours"
 
 
 def digest(findings: list[dict]) -> str:
@@ -452,6 +523,7 @@ RULE_TITLES = {
     "c": "c. In progress with no activity",
     "d": "d. Missing Status, Track or Work level",
     "e": "e. Root ruling comment newer than the last Status change (heuristic)",
+    "s": "s. A watched workflow's schedule has stopped firing (peer and self check)",
     "x": "x. Content could not be read",
     # Board-currency rule set (scripts/board-currency-rules.py), merged in by `check --currency`.
     "R1": "R1. Routine PR references exactly one open Delivery with a parent Outcome",
@@ -515,7 +587,12 @@ def _marker(findings: list[dict]) -> str:
 
 def finding_line(f: dict) -> str:
     title = f" {code(f['title'])}" if f.get("title") else ""
-    ack = f" Ack: {code(f['ack'])}" if f.get("ack") else ""
+    if f.get("ack"):
+        ack = f" Ack: {code(f['ack'])}"
+    elif f["rule"] == "s":
+        ack = " Clears when the schedule fires again."
+    else:
+        ack = ""
     return f"- {code(f['ref'])}{title}: {code(f['text'])}{ack}"
 
 
@@ -525,7 +602,7 @@ def render_body(findings: list[dict], snapshot_meta: dict, limit: int = BODY_LIM
         "",
         f"Generated by the hourly board observer from read-only snapshots of Project "
         f"{snapshot_meta.get('number', 3)} taken {snapshot_meta.get('fetchedAt', 'unknown')} "
-        f"({snapshot_meta.get('items', '?')} cards): board-drift rules a-e and x, and the deterministic "
+        f"({snapshot_meta.get('items', '?')} cards): board-drift rules a-e, s and x, and the deterministic "
         f"board-currency rules R1-R9 and U ({snapshot_meta.get('currencyRuleset') or 'not evaluated'}; design "
         "`docs/coordination/2026-10-31-board-currency-gate.md`). It never edits board fields: Root resolves each "
         "finding with a guarded Status write, a native fix or a recorded disposition, and this issue is rewritten "
@@ -543,12 +620,13 @@ def render_body(findings: list[dict], snapshot_meta: dict, limit: int = BODY_LIM
         "`Ack:` token (`[board-drift-ack] <rule>:<key>`, or `<rule>:*` for any finding of that rule) when no "
         "Status change is owed. An ack must be newer than the evidence it covers. Rule e is a first-line "
         "ruling-marker heuristic with known precision and recall limits. Board-currency findings (R1-R9, U) "
-        "have no ack: each clears when the native state it reads is fixed.",
+        "have no ack: each clears when the native state it reads is fixed. Rule s (a schedule that stopped "
+        "firing) has no ack either: it clears when that schedule fires again.",
         "",
         f"Owner: {code('FS-GG/.github#4730')}. Rule: work-board lifecycle-contract, same-turn Status write.",
     ]
     sections: list[tuple[str, list[dict]]] = []
-    for rule in ("a", "b", "c", "d", "e", "x") + CURRENCY_RULES:
+    for rule in ("a", "b", "c", "d", "e", "s", "x") + CURRENCY_RULES:
         normal = [f for f in findings if f["rule"] == rule and f.get("rank") != "low"]
         low = [f for f in findings if f["rule"] == rule and f.get("rank") == "low"]
         if normal:
@@ -741,9 +819,13 @@ def cmd_check(args: argparse.Namespace) -> int:
         now = parse_time(args.now) if args.now else dt.datetime.now(dt.timezone.utc)
         if now is None:
             raise NoVerdict(f"--now {args.now!r} is not an ISO timestamp")
+        # With --schedule, an unusable document is NO VERDICT: the schedule read records its own failures per
+        # workflow, so a missing or malformed file is a broken step, never "no drift".
+        schedule = validate_schedule(json.loads(Path(args.schedule).read_text(encoding="utf-8"))) if args.schedule else None
         findings = analyze(snapshot, now, pr_window_hours=args.pr_window_hours, stale_days=args.stale_days,
                            root_logins=tuple(args.root_login or DEFAULT_ROOT_LOGINS),
-                           reveal_private=args.reveal_private, hmac_key=load_key(dict(os.environ)))
+                           reveal_private=args.reveal_private, hmac_key=load_key(dict(os.environ)),
+                           schedule=schedule)
         currency_ruleset = None
         if args.currency:
             document = json.loads(Path(args.currency).read_text(encoding="utf-8"))
@@ -787,6 +869,8 @@ def main(argv: list[str] | None = None) -> int:
     check = sub.add_parser("check", help="analyze a snapshot and write findings.json")
     check.add_argument("--snapshot", required=True)
     check.add_argument("--out", required=True)
+    check.add_argument("--schedule", default=None,
+                       help="schedule.json from board-drift-schedule-fetch.py; enables rule s")
     check.add_argument("--now", default=None, help="ISO timestamp override, for tests")
     check.add_argument("--pr-window-hours", type=float, default=24)
     check.add_argument("--stale-days", type=float, default=7)
