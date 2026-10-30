@@ -185,6 +185,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-10-30** — — CREATOR023 RELEASE ROUTE (.github; #3010): add the CURRENT_023 release route for NewSddWorkspace source 0.23.0 (typed provider catalog creation with stable SDD CLI 2.5.3 or newer, describing Templates 0.20.1) over genuine promoted coherent 0.113.0 (release 421880935, immutable source 79db622f) with the fresh journal board-v2-product-creator-023. The published 022 route, its 022r1 journal and the abandoned 022 journal stay immutable history. Published package-version/tag stay 0.22.0; no 023 candidate, preflight, publication or installed adoption is asserted, and Templates 0.20.1 publication is separate.
+
 - **2026-10-25** — — RECONCILE PUBLISHED WORKSPACE.TEMPLATE 0.20.0 (Workspace.Template 0.20.0 (Templates#441)): source 1b9b1ca92556eb1acd0e4d1c9cb851a8c7906f86, original publisher 40163553390/a1 on both feeds (589 signature-excluded entries), tag fs-gg-templates/v0.20.0 -> 2285deef…; adds the TypeScript, JavaScript, Rust and Go CLI workspace providers qualified through SDD CLI 2.5.1 / Governance CLI 1.15.0 (payload 825a0815…); see the dated section above for the full evidence.
 
 - **2026-10-23** — ACCEPTED COHERENT113 PUBLICATION (.github; #4640):

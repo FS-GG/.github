@@ -656,7 +656,7 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | `fs-gg-net` | FS.GG.Net | `0.6.0` | `0.6.0` |
 | `coord-engine` | FS-GG/.github | `0.113.0` | `0.113.0` |
 | `telemetry-host` | FS-GG/.github | `0.9.0` | `0.8.0` |
-| `new-sdd-workspace` | FS-GG/.github | `0.22.0` | `0.22.0` |
+| `new-sdd-workspace` | FS-GG/.github | `0.23.0` | `0.22.0` |
 | `fs-gg-workspace-template` | FS.GG.Templates | `0.20.0` | `0.20.0` |
 | `game-skills` | FS.GG.Game | `0.9.0` | `0.9.0` |
 | `rendering-skills` | FS.GG.Rendering | `0.2.0` | `0.2.0` |
