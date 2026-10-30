@@ -10,7 +10,8 @@
 # worker re-reading the `release` output and disbelieving it. There is no second line of defence:
 # `done --flip` cannot help, because the work WAS merged — it just did not finish the item.
 #
-# The subjects of this gate are the PR BODY and the branch's COMMIT MESSAGES (#684) — not the tree —
+# The subjects of this gate are the PR BODY, the PR TITLE (.github#4730) and the branch's COMMIT MESSAGES
+# (#684) — not the tree —
 # so there is deliberately NO `paths:` filter: any PR can carry a negated keyword, including one that
 # touches no file this gate knows about. It runs on `edited` (the body changed) and on `synchronize`
 # (the commits changed, AND so the check is present on the head SHA the merge gate reads — a check
@@ -45,11 +46,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
-      # No pip install: the gate is stdlib-only (re, pathlib) on purpose. A lint that reads a PR body
+      # PyYAML is for the FIXTURE only (product-lint.sh reads kit-materialize.yml to run the real job
+      # step). The gate itself is stdlib-only (re, pathlib) on purpose: a lint that reads a PR body
       # should not need a dependency, and a dependency is one more thing that can fail open on a runner.
+      # The `declared-closes` job below keeps plain setup-python and installs nothing.
+      - uses: ./.github/actions/setup-policy-python
       - name: Run the closing-keywords fixture (no network)
         run: bash tests/closing-keywords/run.sh
 
@@ -102,11 +103,15 @@ jobs:
         id: check
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
+          # The TITLE is a third subject (.github#4730): under COMMIT_OR_PR_TITLE it becomes the squash
+          # commit subject on a multi-commit PR, so "docs: close #N ..." closes N although the body is
+          # clean (.github#4963). Retitling fires `edited`, which this workflow already listens to.
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           printf '%s' "$PR_BODY" > pr-body.md
           rc=0
           out="$(python scripts/check-closing-keywords.py \
-                   --commits commit-messages.txt --body pr-body.md 2>&1)" || rc=$?
+                   --commits commit-messages.txt --body pr-body.md --title="$PR_TITLE" 2>&1)" || rc=$?
           [ -z "$out" ] || printf '%s\n' "$out"
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
 
