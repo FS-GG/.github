@@ -176,10 +176,6 @@ jobs:
     uses: ./.github/workflows/reconcile-concurrency-scope-coherence.yml
     permissions:
       contents: read
-  check-release-successor-authenticate-source:
-    uses: ./.github/workflows/release-successor-authenticate-source.yml
-    permissions:
-      contents: read
   check-repo-filter-monopoly:
     uses: ./.github/workflows/repo-filter-monopoly.yml
     permissions:
@@ -271,7 +267,6 @@ jobs:
       - check-recipe-landable
       - check-recipe-pagination
       - check-reconcile-concurrency-scope-coherence
-      - check-release-successor-authenticate-source
       - check-repo-filter-monopoly
       - check-required-context-coherence-selftest
       - check-retirement-order-coherence

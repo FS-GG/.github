@@ -18,7 +18,6 @@ on:
       - '.github/actions/setup-policy-python/**'
       - 'scripts/check-release-successor-authenticate.py'
       - 'tests/release-successor-authenticate/**'
-  workflow_call:
 
 permissions:
   contents: read
