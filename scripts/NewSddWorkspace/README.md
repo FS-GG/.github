@@ -13,20 +13,44 @@ retired `scripts/new-sdd-fullstack.sh` (see [ADR-0016](https://github.com/FS-GG/
 
 ## Current source and published boundary
 
-Published **0.23.0** introduced descriptor-driven catalog creation with stable SDD CLI
+Wizard **0.23.0** is published: tag `new-sdd-workspace/v0.23.0` (release 429016553) and nuget.org
+`FS.GG.NewSddWorkspace` 0.23.0. It provides descriptor-driven catalog creation with stable SDD CLI
 **2.5.3 or newer**. Creation and dry-run admit that runtime before target mutation and recheck the
 exact producer immediately before scaffold. Legacy typed project knowledge retains its 2.1.0 floor;
-list/help require no catalog runtime. Source selection does not establish publication or installed
-support: public producer/template identities and genuine consumer acceptance remain separate gates.
-The catalog route described below is written against FS.GG.Templates **0.20.1**
-(published tag `fs-gg-templates/v0.20.1`, package `FS.GG.Workspace.Template::0.20.1`), the release that carries the
+list/help require no catalog runtime.
+The catalog route described below describes the published FS.GG.Templates **0.20.1**
+(tag `fs-gg-templates/v0.20.1`, package `FS.GG.Workspace.Template::0.20.1`), the release that carries the
 common project-knowledge composition for the TypeScript, JavaScript, Rust and Go providers.
+The four-product public-tool journeys passed on Linux x64 **with `--no-coordination`**: the public Wizard 0.23.0,
+SDD 2.5.3 and Governance 1.15.0 installed from nuget.org created TypeScript, JavaScript, Rust and Go CLI workspaces
+against `fs-gg-templates/v0.20.1`, and 85 of 85 checks passed (creation, knowledge, Doctor, Governance Verify with all
+eight gates, and five refusal controls per product); see the
+[#3010 Step 3 result](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523620705). The retained receipts are
+in private custody; their manifest digest is `ea322f1526a048836deb2f1eaa2e817ccdaffc91647e4cc19cd69bd191e8d217`
+and the run summary `evidence/results.json` is `aa01a492c6ded094ac988cb2953d02ff8cfdb74e6a27ac3ac8abc9b3fc97737d`.
 
-Prospective source **0.23.1** repairs a defect in the published 0.23.0 (#4964): with default coordination its
-creations carried Wizard-written members in the SDD-owned `.fsgg/scaffold-provenance.json`, which SDD CLI 2.5.3
-rejects, so `fsgg-sdd doctor` was incoherent. 0.23.1 keeps that state in Wizard-owned files (see
-[Where the security state lives](#where-the-security-state-lives-fsggsecurity-obligationsjson)) and pins the
-coordination kit. Wizard 0.23.1 itself is not published by this source change.
+**Known defect in 0.23.0: creation with default coordination yields an incoherent `doctor`.** With coordination
+on (the default), Wizard 0.23.0 writes a `securityObligations` key into `.fsgg/scaffold-provenance.json`. That file
+belongs to SDD, and SDD 2.5.3 rejects the unknown property: `doctor` reports `isCoherent:false` with
+`scaffold.provenanceMalformed` on all four catalog providers. The default-coordination journey found this (see the
+[#3010 result](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523944130)); the repair is tracked in
+.github#4964 (obligations move to a Wizard-owned file; Wizard 0.23.1) and its source is prepared, but it is not yet published.
+Until 0.23.1, use `--no-coordination` (the configuration the 85/85 result covers). Do not edit
+`.fsgg/scaffold-provenance.json` to make `doctor` pass: that hides the pending security obligations from SDD.
+The obligations were recorded as pending, never claimed satisfied, and `knowledge check` passed on all four products.
+
+Default coordination also fetches the coordination kit over HTTPS from the moving `main` ref of this repository, so
+the materialized kit is not reproducible across fetches. The kit observed in the journey matched `main@a9a6f77f`
+byte for byte; the 0.23.1 source pins it (see below).
+
+Stated limits remain: the GitHub Packages feed was not read directly (the qualifying token received 403), only
+one Linux x64 carrier was exercised, no reproducibility pack exists, and independent custody of the advisory inputs
+is still owed.
+
+Prospective source **0.23.1** repairs both points (#4964): it keeps the Wizard's state in Wizard-owned files (see
+[Where the security state lives](#where-the-security-state-lives-fsggsecurity-obligationsjson)), migrates
+workspaces that 0.23.0 already created on the next `secure`/`retrofit`/`--upgrade` run, and pins the coordination
+kit. Wizard 0.23.1 itself is not published by this source change; until it is, the guidance above stands.
 
 ## Install
 
@@ -132,16 +156,15 @@ new-sdd-workspace ./Greeter "Greeter" --template go-cli --ref fs-gg-templates/v0
   then the product shape, then each descriptor prompt, then the policy file, and shows the resolved selection
   before it asks to create.
 
-The catalog route is a source integration candidate. It does not establish the complete
-[#3010 adoption](https://github.com/FS-GG/.github/issues/3010): the published 0.20.0 polyglot payloads
-lack the common project-knowledge CI/checker composition that the published Templates 0.20.1 carries; the Wizard 0.23.0
-publication and its public-tool journeys passed, and the default-coordination doctor repair (0.23.1) remains outstanding. Every catalog creation initializes the canonical store through the exact
+The catalog route is published with Wizard 0.23.0 over Templates 0.20.1 and its public-tool journeys are
+recorded in [#3010](https://github.com/FS-GG/.github/issues/3010) (the limits are stated in the first section).
+The published Templates 0.20.0 polyglot payloads lack the common project-knowledge CI/checker composition that
+0.20.1 carries. Every catalog creation initializes the canonical store through the exact
 capable SDD producer, pins that version locally, and requires the guide, schema, CI and checker before
 `knowledge check` and the initialization handoff. Known-missing CI/checker payloads refuse before target
 creation. Missing generated assets or refused knowledge checks fail creation;
 the partially created workspace is retained for diagnosis. The legacy Rendering overlay is not applied to
-catalog providers. Keep coherent registry activation and public Wizard publication separate until those producer
-and consumer checks pass. Future execution inputs can use descriptor-declared parameters; this candidate
+catalog providers. Future execution inputs can use descriptor-declared parameters; this release
 does not claim the accepted Coordination controller is implemented or activated.
 
 ### Typed project knowledge bootstrap

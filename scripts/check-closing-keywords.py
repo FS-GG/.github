@@ -104,8 +104,14 @@ WHAT IT DELIBERATELY DOES NOT DO
   the event payload. So the gate is pure, offline, and testable — and its fixture can prove it says
   NO, which is the only thing that makes a green from it worth anything (#266).
 
-  It does not check the TITLE. GitHub never honours a keyword there (#558), so a title cannot close
-  anything, and flagging one would be noise.
+  THE TITLE IS CHECKED ONLY WHEN YOU PASS `--title` (.github#4730). It used to be out of scope on the
+  strength of #558: GitHub does not read a keyword in a PR title as a closing LINK. That is still true,
+  and it is not the whole story. Under `squash_merge_commit_message: COMMIT_OR_PR_TITLE` the title
+  BECOMES THE SQUASH COMMIT SUBJECT on a multi-commit PR, and a commit subject is parsed as a commit
+  message when it lands on the default branch. .github#4963 had a clean body (`Refs #3010`) and a title
+  beginning "docs: close #3010 ..."; only a reviewer stopped it. A title is plain text: there is no
+  markdown, no code span and NO OPT-IN. A declaration line belongs in the body; the same sentence in a
+  title is a finding, negated or not. Use `Refs #N` or `(Refs #N)` in a title.
 
 TWO SUBJECTS, BECAUSE THE BODY WAS ONLY EVER A PROXY (#684)
   Under this repo's squash settings (`squash_merge_commit_message: COMMIT_MESSAGES`) the squash
@@ -141,6 +147,21 @@ TWO SUBJECTS, BECAUSE THE BODY WAS ONLY EVER A PROXY (#684)
 
   Findings are reported per subject and by name, because the remedies differ: a body finding you fix
   by editing the body, a commit-message finding you cannot — you must rewrite the branch.
+
+THE OPT-IN, THE NON-KEYWORDS AND THE PRODUCT REPOS (.github#4730)
+  The one documented opt-in is the DECLARATION LINE: a line that is nothing but `Closes #N.` (optional
+  bullet, optional full stop, the keyword repeated for every issue). Everything else is a finding,
+  negated or not, in prose or in code. `Refs #N` is not a keyword and passes.
+
+  Only the nine words GitHub binds are keywords. `resolving`, `closing`, `fixing` bind nothing, so
+  "this is not resolving #N" is clean and stays clean: flagging it would be a false positive on a body
+  that cannot close anything. A keyword with no reference after it ("close the file") is also clean.
+  tests/closing-keywords/product-lint.sh pins all of this, keyword by keyword.
+
+  The rule reaches every coordination-kit receiver through the `closing-keywords` job of
+  .github/workflows/kit-materialize.yml (check context `materialize / closing-keywords`), which fetches
+  THIS file at that workflow's own commit and feeds it the live PR body (event payload as fallback).
+  FS.GG.Game#731 is the motivating case: a body saying it did not close an issue closed it.
 
 EXIT CODES  (the contract; the workflow greps nothing)
   0  every closing reference is declared (the declared set, if any, is printed)
@@ -467,6 +488,27 @@ def audit(body: str, *, markdown: bool = True) -> tuple[list[str], list[str]]:
     return findings, declared
 
 
+def audit_title(title: str) -> tuple[list[str], list[str]]:
+    """(findings, declared) for a PR TITLE: the same grammar as the body, with no opt-in and no code.
+
+    A title is one line of plain text that becomes the squash commit subject (`COMMIT_OR_PR_TITLE`), so
+    there is no declaration line to bless and no markdown to excuse a code span. Every keyword next to a
+    reference is a finding; negation only words it. `declared` is always empty.
+    """
+    findings: list[str] = []
+    for m in CLOSING.finditer(title):
+        kw, ref = m.group("kw"), m.group("ref")
+        neg = is_negated(title, m.start("kw"))
+        what = f"`{neg} {kw} {ref}`" if neg else f"`{kw} {ref}`"
+        note = f' (GitHub does NOT read the word "{neg}")' if neg else ""
+        findings.append(
+            f"title: {what} is in the PR TITLE{note}. Under COMMIT_OR_PR_TITLE the title becomes the "
+            f"squash commit subject and GitHub WILL CLOSE {ref} when it lands on the default branch. "
+            f"Retitle without the keyword, e.g. `(Refs {ref})`.\n      {title.strip()}"
+        )
+    return findings, []
+
+
 def read_subject(path: str, what: str) -> str:
     p = Path(path)
     if not p.is_file():
@@ -483,11 +525,17 @@ def main() -> int:
         "(`git log --format=%%B base..head`) — the text that BECOMES the squash message, and so "
         "the text that actually closes. Scanned as plain text: no markdown, no code exemption.",
     )
+    ap.add_argument(
+        "--title",
+        help="the PR title. It becomes the squash commit subject under COMMIT_OR_PR_TITLE, so a closing "
+        "keyword next to a reference in it closes the issue. Plain text: no opt-in, no code exemption. "
+        "An empty title is a NO VERDICT (every PR has one).",
+    )
     args = ap.parse_args()
 
     # (label, text, markdown). ORDER MATTERS: the subject that actually CLOSES comes first, because
     # it is the one whose declared set the summary reports as "will close".
-    subjects: list[tuple[str, str, bool]] = []
+    subjects: list[tuple[str, str, bool | None]] = []  # markdown flag; None = a TITLE
 
     try:
         if args.commits:
@@ -506,9 +554,14 @@ def main() -> int:
                 )
             subjects.append(("commit messages (what BECOMES the squash message)", commits, False))
 
+        if args.title is not None:
+            if not args.title.strip():
+                raise NoVerdict("the PR title is EMPTY. Every pull request has a title, so this is broken wiring, not a clean title (#266).")
+            subjects.append(("PR title (what becomes the squash commit subject)", args.title, None))
+
         if args.body:
             subjects.append(("PR body (what records the PR's link)", read_subject(args.body, "body"), True))
-        elif not args.commits:
+        elif not args.commits and args.title is None:
             if sys.stdin.isatty():
                 raise NoVerdict("no body supplied on stdin and no --body/--commits given")
             subjects.append(("PR body (what records the PR's link)", sys.stdin.read(), True))
@@ -519,7 +572,10 @@ def main() -> int:
         print(f"check-closing-keywords: no verdict: cannot read subject: {e}", file=sys.stderr)
         return 3
 
-    audited = [(label, audit(text, markdown=md)) for label, text, md in subjects]
+    audited = [
+        (label, audit_title(text) if md is None else audit(text, markdown=md))
+        for label, text, md in subjects
+    ]
     findings = [f for _, (fs, _) in audited for f in fs]
 
     if findings:
