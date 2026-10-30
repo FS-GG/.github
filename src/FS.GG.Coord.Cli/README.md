@@ -133,7 +133,7 @@ yields identical bytes.
 ## Batched enrollment and the supported-route preflight (`enrollment`, `route-preflight`)
 
 Two dispatch roots, registered like `context-view` (ahead of the typed handler table, so they are not in the command
-catalogue), carry the batched programme-enrollment work of #4941. They are reached through the `fsgg-coord` shim, which execs the engine, and run the
+catalogue; the V1 writer census classifies both as `writes: never`), carry the batched programme-enrollment work of #4941. They are reached through the `fsgg-coord` shim, which execs the engine, and run the
 same code as the `tools/BoardV2Import` tool (`FS.GG.Coord.GitHub.V2EnrollmentCommands`), so the two surfaces cannot drift.
 
 ```bash

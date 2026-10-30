@@ -6,7 +6,8 @@ namespace FS.GG.Coord.Cli
 ///   fsgg-coord enrollment plan|prepare|bind-runtime|render-carrier|resolve-issues  NAMED-ARGUMENTS
 ///   fsgg-coord route-preflight --route ROUTE --stage STAGE --repository CHECKOUT [route arguments]
 ///
-/// Both are dispatch arms ahead of the typed handler table, like `context-view`; they are not in the command catalogue. The code is the shared
+/// Both are dispatch arms ahead of the typed handler table, like `context-view`; they are not in the command catalogue and are classified in the V1 writer census
+/// (`outOfCatalogueRoots`, `writes: never`). The code is the shared
 /// `FS.GG.Coord.GitHub.V2EnrollmentCommands`, the same code the `BoardV2Import` tool runs, so the two surfaces cannot drift.
 ///
 /// Every command prints one closed refusal code on stderr and never a payload, nonce, native identity, path or input text.

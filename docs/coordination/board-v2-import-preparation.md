@@ -542,6 +542,6 @@ when the checkout's gate bytes equal the trusted base's (`refs/remotes/origin/ma
 **Engine surface.** The commands are registered in the coordination engine as the roots `enrollment` (`plan`, `prepare`,
 `bind-runtime`, `render-carrier`, `resolve-issues`) and `route-preflight`, reaching the installed tool through the `fsgg-coord` shim, which execs the engine (`fsgg-coord-engine enrollment ...` and
 `fsgg-coord-engine route-preflight ...`). Both are dispatch arms ahead of the typed handler table, like `context-view`, and are
-not in the command catalogue.
+not in the command catalogue; the V1 writer census classifies both in `outOfCatalogueRoots` as `writes: never` (they create only new owner-only local files, read GitHub by `GET`, and run the base-blob gates as subprocesses).
 `preflight` is not a root because the engine already answers a skill `preflight` root. The constructor identity in a receipt is now
 the `FS.GG.Coord.GitHub` assembly (revision and sha256) that both surfaces share, not the `BoardV2Import` executable.
