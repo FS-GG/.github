@@ -1,0 +1,35 @@
+# Gates for the LEARN retirement acknowledgement writer r2 (deployment/learn-finite-profile/ack), Refs #4647.
+#
+# Drives the functions the root CLI calls against temporary trees: create, read-only check and remove of an
+# acknowledgement; a swapped, symlinked, world-writable or foreign-owned path; a source directory that is not the mounted
+# view; existing acknowledgements; and the argument parser. stdlib only; no credential, no network, no container, no root.
+#
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a divergence.
+name: learn-ack-writer-selftest
+
+on:
+  pull_request:
+    paths:
+      - "deployment/learn-finite-profile/ack/**"
+      - "tests/learn-ack-writer/**"
+      - ".github/workflows/learn-ack-writer-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deployment/learn-finite-profile/ack/**"
+      - "tests/learn-ack-writer/**"
+      - ".github/workflows/learn-ack-writer-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the acknowledgement writer gates
+        run: python3 tests/learn-ack-writer/run.py
