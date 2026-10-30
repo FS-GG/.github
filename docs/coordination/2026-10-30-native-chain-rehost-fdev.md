@@ -272,8 +272,7 @@ ruling states.
   for the root, plus the read-only input and control images. With `discard=ignore` and
   `--target-is-zero`, nothing deallocates those blocks during the run. Other writers on
   `vdb` can consume only free space that was never allocated *inside the guest's
-  filesystem*. This bullet covers the guest only. The `vdb` image is a sparse file on the
-  host HDD partition, so preallocating inside the guest does not guarantee host space:
+  filesystem*. This bullet covers the guest only. The `vdb` image may be sparse; Home has not confirmed. If it is, preallocating inside the guest does not guarantee host space:
   the host partition can fill from co-tenants or the other images. Host-partition bytes
   and inodes free are therefore a separate capacity fact, recorded before each window
   under §3 (d). That Home `df` reading is still owed.
@@ -301,7 +300,7 @@ ruling states.
   - *Enforcement for each native window:*
     - (a) inside fdev, `io.max` on the drained agent-lane units and on the fsgg-store,
       LEARN and SC2 service units for the HDD-backed devices, plus the scheduled lane
-      drain. Per Root's decision in response to review, the cap is not set on the whole
+      drain. Per [Root's decision in response to review](https://github.com/FS-GG/.github/issues/4778#issuecomment-6527516917), the cap is not set on the whole
       `user-1000.slice`: the launcher front end, the readback actor and the Root session
       stay unthrottled, and the launcher's window-entry step applies and removes the caps;
     - (b) on Home, Home stops the scheduled writer, the only host writer, for the
@@ -459,7 +458,7 @@ Root holds the candidate decryption key and the JIT credential in fdev private c
 The target schema requires `sharedCodexHost: false`
 (`dedicated_qualification_runner.py validate_target_data`), and the runner README forbids
 the shared Codex machine. A disposable nested guest on fdev is dedicated, but its host is
-the shared agent machine. **Root has ruled** (in response to the plan's review):
+the shared agent machine. **Root has ruled** ([in response to the plan's review](https://github.com/FS-GG/.github/issues/4778#issuecomment-6527516917)):
 
 - A disposable nested guest on fdev is permitted for qualification **only during a
   drained, exclusive window**.
