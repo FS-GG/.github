@@ -544,7 +544,7 @@ def main():
     tool_info = {}
     for name, command in [('dotnet', ['/usr/bin/dotnet', '--info']), ('runtimes', ['/usr/bin/dotnet', '--list-runtimes']), ('node', ['node', '--version']), ('npm', ['npm', '--version'])]:
         tool_info[name] = subprocess.check_output(command, text=True)
-    tool_info['compilerAndHostHashes'] = {str(path): digest(path) for path in [Path('/usr/share/dotnet/dotnet'), Path('/usr/share/dotnet/sdk/10.0.403/FSharp/fsc.dll'), Path('/usr/share/dotnet/sdk/10.0.403/FSharp/FSharp.Compiler.Service.dll')]}
+    tool_info['compilerAndHostHashes'] = {str(path): digest(path) for path in [Path('/usr/share/dotnet/dotnet'), Path('/usr/share/dotnet/sdk/10.0.401/FSharp/fsc.dll'), Path('/usr/share/dotnet/sdk/10.0.401/FSharp/FSharp.Compiler.Service.dll')]}
     tool_info['runtimeFiles'] = [{'path': str(path), 'sha256': digest(path)} for name in ('libcoreclr.so', 'System.Private.CoreLib.dll', 'libhostfxr.so') for path in Path('/usr/share/dotnet').glob('**/' + name)]
     require(tool_info['runtimeFiles'], 'missing hosted runtime file identities')
     json_write(evidence / 'runtime-toolchain.json', tool_info)
