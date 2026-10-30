@@ -45,6 +45,16 @@ module V2ProjectionSource =
           PopulationGap: IoError option
           Cleanup: string }
 
+    /// The single hard-coded programme issue URL the installed reader admits as an owning plan.
+    val programmePlanIssueUrl: string
+
+    /// Pure grammar of a declared owning-plan blob URL as the installed reader applies it: exact
+    /// https://github.com blob URL in a bound repository, ref `main` or a 40-hex commit, and a `docs/`
+    /// path or one of the maintained observation references. Returns (repository, ref, path) or the
+    /// reader's own refusal detail. No transport, no native read, no authority; the installed reader
+    /// calls this same function so a planner cannot drift from it.
+    val programmePlanBlobGrammar: repositories: Set<string> -> url: string -> Result<string * string * string, string>
+
     /// Verify the loaded adapter assembly hash before IO. Read the fixed canonical manifest at the
     /// admitted population commit, validate the complete three-to-five organization pilot or one-to-five
     /// receiver repository cohort and exact binding, then
