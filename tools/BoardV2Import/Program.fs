@@ -561,8 +561,8 @@ let organizationMain (args: string array) =
 
 // Current programme preparation is offline. Enrollment parsing and commitment construction
 // belong to the same maintained API as runtime authentication, not to a second tool decoder.
-let private programmeInputLimit = 256 * 1024
-let private programmePayloadLimit = 128 * 1024
+let private programmeInputLimit = FS.GG.Coord.GitHub.V2Preflight.bindingLimitBytes
+let private programmePayloadLimit = FS.GG.Coord.GitHub.V2Preflight.payloadLimitBytes
 
 let private programmePath (path: string) =
     let full = Path.GetFullPath path
@@ -681,55 +681,71 @@ module private Successor =
         Map.ofArray pairs
 
     let read limit (path: string) =
-        try programmeRead limit (programmePath path) with _ -> refuse V2Enrollment.MalformedInput
+        try programmeRead limit (programmePath path) with _ -> refuse V2Enrollment.InputUnreadable
 
     let readText limit (path: string) =
         let bytes = read limit path
         try strictUtf8.GetString bytes with _ -> refuse V2Enrollment.MalformedInput
 
-    let distinctPaths (paths: string list) =
+    // Inputs that cannot be resolved without crossing a link are InputUnreadable; outputs are CustodyUnavailable.
+    let distinctPaths (inputs: string list) (outputs: string list) =
         let comparison = if OperatingSystem.IsWindows() then StringComparer.OrdinalIgnoreCase else StringComparer.Ordinal
-        let full = try paths |> List.map programmePath with _ -> refuse V2Enrollment.MalformedInput
+        let resolvedInputs = try inputs |> List.map programmePath with _ -> refuse V2Enrollment.InputUnreadable
+        let resolvedOutputs = try outputs |> List.map programmePath with _ -> refuse V2Enrollment.CustodyUnavailable
+        let full = resolvedInputs @ resolvedOutputs
         if (Collections.Generic.HashSet<string>(full, comparison)).Count <> full.Length then refuse V2Enrollment.MalformedInput
 
     let outputsAbsent (paths: string list) =
         for path in paths do
-            let full = try programmePath path with _ -> refuse V2Enrollment.MalformedInput
+            let full = try programmePath path with _ -> refuse V2Enrollment.CustodyUnavailable
             if File.Exists full || Directory.Exists full then refuse V2Enrollment.OutputExists
 
+    // A CreateNew that loses a race (or meets an entry the earlier absence check could not see) is
+    // OutputExists; any other failure to create, write, sync or read back is CustodyUnavailable.
     let write (path: string) (bytes: byte array) =
-        let full = programmePath path
-        // CreateNew still protects against a collision arriving after the earlier absence check.
+        let full = try programmePath path with _ -> refuse V2Enrollment.CustodyUnavailable
         if File.Exists full || Directory.Exists full then refuse V2Enrollment.OutputExists
+        let stream = match V2Custody.createExclusive full with Ok stream -> stream | Error refusal -> refuse refusal
         try
-            programmeWrite full bytes
+            (use stream = stream
+             stream.Write bytes
+             stream.Flush(true))
+            programmeSyncDirectory (Path.GetDirectoryName full)
             programmeRetained full bytes
-        with _ -> refuse V2Enrollment.MalformedInput
+        with _ -> refuse V2Enrollment.CustodyUnavailable
 
-    // The protected public blob is read from the supplied checkout at the exact merge commit.
-    // A fixed argument vector, no shell, bounded output, stderr discarded.
-    let protectedPublicBlob (repository: string) (mergeSha: string) =
-        require (Regex.IsMatch(mergeSha, @"\A[0-9a-f]{40}\z")) "merge sha"
+    let private gitRun (repository: string) (arguments: string list) (limit: int) : string =
         let info = Diagnostics.ProcessStartInfo("git")
-        for argument in [ "-C"; programmePath repository; "cat-file"; "blob"; mergeSha + ":" + manifestPath ] do info.ArgumentList.Add argument
+        for argument in [ "-C"; (try programmePath repository with _ -> refuse V2Enrollment.InputUnreadable) ] @ arguments do info.ArgumentList.Add argument
         info.RedirectStandardOutput <- true
         info.RedirectStandardError <- true
         info.UseShellExecute <- false
         info.Environment.["GIT_TERMINAL_PROMPT"] <- "0"
-        use proc = Diagnostics.Process.Start info
-        let errors = proc.StandardError.ReadToEndAsync()
-        use buffer = new MemoryStream()
-        let chunk = Array.zeroCreate<byte> 512
-        let mutable count = proc.StandardOutput.BaseStream.Read(chunk, 0, chunk.Length)
-        while count > 0 && buffer.Length <= 2048L do
-            buffer.Write(chunk, 0, count)
-            count <- proc.StandardOutput.BaseStream.Read(chunk, 0, chunk.Length)
-        if not (proc.WaitForExit 15000) then
-            (try proc.Kill() with _ -> ())
-            refuse V2Enrollment.PredecessorCommitmentMismatch
-        errors.Wait()
-        if proc.ExitCode <> 0 || buffer.Length = 0L || buffer.Length > 2048L then refuse V2Enrollment.PredecessorCommitmentMismatch
-        try strictUtf8.GetString(buffer.ToArray()) with _ -> refuse V2Enrollment.PredecessorCommitmentMismatch
+        try
+            use proc = Diagnostics.Process.Start info
+            let errors = proc.StandardError.ReadToEndAsync()
+            use buffer = new MemoryStream()
+            let chunk = Array.zeroCreate<byte> 512
+            let mutable count = proc.StandardOutput.BaseStream.Read(chunk, 0, chunk.Length)
+            while count > 0 && buffer.Length <= int64 limit do
+                buffer.Write(chunk, 0, count)
+                count <- proc.StandardOutput.BaseStream.Read(chunk, 0, chunk.Length)
+            if not (proc.WaitForExit 15000) then
+                (try proc.Kill() with _ -> ())
+                refuse V2Enrollment.GitReadFailed
+            errors.Wait()
+            if proc.ExitCode <> 0 || buffer.Length = 0L || buffer.Length > int64 limit then refuse V2Enrollment.GitReadFailed
+            strictUtf8.GetString(buffer.ToArray())
+        with
+        | Refused refusal -> refuse refusal
+        | _ -> refuse V2Enrollment.GitReadFailed
+
+    // The protected public blob is read from the supplied checkout at the exact merge commit.
+    // A fixed argument vector, no shell, bounded output, stderr discarded. A failed read is
+    // GitReadFailed; only a blob that is read and then fails to authenticate is a commitment mismatch.
+    let protectedPublicBlob (repository: string) (mergeSha: string) =
+        if not (Regex.IsMatch(mergeSha, @"\A[0-9a-f]{40}\z")) then refuse V2Enrollment.MalformedInput
+        gitRun repository [ "cat-file"; "blob"; mergeSha + ":" + manifestPath ] 2048
 
     let decodeRequestFile (path: string) =
         match V2Enrollment.decodeRequest (readText 1048576 path) with
@@ -745,16 +761,16 @@ module private Successor =
             match informational with
             | Some attribute when attribute.InformationalVersion.Contains "+" -> attribute.InformationalVersion.Substring(attribute.InformationalVersion.LastIndexOf '+' + 1)
             | _ -> ""
-        if not (Regex.IsMatch(revision, @"\A[0-9a-f]{40}\z")) then refuse V2Enrollment.MalformedInput
+        if not (Regex.IsMatch(revision, @"\A[0-9a-f]{40}\z")) then refuse V2Enrollment.CustodyUnavailable
         revision, artifact
 
     let plan (args: string array) =
         let a = named args [ "--request"; "--native-facts"; "--repository"; "--template-output"; "--payload-output" ]
-        distinctPaths [ a.["--request"]; a.["--native-facts"]; a.["--template-output"]; a.["--payload-output"] ]
+        distinctPaths [ a.["--request"]; a.["--native-facts"] ] [ a.["--template-output"]; a.["--payload-output"] ]
         outputsAbsent [ a.["--template-output"]; a.["--payload-output"] ]
         let request = decodeRequestFile a.["--request"]
         let facts = match V2Enrollment.decodeNativeFacts (readText 1048576 a.["--native-facts"]) with Ok facts -> facts | Error refusal -> refuse refusal
-        distinctPaths [ a.["--request"]; request.PredecessorPrivatePath; a.["--template-output"]; a.["--payload-output"] ]
+        distinctPaths [ a.["--request"]; request.PredecessorPrivatePath ] [ a.["--template-output"]; a.["--payload-output"] ]
         let privateJson = readText programmeInputLimit request.PredecessorPrivatePath
         let publicJson = protectedPublicBlob a.["--repository"] request.PredecessorMergeSha
         match V2Enrollment.plan privateJson publicJson request facts with
@@ -765,15 +781,22 @@ module private Successor =
             printfn "successor planned; rows=%d appended=%d; offline only" planned.TotalRows planned.Appended.Length
 
     let prepare (args: string array) =
-        require (programmeDirectorySupported()) "programme private creation unavailable"
-        let a = named args [ "--request"; "--template"; "--payload"; "--private-output"; "--public-output"; "--receipt-output" ]
+        if not (programmeDirectorySupported()) then refuse V2Enrollment.CustodyUnavailable
+        let a = named args [ "--request"; "--native-facts"; "--repository"; "--template"; "--payload"; "--private-output"; "--public-output"; "--receipt-output" ]
         let request = decodeRequestFile a.["--request"]
-        distinctPaths [ a.["--request"]; request.PredecessorPrivatePath; a.["--template"]; a.["--payload"]; a.["--private-output"]; a.["--public-output"]; a.["--receipt-output"] ]
+        distinctPaths [ a.["--request"]; a.["--native-facts"]; request.PredecessorPrivatePath; a.["--template"]; a.["--payload"] ] [ a.["--private-output"]; a.["--public-output"]; a.["--receipt-output"] ]
         outputsAbsent [ a.["--private-output"]; a.["--public-output"]; a.["--receipt-output"] ]
         let revision, artifact = constructorIdentity ()
+        let facts = match V2Enrollment.decodeNativeFacts (readText 1048576 a.["--native-facts"]) with Ok facts -> facts | Error refusal -> refuse refusal
         let predecessorJson = readText programmeInputLimit request.PredecessorPrivatePath
+        let publicPredecessor = protectedPublicBlob a.["--repository"] request.PredecessorMergeSha
         let template = readText programmeInputLimit a.["--template"]
         let payload = read programmePayloadLimit a.["--payload"]
+        // The supplied template and payload are untrusted bytes: nothing reaches the constructor until they
+        // are exactly what the planner re-derives from the request, the predecessor and the native facts.
+        match V2Enrollment.verifyPrepared predecessorJson publicPredecessor request facts template payload with
+        | Error refusal -> refuse refusal
+        | Ok() -> ()
         match FS.GG.Coord.GitHub.V2Projection.prepareProgrammeBinding template payload
                   (fun () -> Security.Cryptography.RandomNumberGenerator.GetBytes(32)) with
         | Error _ -> refuse V2Enrollment.MalformedInput
@@ -813,9 +836,9 @@ module private Successor =
             printfn "successor pair prepared; offline only"
 
     let bindRuntime (args: string array) =
-        require (programmeDirectorySupported()) "programme private creation unavailable"
+        if not (programmeDirectorySupported()) then refuse V2Enrollment.CustodyUnavailable
         let a = named args [ "--private-binding"; "--repository"; "--merge-sha"; "--runtime-output" ]
-        distinctPaths [ a.["--private-binding"]; a.["--runtime-output"] ]
+        distinctPaths [ a.["--private-binding"] ] [ a.["--runtime-output"] ]
         outputsAbsent [ a.["--runtime-output"] ]
         let mergeSha = a.["--merge-sha"]
         if not (Regex.IsMatch(mergeSha, @"\A[0-9a-f]{40}\z")) then refuse V2Enrollment.MalformedInput
@@ -842,7 +865,7 @@ module private Successor =
 
     let renderCarrier (args: string array) =
         let a = named args [ "--receipt"; "--output" ]
-        distinctPaths [ a.["--receipt"]; a.["--output"] ]
+        distinctPaths [ a.["--receipt"] ] [ a.["--output"] ]
         outputsAbsent [ a.["--output"] ]
         let receipt = try JsonNode.Parse(readText 65536 a.["--receipt"]) with _ -> refuse V2Enrollment.MalformedInput
         let hex40 (value: string) = Regex.IsMatch(value, @"\A[0-9a-f]{40}\z")
@@ -892,14 +915,224 @@ module private Successor =
         write a.["--output"] (strictUtf8.GetBytes rendered)
         printfn "carrier rendered from receipt; offline only"
 
+    // ---- online read-only resolution and the supported-route preflight ----
+
+    // Test seam only: the executable that serves read-only GETs. It never changes what is requested:
+    // every invocation is the closed GET argument vector from V2NativeResolve.getArguments.
+    let private ghExecutable () =
+        match Environment.GetEnvironmentVariable "BOARD_V2_IMPORT_GH" with
+        | null | "" -> "gh"
+        | value -> value
+
+    let ghGet : V2NativeResolve.Get =
+        fun path paginated ->
+            match V2NativeResolve.getArguments path paginated with
+            | None -> V2NativeResolve.Failed
+            | Some arguments ->
+                try
+                    let info = Diagnostics.ProcessStartInfo(ghExecutable ())
+                    for argument in arguments do info.ArgumentList.Add argument
+                    info.RedirectStandardOutput <- true
+                    info.RedirectStandardError <- true
+                    info.UseShellExecute <- false
+                    info.Environment.["GH_PROMPT_DISABLED"] <- "1"
+                    info.Environment.["GH_NO_UPDATE_NOTIFIER"] <- "1"
+                    use proc = Diagnostics.Process.Start info
+                    let output = proc.StandardOutput.ReadToEndAsync()
+                    let errors = proc.StandardError.ReadToEndAsync()
+                    if not (proc.WaitForExit 120000) then
+                        (try proc.Kill() with _ -> ())
+                        V2NativeResolve.Failed
+                    else
+                        output.Wait()
+                        errors.Wait()
+                        if proc.ExitCode = 0 then (if output.Result.Length > 33554432 then V2NativeResolve.Failed else V2NativeResolve.Body output.Result)
+                        elif errors.Result.Contains "HTTP 404" then V2NativeResolve.NotFound
+                        else V2NativeResolve.Failed
+                with _ -> V2NativeResolve.Failed
+
+    let programmeBinding (request: V2Enrollment.Request) =
+        match V2Projection.decodeBinding (readText programmeInputLimit request.PredecessorPrivatePath) with
+        | Ok binding when V2Projection.isProgrammeBinding binding -> binding
+        | _ -> refuse V2Enrollment.MalformedInput
+
+    let resolveIssues (args: string array) =
+        let a = named args [ "--request"; "--native-facts-output" ]
+        let request = decodeRequestFile a.["--request"]
+        distinctPaths [ a.["--request"]; request.PredecessorPrivatePath ] [ a.["--native-facts-output"] ]
+        outputsAbsent [ a.["--native-facts-output"] ]
+        let binding = programmeBinding request
+        match V2NativeResolve.resolve ghGet binding request with
+        | Error refusal -> refuse refusal
+        | Ok resolved ->
+            let json = V2NativeResolve.encodeNativeFacts resolved.Facts
+            // The document must be exactly what the planner's own strict reader accepts.
+            if (V2Enrollment.decodeNativeFacts json |> Result.isError) then refuse V2Enrollment.MalformedInput
+            write a.["--native-facts-output"] (strictUtf8.GetBytes json)
+            printfn "native facts resolved; issues=%d; read-only" resolved.Facts.Issues.Length
+
+    // Order-insensitive named arguments with required names, optional names and value-less flags.
+    let namedOptional (args: string array) (required: string list) (optional: string list) (flags: string list) =
+        let mutable index = 1
+        let values = Collections.Generic.Dictionary<string, string>(StringComparer.Ordinal)
+        let present = Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+        while index < args.Length do
+            let name = args.[index]
+            if List.contains name flags then
+                if not (present.Add name) then refuse V2Enrollment.MalformedInput
+                index <- index + 1
+            elif List.contains name required || List.contains name optional then
+                if index + 1 >= args.Length || values.ContainsKey name then refuse V2Enrollment.MalformedInput
+                values.[name] <- args.[index + 1]
+                index <- index + 2
+            else refuse V2Enrollment.MalformedInput
+        if required |> List.exists (fun name -> not (values.ContainsKey name)) then refuse V2Enrollment.MalformedInput
+        values, present
+
+    let private observe (read: unit -> 'a) : V2Preflight.Observed<'a> =
+        try V2Preflight.Known(read ()) with _ -> V2Preflight.NotObserved V2Preflight.Unreadable
+
+    let private cgroupHeadroom () : V2Preflight.Observed<int64 option> =
+        try
+            let line =
+                File.ReadAllLines "/proc/self/cgroup" |> Array.tryFind (fun entry -> entry.StartsWith "0::")
+            match line with
+            | None -> V2Preflight.NotObserved V2Preflight.Unreadable
+            | Some entry ->
+                let relative = entry.Substring 3
+                let mutable levels = []
+                let mutable current = relative
+                let mutable fin = false
+                while not fin do
+                    let directory = "/sys/fs/cgroup" + (if current = "/" then "" else current)
+                    let limitPath, usedPath = Path.Combine(directory, "memory.max"), Path.Combine(directory, "memory.current")
+                    if File.Exists limitPath && File.Exists usedPath then levels <- levels @ [ File.ReadAllText limitPath, File.ReadAllText usedPath ]
+                    if current = "/" || current = "" then fin <- true
+                    else
+                        let parent = current.Substring(0, current.LastIndexOf '/')
+                        current <- (if parent = "" then "/" else parent)
+                V2Preflight.headroomOf levels
+        with _ -> V2Preflight.NotObserved V2Preflight.Unreadable
+
+    let private nugetCache (given: string option) =
+        match given with
+        | Some path -> path
+        | None ->
+            match Environment.GetEnvironmentVariable "NUGET_PACKAGES" with
+            | null | "" -> Path.Combine(Environment.GetFolderPath Environment.SpecialFolder.UserProfile, ".nuget", "packages")
+            | value -> value
+
+    let preflight (args: string array) : int =
+        let values, flags =
+            namedOptional args
+                [ "--route"; "--stage"; "--request"; "--repository" ]
+                [ "--native-facts"; "--runtime-binding"; "--installed-reader"; "--known-readers"; "--lockfile"; "--nuget-cache"
+                  "--main-revision"; "--min-headroom-bytes"; "--churn-window-minutes" ]
+                [ "--online" ]
+        let online = flags.Contains "--online"
+        if online = values.ContainsKey "--native-facts" then refuse V2Enrollment.MalformedInput
+        let route =
+            V2Preflight.routes |> List.tryFind (fun route -> V2Preflight.routeCode route = values.["--route"]) |> Option.defaultWith (fun () -> refuse V2Enrollment.MalformedInput)
+        let stage =
+            V2Preflight.stages |> List.tryFind (fun stage -> V2Preflight.stageCode stage = values.["--stage"]) |> Option.defaultWith (fun () -> refuse V2Enrollment.MalformedInput)
+        let request = decodeRequestFile values.["--request"]
+        let optionalNumber (name: string) (fallback: int64) =
+            match values.TryGetValue name with
+            | true, text ->
+                let mutable parsed = 0L
+                if Int64.TryParse(text, Globalization.NumberStyles.None, Globalization.CultureInfo.InvariantCulture, &parsed) && parsed >= 0L && parsed <= 1000000000000L then parsed
+                else refuse V2Enrollment.MalformedInput
+            | _ -> fallback
+        let repository = values.["--repository"]
+        let privateJson = observe (fun () -> readText programmeInputLimit request.PredecessorPrivatePath)
+        let publicJson = observe (fun () -> protectedPublicBlob repository request.PredecessorMergeSha)
+        // Online: one read-only resolution gives both the facts and the Project item inventory. A failed
+        // read leaves those inputs unobserved, which the preflight reports as Unknown.
+        let facts, items =
+            if online then
+                match privateJson with
+                | V2Preflight.Known json ->
+                    match V2Projection.decodeBinding json with
+                    | Ok binding when V2Projection.isProgrammeBinding binding ->
+                        match V2NativeResolve.resolve ghGet binding request with
+                        | Ok resolved -> V2Preflight.Known(resolved.Facts, V2Preflight.Live), V2Preflight.Known resolved.Items
+                        | Error _ -> V2Preflight.NotObserved V2Preflight.Incomplete, V2Preflight.NotObserved V2Preflight.Incomplete
+                    | _ -> V2Preflight.NotObserved V2Preflight.Unreadable, V2Preflight.NotObserved V2Preflight.Unreadable
+                | V2Preflight.NotObserved kind -> V2Preflight.NotObserved kind, V2Preflight.NotObserved kind
+            else
+                let supplied =
+                    match V2Enrollment.decodeNativeFacts (readText 1048576 values.["--native-facts"]) with
+                    | Ok facts -> V2Preflight.Known(facts, V2Preflight.Supplied)
+                    | Error refusal -> refuse refusal
+                supplied, V2Preflight.NotObserved V2Preflight.NotSupplied
+        let revision = observe (fun () -> fst (constructorIdentity ()))
+        let mainRevision =
+            match values.TryGetValue "--main-revision" with
+            | true, sha -> if Regex.IsMatch(sha, @"\A[0-9a-f]{40}\z") then V2Preflight.Known sha else refuse V2Enrollment.MalformedInput
+            | _ -> observe (fun () -> (gitRun repository [ "rev-parse"; "--verify"; "refs/remotes/origin/main" ] 128).Trim())
+        let lockPath = match values.TryGetValue "--lockfile" with | true, path -> path | _ -> Path.Combine(programmePath repository, "tools", "BoardV2Import", "packages.lock.json")
+        let lockText = observe (fun () -> readText 1048576 lockPath)
+        let locked = match lockText with V2Preflight.Known text -> V2Preflight.lockedContentHash "FSharp.Core" text | V2Preflight.NotObserved kind -> V2Preflight.NotObserved kind
+        let cached =
+            match lockText with
+            | V2Preflight.Known text ->
+                observe (fun () ->
+                    let node = JsonNode.Parse text
+                    let version = node.["dependencies"].AsObject() |> Seq.collect (fun framework -> framework.Value.AsObject()) |> Seq.filter (fun package -> package.Key = "FSharp.Core") |> Seq.map (fun package -> package.Value.["resolved"].GetValue<string>()) |> Seq.exactlyOne
+                    if not (Regex.IsMatch(version, @"\A[0-9A-Za-z.+-]{1,64}\z")) then invalidOp "version"
+                    let cache = nugetCache (match values.TryGetValue "--nuget-cache" with | true, path -> Some path | _ -> None)
+                    File.ReadAllText(Path.Combine(cache, "fsharp.core", version.ToLowerInvariant(), ".nupkg.metadata")))
+                |> function
+                    | V2Preflight.Known metadata -> V2Preflight.metadataContentHash metadata
+                    | V2Preflight.NotObserved kind -> V2Preflight.NotObserved kind
+            | V2Preflight.NotObserved kind -> V2Preflight.NotObserved kind
+        let inputs : V2Preflight.EnrollmentInputs =
+            { Request = request
+              Facts = facts
+              ConstructorRevision = revision
+              ProtectedMain = mainRevision
+              PredecessorPrivate = privateJson
+              PredecessorPublic = publicJson
+              RuntimeBinding =
+                (match values.TryGetValue "--runtime-binding" with
+                 | true, path -> observe (fun () -> readText programmeInputLimit path)
+                 | _ -> V2Preflight.NotObserved V2Preflight.NotSupplied)
+              InstalledReaderSha256 =
+                (match values.TryGetValue "--installed-reader" with
+                 | true, path -> observe (fun () -> sha256Hex (File.ReadAllBytes(programmePath path)))
+                 | _ -> V2Preflight.NotObserved V2Preflight.NotSupplied)
+              KnownInstalledReaders =
+                (match values.TryGetValue "--known-readers" with
+                 | true, path ->
+                    (try
+                        (readText 65536 path).Split([| '\n' |], StringSplitOptions.RemoveEmptyEntries)
+                        |> Array.map _.Trim()
+                        |> Array.filter (fun line -> Regex.IsMatch(line, @"\A[0-9a-f]{64}\z"))
+                        |> Set.ofArray
+                     with Refused _ -> Set.empty)
+                 | _ -> Set.empty)
+              LockedFSharpCoreHash = locked
+              CachedFSharpCoreHash = cached
+              MemoryHeadroomBytes = cgroupHeadroom ()
+              MinimumHeadroomBytes = optionalNumber "--min-headroom-bytes" 1073741824L
+              PayloadLimitBytes = V2Preflight.payloadLimitBytes
+              BindingLimitBytes = V2Preflight.bindingLimitBytes
+              ProjectItems = items
+              Now = DateTimeOffset.UtcNow
+              ChurnWindow = TimeSpan.FromMinutes(float (optionalNumber "--churn-window-minutes" 10L)) }
+        let report = V2Preflight.run route stage inputs
+        printfn "%s" (V2Preflight.toJson report)
+        V2Preflight.exitCode report.Overall
+
     let run (command: string) (args: string array) =
         try
             match command with
-            | "plan-successor" -> plan args
-            | "prepare-successor" -> prepare args
-            | "bind-runtime" -> bindRuntime args
-            | _ -> renderCarrier args
-            0
+            | "plan-successor" -> plan args; 0
+            | "prepare-successor" -> prepare args; 0
+            | "bind-runtime" -> bindRuntime args; 0
+            | "resolve-issues" -> resolveIssues args; 0
+            | "preflight" -> preflight args
+            | _ -> renderCarrier args; 0
         with
         | Refused refusal ->
             eprintfn "board-v2 successor refused: %s" (V2Enrollment.refusalCode refusal)
@@ -911,7 +1144,7 @@ module private Successor =
 [<EntryPoint>]
 let main args =
     try
-        if args.Length > 0 && List.contains args.[0] [ "plan-successor"; "prepare-successor"; "bind-runtime"; "render-carrier" ] then
+        if args.Length > 0 && List.contains args.[0] [ "plan-successor"; "prepare-successor"; "bind-runtime"; "render-carrier"; "resolve-issues"; "preflight" ] then
             Successor.run args.[0] args
         elif args.Length > 0 && args.[0] = "prepare-programme" then
             programmeMain args
