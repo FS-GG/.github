@@ -1475,11 +1475,11 @@ jobs:
             echo "::warning title=closing-keywords: live body unreadable::falling back to the body in the event payload"
           fi
           echo "closing-keywords: linting the pull request body (source: $source_of_body, $(wc -c < "$body") bytes)"
-          rc=0
-          out="$(python3 -I fsgg-hub/scripts/check-closing-keywords.py --body "$body" 2>&1)" || rc=$?
+          lint_rc=0
+          out="$(python3 -I fsgg-hub/scripts/check-closing-keywords.py --body "$body" 2>&1)" || lint_rc=$?
           # Indented so that no line of attacker-controlled body text can open a workflow command.
           [ -z "$out" ] || printf '%s\n' "$out" | sed 's/^/| /'
-          case "$rc" in
+          case "$lint_rc" in
             0)
               echo "closing-keywords: OK" >> "$GITHUB_STEP_SUMMARY"
               ;;
@@ -1510,7 +1510,7 @@ jobs:
               exit 1
               ;;
             *)
-              echo "::error title=closing-keywords: inconclusive::check-closing-keywords.py exited $rc, which this job does not classify; treating as a failure"
+              echo "::error title=closing-keywords: inconclusive::check-closing-keywords.py exited $lint_rc, which this job does not classify; treating as a failure"
               exit 1
               ;;
           esac
