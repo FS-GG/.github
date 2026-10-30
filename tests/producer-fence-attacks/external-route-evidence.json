@@ -143,6 +143,13 @@
       "reason": "Executable hard-codes GitHub Packages and/or nuget.org provider endpoints, so an isolated target cannot capture the mutation without changing the program under test."
     },
     {
+      "path": "src/FS.GG.Telemetry.Client/DirectResponses.fs",
+      "sha256": "7c4d5dcd6f5eca9e6033d8519bf8a2ab6d4b86c704b33ea43f09cabcdc9b4754",
+      "status": "no-standalone-artifact",
+      "gs2089": "unresolved",
+      "reason": "Census row is source/library code (a bounded HttpMethod.Post to the Responses provider reachable only through the protected native Responses collection) without a retained standalone executable plus complete invocation inputs."
+    },
+    {
       "path": "src/FS.GG.Telemetry.Client/RemoteClient.fs",
       "sha256": "8e03d5ff3609812e2241463ab8cd0bcd05094b208df6e30870e4bc1a045e6713",
       "status": "no-standalone-artifact",

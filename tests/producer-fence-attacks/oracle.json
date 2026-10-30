@@ -297,6 +297,7 @@
     "scripts/NewSddWorkspace/Program.fs",
     "scripts/release-saga-ci.sh",
     "scripts/release-saga-promote-release.sh",
+    "src/FS.GG.Telemetry.Client/DirectResponses.fs",
     "src/FS.GG.Telemetry.Client/RemoteClient.fs",
     "tools/routine-delivery.py"
   ],
