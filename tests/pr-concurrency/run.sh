@@ -38,7 +38,6 @@ mapfile -t NAMES < <(python3 "$TOOL" --list)
 
 mutants=0
 for name in "${NAMES[@]}"; do
-  src="$ROOT/.github/workflows/$name.yml"
   for m in M1 M2 M3 M4 M5 M6 M7 M8; do
     d="$WORK/$name-$m"; mkdir -p "$d/.github/workflows"
     # every governed file must exist in the mutant root, so copy them all and mutate only one
