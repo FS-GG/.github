@@ -13,14 +13,17 @@ never started ([#4778 decision](https://github.com/FS-GG/.github/issues/4778#iss
 [#4517 decision](https://github.com/FS-GG/.github/issues/4517#issuecomment-6518659566)).
 It bound Home-side facts: boot id, Root PIDs, tmux pane `%2`, MemAvailable and the B0
 backing. The fdev migration changed those facts
-(Atlas `environment/fdev-kvm-vm`, `environment/home-subsystems-migrated-into-fdev`).
+(Atlas `environment/fdev-kvm-vm`, merged in .github `eee584f2` (#4937), and
+`environment/home-subsystems-migrated-into-fdev`). The device line of the former is
+corrected by .github#4970.
 Root directed that the shared chain move inside fdev:
 runner → export → genuine bake → registration → first BAR.
 
 **Security zone and owner.** The repository owner ruled that protection inside fdev is
 cooperative only, intentionally, and that the fdev VM is the only relevant security zone
 ([durable record](https://github.com/FS-GG/.github/issues/4778#issuecomment-6519522997);
-Atlas `environment/fdev-vm-is-the-only-security-zone`, merged in .github `37028dfd`).
+Atlas `environment/fdev-vm-is-the-only-security-zone`, merged in .github PR #4942 as
+`37028dfd`).
 Home enforces that boundary through the VMM container and the egress filter. Under that
 ruling, [Root decision 1](https://github.com/FS-GG/.github/issues/4778#issuecomment-6522829725)
 makes **fdev the trusted owner for this route**. The 2026-10-24 Home-only export and
@@ -167,14 +170,22 @@ The two clock sources are kept separate:
     enclosing bound measured from the start witness has passed.
   - *End witness:* the `created_at` of Root's result post.
 
-**What bounds real time.** Nothing inside fdev bounds real time if Home pauses or
-suspends the fdev VM. Whether fdev's monotonic clock advances during such a pause is
-Unknown. The bound is applied after the fact. If the end witness minus the start witness
-exceeds the enclosing bound plus 300 s for posting, the operation is recorded as having
-exceeded its real-time bound. A result that exceeds it is not accepted as
-qualification, whatever the monotonic outcome. An fdev reboot or upgrade during a step
-ends it as FAILED or Unknown. It is never resumed. The values above are proposals for
-Root to bind in each selection.
+**What bounds real time.** Home never pauses or freezes fdev
+([Home's confirmation](https://github.com/FS-GG/.github/issues/4517#issuecomment-6526676894)). fdev stops only by an ACPI power-down on owner request,
+and it can also reboot or be upgraded. Four cases can therefore affect real time:
+an ACPI power-down, an owner stop, a reboot or upgrade, and a stalled guest or fdev.
+Nothing inside fdev bounds real time across them, so the bound is applied as follows:
+
+- *Power-down, owner stop, reboot or upgrade during a step:* the step ends as FAILED or
+  Unknown. It is never resumed.
+- *Stalled guest:* `RuntimeMaxSec`, then `TimeoutStopSec` and SIGKILL, bound it in fdev
+  time.
+- *All cases, after the fact:* if the end witness minus the start witness exceeds the
+  enclosing bound plus 300 s for posting, the operation is recorded as having exceeded
+  its real-time bound. A result that exceeds it is not accepted as qualification,
+  whatever the monotonic outcome.
+
+The values above are proposals for Root to bind in each selection.
 
 ### Single claim and no replay
 
@@ -203,9 +214,12 @@ Retirement runs in this order, inside the step's retire and collector clocks:
 5. Check runner absence through the API (M2).
 6. Another actor reads back every item above.
 
-The launcher changes no properties on `user-1000.slice`. Root drains other lanes for
-the window instead (see [capacity](#3-write-domains-and-capacity)). The launcher front
-end, the readback actor and the Root session keep running unthrottled.
+The launcher changes no properties on `user-1000.slice` as a whole. Root drains other
+lanes for the window (see [capacity](#3-write-domains-and-capacity)). The launcher's
+window-entry step applies the `io.max` caps of §3 (a) to the drained agent-lane units and
+to the fsgg-store, LEARN and SC2 service units on the HDD-backed devices, and its
+window-exit step removes them. The launcher front end, the readback actor and the Root
+session are not capped and keep running unthrottled.
 
 ## M1 bake layout
 
@@ -236,8 +250,8 @@ end, the readback actor and the Root session keep running unthrottled.
 - *Export.* The collector copies `root.raw` with `cp --sparse=always` to
   `/srv/bulk/native-chain/<op>/qualified-root.raw` and re-hashes the copy. Both digests
   must match. `DEDICATED_PROVIDER_IMAGE_ID` is `fdev-kvm-qualification-v1/<op>`.
-- *Target field.* `TARGET.json` must state `sharedCodexHost` truthfully. See open
-  decision 1.
+- *Target field.* `TARGET.json` must state `sharedCodexHost` and the host fields truthfully. See the
+  [shared-host ruling](#shared-host-ruling-open-decision-1).
 
 ## 3. Write domains and capacity
 
@@ -250,14 +264,19 @@ end, the readback actor and the Root session keep running unthrottled.
 | `/` (`vdd`) | transient unit state only | regenerated on upgrade |
 | `/srv/sc2-reserved` (`vdc`) and LEARN `vda` | excluded | SC2-only reserved operation e995b57e, which #4778 forbids borrowing; LEARN qualification |
 
-**Mapping to #4778 Done when, option (b): an independently provisioned resource domain.**
+**Mapping to #4778 Done when, option (b): an independently provisioned resource domain, except I/O, which §3 leaves unsatisfied.**
 Capacity enforcement here is kernel accounting. Write exclusion is cooperative, as the
 ruling states.
 
 - *Bytes:* every guest disk is a raw file preallocated in full before start: 256 GiB
   for the root, plus the read-only input and control images. With `discard=ignore` and
   `--target-is-zero`, nothing deallocates those blocks during the run. Other writers on
-  `vdb` can consume only free space that was never allocated.
+  `vdb` can consume only free space that was never allocated *inside the guest's
+  filesystem*. This bullet covers the guest only. The `vdb` image is a sparse file on the
+  host HDD partition, so preallocating inside the guest does not guarantee host space:
+  the host partition can fill from co-tenants or the other images. Host-partition bytes
+  and inodes free are therefore a separate capacity fact, recorded before each window
+  under §3 (d). That Home `df` reading is still owed.
 - *Inodes:* the guest filesystems are independent. On the host side each run uses a
   handful of inodes on `vdb`, which has 134 M free.
 - *Writes:* old writers have no path into the run directory. QEMU holds the image locks.
@@ -276,17 +295,19 @@ ruling states.
   - *Backing identity and competitors (established by Home evidence):* the `vdb`, `vdf`,
     `vdc` and `vda` images sit on one host rotational HDD with a single partition and the
     mq-deadline scheduler, together with the other co-located fdev images. The host
-    co-tenants are an always-on media-library service (reads), a media conversion pipeline
-    (writes) and a game library (active when the owner plays); an idle backups directory is
-    also present. Home cannot guarantee a quiet disk. The fdev VM cgroup has no `io.max`
+    co-tenants are a bulk media reader, a scheduled writer and an interactive owner
+    workload. Home cannot guarantee a quiet disk. The fdev VM cgroup has no `io.max`
     or `io.weight`.
   - *Enforcement for each native window:*
-    - (a) inside fdev, `io.max` on `user-1000.slice` and the fsgg-store, LEARN and SC2
-      units for the HDD-backed devices, plus the scheduled lane drain;
-    - (b) on Home, Home stops the conversion pipeline, the only host writer, for the
-      named window, and the owner does not run the game library;
+    - (a) inside fdev, `io.max` on the drained agent-lane units and on the fsgg-store,
+      LEARN and SC2 service units for the HDD-backed devices, plus the scheduled lane
+      drain. Per Root's decision in response to review, the cap is not set on the whole
+      `user-1000.slice`: the launcher front end, the readback actor and the Root session
+      stay unthrottled, and the launcher's window-entry step applies and removes the caps;
+    - (b) on Home, Home stops the scheduled writer, the only host writer, for the
+      named window, and the owner does not run the interactive workload;
     - (c) observation, with per-device `io.stat` and PSI in fdev and Home `iostat -dx` on
-      the HDD across the window, with media-library reads as an observed, unenforced
+      the HDD across the window, with the bulk media reader as an observed, unenforced
       reader;
     - (d) capacity, with bytes and inodes free on the HDD partition recorded before the
       window. That needs one more small Home fact: `df` on the partition.
@@ -318,8 +339,9 @@ schema enforces it as floors. The BAR gate's 14 GiB of available guest memory an
 of free backing are observed inside the guest. Home confirmed the fdev VMM device set
 ([#4517](https://github.com/FS-GG/.github/issues/4517#issuecomment-6526676894); Atlas `environment/fdev-gpu-and-audio`): q35 with KVM, `virtio-gpu-gl-pci`
 with blob and DRM native context on the AMD iGPU render node only, output-only PipeWire
-audio with no capture, emulated input only, virtio-net with user-mode networking, and
-virtio-rng. This headless chain uses none of the GPU or audio devices and passes none into
+audio with no capture, virtio-net with user-mode networking, and virtio-rng. Home's list
+names no input device; that the guest has only emulated PS/2 input and no virtio-input is
+a guest-side observation, not a Home statement. This headless chain uses none of the GPU or audio devices and passes none into
 nested guests. DRM native context exposes the host amdgpu driver to fdev, a risk the owner
 accepted under the VM-only security zone ruling.
 
@@ -330,7 +352,7 @@ accepted under the VM-only security zone ruling.
   Home-held.
 - The five old v3 lease records name Home's former mount path. They are not modified
   and keep their own Unknown scope.
-- The new domains are demonstrably isolated in four ways: different filesystems, fresh
+- The new domains are demonstrably isolated, except for I/O, which §3 leaves unsatisfied, in four ways: different filesystems, fresh
   identities, fresh clocks and no shared engine store. Under ADR-0096 B the 439 + 46
   holds therefore do not fence them. This plan observed no data writer on `vdb`. Any
   writer found at admission refuses the run.
@@ -339,7 +361,7 @@ accepted under the VM-only security zone ruling.
 
 | Owning record | This path can establish | This path cannot establish |
 |---|---|---|
-| #4778 | The option (b) decision with capacity enforcement observed in a real run: identity, bytes, inodes, CPU and memory correspondence, refusal controls, lifecycle and independent retirement. Write exclusion is cooperative. | I/O correspondence, which only a native window's captured evidence satisfies (§3); Home physical capacity; recovery of the historical B0 originals. |
+| #4778 | The option (b) decision with capacity enforcement observed in a real run: identity, bytes, inodes, CPU and memory correspondence, host-partition capacity evidence under §3 (d) once Home supplies it, refusal controls, lifecycle and independent retirement. Write exclusion is cooperative. | I/O correspondence, which only a native window's captured evidence satisfies (§3); recovery of the historical B0 originals. |
 | #4650 (V3-ENV-01) | For the fdev nested profile: enforcing execution, committed export, independent cleanup, a qualified launcher source and its first genuine use. | Unattended allocation without a human or host agent, worker-loss recovery, reboot persistence, publication or installed adoption, benefit disposition. |
 | [#4820](https://github.com/FS-GG/.github/issues/4820) | Real use of the journal producer for Commit on fdev. | LEARN finite-profile .1–.3 acceptance. The Home-only export exception does not transfer. |
 | Coordination#1032 | The complete pinned FSBar headless-integration image from current accepted source, if M2 succeeds: manifests, image identity, the encrypted exported candidate, static ELF correspondence, bounded outputs, readback and retirement. | Loaded engine/plugin ABI, Count1 and the useful-play journeys ([#4842](https://github.com/FS-GG/.github/issues/4842)), product publication, installed B2 adoption. |
@@ -357,7 +379,9 @@ verification under ADR-0096 A, and read-only preflight. It boots no guest.
   - the claim front end;
   - the unit, slice, disk and seed builder;
   - the collector and retirement helper;
-  - a README amendment adding provider `fdev-kvm-qualification-v1`.
+  - a README amendment adding provider `fdev-kvm-qualification-v1`;
+  - the target-schema host fields of the [shared-host ruling](#shared-host-ruling-open-decision-1):
+    `hostKind: fdev-agent-vm-drained-window` and `ioSharedWithHostCoTenants: true`.
 - *Privacy:* a privacy review of the helpers adapted from private custody.
 - *Controls:* claim races, a retired-ID refusal, clock arithmetic including the GitHub
   witness checks, golden files for the argv and unit properties (including
@@ -380,7 +404,7 @@ derivation: the input-image digest is checked before use.
 
 - *Prerequisites:*
   - M0 merged;
-  - open decision 1 resolved;
+  - the [shared-host ruling](#shared-host-ruling-open-decision-1) implemented by M0;
   - Home's confirmation of the current VMM device set, which is met
     ([Root decision 6](https://github.com/FS-GG/.github/issues/4778#issuecomment-6522829725);
     [Home's confirmation on #4517](https://github.com/FS-GG/.github/issues/4517#issuecomment-6526676894));
@@ -430,25 +454,31 @@ The workflow enforces these constraints itself:
 Root holds the candidate decryption key and the JIT credential in fdev private custody
 (0700). M2's native clocks total about 2.7 h.
 
-## Open decision
+## Shared-host ruling (Open decision 1)
 
-1. **Shared-host field.** The target schema requires `sharedCodexHost: false`
-   (`dedicated_qualification_runner.py validate_target_data`), and the runner README
-   forbids the shared Codex machine. A disposable nested guest on fdev is dedicated, but
-   its host is the shared agent machine. Root must rule whether that is permitted. If it
-   is, M0 must change the schema field's meaning, or add a host field, so the target
-   stays truthful.
+The target schema requires `sharedCodexHost: false`
+(`dedicated_qualification_runner.py validate_target_data`), and the runner README forbids
+the shared Codex machine. A disposable nested guest on fdev is dedicated, but its host is
+the shared agent machine. **Root has ruled** (in response to the plan's review):
+
+- A disposable nested guest on fdev is permitted for qualification **only during a
+  drained, exclusive window**.
+- `sharedCodexHost` keeps its meaning: other agent workloads run during the window. It is
+  `false` only when the launcher's exclusivity checks pass (lanes drained, no other
+  `fsgg-native-*` unit and no v3 pilot unit active).
+- M0 adds `hostKind: fdev-agent-vm-drained-window` and records
+  `ioSharedWithHostCoTenants: true` in the target, so the target stays truthful.
+- The evidence must never claim independence from fdev or from Home.
 
 Root has decided the other earlier questions: trusted owner and Commit destination,
-I/O correspondence, memory, acquisition, credential custody and the device-set
-prerequisite. The write domain follows decision 1's bulk destination, with working
-state on `vdb`.
+memory, acquisition, credential custody and the device-set prerequisite. For I/O
+correspondence, enforcement is ruled and the evidence is owed from each window (§3). The
+write domain follows Root decision 1's bulk destination, with working state on `vdb`.
 
 ## Unknowns
 
 - Actual HDD contention between the attached images and the host co-tenants during a
   native window, which only that window's captured evidence can establish.
-- Whether fdev's monotonic clock advances while Home pauses fdev.
 - Whether nested-SVM performance fits the bake clock and the BAR job's 90-minute budget.
   A timeout would be a retained first failure, not a reason to extend the clock.
 - Whether `passt --no-map-gw` fully blocks the M2 guest from fdev loopback services.
