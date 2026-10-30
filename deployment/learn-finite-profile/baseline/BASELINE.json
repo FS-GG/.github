@@ -312,12 +312,14 @@
     "sha256": "2aec965b2d22d56995d3c28883b8a031e4e89e034e4f16954f11f945694ea779"
    }
   ],
+  "manualReadNote": "Readers are self-asserted: a record states who claims to have read the bytes; it is not an authenticated identity or an independent attestation.",
   "method": "verify_baseline.py SCAN classes over every imported file, plus a recorded manual read of the same bytes",
   "personNames": [
    "eugen",
    "ehotwagner",
    "hotwagner"
   ],
+  "personNamesPolicy": "personNames is published with this manifest, so it may only hold names that are already public (here: an account name that appears in the public #4647 issue body). Never add a name to catch it.",
   "urlAllowPrefixes": [
    "https://github.com/FS-GG/"
   ]
