@@ -19,6 +19,9 @@
 # bytes would have passed the entire two weeks #843 describes.
 name: skill-union-bundle
 
+# The fixture asserts current truth about the skills themselves (tests/skill-union/check-current-truth.py), so a
+# skill edit must run it: #4680/#4711 changed skills without touching a listed path and the fixture sat red on
+# main until this repair (#4730).
 on:
   pull_request:
     paths:
@@ -27,6 +30,8 @@ on:
       - "scripts/generate-skill-union-bundle"
       - "dist/skill-union-assert.sh"
       - "tests/skill-union/**"
+      - ".agents/skills/**"
+      - ".claude/skills/**"
       - ".github/workflows/skill-union-bundle.yml"
   push:
     branches: [main]
@@ -36,6 +41,8 @@ on:
       - "scripts/generate-skill-union-bundle"
       - "dist/skill-union-assert.sh"
       - "tests/skill-union/**"
+      - ".agents/skills/**"
+      - ".claude/skills/**"
       - ".github/workflows/skill-union-bundle.yml"
   workflow_dispatch:
 
