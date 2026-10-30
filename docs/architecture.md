@@ -53,11 +53,11 @@ source design delivery alone did not establish the new providers' public install
 established for the TypeScript, JavaScript, Rust and Go CLI providers by two public installed acceptances over Templates 0.20.1
 on Linux x64 and one contained no-credential carrier: creations with `--no-coordination` through Wizard 0.23.0, SDD 2.5.3 and
 Governance 1.15.0 ([#3010](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523620705)), and creations with default
-coordination through the published Wizard 0.23.1 from nuget.org ([#4964](https://github.com/FS-GG/.github/issues/4964);
-receipts manifest `2e6a4afb9703c95e507e7652523d1f5577658c1e01e0eeea63d21e5b07ce4a00`), where `doctor` is coherent on all four. Wizard 0.23.0 default coordination was not accepted: it wrote a key
+coordination through the published Wizard 0.23.1 from nuget.org ([#4964 acceptance record](https://github.com/FS-GG/.github/issues/4964#issuecomment-6528912322);
+receipts manifest `2e6a4afb9703c95e507e7652523d1f5577658c1e01e0eeea63d21e5b07ce4a00`), where `doctor.isCoherent` is `true` on all four. Wizard 0.23.0 default coordination was not accepted: it wrote a key
 into the SDD-owned provenance that SDD 2.5.3 rejects and fetched the coordination kit from unpinned `main`; 0.23.1 stores that
 state in Wizard-owned files, migrates existing workspaces and pins the kit. Limits recorded there: GitHub Packages not read
-directly, one carrier, advisory-input custody owed.
+directly, one carrier, advisory-input custody owed, and the V2 `productBoard` route was not re-qualified.
 
 This page is a map. Authoritative detail lives in each component repository and in
 the decision records linked throughout.

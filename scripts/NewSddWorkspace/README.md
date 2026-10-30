@@ -28,14 +28,14 @@ the public Wizard 0.23.0, SDD 2.5.3 and Governance 1.15.0 installed from nuget.o
 `ea322f1526a048836deb2f1eaa2e817ccdaffc91647e4cc19cd69bd191e8d217`, run summary
 `aa01a492c6ded094ac988cb2953d02ff8cfdb74e6a27ac3ac8abc9b3fc97737d`). The default-coordination journeys against the
 **published 0.23.1**, installed from nuget.org into the same contained no-credential carrier, passed on all four providers
-(82 checks; receipts manifest `2e6a4afb9703c95e507e7652523d1f5577658c1e01e0eeea63d21e5b07ce4a00`, see [#4964](https://github.com/FS-GG/.github/issues/4964)): `doctor`
-`isCoherent:true` with no diagnostics, both obligations recorded as pending in `.fsgg/security-obligations.json`, provenance
+(82 checks; receipts manifest `2e6a4afb9703c95e507e7652523d1f5577658c1e01e0eeea63d21e5b07ce4a00`, see [the #4964 acceptance record](https://github.com/FS-GG/.github/issues/4964#issuecomment-6528912322)): `doctor.isCoherent:true` with
+no diagnostics, both obligations recorded as pending in `.fsgg/security-obligations.json`, provenance
 free of the moved keys, the coordination kit byte-identical to the pinned commit `a9a6f77f`, the embedded
 `initialize-sdd-workspace` skill, an idempotent `retrofit`, and migration of a workspace created by 0.23.0.
 
 **Fixed in 0.23.1: creation with default coordination used to yield an incoherent `doctor`.** Wizard 0.23.0 with
 coordination on (the default) wrote its `securityObligations` key into the SDD-owned `.fsgg/scaffold-provenance.json`, which
-SDD 2.5.3 rejects as an unknown property: `doctor` reported `isCoherent:false` with `scaffold.provenanceMalformed` on all four
+SDD 2.5.3 rejects as an unknown property: `doctor.isCoherent` was `false` with `scaffold.provenanceMalformed` on all four
 catalog providers (found by the default-coordination journey,
 [#3010 result](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523944130)). 0.23.1 keeps the Wizard's state in
 Wizard-owned files (see
@@ -47,7 +47,8 @@ pending, never claimed satisfied.
 
 Stated limits remain: the GitHub Packages feed was not read directly (the qualifying token received 403 or lacked
 `read:packages`), only one Linux x64 carrier was exercised, no reproducibility pack exists, and independent custody of the
-advisory inputs is still owed.
+advisory inputs is still owed. The selected-product V2 `productBoard` route was not re-qualified by the 0.23.1 acceptance, and
+the sentence below that it is unchanged is not an acceptance claim.
 
 ## Install
 
@@ -246,7 +247,7 @@ default-coordination creation of Wizard 0.23.0 (#4964). SDD's schema is not wide
 longer writes its own `securityObligations`, `verifiedSecurityReceipts` or `retrofits` members into provenance. The
 selected-product V2 route (`--board-binding`) still records a `productBoard` member there; that route is not part of
 default coordination, it applies to the provenance generation SDD 2.5.3 tolerates, and it was neither changed nor
-re-qualified here.
+re-qualified here (its acceptance is not claimed by 0.23.1).
 
 ```json
 {
