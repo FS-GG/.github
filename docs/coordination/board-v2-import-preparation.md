@@ -469,38 +469,55 @@ facts do not support as `NodeIdMismatch`, a changed prefix as `PrefixNotPreserve
 `SuccessorNotRederived`, all before any output exists.
 
 `resolve-issues --request --native-facts-output` is the online half of `plan-successor`. It is read-only by construction:
-the only effect is a `GET` of an `/orgs/` or `/repos/` path through the GitHub CLI with a fixed argument vector (`--method
-GET`, never a field, input or GraphQL endpoint). It reads the Project, its fields and every item, each request issue and
-each protected plan document on `main`, and writes the `fsgg.board-v2-native-facts/1` document the planner consumes. A clean
-404 on an issue is reported as partial visibility and refused by the planner; any other failed read is `NativeReadFailed` and
-writes nothing.
+the only effect is a `GET` through the GitHub CLI with a fixed argument vector (`--method GET`, never a field, input or
+GraphQL endpoint), and the path must be exactly one of ten allowlisted endpoints: the Project, its fields and its items; a
+repository, one issue, one pull request and its commits, the open pull requests and the `main` ref of a repository; and a
+document on `main`.
+A path segment is a name (`[A-Za-z0-9_.-]`, no `%`); only a whole `.` or `..` segment is a traversal, so a name like `a..b.md`
+is reachable. It reads the Project, its fields and every item, each request issue and each protected plan document on
+`main`, and writes the `fsgg.board-v2-native-facts/1` document the planner consumes. A clean
+404 on an issue is reported as partial visibility and refused by the planner; any other failed read, or a response over the
+32 MiB stream cap (the process is stopped, never buffered whole), is `NativeReadFailed` and writes nothing. A plan document
+that reads 404 is an absence only if the repository itself can be read; otherwise the repository is reported as hidden
+(outside the fixed facts document) and the preflight says `Unknown`, not `Unsupported`.
 
 `preflight --route --stage --request --repository (--online | --native-facts)` returns a typed verdict per registered check
 for the next stage of a closed route: `SupportedForNextStage` (with evidence), `Unsupported` (an exact reason and who can
 supply what is missing) or `Unknown` (an exact gap). The exit code is 0 only when every check is supported, 10 when any is
 unsupported and 11 when none is unsupported but any is unknown; unknown is never 0, and 2 stays a refusal to run. Registered
-routes are `ProgrammeEnrollmentSuccessor` (stages `PlanSuccessor`, `PrepareSuccessor`, `BindRuntime`),
-`RoutineDelivery` and `PublicationWriterRegistration`; the latter two have no checks yet and report `Unknown`.
+routes and their stages: `ProgrammeEnrollmentSuccessor` (`PlanSuccessor`, `PrepareSuccessor`, `BindRuntime`),
+`RoutineDelivery` (`OpenPullRequest`, `MergePullRequest`) and `PublicationWriterRegistration` (`RegisterWriter`,
+`RunWriter`). A route and stage that do not belong together report `Unknown` (`Registry/NotRegistered`), never supported.
+
+`BindRuntime` observes its own inputs (`--successor-private`, `--successor-merge-sha`, and the public blob at that merge read
+through `--repository`): the successor pair must authenticate against that blob (`SuccessorIntegrity`), extend the predecessor
+(`SuccessorExtendsPredecessor`), and carry plan references the installed grammar admits and that exist on `main` now, judged
+from the successor's own appended rows (a sha-pinned reference is immutable and says nothing about `main` now, so it is `Unknown`, not supported). Missing successor inputs are `Unknown`, never taken from the predecessor.
 
 | Check | Decided from | Unsupported when | Unknown when |
 |---|---|---|---|
-| `ConstructorIdentity` | running constructor source revision, intended protected main | they differ | either unreadable |
+| `ConstructorIdentity` | running constructor source revision, intended protected main (`--online`: the live head by GET; `--main-revision`: asserted; otherwise the local tracking ref, which may be stale) | they differ from a live or asserted main | either unreadable, or the main is only the local tracking ref: a stale checkout can equal a stale ref, so a match proves nothing offline and the exit is never 0 |
 | `PredecessorIntegrity` | private pair, public blob at the recorded merge | the commitment differs, or the payload cannot be spliced | either unreadable |
 | `RuntimeBindingIntegrity` | runtime binding against the private pair | it differs in anything but `populationRevision`, or that is not the recorded merge | not supplied |
 | `FactsComplete`, `IssueKind`, `IssueIdentity`, `ProjectMembership`, `RepositoryInBinding`, `NotAlreadyEnrolled`, `RoadmapConflict` | the planner's own per-row findings, all of them rather than the first | a row fails the check (the row is named) | facts partial or unobserved |
 | `PlanGrammar` | the installed plan grammar; the installed artifact sha against a known table | a plan reference is not admitted | the installed artifact is not in the known table |
-| `PlanBlob` | plan documents on `main` now | a document is absent | facts were supplied rather than read now |
+| `PlanBlob` | plan documents on `main` now | a document is absent in a readable repository | facts were supplied rather than read now, or the repository may be invisible (`PlanBlob/NotVisible`) |
 | `RowCap` | predecessor rows plus request rows against 100 | the total exceeds the cap | predecessor unreadable |
 | `PayloadBound`, `TemplateBound` | computed payload and private binding sizes against the installed reader bounds | either is exceeded | inputs unreadable |
 | `ToolchainLock` | locked FSharp.Core `contentHash` against the cache's `.nupkg.metadata` | they differ (the NU1403 risk) | either unreadable |
-| `MemoryHeadroom` | smallest remaining bytes over the process cgroup chain | below the minimum | cgroup unreadable |
-| `ProjectAutoAdd` | Project items not in the binding's enrolled set | never: no breaking condition is proven | any lacks Status, Track or Work level (each named with its missing fields), or items unobserved |
+| `MemoryHeadroom` | smallest remaining bytes over the process cgroup chain, and host `MemAvailable` (the smaller of the two; alone when no cgroup limit applies) | below the minimum | cgroup unreadable, or `MemAvailable` unreadable (a known cgroup limit does not bound the host) |
+| `ProjectAutoAdd` | Project items not in the binding's enrolled set; every enrolled node must be in the inventory | never: no breaking condition is proven | any lacks Status, Track or Work level (each named with its missing fields), an enrolled node is absent from the inventory, or items are unobserved |
 | `AdjacencyChurn` (`BindRuntime`) | unrelated item `updated_at` within the window | never | any unrelated update in the window |
 
 `ProjectAutoAdd` is never `Unsupported`: on 2026-10-30 the installed caller kept working with a bare unenrolled membership (and three legacy partial ones) present, so that such memberships break it is unproven; only a sudden rise in them matched the later refusal, whose code was coarse. They are reported as `Unknown` with each item and its missing fields, and the JSON finding carries a note saying so. No `Unsupported` verdict exists for a condition that is not proven.
 
+`RoutineDelivery` checks (`OpenPullRequest` on a candidate that is not yet a pull request, from the checkout's branch and head with `--title` and `--body-file` and the commits between `refs/remotes/origin/main` and `HEAD`; `MergePullRequest` on `--pr N`, with its commits read by GET). The marker, operation, changed-path and closing-keyword grammars are **not re-derived**: the preflight runs the maintained gates from the checkout and observes their results. `scripts/check-claim-generation.py` (a routine head, `--base-sha`, `--routine-policy-ref`) decides `MarkerSingle` (exactly one complete marker, no repeated field), `MarkerHeadBound`, `MarkerOperationAllowed` and `ChangesPresent`, in the gate's own order: a finding decides its check, earlier checks passed, later ones were not reached (`RoutineGate/NotEvaluated`); a gate that cannot run (rc other than a finding, a base the checkout does not hold) is `Unknown`. `scripts/check-closing-keywords.py` (title, body and commit messages) decides `ClosingLinkDeclared`: rc 1 (a closing keyword that is not declared on a line of its own) is `Unsupported`, rc 0 with a declared closing line is `Unknown` (whether it fulfils the issue is not decidable here), rc 0 with none is supported, and rc 3 or any failure is `Unknown`. `RoutineBranch` uses the gate's own pattern `^routine/[a-z0-9][a-z0-9._-]*$` and the gate is not run for a branch outside it. `SinglePullRequest` needs none open before opening and exactly one before merging. At merge only: `BaseIsDefaultBranch` and `PullRequestOpen` (at open there is no pull request, so both would be tautologies) and `BaseCurrent` (a recorded base that is not the live default branch head is `Unknown`, because that is the `routine-eligibility` race).
+
+`PublicationWriterRegistration` checks: `RegisterWriter` needs a readable workflow that carries a publication effect token (comment lines excluded) and is neither a registered writer nor exempt in this repository; `RunWriter` needs it to be a registered writer and the maintained `scripts/check-publication-writer-coverage.py --local` to report zero unmet. That script stays the authority: its result is observed, not re-derived.
+
 The toolchain check compares the lock file with `.nupkg.metadata`, not with the cache's `.nupkg.sha512`, which is a
 different digest of the same package and would report a healthy cache as mismatched. The known-reader table is supplied
 (`--known-readers`, one sha256 per line) and is empty by default, so the installed grammar is `Unknown` until a verified
-installed artifact is listed. The intended protected main defaults to the checkout's local `refs/remotes/origin/main`, so fetch first or pass `--main-revision`. The preflight grants no authority, performs no mutation and prints no payload, nonce, private
-binding content or node id; engine registration and lifting the row cap remain later deliveries of the same issue.
+installed artifact is listed. Without `--online` or `--main-revision` the intended main is the checkout's local `refs/remotes/origin/main`, which may be stale. The preflight grants no authority, performs no mutation and prints no payload, nonce, private
+binding content or content node id (`I_...`); it prints issue references, and the Project item id (`PVTI_...`) only for a
+non-issue item, which has no reference. Engine registration and lifting the row cap remain later deliveries of the same issue.

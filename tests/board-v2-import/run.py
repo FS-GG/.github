@@ -10,6 +10,7 @@ import os
 import sys
 import pathlib
 import subprocess
+import shutil
 import tempfile
 import unittest
 
@@ -1155,6 +1156,8 @@ for prefix, body in routes:
             sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         if body == 'FAIL':
             sys.stderr.write('gh: boom (HTTP 500)\\n'); sys.exit(1)
+        if body == 'HUGE':
+            sys.stdout.write('x' * (33554432 + 4096)); sys.exit(0)
         sys.stdout.write(json.dumps(body) if not isinstance(body, str) else body)
         sys.exit(0)
 sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
@@ -1171,7 +1174,9 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         return {'node_id': 'PVTI_' + node, 'content_type': 'Issue', 'updated_at': updated,
                 'content': {'node_id': node, 'number': number, 'repository_url': 'https://api.github.com/repos/' + repository}, 'fields': fields}
 
-    def fake_gh(self, items=None, overrides=None, name='fake'):
+    MAIN_SHA = 'e' * 40
+
+    def fake_gh(self, items=None, overrides=None, name='fake', main=None):
         """A recording stand-in for the GitHub CLI. Returns (environment, argv log path)."""
         base = self.dir / name
         base.mkdir(exist_ok=True)
@@ -1187,7 +1192,8 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
             ['/orgs/FS-GG/projectsV2/3', {'number': 3, 'node_id': self.PROJECT}],
             ['/repos/FS-GG/.github/issues/80001', {'node_id': f'I_synthetic_{self.SENTINEL}_new1', 'repository_url': 'https://api.github.com/repos/FS-GG/.github'}],
             ['/repos/FS-GG/FS.GG.Templates/issues/80002', {'node_id': f'I_synthetic_{self.SENTINEL}_new2', 'repository_url': 'https://api.github.com/repos/FS-GG/FS.GG.Templates'}],
-            ['/repos/FS-GG/.github/contents/' + self.PLAN_PATH, {'type': 'file'}]]
+            ['/repos/FS-GG/.github/contents/' + self.PLAN_PATH, {'type': 'file'}],
+            ['/repos/FS-GG/.github/git/ref/heads/main', {'object': {'sha': main or SOURCE_REVISION or self.MAIN_SHA}}]]
         (base / 'routes.json').write_text(json.dumps(routes))
         log = base / 'argv.log'
         log.write_text('')
@@ -1256,7 +1262,7 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         # Outputs are never overwritten.
         self.refused(self.run_cli_env(env, 'resolve-issues', '--request', out/'request.json', '--native-facts-output', out/'absent.json'), 'OutputExists')
 
-    def preflight(self, env, stage='PlanSuccessor', online=True, facts=None, extra=(), fixture=None, request=None, route='ProgrammeEnrollmentSuccessor', main=None):
+    def preflight(self, env, stage='PlanSuccessor', online=True, facts=None, extra=(), fixture=None, request=None, route='ProgrammeEnrollmentSuccessor', main=None, live_main=False):
         fixture = fixture or self.fixture
         out = self.dir / ('preflight-' + str(len(list(self.dir.iterdir()))))
         out.mkdir()
@@ -1267,7 +1273,9 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         cache.mkdir(parents=True)
         (cache / '.nupkg.metadata').write_bytes(self.wire({'version': 2, 'contentHash': 'synthetic-hash==', 'source': 's'}))
         args = ['preflight', '--route', route, '--stage', stage, '--request', out/'request.json', '--repository', fixture['repository'],
-                '--lockfile', out/'lock.json', '--nuget-cache', out/'cache', '--min-headroom-bytes', '0', '--main-revision', main or SOURCE_REVISION or 'a'*40]
+                '--lockfile', out/'lock.json', '--nuget-cache', out/'cache', '--min-headroom-bytes', '0']
+        if not live_main:
+            args += ['--main-revision', main or SOURCE_REVISION or 'a'*40]
         if online:
             args.append('--online')
         else:
@@ -1363,6 +1371,237 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         for bad in (['preflight'], ['preflight', '--route', 'Nope', '--stage', 'PlanSuccessor', '--request', 'x', '--repository', 'y', '--online']):
             done = self.run_cli_env(env, *bad)
             self.refused(done, 'MalformedInput')
+
+    # ---- PR 3: the live main head, the stage's own inputs, the routes and the stream cap ----
+
+    def test_online_constructor_identity_reads_the_live_main_head_by_get(self):
+        if not SOURCE_REVISION:
+            self.skipTest('needs the build revision')
+        env, log = self.fake_gh(main=SOURCE_REVISION, name='main-same')
+        result, out = self.preflight(env, live_main=True)
+        report, rows = self.verdicts(result)
+        self.assertEqual('SupportedForNextStage', rows['ConstructorIdentity']['verdict'])
+        self.assertIn('live remote head', rows['ConstructorIdentity']['evidence'])
+        calls = [argv[-1] for argv in self.argv_log(log)]
+        self.assertIn('/repos/FS-GG/.github/git/ref/heads/main', calls)
+        for argv in self.argv_log(log):
+            self.assertEqual(['api', '--method', 'GET'], argv[:3])
+        # Causal: only the live head differs, and the verdict flips to Unsupported.
+        other, _ = self.fake_gh(main='0' * 40, name='main-other')
+        result, out = self.preflight(other, live_main=True)
+        row = self.verdicts(result)[1]['ConstructorIdentity']
+        self.assertEqual(('Unsupported', 'ConstructorDiffersFromMain'), (row['verdict'], row['reason']))
+        # A failed head read is Unknown, not a verdict.
+        broken, _ = self.fake_gh(overrides=[['/repos/FS-GG/.github/git/ref/heads/main', 'FAIL']], name='main-fail')
+        result, out = self.preflight(broken, live_main=True)
+        self.assertEqual('ProtectedMain/ReadFailed', self.verdicts(result)[1]['ConstructorIdentity']['gap'])
+
+    def test_offline_constructor_identity_keeps_the_flag_and_marks_the_local_ref_as_possibly_stale(self):
+        if not SOURCE_REVISION:
+            self.skipTest('needs the build revision')
+        env, log = self.fake_gh()
+        # Flag asserted by the operator: a difference is Unsupported.
+        result, out = self.preflight(env, online=False, main='0' * 40)
+        row = self.verdicts(result)[1]['ConstructorIdentity']
+        self.assertEqual(('Unsupported', 'ConstructorDiffersFromMain'), (row['verdict'], row['reason']))
+        # No flag: the checkout's local tracking ref. A fixture repository carries one; a different value is only Unknown.
+        repository = self.fixture['repository']
+        self.git(repository, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+        result, out = self.preflight(env, online=False, live_main=True)
+        row = self.verdicts(result)[1]['ConstructorIdentity']
+        self.assertEqual(('Unknown', 'ProtectedMain/NotLive'), (row['verdict'], row['gap']))
+        self.assertEqual([], self.argv_log(log))  # offline: no read of the live head
+
+    def test_bind_runtime_observes_the_successor_inputs(self):
+        if not SOURCE_REVISION:
+            self.skipTest('needs the build revision')
+        result, out = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(0, self.prepare(out).returncode)
+        public_bytes = (out / 'pair-public.json').read_bytes()
+        merge = self.commit_manifest(self.fixture['repository'], public_bytes)
+        env, log = self.fake_gh()
+        extra = ['--successor-private', out/'pair-private.json', '--successor-merge-sha', merge]
+        done, _ = self.preflight(env, stage='BindRuntime', extra=extra)
+        report, rows = self.verdicts(done)
+        self.assertEqual(['ConstructorIdentity', 'SuccessorIntegrity', 'SuccessorExtendsPredecessor', 'PlanGrammar', 'PlanBlob', 'ToolchainLock',
+                          'MemoryHeadroom', 'ProjectAutoAdd', 'AdjacencyChurn'], [row['check'] for row in report['findings']])
+        self.assertEqual('SupportedForNextStage', rows['SuccessorIntegrity']['verdict'])
+        self.assertEqual('SupportedForNextStage', rows['SuccessorExtendsPredecessor']['verdict'])
+        self.assertNotIn('PredecessorIntegrity', rows)
+        self.assert_hygiene(done, out)
+        # Without the successor flags the stage's own inputs are unknown, never silently taken from the predecessor.
+        missing, _ = self.preflight(env, stage='BindRuntime')
+        rows = self.verdicts(missing)[1]
+        self.assertEqual('SuccessorPrivate/NotSupplied', rows['SuccessorIntegrity']['gap'])
+        self.assertEqual('SuccessorPrivate/NotSupplied', rows['SuccessorExtendsPredecessor']['gap'])
+        # A merge that does not hold the successor's public blob is a failed git read, i.e. Unknown, not a verdict.
+        wrong, _ = self.preflight(env, stage='BindRuntime', extra=['--successor-private', out/'pair-private.json', '--successor-merge-sha', '1' * 40])
+        self.assertEqual('SuccessorPublic/Unreadable', self.verdicts(wrong)[1]['SuccessorIntegrity']['gap'])
+        # The predecessor's own commit is a real merge, but its blob is the predecessor's commitment, not the successor's.
+        not_it, _ = self.preflight(env, stage='BindRuntime', extra=['--successor-private', out/'pair-private.json', '--successor-merge-sha', self.fixture['merge']])
+        row = self.verdicts(not_it)[1]['SuccessorIntegrity']
+        self.assertEqual(('Unsupported', 'SuccessorCommitmentMismatch'), (row['verdict'], row['reason']))
+
+    def routine_repository(self, branch='routine/synthetic', message='feat: synthetic change\n\nRefs #4941'):
+        """A real checkout carrying the routine policy: a base commit on main, then one routine commit on `branch`."""
+        repository = self.dir / ('routine-' + str(len(list(self.dir.iterdir()))))
+        repository.mkdir()
+        self.git(repository, 'init', '-q', '-b', 'main')
+        (repository / '.fsgg').mkdir()
+        (repository / '.fsgg' / 'routine-development.json').write_bytes((ROOT / '.fsgg' / 'routine-development.json').read_bytes())
+        (repository / 'scripts').mkdir()
+        for name in ('check-claim-generation.py', 'check-closing-keywords.py'):
+            (repository / 'scripts' / name).write_bytes((ROOT / 'scripts' / name).read_bytes())
+        shutil.copytree(ROOT / 'scripts' / 'lib', repository / 'scripts' / 'lib', ignore=shutil.ignore_patterns('__pycache__'))
+        self.git(repository, 'add', '-A')
+        self.git(repository, 'commit', '-q', '-m', 'base')
+        base = self.git(repository, 'rev-parse', 'HEAD')
+        self.git(repository, 'update-ref', 'refs/remotes/origin/main', base)
+        self.git(repository, 'checkout', '-q', '-b', branch)
+        (repository / 'change.txt').write_text('change\n')
+        self.git(repository, 'add', '-A')
+        self.git(repository, 'commit', '-q', '-m', message)
+        return repository, base, self.git(repository, 'rev-parse', 'HEAD')
+
+    def routine(self, env, stage, repository, *extra, online=True):
+        args = ['preflight', '--route', 'RoutineDelivery', '--stage', stage, '--repository', repository, *extra]
+        if online:
+            args.append('--online')
+        return self.run_cli_env(env, *args)
+
+    MARKER = '<!-- fsgg:routine-development/v1 head={head} operation={operation} -->'
+
+    def pull_routes(self, head, base, body=None, title='feat: synthetic (Refs #4941)', commit='feat: synthetic change\n\nRefs #4941', state='open',
+                    number=7, listing=1, branch='routine/synthetic', main=None, operation='source-change'):
+        marker = self.MARKER.format(head=head, operation=operation)
+        pr = lambda n: {'number': n, 'state': state, 'title': title, 'body': body if body is not None else f'Refs #4941\n\n{marker}\n',
+                        'base': {'ref': 'main', 'sha': base}, 'head': {'ref': branch, 'sha': head}}
+        return [[f'/repos/FS-GG/.github/pulls/{number}/commits', [[{'commit': {'message': commit}}]]],
+                [f'/repos/FS-GG/.github/pulls/{number}', pr(number)],
+                ['/repos/FS-GG/.github/pulls?', [[pr(number + i) for i in range(listing)]]],
+                ['/repos/FS-GG/.github/git/ref/heads/main', {'object': {'sha': main or base}}]]
+
+    def merge_report(self, name, repository, head, base, **changes):
+        env, log = self.fake_gh(overrides=self.pull_routes(head, base, **changes), name=name)
+        done = self.routine(env, 'MergePullRequest', repository, '--pr', '7')
+        report = json.loads(done.stdout)
+        return done, report, {r['check']: r for r in report['findings']}, log
+
+    def test_routine_delivery_route_through_the_cli(self):
+        repository, base, head = self.routine_repository()
+        done, report, rows, log = self.merge_report('routine-ok', repository, head, base)
+        self.assertEqual((0, 'SupportedForNextStage', 10), (done.returncode, report['overall'], len(report['findings'])), done.stdout)
+        for argv in self.argv_log(log):
+            self.assertEqual(['api', '--method', 'GET'], argv[:3])
+        calls = [argv[-1] for argv in self.argv_log(log)]
+        self.assertIn('/repos/FS-GG/.github/pulls/7/commits?per_page=100', calls)
+        # One change at a time flips exactly the check it concerns, with the gate's own finding behind it.
+        stale = self.merge_report('routine-stale', repository, head, base, body='Refs #4941\n' + self.MARKER.format(head='9' * 40, operation='source-change'))
+        self.assertEqual((10, 'MarkerHeadDiffers'), (stale[0].returncode, stale[2]['MarkerHeadBound']['reason']))
+        self.assertEqual('SupportedForNextStage', stale[2]['MarkerSingle']['verdict'])
+        # The gate refuses a repeated field as ambiguous; a first-occurrence reading would have admitted source-change.
+        dup = self.merge_report('routine-dup', repository, head, base, body=f'Refs #4941\n<!-- fsgg:routine-development/v1 head={head} operation=source-change operation=publish -->')
+        self.assertEqual((10, 'MarkerMissingOrAmbiguous'), (dup[0].returncode, dup[2]['MarkerSingle']['reason']))
+        self.assertEqual('RoutineGate/NotEvaluated', dup[2]['MarkerOperationAllowed']['gap'])
+        protected = self.merge_report('routine-protected', repository, head, base, operation='publish')
+        self.assertEqual((10, 'OperationNotAllowed'), (protected[0].returncode, protected[2]['MarkerOperationAllowed']['reason']))
+        self.assertEqual('SupportedForNextStage', protected[2]['MarkerHeadBound']['verdict'])
+        # The branch pattern is the gate's own, not a prefix test: the gate is not even run for a branch outside it.
+        for branch in ['routine/Upper', 'routine/', 'routine/a/b']:
+            bad = self.merge_report('routine-branch', repository, head, base, branch=branch)
+            self.assertEqual((10, 'BranchNotRoutine'), (bad[0].returncode, bad[2]['RoutineBranch']['reason']), branch)
+            self.assertEqual('RoutineGate/NotEvaluated', bad[2]['MarkerSingle']['gap'])
+        closed = self.merge_report('routine-closed', repository, head, base, state='closed')
+        self.assertEqual((10, 'PullRequestNotOpen'), (closed[0].returncode, closed[2]['PullRequestOpen']['reason']))
+        moved = self.merge_report('routine-moved', repository, head, base, main='c' * 40)
+        self.assertEqual((11, 'BaseHead/BaseMoved'), (moved[0].returncode, moved[2]['BaseCurrent']['gap']))
+        two = self.merge_report('routine-two', repository, head, base, listing=2)
+        self.assertEqual((10, 'PullRequestNotSingle'), (two[0].returncode, two[2]['SinglePullRequest']['reason']))
+        # A base the checkout does not hold makes the gate unable to read its policy: unknown, never a verdict.
+        elsewhere = self.merge_report('routine-nobase', repository, head, '5' * 40)
+        self.assertEqual((11, 'RoutineGate/Unreadable'), (elsewhere[0].returncode, elsewhere[2]['MarkerSingle']['gap']))
+
+    def test_closing_keywords_are_decided_by_the_maintained_gate_not_a_local_pattern(self):
+        repository, base, head = self.routine_repository()
+        marker = self.MARKER.format(head=head, operation='source-change')
+        # Forms a local pattern would miss, each inline in prose: the gate says they close, so they are Unsupported.
+        inline = ['it Closes:#4941 today', 'it Fixes GH-4941 too', 'it resolves https://github.com/FS-GG/.github/issues/4941 too', 'Closed FS-GG/.github#4941 here']
+        for text in inline:
+            done, report, rows, _ = self.merge_report('closing-body', repository, head, base, body=f'Refs #4941\n{text}\n{marker}\n')
+            self.assertEqual((10, 'ClosingKeywordUndeclared'), (done.returncode, rows['ClosingLinkDeclared']['reason']), text)
+        # The title and a commit message are subjects of the gate too (a commit message is what a squash turns into its message).
+        titled = self.merge_report('closing-title', repository, head, base, title='resolve #4941')
+        self.assertEqual((10, 'ClosingKeywordUndeclared'), (titled[0].returncode, titled[2]['ClosingLinkDeclared']['reason']))
+        for commit in ['feat: x\n\nthis commit fixes GH-4941 inline', 'feat: x\n\nCloses:#4941 inline too']:
+            committed = self.merge_report('closing-commit', repository, head, base, commit=commit)
+            self.assertEqual((10, 'ClosingKeywordUndeclared'), (committed[0].returncode, committed[2]['ClosingLinkDeclared']['reason']), commit)
+        # A properly declared line on its own is the gate's accepted way to close: Unknown, never AllSupported.
+        for text in ['Closes #4941.', 'Closes:#4941', 'Fixes GH-4941']:
+            declared = self.merge_report('closing-declared', repository, head, base, body=f'{text}\n{marker}\n')
+            self.assertEqual((11, 'unknown'), (declared[0].returncode, declared[2]['ClosingLinkDeclared']['verdict'].lower()), text)
+            self.assertTrue(declared[2]['ClosingLinkDeclared']['gap'].startswith('ClosingGate/ClosingLinkPresent'), text)
+        committed_declared = self.merge_report('closing-commit-declared', repository, head, base, commit='feat: x\n\nFixes #4941')
+        self.assertEqual(11, committed_declared[0].returncode)
+        # Causal: the very same inline sentence with the verb dropped is a reference, which is supported.
+        clean = self.merge_report('closing-clean', repository, head, base, body=f'Refs #4941\nit Refs 4941 today\n{marker}\n')
+        self.assertEqual((0, 'SupportedForNextStage'), (clean[0].returncode, clean[2]['ClosingLinkDeclared']['verdict']))
+
+    def test_routine_open_stage_reads_the_checkout_and_its_commits(self):
+        repository, base, head = self.routine_repository()
+        body = self.dir / 'candidate-body.md'
+        body.write_text(f'Refs #4941\n\n{self.MARKER.format(head=head, operation="source-change")}\n')
+        empty, log = self.fake_gh(overrides=[['/repos/FS-GG/.github/pulls?', [[]]], ['/repos/FS-GG/.github/git/ref/heads/main', {'object': {'sha': base}}]], name='routine-open')
+        opened = self.routine(empty, 'OpenPullRequest', repository, '--title', 'feat: synthetic (Refs #4941)', '--body-file', body)
+        self.assertEqual((0, 7), (opened.returncode, len(json.loads(opened.stdout)['findings'])), opened.stdout)
+        # Offline, the open-pull-request count cannot be known: Unknown, never supported; the gates still run locally.
+        offline = self.routine(empty, 'OpenPullRequest', repository, '--title', 'feat: synthetic (Refs #4941)', '--body-file', body, online=False)
+        rows = {r['check']: r for r in json.loads(offline.stdout)['findings']}
+        self.assertEqual((11, 'OpenPullRequests/NotSupplied', 'SupportedForNextStage'), (offline.returncode, rows['SinglePullRequest']['gap'], rows['MarkerHeadBound']['verdict']))
+        # A body whose marker names another head is refused before a pull request exists.
+        body.write_text('Refs #4941\n\n' + self.MARKER.format(head='7' * 40, operation='source-change') + '\n')
+        wrong = self.routine(empty, 'OpenPullRequest', repository, '--title', 't (Refs #4941)', '--body-file', body)
+        self.assertEqual(10, wrong.returncode)
+        # The commits between the tracking ref and HEAD are what a squash merge would use: a keyword in one is Unsupported.
+        closing_repository, _, closing_head = self.routine_repository(message='feat: x\n\nthis commit closes #4941 inline')
+        body.write_text(f'Refs #4941\n\n{self.MARKER.format(head=closing_head, operation="source-change")}\n')
+        closing = self.routine(empty, 'OpenPullRequest', closing_repository, '--title', 'feat: x (Refs #4941)', '--body-file', body)
+        rows = {r['check']: r for r in json.loads(closing.stdout)['findings']}
+        self.assertEqual((10, 'ClosingKeywordUndeclared'), (closing.returncode, rows['ClosingLinkDeclared']['reason']))
+
+    def test_publication_writer_route_through_the_cli(self):
+        env, _ = self.fake_gh()
+        def run(stage, workflow):
+            done = subprocess.run(['dotnet', str(DLL), 'preflight', '--route', 'PublicationWriterRegistration', '--stage', stage, '--repository', str(ROOT), '--workflow', workflow],
+                                  capture_output=True, text=True, timeout=180, env=env)
+            return done, {r['check']: r for r in json.loads(done.stdout)['findings']}
+        registered = '.github/workflows/release-successor-publish.yml'
+        done, rows = run('RunWriter', registered)
+        self.assertEqual(['RegistryReadable', 'WriterRegistered', 'CoverageAudit'], list(rows))
+        # The maintained gate is run for real and is authoritative: clean here, so the registered writer is supported.
+        self.assertEqual((0, 'SupportedForNextStage'), (done.returncode, rows['CoverageAudit']['verdict']), done.stdout)
+        done, rows = run('RegisterWriter', registered)
+        self.assertEqual((10, 'WriterAlreadyRegistered'), (done.returncode, rows['NotYetRegistered']['reason']))
+        self.assertEqual('SupportedForNextStage', rows['WorkflowPublishes']['verdict'])
+        plain = '.github/workflows/graphql-monopoly.yml'
+        done, rows = run('RegisterWriter', plain)
+        self.assertEqual((10, 'WorkflowHasNoPublicationEffect'), (done.returncode, rows['WorkflowPublishes']['reason']))
+        done, rows = run('RunWriter', plain)
+        self.assertEqual((10, 'WriterNotRegistered'), (done.returncode, rows['WriterRegistered']['reason']))
+        # A workflow path outside the workflow directory is refused rather than read.
+        for bad in ['../../etc/passwd', '.github/workflows/../../x.yml', 'scripts/x.yml']:
+            refused = subprocess.run(['dotnet', str(DLL), 'preflight', '--route', 'PublicationWriterRegistration', '--stage', 'RegisterWriter', '--repository', str(ROOT), '--workflow', bad],
+                                     capture_output=True, text=True, timeout=60, env=env)
+            self.refused(refused, 'MalformedInput')
+
+    def test_a_response_over_the_stream_cap_is_a_failed_read_not_a_buffered_one(self):
+        out = self.dir / 'huge'
+        out.mkdir()
+        (out / 'request.json').write_bytes(self.wire(self.request()))
+        env, log = self.fake_gh(overrides=[['/orgs/FS-GG/projectsV2/3/items', 'HUGE']], name='huge')
+        done = self.run_cli_env(env, 'resolve-issues', '--request', out/'request.json', '--native-facts-output', out/'never.json')
+        self.refused(done, 'NativeReadFailed')
+        self.assertFalse((out / 'never.json').exists())
 
     def test_carrier_refuses_open_or_foreign_receipts_and_never_echoes_them(self):
         result, out = self.plan()

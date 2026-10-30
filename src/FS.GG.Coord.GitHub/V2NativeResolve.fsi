@@ -41,10 +41,26 @@ module V2NativeResolve =
     type Resolved =
         { Facts: V2Enrollment.NativeFacts
           /// Every item of the Project, read completely or the whole resolution fails.
-          Items: ProjectItem list }
+          Items: ProjectItem list
+          /// Repositories where a plan document read as 404 and the repository itself could not be read: the
+          /// 404 may be invisibility rather than absence. The facts document keeps its fixed shape; this is separate.
+          HiddenRepositories: string list }
 
-    /// `GET`-only argument vector for the GitHub CLI, or `None` when the path is outside the closed grammar
-    /// (`/orgs/...` or `/repos/...`, bounded characters, an optional bounded query). Always contains
+    /// The fields of a pull request the routine-delivery preflight needs.
+    type PullRequest =
+        { Number: int
+          State: string
+          Title: string
+          Body: string
+          BaseRef: string
+          BaseSha: string
+          HeadRef: string
+          HeadSha: string }
+
+    /// `GET`-only argument vector for the GitHub CLI, or `None` unless `path` is exactly one allowlisted
+    /// endpoint with the pagination that endpoint needs: project metadata, fields and items; a repository,
+    /// one issue, one pull request and its commits, the open pull requests, the `main` ref; and a document on `main`.
+    /// A path segment is a name (`[A-Za-z0-9_.-]`, never `%`, never exactly `.` or `..`). Always contains
     /// `--method GET` and never a field, body or input flag.
     val getArguments: path: string -> paginated: bool -> string list option
 
@@ -58,3 +74,15 @@ module V2NativeResolve =
 
     /// The `fsgg.board-v2-native-facts/1` document for the planner. Deterministic, compact.
     val encodeNativeFacts: facts: V2Enrollment.NativeFacts -> string
+
+    /// The live head of `main` of `repository` (`owner/name`), by a read-only GET.
+    val readMainHead: get: Get -> repository: string -> Result<string, V2Enrollment.Refusal>
+
+    /// One pull request of `repository`, by a read-only GET.
+    val readPullRequest: get: Get -> repository: string -> number: int -> Result<PullRequest, V2Enrollment.Refusal>
+
+    /// The commit messages of one pull request, joined by blank lines, by a read-only paginated GET. Empty is a failed read.
+    val readPullRequestCommits: get: Get -> repository: string -> number: int -> Result<string, V2Enrollment.Refusal>
+
+    /// Every open pull request of `repository` whose head branch is `headRef`, by a read-only paginated GET.
+    val openPullRequestsFor: get: Get -> repository: string -> headRef: string -> Result<PullRequest list, V2Enrollment.Refusal>
