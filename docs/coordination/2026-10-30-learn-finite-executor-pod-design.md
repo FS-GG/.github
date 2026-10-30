@@ -151,6 +151,12 @@ egress can show:
 - *Spool.* The spool replay shows the installed receiver accepting the retained producer's facts once, with
   receipts and original clocks.
 
+**Relation to the persistent receiver plan.** The receiver in the pod is disposable and uses the published Telemetry Host
+payload. It is not the persistent receiver of the [LEARN C2 persistent receiver v3 plan](../roadmaps/learn-c2-persistent-receiver-v3.md),
+whose v3 image, installation, grants, capture, custody and activation stay open there and are not advanced by this run.
+Accepting facts in the pod shows that the installed Host/Runner output and the receiver contract fit together on the pinned
+bytes. Receiver-first adoption into the real receiver, and its backup and restore evidence, remain that plan's gates.
+
 Not established by this run: production usage, economics, statistical conclusions, adoption into fsgg-store, or
 any fresh-workspace default. The Host-side work is fixture work, not a second production input, and the spool is
 the only production input.
@@ -263,7 +269,7 @@ SystemAdmin Main deployment, and the telemetry drain schedule.
 
 1. **Spool boundary.** `spool/` subtrees only, or whole `passive-*` directories. The drain timer's effect on these
    directories is unverified.
-2. **Producer CLI and receiver version.** Which package drains the spool, and whether Telemetry Host 0.8.0 matches the
+2. **Producer CLI, receiver version and v3 relation.** Which package drains the spool, and whether Telemetry Host 0.8.0 matches the
    receiver fsgg-store runs.
 3. **Seccomp applicability** to PostgreSQL and the single-file .NET apps. Untested.
 4. **Shared `/out` across pod containers** under the finalizer's custody chain, which today archives one container.
