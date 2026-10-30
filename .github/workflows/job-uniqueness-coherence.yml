@@ -50,9 +50,16 @@
 # understand this class of gate rather than two.
 name: job-uniqueness-coherence
 
+# `pull_request.types` is the three GitHub defaults and nothing else (.github#4730, CI load). The gate
+# reads two event fields, `pull_request.base.sha` and `pull_request.head.sha`, and compares git trees at
+# them: it never reads the PR body, title or labels, so `edited`, `labeled` and `unlabeled` could only
+# re-run it, to the same verdict, on a head it had already judged. Each such event cost the whole
+# workflow (2 jobs) on a runner pool that was the binding constraint on delivery. If this gate ever
+# starts reading the body or labels, restore the matching type AND change tests/job-uniqueness/run.sh,
+# which pins both the type list and the set of `github.event.*` fields this file may read.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    types: [opened, synchronize, reopened]
     paths:
       - ".github/workflows/**"
       - "scripts/check-job-uniqueness.py"

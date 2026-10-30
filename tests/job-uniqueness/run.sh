@@ -271,6 +271,53 @@ assert "--required-context contract-coherence" not in body, (
 for jid, j in d["jobs"].items():
     assert isinstance(j.get("timeout-minutes"), int), f"job {jid} does not bound itself (#541)"
 PY
+
+# .github#4730: the trigger list is derived from what the gate READS. It reads base.sha and head.sha and
+# nothing else from the event, so it must not subscribe to body/label edits (`edited`, `labeled`,
+# `unlabeled`), each of which would re-run it for no new information.
+if python3 - "$REPO_ROOT/.github/workflows/job-uniqueness-coherence.yml" <<'PY'
+import re, sys, yaml
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+ALLOWED_FIELDS = {"github.event.pull_request.base.sha", "github.event.pull_request.head.sha"}
+WANTED_TYPES = ["opened", "reopened", "synchronize"]
+
+def verdict(t):
+    """Return the list of reasons this workflow text is not the shape #4730 pinned (empty = clean)."""
+    out = []
+    d = yaml.safe_load(t)
+    on = d.get("on", d.get(True))
+    types = sorted((on.get("pull_request") or {}).get("types") or [])
+    if types != WANTED_TYPES:
+        out.append(f"pull_request.types is {types}, want {WANTED_TYPES}")
+    code = "\n".join(l for l in t.splitlines() if not l.lstrip().startswith("#"))
+    for field in sorted(set(re.findall(r"github\.event\.[A-Za-z0-9_.]+", code)) - ALLOWED_FIELDS):
+        out.append(f"reads {field}, which is outside {sorted(ALLOWED_FIELDS)}")
+    return out
+
+assert verdict(text) == [], f"the shipped workflow is not the pinned shape: {verdict(text)}"
+
+# Causal control: the pin must be able to say NO. Each mutant re-adds one trigger type, or one event
+# field read, and must be refused for that reason.
+mutants = 0
+for extra in ("edited", "labeled", "unlabeled"):
+    m = text.replace("types: [opened, synchronize, reopened]", f"types: [opened, synchronize, reopened, {extra}]", 1)
+    assert m != text
+    v = verdict(m)
+    assert any(f"pull_request.types is" in r and extra in r for r in v), f"adding {extra!r} was not refused: {v}"
+    mutants += 1
+for field in ("body", "title", "labels", "user.login"):
+    m = text.replace("BASE_SHA: ${{ github.event.pull_request.base.sha }}",
+                     "BASE_SHA: ${{ github.event.pull_request.base.sha }}\n          X: ${{ github.event.pull_request.%s }}" % field, 1)
+    assert m != text
+    v = verdict(m)
+    assert any(f"reads github.event.pull_request.{field}" in r for r in v), f"reading {field!r} was not refused: {v}"
+    mutants += 1
+print(f"trigger-pin control: shipped shape clean; {mutants} mutant(s) (3 re-added types, 4 event-field reads) each refused for the right reason")
+PY
+then ok "the shipped job-uniqueness-coherence.yml subscribes only to opened/synchronize/reopened and reads only base.sha/head.sha from the event; 7 mutants (re-added edited/labeled/unlabeled, reads of body/title/labels/user) are each refused"
+else bad "the job-uniqueness-coherence.yml trigger pin (#4730) does not hold, or cannot say NO"
+fi
 then ok "the shipped job-uniqueness-coherence.yml declares no invalid scope, bounds its jobs, diffs the merge-base, wires --required-context, and runs both the gate and this fixture"
 else bad "the shipped job-uniqueness-coherence.yml is not the shape this fixture asserts"
 fi
