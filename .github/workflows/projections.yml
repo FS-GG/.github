@@ -97,6 +97,7 @@ on:
       - ".claude/skills/**"
       - ".agents/skills/**"
       - ".github/workflows/projections.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

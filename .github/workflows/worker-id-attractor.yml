@@ -64,6 +64,7 @@ on:
       - "scripts/check-worker-id-attractor.py"
       - "tests/worker-id-attractor/**"
       - ".github/workflows/worker-id-attractor.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

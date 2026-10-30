@@ -37,6 +37,7 @@ on:
       - "scripts/generate-driver-manifest"
       - "tests/skill-registry/catalog-triggers.json"
       - ".github/workflows/skill-roots-selfcheck.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

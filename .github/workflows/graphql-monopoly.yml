@@ -98,6 +98,7 @@ on:
       - "tests/graphql-monopoly/**"
       - "tests/FS.GG.Coord.GitHub.Tests/**"
       - ".github/workflows/graphql-monopoly.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

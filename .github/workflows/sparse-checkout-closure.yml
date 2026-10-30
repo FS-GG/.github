@@ -42,6 +42,7 @@ on:
       - "scripts/lib/sparse.py"
       - "tests/sparse-checkout-closure/**"
       - ".github/workflows/**"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

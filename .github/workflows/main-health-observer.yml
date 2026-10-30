@@ -1,0 +1,370 @@
+name: main-health-observer
+
+# WHAT PROBLEM THIS SOLVES (Refs #4730)
+# =====================================
+#
+# Three checks were red on main for days and nobody saw them: `skill-registry-coherence` (6 days),
+# `coord-github`/`edge` and `skill-union-bundle`/`skill-union-selftest` (12 days). All three are
+# path-filtered and none is required, so a break caused by a file outside a filter leaves red on main with
+# no run to show it, and a pull-request run is judged against the merge base. This workflow is the net.
+# Nightly, and on dispatch, it
+#
+#   1. calls every path-filtered push check that can run standalone against main, whatever changed
+#      (the `check-*` jobs below: the callee's own jobs run, nothing is copied);
+#   2. reads the latest conclusive push-run and schedule-run conclusion of every workflow that triggers on
+#      push to main or on a schedule (this is what covers canaries such as `v1-writer-census-drift` and
+#      `installation-grants-current`, which need secrets or run on their own schedule);
+#   3. keeps ONE issue, "Main health: FS-GG/.github": opened or rewritten when the set of red workflows
+#      changes, commented once per change, closed when everything is green.
+#
+# It never edits a workflow, a branch or a board field. The design, the derivation of the list and the
+# fail-closed rules are in scripts/main-health-observer.py (read its module docstring first).
+#
+# THE CHECK LIST IS DERIVED, NOT WRITTEN BY HAND
+# ==============================================
+#
+# `python3 scripts/main-health-observer.py plan` parses .github/workflows for push `paths:` filters, drops
+# the workflows that cannot run standalone (secrets, an environment, write permissions, an event payload, a
+# self-hosted runner) and intersects the rest with the workflows that declare `workflow_call:` (the callee's
+# opt-in). The two GENERATED regions below are that intersection, rendered. `plan --check` (run in the
+# selftest on every workflow edit, and again at the start of `main-health-collect`) fails if they differ;
+# `plan --write` regenerates them. GitHub allows at most 50 unique reusable workflows per file.
+#
+# THREE JOBS, THREE CREDENTIALS, NONE ABLE TO DO ANOTHER'S JOB
+# ============================================================
+#
+#   check-*              each holds only the read scopes its callee asks for (contents: read, nothing else).
+#   main-health-collect  holds `actions: read` (run history) and cannot write anything.
+#   main-health-report   holds `issues: write` and nothing else. It never sees run history.
+#
+# FAIL CLOSED
+# ===========
+#
+# `main-health-collect` must run when a check is red, so it carries `!cancelled()` rather than `success()`:
+# a red check is data, not a reason to skip the report. Everything else is the opposite. A caller job that
+# was cancelled or skipped, a missing result, an API error or an unreadable response is recorded as UNKNOWN,
+# and `main-health-report` then leaves the issue untouched and fails the run. A cancelled run (operator, or
+# a concurrent push to main cancelling a callee that shares its concurrency group) skips both later jobs.
+# This workflow can never close the issue about a workflow it did not judge (.github#266).
+#
+# The report job is the only writer, and the only writes are the REST calls on the one issue.
+on:
+  schedule:
+    # After every other scheduled canary (the last is 08:17) so their latest run is the night's run.
+    - cron: "47 8 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Judge everything and print the planned issue action; write nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# One observation at a time; never cancel a running one.
+concurrency:
+  group: main-health-observer
+  cancel-in-progress: false
+
+jobs:
+  # BEGIN GENERATED CHECK JOBS
+  check-adr-coherence:
+    uses: ./.github/workflows/adr-coherence.yml
+    permissions:
+      contents: read
+  check-coherent-set-version:
+    uses: ./.github/workflows/coherent-set-version.yml
+    permissions:
+      contents: read
+  check-coord-github:
+    uses: ./.github/workflows/coord-github.yml
+    permissions:
+      contents: read
+  check-coord-guards:
+    uses: ./.github/workflows/coord-guards.yml
+    permissions:
+      contents: read
+  check-engine-build-determinism:
+    uses: ./.github/workflows/engine-build-determinism.yml
+    permissions:
+      contents: read
+  check-engine-release-notes:
+    uses: ./.github/workflows/engine-release-notes.yml
+    permissions:
+      contents: read
+  check-generator-list:
+    uses: ./.github/workflows/generator-list.yml
+    permissions:
+      contents: read
+  check-graphql-monopoly:
+    uses: ./.github/workflows/graphql-monopoly.yml
+    permissions:
+      contents: read
+  check-harness-identity:
+    uses: ./.github/workflows/harness-identity.yml
+    permissions:
+      contents: read
+  check-ignored-author-coherence:
+    uses: ./.github/workflows/ignored-author-coherence.yml
+    permissions:
+      contents: read
+  check-kit-bump-shape:
+    uses: ./.github/workflows/kit-bump-shape.yml
+    permissions:
+      contents: read
+  check-main-health-observer-selftest:
+    uses: ./.github/workflows/main-health-observer-selftest.yml
+    permissions:
+      contents: read
+  check-org-permission-policy:
+    uses: ./.github/workflows/org-permission-policy.yml
+    permissions:
+      contents: read
+  check-parity-fixtures:
+    uses: ./.github/workflows/parity-fixtures.yml
+    permissions:
+      contents: read
+  check-paths-coherence:
+    uses: ./.github/workflows/paths-coherence.yml
+    permissions:
+      contents: read
+  check-policy:
+    uses: ./.github/workflows/policy.yml
+    permissions:
+      contents: read
+  check-preset-repo-scope-coherence:
+    uses: ./.github/workflows/preset-repo-scope-coherence.yml
+    permissions:
+      contents: read
+  check-preset-resolution:
+    uses: ./.github/workflows/preset-resolution.yml
+    permissions:
+      contents: read
+  check-project-field-options:
+    uses: ./.github/workflows/project-field-options.yml
+    permissions:
+      contents: read
+  check-projections:
+    uses: ./.github/workflows/projections.yml
+    permissions:
+      contents: read
+  check-publish-flags:
+    uses: ./.github/workflows/publish-flags.yml
+    permissions:
+      contents: read
+  check-recipe-followup:
+    uses: ./.github/workflows/recipe-followup.yml
+    permissions:
+      contents: read
+  check-recipe-landable:
+    uses: ./.github/workflows/recipe-landable.yml
+    permissions:
+      contents: read
+  check-recipe-pagination:
+    uses: ./.github/workflows/recipe-pagination.yml
+    permissions:
+      contents: read
+  check-reconcile-concurrency-scope-coherence:
+    uses: ./.github/workflows/reconcile-concurrency-scope-coherence.yml
+    permissions:
+      contents: read
+  check-release-successor-authenticate-source:
+    uses: ./.github/workflows/release-successor-authenticate-source.yml
+    permissions:
+      contents: read
+  check-repo-filter-monopoly:
+    uses: ./.github/workflows/repo-filter-monopoly.yml
+    permissions:
+      contents: read
+  check-required-context-coherence-selftest:
+    uses: ./.github/workflows/required-context-coherence-selftest.yml
+    permissions:
+      contents: read
+  check-retirement-order-coherence:
+    uses: ./.github/workflows/retirement-order-coherence.yml
+    permissions:
+      contents: read
+  check-ship-verdict-provenance:
+    uses: ./.github/workflows/ship-verdict-provenance.yml
+    permissions:
+      contents: read
+  check-skill-registry-coherence:
+    uses: ./.github/workflows/skill-registry-coherence.yml
+    permissions:
+      contents: read
+  check-skill-roots-selfcheck:
+    uses: ./.github/workflows/skill-roots-selfcheck.yml
+    permissions:
+      contents: read
+  check-skill-union-bundle:
+    uses: ./.github/workflows/skill-union-bundle.yml
+    permissions:
+      contents: read
+  check-skill-union-selftest:
+    uses: ./.github/workflows/skill-union-selftest.yml
+    permissions:
+      contents: read
+  check-skill-view-parity:
+    uses: ./.github/workflows/skill-view-parity.yml
+    permissions:
+      contents: read
+  check-skill-view:
+    uses: ./.github/workflows/skill-view.yml
+    permissions:
+      contents: read
+  check-skillmirror-freshness:
+    uses: ./.github/workflows/skillmirror-freshness.yml
+    permissions:
+      contents: read
+  check-source-coherence:
+    uses: ./.github/workflows/source-coherence.yml
+    permissions:
+      contents: read
+  check-sparse-checkout-closure:
+    uses: ./.github/workflows/sparse-checkout-closure.yml
+    permissions:
+      contents: read
+  check-timeout-coherence:
+    uses: ./.github/workflows/timeout-coherence.yml
+    permissions:
+      contents: read
+  check-worker-id-attractor:
+    uses: ./.github/workflows/worker-id-attractor.yml
+    permissions:
+      contents: read
+  # END GENERATED CHECK JOBS
+
+  main-health-collect:
+    name: main-health-collect
+    needs:
+      # BEGIN GENERATED NEEDS
+      - check-adr-coherence
+      - check-coherent-set-version
+      - check-coord-github
+      - check-coord-guards
+      - check-engine-build-determinism
+      - check-engine-release-notes
+      - check-generator-list
+      - check-graphql-monopoly
+      - check-harness-identity
+      - check-ignored-author-coherence
+      - check-kit-bump-shape
+      - check-main-health-observer-selftest
+      - check-org-permission-policy
+      - check-parity-fixtures
+      - check-paths-coherence
+      - check-policy
+      - check-preset-repo-scope-coherence
+      - check-preset-resolution
+      - check-project-field-options
+      - check-projections
+      - check-publish-flags
+      - check-recipe-followup
+      - check-recipe-landable
+      - check-recipe-pagination
+      - check-reconcile-concurrency-scope-coherence
+      - check-release-successor-authenticate-source
+      - check-repo-filter-monopoly
+      - check-required-context-coherence-selftest
+      - check-retirement-order-coherence
+      - check-ship-verdict-provenance
+      - check-skill-registry-coherence
+      - check-skill-roots-selfcheck
+      - check-skill-union-bundle
+      - check-skill-union-selftest
+      - check-skill-view-parity
+      - check-skill-view
+      - check-skillmirror-freshness
+      - check-source-coherence
+      - check-sparse-checkout-closure
+      - check-timeout-coherence
+      - check-worker-id-attractor
+      # END GENERATED NEEDS
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-policy-python
+
+      - name: Create a private scratch directory
+        id: scratch
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$(mktemp -d "$RUNNER_TEMP/main-health.XXXXXX")"
+          chmod 700 "$dir"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+
+      # Judge the fresh runs (from `needs`) and read the latest push and schedule runs. A bounded number of
+      # REST reads: one per push or scheduled workflow, plus one per red run for the failed job names.
+      # Any unjudged check lands in findings.json as UNKNOWN; the report job refuses to act on it.
+      - name: Judge the checks
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCRATCH: ${{ steps.scratch.outputs.dir }}
+          MAIN_HEALTH_NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          python3 scripts/main-health-observer.py collect --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+            --out "$SCRATCH/findings.json" | tee "$SCRATCH/collect.log"
+          {
+            echo '### Main health observation'
+            echo
+            echo '```'
+            cat "$SCRATCH/collect.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the findings for the report job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: main-health-findings
+          path: ${{ steps.scratch.outputs.dir }}/findings.json
+          if-no-files-found: error
+          retention-days: 3
+
+  main-health-report:
+    name: main-health-report
+    needs: main-health-collect
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-policy-python
+
+      - name: Download the findings
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: main-health-findings
+          path: ${{ runner.temp }}/main-health-findings
+
+      - name: Open, update or close the single report issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FINDINGS_DIR: ${{ runner.temp }}/main-health-findings
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          extra=()
+          if [ "$DRY_RUN" = 'true' ]; then
+            extra+=(--dry-run)
+            echo "::notice::dry run: the planned issue action is printed and nothing is written"
+          fi
+          python3 scripts/main-health-observer.py report \
+            --findings "$FINDINGS_DIR/findings.json" --repo "$GITHUB_REPOSITORY" "${extra[@]}"

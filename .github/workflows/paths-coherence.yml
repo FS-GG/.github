@@ -51,6 +51,7 @@ on:
       - "**/*.fsproj"
       - "**/*.csproj"
       - "**/*.vbproj"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

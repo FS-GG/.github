@@ -62,6 +62,7 @@ on:
     # skillmirror-freshness 07:11) so the API reads do not contend. This is the trigger that catches a
     # receiver's tree moving when nothing here changes — the direction the document went stale in.
     - cron: "23 7 * * *"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

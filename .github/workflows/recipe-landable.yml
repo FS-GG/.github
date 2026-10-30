@@ -53,6 +53,7 @@ on:
       # leave the new root ungated on the exact PR that re-grows a copy: the gate would be correct and
       # would never run, which is #266 wearing the fix for #266.
       - ".github/workflows/**"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

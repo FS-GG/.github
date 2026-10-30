@@ -33,6 +33,7 @@ on:
       - "tests/coord-engine-parity/**"
       - "scripts/check-parity-fixtures.py"
       - ".github/workflows/parity-fixtures.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

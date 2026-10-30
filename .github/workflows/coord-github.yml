@@ -126,6 +126,7 @@ on:
       - "Directory.Packages.props"
       - "global.json"
       - ".github/workflows/coord-github.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
