@@ -16,6 +16,7 @@
     <Compile Include="V2InspectionAcquisitionTests.fs" />
     <Compile Include="V2ObservationTransportTests.fs" />
     <Compile Include="V2MigrationTests.fs" />
+    <Compile Include="V2EnrollmentTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
