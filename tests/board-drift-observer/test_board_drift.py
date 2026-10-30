@@ -33,6 +33,16 @@ def load(name: str, filename: str):
 OBS = load("board_drift_observer", "board-drift-observer.py")
 FETCH = load("board_drift_fetch", "board-drift-fetch.py")
 
+TEST_KEY = "unit-test-hmac-key-0123456789abcdef"
+os.environ["BOARD_DRIFT_HMAC_KEY"] = TEST_KEY
+
+
+def analyze(snap, now, **kw):
+    """OBS.analyze with the placeholder key supplied, as the workflow's check step does."""
+    kw.setdefault("hmac_key", TEST_KEY.encode())
+    return OBS.analyze(snap, now, **kw)
+
+
 NOW = dt.datetime(2026, 10, 30, 18, 0, tzinfo=dt.timezone.utc)
 REPO = "FS-GG/.github"
 
@@ -74,7 +84,7 @@ def snapshot(items, prs=(), **kw):
 
 
 def rules(items, prs=(), **kw):
-    return [(f["rule"], f["ref"]) for f in OBS.analyze(snapshot(items, prs), NOW, **kw)]
+    return [(f["rule"], f["ref"]) for f in analyze(snapshot(items, prs), NOW, **kw)]
 
 
 class RuleA(unittest.TestCase):
@@ -105,7 +115,7 @@ class RuleA(unittest.TestCase):
             self.assertEqual(rules([item()], [pr(body=body)]), [], body)
 
     def test_one_finding_per_card_lists_every_pr(self):
-        found = OBS.analyze(snapshot([item()], [pr(900), pr(901, body="Refs #100, #7")]), NOW)
+        found = analyze(snapshot([item()], [pr(900), pr(901, body="Refs #100, #7")]), NOW)
         self.assertEqual([f["rule"] for f in found], ["a"])
         self.assertEqual(found[0]["prs"], [f"{REPO}#900", f"{REPO}#901"])
 
@@ -148,7 +158,7 @@ class RuleD(unittest.TestCase):
         self.assertEqual(rules([item(status=None, state="OPEN")]), [("d", f"{REPO}#100")])
         self.assertEqual(rules([item(track=None)]), [("d", f"{REPO}#100")])
         self.assertEqual(rules([item(workLevel=None)]), [("d", f"{REPO}#100")])
-        found = OBS.analyze(snapshot([item(status=None, track=None, workLevel=None)]), NOW)
+        found = analyze(snapshot([item(status=None, track=None, workLevel=None)]), NOW)
         self.assertEqual(found[0]["missing"], ["Status", "Track", "Work level"])
 
     def test_negative_complete_card(self):
@@ -191,7 +201,7 @@ class RuleE(unittest.TestCase):
         self.assertEqual(rules([item(status="Blocked", comments=[ack, comment(2, hours=2)])]), [("e", f"{REPO}#100")])
 
     def test_one_finding_per_card_keyed_by_newest_ruling(self):
-        found = OBS.analyze(snapshot([item(status="Blocked", comments=[comment(1, hours=3), comment(2, hours=2)])]), NOW)
+        found = analyze(snapshot([item(status="Blocked", comments=[comment(1, hours=3), comment(2, hours=2)])]), NOW)
         self.assertEqual(len(found), 1)
         self.assertTrue(found[0]["key"].endswith("|2"))
 
@@ -256,7 +266,7 @@ class ReportPlan(unittest.TestCase):
     META = {"number": 3, "fetchedAt": "2026-10-30T18:00:00Z", "items": 1}
 
     def findings(self, *numbers):
-        return OBS.analyze(snapshot([item(n, status=None) for n in numbers]), NOW)
+        return analyze(snapshot([item(n, status=None) for n in numbers]), NOW)
 
     def existing(self, findings, state="open"):
         return {"number": 77, "state": state, "body": OBS.render_body(findings, self.META)}
@@ -272,8 +282,8 @@ class ReportPlan(unittest.TestCase):
         self.assertEqual(OBS.plan_report(f, self.existing(f), later)["action"], "noop")
 
     def test_volatile_values_do_not_change_the_set(self):
-        a = OBS.analyze(snapshot([item(status="In progress", statusUpdatedAt=hours_ago(24 * 8), contentUpdatedAt=hours_ago(24 * 8))]), NOW)
-        b = OBS.analyze(snapshot([item(status="In progress", statusUpdatedAt=hours_ago(24 * 9), contentUpdatedAt=hours_ago(24 * 9))]), NOW)
+        a = analyze(snapshot([item(status="In progress", statusUpdatedAt=hours_ago(24 * 8), contentUpdatedAt=hours_ago(24 * 8))]), NOW)
+        b = analyze(snapshot([item(status="In progress", statusUpdatedAt=hours_ago(24 * 9), contentUpdatedAt=hours_ago(24 * 9))]), NOW)
         self.assertEqual(OBS.digest(a), OBS.digest(b))
 
     def test_rewrites_and_comments_once_when_the_set_changes(self):
@@ -316,7 +326,7 @@ class ReportPlan(unittest.TestCase):
         self.assertEqual(plan["action"], "update")
 
     def test_report_text_writes_no_reference_mention_or_closing_keyword(self):
-        f = OBS.analyze(snapshot([item(status=None, title="fixes #12 and @someone")]), NOW)
+        f = analyze(snapshot([item(status=None, title="fixes #12 and @someone")]), NOW)
         body = OBS.render_body(f, self.META)
         marker, text = body.split("-->", 1)
         self.assertNotIn("#", marker.replace("<!-- fsgg:board-drift/v1", ""))
@@ -450,7 +460,7 @@ class FetchFailClosed(FetchHelper, unittest.TestCase):
         self.assertEqual(len(reads), 1)
         self.assertTrue(stub.writes() == [])
         # and the analysis accepts it end to end
-        self.assertEqual([f["rule"] for f in OBS.analyze(snap, dt.datetime.now(dt.timezone.utc))], ["a"])
+        self.assertEqual([f["rule"] for f in analyze(snap, dt.datetime.now(dt.timezone.utc))], ["a"])
 
     def test_a_failed_graphql_call_writes_no_snapshot(self):
         GhStub(self, graphql_pages=[], fail={"graphql": "HTTP 502"})
@@ -548,6 +558,56 @@ class FetchMutantsAndVisibility(FetchHelper, unittest.TestCase):
         reads = [c[1] for c in stub.calls if c[1].startswith("repos/") and c[1].count("/") == 2]
         self.assertEqual(sorted(reads), ["repos/FS-GG/Broken", "repos/FS-GG/Other"])
 
+    def test_a_failed_private_comments_read_publishes_no_repo_number_or_response_text(self):
+        node = gh_item("I1", 4242, "Blocked", hours_ago(5), private=True, repo="FS-GG/Secret.Repo")
+        leak = "HTTP 403 repos/FS-GG/Secret.Repo/issues/4242 SECRET-RESPONSE-BODY"
+        GhStub(self, graphql_pages=[gql_page([node], 1)], fail={"/comments?since=": leak})
+        self.assertEqual(self.fetch()[:2], (1, False))
+        for secret in ("Secret.Repo", "4242", "SECRET-RESPONSE-BODY", "403", "repos/", "issues"):
+            self.assertNotIn(secret, self.stderr)
+        self.assertIn("comments call failed (exit 1)", self.stderr)
+
+    def test_failed_graphql_and_search_calls_name_only_a_label_and_exit_code(self):
+        GhStub(self, graphql_pages=[], fail={"graphql": "HTTP 502 organization(login: FS-GG) SECRET-RESPONSE-BODY"})
+        self.assertEqual(self.fetch()[:2], (1, False))
+        self.assertIn("graphql call failed (exit 1)", self.stderr)
+        self.assertNotIn("SECRET-RESPONSE-BODY", self.stderr)
+        self.assertNotIn("FS-GG", self.stderr)
+        GhStub(self, graphql_pages=self.board(), fail={"search/issues": "HTTP 422 org:FS-GG SECRET-RESPONSE-BODY"})
+        self.assertEqual(self.fetch()[:2], (1, False))
+        self.assertIn("search call failed (exit 1)", self.stderr)
+        self.assertNotIn("SECRET-RESPONSE-BODY", self.stderr)
+
+    def test_graphql_error_text_and_unexpected_exceptions_are_not_echoed(self):
+        errors = json.dumps({"errors": [{"message": "Could not resolve FS-GG/Secret.Repo#4242 SECRET-RESPONSE-BODY"}]})
+        GhStub(self, graphql_pages=[errors])
+        self.assertEqual(self.fetch()[:2], (1, False))
+        for secret in ("Secret.Repo", "4242", "SECRET-RESPONSE-BODY"):
+            self.assertNotIn(secret, self.stderr)
+        bad = json.loads(self.board()[0])
+        bad["data"]["organization"]["projectV2"]["items"]["nodes"] = ["SECRET-RESPONSE-BODY"]
+        GhStub(self, graphql_pages=[json.dumps(bad)])
+        self.assertEqual(self.fetch()[:2], (1, False))
+        self.assertNotIn("SECRET-RESPONSE-BODY", self.stderr)
+        self.assertIn("unexpected", self.stderr)
+
+    def test_the_observer_report_error_also_names_no_response_text(self):
+        GhStub(self, issues=[], fail={"issues?labels=": "HTTP 403 SECRET-RESPONSE-BODY"})
+        err = io.StringIO()
+        with tempfile.TemporaryDirectory() as d, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            f = Path(d, "f.json")
+            f.write_text(json.dumps({"schema": OBS.FINDINGS_SCHEMA, "meta": {}, "findings": [OBS.finding("d", item(), "Track", "t")]}))
+            rc = OBS.main(["report", "--findings", str(f)])
+        self.assertEqual(rc, 1)
+        self.assertNotIn("SECRET-RESPONSE-BODY", err.getvalue())
+
+    def test_a_non_boolean_is_private_value_is_stored_as_unknown(self):
+        nodes = [gh_item("I1", 100, "Ready", hours_ago(5))]
+        for value in ("false", 1, "", None):
+            nodes[0]["content"]["repository"]["isPrivate"] = value
+            GhStub(self, graphql_pages=[gql_page(nodes, 1)])
+            self.assertIsNone(self.fetch()[2]["items"][0]["repoPrivate"], repr(value))
+
     def test_closed_done_complete_cards_get_no_comment_read_but_incomplete_ones_do(self):
         nodes = [gh_item("I1", 100, "Done", hours_ago(5), state="CLOSED"),
                  gh_item("I2", 101, "Done", hours_ago(5), state="CLOSED", track=None)]
@@ -587,7 +647,7 @@ class Privacy(unittest.TestCase):
     """.github is public; Project 3 holds private cards. Nothing private may reach findings, body, logs."""
 
     def published(self, snap, **kw):
-        found = OBS.analyze(snap, NOW, **kw)
+        found = analyze(snap, NOW, **kw)
         with tempfile.TemporaryDirectory() as d:
             sp, out = Path(d, "s.json"), Path(d, "f.json")
             sp.write_text(json.dumps(snap))
@@ -649,14 +709,62 @@ class Privacy(unittest.TestCase):
         self.assertIn(SECRET_TITLE, text)
 
     def test_placeholders_are_stable_so_the_finding_set_dedupes(self):
-        a = [f["key"] for f in OBS.analyze(private_board(True), NOW)]
-        b = [f["key"] for f in OBS.analyze(private_board(True), NOW + dt.timedelta(minutes=5))]
+        a = [f["key"] for f in analyze(private_board(True), NOW)]
+        b = [f["key"] for f in analyze(private_board(True), NOW + dt.timedelta(minutes=5))]
         self.assertEqual(a, b)
 
     def test_reveal_private_is_an_explicit_local_switch(self):
-        found = OBS.analyze(private_board(True), NOW, reveal_private=True)
+        found = analyze(private_board(True), NOW, reveal_private=True)
         self.assertIn(f"{SECRET_REPO}#100", [f["ref"] for f in found])
         self.assertIn(SECRET_TITLE, [f.get("title") for f in found])
+
+    def test_placeholders_are_keyed_not_a_plain_hash(self):
+        import hashlib
+        found = analyze(private_board(True), NOW)
+        raw = f"{SECRET_REPO}#100"
+        plain = "private:" + hashlib.sha256(raw.encode()).hexdigest()[:12]
+        self.assertNotIn(plain, [f["ref"] for f in found])
+        other = analyze(private_board(True), NOW, hmac_key=b"a-different-key-0123456789")
+        self.assertNotEqual([f["ref"] for f in found], [f["ref"] for f in other])
+        self.assertEqual(OBS.opaque(raw, TEST_KEY.encode()), [f["ref"] for f in found if f["rule"] == "a"][0])
+
+    def test_without_a_usable_key_the_check_fails_closed_and_writes_nothing(self):
+        for value in (None, "", "short"):
+            with tempfile.TemporaryDirectory() as d:
+                sp, out = Path(d, "s.json"), Path(d, "f.json")
+                sp.write_text(json.dumps(snapshot([item()])))  # nothing private: the key is still required
+                old = os.environ.pop("BOARD_DRIFT_HMAC_KEY", None)
+                if value is not None:
+                    os.environ["BOARD_DRIFT_HMAC_KEY"] = value
+                try:
+                    err = io.StringIO()
+                    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                        rc = OBS.main(["check", "--snapshot", str(sp), "--out", str(out), "--now", iso_now()])
+                finally:
+                    os.environ["BOARD_DRIFT_HMAC_KEY"] = old if old is not None else TEST_KEY
+                self.assertEqual((rc, out.exists()), (OBS.NO_VERDICT, False), repr(value))
+                self.assertIn("BOARD_DRIFT_HMAC_KEY", err.getvalue())
+
+    def test_reveal_private_needs_no_key_for_local_use(self):
+        found = OBS.analyze(private_board(True), NOW, reveal_private=True)
+        self.assertEqual(len(found), 6)
+
+    def test_urls_are_dropped_for_private_findings_and_kept_for_public_ones(self):
+        private = analyze(private_board(True), NOW)
+        for f in private:
+            self.assertNotIn("commentUrl", f)
+            self.assertNotIn("prUrl", f)
+        self.assertNotIn("https://", json.dumps(private))
+        public = analyze(private_board(False), NOW)
+        self.assertTrue([f for f in public if f["rule"] == "e"][0].get("commentUrl"))
+
+    def test_a_non_boolean_is_private_flag_is_unknown_and_so_private(self):
+        for value in ("false", 0, "", [], {}, None):
+            node = item(100, status=None, title=SECRET_TITLE, repo=SECRET_REPO)
+            node["repoPrivate"] = value
+            found = analyze(snapshot([node]), NOW)
+            self.assertTrue(found[0]["ref"].startswith("private:"), repr(value))
+            self.assertNotIn(SECRET_TITLE, json.dumps(found))
 
     def test_the_workflow_never_passes_reveal_private(self):
         self.assertNotIn("reveal", (ROOT / ".github/workflows/board-drift-observer.yml").read_text())
@@ -716,7 +824,7 @@ class Dispositions(unittest.TestCase):
         self.assertEqual(rules([node]), [])
 
     def test_the_ack_key_is_the_one_printed_on_the_report_line(self):
-        f = OBS.analyze(snapshot([item(track=None)]), NOW)[0]
+        f = analyze(snapshot([item(track=None)]), NOW)[0]
         self.assertEqual(f["ack"], "[board-drift-ack] d:Track")
         self.assertIn("[board-drift-ack] d:Track", OBS.render_body([f], OBS.snapshot_meta(snapshot([item()]))))
 
@@ -739,19 +847,19 @@ class DownRankAndTruncation(unittest.TestCase):
 
     def test_docs_titled_prs_rank_low_and_are_listed_apart(self):
         docs = [pr(900, title="docs(atlas): record"), pr(901, title="docs: more")]
-        found = OBS.analyze(snapshot([item(status="Blocked")], docs), NOW)
+        found = analyze(snapshot([item(status="Blocked")], docs), NOW)
         self.assertEqual([f["rank"] for f in found], ["low"])
         body = OBS.render_body(found, self.META)
         self.assertIn("lower confidence", body.lower())
 
     def test_one_non_docs_pr_keeps_normal_rank_and_documentation_is_not_docs(self):
-        mixed = OBS.analyze(snapshot([item(status="Blocked")], [pr(900, title="docs: x"), pr(901, title="fix: y")]), NOW)
+        mixed = analyze(snapshot([item(status="Blocked")], [pr(900, title="docs: x"), pr(901, title="fix: y")]), NOW)
         self.assertEqual(mixed[0]["rank"], "normal")
-        word = OBS.analyze(snapshot([item(status="Blocked")], [pr(900, title="documentation overhaul")]), NOW)
+        word = analyze(snapshot([item(status="Blocked")], [pr(900, title="documentation overhaul")]), NOW)
         self.assertEqual(word[0]["rank"], "normal")
 
     def big(self, n):
-        return OBS.analyze(snapshot([item(1000 + i, status=None, title="t" * 200) for i in range(n)]), NOW)
+        return analyze(snapshot([item(1000 + i, status=None, title="t" * 200) for i in range(n)]), NOW)
 
     def test_a_huge_finding_set_is_truncated_under_the_issue_limit_with_an_n_more_line(self):
         found = self.big(1000)
@@ -798,7 +906,7 @@ class ReportApply(unittest.TestCase):
         self.assertEqual(len(creates), 1)
         body = json.loads(json.dumps(creates[0]))  # recorded args only; the payload is on stdin
         existing = {"number": 7, "state": "open", "title": OBS.REPORT_TITLE, "labels": [{"name": OBS.REPORT_LABEL}],
-                    "body": OBS.render_body(OBS.analyze(snapshot([item(100, status=None, title="t100")]), NOW),
+                    "body": OBS.render_body(analyze(snapshot([item(100, status=None, title="t100")]), NOW),
                                             {"number": 3, "fetchedAt": "x", "items": 1})}
         stub2, rcs2 = self.run_pipeline(nodes, [existing])
         self.assertEqual(rcs2, [0, 0, 0])
@@ -894,6 +1002,22 @@ class WorkflowShape(unittest.TestCase):
         self.assertNotIn("`report`", header)
         for job in self.doc["jobs"]:
             self.assertIn(f"`{job}`", header)
+
+    def test_only_findings_json_is_uploaded_never_the_scratch_directory(self):
+        uploads = [s for j in self.doc["jobs"].values() for s in j["steps"] if "upload-artifact" in s.get("uses", "")]
+        self.assertEqual(len(uploads), 1)
+        path = uploads[0]["with"]["path"]
+        self.assertTrue(path.endswith("/findings.json") and "\n" not in path, path)
+        self.assertEqual(path, "${{ steps.scratch.outputs.dir }}/findings.json")
+        self.assertNotIn("snapshot", path)
+        self.assertEqual(uploads[0]["with"]["if-no-files-found"], "error")
+
+    def test_the_hmac_key_reaches_only_the_check_step_of_the_read_job(self):
+        read, report = self.doc["jobs"]["board-drift-read"], self.doc["jobs"]["board-drift-report"]
+        holders = [s.get("name") for s in read["steps"] if "BOARD_DRIFT_HMAC_KEY" in json.dumps(s)]
+        self.assertEqual(holders, ["Evaluate the drift rules"])
+        self.assertNotIn("BOARD_DRIFT_HMAC_KEY", json.dumps(report))
+        self.assertEqual(self.text.count("secrets.BOARD_DRIFT_HMAC_KEY"), 1)
 
     def test_the_workflow_writes_no_board_field(self):
         for forbidden in ("item-edit", "updateProjectV2", "mutation", "set-field", "projects: write", "permission-organization-projects: write"):

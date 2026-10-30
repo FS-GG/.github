@@ -92,10 +92,14 @@ jobs:
           set -euo pipefail
           python3 scripts/board-drift-fetch.py --owner FS-GG --project 3 --out "$SCRATCH/snapshot.json"
 
+      # The placeholder key is used here and nowhere else: only this step needs it, and the report job
+      # never sees it. Absent or short, `check` exits NO VERDICT and the run is red (it never falls back
+      # to an unkeyed hash). Create it once: openssl rand -hex 32 | gh secret set BOARD_DRIFT_HMAC_KEY --repo FS-GG/.github
       - name: Evaluate the drift rules
         shell: bash
         env:
           SCRATCH: ${{ steps.scratch.outputs.dir }}
+          BOARD_DRIFT_HMAC_KEY: ${{ secrets.BOARD_DRIFT_HMAC_KEY }}
         run: |
           set -euo pipefail
           python3 scripts/board-drift-observer.py check \

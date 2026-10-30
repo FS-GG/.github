@@ -69,10 +69,20 @@ PRIVACY
 The report is published in a PUBLIC repository, but Project 3 holds cards and PRs from private
 repositories. `repository.isPrivate` is fetched; only an explicit `false` is public. For a private or
 unknown-visibility repository, and for a draft card, the issue body, findings.json and the run summary
-carry only `private:<12 hex of sha256>`: no title, no PR name, no URL, no repo or number. Unknown
-counts as private. A local operator recovers names with the fetch script and `check --reveal-private`.
-(The placeholder is a plain hash of the ref, so it hides the name from a reader but would let someone
-who already guesses a private repo name and number confirm that it is on the board.)
+carry only `private:<12 hex of HMAC-SHA256>`: no title, no PR name, no URL, no repo or number. Unknown
+counts as private. The HMAC key is the repository secret BOARD_DRIFT_HMAC_KEY, used only by the read job's
+`check` step, so a placeholder cannot be recomputed by someone who guesses a private name. With the key
+missing, empty or shorter than 16 bytes `check` exits NO VERDICT (2): it never falls back to an unkeyed
+hash, and it needs the key even when nothing is private. A local operator recovers names with the fetch
+script and `check --reveal-private` (no key needed, output stays local).
+
+Create the secret once, before enabling the workflow (rotating it changes every placeholder, so the next
+run rewrites the issue once):
+
+    openssl rand -hex 32 | gh secret set BOARD_DRIFT_HMAC_KEY --repo FS-GG/.github
+
+Failure messages from the fetch name only a fixed call label and an exit code (graphql, search, comments,
+repo-visibility): never an argv, a repository, a number or response text, because the Actions log is public.
 
 DISPOSITIONS
 ============
@@ -96,6 +106,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -111,6 +122,9 @@ REPORT_REPO = "FS-GG/.github"
 MARKER_PREFIX = "fsgg:board-drift/v1"
 
 NO_VERDICT = 2
+
+HMAC_KEY_ENV = "BOARD_DRIFT_HMAC_KEY"
+MIN_KEY_BYTES = 16
 
 # GitHub rejects an issue body above 65,536 characters; stay well under it and say what was cut.
 BODY_LIMIT = 60000
@@ -189,9 +203,16 @@ def raw_ref(item: dict) -> str:
     return f"draft:{item.get('itemId') or 'unknown'}"
 
 
-def opaque(raw: str) -> str:
-    """A stable placeholder for something that must not be published: no name, no number, no title."""
-    return "private:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+def opaque(raw: str, key: bytes) -> str:
+    """A stable placeholder for something that must not be published: no name, no number, no title.
+    HMAC-SHA256 under a repository secret, so it cannot be recomputed by someone who guesses a name."""
+    return "private:" + hmac.new(key, raw.encode("utf-8"), hashlib.sha256).hexdigest()[:12]
+
+
+def load_key(environ: dict[str, str]) -> bytes | None:
+    """The placeholder key from BOARD_DRIFT_HMAC_KEY, or None when absent or empty."""
+    value = environ.get(HMAC_KEY_ENV, "")
+    return value.encode("utf-8") if value else None
 
 
 def is_public(flag: object) -> bool:
@@ -200,14 +221,14 @@ def is_public(flag: object) -> bool:
     return flag is False
 
 
-def shown_ref(item: dict, reveal: bool) -> str:
+def shown_ref(item: dict, reveal: bool, key: bytes | None) -> str:
     raw = raw_ref(item)
-    return raw if reveal or is_public(item.get("repoPrivate")) else opaque(raw)
+    return raw if reveal or is_public(item.get("repoPrivate")) else opaque(raw, key)
 
 
-def shown_pr(pr: dict, reveal: bool) -> str:
+def shown_pr(pr: dict, reveal: bool, key: bytes | None) -> str:
     raw = f"{pr.get('repo')}#{pr.get('number')}"
-    return raw if reveal or is_public(pr.get("repoPrivate")) else opaque(raw)
+    return raw if reveal or is_public(pr.get("repoPrivate")) else opaque(raw, key)
 
 
 def validate_snapshot(snapshot: object) -> dict:
@@ -228,12 +249,13 @@ def validate_snapshot(snapshot: object) -> dict:
     return snapshot
 
 
-def finding(rule: str, item: dict, extra: str, text: str, *, reveal: bool = False, rank: str = "normal",
+def finding(rule: str, item: dict, extra: str, text: str, *, reveal: bool = False, key: bytes | None = None,
+            rank: str = "normal",
             **more: object) -> dict:
     """One finding. Everything published (ref, title, urls, PR names) goes through the visibility gate
     here, so findings.json, the run summary and the issue body cannot disagree about what is private."""
     public = reveal or is_public(item.get("repoPrivate"))
-    ref = shown_ref(item, reveal)
+    ref = shown_ref(item, reveal, key)
     record = {"rule": rule, "ref": ref, "key": f"{rule}|{ref}|{extra}", "text": text, "rank": rank,
               "ack": f"{ACK_TOKEN} {rule}:{extra}", **more}
     if public and item.get("title"):
@@ -279,12 +301,19 @@ def analyze(
     stale_days: float = 7,
     root_logins: tuple[str, ...] = DEFAULT_ROOT_LOGINS,
     reveal_private: bool = False,
+    hmac_key: bytes | None = None,
 ) -> list[dict]:
     """PURE. Findings for a validated snapshot at `now`, in a stable order.
 
     `reveal_private` exists for a local operator who holds the snapshot and wants real names; the
     workflow never passes it, so published output carries placeholders for private/unknown repos."""
     validate_snapshot(snapshot)
+    # Fail closed: without a usable key there is no safe placeholder, and falling back to an unkeyed
+    # hash would let a reader confirm a guessed private name. Required even when nothing is private.
+    if not reveal_private and (hmac_key is None or len(hmac_key) < MIN_KEY_BYTES):
+        raise NoVerdict(f"{HMAC_KEY_ENV} is missing or shorter than {MIN_KEY_BYTES} bytes: refusing to publish "
+                        "placeholders without a key")
+    hk = hmac_key
     roots = {login.lower() for login in root_logins}
     window = dt.timedelta(hours=pr_window_hours)
     stale = dt.timedelta(days=stale_days)
@@ -309,12 +338,12 @@ def analyze(
             if not value
         ]
         if missing and not acked(acks, "d", ",".join(missing), parse_time(item.get("itemUpdatedAt"))):
-            out.append(finding("d", item, ",".join(missing), "missing " + ", ".join(missing), reveal=rv,
+            out.append(finding("d", item, ",".join(missing), "missing " + ", ".join(missing), reveal=rv, key=hk,
                                missing=missing, status=status))
         if item.get("unreadable"):
             if not acked(acks, "x", "unreadable", parse_time(item.get("itemUpdatedAt"))):
                 out.append(finding("x", item, "unreadable", "content could not be read (null content)",
-                                   reveal=rv, status=status))
+                                   reveal=rv, key=hk, status=status))
             continue
         if not status or state is None:
             continue
@@ -324,10 +353,10 @@ def analyze(
         closed_at = parse_time(item.get("closedAt"))
         b_since = max([t for t in (status_at, closed_at) if t is not None], default=None)
         if closed and status != "Done" and not acked(acks, "b", "closed", b_since):
-            out.append(finding("b", item, "closed", f"{state.lower()} but Status is {status}", reveal=rv,
+            out.append(finding("b", item, "closed", f"{state.lower()} but Status is {status}", reveal=rv, key=hk,
                                status=status, state=state))
         if not closed and status == "Done" and not acked(acks, "b", "open-done", status_at):
-            out.append(finding("b", item, "open-done", "open but Status is Done", reveal=rv,
+            out.append(finding("b", item, "open-done", "open but Status is Done", reveal=rv, key=hk,
                                status=status, state=state))
 
         linked = [p for p in prs_by_ref.get(key, []) if (p.get("repo"), p.get("number")) != key]
@@ -339,7 +368,7 @@ def analyze(
                 changed = parse_time(pr.get("updatedAt"))
                 if pr.get("draft") or changed is None or now - changed > window:
                     continue
-                fresh.append((pr, shown_pr(pr, rv), changed))
+                fresh.append((pr, shown_pr(pr, rv, hk), changed))
             if fresh:
                 extra = "+".join(name for _, name, _ in fresh)
                 if not acked(acks, "a", extra, status_at):
@@ -351,7 +380,7 @@ def analyze(
                         finding("a", item, extra,
                                 f"{status} while open non-draft PR {names} says Refs (newest change {iso(newest)})"
                                 + ("; every PR title starts with docs, lower confidence" if docs_only else ""),
-                                reveal=rv, rank="low" if docs_only else "normal", status=status,
+                                reveal=rv, key=hk, rank="low" if docs_only else "normal", status=status,
                                 prs=[name for _, name, _ in fresh])
                     )
 
@@ -367,7 +396,7 @@ def analyze(
             if (last is None or now - last > stale) and not acked(acks, "c", "idle", now - stale):
                 idle = "no activity signal at all" if last is None else f"last activity {iso(last)}"
                 out.append(finding("c", item, "idle", f"In progress with {idle} (more than {stale_days:g} days)",
-                                   reveal=rv, status=status))
+                                   reveal=rv, key=hk, status=status))
 
         # (e) A first-line ruling/decision-marker heuristic with known precision and recall limits.
         if status != "Done" and not closed and status_at is not None:
@@ -391,7 +420,7 @@ def analyze(
                     finding("e", item, str(last.get("id")),
                             f"{len(pending)} Root ruling comment(s) newer than the Status change ({iso(status_at)}); "
                             f"newest {last.get('id')} at {last.get('createdAt')}",
-                            reveal=rv, status=status, commentUrl=last.get("url"))
+                            reveal=rv, key=hk, status=status, commentUrl=last.get("url"))
                 )
 
     order = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "x": 5}
@@ -567,7 +596,8 @@ def gh_api(args: list[str], payload: dict | None = None, *, allow_status: tuple[
         text = (proc.stdout + proc.stderr).strip()
         if any(s in text for s in allow_status):
             return ""
-        raise RuntimeError(f"gh api {' '.join(args)} failed ({proc.returncode}): {text[:300]}")
+        # Fixed text only: this log is public and a response body is not ours to republish.
+        raise RuntimeError(f"gh api call failed (exit {proc.returncode})")
     return proc.stdout
 
 
@@ -628,7 +658,7 @@ def cmd_check(args: argparse.Namespace) -> int:
             raise NoVerdict(f"--now {args.now!r} is not an ISO timestamp")
         findings = analyze(snapshot, now, pr_window_hours=args.pr_window_hours, stale_days=args.stale_days,
                            root_logins=tuple(args.root_login or DEFAULT_ROOT_LOGINS),
-                           reveal_private=args.reveal_private)
+                           reveal_private=args.reveal_private, hmac_key=load_key(dict(os.environ)))
     except (NoVerdict, OSError, json.JSONDecodeError) as exc:
         print(f"board-drift-observer: NO VERDICT: {exc}", file=sys.stderr)
         return NO_VERDICT

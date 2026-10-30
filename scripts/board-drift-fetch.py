@@ -72,25 +72,34 @@ query($owner:String!,$number:Int!,$cursor:String){
 
 
 class FetchError(Exception):
-    pass
+    """A failed read. The message is built ONLY from fixed text: this runs in a public repository's
+    Actions log, and an argv (`repos/<private>/issues/7/comments`) or a response body would publish a
+    private repository's name, a card number or API text. Never put either in a FetchError."""
 
 
-def gh(args: list[str], *, stdin: str | None = None) -> str:
+# The only call labels a failure may name.
+LABELS = ("graphql", "search", "comments", "repo-visibility")
+
+
+def gh(label: str, args: list[str]) -> str:
+    assert label in LABELS, label
     cmd = [os.environ.get("BOARD_DRIFT_GH", "gh"), *args]
     try:
-        proc = subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=180, check=False)
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise FetchError(f"{' '.join(args[:3])}: {exc}") from exc
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180, check=False)
+    except subprocess.TimeoutExpired as exc:
+        raise FetchError(f"{label} call timed out") from None
+    except OSError as exc:
+        raise FetchError(f"{label} call could not start ({type(exc).__name__})") from None
     if proc.returncode:
-        raise FetchError(f"gh {' '.join(args[:3])} failed ({proc.returncode}): {(proc.stdout + proc.stderr).strip()[:300]}")
+        raise FetchError(f"{label} call failed (exit {proc.returncode})")
     return proc.stdout
 
 
 def ndjson(text: str) -> list[dict]:
     try:
         return [json.loads(line) for line in text.splitlines() if line.strip()]
-    except json.JSONDecodeError as exc:
-        raise FetchError(f"unparseable REST output: {exc}") from exc
+    except json.JSONDecodeError:
+        raise FetchError("comments output is not parseable") from None
 
 
 def fetch_items(owner: str, number: int, max_pages: int) -> tuple[dict, list[dict]]:
@@ -103,11 +112,11 @@ def fetch_items(owner: str, number: int, max_pages: int) -> tuple[dict, list[dic
         if cursor:
             args += ["-f", f"cursor={cursor}"]
         try:
-            response = json.loads(gh(args))
-        except json.JSONDecodeError as exc:
-            raise FetchError(f"GraphQL response is not JSON: {exc}") from exc
+            response = json.loads(gh("graphql", args))
+        except json.JSONDecodeError:
+            raise FetchError("graphql response is not JSON") from None
         if response.get("errors"):
-            raise FetchError(f"GraphQL errors: {json.dumps(response['errors'])[:300]}")
+            raise FetchError("graphql response carries errors")
         node = ((response.get("data") or {}).get("organization") or {}).get("projectV2")
         if not node or not isinstance(node.get("items"), dict):
             raise FetchError("GraphQL response has no organization.projectV2.items (token scope or project number?)")
@@ -132,6 +141,11 @@ def fetch_items(owner: str, number: int, max_pages: int) -> tuple[dict, list[dic
     return project, items
 
 
+def _visibility(value: object) -> bool | None:
+    """Only a real boolean is a visibility; anything else (a string, a number, null) is unknown."""
+    return value if isinstance(value, bool) else None
+
+
 def normalize_item(node: dict) -> dict:
     content = node.get("content")
     status = node.get("status") or {}
@@ -154,7 +168,7 @@ def normalize_item(node: dict) -> dict:
         item.update(
             repo=(content.get("repository") or {}).get("nameWithOwner"),
             # Missing or null stays None: unknown visibility is treated as private downstream.
-            repoPrivate=(content.get("repository") or {}).get("isPrivate"),
+            repoPrivate=_visibility((content.get("repository") or {}).get("isPrivate")),
             number=content.get("number"),
             state=content.get("state"),
             closedAt=content.get("closedAt"),
@@ -170,7 +184,7 @@ def normalize_item(node: dict) -> dict:
 def repo_visibility(repo: str) -> bool | None:
     """True when private, False when public, None when it cannot be told (treated as private)."""
     try:
-        value = json.loads(gh(["api", f"repos/{repo}", "--jq", ".private"]) or "null")
+        value = json.loads(gh("repo-visibility", ["api", f"repos/{repo}", "--jq", ".private"]) or "null")
     except (FetchError, json.JSONDecodeError):
         return None
     return value if isinstance(value, bool) else None
@@ -181,11 +195,11 @@ def fetch_prs(org: str, known: dict[str, bool | None] | None = None) -> list[dic
     prs: list[dict] = []
     page, total = 1, None
     while True:
-        out = gh(["api", f"search/issues?q=org:{org}+is:pr+is:open&per_page=100&page={page}&sort=updated&order=desc"])
+        out = gh("search", ["api", f"search/issues?q=org:{org}+is:pr+is:open&per_page=100&page={page}&sort=updated&order=desc"])
         try:
             doc = json.loads(out)
         except json.JSONDecodeError as exc:
-            raise FetchError(f"PR search response is not JSON: {exc}") from exc
+            raise FetchError("search response is not JSON") from None
         if doc.get("incomplete_results") is not False or not isinstance(doc.get("items"), list):
             raise FetchError("PR search returned incomplete results")
         total = doc.get("total_count")
@@ -219,7 +233,7 @@ def fetch_prs(org: str, known: dict[str, bool | None] | None = None) -> list[dic
 
 
 def fetch_comments(repo: str, number: int, since: str) -> list[dict]:
-    out = gh(["api", f"repos/{repo}/issues/{number}/comments?since={since}&per_page=100", "--paginate", "--jq", ".[]"])
+    out = gh("comments", ["api", f"repos/{repo}/issues/{number}/comments?since={since}&per_page=100", "--paginate", "--jq", ".[]"])
     return [
         {"id": c.get("id"), "author": (c.get("user") or {}).get("login", ""), "createdAt": c.get("created_at"),
          "url": c.get("html_url"), "body": (c.get("body") or "")[:COMMENT_BODY_LIMIT]}
@@ -256,6 +270,9 @@ def main(argv: list[str] | None = None) -> int:
             item["comments"] = fetch_comments(item["repo"], item["number"], since)
     except FetchError as exc:
         print(f"board-drift-fetch: FAILED (no snapshot written): {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:  # noqa: BLE001 - a traceback would print source lines and values
+        print(f"board-drift-fetch: FAILED (no snapshot written): unexpected {type(exc).__name__}", file=sys.stderr)
         return 1
 
     snapshot = {
