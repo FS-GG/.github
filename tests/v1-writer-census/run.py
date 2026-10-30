@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -152,6 +153,122 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
     stale_path.write_text(json.dumps(stale), encoding="utf-8")
     expect_red(run("--census", str(stale_path), "--structural"), "outside the current executable population", "census row for a source that no longer carries a sink reds")
 
+    relabeled = json.loads(json.dumps(base_census))
+    next(row for row in relabeled["sources"] if row["path"] == "tools/routine-delivery.py")["disposition"] = "read-only"
+    relabeled_path = work / "routine-delivery-read-only.json"
+    relabeled_path.write_text(json.dumps(relabeled), encoding="utf-8")
+    expect_red(
+        run("--census", str(relabeled_path), "--structural"),
+        "must remain classified v2-delivery-boundary",
+        "sealed routine delivery cannot be relabeled back to read-only",
+    )
+
+    for omitted_arm in ('"board-v2" :: _', "TelemetryApplication.tryRun"):
+        unlisted_census = json.loads(json.dumps(base_census))
+        unlisted_census["outOfCatalogueRoots"] = [row for row in unlisted_census["outOfCatalogueRoots"] if row["arm"] != omitted_arm]
+        unlisted_path = work / "unlisted-arm.json"
+        unlisted_path.write_text(json.dumps(unlisted_census), encoding="utf-8")
+        expect_red(run("--census", str(unlisted_path), "--structural"), omitted_arm, f"pre-handler arm {omitted_arm} left out of the census reds")
+
+    stale_arm = json.loads(json.dumps(base_census))
+    stale_arm["outOfCatalogueRoots"].append({"arm": '"retired" :: _', "name": "retired", "writes": "never", "justification": "An arm that main no longer dispatches must not linger in the census."})
+    stale_arm_path = work / "stale-arm.json"
+    stale_arm_path.write_text(json.dumps(stale_arm), encoding="utf-8")
+    expect_red(run("--census", str(stale_arm_path), "--structural"), "no longer dispatches", "census arm that main no longer dispatches reds")
+
+    unjustified = json.loads(json.dumps(base_census))
+    unjustified["outOfCatalogueRoots"][0]["justification"] = "ok"
+    unjustified_path = work / "unjustified-arm.json"
+    unjustified_path.write_text(json.dumps(unjustified), encoding="utf-8")
+    expect_red(run("--census", str(unjustified_path), "--structural"), "lacks a specific justification", "pre-handler arm without a justification reds")
+
+    undeclared_kind = json.loads(json.dumps(base_census))
+    next(row for row in undeclared_kind["sources"] if row["path"] == "tests/recipe-landable/run.sh")["sinkKinds"].remove("gh-api-write")
+    undeclared_kind_path = work / "undeclared-kind.json"
+    undeclared_kind_path.write_text(json.dumps(undeclared_kind), encoding="utf-8")
+    expect_red(run("--census", str(undeclared_kind_path), "--structural"), "sink discovery changed", "census row that omits the gh-api-write sink reds")
+
+    # The arm guard reads F# text, so every dispatch spelling a contributor might use must either be listed or
+    # refuse. Each case edits the real Program.fs in a throwaway root and runs the guard on it.
+    checker_spec = importlib.util.spec_from_file_location("v1_writer_census_checker", ROOT / "scripts/check-v1-writer-census.py")
+    checker = importlib.util.module_from_spec(checker_spec)
+    checker_spec.loader.exec_module(checker)
+    real_program = (ROOT / "src/FS.GG.Coord.Cli/Program.fs").read_text(encoding="utf-8")
+    board_arm = '            | "board-v2" :: _ ->\n'
+    outer_match = "            match arguments with\n"
+    skill_dispatch = "                match SkillCommandApplication.tryRun arguments with\n"
+    shape_ok = all(real_program.count(anchor_text) == 1 for anchor_text in (board_arm, outer_match, skill_dispatch))
+    if not shape_ok:
+        bad("arm guard fixtures", "Program.fs dispatch shape moved; update the fixtures")
+
+    def guard(program_text: str) -> str | None:
+        root = work / "guard-root"
+        (root / "src/FS.GG.Coord.Cli").mkdir(parents=True, exist_ok=True)
+        (root / "src/FS.GG.Coord.Cli/Program.fs").write_text(program_text, encoding="utf-8")
+        try:
+            checker.validate_out_of_catalogue(root, base_census)
+        except checker.CensusError as error:
+            return str(error)
+        return None
+
+    def reindent(program_text: str, extra: int) -> str:
+        start = program_text.index("let main argv")
+        end = program_text.index("commandHandlers[opts.Command]", start)
+        body = "\n".join((" " * extra + line) if line.strip() else line for line in program_text[start:end].split("\n"))
+        return program_text[:start] + body + program_text[end:]
+
+    if shape_ok:
+        refused = {
+            "same-line arm body": (board_arm, '            | "same-line" :: _ -> NewApplication.tryRun arguments |> Option.defaultValue ExitError\n' + board_arm, '"same-line" :: _'),
+            "same-line arm body with a guard": (board_arm, '            | "guarded" :: rest when rest.Length > 1 -> ExitError\n' + board_arm, '"guarded" :: rest when rest.Length > 1'),
+            "arm with a trailing comment after the arrow": (board_arm, '            | "commented" :: _ -> // looks harmless\n                ExitError\n' + board_arm, '"commented" :: _'),
+            "arm at an unexpected indent": (board_arm, '        | "shallow" :: _ ->\n            ExitError\n' + board_arm, "unexpected indent"),
+            "stacked or-pattern arm": (board_arm, '            | "stacked-a" :: _\n            | "stacked-b" :: _ ->\n                ExitError\n' + board_arm, '"stacked-a" :: _ | "stacked-b" :: _'),
+            "different dispatcher method name": (skill_dispatch, "                match QuietApplication.tryExecute arguments with\n                | Some code -> code\n                | None ->\n" + skill_dispatch, "QuietApplication.tryExecute"),
+            "dispatcher named run": (skill_dispatch, "                match QuietApplication.run arguments with\n                | Some code -> code\n                | None ->\n" + skill_dispatch, "QuietApplication.run"),
+            "parenthesised dispatcher": (skill_dispatch, "                match (QuietApplication.tryRun) arguments with\n                | Some code -> code\n                | None ->\n" + skill_dispatch, "QuietApplication.tryRun"),
+            "piped dispatcher": (skill_dispatch, "                match arguments |> QuietApplication.tryRun with\n                | Some code -> code\n                | None ->\n" + skill_dispatch, "QuietApplication.tryRun"),
+            "dispatcher on a different argument name": (skill_dispatch, "                match QuietApplication.tryRun argv with\n                | Some code -> code\n                | None ->\n" + skill_dispatch, "QuietApplication.tryRun"),
+            "if-then dispatch before the match": (outer_match, "            if List.contains \"--quiet\" arguments then QuietApplication.run arguments else\n" + outer_match, "QuietApplication.run"),
+            "function-keyword dispatch": (outer_match, "            let route = function | [ \"x\" ] -> 1 | _ -> 0\n" + outer_match, "function"),
+        }
+        for label, (old, replacement, needle) in refused.items():
+            message = guard(real_program.replace(old, replacement, 1))
+            if message is not None and needle in message:
+                ok(f"arm guard refuses: {label}")
+            else:
+                bad(f"arm guard refuses: {label}", repr(message))
+
+        accepted = {
+            "unchanged Program.fs": real_program,
+            "comment-only edits are not dispatch": real_program.replace(board_arm, '            // | "ghost" :: _ -> GhostApplication.tryRun arguments\n            (* QuietApplication.run arguments *)\n' + board_arm, 1),
+            "a different argument name on the outer match": real_program.replace(outer_match, "            match args with\n", 1),
+            "the whole dispatch reindented": reindent(real_program, 4),
+        }
+        for label, program_text in accepted.items():
+            message = guard(program_text)
+            if message is None:
+                ok(f"arm guard accepts: {label}")
+            else:
+                bad(f"arm guard accepts: {label}", message)
+        renamed = real_program.replace(outer_match, "            match args with\n", 1)
+        message = guard(renamed.replace(board_arm, '            | "renamed-arm" :: _ -> NewApplication.run args\n' + board_arm, 1))
+        if message is not None and '"renamed-arm" :: _' in message:
+            ok("arm guard refuses a new same-line arm under a renamed match argument")
+        else:
+            bad("arm guard refuses a new same-line arm under a renamed match argument", repr(message))
+        message = guard(reindent(real_program.replace(board_arm, '            | "late" :: _ -> NewApplication.run arguments\n' + board_arm, 1), 4))
+        if message is not None and '"late" :: _' in message:
+            ok("arm guard refuses a new arm in a reindented dispatch")
+        else:
+            bad("arm guard refuses a new arm in a reindented dispatch", repr(message))
+
+    scanner_pin = json.loads(json.dumps(base_census))
+    scanner_pin["scannerIdentities"][0]["sha256"] = "0" * 64
+    scanner_pin_path = work / "scanner-pin.json"
+    scanner_pin_path.write_text(json.dumps(scanner_pin), encoding="utf-8")
+    expect_red(run("--census", str(scanner_pin_path), "--structural"), "scanner identity changed", "mispinned gh api scanner reds")
+
     clone = work / "repo"
     cloned = subprocess.run(["git", "clone", "--quiet", "--shared", str(ROOT), str(clone)], text=True, capture_output=True, check=False)
     if cloned.returncode != 0:
@@ -161,6 +278,59 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
         subprocess.run(["git", "-C", str(clone), "add", "scripts/dynamic-writer.py"], check=True)
         dynamic = run("--structural", root=clone)
         expect_red(dynamic, "scripts/dynamic-writer.py", "new dynamic writer reds")
+        (clone / "scripts/dynamic-writer.py").unlink()
+        subprocess.run(["git", "-C", str(clone), "rm", "-q", "--cached", "scripts/dynamic-writer.py"], check=True)
+
+        for fixture, label in (
+            ("new-gh-api-field-writer.sh", "implicit POST by field flag (no method flag) reds"),
+            ("new-gh-api-input-writer.sh", "request body by input flag reds"),
+            ("new-gh-api-folded-writer.yml", "field flag on the next line of a folded scalar reds"),
+            ("new-gh-api-graphql-query.sh", "graphql query field needs an explicit row and reds"),
+        ):
+            target = clone / "scripts" / fixture
+            shutil.copy2(FIXTURES / fixture, target)
+            subprocess.run(["git", "-C", str(clone), "add", f"scripts/{fixture}"], check=True)
+            expect_red(run("--structural", root=clone), f"scripts/{fixture}", label)
+            subprocess.run(["git", "-C", str(clone), "rm", "-q", "-f", f"scripts/{fixture}"], check=True)
+
+        shutil.copy2(FIXTURES / "read-only-gh-api.sh", clone / "scripts/read-only-gh-api.sh")
+        subprocess.run(["git", "-C", str(clone), "add", "scripts/read-only-gh-api.sh"], check=True)
+        green = run("--structural", root=clone)
+        if green.returncode == 0:
+            ok("read-only gh api GET, command substitution and pipe stay green")
+        else:
+            bad("read-only gh api GET, command substitution and pipe stay green", green.stderr.strip())
+        subprocess.run(["git", "-C", str(clone), "rm", "-q", "-f", "scripts/read-only-gh-api.sh"], check=True)
+
+        scanner = clone / "scripts/lib/gh_api_scan.py"
+        original_scanner = scanner.read_text(encoding="utf-8")
+        scanner.write_text(original_scanner.replace('READ_ONLY_METHODS = {"GET", "HEAD"}', 'READ_ONLY_METHODS = {"GET", "HEAD", "POST"}'), encoding="utf-8")
+        expect_red(run("--structural", root=clone), "scanner identity changed", "weakened gh api tokeniser reds")
+        scanner.write_text(original_scanner, encoding="utf-8")
+
+        dispatch_scanner = clone / "scripts/lib/fsharp_dispatch_scan.py"
+        original_dispatch_scanner = dispatch_scanner.read_text(encoding="utf-8")
+        dispatch_scanner.write_text(original_dispatch_scanner.replace("(?:try)?(?:run|execute", "(?:try)?(?:runx|execute"), encoding="utf-8")
+        expect_red(run("--structural", root=clone), "scanner identity changed", "weakened arm-dispatch scanner reds")
+        dispatch_scanner.write_text(original_dispatch_scanner, encoding="utf-8")
+
+        program = clone / "src/FS.GG.Coord.Cli/Program.fs"
+        original_program = program.read_text(encoding="utf-8")
+        arm = '            | "board-v2" :: _ ->\n'
+        skill = "                match SkillCommandApplication.tryRun arguments with\n"
+        if original_program.count(arm) != 1 or original_program.count(skill) != 1:
+            bad("new pre-handler arm reds", "Program.fs dispatch shape moved")
+        else:
+            program.write_text(
+                original_program.replace(arm, '            | "new-writer" :: _ ->\n                invoked <- "new-writer"\n                ExitError\n' + arm),
+                encoding="utf-8")
+            expect_red(run("--structural", root=clone), '"new-writer" :: _', "new pre-handler dispatch arm added unlisted reds")
+            program.write_text(
+                original_program.replace(skill, "                match QuietApplication.tryRun arguments with\n                | Some code -> code\n                | None ->\n" + skill),
+                encoding="utf-8")
+            expect_red(run("--structural", root=clone), "QuietApplication.tryRun", "new pre-handler tryRun dispatcher added unlisted reds")
+            program.write_text(original_program, encoding="utf-8")
+            program.write_text(original_program, encoding="utf-8")
 
     unreadable = work / "unreadable.json"
     unreadable.write_text("{", encoding="utf-8")

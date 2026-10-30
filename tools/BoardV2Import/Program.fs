@@ -924,8 +924,6 @@ module private Successor =
         | null | "" -> "gh"
         | value -> value
 
-    let private ghOutputCap = 33554432
-
     let ghGet : V2NativeResolve.Get =
         fun path paginated ->
             match V2NativeResolve.getArguments path paginated with
@@ -940,26 +938,15 @@ module private Successor =
                     info.Environment.["GH_PROMPT_DISABLED"] <- "1"
                     info.Environment.["GH_NO_UPDATE_NOTIFIER"] <- "1"
                     use proc = Diagnostics.Process.Start info
+                    let output = proc.StandardOutput.ReadToEndAsync()
                     let errors = proc.StandardError.ReadToEndAsync()
-                    // Stream the body up to the cap; a response that reaches it is killed, never buffered whole.
-                    use buffer = new MemoryStream()
-                    let chunk = Array.zeroCreate<byte> 65536
-                    let mutable overflow = false
-                    let mutable count = proc.StandardOutput.BaseStream.Read(chunk, 0, chunk.Length)
-                    while count > 0 && not overflow do
-                        if buffer.Length + int64 count > int64 ghOutputCap then overflow <- true
-                        else
-                            buffer.Write(chunk, 0, count)
-                            count <- proc.StandardOutput.BaseStream.Read(chunk, 0, chunk.Length)
-                    if overflow then
-                        (try proc.Kill() with _ -> ())
-                        V2NativeResolve.Failed
-                    elif not (proc.WaitForExit 120000) then
+                    if not (proc.WaitForExit 120000) then
                         (try proc.Kill() with _ -> ())
                         V2NativeResolve.Failed
                     else
+                        output.Wait()
                         errors.Wait()
-                        if proc.ExitCode = 0 then V2NativeResolve.Body(strictUtf8.GetString(buffer.ToArray()))
+                        if proc.ExitCode = 0 then (if output.Result.Length > 33554432 then V2NativeResolve.Failed else V2NativeResolve.Body output.Result)
                         elif errors.Result.Contains "HTTP 404" then V2NativeResolve.NotFound
                         else V2NativeResolve.Failed
                 with _ -> V2NativeResolve.Failed
@@ -1035,22 +1022,19 @@ module private Successor =
             | null | "" -> Path.Combine(Environment.GetFolderPath Environment.SpecialFolder.UserProfile, ".nuget", "packages")
             | value -> value
 
-    // Host MemAvailable, in bytes.
-    let private hostMemAvailable () : V2Preflight.Observed<int64> =
-        try
-            let line = File.ReadAllLines "/proc/meminfo" |> Array.find (fun entry -> entry.StartsWith "MemAvailable:")
-            let m = Regex.Match(line, @"\AMemAvailable:\s+([0-9]+)\s+kB\s*\z")
-            if m.Success then V2Preflight.Known(Int64.Parse m.Groups.[1].Value * 1024L) else V2Preflight.NotObserved V2Preflight.Unreadable
-        with _ -> V2Preflight.NotObserved V2Preflight.Unreadable
-
-    let private protectedMainRepository = "FS-GG/.github"
-
-    let private requiredFor (values: Collections.Generic.Dictionary<string, string>) (names: string list) =
-        if names |> List.exists (fun name -> not (values.ContainsKey name)) then refuse V2Enrollment.MalformedInput
-
-    let private preflightEnrollment (route: V2Preflight.Route) (stage: V2Preflight.Stage) (values: Collections.Generic.Dictionary<string, string>) (online: bool) : int =
-        requiredFor values [ "--request" ]
+    let preflight (args: string array) : int =
+        let values, flags =
+            namedOptional args
+                [ "--route"; "--stage"; "--request"; "--repository" ]
+                [ "--native-facts"; "--runtime-binding"; "--installed-reader"; "--known-readers"; "--lockfile"; "--nuget-cache"
+                  "--main-revision"; "--min-headroom-bytes"; "--churn-window-minutes" ]
+                [ "--online" ]
+        let online = flags.Contains "--online"
         if online = values.ContainsKey "--native-facts" then refuse V2Enrollment.MalformedInput
+        let route =
+            V2Preflight.routes |> List.tryFind (fun route -> V2Preflight.routeCode route = values.["--route"]) |> Option.defaultWith (fun () -> refuse V2Enrollment.MalformedInput)
+        let stage =
+            V2Preflight.stages |> List.tryFind (fun stage -> V2Preflight.stageCode stage = values.["--stage"]) |> Option.defaultWith (fun () -> refuse V2Enrollment.MalformedInput)
         let request = decodeRequestFile values.["--request"]
         let optionalNumber (name: string) (fallback: int64) =
             match values.TryGetValue name with
@@ -1062,36 +1046,30 @@ module private Successor =
         let repository = values.["--repository"]
         let privateJson = observe (fun () -> readText programmeInputLimit request.PredecessorPrivatePath)
         let publicJson = observe (fun () -> protectedPublicBlob repository request.PredecessorMergeSha)
-        // Online: one read-only resolution gives the facts, the Project item inventory and which plan-document
-        // 404s may be invisibility. A failed read leaves those inputs unobserved (ReadFailed), reported as Unknown.
-        let facts, items, hidden =
+        // Online: one read-only resolution gives both the facts and the Project item inventory. A failed
+        // read leaves those inputs unobserved, which the preflight reports as Unknown.
+        let facts, items =
             if online then
                 match privateJson with
                 | V2Preflight.Known json ->
                     match V2Projection.decodeBinding json with
                     | Ok binding when V2Projection.isProgrammeBinding binding ->
                         match V2NativeResolve.resolve ghGet binding request with
-                        | Ok resolved -> V2Preflight.Known(resolved.Facts, V2Preflight.Live), V2Preflight.Known resolved.Items, Set.ofList resolved.HiddenRepositories
-                        | Error _ -> V2Preflight.NotObserved V2Preflight.ReadFailed, V2Preflight.NotObserved V2Preflight.ReadFailed, Set.empty
-                    | _ -> V2Preflight.NotObserved V2Preflight.Unreadable, V2Preflight.NotObserved V2Preflight.Unreadable, Set.empty
-                | V2Preflight.NotObserved kind -> V2Preflight.NotObserved kind, V2Preflight.NotObserved kind, Set.empty
+                        | Ok resolved -> V2Preflight.Known(resolved.Facts, V2Preflight.Live), V2Preflight.Known resolved.Items
+                        | Error _ -> V2Preflight.NotObserved V2Preflight.Incomplete, V2Preflight.NotObserved V2Preflight.Incomplete
+                    | _ -> V2Preflight.NotObserved V2Preflight.Unreadable, V2Preflight.NotObserved V2Preflight.Unreadable
+                | V2Preflight.NotObserved kind -> V2Preflight.NotObserved kind, V2Preflight.NotObserved kind
             else
                 let supplied =
                     match V2Enrollment.decodeNativeFacts (readText 1048576 values.["--native-facts"]) with
                     | Ok facts -> V2Preflight.Known(facts, V2Preflight.Supplied)
                     | Error refusal -> refuse refusal
-                supplied, V2Preflight.NotObserved V2Preflight.NotSupplied, Set.empty
+                supplied, V2Preflight.NotObserved V2Preflight.NotSupplied
         let revision = observe (fun () -> fst (constructorIdentity ()))
-        // The intended main: an asserted revision, else (online) the live head by GET, else the local tracking ref,
-        // which may be stale.
-        let mainRevision, freshness =
+        let mainRevision =
             match values.TryGetValue "--main-revision" with
-            | true, sha -> (if Regex.IsMatch(sha, @"\A[0-9a-f]{40}\z") then V2Preflight.Known sha else refuse V2Enrollment.MalformedInput), V2Preflight.AssertedMain
-            | _ when online ->
-                (match V2NativeResolve.readMainHead ghGet protectedMainRepository with
-                 | Ok sha -> V2Preflight.Known sha
-                 | Error _ -> V2Preflight.NotObserved V2Preflight.ReadFailed), V2Preflight.LiveMain
-            | _ -> observe (fun () -> (gitRun repository [ "rev-parse"; "--verify"; "refs/remotes/origin/main" ] 128).Trim()), V2Preflight.LocalTrackingRef
+            | true, sha -> if Regex.IsMatch(sha, @"\A[0-9a-f]{40}\z") then V2Preflight.Known sha else refuse V2Enrollment.MalformedInput
+            | _ -> observe (fun () -> (gitRun repository [ "rev-parse"; "--verify"; "refs/remotes/origin/main" ] 128).Trim())
         let lockPath = match values.TryGetValue "--lockfile" with | true, path -> path | _ -> Path.Combine(programmePath repository, "tools", "BoardV2Import", "packages.lock.json")
         let lockText = observe (fun () -> readText 1048576 lockPath)
         let locked = match lockText with V2Preflight.Known text -> V2Preflight.lockedContentHash "FSharp.Core" text | V2Preflight.NotObserved kind -> V2Preflight.NotObserved kind
@@ -1108,29 +1086,17 @@ module private Successor =
                     | V2Preflight.Known metadata -> V2Preflight.metadataContentHash metadata
                     | V2Preflight.NotObserved kind -> V2Preflight.NotObserved kind
             | V2Preflight.NotObserved kind -> V2Preflight.NotObserved kind
-        // BindRuntime's own inputs: the successor binding, the merge that delivered it and the public blob at it.
-        let successorPrivate, successorMerge, successorPublic =
-            match values.TryGetValue "--successor-private", values.TryGetValue "--successor-merge-sha" with
-            | (true, path), (true, sha) ->
-                if not (Regex.IsMatch(sha, @"\A[0-9a-f]{40}\z")) then refuse V2Enrollment.MalformedInput
-                observe (fun () -> readText programmeInputLimit path), V2Preflight.Known sha, observe (fun () -> protectedPublicBlob repository sha)
-            | (false, _), (false, _) -> V2Preflight.NotObserved V2Preflight.NotSupplied, V2Preflight.NotObserved V2Preflight.NotSupplied, V2Preflight.NotObserved V2Preflight.NotSupplied
-            | _ -> refuse V2Enrollment.MalformedInput
         let inputs : V2Preflight.EnrollmentInputs =
             { Request = request
               Facts = facts
               ConstructorRevision = revision
               ProtectedMain = mainRevision
-              ProtectedMainFreshness = freshness
               PredecessorPrivate = privateJson
               PredecessorPublic = publicJson
               RuntimeBinding =
                 (match values.TryGetValue "--runtime-binding" with
                  | true, path -> observe (fun () -> readText programmeInputLimit path)
                  | _ -> V2Preflight.NotObserved V2Preflight.NotSupplied)
-              SuccessorPrivate = successorPrivate
-              SuccessorMergeSha = successorMerge
-              SuccessorPublic = successorPublic
               InstalledReaderSha256 =
                 (match values.TryGetValue "--installed-reader" with
                  | true, path -> observe (fun () -> sha256Hex (File.ReadAllBytes(programmePath path)))
@@ -1148,189 +1114,15 @@ module private Successor =
               LockedFSharpCoreHash = locked
               CachedFSharpCoreHash = cached
               MemoryHeadroomBytes = cgroupHeadroom ()
-              HostMemAvailableBytes = hostMemAvailable ()
               MinimumHeadroomBytes = optionalNumber "--min-headroom-bytes" 1073741824L
               PayloadLimitBytes = V2Preflight.payloadLimitBytes
               BindingLimitBytes = V2Preflight.bindingLimitBytes
               ProjectItems = items
-              InvisibleRepositories = hidden
               Now = DateTimeOffset.UtcNow
               ChurnWindow = TimeSpan.FromMinutes(float (optionalNumber "--churn-window-minutes" 10L)) }
         let report = V2Preflight.run route stage inputs
         printfn "%s" (V2Preflight.toJson report)
         V2Preflight.exitCode report.Overall
-
-    let private slugOf (values: Collections.Generic.Dictionary<string, string>) =
-        match values.TryGetValue "--slug" with
-        | true, slug -> if Regex.IsMatch(slug, @"\A[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}\z") then slug else refuse V2Enrollment.MalformedInput
-        | _ -> protectedMainRepository
-
-    // Runs a maintained gate script from the checkout and returns (exit code, stdout, stderr), or None if it could not run.
-    let private runGate (repository: string) (arguments: string list) : (int * string * string) option =
-        try
-            let info = Diagnostics.ProcessStartInfo("python3")
-            for argument in [ "-I"; "-B" ] @ arguments do info.ArgumentList.Add argument
-            info.WorkingDirectory <- repository
-            info.RedirectStandardOutput <- true
-            info.RedirectStandardError <- true
-            info.UseShellExecute <- false
-            use proc = Diagnostics.Process.Start info
-            let output = proc.StandardOutput.ReadToEndAsync()
-            let errors = proc.StandardError.ReadToEndAsync()
-            if not (proc.WaitForExit 120000) then
-                (try proc.Kill() with _ -> ())
-                None
-            else
-                output.Wait()
-                errors.Wait()
-                Some(proc.ExitCode, output.Result, errors.Result)
-        with _ -> None
-
-    let private preflightRoutine (stage: V2Preflight.Stage) (values: Collections.Generic.Dictionary<string, string>) (online: bool) : int =
-        let repository = programmePath values.["--repository"]
-        let slug = slugOf values
-        let defaultBranch = "main"
-        let unobserved kind = V2Preflight.NotObserved kind
-        let localBase () = observe (fun () -> (gitRun repository [ "rev-parse"; "--verify"; "refs/remotes/origin/main" ] 128).Trim())
-        // What the gates read: head ref and sha, base sha, title, body and the commit messages that become the squash message.
-        let candidate, baseForGate, title, body, commits =
-            match values.TryGetValue "--pr" with
-            | true, number ->
-                if not online then unobserved V2Preflight.NotSupplied, None, None, None, None
-                else
-                    let mutable parsed = 0
-                    if not (Int32.TryParse(number, Globalization.NumberStyles.None, Globalization.CultureInfo.InvariantCulture, &parsed)) || parsed < 1 then refuse V2Enrollment.MalformedInput
-                    match V2NativeResolve.readPullRequest ghGet slug parsed with
-                    | Error _ -> unobserved V2Preflight.ReadFailed, None, None, None, None
-                    | Ok pr ->
-                        let commits = match V2NativeResolve.readPullRequestCommits ghGet slug parsed with Ok text -> Some text | Error _ -> None
-                        V2Preflight.Known({ BaseRef = pr.BaseRef; BaseSha = Some pr.BaseSha; HeadRef = pr.HeadRef; HeadSha = pr.HeadSha; State = Some pr.State }: V2Preflight.RoutineCandidate),
-                        Some pr.BaseSha, Some pr.Title, Some pr.Body, commits
-            | _ ->
-                // A candidate not yet opened: the checkout's branch and head, the supplied title and body file, and the
-                // commits between the local tracking ref and the head.
-                requiredFor values [ "--title"; "--body-file" ]
-                let head = observe (fun () -> (gitRun repository [ "rev-parse"; "--abbrev-ref"; "HEAD" ] 256).Trim(), (gitRun repository [ "rev-parse"; "--verify"; "HEAD" ] 128).Trim())
-                let body = try Some(readText 1048576 values.["--body-file"]) with Refused _ -> None
-                let commits = try Some(gitRun repository [ "log"; "--format=%B"; "refs/remotes/origin/main..HEAD" ] 1048576) with Refused _ -> None
-                let baseSha = match localBase () with V2Preflight.Known sha -> Some sha | _ -> None
-                (match head with
-                 | V2Preflight.Known(ref, sha) -> V2Preflight.Known({ BaseRef = defaultBranch; BaseSha = None; HeadRef = ref; HeadSha = sha; State = None }: V2Preflight.RoutineCandidate)
-                 | V2Preflight.NotObserved kind -> unobserved kind), baseSha, Some values.["--title"], body, commits
-        let live, openCount =
-            if online then
-                let live = match V2NativeResolve.readMainHead ghGet slug with Ok sha -> V2Preflight.Known sha | Error _ -> unobserved V2Preflight.ReadFailed
-                let count =
-                    match candidate with
-                    | V2Preflight.Known value ->
-                        (match V2NativeResolve.openPullRequestsFor ghGet slug value.HeadRef with
-                         | Ok list -> V2Preflight.Known list.Length
-                         | Error _ -> unobserved V2Preflight.ReadFailed)
-                    | V2Preflight.NotObserved kind -> V2Preflight.NotObserved kind
-                live, count
-            else unobserved V2Preflight.NotSupplied, unobserved V2Preflight.NotSupplied
-        // The maintained gates are observed, never re-derived. Their inputs go through a private temp directory.
-        let scratch = IO.Directory.CreateTempSubdirectory("v2preflight-")
-        let routineGate, closingGate =
-            try
-                let bodyFile = IO.Path.Combine(scratch.FullName, "body.md")
-                let commitsFile = IO.Path.Combine(scratch.FullName, "commits.txt")
-                (match body with Some text -> IO.File.WriteAllText(bodyFile, text) | None -> ())
-                (match commits with Some text -> IO.File.WriteAllText(commitsFile, text) | None -> ())
-                let routine =
-                    match candidate, baseForGate, body with
-                    | V2Preflight.Known value, Some baseSha, Some _ when Regex.IsMatch(value.HeadRef, @"\Aroutine/[a-z0-9][a-z0-9._-]*\z") ->
-                        (match runGate repository [ "scripts/check-claim-generation.py"; "--repo"; slug; "--head-ref"; value.HeadRef; "--head-sha"; value.HeadSha; "--base-sha"; baseSha; "--routine-policy-ref"; baseSha; "--body"; bodyFile ] with
-                         | Some(0, out, _) when out.Contains "routine delivery admitted" -> V2Preflight.Known V2Preflight.Admitted
-                         | Some(_, _, err) ->
-                            let m = Regex.Match(err, @"FINDING \[([a-z-]{1,40})\]")
-                            if m.Success then V2Preflight.Known(V2Preflight.GateFinding m.Groups.[1].Value) else unobserved V2Preflight.Unreadable
-                         | None -> unobserved V2Preflight.Unreadable)
-                    | V2Preflight.Known _, _, _ -> unobserved V2Preflight.NotEvaluated
-                    | V2Preflight.NotObserved kind, _, _ -> unobserved kind
-                let closing =
-                    match title, body, commits with
-                    | Some t, Some _, Some _ ->
-                        (match runGate repository [ "scripts/check-closing-keywords.py"; "--title=" + t; "--body"; bodyFile; "--commits"; commitsFile ] with
-                         | Some(0, out, _) ->
-                            let declared = Regex.Match(out, @"will close: ([^\r\n]+)")
-                            if declared.Success then V2Preflight.Known(V2Preflight.DeclaredClosing(declared.Groups.[1].Value.Split([| ", " |], StringSplitOptions.RemoveEmptyEntries) |> Array.toList))
-                            elif out.Contains "closes no issue" then V2Preflight.Known V2Preflight.NoClosing
-                            else unobserved V2Preflight.Unreadable
-                         | Some(1, _, _) -> V2Preflight.Known V2Preflight.UndeclaredClosing
-                         | _ -> unobserved V2Preflight.Unreadable)
-                    | _ -> unobserved V2Preflight.Unreadable
-                routine, closing
-            finally
-                (try scratch.Delete true with _ -> ())
-        let report = V2Preflight.runRoutine stage { DefaultBranch = defaultBranch; Candidate = candidate; LiveBaseSha = live; OpenPullRequests = openCount; RoutineGate = routineGate; ClosingGate = closingGate }
-        printfn "%s" (V2Preflight.toJson report)
-        V2Preflight.exitCode report.Overall
-
-    let private preflightPublication (stage: V2Preflight.Stage) (values: Collections.Generic.Dictionary<string, string>) : int =
-        requiredFor values [ "--workflow" ]
-        let repository = programmePath values.["--repository"]
-        let slug = slugOf values
-        let workflowPath = values.["--workflow"]
-        if not (Regex.IsMatch(workflowPath, @"\A\.github/workflows/[A-Za-z0-9._-]{1,100}\.ya?ml\z")) then refuse V2Enrollment.MalformedInput
-        let audit : V2Preflight.Observed<V2Preflight.CoverageAuditResult> =
-            if stage <> V2Preflight.RunWriter then V2Preflight.NotObserved V2Preflight.NotSupplied
-            else
-                // The maintained gate stays authoritative: its result is observed, not re-derived.
-                try
-                    let info = Diagnostics.ProcessStartInfo("python3")
-                    for argument in [ "-I"; "-B"; Path.Combine(repository, "scripts", "check-publication-writer-coverage.py"); "--local" ] do info.ArgumentList.Add argument
-                    info.WorkingDirectory <- repository
-                    info.RedirectStandardOutput <- true
-                    info.RedirectStandardError <- true
-                    info.UseShellExecute <- false
-                    use proc = Diagnostics.Process.Start info
-                    let output = proc.StandardOutput.ReadToEndAsync()
-                    let errors = proc.StandardError.ReadToEndAsync()
-                    if not (proc.WaitForExit 120000) then
-                        (try proc.Kill() with _ -> ())
-                        V2Preflight.NotObserved V2Preflight.Unreadable
-                    else
-                        output.Wait()
-                        errors.Wait()
-                        let summary = Regex.Match(output.Result, @"publication writer coverage: ([0-9]+) unmet")
-                        match proc.ExitCode, summary.Success with
-                        | 0, true when summary.Groups.[1].Value = "0" -> V2Preflight.Known V2Preflight.Clean
-                        | 1, true -> V2Preflight.Known(V2Preflight.Unmet(int summary.Groups.[1].Value))
-                        | _ -> V2Preflight.NotObserved V2Preflight.Unreadable
-                with _ -> V2Preflight.NotObserved V2Preflight.Unreadable
-        let inputs : V2Preflight.PublicationInputs =
-            { Repository = slug
-              WorkflowPath = workflowPath
-              Workflow = observe (fun () -> readText 1048576 (Path.Combine(repository, workflowPath)))
-              Registry = observe (fun () -> readText 1048576 (Path.Combine(repository, "registry", "publication-writers.json")))
-              CoverageAudit = audit }
-        let report = V2Preflight.runPublication stage inputs
-        printfn "%s" (V2Preflight.toJson report)
-        V2Preflight.exitCode report.Overall
-
-    let preflight (args: string array) : int =
-        let values, flags =
-            namedOptional args
-                [ "--route"; "--stage"; "--repository" ]
-                [ "--request"; "--native-facts"; "--runtime-binding"; "--installed-reader"; "--known-readers"; "--lockfile"; "--nuget-cache"
-                  "--main-revision"; "--min-headroom-bytes"; "--churn-window-minutes"; "--successor-private"; "--successor-merge-sha"
-                  "--pr"; "--title"; "--body-file"; "--workflow"; "--slug" ]
-                [ "--online" ]
-        let online = flags.Contains "--online"
-        let route =
-            V2Preflight.routes |> List.tryFind (fun route -> V2Preflight.routeCode route = values.["--route"]) |> Option.defaultWith (fun () -> refuse V2Enrollment.MalformedInput)
-        let stage =
-            V2Preflight.stages |> List.tryFind (fun stage -> V2Preflight.stageCode stage = values.["--stage"]) |> Option.defaultWith (fun () -> refuse V2Enrollment.MalformedInput)
-        match route with
-        | V2Preflight.ProgrammeEnrollmentSuccessor -> preflightEnrollment route stage values online
-        | V2Preflight.RoutineDelivery when stage = V2Preflight.OpenPullRequest || stage = V2Preflight.MergePullRequest -> preflightRoutine stage values online
-        | V2Preflight.PublicationWriterRegistration when stage = V2Preflight.RegisterWriter || stage = V2Preflight.RunWriter -> preflightPublication stage values
-        | _ ->
-            // A route and stage that do not belong together have no registered checks: an explicit Unknown.
-            let report = V2Preflight.unregisteredReport route stage
-            printfn "%s" (V2Preflight.toJson report)
-            V2Preflight.exitCode report.Overall
 
     let run (command: string) (args: string array) =
         try

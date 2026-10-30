@@ -1,0 +1,8 @@
+name: fixture
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: >-
+          gh api repos/FS-GG/FS.GG.SDD/issues
+          -F title=t

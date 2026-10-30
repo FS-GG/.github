@@ -8,10 +8,12 @@ import hashlib
 import json
 import pathlib
 import re
-import shlex
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "scripts" / "lib"))
+from gh_api_scan import gh_api_writes as scan_gh_api_writes  # noqa: E402  (shared with the v1 writer census)
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ORACLE_PATH = ROOT / "tests/producer-fence-attacks/oracle.json"
@@ -60,50 +62,9 @@ FORBIDDEN_PROVIDER_WRITES = (
     r"\bcurl\b[^\n]*\s-X\s+(?:POST|PATCH|PUT|DELETE)\b",
     r"\brepos/[^\s]+/dispatches\b",
 )
-GH_API = re.compile(r"\bgh\s+api\b", re.I)
-SHELL_COMMAND_BOUNDARY = {";", ";;", "&&", "||", "|", "|&", "&", "(", ")"}
-READ_ONLY_METHODS = {"GET", "HEAD"}
-
-
 def gh_api_writes(active: str) -> bool:
-    """True when any `gh api` invocation can send a non-GET request.
-
-    `gh api` is a GET unless it is given a method other than GET, a request body (`--input`), or a
-    field (`-f/-F/--field/--raw-field`, which makes it a POST). Flags may precede or follow the endpoint
-    and an invocation may continue over a backslash-newline, so each invocation is tokenised up to the
-    next shell command boundary. A method whose value is not literally GET or HEAD (for example a
-    variable) is treated as a write: this validator fails closed on what it cannot resolve."""
-    joined = re.sub(r"\\[ \t]*\r?\n", " ", active)
-    for line in joined.splitlines():
-        for match in GH_API.finditer(line):
-            rest = line[match.end():]
-            try:
-                lexer = shlex.shlex(rest, posix=True, punctuation_chars=True)
-                lexer.whitespace_split = True
-                lexer.commenters = ""
-                words = list(lexer)
-            except ValueError:
-                words = [word.strip("\"'") for word in rest.split()]
-            tokens: list[str] = []
-            for word in words:
-                if word in SHELL_COMMAND_BOUNDARY:
-                    break
-                tokens.append(word)
-            for index, token in enumerate(tokens):
-                value: str | None = None
-                if token in ("-X", "--method"):
-                    value = tokens[index + 1] if index + 1 < len(tokens) else ""
-                elif token.startswith("--method="):
-                    value = token[len("--method="):]
-                elif re.fullmatch(r"-X=?.+", token):
-                    value = token[2:].lstrip("=")
-                if value is not None and value.upper() not in READ_ONLY_METHODS:
-                    return True
-                if token in ("--field", "--raw-field", "--input") or re.match(r"--(?:field|raw-field|input)=", token):
-                    return True
-                if re.match(r"-[A-Za-z]*[fF]", token) and not token.startswith("--"):
-                    return True
-    return False
+    """Kit workflow text is YAML, so folded and plain multi-line scalars are joined before scanning."""
+    return scan_gh_api_writes(active, yaml=True)
 
 
 def provider_write_command(active: str) -> bool:
