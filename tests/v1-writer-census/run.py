@@ -140,6 +140,18 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
     wrong_source_path.write_text(json.dumps(wrong_source), encoding="utf-8")
     expect_red(run("--census", str(wrong_source_path), "--structural"), "sealed merge boundary", "sealed routine delivery cannot be relabeled as writable")
 
+    drifted = json.loads(json.dumps(base_census))
+    next(row for row in drifted["sources"] if row["path"] == "global.json")["sha256"] = "0" * 64
+    drifted_path = work / "drifted.json"
+    drifted_path.write_text(json.dumps(drifted), encoding="utf-8")
+    expect_red(run("--census", str(drifted_path), "--structural"), "census source identity changed for global.json", "drifted source identity reds")
+
+    stale = json.loads(json.dumps(base_census))
+    stale["sources"].append({"path": "scripts/vanished-writer.py", "disposition": "read-only", "sinkKinds": [], "sha256": "0" * 64})
+    stale_path = work / "stale.json"
+    stale_path.write_text(json.dumps(stale), encoding="utf-8")
+    expect_red(run("--census", str(stale_path), "--structural"), "outside the current executable population", "census row for a source that no longer carries a sink reds")
+
     clone = work / "repo"
     cloned = subprocess.run(["git", "clone", "--quiet", "--shared", str(ROOT), str(clone)], text=True, capture_output=True, check=False)
     if cloned.returncode != 0:
