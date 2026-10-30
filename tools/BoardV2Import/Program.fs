@@ -659,10 +659,261 @@ let private programmeMain (args: string array) =
         eprintfn "board-v2 programme preparation refused"
         2
 
+// ---- Batched successor enrollment (offline wrappers over FS.GG.Coord.GitHub.V2Enrollment) ----
+// Each subcommand prints a refusal code only: never payload, nonce, native identity, path or input text.
+// A partially created output set is retained on failure; nothing is deleted, retried, reseeded or overwritten.
+module private Successor =
+    open FS.GG.Coord.GitHub
+
+    exception Refused of V2Enrollment.Refusal
+
+    let refuse (refusal: V2Enrollment.Refusal) : 'a = raise (Refused refusal)
+    let strictUtf8 = Text.UTF8Encoding(false, true)
+    let manifestPath = "docs/coordination/board-v2-import-manifest.json"
+    let sha256Hex (bytes: byte array) = Security.Cryptography.SHA256.HashData bytes |> Convert.ToHexStringLower
+
+    // Order-insensitive, exact, duplicate-free named arguments.
+    let named (args: string array) (names: string list) =
+        let rest = args |> Array.skip 1
+        if rest.Length <> names.Length * 2 then refuse V2Enrollment.MalformedInput
+        let pairs = rest |> Array.chunkBySize 2 |> Array.map (fun pair -> pair.[0], pair.[1])
+        if (pairs |> Array.map fst |> Set.ofArray) <> Set.ofList names || pairs.Length <> names.Length then refuse V2Enrollment.MalformedInput
+        Map.ofArray pairs
+
+    let read limit (path: string) =
+        try programmeRead limit (programmePath path) with _ -> refuse V2Enrollment.MalformedInput
+
+    let readText limit (path: string) =
+        let bytes = read limit path
+        try strictUtf8.GetString bytes with _ -> refuse V2Enrollment.MalformedInput
+
+    let distinctPaths (paths: string list) =
+        let comparison = if OperatingSystem.IsWindows() then StringComparer.OrdinalIgnoreCase else StringComparer.Ordinal
+        let full = try paths |> List.map programmePath with _ -> refuse V2Enrollment.MalformedInput
+        if (Collections.Generic.HashSet<string>(full, comparison)).Count <> full.Length then refuse V2Enrollment.MalformedInput
+
+    let outputsAbsent (paths: string list) =
+        for path in paths do
+            let full = try programmePath path with _ -> refuse V2Enrollment.MalformedInput
+            if File.Exists full || Directory.Exists full then refuse V2Enrollment.OutputExists
+
+    let write (path: string) (bytes: byte array) =
+        let full = programmePath path
+        // CreateNew still protects against a collision arriving after the earlier absence check.
+        if File.Exists full || Directory.Exists full then refuse V2Enrollment.OutputExists
+        try
+            programmeWrite full bytes
+            programmeRetained full bytes
+        with _ -> refuse V2Enrollment.MalformedInput
+
+    // The protected public blob is read from the supplied checkout at the exact merge commit.
+    // A fixed argument vector, no shell, bounded output, stderr discarded.
+    let protectedPublicBlob (repository: string) (mergeSha: string) =
+        require (Regex.IsMatch(mergeSha, @"\A[0-9a-f]{40}\z")) "merge sha"
+        let info = Diagnostics.ProcessStartInfo("git")
+        for argument in [ "-C"; programmePath repository; "cat-file"; "blob"; mergeSha + ":" + manifestPath ] do info.ArgumentList.Add argument
+        info.RedirectStandardOutput <- true
+        info.RedirectStandardError <- true
+        info.UseShellExecute <- false
+        info.Environment.["GIT_TERMINAL_PROMPT"] <- "0"
+        use proc = Diagnostics.Process.Start info
+        let errors = proc.StandardError.ReadToEndAsync()
+        use buffer = new MemoryStream()
+        let chunk = Array.zeroCreate<byte> 512
+        let mutable count = proc.StandardOutput.BaseStream.Read(chunk, 0, chunk.Length)
+        while count > 0 && buffer.Length <= 2048L do
+            buffer.Write(chunk, 0, count)
+            count <- proc.StandardOutput.BaseStream.Read(chunk, 0, chunk.Length)
+        if not (proc.WaitForExit 15000) then
+            (try proc.Kill() with _ -> ())
+            refuse V2Enrollment.PredecessorCommitmentMismatch
+        errors.Wait()
+        if proc.ExitCode <> 0 || buffer.Length = 0L || buffer.Length > 2048L then refuse V2Enrollment.PredecessorCommitmentMismatch
+        try strictUtf8.GetString(buffer.ToArray()) with _ -> refuse V2Enrollment.PredecessorCommitmentMismatch
+
+    let decodeRequestFile (path: string) =
+        match V2Enrollment.decodeRequest (readText 1048576 path) with
+        | Ok request -> request
+        | Error refusal -> refuse refusal
+
+    let constructorIdentity () =
+        let assembly = Reflection.Assembly.GetExecutingAssembly()
+        let artifact = File.ReadAllBytes assembly.Location |> sha256Hex
+        let informational = assembly.GetCustomAttributes(typeof<Reflection.AssemblyInformationalVersionAttribute>, false)
+                            |> Seq.cast<Reflection.AssemblyInformationalVersionAttribute> |> Seq.tryExactlyOne
+        let revision =
+            match informational with
+            | Some attribute when attribute.InformationalVersion.Contains "+" -> attribute.InformationalVersion.Substring(attribute.InformationalVersion.LastIndexOf '+' + 1)
+            | _ -> ""
+        if not (Regex.IsMatch(revision, @"\A[0-9a-f]{40}\z")) then refuse V2Enrollment.MalformedInput
+        revision, artifact
+
+    let plan (args: string array) =
+        let a = named args [ "--request"; "--native-facts"; "--repository"; "--template-output"; "--payload-output" ]
+        distinctPaths [ a.["--request"]; a.["--native-facts"]; a.["--template-output"]; a.["--payload-output"] ]
+        outputsAbsent [ a.["--template-output"]; a.["--payload-output"] ]
+        let request = decodeRequestFile a.["--request"]
+        let facts = match V2Enrollment.decodeNativeFacts (readText 1048576 a.["--native-facts"]) with Ok facts -> facts | Error refusal -> refuse refusal
+        distinctPaths [ a.["--request"]; request.PredecessorPrivatePath; a.["--template-output"]; a.["--payload-output"] ]
+        let privateJson = readText programmeInputLimit request.PredecessorPrivatePath
+        let publicJson = protectedPublicBlob a.["--repository"] request.PredecessorMergeSha
+        match V2Enrollment.plan privateJson publicJson request facts with
+        | Error refusal -> refuse refusal
+        | Ok planned ->
+            write a.["--template-output"] (strictUtf8.GetBytes planned.TemplateJson)
+            write a.["--payload-output"] planned.Payload
+            printfn "successor planned; rows=%d appended=%d; offline only" planned.TotalRows planned.Appended.Length
+
+    let prepare (args: string array) =
+        require (programmeDirectorySupported()) "programme private creation unavailable"
+        let a = named args [ "--request"; "--template"; "--payload"; "--private-output"; "--public-output"; "--receipt-output" ]
+        let request = decodeRequestFile a.["--request"]
+        distinctPaths [ a.["--request"]; request.PredecessorPrivatePath; a.["--template"]; a.["--payload"]; a.["--private-output"]; a.["--public-output"]; a.["--receipt-output"] ]
+        outputsAbsent [ a.["--private-output"]; a.["--public-output"]; a.["--receipt-output"] ]
+        let revision, artifact = constructorIdentity ()
+        let predecessorJson = readText programmeInputLimit request.PredecessorPrivatePath
+        let template = readText programmeInputLimit a.["--template"]
+        let payload = read programmePayloadLimit a.["--payload"]
+        match FS.GG.Coord.GitHub.V2Projection.prepareProgrammeBinding template payload
+                  (fun () -> Security.Cryptography.RandomNumberGenerator.GetBytes(32)) with
+        | Error _ -> refuse V2Enrollment.MalformedInput
+        | Ok (privateJson, publicJson) ->
+            let privateBytes = strictUtf8.GetBytes privateJson
+            let publicBytes = strictUtf8.GetBytes publicJson
+            if privateBytes.Length > programmeInputLimit || publicBytes.Length > programmeInputLimit then refuse V2Enrollment.MalformedInput
+            write a.["--private-output"] privateBytes
+            write a.["--public-output"] publicBytes
+            let verdict = V2Enrollment.verifyPair predecessorJson privateJson publicJson
+            let commitment = match V2Projection.decodeProgrammePublicCommitment publicJson with Ok value -> value | Error _ -> refuse V2Enrollment.MalformedInput
+            let receipt = JsonObject()
+            receipt.["schema"] <- JsonValue.Create "fsgg.board-v2-successor-receipt/1"
+            receipt.["cohort"] <- JsonValue.Create request.Cohort
+            receipt.["predecessorMergeSha"] <- JsonValue.Create request.PredecessorMergeSha
+            let rows = JsonObject()
+            rows.["predecessor"] <- JsonValue.Create verdict.PredecessorRows
+            rows.["appended"] <- JsonValue.Create verdict.AppendedRows
+            rows.["total"] <- JsonValue.Create verdict.TotalRows
+            receipt.["rows"] <- rows
+            receipt.["privateSha256"] <- JsonValue.Create(sha256Hex privateBytes)
+            receipt.["publicSha256"] <- JsonValue.Create(sha256Hex publicBytes)
+            receipt.["commitmentSha256"] <- JsonValue.Create commitment
+            let constructor = JsonObject()
+            constructor.["revision"] <- JsonValue.Create revision
+            constructor.["artifactSha256"] <- JsonValue.Create artifact
+            receipt.["constructor"] <- constructor
+            receipt.["prefixPreserved"] <- JsonValue.Create verdict.PrefixPreserved
+            receipt.["headerPreserved"] <- JsonValue.Create verdict.HeaderPreserved
+            receipt.["recomputedCommitment"] <- JsonValue.Create verdict.RecomputedCommitment
+            write a.["--receipt-output"] (strictUtf8.GetBytes(receipt.ToJsonString()))
+            // Independently reread the complete retained pair after every output exists.
+            programmeRetained (programmePath a.["--private-output"]) privateBytes
+            programmeRetained (programmePath a.["--public-output"]) publicBytes
+            if not (verdict.PrefixPreserved && verdict.HeaderPreserved) then refuse V2Enrollment.PrefixNotPreserved
+            if not verdict.RecomputedCommitment then refuse V2Enrollment.PredecessorCommitmentMismatch
+            printfn "successor pair prepared; offline only"
+
+    let bindRuntime (args: string array) =
+        require (programmeDirectorySupported()) "programme private creation unavailable"
+        let a = named args [ "--private-binding"; "--repository"; "--merge-sha"; "--runtime-output" ]
+        distinctPaths [ a.["--private-binding"]; a.["--runtime-output"] ]
+        outputsAbsent [ a.["--runtime-output"] ]
+        let mergeSha = a.["--merge-sha"]
+        if not (Regex.IsMatch(mergeSha, @"\A[0-9a-f]{40}\z")) then refuse V2Enrollment.MalformedInput
+        let privateJson = readText programmeInputLimit a.["--private-binding"]
+        let binding = match V2Projection.decodeBinding privateJson with Ok value -> value | Error _ -> refuse V2Enrollment.MalformedInput
+        let publicJson = protectedPublicBlob a.["--repository"] mergeSha
+        match V2Projection.authenticateProgrammeEnrollment binding publicJson with
+        | Error _ -> refuse V2Enrollment.PredecessorCommitmentMismatch
+        | Ok _ ->
+            // Replace exactly the 40-hex population revision; every other byte is carried over.
+            let needle = "\"populationRevision\":\"" + binding.PopulationRevision + "\""
+            let first = privateJson.IndexOf(needle, StringComparison.Ordinal)
+            if first < 0 || privateJson.IndexOf(needle, first + 1, StringComparison.Ordinal) >= 0 then refuse V2Enrollment.MalformedInput
+            let runtimeJson = privateJson.Substring(0, first) + "\"populationRevision\":\"" + mergeSha + "\"" + privateJson.Substring(first + needle.Length)
+            let strip (json: string) =
+                let node = JsonNode.Parse json
+                node.AsObject().Remove "populationRevision" |> ignore
+                node
+            let runtime = match V2Projection.decodeBinding runtimeJson with Ok value -> value | Error _ -> refuse V2Enrollment.MalformedInput
+            if runtime.PopulationRevision <> mergeSha || not (JsonNode.DeepEquals(strip privateJson, strip runtimeJson))
+               || (V2Projection.authenticateProgrammeEnrollment runtime publicJson |> Result.isError) then refuse V2Enrollment.PredecessorCommitmentMismatch
+            write a.["--runtime-output"] (strictUtf8.GetBytes runtimeJson)
+            printfn "runtime binding written; population revision rebound; offline only"
+
+    let renderCarrier (args: string array) =
+        let a = named args [ "--receipt"; "--output" ]
+        distinctPaths [ a.["--receipt"]; a.["--output"] ]
+        outputsAbsent [ a.["--output"] ]
+        let receipt = try JsonNode.Parse(readText 65536 a.["--receipt"]) with _ -> refuse V2Enrollment.MalformedInput
+        let hex40 (value: string) = Regex.IsMatch(value, @"\A[0-9a-f]{40}\z")
+        let hex64 (value: string) = Regex.IsMatch(value, @"\A[0-9a-f]{64}\z")
+        let rendered =
+            try
+                closedKeys receipt [ "schema"; "cohort"; "predecessorMergeSha"; "rows"; "privateSha256"; "publicSha256"; "commitmentSha256"; "constructor"; "prefixPreserved"; "headerPreserved"; "recomputedCommitment" ]
+                exact receipt "schema" "fsgg.board-v2-successor-receipt/1"
+                let cohort = s receipt "cohort"
+                require (Regex.IsMatch(cohort, @"\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z") && hex40 (s receipt "predecessorMergeSha")) "receipt identity"
+                for name in [ "privateSha256"; "publicSha256"; "commitmentSha256" ] do require (hex64 (s receipt name)) "receipt digest"
+                let rows = receipt.["rows"]
+                closedKeys rows [ "predecessor"; "appended"; "total" ]
+                let predecessor, appended, total = integer rows "predecessor", integer rows "appended", integer rows "total"
+                require (predecessor >= 1 && appended >= 1 && total = predecessor + appended && total <= 100) "receipt counts"
+                let constructor = receipt.["constructor"]
+                closedKeys constructor [ "revision"; "artifactSha256" ]
+                require (hex40 (s constructor "revision") && hex64 (s constructor "artifactSha256")) "receipt constructor"
+                let yes (name: string) = if b receipt name then "yes" else "no"
+                let mergeSha, commitment, publicSha, privateSha = s receipt "predecessorMergeSha", s receipt "commitmentSha256", s receipt "publicSha256", s receipt "privateSha256"
+                let revision, artifact = s constructor "revision", s constructor "artifactSha256"
+                let prefix, header, recomputed = yes "prefixPreserved", yes "headerPreserved", yes "recomputedCommitment"
+                String.concat "\n" [
+                    $"# Batched enrollment successor: {cohort}"
+                    ""
+                    $"This carrier delivers the public commitment of one successor enrollment pair prepared offline by the maintained BoardV2Import constructor (`plan-successor`, `prepare-successor`). It appends {appended} row(s) to the {predecessor} rows of the predecessor, which was the protected commitment at `{mergeSha}`, for {total} rows in total. No identity, order or node id of a predecessor row changes."
+                    ""
+                    "| Fact | Value |"
+                    "|---|---|"
+                    $"| Predecessor rows | {predecessor} |"
+                    $"| Appended rows | {appended} |"
+                    $"| Total rows | {total} |"
+                    $"| Commitment SHA256 | `{commitment}` |"
+                    $"| Public blob SHA256 | `{publicSha}` |"
+                    $"| Private binding SHA256 | `{privateSha}` |"
+                    $"| Constructor source revision | `{revision}` |"
+                    $"| Constructor SHA256 | `{artifact}` |"
+                    $"| Predecessor prefix byte-identical | {prefix} |"
+                    $"| Payload header and binding fields unchanged | {header} |"
+                    $"| Commitment recomputed from the private pair | {recomputed} |"
+                    ""
+                    "The [public manifest](board-v2-import-manifest.json) carries only the two-field commitment document. The private payload, nonce and binding stay outside source."
+                    ""
+                    "After protected review and merge, Root must rebind only the successor private runtime binding's population revision to the actual protected delivery (`bind-runtime`), authenticate the delivered public blob against the pair and qualify the exact installed population read. Offline construction and this carrier grant no native write, implementation admission or enrollment authority."
+                    "" ]
+            with _ -> refuse V2Enrollment.MalformedInput
+        write a.["--output"] (strictUtf8.GetBytes rendered)
+        printfn "carrier rendered from receipt; offline only"
+
+    let run (command: string) (args: string array) =
+        try
+            match command with
+            | "plan-successor" -> plan args
+            | "prepare-successor" -> prepare args
+            | "bind-runtime" -> bindRuntime args
+            | _ -> renderCarrier args
+            0
+        with
+        | Refused refusal ->
+            eprintfn "board-v2 successor refused: %s" (V2Enrollment.refusalCode refusal)
+            2
+        | _ ->
+            eprintfn "board-v2 successor refused: %s" (V2Enrollment.refusalCode V2Enrollment.MalformedInput)
+            2
+
 [<EntryPoint>]
 let main args =
     try
-        if args.Length > 0 && args.[0] = "prepare-programme" then
+        if args.Length > 0 && List.contains args.[0] [ "plan-successor"; "prepare-successor"; "bind-runtime"; "render-carrier" ] then
+            Successor.run args.[0] args
+        elif args.Length > 0 && args.[0] = "prepare-programme" then
             programmeMain args
         elif args.Length = 2 && args.[1] = "--existing-product" then
             let result = existingProduct args.[0]

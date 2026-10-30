@@ -428,3 +428,32 @@ archive, closure or issue-body operation ran. The retired lifecycle writer and s
 archive/bootstrap boundaries are unchanged. This supersedes only the pending native notice gate;
 remaining approved carryover and unselected outcome/consumer authority keep .4 open. No additional
 identity, including SDD#935, is selected. Publication .5 remains complete and .6 separate.
+
+## Batched programme successor preparation — offline planner ([#4941](https://github.com/FS-GG/.github/issues/4941), PR 1)
+
+`tools/BoardV2Import` gains four offline subcommands that replace the per-cohort cloned wrapper scripts. The
+decision logic is the pure planner `FS.GG.Coord.GitHub/V2Enrollment`; the subcommands only read files, call it
+and write outputs with the same exclusive `CreateNew` 0600 custody, directory fsync and readback as
+`prepare-programme`. None performs a native read or write, and none grants enrollment, admission or
+implementation authority.
+
+| Subcommand | Reads | Writes |
+|---|---|---|
+| `plan-successor --request --native-facts --repository --template-output --payload-output` | closed request, read-only native facts, predecessor private pair, protected public blob at the merge sha | successor binding template and payload (private custody) |
+| `prepare-successor --request --template --payload --private-output --public-output --receipt-output` | request, template, payload, predecessor private pair | the successor pair and a closed non-secret `receipt.json` |
+| `bind-runtime --private-binding --repository --merge-sha --runtime-output` | successor private binding, public blob at the merge | runtime binding differing only in the 40 hex bytes of `populationRevision` |
+| `render-carrier --receipt --output` | `receipt.json` only | fixed-template carrier document |
+
+The successor payload is the predecessor payload bytes before its closing `]}`, a comma, the appended rows and the
+closing `]}`: a raw-byte splice, never a re-serialization, so the prefix is exact by construction and is verified
+again independently after the pair exists (`prefixPreserved`, `headerPreserved`, `recomputedCommitment`). A
+Roadmap is generated only from `programmeIssue3008` or `protectedDoc{repo,path}` and must pass the installed
+reader's own plan grammar (`V2ProjectionSource.programmePlanBlobGrammar`, now shared by the reader), which refuses an
+Outcome issue URL before anything is constructed. The planner mirrors the installed 100-row ceiling and does not lift it.
+
+Refusals print one closed code on stderr and never payload, nonce, path or input text: `DuplicateIssue`,
+`AlreadyEnrolled`, `IsPullRequest`, `NodeIdMismatch`, `NotProjectMember`, `RepositoryOutsideBinding`,
+`PredecessorCommitmentMismatch`, `PrefixNotPreserved`, `PlanNotAdmitted`, `PlanBlobAbsentOnMain`, `RowCapExceeded`,
+`ConflictingHumanValue`, `PartialVisibility`, `OutputExists` and `MalformedInput`. The online `resolve-issues`
+step that produces the native facts, the supported-route preflight and engine CLI registration are later
+deliveries of the same issue.
