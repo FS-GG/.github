@@ -95,6 +95,8 @@
     <Compile Include="V2InspectionAcquisition.fs" />
     <Compile Include="V2ProjectionSource.fsi" />
     <Compile Include="V2ProjectionSource.fs" />
+    <Compile Include="V2Enrollment.fsi" />
+    <Compile Include="V2Enrollment.fs" />
     <Compile Include="V2Migration.fsi" />
     <Compile Include="V2Migration.fs" />
     <Compile Include="V2MigrationTransport.fsi" />
