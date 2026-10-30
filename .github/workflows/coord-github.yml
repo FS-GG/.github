@@ -40,6 +40,9 @@ on:
       # tests/producer-fence-attacks/run.py byte-pins every file below (external-route-evidence.json, the
       # census documents, the GS2-08.9 dispositions, the write fixture). Editing one without this job
       # running leaves main red at the next unrelated push (#4965 changed kit-materialize.yml unseen).
+      # tools/routine-delivery.py and scripts/NewSddWorkspace/Program.fs are deliberately NOT listed:
+      # under ADR-0091 run.py treats both as historical-only (HISTORICAL_ONLY_SOURCE_HASHES, and the
+      # `validate_historical_only_source` skip before the current-bytes comparison) and never hashes them.
       - ".github/workflows/dispatch-sender.yml"
       - ".github/workflows/feed-autofix.yml"
       - ".github/workflows/fsgg-dispatch-broker.yml"
@@ -57,10 +60,8 @@ on:
       - ".github/workflows/skill-registry-autofix.yml"
       - ".github/workflows/skillmirror-redrive.yml"
       - ".github/workflows/touch-set-drift.yml"
-      - "scripts/NewSddWorkspace/Program.fs"
       - "scripts/release-saga-ci.sh"
       - "scripts/release-saga-promote-release.sh"
-      - "tools/routine-delivery.py"
       - "docs/coordination/v1-writer-census.json"
       - "docs/coordination/v1-writer-receiver-census.json"
       - "docs/reports/gs2-08-9-release-route-dispositions.json"
@@ -92,6 +93,9 @@ on:
       # tests/producer-fence-attacks/run.py byte-pins every file below (external-route-evidence.json, the
       # census documents, the GS2-08.9 dispositions, the write fixture). Editing one without this job
       # running leaves main red at the next unrelated push (#4965 changed kit-materialize.yml unseen).
+      # tools/routine-delivery.py and scripts/NewSddWorkspace/Program.fs are deliberately NOT listed:
+      # under ADR-0091 run.py treats both as historical-only (HISTORICAL_ONLY_SOURCE_HASHES, and the
+      # `validate_historical_only_source` skip before the current-bytes comparison) and never hashes them.
       - ".github/workflows/dispatch-sender.yml"
       - ".github/workflows/feed-autofix.yml"
       - ".github/workflows/fsgg-dispatch-broker.yml"
@@ -109,10 +113,8 @@ on:
       - ".github/workflows/skill-registry-autofix.yml"
       - ".github/workflows/skillmirror-redrive.yml"
       - ".github/workflows/touch-set-drift.yml"
-      - "scripts/NewSddWorkspace/Program.fs"
       - "scripts/release-saga-ci.sh"
       - "scripts/release-saga-promote-release.sh"
-      - "tools/routine-delivery.py"
       - "docs/coordination/v1-writer-census.json"
       - "docs/coordination/v1-writer-receiver-census.json"
       - "docs/reports/gs2-08-9-release-route-dispositions.json"

@@ -86,6 +86,59 @@ def main() -> None:
         historical, successor_for(write_command), write_command),
         "a provider write command with a matching hash")
 
+    # Every spelling of a `gh api` write is refused with a matching hash, and a read-only GET is not.
+    inject_anchor = b"          dotnet restore \"$RECEIVER_PROJECT\" -v minimal\n"
+    assert source.count(inject_anchor) == 1, "selftest injection anchor moved"
+
+    def with_line(line: str) -> bytes:
+        return source.replace(inject_anchor, ("          " + line + "\n").encode(), 1)
+
+    write_spellings = {
+        "explicit --method POST": "gh api --method POST repos/FS-GG/.github/issues/1/comments",
+        "explicit --method PATCH": "gh api --method PATCH repos/FS-GG/.github/issues/1",
+        "explicit --method PUT": "gh api --method PUT repos/FS-GG/.github/pulls/1/merge",
+        "explicit --method DELETE": "gh api --method DELETE repos/FS-GG/.github/issues/1/labels/x",
+        "lower-case method": "gh api --method post repos/FS-GG/.github/issues/1/comments",
+        "--method=VALUE form": "gh api --method=POST repos/FS-GG/.github/issues/1/comments",
+        "-X DELETE": "gh api -X DELETE repos/FS-GG/.github/issues/1/labels/x",
+        "-XPUT attached": "gh api -XPUT repos/FS-GG/.github/pulls/1/merge",
+        "unresolvable method variable": 'gh api -X "$METHOD" repos/FS-GG/.github/issues/1',
+        "implicit POST via -f": "gh api repos/FS-GG/.github/issues -f title=x",
+        "implicit POST via -F": "gh api repos/FS-GG/.github/issues -F title=x",
+        "attached -ftitle=x": "gh api repos/FS-GG/.github/issues -ftitle=x",
+        "implicit POST via --field": "gh api repos/FS-GG/.github/issues --field title=x",
+        "implicit POST via --raw-field": "gh api repos/FS-GG/.github/issues --raw-field title=x",
+        "--field=VALUE form": "gh api repos/FS-GG/.github/issues --field=title=x",
+        "request body via --input -": "gh api repos/FS-GG/.github/issues --input -",
+        "request body via --input FILE": "gh api repos/FS-GG/.github/issues --input payload.json",
+        "flag before the endpoint": "gh api -f title=x repos/FS-GG/.github/issues",
+        "flag after a quoted jq pipe": "gh api repos/FS-GG/.github/pulls/1 --jq '.a | .b' -f title=x",
+        "quoted flag word": 'gh api "-f" title=x repos/FS-GG/.github/issues',
+        "flag on a continuation line": "gh api repos/FS-GG/.github/issues \\\n          --method POST",
+        "write after a redirection": "gh api repos/FS-GG/.github/issues > /dev/null -f title=x",
+        "graphql with fields": "gh api graphql -f query='mutation{x}'",
+    }
+    for label, line in write_spellings.items():
+        mutated = with_line(line)
+        must_fail(lambda mutated=mutated: validator.validate_kit_read_only_successor(
+            historical, successor_for(mutated), mutated), f"a gh api write ({label}) with a matching hash")
+
+    read_only_spellings = {
+        "plain GET": "gh api repos/FS-GG/.github/pulls/1",
+        "explicit --method GET": "gh api --method GET repos/FS-GG/.github/pulls/1",
+        "-X GET": "gh api -X GET repos/FS-GG/.github/pulls/1",
+        "paginated GET with a pipe inside the jq filter": "gh api --paginate repos/FS-GG/.github/pulls/1/commits --jq '.[] | .sha'",
+        "header, redirection and a following command": "gh api --header 'Accept: application/vnd.github+json' repos/FS-GG/.github/pulls/1 > pr.json 2>&1 && git log -f",
+        "a field flag on a different command after a boundary": "gh api repos/FS-GG/.github/pulls/1 ; curl -f https://example.invalid",
+        "GET continued over a line": "gh api repos/FS-GG/.github/pulls/1 \\\n          --jq .number",
+    }
+    for label, line in read_only_spellings.items():
+        accepted = with_line(line)
+        try:
+            validator.validate_kit_read_only_successor(historical, successor_for(accepted), accepted)
+        except SystemExit as error:
+            raise SystemExit(f"producer-fence-validator-selftest: refused a read-only gh api GET ({label}): {error}")
+
     with tempfile.TemporaryDirectory() as temporary:
         temp = pathlib.Path(temporary)
         trx = temp / "evidence.trx"
