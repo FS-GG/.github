@@ -97,6 +97,12 @@
     <Compile Include="V2ProjectionSource.fs" />
     <Compile Include="V2Enrollment.fsi" />
     <Compile Include="V2Enrollment.fs" />
+    <Compile Include="V2Custody.fsi" />
+    <Compile Include="V2Custody.fs" />
+    <Compile Include="V2NativeResolve.fsi" />
+    <Compile Include="V2NativeResolve.fs" />
+    <Compile Include="V2Preflight.fsi" />
+    <Compile Include="V2Preflight.fs" />
     <Compile Include="V2Migration.fsi" />
     <Compile Include="V2Migration.fs" />
     <Compile Include="V2MigrationTransport.fsi" />

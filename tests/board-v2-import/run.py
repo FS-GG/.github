@@ -821,10 +821,13 @@ class SuccessorEnrollmentTests(unittest.TestCase):
         self.assertEqual(f'board-v2 successor refused: {code}\n', result.stderr)
         self.assertNotIn(self.SENTINEL, result.stdout + result.stderr)
 
-    def prepare(self, out, fixture=None, request=None, name='pair'):
+    def prepare(self, out, fixture=None, request=None, name='pair', facts=None):
         fixture = fixture or self.fixture
         (out / 'request.json').write_bytes(self.wire(request or self.request(fixture)))
-        return self.run_cli('prepare-successor', '--request', out/'request.json', '--template', out/'template.json', '--payload', out/'payload.json',
+        if facts is not None:
+            (out / 'facts.json').write_bytes(self.wire(facts))
+        return self.run_cli('prepare-successor', '--request', out/'request.json', '--native-facts', out/'facts.json', '--repository', fixture['repository'],
+                            '--template', out/'template.json', '--payload', out/'payload.json',
                             '--private-output', out/(name+'-private.json'), '--public-output', out/(name+'-public.json'), '--receipt-output', out/(name+'-receipt.json'))
 
     def expected_fragment(self, fixture):
@@ -953,8 +956,7 @@ class SuccessorEnrollmentTests(unittest.TestCase):
         other = self.make_predecessor('other', 5)
         mismatch = self.request(); mismatch['predecessor']['mergeSha'] = other['merge']
         result, out = self.plan(mismatch, name='mismatch')
-        self.assertEqual(2, result.returncode)  # same working repository does not contain that commit either way
-        self.assertEqual('board-v2 successor refused: PredecessorCommitmentMismatch\n', result.stderr)
+        self.refused(result, 'GitReadFailed')  # that commit is not in this repository: a failed read, not a mismatch
         swapped = self.request(); swapped['predecessor']['privatePath'] = str(other['private'])
         self.assert_refusal('PredecessorCommitmentMismatch', swapped)
         # PrefixNotPreserved: a predecessor payload that cannot be spliced (trailing newline after the closing)
@@ -1013,10 +1015,17 @@ class SuccessorEnrollmentTests(unittest.TestCase):
                 self.assertEqual(self.SENTINEL.encode(), (out / retained).read_bytes())
                 self.assertEqual({retained}, {n for n in ['pair-private.json', 'pair-public.json', 'pair-receipt.json'] if (out / n).exists()})
 
-    def test_prefix_mutations_are_detected_by_independent_receipt_booleans(self):
+    PAIR = ['pair-private.json', 'pair-public.json', 'pair-receipt.json']
+
+    def assert_nothing_prepared(self, out):
+        self.assertEqual([], [n for n in self.PAIR if (out / n).exists()])
+
+    def test_prefix_and_template_mutations_are_refused_before_any_output_exists(self):
+        """O1: the supplied template and payload are untrusted; they must equal the planner's own re-derivation."""
         result, out = self.plan()
         self.assertEqual(0, result.returncode, result.stderr)
         original = (out / 'payload.json').read_bytes()
+        original_template = (out / 'template.json').read_bytes()
         prefix_end = len(self.fixture['payload']) - 2
         positions = {'first old roadmap': original.index(b'old-') + 1, 'last old roadmap': original.rindex(b'old-', 0, prefix_end) + 1,
                      'last prefix byte before the closing object': prefix_end - 3}
@@ -1026,31 +1035,332 @@ class SuccessorEnrollmentTests(unittest.TestCase):
                 self.assertLess(position, prefix_end)
                 mutated[position] = ord('Q') if mutated[position] != ord('Q') else ord('R')
                 (out / 'payload.json').write_bytes(bytes(mutated))
-                for name in ['pair-private.json', 'pair-public.json', 'pair-receipt.json']:
-                    if (out / name).exists(): (out / name).unlink()
-                # Every mutation stays a valid enrollment, so only the independent prefix check can catch it.
                 self.refused(self.prepare(out), 'PrefixNotPreserved')
-                receipt = json.loads((out / 'pair-receipt.json').read_bytes())
-                self.assertEqual([False, True, True], [receipt['prefixPreserved'], receipt['headerPreserved'], receipt['recomputedCommitment']])
+                self.assert_nothing_prepared(out)
         # A repository reorder keeps the payload valid: header bytes differ, rows are identical.
         reordered = original.replace(b'"repositories":["FS-GG/.github","FS-GG/FS.GG.Templates"]', b'"repositories":["FS-GG/FS.GG.Templates","FS-GG/.github"]')
         self.assertNotEqual(original, reordered)
         (out / 'payload.json').write_bytes(reordered)
-        for name in ['pair-private.json', 'pair-public.json', 'pair-receipt.json']:
-            if (out / name).exists(): (out / name).unlink()
         self.refused(self.prepare(out), 'PrefixNotPreserved')
-        receipt = json.loads((out / 'pair-receipt.json').read_bytes())
-        self.assertEqual([False, False, True], [receipt['prefixPreserved'], receipt['headerPreserved'], receipt['recomputedCommitment']])
+        self.assert_nothing_prepared(out)
         # A template that drifts any binding field other than the selected issues and population revision.
         (out / 'payload.json').write_bytes(original)
-        template = json.loads((out / 'template.json').read_bytes())
+        template = json.loads(original_template)
         template['status']['options']['Ready'] = 'synthetic-drifted-option-id'
         (out / 'template.json').write_bytes(self.wire(template))
-        for name in ['pair-private.json', 'pair-public.json', 'pair-receipt.json']:
-            if (out / name).exists(): (out / name).unlink()
-        self.refused(self.prepare(out), 'PrefixNotPreserved')
-        receipt = json.loads((out / 'pair-receipt.json').read_bytes())
-        self.assertEqual([True, False, True], [receipt['prefixPreserved'], receipt['headerPreserved'], receipt['recomputedCommitment']])
+        self.refused(self.prepare(out), 'SuccessorNotRederived')
+        self.assert_nothing_prepared(out)
+        # Causal control: restoring exactly the derived bytes is accepted, so the re-derivation caused every refusal above.
+        (out / 'template.json').write_bytes(original_template)
+        accepted = self.prepare(out)
+        self.assertEqual(0, accepted.returncode, accepted.stderr)
+
+    def test_hand_edited_appended_rows_are_refused_and_the_old_behaviour_would_have_reached_a_commitment(self):
+        """O1 causal: each edited payload is accepted by the installed constructor (prepare-programme) and refused by prepare-successor."""
+        result, out = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        payload = (out / 'payload.json').read_bytes()
+        template = (out / 'template.json').read_bytes()
+        outcome_url = b'"roadmap":"https://github.com/FS-GG/.github/issues/4930"'
+        cases = {
+            'PlanNotAdmitted': (payload.replace(b'"roadmap":"https://github.com/FS-GG/.github/issues/3008"', outcome_url), template),
+            'NodeIdMismatch': (payload.replace(f'I_synthetic_{self.SENTINEL}_new1'.encode(), b'I_synthetic_other'),
+                               template.replace(f'I_synthetic_{self.SENTINEL}_new1'.encode(), b'I_synthetic_other')),
+            'SuccessorNotRederived': (payload.replace(b'},{"issue":"FS-GG/FS.GG.Templates#80002"', b'}, {"issue":"FS-GG/FS.GG.Templates#80002"'), template),
+        }
+        for code, (edited_payload, edited_template) in cases.items():
+            with self.subTest(code=code):
+                self.assertNotEqual(payload, edited_payload)
+                (out / 'payload.json').write_bytes(edited_payload)
+                (out / 'template.json').write_bytes(edited_template)
+                # Positive leg: the unchanged installed constructor turns the very same bytes into a commitment.
+                legacy = self.run_cli('prepare-programme', '--binding-template', out/'template.json', '--payload', out/'payload.json',
+                                      '--private-output', out/f'legacy-{code}-private.json', '--public-output', out/f'legacy-{code}-public.json')
+                self.assertEqual(0, legacy.returncode, legacy.stderr)
+                self.assertTrue((out / f'legacy-{code}-public.json').exists())
+                # Negative leg: the successor route refuses before creating anything.
+                self.refused(self.prepare(out), code)
+                self.assert_nothing_prepared(out)
+
+    def test_facts_that_no_longer_support_the_inputs_refuse_prepare(self):
+        result, out = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.refused(self.prepare(out, facts=self.facts(planBlobs=[])), 'PlanBlobAbsentOnMain')
+        self.refused(self.prepare(out, facts=self.facts_issue(1, projectMember=False)), 'NotProjectMember')
+        self.assert_nothing_prepared(out)
+        self.assertEqual(0, self.prepare(out, facts=self.facts()).returncode)
+
+    def test_error_codes_are_split_by_cause(self):
+        """O2: input-unreadable, custody-unavailable and git-read-failed are distinct from malformed input and mismatch."""
+        result, out = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        run = lambda **c: self.run_cli('plan-successor', '--request', c.get('request', out/'request.json'), '--native-facts', c.get('facts', out/'facts.json'),
+                                       '--repository', c.get('repository', self.fixture['repository']),
+                                       '--template-output', c.get('template', out/'o-template.json'), '--payload-output', c.get('payload', out/'o-payload.json'))
+        # InputUnreadable: absent, oversize and linked input files.
+        self.refused(run(facts=out/'missing.json'), 'InputUnreadable')
+        (out / 'big.json').write_bytes(b' ' * (1048576 + 1))
+        self.refused(run(facts=out/'big.json'), 'InputUnreadable')
+        self.refused(self.run_cli('prepare-successor', '--request', out/'request.json', '--native-facts', out/'facts.json', '--repository', self.fixture['repository'],
+                                  '--template', out/'template.json', '--payload', out/'missing-payload.json',
+                                  '--private-output', out/'a.json', '--public-output', out/'b.json', '--receipt-output', out/'c.json'), 'InputUnreadable')
+        # Undecodable content is still MalformedInput, not InputUnreadable.
+        (out / 'garbage.json').write_bytes(b'\xff\xfe')
+        self.refused(run(facts=out/'garbage.json'), 'MalformedInput')
+        # GitReadFailed: a repository that is not a repository, and a merge sha it does not contain.
+        not_repo = self.dir / 'not-a-repo'
+        not_repo.mkdir()
+        self.refused(run(repository=not_repo), 'GitReadFailed')
+        self.refused(run(repository=self.dir / 'absent-repo'), 'GitReadFailed')
+        # ...whereas a blob that is read and does not authenticate remains a commitment mismatch.
+        other = self.make_predecessor('other-split', 5)
+        swapped = self.request(); swapped['predecessor']['privatePath'] = str(other['private'])
+        self.assert_refusal('PredecessorCommitmentMismatch', swapped)
+        # CustodyUnavailable: the output directory cannot take a new file.
+        if os.name != 'nt' and os.geteuid() != 0:
+            locked = self.dir / 'locked'
+            locked.mkdir()
+            locked.chmod(0o500)
+            try:
+                self.refused(run(template=locked/'t.json', payload=locked/'p.json'), 'CustodyUnavailable')
+                self.assertEqual([], list(locked.iterdir()))
+            finally:
+                locked.chmod(0o700)
+
+    def test_a_linked_output_path_is_refused_as_custody_and_creates_nothing(self):
+        """The CreateNew race itself is controlled in the F# custody tests, where it can be made deterministic."""
+        if os.name == 'nt':
+            self.skipTest('symbolic links')
+        result, out = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        race = out / 'race-template.json'
+        race.symlink_to(out / 'nowhere-at-all')
+        again = self.run_cli('plan-successor', '--request', out/'request.json', '--native-facts', out/'facts.json', '--repository', self.fixture['repository'],
+                             '--template-output', race, '--payload-output', out/'race-payload.json')
+        self.refused(again, 'CustodyUnavailable')
+        self.assertTrue(race.is_symlink())
+        self.assertFalse((out / 'nowhere-at-all').exists())
+        self.assertFalse((out / 'race-payload.json').exists())
+
+    FAKE_GH = """#!/usr/bin/env python3
+import json, os, sys
+argv = sys.argv[1:]
+with open(os.environ['FAKE_GH_LOG'], 'a') as log:
+    log.write(json.dumps(argv) + '\\n')
+routes = json.load(open(os.environ['FAKE_GH_ROUTES']))
+path = argv[-1]
+for prefix, body in routes:
+    if path == prefix or path.startswith(prefix):
+        if body is None:
+            sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
+        if body == 'FAIL':
+            sys.stderr.write('gh: boom (HTTP 500)\\n'); sys.exit(1)
+        sys.stdout.write(json.dumps(body) if not isinstance(body, str) else body)
+        sys.exit(0)
+sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
+"""
+
+    def item_json(self, node, number, repository, status=True, track=True, level=True, roadmap=None, updated='2026-01-01T00:00:00Z'):
+        def single(name, text):
+            return {'id': 2, 'name': name, 'data_type': 'single_select', 'value': {'id': 'o', 'name': {'html': text, 'raw': text}}}
+        fields = []
+        if status: fields.append(single('Status', 'Backlog'))
+        if track: fields.append(single('Track', 'Active delivery'))
+        if level: fields.append(single('Work level', 'Delivery'))
+        if roadmap: fields.append({'id': 1, 'name': 'Roadmap', 'data_type': 'text', 'value': {'html': '<a>x</a>', 'raw': roadmap}})
+        return {'node_id': 'PVTI_' + node, 'content_type': 'Issue', 'updated_at': updated,
+                'content': {'node_id': node, 'number': number, 'repository_url': 'https://api.github.com/repos/' + repository}, 'fields': fields}
+
+    def fake_gh(self, items=None, overrides=None, name='fake'):
+        """A recording stand-in for the GitHub CLI. Returns (environment, argv log path)."""
+        base = self.dir / name
+        base.mkdir(exist_ok=True)
+        script = base / 'gh'
+        script.write_text(self.FAKE_GH)
+        script.chmod(0o755)
+        enrolled = [self.item_json(row['nodeId'], 70001 + i, 'FS-GG/.github') for i, row in enumerate(self.fixture['rows'])]
+        seeded = [self.item_json(f'I_synthetic_{self.SENTINEL}_new1', 80001, 'FS-GG/.github', roadmap='https://github.com/FS-GG/.github/issues/3008'),
+                  self.item_json(f'I_synthetic_{self.SENTINEL}_new2', 80002, 'FS-GG/FS.GG.Templates')]
+        routes = [[p, b] for p, b in (overrides or [])] + [
+            ['/orgs/FS-GG/projectsV2/3/fields', [[{'id': 10, 'name': 'Status'}, {'id': 11, 'name': 'Roadmap'}, {'id': 12, 'name': 'Track'}, {'id': 13, 'name': 'Work level'}]]],
+            ['/orgs/FS-GG/projectsV2/3/items', [enrolled + seeded + (items or [])]],
+            ['/orgs/FS-GG/projectsV2/3', {'number': 3, 'node_id': self.PROJECT}],
+            ['/repos/FS-GG/.github/issues/80001', {'node_id': f'I_synthetic_{self.SENTINEL}_new1', 'repository_url': 'https://api.github.com/repos/FS-GG/.github'}],
+            ['/repos/FS-GG/FS.GG.Templates/issues/80002', {'node_id': f'I_synthetic_{self.SENTINEL}_new2', 'repository_url': 'https://api.github.com/repos/FS-GG/FS.GG.Templates'}],
+            ['/repos/FS-GG/.github/contents/' + self.PLAN_PATH, {'type': 'file'}]]
+        (base / 'routes.json').write_text(json.dumps(routes))
+        log = base / 'argv.log'
+        log.write_text('')
+        env = dict(os.environ, BOARD_V2_IMPORT_GH=str(script), FAKE_GH_LOG=str(log), FAKE_GH_ROUTES=str(base / 'routes.json'))
+        return env, log
+
+    def run_cli_env(self, env, *args):
+        return subprocess.run(['dotnet', str(DLL), *map(str, args)], capture_output=True, text=True, timeout=120, env=env)
+
+    def argv_log(self, log):
+        return [json.loads(line) for line in log.read_text().splitlines()]
+
+    def test_resolve_issues_emits_the_facts_the_planner_consumes_using_only_get(self):
+        env, log = self.fake_gh()
+        out = self.dir / 'resolve'
+        out.mkdir()
+        (out / 'request.json').write_bytes(self.wire(self.request()))
+        done = self.run_cli_env(env, 'resolve-issues', '--request', out/'request.json', '--native-facts-output', out/'resolved.json')
+        self.assertEqual(0, done.returncode, done.stderr)
+        self.assertEqual('native facts resolved; issues=2; read-only\n', done.stdout)
+        self.assertEqual('', done.stderr)
+        self.assertNotIn(self.SENTINEL, done.stdout + done.stderr)
+        if os.name != 'nt':
+            self.assertEqual(0o600, (out / 'resolved.json').stat().st_mode & 0o777)
+        resolved = json.loads((out / 'resolved.json').read_bytes())
+        self.assertEqual('fsgg.board-v2-native-facts/1', resolved['schema'])
+        self.assertEqual(self.PROJECT, resolved['projectId'])
+        self.assertEqual([f'I_synthetic_{self.SENTINEL}_new1', f'I_synthetic_{self.SENTINEL}_new2'], [r['nodeId'] for r in resolved['issues']])
+        self.assertEqual(['https://github.com/FS-GG/.github/issues/3008', None], [r['humanRoadmap'] for r in resolved['issues']])
+        self.assertEqual([True, True], [r['projectMember'] for r in resolved['issues']])
+        self.assertEqual([{'repository': 'FS-GG/.github', 'path': self.PLAN_PATH, 'onMain': True}], resolved['planBlobs'])
+        # Every call is a GET and cannot carry a body, field, method override or the GraphQL endpoint.
+        calls = self.argv_log(log)
+        self.assertEqual(6, len(calls))
+        for argv in calls:
+            self.assertEqual(['api', '--method', 'GET'], argv[:3])
+            self.assertTrue(argv[-1].startswith('/orgs/') or argv[-1].startswith('/repos/'))
+            for forbidden in ['-f', '-F', '--field', '--raw-field', '--input', '-X', 'POST', 'PATCH', 'PUT', 'DELETE', 'graphql']:
+                self.assertNotIn(forbidden, argv)
+        # The planner accepts the resolved document: resolution is the missing online half of plan-successor.
+        planned = self.run_cli('plan-successor', '--request', out/'request.json', '--native-facts', out/'resolved.json', '--repository', self.fixture['repository'],
+                               '--template-output', out/'template.json', '--payload-output', out/'payload.json')
+        self.assertEqual(0, planned.returncode, planned.stderr)
+        self.assertEqual('successor planned; rows=7 appended=2; offline only\n', planned.stdout)
+
+    def test_resolve_issues_failures_are_typed_and_write_nothing(self):
+        out = self.dir / 'resolve-fail'
+        out.mkdir()
+        (out / 'request.json').write_bytes(self.wire(self.request()))
+        for label, overrides in {'issue read fails': [['/repos/FS-GG/.github/issues/80001', 'FAIL']],
+                                 'project read fails': [['/orgs/FS-GG/projectsV2/3/items', 'FAIL']],
+                                 'malformed body': [['/repos/FS-GG/.github/issues/80001', '{"leak":"' + self.SENTINEL + '"']]}.items():
+            with self.subTest(label):
+                env, log = self.fake_gh(overrides=overrides, name='fail-' + label.replace(' ', '-'))
+                done = self.run_cli_env(env, 'resolve-issues', '--request', out/'request.json', '--native-facts-output', out/'never.json')
+                self.refused(done, 'NativeReadFailed')
+                self.assertFalse((out / 'never.json').exists())
+        # An absent issue (a clean 404) is partial visibility, which the planner then refuses with its own code.
+        env, _ = self.fake_gh(overrides=[['/repos/FS-GG/.github/issues/80001', None]], name='absent')
+        done = self.run_cli_env(env, 'resolve-issues', '--request', out/'request.json', '--native-facts-output', out/'absent.json')
+        self.assertEqual(0, done.returncode, done.stderr)
+        self.assertEqual('partial', json.loads((out / 'absent.json').read_bytes())['issues'][0]['visibility'])
+        planned = self.run_cli('plan-successor', '--request', out/'request.json', '--native-facts', out/'absent.json', '--repository', self.fixture['repository'],
+                               '--template-output', out/'t.json', '--payload-output', out/'p.json')
+        self.refused(planned, 'PartialVisibility')
+        # Outputs are never overwritten.
+        self.refused(self.run_cli_env(env, 'resolve-issues', '--request', out/'request.json', '--native-facts-output', out/'absent.json'), 'OutputExists')
+
+    def preflight(self, env, stage='PlanSuccessor', online=True, facts=None, extra=(), fixture=None, request=None, route='ProgrammeEnrollmentSuccessor', main=None):
+        fixture = fixture or self.fixture
+        out = self.dir / ('preflight-' + str(len(list(self.dir.iterdir()))))
+        out.mkdir()
+        (out / 'request.json').write_bytes(self.wire(request or self.request(fixture)))
+        lock = {'version': 2, 'dependencies': {'net10.0': {'FSharp.Core': {'type': 'Direct', 'resolved': '1.2.3', 'contentHash': 'synthetic-hash=='}}}}
+        (out / 'lock.json').write_bytes(self.wire(lock))
+        cache = out / 'cache' / 'fsharp.core' / '1.2.3'
+        cache.mkdir(parents=True)
+        (cache / '.nupkg.metadata').write_bytes(self.wire({'version': 2, 'contentHash': 'synthetic-hash==', 'source': 's'}))
+        args = ['preflight', '--route', route, '--stage', stage, '--request', out/'request.json', '--repository', fixture['repository'],
+                '--lockfile', out/'lock.json', '--nuget-cache', out/'cache', '--min-headroom-bytes', '0', '--main-revision', main or SOURCE_REVISION or 'a'*40]
+        if online:
+            args.append('--online')
+        else:
+            (out / 'facts.json').write_bytes(self.wire(facts or self.facts()))
+            args += ['--native-facts', out/'facts.json']
+        result = self.run_cli_env(env, *args, *extra)
+        return result, out
+
+    def verdicts(self, result):
+        report = json.loads(result.stdout)
+        self.assertEqual('fsgg.board-v2-preflight/1', report['schema'])
+        return report, {row['check']: row for row in report['findings']}
+
+    def assert_hygiene(self, result, out):
+        visible = result.stdout + result.stderr
+        for secret in [self.SENTINEL, 'I_synthetic', self.fixture['payload'].decode(), json.loads(self.fixture['private'].read_bytes())['programmeEnrollment']['nonceHex']]:
+            self.assertNotIn(secret, visible)
+
+    def test_preflight_exit_codes_distinguish_supported_unsupported_and_unknown(self):
+        env, log = self.fake_gh()
+        runtime = self.fixture['base'] / 'runtime-binding.json'
+        binding = json.loads(self.fixture['private'].read_bytes())
+        binding['populationRevision'] = self.fixture['merge']
+        runtime.write_bytes(self.wire(binding))
+        full = ['--runtime-binding', runtime, '--installed-reader', DLL, '--known-readers', self.write_known_readers()]
+        # Everything decidable supports the stage. The host's cgroup may be unreadable: that is Unknown and never exit 0.
+        result, out = self.preflight(env, extra=full)
+        report, rows = self.verdicts(result)
+        self.assert_hygiene(result, out)
+        if SOURCE_REVISION:
+            for name, row in rows.items():
+                if name != 'MemoryHeadroom':
+                    self.assertEqual('SupportedForNextStage', row['verdict'], (name, row))
+            if rows['MemoryHeadroom']['verdict'] == 'SupportedForNextStage':
+                self.assertEqual((0, 'SupportedForNextStage'), (result.returncode, report['overall']))
+            else:
+                self.assertEqual((11, 'Unknown'), (result.returncode, report['overall']))
+                self.assertEqual('CgroupMemory/Unreadable', rows['MemoryHeadroom']['gap'])
+        # Unknown: the installed artifact is not named, so its grammar cannot be asserted. Never exit 0.
+        unknown, out = self.preflight(env, extra=['--runtime-binding', runtime])
+        report, rows = self.verdicts(unknown)
+        self.assertEqual('Unknown', report['overall'])
+        self.assertEqual(11, unknown.returncode)
+        self.assertEqual('InstalledReader/NotSupplied', rows['PlanGrammar']['gap'])
+        # Unsupported: an unenrolled item without Status, Track and Work level (Project 3 auto-add). Names it.
+        bare = self.item_json('I_auto_added', 4940, 'FS-GG/.github', status=False, track=False, level=False)
+        env2, _ = self.fake_gh(items=[bare], name='autoadd')
+        unsupported, out = self.preflight(env2, extra=full)
+        report, rows = self.verdicts(unsupported)
+        self.assertEqual((10, 'Unsupported'), (unsupported.returncode, report['overall']))
+        self.assertEqual(('Unsupported', 'UnenrolledItemLacksSchedulingFields', 'Root', ['FS-GG/.github#4940[Status,Track,Work level]']),
+                         tuple(rows['ProjectAutoAdd'][k] for k in ['verdict', 'reason', 'supplier', 'subjects']))
+        self.assert_hygiene(unsupported, out)
+        # Causal: the same board with the item seeded (Status, Track and Work level present) is not an offender.
+        seeded = self.item_json('I_auto_added', 4940, 'FS-GG/.github')
+        env3, _ = self.fake_gh(items=[seeded], name='seeded')
+        fine, out = self.preflight(env3, extra=full)
+        self.assertEqual('SupportedForNextStage', self.verdicts(fine)[1]['ProjectAutoAdd']['verdict'])
+
+    def write_known_readers(self):
+        path = self.dir / 'known-readers.txt'
+        path.write_text(hashlib.sha256(DLL.read_bytes()).hexdigest() + '\n')
+        return path
+
+    def test_preflight_offline_facts_cannot_assert_main_now_and_unregistered_routes_are_unknown(self):
+        env, log = self.fake_gh()
+        result, out = self.preflight(env, online=False)
+        report, rows = self.verdicts(result)
+        self.assertEqual('NativeFacts/NotLive', rows['PlanBlob']['gap'])
+        self.assertEqual('ProjectItems/NotSupplied', rows['ProjectAutoAdd']['gap'])
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual([], self.argv_log(log))  # offline facts: no native read at all
+        for route in ['RoutineDelivery', 'PublicationWriterRegistration']:
+            unregistered, _ = self.preflight(env, online=False, route=route)
+            self.assertEqual(11, unregistered.returncode)
+            self.assertEqual(['RouteRegistry'], [row['check'] for row in json.loads(unregistered.stdout)['findings']])
+
+    def test_preflight_names_each_unsupported_route_check_and_refuses_bad_arguments(self):
+        env, _ = self.fake_gh()
+        # The cap: 99 predecessor rows leave room for one request issue, not two.
+        full99 = self.make_predecessor('preflight99', 99)
+        result, _ = self.preflight(env, online=False, fixture=full99)
+        report, rows = self.verdicts(result)
+        self.assertEqual(('Unsupported', 'RowCapExceeded', 'ProtocolRelease', ['99+2>100']), tuple(rows['RowCap'][k] for k in ['verdict', 'reason', 'supplier', 'subjects']))
+        self.assertEqual(10, result.returncode)
+        # A constructor that is not the intended protected main is unsupported, supplied by a rebuild.
+        wrong, _ = self.preflight(env, online=False, main='0' * 40)
+        self.assertEqual(('Unsupported', 'ConstructorDiffersFromMain', 'ConstructorBuild'),
+                         tuple(self.verdicts(wrong)[1]['ConstructorIdentity'][k] for k in ['verdict', 'reason', 'supplier']))
+        # Usage errors are refusals (exit 2), not verdicts, and print only a code.
+        for bad in (['preflight'], ['preflight', '--route', 'Nope', '--stage', 'PlanSuccessor', '--request', 'x', '--repository', 'y', '--online']):
+            done = self.run_cli_env(env, *bad)
+            self.refused(done, 'MalformedInput')
 
     def test_carrier_refuses_open_or_foreign_receipts_and_never_echoes_them(self):
         result, out = self.plan()
@@ -1082,7 +1392,7 @@ class SuccessorEnrollmentTests(unittest.TestCase):
             link = out / 'link-facts.json'
             link.symlink_to(out / 'facts.json')
             self.refused(self.run_cli('plan-successor', '--request', out/'request.json', '--native-facts', link, '--repository', self.fixture['repository'],
-                                      '--template-output', out/'t2.json', '--payload-output', out/'p2.json'), 'MalformedInput')
+                                      '--template-output', out/'t2.json', '--payload-output', out/'p2.json'), 'InputUnreadable')
             self.assertFalse((out / 't2.json').exists())
 
 

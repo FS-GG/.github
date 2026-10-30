@@ -26,6 +26,11 @@ module V2Enrollment =
         | PartialVisibility
         | OutputExists
         | MalformedInput
+        | InputUnreadable
+        | CustodyUnavailable
+        | GitReadFailed
+        | NativeReadFailed
+        | SuccessorNotRederived
 
     let refusalCode (refusal: Refusal) =
         match refusal with
@@ -44,6 +49,11 @@ module V2Enrollment =
         | PartialVisibility -> "PartialVisibility"
         | OutputExists -> "OutputExists"
         | MalformedInput -> "MalformedInput"
+        | InputUnreadable -> "InputUnreadable"
+        | CustodyUnavailable -> "CustodyUnavailable"
+        | GitReadFailed -> "GitReadFailed"
+        | NativeReadFailed -> "NativeReadFailed"
+        | SuccessorNotRederived -> "SuccessorNotRederived"
 
     type PlanSpec =
         | ProgrammeIssue3008
@@ -95,12 +105,16 @@ module V2Enrollment =
           Slice: string
           Classification: Classification }
 
+    [<StructuredFormatDisplay("{Display}")>]
     type SuccessorPlan =
         { TemplateJson: string
           Payload: byte array
           Appended: PlannedRow list
           PredecessorRows: int
           TotalRows: int }
+        // Generic printing (%A, ToString) must never reach the private template or the payload bytes.
+        member this.Display = "SuccessorPlan(rows=" + string this.TotalRows + "; appended=" + string this.Appended.Length + "; content withheld)"
+        override this.ToString() = this.Display
 
     type Seams =
         { Grammar: Set<string> -> string -> Result<string * string * string, string>
@@ -303,29 +317,142 @@ module V2Enrollment =
         && successor.[predecessor.Length - 2] = byte ','
         && endsWithClosing successor
 
+    // Every value is JSON-escaped here, whatever validation preceded it: the splice is raw bytes into a
+    // document the installed reader parses, so a quote or backslash must never be able to end a string.
+    let private jsonString (value: string) = "\"" + JsonEncodedText.Encode(value).ToString() + "\""
+
     let private rowFragment (rows: PlannedRow list) =
-        // Every emitted character is validated against a closed ASCII pattern before this point,
-        // so no JSON escaping is required and none is performed.
         rows
-        |> List.map (fun row -> "{\"issue\":\"" + row.Issue + "\",\"nodeId\":\"" + row.NodeId + "\",\"roadmap\":\"" + row.Roadmap + "\"}")
+        |> List.map (fun row -> "{\"issue\":" + jsonString row.Issue + ",\"nodeId\":" + jsonString row.NodeId + ",\"roadmap\":" + jsonString row.Roadmap + "}")
         |> String.concat ","
         |> strictUtf8.GetBytes
 
     // ---- planner ----
 
-    type private ResultBuilder() =
-        member _.Bind(value: Result<'a, Refusal>, body: 'a -> Result<'b, Refusal>) = Result.bind body value
-        member _.Return(value: 'a) : Result<'a, Refusal> = Ok value
-        member _.ReturnFrom(value: Result<'a, Refusal>) = value
+    type Finding = { Refusal: Refusal; Issue: string option }
 
-    let private result = ResultBuilder()
-
-    let private ensure (condition: bool) (refusal: Refusal) : Result<unit, Refusal> =
-        if condition then Ok() else Error refusal
+    type Analysis =
+        { PredecessorRows: int
+          PredecessorPayloadBytes: int
+          Findings: Finding list }
 
     let private repositoryOf (reference: string) = reference.Substring(0, reference.IndexOf '#')
 
     let private lower (value: string) = value.ToLowerInvariant()
+
+    let private authenticate (predecessorPrivateJson: string) (predecessorPublicJson: string) =
+        match V2Projection.decodeBinding predecessorPrivateJson with
+        | Ok binding when V2Projection.isProgrammeBinding binding && binding.ProgrammeEnrollment.IsSome ->
+            match V2Projection.authenticateProgrammeEnrollment binding predecessorPublicJson with
+            | Ok rows -> Ok(binding, rows)
+            | Error _ -> Error PredecessorCommitmentMismatch
+        | _ -> Error PredecessorCommitmentMismatch
+
+    let private roadmapFor (seams: Seams) (binding: V2Projection.Binding) (issue: RequestIssue) : string option =
+        match issue.Plan with
+        | ProgrammeIssue3008 ->
+            if binding.Repositories.Contains "FS-GG/.github" then Some V2ProjectionSource.programmePlanIssueUrl else None
+        | ProtectedDoc(repository, path) ->
+            let url = "https://github.com/" + repository + "/blob/main/" + path
+            match seams.Grammar binding.Repositories url with
+            | Ok(admittedRepository, "main", admittedPath)
+                when admittedRepository = repository && admittedPath = path && matches roadmapPattern url -> Some url
+            | _ -> None
+
+    // Every independent per-row and request-wide finding, in the planner's own check order: check-major,
+    // then row order. The planner refuses with the first; the preflight reports all. One implementation.
+    let private examine
+        (seams: Seams)
+        (binding: V2Projection.Binding)
+        (predecessorRows: (string * string * string) list)
+        (predecessorPayload: byte array)
+        (request: Request)
+        (facts: NativeFacts)
+        : Finding list * (string * RequestIssue * NativeIssueFact) list option =
+        let findings = ResizeArray<Finding>()
+        let add (refusal: Refusal) (issue: string option) = findings.Add { Refusal = refusal; Issue = issue }
+        let issues = request.Issues
+        // 1. Request shape against the binding, then the plan grammar, before any construction.
+        let seen = Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+        for issue in issues do
+            if not (seen.Add(lower issue.Ref)) then add DuplicateIssue (Some issue.Ref)
+        for issue in issues do
+            if not (binding.Repositories.Contains(repositoryOf issue.Ref)) then add RepositoryOutsideBinding (Some issue.Ref)
+        let roadmaps = issues |> List.map (roadmapFor seams binding)
+        List.zip issues roadmaps |> List.iter (fun (issue, roadmap) -> if roadmap.IsNone then add PlanNotAdmitted (Some issue.Ref))
+        // 2. Native facts: visibility, kind, identity, enrollment, membership.
+        let factFor (issue: RequestIssue) =
+            facts.Issues |> List.tryFind (fun fact -> String.Equals(fact.Ref, issue.Ref, StringComparison.OrdinalIgnoreCase))
+        let found = issues |> List.map factFor
+        List.zip issues found |> List.iter (fun (issue, fact) ->
+            match fact with
+            | Some value when value.Complete -> ()
+            | _ -> add PartialVisibility (Some issue.Ref))
+        let rows =
+            List.zip3 roadmaps issues found
+            |> List.choose (fun (roadmap, issue, fact) ->
+                match fact with
+                | Some value when value.Complete -> Some(roadmap, issue, value)
+                | _ -> None)
+        for _, issue, fact in rows do
+            if fact.Kind = NativePullRequest then add IsPullRequest (Some issue.Ref)
+        let enrolledByNode = predecessorRows |> List.map (fun (issue, node, _) -> node, issue) |> Map.ofList
+        let enrolledByIssue = predecessorRows |> List.map (fun (issue, node, _) -> lower issue, node) |> Map.ofList
+        let nodeCounts = rows |> List.countBy (fun (_, _, fact) -> fact.NodeId) |> Map.ofList
+        for _, issue, fact in rows do
+            let consistentWithPredecessor =
+                match Map.tryFind fact.NodeId enrolledByNode, Map.tryFind (lower issue.Ref) enrolledByIssue with
+                | None, None -> true
+                | Some enrolledIssue, Some enrolledNode -> enrolledNode = fact.NodeId && lower enrolledIssue = lower issue.Ref
+                | _ -> false
+            if nodeCounts.[fact.NodeId] > 1
+               || not (fact.NodeId.StartsWith("I_", StringComparison.Ordinal))
+               || lower fact.Repository <> lower (repositoryOf issue.Ref)
+               || not consistentWithPredecessor then add NodeIdMismatch (Some issue.Ref)
+        for _, issue, fact in rows do
+            if Map.containsKey fact.NodeId enrolledByNode || Map.containsKey (lower issue.Ref) enrolledByIssue then add AlreadyEnrolled (Some issue.Ref)
+        if facts.ProjectId <> binding.ProjectId then add NotProjectMember None
+        for _, issue, fact in rows do
+            if not fact.ProjectMember then add NotProjectMember (Some issue.Ref)
+        // 3. Offline plan-existence fact for protected documents.
+        for issue in issues do
+            match issue.Plan with
+            | ProgrammeIssue3008 -> ()
+            | ProtectedDoc(repository, path) ->
+                if not (facts.PlanBlobs |> List.exists (fun blob -> blob.Repository = repository && blob.Path = path && blob.OnMain)) then
+                    add PlanBlobAbsentOnMain (Some issue.Ref)
+        // 4. Never overwrite a differing human Roadmap value.
+        for roadmap, issue, fact in rows do
+            match roadmap, fact.HumanRoadmap with
+            | Some expected, Some value when value <> expected -> add ConflictingHumanValue (Some issue.Ref)
+            | _ -> ()
+        // 5. The installed row ceiling and the splice precondition.
+        if predecessorRows.Length + issues.Length > rowCap then add RowCapExceeded None
+        if not (spliceable predecessorPayload) then add PrefixNotPreserved None
+        let paired =
+            if roadmaps |> List.forall Option.isSome && found |> List.forall (fun fact -> fact.IsSome && fact.Value.Complete) then
+                Some(List.zip3 roadmaps issues found |> List.map (fun (roadmap, issue, fact) -> roadmap.Value, issue, fact.Value))
+            else None
+        List.ofSeq findings, paired
+
+    let analyzeWith
+        (seams: Seams)
+        (predecessorPrivateJson: string)
+        (predecessorPublicJson: string)
+        (request: Request)
+        (facts: NativeFacts)
+        : Result<Analysis, Refusal> =
+        try
+            match authenticate predecessorPrivateJson predecessorPublicJson with
+            | Error refusal -> Error refusal
+            | Ok(binding, predecessorRows) ->
+                let payload = payloadOf binding
+                let findings, _ = examine seams binding predecessorRows payload request facts
+                Ok { PredecessorRows = predecessorRows.Length; PredecessorPayloadBytes = payload.Length; Findings = findings }
+        with _ -> Error MalformedInput
+
+    let analyze predecessorPrivateJson predecessorPublicJson request facts =
+        analyzeWith defaultSeams predecessorPrivateJson predecessorPublicJson request facts
 
     let planWith
         (seams: Seams)
@@ -335,109 +462,83 @@ module V2Enrollment =
         (facts: NativeFacts)
         : Result<SuccessorPlan, Refusal> =
         try
-            result {
-                // 1. Authenticate the predecessor pair through the installed authenticator.
-                let! binding =
-                    match V2Projection.decodeBinding predecessorPrivateJson with
-                    | Ok binding when V2Projection.isProgrammeBinding binding && binding.ProgrammeEnrollment.IsSome -> Ok binding
-                    | _ -> Error PredecessorCommitmentMismatch
-                let! predecessorRows =
-                    V2Projection.authenticateProgrammeEnrollment binding predecessorPublicJson
-                    |> Result.mapError (fun _ -> PredecessorCommitmentMismatch)
+            match authenticate predecessorPrivateJson predecessorPublicJson with
+            | Error refusal -> Error refusal
+            | Ok(binding, predecessorRows) ->
                 let predecessorPayload = payloadOf binding
-                let issues = request.Issues
-                // 2. Request shape against the binding, then the plan grammar, before any construction.
-                let refs = issues |> List.map (fun issue -> lower issue.Ref)
-                do! ensure ((Set.ofList refs).Count = refs.Length) DuplicateIssue
-                do! ensure (issues |> List.forall (fun issue -> binding.Repositories.Contains(repositoryOf issue.Ref))) RepositoryOutsideBinding
-                let roadmapOf (issue: RequestIssue) : Result<string, Refusal> =
-                    match issue.Plan with
-                    | ProgrammeIssue3008 ->
-                        if binding.Repositories.Contains "FS-GG/.github" then Ok V2ProjectionSource.programmePlanIssueUrl
-                        else Error PlanNotAdmitted
-                    | ProtectedDoc(repository, path) ->
-                        let url = "https://github.com/" + repository + "/blob/main/" + path
-                        match seams.Grammar binding.Repositories url with
-                        | Ok(admittedRepository, "main", admittedPath)
-                            when admittedRepository = repository && admittedPath = path && matches roadmapPattern url -> Ok url
-                        | _ -> Error PlanNotAdmitted
-                let! roadmaps =
-                    issues |> List.map roadmapOf
-                    |> List.fold (fun accumulated next ->
-                        match accumulated, next with
-                        | Error refusal, _ -> Error refusal
-                        | Ok _, Error refusal -> Error refusal
-                        | Ok values, Ok url -> Ok(values @ [ url ])) (Ok [])
-                // 3. Native facts: visibility, kind, identity, enrollment, membership.
-                let factFor (issue: RequestIssue) =
-                    facts.Issues |> List.tryFind (fun fact -> String.Equals(fact.Ref, issue.Ref, StringComparison.OrdinalIgnoreCase))
-                let found = issues |> List.map factFor
-                do! ensure (found |> List.forall (fun fact -> fact.IsSome && fact.Value.Complete)) PartialVisibility
-                let paired = List.zip3 roadmaps issues (found |> List.map Option.get)
-                let first (check: string * RequestIssue * NativeIssueFact -> Refusal option) =
-                    match paired |> List.tryPick check with
-                    | Some refusal -> Error refusal
-                    | None -> Ok()
-                do! first (fun (_, _, fact) -> if fact.Kind = NativePullRequest then Some IsPullRequest else None)
-                let nodes = paired |> List.map (fun (_, _, fact) -> fact.NodeId)
-                let enrolledByNode = predecessorRows |> List.map (fun (issue, node, _) -> node, issue) |> Map.ofList
-                let enrolledByIssue = predecessorRows |> List.map (fun (issue, node, _) -> lower issue, node) |> Map.ofList
-                do! ensure ((Set.ofList nodes).Count = nodes.Length) NodeIdMismatch
-                do! first (fun (_, issue, fact) ->
-                        let consistentWithPredecessor =
-                            match Map.tryFind fact.NodeId enrolledByNode, Map.tryFind (lower issue.Ref) enrolledByIssue with
-                            | None, None -> true
-                            | Some enrolledIssue, Some enrolledNode -> enrolledNode = fact.NodeId && lower enrolledIssue = lower issue.Ref
-                            | _ -> false
-                        if not (fact.NodeId.StartsWith("I_", StringComparison.Ordinal))
-                           || lower fact.Repository <> lower (repositoryOf issue.Ref)
-                           || not consistentWithPredecessor then Some NodeIdMismatch
-                        else None)
-                do! first (fun (_, issue, fact) ->
-                        if Map.containsKey fact.NodeId enrolledByNode || Map.containsKey (lower issue.Ref) enrolledByIssue then Some AlreadyEnrolled
-                        else None)
-                do! ensure (facts.ProjectId = binding.ProjectId) NotProjectMember
-                do! first (fun (_, _, fact) -> if not fact.ProjectMember then Some NotProjectMember else None)
-                // 4. Offline plan-existence fact for protected documents.
-                do! ensure
-                        (issues |> List.forall (fun issue ->
-                            match issue.Plan with
-                            | ProgrammeIssue3008 -> true
-                            | ProtectedDoc(repository, path) ->
-                                facts.PlanBlobs |> List.exists (fun blob -> blob.Repository = repository && blob.Path = path && blob.OnMain)))
-                        PlanBlobAbsentOnMain
-                // 5. Never overwrite a differing human Roadmap value.
-                do! first (fun (roadmap, _, fact) ->
-                        match fact.HumanRoadmap with
-                        | Some value when value <> roadmap -> Some ConflictingHumanValue
-                        | _ -> None)
-                // 6. The installed row ceiling and the splice precondition.
-                do! ensure (predecessorRows.Length + issues.Length <= rowCap) RowCapExceeded
-                do! ensure (spliceable predecessorPayload) PrefixNotPreserved
-                // 7. Construction: raw-byte splice, prefix verification, then the installed payload validator.
-                let appended =
-                    paired |> List.map (fun (roadmap, issue, fact) ->
-                        { Issue = issue.Ref; NodeId = fact.NodeId; Roadmap = roadmap; Slice = issue.Slice; Classification = issue.Classification })
-                let successor = seams.Splice predecessorPayload (rowFragment appended)
-                do! ensure (startsWithPrefix successor predecessorPayload) PrefixNotPreserved
-                let template = JsonNode.Parse predecessorPrivateJson
-                template.AsObject().Remove "programmeEnrollment" |> ignore
-                template.["populationRevision"] <- JsonValue.Create request.PredecessorMergeSha
-                let selected = template.["selectedIssues"].AsObject()
-                appended |> List.iter (fun row -> selected.Add(row.NodeId, JsonValue.Create row.Issue))
-                let templateJson = template.ToJsonString()
-                // The installed constructor validates the template and payload; a fixed placeholder
-                // nonce is used, the result is discarded and the placeholder is never emitted.
-                do! V2Projection.prepareProgrammeBinding templateJson successor (fun () -> Array.zeroCreate 32)
-                    |> Result.map ignore
-                    |> Result.mapError (fun _ -> PrefixNotPreserved)
-                return { TemplateJson = templateJson; Payload = successor; Appended = appended
-                         PredecessorRows = predecessorRows.Length; TotalRows = predecessorRows.Length + appended.Length }
-            }
+                match examine seams binding predecessorRows predecessorPayload request facts with
+                | first :: _, _ -> Error first.Refusal
+                | [], None -> Error MalformedInput
+                | [], Some paired ->
+                    // Construction: raw-byte splice, prefix verification, then the installed payload validator.
+                    let appended =
+                        paired |> List.map (fun (roadmap, issue, fact) ->
+                            { Issue = issue.Ref; NodeId = fact.NodeId; Roadmap = roadmap; Slice = issue.Slice; Classification = issue.Classification })
+                    let successor = seams.Splice predecessorPayload (rowFragment appended)
+                    if not (startsWithPrefix successor predecessorPayload) then Error PrefixNotPreserved
+                    else
+                        let template = JsonNode.Parse predecessorPrivateJson
+                        template.AsObject().Remove "programmeEnrollment" |> ignore
+                        template.["populationRevision"] <- JsonValue.Create request.PredecessorMergeSha
+                        let selected = template.["selectedIssues"].AsObject()
+                        appended |> List.iter (fun row -> selected.Add(row.NodeId, JsonValue.Create row.Issue))
+                        let templateJson = template.ToJsonString()
+                        // The installed constructor validates the template and payload; a fixed placeholder
+                        // nonce is used, the result is discarded and the placeholder is never emitted.
+                        match V2Projection.prepareProgrammeBinding templateJson successor (fun () -> Array.zeroCreate 32) with
+                        | Error _ -> Error PrefixNotPreserved
+                        | Ok _ ->
+                            Ok { TemplateJson = templateJson; Payload = successor; Appended = appended
+                                 PredecessorRows = predecessorRows.Length; TotalRows = predecessorRows.Length + appended.Length }
         with _ -> Error MalformedInput
 
     let plan predecessorPrivateJson predecessorPublicJson request facts =
         planWith defaultSeams predecessorPrivateJson predecessorPublicJson request facts
+
+    // ---- re-derivation of supplied successor inputs ----
+
+    let verifyPreparedWith
+        (seams: Seams)
+        (predecessorPrivateJson: string)
+        (predecessorPublicJson: string)
+        (request: Request)
+        (facts: NativeFacts)
+        (template: string)
+        (payload: byte array)
+        : Result<unit, Refusal> =
+        match planWith seams predecessorPrivateJson predecessorPublicJson request facts with
+        | Error refusal -> Error refusal
+        | Ok planned ->
+            try
+                let binding =
+                    match V2Projection.decodeBinding predecessorPrivateJson with
+                    | Ok binding -> binding
+                    | Error _ -> malformed ()
+                let predecessorPayload = payloadOf binding
+                if not (startsWithPrefix payload predecessorPayload) then Error PrefixNotPreserved
+                else
+                    // The supplied rows are read from the supplied bytes themselves, not from the plan.
+                    let suppliedRows =
+                        use document = JsonDocument.Parse(ReadOnlyMemory<byte>(payload))
+                        document.RootElement.GetProperty("items").EnumerateArray()
+                        |> Seq.map (fun row -> text "issue" row, text "nodeId" row, text "roadmap" row)
+                        |> Seq.toList
+                    let appended = suppliedRows |> List.skip (min planned.PredecessorRows suppliedRows.Length)
+                    let admitted (roadmap: string) =
+                        (roadmap = V2ProjectionSource.programmePlanIssueUrl && binding.Repositories.Contains "FS-GG/.github")
+                        || (match seams.Grammar binding.Repositories roadmap with
+                            | Ok(_, "main", _) -> matches roadmapPattern roadmap
+                            | _ -> false)
+                    let joined (issue: string, node: string) =
+                        facts.Issues |> List.exists (fun fact -> String.Equals(fact.Ref, issue, StringComparison.OrdinalIgnoreCase) && fact.NodeId = node)
+                    if appended |> List.exists (fun (_, _, roadmap) -> not (admitted roadmap)) then Error PlanNotAdmitted
+                    elif appended |> List.exists (fun (issue, node, _) -> not (joined (issue, node))) then Error NodeIdMismatch
+                    elif payload <> planned.Payload || template <> planned.TemplateJson then Error SuccessorNotRederived
+                    else Ok()
+            with _ -> Error SuccessorNotRederived
+
+    let verifyPrepared predecessorPrivateJson predecessorPublicJson request facts template payload =
+        verifyPreparedWith defaultSeams predecessorPrivateJson predecessorPublicJson request facts template payload
 
     // ---- independent pair verification ----
 

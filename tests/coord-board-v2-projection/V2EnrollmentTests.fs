@@ -9,17 +9,18 @@ module V2EnrollmentTests =
     open FS.GG.Coord.GitHub
     open FS.GG.Coord.GitHub.V2Enrollment
 
-    let private sentinel = "SYNTHETIC_PRIVATE_SENTINEL_9f310"
-    let private projectId = "PVT_kwDOEYAWY84Bldpa"
-    let private planPath = "docs/roadmaps/synthetic-plan.md"
-    let private get = function Ok value -> value | Error refusal -> failwith (refusalCode refusal)
-    let private getIo = function Ok value -> value | Error error -> failwith (Errors.explain error)
+    let internal sentinel = "SYNTHETIC_PRIVATE_SENTINEL_9f310"
+    let internal projectId = "PVT_kwDOEYAWY84Bldpa"
+    let internal planPath = "docs/roadmaps/synthetic-plan.md"
+    let internal get = function Ok value -> value | Error refusal -> failwith (refusalCode refusal)
+    let internal getIo = function Ok value -> value | Error error -> failwith (Errors.explain error)
 
-    let private compact (node: JsonNode) = node.ToJsonString()
+    let internal compact (node: JsonNode) = node.ToJsonString()
 
     /// A real predecessor pair built through the installed constructor with a fixed synthetic nonce.
-    let private predecessor (count: int) (trailing: string) =
-        let rows = [ for i in 0 .. count - 1 -> $"FS-GG/.github#{70001 + i}", $"I_synthetic_{sentinel}_{i}", $"https://github.com/FS-GG/.github/blob/main/docs/roadmaps/old-{i}.md" ]
+    let internal predecessorPadded (count: int) (trailing: string) (pad: int) =
+        let padding = String.replicate pad "p"
+        let rows = [ for i in 0 .. count - 1 -> $"FS-GG/.github#{70001 + i}", $"I_synthetic_{sentinel}_{i}", $"https://github.com/FS-GG/.github/blob/main/docs/roadmaps/old-{i}{padding}.md" ]
         let field (label: string) (options: string list) =
             let node = JsonObject()
             node["id"] <- JsonValue.Create("synthetic-" + label)
@@ -50,19 +51,21 @@ module V2EnrollmentTests =
         let privateJson, publicJson = V2Projection.prepareProgrammeBinding (compact template) payload (fun () -> Array.create 32 7uy) |> getIo
         privateJson, publicJson, payload
 
-    let private mergeSha = String.replicate 40 "9"
+    let internal predecessor (count: int) (trailing: string) = predecessorPadded count trailing 0
 
-    let private request =
+    let internal mergeSha = String.replicate 40 "9"
+
+    let internal request =
         { Cohort = "cohort-synthetic"; PredecessorPrivatePath = "/synthetic/private.json"; PredecessorMergeSha = mergeSha
           Issues =
             [ { Ref = "FS-GG/.github#80001"; Slice = "synthetic-outcome"; Plan = ProgrammeIssue3008; Classification = Outcome }
               { Ref = "FS-GG/FS.GG.Templates#80002"; Slice = "synthetic-delivery"; Plan = ProtectedDoc("FS-GG/.github", planPath); Classification = Delivery } ] }
 
-    let private fact (reference: string) (node: string) : NativeIssueFact =
+    let internal fact (reference: string) (node: string) : NativeIssueFact =
         { Ref = reference; NodeId = node; Kind = NativeIssue; Repository = reference.Substring(0, reference.IndexOf '#')
           ProjectMember = true; Complete = true; HumanRoadmap = None }
 
-    let private facts : NativeFacts =
+    let internal facts : NativeFacts =
         { ProjectId = projectId
           Issues = [ fact "FS-GG/.github#80001" "I_synthetic_new1"; fact "FS-GG/FS.GG.Templates#80002" "I_synthetic_new2" ]
           PlanBlobs = [ { Repository = "FS-GG/.github"; Path = planPath; OnMain = true } ] }
@@ -169,8 +172,9 @@ module V2EnrollmentTests =
     [<Fact>]
     let ``refusal codes are the closed printable case names and carry no input`` () =
         let all = [ DuplicateIssue; AlreadyEnrolled; IsPullRequest; NodeIdMismatch; NotProjectMember; RepositoryOutsideBinding; PredecessorCommitmentMismatch
-                    PrefixNotPreserved; PlanNotAdmitted; PlanBlobAbsentOnMain; RowCapExceeded; ConflictingHumanValue; PartialVisibility; OutputExists; MalformedInput ]
-        Assert.Equal(15, (all |> List.map refusalCode |> Set.ofList).Count)
+                    PrefixNotPreserved; PlanNotAdmitted; PlanBlobAbsentOnMain; RowCapExceeded; ConflictingHumanValue; PartialVisibility; OutputExists; MalformedInput
+                    InputUnreadable; CustodyUnavailable; GitReadFailed; NativeReadFailed; SuccessorNotRederived ]
+        Assert.Equal(20, (all |> List.map refusalCode |> Set.ofList).Count)
         for refusal in all do Assert.Equal(string refusal, refusalCode refusal)
 
     [<Fact>]
@@ -213,3 +217,153 @@ module V2EnrollmentTests =
         let enrolled = { request with Issues = [ { request.Issues.[0] with Ref = "FS-GG/.github#70001" } ] }
         Assert.Equal(Error AlreadyEnrolled, run enrolled { facts with Issues = [ fact "FS-GG/.github#70001" ("I_synthetic_" + sentinel + "_0") ] })
         Assert.Equal(Error PredecessorCommitmentMismatch, plan privateJson (publicJson.Replace(publicJson.Substring(publicJson.Length - 10, 4), "0000")) request facts |> Result.map ignore)
+
+    // ---- #4941 PR 2: analysis, O1 (re-derivation), O4 (escaping and redaction) ----
+
+    [<Fact>]
+    let ``analyze reports every independent finding and its head is exactly the refusal the planner returns`` () =
+        let privateJson, publicJson, _ = predecessor 5 ""
+        let ref0, ref1 = request.Issues.[0].Ref, request.Issues.[1].Ref
+        let factMutations : (string * (NativeFacts -> NativeFacts)) list =
+            let issue0 change (facts: NativeFacts) = { facts with Issues = change facts.Issues.[0] :: facts.Issues.Tail }
+            let issue1 change (facts: NativeFacts) = { facts with Issues = facts.Issues.Head :: [ change facts.Issues.[1] ] }
+            [ "pr", issue0 (fun f -> { f with Kind = NativePullRequest })
+              "member", issue1 (fun f -> { f with ProjectMember = false })
+              "partial", issue1 (fun f -> { f with Complete = false })
+              "node", issue0 (fun f -> { f with NodeId = "X_bad" })
+              "blob", (fun facts -> { facts with PlanBlobs = [] })
+              "human", issue0 (fun f -> { f with HumanRoadmap = Some "https://github.com/FS-GG/.github/issues/4930" })
+              "project", (fun facts -> { facts with ProjectId = "PVT_other" })
+              "enrolled", issue0 (fun f -> { f with Ref = "FS-GG/.github#70001"; NodeId = "I_synthetic_" + sentinel + "_0" }) ]
+        let requestMutations : (string * (Request -> Request)) list =
+            [ "duplicate", (fun r -> { r with Issues = r.Issues @ [ r.Issues.[0] ] })
+              "outside", (fun r -> { r with Issues = { r.Issues.[0] with Ref = "FS-GG/Other#9" } :: r.Issues.Tail })
+              "grammar", (fun r -> { r with Issues = r.Issues.Head :: [ { r.Issues.[1] with Plan = ProtectedDoc("FS-GG/.github", "issues/4930") } ] }) ]
+        let scenarios =
+            [ for n1, f1 in factMutations do
+                yield n1, id, f1
+                for n2, f2 in factMutations do yield n1 + "+" + n2, id, (f1 >> f2)
+              for n1, r1 in requestMutations do
+                yield n1, r1, id
+                for n2, f2 in factMutations do yield n1 + "+" + n2, r1, f2 ]
+        let mutable multi = 0
+        for name, r, f in scenarios do
+            let r', f' = r request, f facts
+            let analysis = analyze privateJson publicJson r' f' |> get
+            match plan privateJson publicJson r' f', analysis.Findings with
+            | Ok _, [] -> ()
+            | Error refusal, head :: rest ->
+                if not rest.IsEmpty && rest |> List.exists (fun x -> x.Refusal <> head.Refusal) then multi <- multi + 1
+                Assert.True((refusal = head.Refusal), name)
+            | Ok _, findings -> failwithf "%s: plan succeeded with %d findings" name findings.Length
+            | Error refusal, [] -> failwithf "%s: plan refused %s with no finding" name (refusalCode refusal)
+        // The report is genuinely multi-finding, not first-only.
+        Assert.True(multi > 20, string multi)
+        Assert.True((analyze privateJson publicJson request facts |> get).Findings.IsEmpty)
+        ignore (ref0, ref1)
+
+    [<Fact>]
+    let ``row fragment values are JSON-escaped; the unescaped concatenation is not valid JSON`` () =
+        let privateJson, publicJson, _ = predecessor 5 ""
+        let hostile = "I_a\"b\\c,\"roadmap\":\"xé\u0001"
+        let hostileFacts = { facts with Issues = { facts.Issues.[0] with NodeId = hostile } :: facts.Issues.Tail }
+        let mutable captured : byte array = [||]
+        let capture = { defaultSeams with Splice = fun predecessor rows -> captured <- rows; defaultSeams.Splice predecessor rows }
+        planWith capture privateJson publicJson request hostileFacts |> ignore
+        Assert.True(captured.Length > 0)
+        use document = System.Text.Json.JsonDocument.Parse("[" + Encoding.UTF8.GetString captured + "]")
+        let rows = document.RootElement.EnumerateArray() |> Seq.toList
+        Assert.Equal(2, rows.Length)
+        Assert.Equal(hostile, rows.[0].GetProperty("nodeId").GetString())
+        Assert.Equal("https://github.com/FS-GG/.github/issues/3008", rows.[0].GetProperty("roadmap").GetString())
+        // Causal leg: the PR 1 style concatenation of the same value cannot be parsed, so escaping is what makes it valid.
+        let naive = "[{\"issue\":\"x\",\"nodeId\":\"" + hostile + "\",\"roadmap\":\"y\"}]"
+        Assert.ThrowsAny<exn>(fun () -> System.Text.Json.JsonDocument.Parse(naive) |> ignore) |> ignore
+
+    [<Fact>]
+    let ``a successor plan never prints its template or payload through generic printing`` () =
+        let planned = planned.Value |> get
+        // Positive leg: the sentinel really is in the private bytes, so its absence below means something.
+        Assert.Contains(sentinel, Encoding.UTF8.GetString planned.Payload)
+        Assert.Contains(sentinel, planned.TemplateJson)
+        for printed in [ sprintf "%A" planned; sprintf "%A" (Ok planned: Result<SuccessorPlan, Refusal>); sprintf "%O" planned; string planned; $"{planned}"; planned.ToString() ] do
+            Assert.DoesNotContain(sentinel, printed)
+            Assert.DoesNotContain("I_synthetic", printed)
+            Assert.DoesNotContain(Convert.ToBase64String planned.Payload, printed)
+            Assert.DoesNotContain("populationRevision", printed)
+            Assert.Contains("content withheld", printed)
+
+    let private prepared () =
+        let privateJson, publicJson, _ = predecessor 5 ""
+        let built = plan privateJson publicJson request facts |> get
+        privateJson, publicJson, built
+
+    let private accepted (built: SuccessorPlan) (template: string) (payload: byte array) =
+        V2Projection.prepareProgrammeBinding template payload (fun () -> Array.create 32 2uy) |> Result.isOk
+
+    [<Fact>]
+    let ``O1 causal controls: hand-edited successor inputs reach a commitment without the re-derivation and are refused with it`` () =
+        let privateJson, publicJson, built = prepared ()
+        let verify template payload = verifyPrepared privateJson publicJson request facts template payload
+        Assert.Equal(Ok(), verify built.TemplateJson built.Payload)
+        let text = Encoding.UTF8.GetString built.Payload
+        let swap (oldText: string) (newText: string) =
+            Assert.Contains(oldText, text)
+            Encoding.UTF8.GetBytes(text.Replace(oldText, newText))
+        // 1. The cohort 89 r1 failure shape: an appended Roadmap that is an Outcome issue URL.
+        let bogus = swap "\"roadmap\":\"https://github.com/FS-GG/.github/issues/3008\"" "\"roadmap\":\"https://github.com/FS-GG/.github/issues/4930\""
+        Assert.True(accepted built built.TemplateJson bogus, "without the re-derivation the constructor accepts the edited payload")
+        Assert.Equal(Error PlanNotAdmitted, verify built.TemplateJson bogus)
+        // 2. A consistently swapped node id (payload and template together) that the facts do not support.
+        let newNode = "I_synthetic_new1"
+        let swappedPayload = swap newNode "I_synthetic_other"
+        let swappedTemplate = built.TemplateJson.Replace(newNode, "I_synthetic_other")
+        Assert.True(accepted built swappedTemplate swappedPayload)
+        Assert.Equal(Error NodeIdMismatch, verify swappedTemplate swappedPayload)
+        // 3. A semantically equal re-spacing of the appended rows is still not the derived payload.
+        let spaced = swap "},{\"issue\":\"FS-GG/FS.GG.Templates#80002\"" "}, {\"issue\":\"FS-GG/FS.GG.Templates#80002\""
+        Assert.True(accepted built built.TemplateJson spaced)
+        Assert.Equal(Error SuccessorNotRederived, verify built.TemplateJson spaced)
+        // 4. A template that drifts any non-derived field.
+        let drifted = built.TemplateJson.Replace("synthetic-status-1", "synthetic-status-drifted")
+        Assert.NotEqual<string>(built.TemplateJson, drifted)
+        Assert.True(accepted built drifted built.Payload)
+        Assert.Equal(Error SuccessorNotRederived, verify drifted built.Payload)
+        // 5. A mutated prefix byte (an old row's roadmap).
+        let mutated = Array.copy built.Payload
+        mutated.[text.IndexOf "old-1" + 4] <- byte '2'
+        Assert.True(accepted built built.TemplateJson mutated)
+        Assert.Equal(Error PrefixNotPreserved, verify built.TemplateJson mutated)
+
+    [<Fact>]
+    let ``O1 refuses with the planner's own refusal when the facts or request no longer support the inputs`` () =
+        let privateJson, publicJson, built = prepared ()
+        let stale = { facts with PlanBlobs = [] }
+        Assert.Equal(Error PlanBlobAbsentOnMain, verifyPrepared privateJson publicJson request stale built.TemplateJson built.Payload)
+
+    // ---- O2: exclusive creation maps a lost CreateNew race to OutputExists ----
+
+    [<Fact>]
+    let ``createExclusive: an existing entry at create time is OutputExists, anything else is CustodyUnavailable`` () =
+        let directory = IO.Path.Combine(IO.Path.GetTempPath(), "v2custody-" + Guid.NewGuid().ToString("N"))
+        IO.Directory.CreateDirectory directory |> ignore
+        try
+            let path = IO.Path.Combine(directory, "out.json")
+            // First create succeeds, owner-only.
+            use first = (match V2Custody.createExclusive path with Ok stream -> stream | Error refusal -> failwith (refusalCode refusal))
+            first.Write(ReadOnlySpan<byte>(Encoding.UTF8.GetBytes sentinel))
+            first.Flush true
+            if not (OperatingSystem.IsWindows()) then
+                Assert.Equal(IO.UnixFileMode.UserRead ||| IO.UnixFileMode.UserWrite, IO.File.GetUnixFileMode path)
+            // The race: no earlier absence check is made here, so the create itself is what meets the existing entry.
+            Assert.Equal(Error OutputExists, V2Custody.createExclusive path |> Result.map ignore)
+            // Control: the original bytes are untouched by the lost race.
+            first.Dispose()
+            Assert.Equal(sentinel, IO.File.ReadAllText path)
+            // A directory in the way is also an existing entry.
+            IO.Directory.CreateDirectory(IO.Path.Combine(directory, "dir.json")) |> ignore
+            Assert.Equal(Error OutputExists, V2Custody.createExclusive (IO.Path.Combine(directory, "dir.json")) |> Result.map ignore)
+            // Not an existing entry: a missing parent is custody, not a race.
+            Assert.Equal(Error CustodyUnavailable, V2Custody.createExclusive (IO.Path.Combine(directory, "missing", "out.json")) |> Result.map ignore)
+        finally
+            IO.Directory.Delete(directory, true)

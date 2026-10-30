@@ -35,9 +35,20 @@ module V2Enrollment =
         | RowCapExceeded
         | ConflictingHumanValue
         | PartialVisibility
-        /// Raised by file-writing wrappers; the pure planner never produces it.
+        /// Raised by file-writing wrappers, including a `CreateNew` race; the pure planner never produces it.
         | OutputExists
         | MalformedInput
+        /// A supplied input file could not be read within its custody and size bounds.
+        | InputUnreadable
+        /// An output file or its durability barrier could not be created or retained.
+        | CustodyUnavailable
+        /// A read of the protected public blob through git failed (distinct from a mismatch).
+        | GitReadFailed
+        /// A read-only native GET failed or returned an unusable body.
+        | NativeReadFailed
+        /// Supplied successor template or payload bytes are not exactly what the planner re-derives
+        /// from the request, the predecessor and the native facts.
+        | SuccessorNotRederived
 
     /// The stable printable code, exactly the case name.
     val refusalCode: refusal: Refusal -> string
@@ -103,6 +114,8 @@ module V2Enrollment =
           Slice: string
           Classification: Classification }
 
+    /// Generic printing (`%A`, `ToString`) is redacted: the plan carries private custody bytes.
+    [<StructuredFormatDisplay("{Display}")>]
     type SuccessorPlan =
         { /// Successor binding template: the predecessor private binding without its private
           /// enrollment, with the appended selected issues and the predecessor merge as the
@@ -113,6 +126,9 @@ module V2Enrollment =
           Appended: PlannedRow list
           PredecessorRows: int
           TotalRows: int }
+        /// Fixed-shape redacted text: row counts only, never the template or payload.
+        member Display: string
+        override ToString: unit -> string
 
     /// Replaceable stages, for fixture controls only. Production composition uses `plan`.
     type Seams =
@@ -143,6 +159,56 @@ module V2Enrollment =
         request: Request ->
         facts: NativeFacts ->
             Result<SuccessorPlan, Refusal>
+
+    /// One independent finding. `Issue` is the request issue reference it concerns, or `None` when it
+    /// concerns the request as a whole.
+    type Finding = { Refusal: Refusal; Issue: string option }
+
+    type Analysis =
+        { PredecessorRows: int
+          PredecessorPayloadBytes: int
+          /// Every independent finding in the planner's own check order; the planner refuses with the first.
+          Findings: Finding list }
+
+    /// All independent findings rather than the first, over the same single implementation `plan` uses.
+    /// Error only when the predecessor pair does not authenticate or cannot be decoded.
+    val analyzeWith:
+        seams: Seams ->
+        predecessorPrivateJson: string ->
+        predecessorPublicJson: string ->
+        request: Request ->
+        facts: NativeFacts ->
+            Result<Analysis, Refusal>
+
+    val analyze:
+        predecessorPrivateJson: string ->
+        predecessorPublicJson: string ->
+        request: Request ->
+        facts: NativeFacts ->
+            Result<Analysis, Refusal>
+
+    /// Re-derive the successor from the request, predecessor and facts and require the supplied template
+    /// and payload to be exactly that. Specific refusals first (`PrefixNotPreserved`, `PlanNotAdmitted`,
+    /// `NodeIdMismatch` read from the supplied bytes), then `SuccessorNotRederived` for any other difference.
+    /// A hand-edited payload that the installed constructor would accept is refused here.
+    val verifyPreparedWith:
+        seams: Seams ->
+        predecessorPrivateJson: string ->
+        predecessorPublicJson: string ->
+        request: Request ->
+        facts: NativeFacts ->
+        template: string ->
+        payload: byte array ->
+            Result<unit, Refusal>
+
+    val verifyPrepared:
+        predecessorPrivateJson: string ->
+        predecessorPublicJson: string ->
+        request: Request ->
+        facts: NativeFacts ->
+        template: string ->
+        payload: byte array ->
+            Result<unit, Refusal>
 
     type PairVerdict =
         { /// Predecessor bytes before its closing `]}` are a byte-exact prefix of the successor payload.
