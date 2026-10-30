@@ -232,6 +232,16 @@ creates inside it. The **`input-read` marker** is owned by the **pod operator**:
 input and only after verifying the claim. The marker is deliberately outside the custody directory. The finalizer records
 whether it exists; the claim tooling only reads it.
 
+**Contract the claim tooling relies on** (for the pod operator and finalizer r5 PRs). The pod operator creates the marker
+before the first read or mount of the input; sets `gates.inputMounted` in its RESULT before it mounts, so a run that dies
+during the mount cannot show `false`; and emits an integer `exitCode`, `runNonceSha256`, `operatorSha256`, `mode`, `opId`,
+schema `home-learn-pod-operator/1` and a `containers` list with `mounts[].destination`. The finalizer records `opId`,
+`inputRead`, `containersStartedWithInput`, the same `runNonceSha256` and its own `finalizerSha256`. Void is fail-closed (a
+missing field blocks it). Supersede needs positive evidence of consumption (the marker, `inputRead` true, or a non-empty
+`containersStartedWithInput`), and a `--run` that created the marker or mounted `/in` and failed early can only be superseded,
+on a Root decision. Root may add `--operator-exit-code`, its own capture of the operator's exit status, which must match the
+RESULT.
+
 **Void and abort.**
 
 - *Voided:* the claim exists, the op failed or was aborted, and all of these hold: the `input-read` marker does not exist;
