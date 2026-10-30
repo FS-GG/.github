@@ -204,6 +204,24 @@ else:
     invalid_refused = False
 results["a non-positive visible-row bound is refused"] = (invalid_refused, invalid_refused)
 
+# THE CLOCK main() READS IS FROZEN, NOT THE WALL (Refs #4730). Legs 13-14 drive `main()`, which calls
+# `_dt.datetime.now()`; their rows carried a hard-coded `closedAt` of 2026-08-28 and silently assumed
+# that was "recent". On 2026-09-27 it stopped being recent, the 101 "safe recent" rows all aged past the
+# 30-day retention, the plan archived 101 instead of 1, and this selftest has been red on main for a
+# month with nobody running it (it is path-filtered and was not touched). The date is now part of the
+# fixture: main() sees FROZEN, which is one day after the rows' closedAt, whatever day the suite runs.
+import types
+FROZEN = dt.datetime(2026, 8, 29, tzinfo=dt.timezone.utc)
+class _FrozenDatetime(dt.datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return FROZEN if tz is None else FROZEN.astimezone(tz)
+def freeze_clock(at=None):
+    global FROZEN
+    FROZEN = at or dt.datetime(2026, 8, 29, tzinfo=dt.timezone.utc)
+    mod._dt = types.SimpleNamespace(datetime=_FrozenDatetime, timezone=dt.timezone, timedelta=dt.timedelta)
+freeze_clock()
+
 # 13. The operator-facing report must distinguish "target reached" from "safety left it above".
 report_rows = [row(number=800, itemId="PVTI_safe", closedAt="2026-08-28T00:00:00Z")] + [
     row(number=801 + i, itemId=f"PVTI_live_{i}", status="Ready", state="OPEN", closedAt=None)
@@ -250,6 +268,23 @@ results["reports projected before/after pages on the common production path"] = 
     report_rc == 0 and "plan: archive 1, keep 100" in page_report and
     "pages: 2 -> 1 projected" in page_report and "archived 1 row(s)" in page_report,
     page_report)
+
+# 15. The CONTROL for 13-14: the result must follow the injected clock and nothing else. The same 101
+#     rows read 60 days later are all past retention, so ALL of them archive. A suite that still read
+#     the wall clock would get one answer on every date; this one gets the two answers below on every
+#     date, which is what "the time bomb is gone" means.
+freeze_clock(dt.datetime(2026, 10, 28, tzinfo=dt.timezone.utc))
+stdout = io.StringIO()
+sys.argv = [str(sys.argv[1]), "--project", "PVT_fixture", "--max-visible", "100", "--execute"]
+try:
+    with contextlib.redirect_stdout(stdout):
+        late_rc = mod.main()
+finally:
+    sys.argv = saved_argv
+late_report = stdout.getvalue()
+results["the report follows the injected clock: 60 days later every aged row archives"] = (
+    late_rc == 0 and "plan: archive 101, keep 0" in late_report, late_report)
+freeze_clock()
 
 print(json.dumps({k: [bool(v[0]), repr(v[1])] for k, v in results.items()}))
 PY
