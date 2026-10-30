@@ -5,7 +5,7 @@ Parent: [Unified Roadmap v3](2026-10-07-unified-development-roadmap-v3.md).
 Design: [provisioned execution](../designs/2026-10-13-provisioned-podman-execution.md).
 Assessment: [upstream prior art](../reports/2026-10-13-provisioned-podman-prior-art.md).
 
-Deliver one finite supplied Linux/Podman profile with ephemeral host-backed storage that mitigates the reported nested-build I/O problem and supports fresh development on another compatible machine. Preserve existing Coordination authority, budgets and cleanup semantics. Qualify the actual storage driver and measured tradeoffs before adoption; do not infer speed or containment from a bind mount.
+Deliver one finite supplied Linux/Podman profile with ephemeral host-backed storage that mitigates the reported nested-build I/O problem and supports fresh blank-slate development on one machine, reconstructed from declared inputs with no carried state. Preserve existing Coordination authority, budgets and cleanup semantics. Qualify the actual storage driver and measured tradeoffs before adoption; do not infer speed or containment from a bind mount.
 
 The new outcome owns host/profile provisioning, ephemeral allocation/teardown and the common conformance envelope. PROC, LANG, LEARN and other existing families own their application integration, publication and installed acceptance. Count shared setup once and link reused exact evidence. The baseline v3 population has 17 rows/two Done; adding V3-ENV-01 makes 18 rows/two Done until actual acceptance changes. This is a scope increase, not negative progress or another estimate of engineering completion.
 
@@ -47,7 +47,7 @@ The original build failed because Buildah mounted a context overlay on inherited
 
 Final scoped readback found no containers, including external build containers, or members of the known original process group. The private pause process, mount retirement and both store allocations remain held or Unknown. Fresh containers permit a distinct admitted ordinary attempt; they do not prove retirement of earlier work. All 439 historical holds and the earlier unknown pause remain unchanged.
 
-This accepts the narrow ordinary-profile assertion under .1, rather than completing .1's whole profile/baseline population or V3-ENV-01. The storage is memory-backed: .2 host-backed allocation and independent teardown, .3 measured storage benefit, .4 strong containment, .6 one-machine blank-slate and recovery journeys, public delivery and installed adoption remain pending. Whole-item Done remains No.
+This accepts the narrow ordinary-profile assertion under .1, rather than completing .1's whole profile/baseline population or V3-ENV-01. The storage is memory-backed: .2 host-backed allocation and independent teardown, .3 measured storage benefit, .4 strong containment, .6 one-machine blank-slate and recovery journeys including host-reboot cases, public delivery and installed adoption remain pending. Whole-item Done remains No.
 
 ## Common-base source preparation — 2026-10-14
 
@@ -69,7 +69,7 @@ image, export, release or installed acceptance. Donor policy, trusted complete t
 the new exact helper/lock join remain pending. Separate Coordination .NET and Templates
 TypeScript compile/unit pilot preparations preserve profile ownership, opt-in digest selection and
 explicit retaining upgrades. OCI publication permissions/integration, actual installed journeys,
-external host-backed allocation/independent cleanup, containment and the second compatible machine
+external host-backed allocation/independent cleanup, containment and the one-machine blank-slate and recovery journeys
 remain open. Original ordinary-profile acceptance, failures and unknown operations remain unchanged;
 .1/.2 and whole-item Done remain incomplete.
 
@@ -231,7 +231,8 @@ incomplete and its unattended normal-use gate stays open.
   safe completion is unproven; manual repair cannot pass these cases. The fresh one-machine
   development/build journey succeeds, no writable
   engine/home/cache state is transferred, and incomplete original cleanup is neither hidden nor
-  reused. Host hardware differences remain outside paired performance conclusions.
+  reused. .6 is not Done while a required host-reboot case is pending. Host hardware differences remain
+  outside paired performance conclusions.
 
 - [ ] **V3-ENV-01.7 — Review benefit, adopt narrowly and retire proven duplication.**
   Report comparable baseline/candidate phase totals, overhead, storage footprint, failure/cleanup
@@ -240,7 +241,7 @@ incomplete and its unattended normal-use gate stays open.
   Qualify affected capability cases after host/kernel/runtime/security changes; do not freeze an
   unserviced platform indefinitely. Remove duplicate setup/supervision only after real parity.
   Optional bounded immutable-image caches need a separate opt-in disposition and cannot satisfy
-  default blank-slate acceptance. Acceptance: the finite common profile and both-machine storage
+  default blank-slate acceptance. Acceptance: the finite common profile and storage
   outcome have durable owner closure, with benefit or no-benefit disposition, limitations and
   migration/rollback evidence. Existing v3 families close only on their own complete assertions.
 
