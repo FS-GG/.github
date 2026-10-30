@@ -140,6 +140,11 @@ through the existing [host loop](host-loop.md#one-primary-progress-record). Exis
 and ordinary independent coding/PR work remain available; external edits retain guarded stale-snapshot
 refusal. A freshness sweep supplements these boundaries.
 Status maintenance grants no dispatch, reservation release, retry, closure or weaker acceptance.
+Any Root action that changes an item's actionability writes its Status in the same turn through the
+guarded write, not at a later sweep: a ruling that removes a blocker, a Delivery dispatch, a
+scope-completing merge, a new blocker or a supplier answer. A brief or ruling without the matching
+write is incomplete. The scheduled `Board drift: Project 3` report issue only detects misses; Root
+resolves each finding with a Status write or a recorded disposition.
 
 Use the existing owning issue's Owner, Done when, Current deliverable, Next action, Blocked on and
 Acceptance evidence with native links. Preserve the complete Done when; a merged slice narrows the

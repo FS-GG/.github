@@ -1,0 +1,151 @@
+name: board-drift-observer
+
+# WHAT PROBLEM THIS SOLVES (Refs #4730)
+# =====================================
+#
+# On 2026-10-30 three Project 3 cards stayed Blocked for hours after rulings and dispatches had made
+# them actionable. Status depends on Root writing it after each ruling, dispatch or merge, and nothing
+# detected a miss. This workflow is the detector. Hourly, it reads Project 3 and compares each card's
+# Status with signals it can observe (open PRs that say Refs, closed/Done mismatches, idle In progress
+# cards, missing fields, Root ruling comments newer than the last Status change) and keeps ONE issue,
+# "Board drift: Project 3", current: opened or rewritten when the finding set changes, commented once
+# per change, closed when there are no findings. It never writes a board field; Root stays the single
+# guarded writer. The rules and the report planner are in scripts/board-drift-observer.py.
+#
+# TWO JOBS, TWO CREDENTIALS, NEITHER ABLE TO DO THE OTHER'S JOB
+# =============================================================
+#
+#   board-drift-read   holds the only credential that can read the org board (App token: organization Projects
+#            read, issues read, pull requests read). It cannot write anything.
+#   board-drift-report holds only the repository GITHUB_TOKEN with `issues: write`, which is all that opening,
+#            labelling, commenting on and closing the report issue in this repository needs. It never
+#            sees the App token and cannot read the board.
+#
+# The report job runs only if the read job succeeded and has no `always()`: a fetch error, a partial page,
+# an incomplete search or an unreadable snapshot leaves the run red and the report issue untouched.
+# This workflow can never say "no drift" about a board it did not read (.github#266).
+#
+# The org App's installation grants are pinned in permission-coherence.yml (re-pin in #4969). The mint
+# below asks only for scopes already in that inventory, at read, so it neither widens nor depends on
+# that re-pin.
+on:
+  schedule:
+    # Hourly, off the hour and clear of coord-board-reconcile (:17) and the daily 04:43 archive.
+    - cron: "23 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Read the board and print the planned issue action; write nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# One observation at a time; never cancel a running one: the report step is idempotent but a run killed
+# between the issue comment and the issue patch would be retried by the next hour anyway.
+concurrency:
+  group: board-drift-observer
+  cancel-in-progress: false
+
+jobs:
+  board-drift-read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # Org-owned Project 3 is invisible to GITHUB_TOKEN. Same App installation the other board readers
+      # mint from, narrowed to the three read scopes this job uses and no write scope at all.
+      - name: Mint a read-only installation token for Project 3, issues and pull requests
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-organization-projects: read
+          permission-issues: read
+          permission-pull-requests: read
+
+      - name: Create a private scratch directory
+        id: scratch
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$(mktemp -d "$RUNNER_TEMP/board-drift.XXXXXX")"
+          chmod 700 "$dir"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+
+      # Bounded and fail-closed: one paginated GraphQL read, one PR search, one comments read per open
+      # card. Any error, partial page or count mismatch exits non-zero and writes no snapshot.
+      - name: Read Project 3 (read-only)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          SCRATCH: ${{ steps.scratch.outputs.dir }}
+        run: |
+          set -euo pipefail
+          python3 scripts/board-drift-fetch.py --owner FS-GG --project 3 --out "$SCRATCH/snapshot.json"
+
+      - name: Evaluate the drift rules
+        shell: bash
+        env:
+          SCRATCH: ${{ steps.scratch.outputs.dir }}
+        run: |
+          set -euo pipefail
+          python3 scripts/board-drift-observer.py check \
+            --snapshot "$SCRATCH/snapshot.json" --out "$SCRATCH/findings.json" | tee "$SCRATCH/check.log"
+          {
+            echo '### Board drift observation'
+            echo
+            echo '```'
+            cat "$SCRATCH/check.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the findings for the report job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: board-drift-findings
+          path: ${{ steps.scratch.outputs.dir }}/findings.json
+          if-no-files-found: error
+          retention-days: 3
+
+  board-drift-report:
+    needs: board-drift-read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Download the findings
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: board-drift-findings
+          path: ${{ runner.temp }}/board-drift-findings
+
+      - name: Open, update or close the single report issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FINDINGS_DIR: ${{ runner.temp }}/board-drift-findings
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          extra=()
+          if [ "$DRY_RUN" = 'true' ]; then
+            extra+=(--dry-run)
+            echo "::notice::dry run: the planned issue action is printed and nothing is written"
+          fi
+          python3 scripts/board-drift-observer.py report \
+            --findings "$FINDINGS_DIR/findings.json" --repo "$GITHUB_REPOSITORY" "${extra[@]}"
