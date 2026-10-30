@@ -1,0 +1,80 @@
+# pr-concurrency-coherence — the PR workflows named in scripts/check-pr-concurrency.py keep the PR-keyed
+# `concurrency` that stops superseded heads and body edits from holding runners (.github#4730).
+#
+# Gate and fixture are both offline and credential-free. The gate reads the governed workflows' YAML and
+# evaluates their declared group / cancel expressions against GitHub's group semantics; the fixture
+# mutates every governed workflow eight ways and demands each be refused for the reason that mutation
+# introduces.
+#
+# THE `paths:` FILTERS ARE PART OF THE GATE and are IDENTICAL on the pull_request and push triggers
+# (check-paths-coherence.py). They name the governed workflow files individually rather than
+# `.github/workflows/**` so an unrelated workflow edit does not buy an extra run on an already
+# over-subscribed runner pool.
+name: pr-concurrency-coherence
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-pr-concurrency.py"
+      - "tests/pr-concurrency/**"
+      - ".github/workflows/pr-concurrency-coherence.yml"
+      - ".github/workflows/architecture-map.yml"
+      - ".github/workflows/coherence.yml"
+      - ".github/workflows/coordination-sync-selftest.yml"
+      - ".github/workflows/fsgg-claim-fence.yml"
+      - ".github/workflows/fsgg-dispatch-broker-selftest.yml"
+      - ".github/workflows/generator-list.yml"
+      - ".github/workflows/new-sdd-workspace-selftest.yml"
+      - ".github/workflows/recipe-followup.yml"
+      - ".github/workflows/recipe-landable.yml"
+      - ".github/workflows/repos-registry-selftest.yml"
+      - ".github/workflows/skill-quality.yml"
+      - ".github/workflows/skill-registry-coherence.yml"
+      - ".github/workflows/skill-roots-selfcheck.yml"
+      - ".github/workflows/skill-view.yml"
+      - ".github/workflows/skill-view-parity.yml"
+      - ".github/workflows/telemetry-git-safety.yml"
+      - ".github/workflows/touch-set-drift.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-pr-concurrency.py"
+      - "tests/pr-concurrency/**"
+      - ".github/workflows/pr-concurrency-coherence.yml"
+      - ".github/workflows/architecture-map.yml"
+      - ".github/workflows/coherence.yml"
+      - ".github/workflows/coordination-sync-selftest.yml"
+      - ".github/workflows/fsgg-claim-fence.yml"
+      - ".github/workflows/fsgg-dispatch-broker-selftest.yml"
+      - ".github/workflows/generator-list.yml"
+      - ".github/workflows/new-sdd-workspace-selftest.yml"
+      - ".github/workflows/recipe-followup.yml"
+      - ".github/workflows/recipe-landable.yml"
+      - ".github/workflows/repos-registry-selftest.yml"
+      - ".github/workflows/skill-quality.yml"
+      - ".github/workflows/skill-registry-coherence.yml"
+      - ".github/workflows/skill-roots-selfcheck.yml"
+      - ".github/workflows/skill-view.yml"
+      - ".github/workflows/skill-view-parity.yml"
+      - ".github/workflows/telemetry-git-safety.yml"
+      - ".github/workflows/touch-set-drift.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-concurrency-coherence-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pr-concurrency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the pr-concurrency fixture (no network)
+        run: bash tests/pr-concurrency/run.sh
+      - name: Assert the governed workflows declare PR-keyed concurrency
+        run: python scripts/check-pr-concurrency.py --root .
