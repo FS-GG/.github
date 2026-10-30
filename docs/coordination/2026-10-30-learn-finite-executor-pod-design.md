@@ -223,24 +223,36 @@ the pod containers can only read it.
 1. `--precheck-only` runs every gate that reads no input: operator and image pins, ack gate, admission file, slice,
    sweep, headroom, pod precheck (network, caps, uid map, seccomp, tmpfs owners). It never mounts or hashes the snapshot.
 2. Root reads that result, writes the claim, then starts `--run`. `--run` re-evaluates the gates, requires a claim that
-   names its own op id, and only then creates the `input-read` marker (`O_EXCL`, in the op's custody directory) and
-   verifies and mounts the snapshot.
+   names its own op id, and only then creates the `input-read` marker and verifies and mounts the snapshot.
+
+**Who owns what on disk.** The **custody directory** `~/.local/state/learn-custody/<op-id>/` is owned by the **finalizer**,
+which creates it with `exist_ok=False`; the operator refuses a run whose custody directory already exists, so nothing else
+creates inside it. The **`input-read` marker** is owned by the **pod operator**: it creates
+`~/.local/state/learn-input/<op-id>/input-read` (directory 0700, `O_EXCL`) immediately before the first read or mount of the
+input and only after verifying the claim. The marker is deliberately outside the custody directory. The finalizer records
+whether it exists; the claim tooling only reads it.
 
 **Void and abort.**
 
-- *Voided:* the claim exists, the op failed or was aborted, and the `input-read` marker does not exist and no container
-  was ever started with `/in`. Root runs `learn-claim.py --void --op-id <id>`, which renames the claim to
-  `<source-identity>.claim.voided-<op-id>` (kept, never deleted) after Root checks the operator RESULT. The source can
-  then be claimed again.
+- *Voided:* the claim exists, the op failed or was aborted, and all of these hold: the `input-read` marker does not exist;
+  the operator RESULT is from a `--run` (a `--precheck-only` result is not evidence about a run) with a non-zero exit code,
+  the input unmounted and no container with `/in`; the finalizer record says `inputRead` false and no container started with
+  the input, carries the RESULT's run nonce, and carries the same operator and finalizer pins as the admission; and the call
+  carries a Root corroboration reference. Root runs `learn_seal_claim.py void`, which renames the claim to
+  `<source-identity>.claim.voided-<op-id>` (kept, never deleted). The source can then be claimed again, and the next claim
+  continues the generation.
 - *Consumed:* the `input-read` marker exists. The claim stands whatever happens next, including a failed run. A later run
   on the same source needs a new explicit Root decision and a new claim after the consumed one is recorded as superseded.
 - A second claim attempt on the same source fails with `EEXIST`. A second op with a new id finds a claim naming another
   op and refuses.
 
 **The claim is cooperative.** `developer` has full sudo and can edit or delete any root-owned file, including claims,
-acks and the sealed snapshot. The claim detects mistakes and defends against a compromise of `fsgg-learn-qual` or of
-a run's containers. It does not defend against Root. The install journal and evidence record the claim's hash so a
-change is visible afterwards.
+acks and the sealed snapshot. The claim detects mistakes; it does not defend against Root. A void is **attested by artifacts
+the operator account writes** (the RESULT, the finalizer record and the marker): the tool makes them consistent with each
+other and with the admission but does not authenticate them, so only Root's independent corroboration strengthens a void, and
+the claim tooling does not detect a compromised `fsgg-learn-qual`. Decision and corroboration references are GitHub comment
+URLs that the tool format-checks and does not verify; Root verifies the comment. The install journal and evidence record the
+claim's hash so a change is visible afterwards.
 
 **No replay, original clocks.** The `feed` container gets the snapshot at `/in` (read-only, `nosuid,nodev,noexec`) and
 copies it into `/work/spool` preserving mtimes. The copy is verified against the sealed manifest, and only the copy is
