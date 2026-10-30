@@ -426,12 +426,28 @@ protect "$WNEST" FS-GG/R main "outer / middle / innermost"
 expect "nested reusable calls produce a nested context — every level's job id is API" \
   0 "ok: every required context is producible" "$WNEST" "$RNEST" FS-GG/R
 
-# An EXPRESSION in a job's `name:` resolves at run time, from values this gate cannot see. Deriving
-# the literal `Build ${{ matrix.os }}` would yield a context that can never match the real one — and
-# the gate would then announce, at exit 1, that the repo is DEADLOCKED and every PR will hang. A
-# confident, alarming, wrong finding is worse than no verdict.
+# An EXPRESSION in a job's `name:` that this gate CANNOT evaluate resolves at run time, from values it
+# cannot see. Deriving the literal `Build ${{ github.ref_name }}` would yield a context that can never
+# match the real one — and the gate would then announce, at exit 1, that the repo is DEADLOCKED and
+# every PR will hang. A confident, alarming, wrong finding is worse than no verdict.
 RE_="$WORK/r-expr"; WE_="$WORK/w-expr"
 mkwf "$RE_/.github/workflows/g.yml" <<'YML'
+name: g
+on: { pull_request: }
+jobs:
+  build:
+    name: Build ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+protect "$WE_" FS-GG/R main "Build main"
+expect "an EXPRESSION in a job's \`name:\` that is not a matrix axis is exit 3 — never a false 'your repo is deadlocked'" \
+  3 "contains an expression" "$WE_" "$RE_" FS-GG/R
+
+# A name that interpolates only SOME of a two-axis matrix is not proven to take, or to skip, the
+# ` (v1, v2)` suffix, so it stays a refusal rather than a guess (Refs #4730).
+RP_="$WORK/r-partial"; WP_="$WORK/w-partial"
+mkwf "$RP_/.github/workflows/g.yml" <<'YML'
 name: g
 on: { pull_request: }
 jobs:
@@ -441,11 +457,45 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
+        sdk: ['10.0']
     steps: [{ run: 'true' }]
 YML
-protect "$WE_" FS-GG/R main "Build ubuntu-latest (ubuntu-latest)"
-expect "an EXPRESSION in a job's \`name:\` is exit 3 — never a false 'your repo is deadlocked'" \
-  3 "contains an expression" "$WE_" "$RE_" FS-GG/R
+protect "$WP_" FS-GG/R main "Build ubuntu-latest"
+expect "a name that interpolates only some matrix axes is still exit 3" \
+  3 "contains an expression" "$WP_" "$RP_" FS-GG/R
+
+# =============================================================================================
+# 2b. Names and conditions this gate CAN derive exactly (Refs #4730). Both were exit 3 on the live
+#     sweep, for FS.GG.Game from 2026-07-29 and FS.GG.Net, so neither repo's protection was checked.
+#     Both fixtures are the real job headers; the negatives are what keep the derivation honest.
+# =============================================================================================
+RG="$WORK/r-game"; WG="$WORK/w-game"
+cp_fix() { mkdir -p "$(dirname "$2")"; cp "$FIX/$1" "$2"; }
+cp_fix game-lockstep.yml "$RG/.github/workflows/gate.yml"
+protect "$WG" FS-GG/R main "Lockstep conformance (dotnet)" "Lockstep conformance (fable)" "Lockstep conformance (browser)"
+expect "a matrix-interpolated job name is derived per combination, WITHOUT the default suffix" \
+  0 "ok: every required context is producible" "$WG" "$RG" FS-GG/R
+protect "$WG" FS-GG/R main "Lockstep conformance (dotnet) (dotnet)"
+expect "the suffixed spelling GitHub never reports is a real deadlock, exit 1 (the old derivation)" \
+  1 "Lockstep conformance (dotnet) (dotnet)" "$WG" "$RG" FS-GG/R
+protect "$WG" FS-GG/R main "Lockstep conformance (safari)"
+expect "a value outside the declared matrix is a deadlock, exit 1" \
+  1 "Lockstep conformance (safari)" "$WG" "$RG" FS-GG/R
+
+RNG="$WORK/r-netif"; WNG="$WORK/w-netif"
+cp_fix net-gate.yml "$RNG/.github/workflows/gate.yml"
+protect "$WNG" FS-GG/FS.GG.Net main "Build + test (locked restore)"
+expect "\`if: github.repository == '<the subject>'\` is proven true on its own pull requests" \
+  0 "ok: every required context is producible" "$WNG" "$RNG" FS-GG/FS.GG.Net
+protect "$WNG" FS-GG/Other main "Build + test (locked restore)"
+expect "the same guard naming a DIFFERENT repository is not proven — exit 3, not a green" \
+  3 "cannot prove runs on a normal pull request" "$WNG" "$RNG" FS-GG/Other
+RNF="$WORK/r-netif-neq"
+cp_fix net-gate.yml "$RNF/.github/workflows/gate.yml"
+sed -i "s/github.repository == 'FS-GG\/FS.GG.Net'/github.repository != 'FS-GG\/FS.GG.Net'/" "$RNF/.github/workflows/gate.yml"
+protect "$WNG" FS-GG/FS.GG.Net main "Build + test (locked restore)"
+expect "\`!=\` the subject is never proven" \
+  3 "cannot prove runs on a normal pull request" "$WNG" "$RNF" FS-GG/FS.GG.Net
 
 # =============================================================================================
 # 3. A context produced only on `push` can NEVER report on a PR — the message must say which.

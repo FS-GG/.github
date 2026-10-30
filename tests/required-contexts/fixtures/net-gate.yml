@@ -1,0 +1,19 @@
+# The job HEADER of FS.GG.Net's gate.yml, verbatim from origin/main on 2026-10-30; the steps are cut to
+# one. The `if:` is what made the nightly required-context-coherence sweep exit 3 for this repo.
+name: gate
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-test:
+    name: Build + test (locked restore)
+    runs-on: ubuntu-latest
+    if: github.repository == 'FS-GG/FS.GG.Net'
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
