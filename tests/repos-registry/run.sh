@@ -1362,6 +1362,45 @@ if [ "$kit_receivers" = "audio,game,governance,net,rendering,sdd,templates," ]; 
   ok "require-context's real target set for coordination-kit is the SEVEN receivers #1587 names"
 else bad "the coordination-kit receiver set is not the seven #1587 must arm" "declared: $kit_receivers"; fi
 
+# --- the required-context sweep has its own roster word (Refs #4730) ---------------------------------
+# required-context-coherence.yml used to take its subject list from `receives: contract-coherence`. SDD,
+# Rendering, Templates and Game retired that caller on 2026-09-26; keeping the word would have kept a
+# false claim, and removing it would have silently dropped four repos from the sweep. The sweep now has
+# `required-context-sweep`, so removing a caller can never shrink the set of repos whose protection is
+# checked. These legs pin exactly that, from the REAL roster and the REAL workflow.
+sweep="$(bash "$REPOS_SH" list --receives required-context-sweep --field id | sort | tr '\n' ',')"
+if [ "$sweep" = "audio,game,governance,net,rendering,sdd,templates," ]; then
+  ok "the required-context sweep covers all SEVEN framework repos, including the four that retired their contract-coherence caller"
+else bad "the sweep's subject list is not the seven framework repos" "declared: $sweep"; fi
+cc="$(bash "$REPOS_SH" list --receives contract-coherence --field id | sort | tr '\n' ',')"
+if [ "$cc" = "audio,governance,net," ]; then
+  ok "contract-coherence is claimed only by the three repos that still call the gate"
+else bad "contract-coherence claims a repo that retired its caller (or drops one that has it)" "declared: $cc"; fi
+kit="$(bash "$REPOS_SH" list --receives coordination-kit --field id | sort | tr '\n' ',')"
+if [ "$sweep" = "$kit" ]; then ok "every coordination-kit receiver is swept (the sweep cannot lag the kit fabric)"
+else bad "a kit receiver is outside the sweep" "sweep=$sweep kit=$kit"; fi
+if grep -qF 'list --receives required-context-sweep --field full' "$REPO_ROOT/.github/workflows/required-context-coherence.yml" \
+   && ! grep -qE 'list --receives contract-coherence' "$REPO_ROOT/.github/workflows/required-context-coherence.yml"; then
+  ok "required-context-coherence.yml builds its matrix from required-context-sweep, not contract-coherence"
+else bad "the sweep workflow is wired to the wrong roster word"; fi
+# The word must have a capability row: a legal-but-undetectable word is the #628 hole.
+norow="$WORK/sweep-no-row.yml"
+python3 - "$REPO_ROOT/registry/repos.yml" "$norow" <<'PY'
+import re, sys
+t = open(sys.argv[1]).read()
+a = t.index("  - id: required-context-sweep\n")
+b = t.index("\n\n", a)
+open(sys.argv[2], "w").write(t[:a] + t[b + 1:])
+PY
+relock "$norow"
+expect_fail "a roster that says required-context-sweep without its capability row is refused" 1 "required-context-sweep" "$norow"
+# Dropping a repo from the sweep is visible: a mutant roster without Game's word no longer lists it.
+nogame="$WORK/sweep-no-game.yml"
+sed -E '/id: game,/ s/, required-context-sweep//' "$REPO_ROOT/registry/repos.yml" > "$nogame"; relock "$nogame"
+if ! bash "$REPOS_SH" list --registry "$nogame" --receives required-context-sweep --field id 2>/dev/null | grep -qx game; then
+  ok "mutant: Game without the word is absent from the sweep list (the pin above would catch it)"
+else bad "mutant roster still lists Game"; fi
+
 echo "repos-registry fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-registry fixture FAILED"; exit 1; }
 echo "repos-registry fixture — OK"
