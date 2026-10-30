@@ -15,6 +15,21 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      # THE ENGINE IS BUILT HERE, NOT ASSUMED (Refs #4730). `scripts/fsgg-coord` resolves a source build
+      # of THIS checkout first and has no other engine on a hosted runner; since #2597/77938c5a moved
+      # the project-visibility read onto the typed engine, a runner without this step exits 69 ("no fsgg-coord engine
+      # found") on every run. Same two commands as `repos-audit`. This workflow has no PR trigger, so
+      # nothing before merge would ever have run it: `check-scheduled-engine-provisioning.py` is the
+      # gate that now says so.
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Build the typed coordination engine
+        run: |
+          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+          dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
       - name: Verify the audit fixture
         run: bash tests/projects-audit/run.sh
       # The Coordination board is org-owned and private. A repository GITHUB_TOKEN cannot read it;

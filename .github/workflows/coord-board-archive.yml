@@ -65,6 +65,21 @@ jobs:
         with:
           persist-credentials: false
 
+      # THE ENGINE IS BUILT HERE, NOT ASSUMED (Refs #4730). `scripts/fsgg-coord` resolves a source build
+      # of THIS checkout first and has no other engine on a hosted runner; since #2597/77938c5a moved
+      # the project-id read onto the typed engine, a runner without this step exits 69 ("no fsgg-coord engine
+      # found") on every run. Same two commands as `repos-audit`. This workflow has no PR trigger, so
+      # nothing before merge would ever have run it: `check-scheduled-engine-provisioning.py` is the
+      # gate that now says so.
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Build the typed coordination engine
+        run: |
+          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+          dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
       # The board is org-owned, so this needs Projects v2 write — which `GITHUB_TOKEN` never carries.
       # Same App installation the reconcile job mints from, with `permission-issues` dropped: this
       # workflow moves ROWS, never issues, and a credential should not carry a scope its job cannot use.
