@@ -148,12 +148,12 @@ So the verdict's deadline is derived, not guessed, and every OK prints it — bo
 machine-readable `verdict-expires-at=<iso8601>` line.
 
 NOTHING IN GITHUB RE-EVALUATES A CHECK ON THAT DEADLINE, WHICH IS THE DEFECT `.github#2656` NAMES.
-`claim-generation.yml` runs this job on `opened`/`synchronize`/`reopened`/`edited`. A lease expiring is none of
+`coherence.yml` runs this job on `opened`/`synchronize`/`reopened`/`edited`. A lease expiring is none of
 those — it is the passage of time — so a green computed before the lapse stays green, and branch
 protection (which is the ONLY fence on a merge made from the GitHub UI or a bare `gh pr merge`, since
 `delivery --apply` re-reads the winning claim itself) would admit the merge on a premise that has since
 lapsed. `--sweep` is the re-evaluation that bounds it, and it runs from ITS OWN workflow —
-`.github/workflows/claim-freshness-sweep.yml`, job `claim-freshness-sweep`, NOT a job in `claim-generation.yml`;
+`.github/workflows/claim-freshness-sweep.yml`, job `claim-freshness-sweep`, NOT a job in `coherence.yml`;
 that file's header records why `scripts/check-required-contexts.py` forced it out. On a schedule it
 re-computes this verdict for every open `item/<n>-*` PR from that PR's OWN lease, and publishes a fresh
 `claim-generation` check run when, and only when, the answer has changed IN THE REVOKING DIRECTION. See
@@ -205,7 +205,7 @@ required contexts (`Landable.advisoryFrom`), so a check `main` requires is score
 included, given the arming above — with no source edit and no paired removal to remember. See
 `Landable.fsi`'s `scoreRequired` doc for the caller-side detail.
 
-CROSS-REPO ITEMS ARE READABLE-OR-UNREADABLE, NOT ASSUMED. `.github/workflows/claim-generation.yml` runs only
+CROSS-REPO ITEMS ARE READABLE-OR-UNREADABLE, NOT ASSUMED. `.github/workflows/coherence.yml` runs only
 on `.github`'s own pull requests, so `--repo` is always `FS-GG/.github` here and its items live in the
 same repository the default `GITHUB_TOKEN` can already read comments on. The algorithm below does not
 hard-code that: it reads whatever `item=` names, and a token that cannot see a genuinely cross-repo
@@ -323,7 +323,7 @@ RELEASED = "released"
 # A CLOCK".
 CLAIM_MARKER_RE = re.compile(r"^<!--\s*fsgg:claim\s(?P<fields>.*?)-->", re.DOTALL)
 
-# The name of the check run this gate's verdict is published under — both by `claim-generation.yml`'s
+# The name of the check run this gate's verdict is published under — both by `coherence.yml`'s
 # `claim-generation` job (implicitly, as the job id) and by `--sweep` (explicitly, as the check-run name
 # it PATCHes). It is also the REQUIRED status context on `main`, which is why the two must agree: a
 # sweep that posted under any other name would leave the stale green in place and fence nothing.
@@ -1034,7 +1034,7 @@ def sweep_all(args: argparse.Namespace) -> int:
     THREE REFUSALS BOUND ITS BLAST RADIUS, and they are refusals rather than best-effort intentions:
 
       IT NEVER ORIGINATES A VERDICT. If a head has no standing `claim-generation` check run, the sweep
-      does nothing for it. Everything it can ever do is CHANGE an answer `claim-generation.yml`'s own job
+      does nothing for it. Everything it can ever do is CHANGE an answer `coherence.yml`'s own job
       already gave, using the same script, the same applicability rule, and the same lease — so a PR the
       required job has not judged cannot first be judged by a cron.
 
