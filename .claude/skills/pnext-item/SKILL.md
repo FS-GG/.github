@@ -55,8 +55,8 @@ For an admitted routine item, the board is an asynchronous view rather than merg
 3. Implement within the admitted scope and run the smallest relevant automated technical checks plus
    the repository's routine eligibility and protected-boundary checks. When the change spans independent
    concerns (for example source plus release route plus docs/registry, or two unrelated fixes), the owner
-   splits it into separately reviewable PRs, stacked or sequenced, before requesting review; #4941's four-PR
-   plan is the model. Before requesting review, run the same gate commands CI will run for the touched paths,
+   splits it into separately reviewable PRs, sequenced under the one-open-PR-per-chain and two-managed-PR lane
+   limits (later ones opened as earlier ones merge), before requesting review; #4941's four-PR sequence is the model. Before requesting review, run the same gate commands CI will run for the touched paths,
    locally or on the PR, and state the results; do not request review on a head with known-red required
    gates, except failures inherited from main, which must be named. Put exactly one
    `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` marker in
@@ -67,7 +67,7 @@ For an admitted routine item, the board is an asynchronous view rather than merg
 4. Repair on the same PR. Recurring same-class failures require investigating relevant callers,
    shared assumptions, failure and cleanup paths before another coherent repair. Governing/code changes
    require one independent source review of the exact candidate, relevant tests and final required CI;
-   inert prose uses owner review and proportionate validation. A reviewer supplies an actual verdict,
+   inert prose uses owner review and proportionate validation. A reviewer supplies an actual verdict and recounts every headline count, reporting an untraceable one as an Unknown,
    without creating a mandatory critic actor or phase chain. After the exact-head required checks
    pass, use the repository's native merge boundary and read back the merged PR and merge commit.
    Continue applicable publication, installation, participant, recovery or native acceptance under

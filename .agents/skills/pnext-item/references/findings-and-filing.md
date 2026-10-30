@@ -9,7 +9,7 @@ Report material process problems promptly when they block progress, risk incorre
 or cause substantial avoidable work. Distinguish observation from hypothesis; include bounded evidence,
 delivery impact, the workaround used and a proposed improvement when known. A missing solution does not
 suppress a valid report. If an environment interruption (fdev reboot, runner congestion, external mirror outage)
-recurs and costs material time, the affected owner files or extends one owned finding on #4730 with timestamps
+recurs and costs material time, the affected owner files or extends one owned finding on the coordination-efficiency owning issue (currently #4730) with timestamps
 and impact, instead of mentioning it only in a report. Use existing owning issues/PRs and worker returns; do not invent findings,
 repeat unchanged reports or create a separate reporting worker, packet, ledger or measurement campaign.
 The root ensures [reasoned, owned disposition](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/host-loop.md#own-process-findings-and-disposition),

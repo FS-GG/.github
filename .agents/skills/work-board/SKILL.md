@@ -55,6 +55,7 @@ controller conversion remains owned by the governing LEARN outcome, not this ada
    hosted capacity; delegate only when authorized and useful. Otherwise continue eligible serial work
    and name its constraint/reopening event. A free agent slot is not resource capacity.
 7. Read back accepted scope and remaining assertions, reconcile Delivery Status before its parent and return to selection.
+   Root's closing comment quotes the generator's own printed counts, not a paraphrase.
    A merge, worker return, completed milestone or stopped watcher does not end a clearing invocation.
 
 The boundary order is: observe results → reconcile acceptance/blockers → update Status and verify
