@@ -1,6 +1,6 @@
 name: release-new-sdd-workspace-successor-candidate
 
-# Fresh Creator023 release qualification reuses genuine promoted113 dependency bytes.
+# Fresh Creator0231 release qualification reuses genuine promoted113 dependency bytes.
 # Candidate evidence never grants effects; the current publisher independently authenticates it.
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   candidate:
-    name: new-sdd-workspace-023-release-candidate
+    name: new-sdd-workspace-0231-release-candidate
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -39,21 +39,21 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           python3 scripts/new_sdd_workspace_successor_admission.py
           version="$(dotnet msbuild scripts/NewSddWorkspace/NewSddWorkspace.fsproj -getProperty:Version | tr -d '[:space:]')"
-          test "$version" = 0.23.0
-          test -z "$(git ls-remote --tags origin refs/tags/new-sdd-workspace/v0.23.0)"
+          test "$version" = 0.23.1
+          test -z "$(git ls-remote --tags origin refs/tags/new-sdd-workspace/v0.23.1)"
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
-            https://api.nuget.org/v3-flatcontainer/fs.gg.newsddworkspace/0.23.0/fs.gg.newsddworkspace.0.23.0.nupkg)"
+            https://api.nuget.org/v3-flatcontainer/fs.gg.newsddworkspace/0.23.1/fs.gg.newsddworkspace.0.23.1.nupkg)"
           test "$response" = 404
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
             -u "$GITHUB_ACTOR:$GITHUB_TOKEN" \
-            https://nuget.pkg.github.com/FS-GG/download/fs.gg.newsddworkspace/0.23.0/fs.gg.newsddworkspace.0.23.0.nupkg)"
+            https://nuget.pkg.github.com/FS-GG/download/fs.gg.newsddworkspace/0.23.1/fs.gg.newsddworkspace.0.23.1.nupkg)"
           test "$response" = 404
       - name: Refuse mismatched Creator profiles before costly graph qualification
         run: python3 tests/new-sdd-workspace-successor/run.py
       - name: Acquire verified promoted originals into fresh isolated checkouts
         run: |
           set -euo pipefail
-          work="$RUNNER_TEMP/creator023-published-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          work="$RUNNER_TEMP/creator0231-published-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           test ! -e "$work"
           mkdir -m 700 "$work"
           git clone --no-hardlinks --no-checkout "$GITHUB_WORKSPACE" "$work/creator"
@@ -86,12 +86,12 @@ jobs:
             -p:CompileUsingReferenceAssemblies=false \
             -p:FsggFrozenCoordSource="$work/producer" -p:FsggFrozenCoordDependencies="$work/dependencies" \
             -p:RepositoryCommit="$GITHUB_SHA" -o "$GITHUB_WORKSPACE/artifacts/new-sdd-workspace"
-          package=artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.23.0.nupkg
+          package=artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.23.1.nupkg
           manifest=artifacts/new-sdd-workspace/manifest.json
           python3 scripts/new-sdd-workspace-release.py prepare --package "$package" \
-            --source-sha "$GITHUB_SHA" --version 0.23.0 --tag new-sdd-workspace/v0.23.0 --output "$manifest"
+            --source-sha "$GITHUB_SHA" --version 0.23.1 --tag new-sdd-workspace/v0.23.1 --output "$manifest"
           python3 scripts/new-sdd-workspace-release.py verify --manifest "$manifest" --package "$package"
-          python3 tests/new-sdd-workspace-successor/run.py --release-qualification-023 --board-package "$package" \
+          python3 tests/new-sdd-workspace-successor/run.py --release-qualification-0231 --board-package "$package" \
             --source-sha "$GITHUB_SHA" --release-manifest "$manifest" \
             --published-coord-dependencies "$work/dependencies" --published-coord-source "$work/producer" \
             --creator-source "$work/creator" > artifacts/new-sdd-workspace/package-evidence.json
@@ -103,7 +103,7 @@ jobs:
         with:
           name: new-sdd-workspace-successor-candidate-${{ github.sha }}-${{ github.run_id }}
           path: |
-            artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.23.0.nupkg
+            artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.23.1.nupkg
             artifacts/new-sdd-workspace/manifest.json
             artifacts/new-sdd-workspace/package-evidence.json
           if-no-files-found: error

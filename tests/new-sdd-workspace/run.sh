@@ -190,6 +190,9 @@ dotnet fsi --reference:"$DLL" "$HERE/pinned-governance.fsx"
 # The consumer side of the ref-pinned provider catalog (FS-GG/.github#3010): typed, over the exact bytes
 # of the published Workspace.Template 0.20.0 catalog and synthetic derivatives. No network or process.
 dotnet fsi --reference:"$DLL" "$HERE/provider-catalog.fsx"
+# The Wizard-owned security state and the pinned coordination kit (FS-GG/.github#4964): no network, no process.
+dotnet fsi --reference:"$DLL" "$HERE/security-obligations.fsx"
+dotnet fsi --reference:"$DLL" "$HERE/coordination-kit.fsx"
 
 # Scrub `fsgg-sdd` from the child's PATH by handing it only the directory the dotnet muxer lives in
 # (onPath does a non-recursive PATH scan, and fsgg-sdd is a global tool in a *different* dir). On a
@@ -374,7 +377,7 @@ if [ "${FSGG_TEST_QUALIFIED_REMOTE_ADMIN:-0}" = 1 ]; then
 # mutation payload, and forbids node ids in GraphQL source. It also returns the same payload shape as
 # GitHub's live ProjectV2 schema so durable state assertions exercise the built CLI, not a substring.
 PROJECT_WORK="$WORK/project workspace's"; mkdir -p "$PROJECT_WORK/.fsgg" "$WORK/project-bin"
-printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"},{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$PROJECT_WORK/.fsgg/scaffold-provenance.json"
+printf '%s\n' '{"schema":"fsgg.new-sdd-workspace-security-obligations/1","securityObligations":[{"kind":"project-access","target":"acme/Roadmap"},{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$PROJECT_WORK/.fsgg/security-obligations.json"
 cat > "$WORK/project-bin/gh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -437,11 +440,11 @@ run_project() {
 project_rc=0; run_project success secure "$PROJECT_WORK" --project acme/Roadmap --public-board --trusted-writers alice,team:platform || project_rc=$?
 if [ "$project_rc" -eq 1 ] && grep -q 'partial verified receipt:' "$WORK/project.out" \
   && grep -qF 'collaborators(first:100)' "$WORK/project.log" \
-  && [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification" and .target=="acme/Roadmap")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 1 ] \
-  && [ "$(jq '[.verifiedSecurityReceipts[] | select(.kind=="project-access" and .verificationState=="partial" and .basePermission=="unverified")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 1 ] \
-  && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access") | .unverifiedFacts | index("effective-exclusive-writer-set")' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null \
-  && [ "$(jq '.verifiedSecurityReceipts[] | select(.kind=="project-access") | .trustedWriters | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 2 ] \
-  && jq -e '.securityObligations[] | select(.kind=="repository-issue-policy")' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null; then
+  && [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification" and .target=="acme/Roadmap")] | length' "$PROJECT_WORK/.fsgg/security-obligations.json")" -eq 1 ] \
+  && [ "$(jq '[.verifiedSecurityReceipts[] | select(.kind=="project-access" and .verificationState=="partial" and .basePermission=="unverified")] | length' "$PROJECT_WORK/.fsgg/security-obligations.json")" -eq 1 ] \
+  && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access") | .unverifiedFacts | index("effective-exclusive-writer-set")' "$PROJECT_WORK/.fsgg/security-obligations.json" >/dev/null \
+  && [ "$(jq '.verifiedSecurityReceipts[] | select(.kind=="project-access") | .trustedWriters | length' "$PROJECT_WORK/.fsgg/security-obligations.json")" -eq 2 ] \
+  && jq -e '.securityObligations[] | select(.kind=="repository-issue-policy")' "$PROJECT_WORK/.fsgg/security-obligations.json" >/dev/null; then
   ok "secure Project uses typed variables and persists one partial receipt plus exact human obligation"
 else
   bad "secure Project production route must persist typed partial provenance" "rc=$project_rc: $(cat "$WORK/project.out")"
@@ -450,10 +453,10 @@ fi
 # The public quickstart defaults to the active personal account. Its Project must
 # travel through the same typed visibility and writer route as an organization board.
 PERSONAL_WORK="$WORK/project-personal"; mkdir -p "$PERSONAL_WORK/.fsgg"
-printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"alice/Roadmap"}]}' > "$PERSONAL_WORK/.fsgg/scaffold-provenance.json"
+printf '%s\n' '{"schema":"fsgg.new-sdd-workspace-security-obligations/1","securityObligations":[{"kind":"project-access","target":"alice/Roadmap"}]}' > "$PERSONAL_WORK/.fsgg/security-obligations.json"
 project_rc=0; run_project personal secure "$PERSONAL_WORK" --project alice/Roadmap --public-board --trusted-writers alice || project_rc=$?
 if [ "$project_rc" -eq 1 ] \
-  && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .project=="alice/Roadmap" and .observedVisibility=="public" and (.trustedWriters | length)==1)' "$PERSONAL_WORK/.fsgg/scaffold-provenance.json" >/dev/null; then
+  && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .project=="alice/Roadmap" and .observedVisibility=="public" and (.trustedWriters | length)==1)' "$PERSONAL_WORK/.fsgg/security-obligations.json" >/dev/null; then
   ok "secure Project supports the active personal-account quickstart"
 else
   bad "personal Project must use the typed RepositoryOwner route" "rc=$project_rc: $(cat "$WORK/project.out")"
@@ -462,27 +465,27 @@ fi
 # A second partial run replaces the receipt/obligation instead of appending. The human completion
 # route then re-executes the observable production mutation and clears only that exact obligation.
 run_project success secure "$PROJECT_WORK" --project acme/Roadmap --public-board --trusted-writers alice,team:platform || true
-if [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 1 ]; then
+if [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification")] | length' "$PROJECT_WORK/.fsgg/security-obligations.json")" -eq 1 ]; then
   ok "Project partial resume is idempotent and deduplicates its human obligation"
 else
-  bad "Project partial resume must not grow duplicate obligations" "$(cat "$PROJECT_WORK/.fsgg/scaffold-provenance.json")"
+  bad "Project partial resume must not grow duplicate obligations" "$(cat "$PROJECT_WORK/.fsgg/security-obligations.json")"
 fi
 # A human observation that includes an unexpected effective writer cannot discharge the obligation.
 project_rc=0; run_project success secure "$PROJECT_WORK" --project acme/Roadmap --trusted-writers alice,team:platform --verified-base-permission READ --verified-exclusive-writers alice,team:platform,mallory || project_rc=$?
-if [ "$project_rc" -ne 0 ] && [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 1 ]; then
+if [ "$project_rc" -ne 0 ] && [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification")] | length' "$PROJECT_WORK/.fsgg/security-obligations.json")" -eq 1 ]; then
   ok "unexpected effective writer keeps the exact human obligation pending"
 else
   bad "human completion must reject an effective writer outside the allowlist" "rc=$project_rc: $(cat "$WORK/project.out")"
 fi
-project_resume="$(jq -r '.securityObligations[] | select(.kind=="project-base-access-human-verification") | .resume' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")"
+project_resume="$(jq -r '.securityObligations[] | select(.kind=="project-base-access-human-verification") | .resume' "$PROJECT_WORK/.fsgg/security-obligations.json")"
 project_rc=0
 PROJECT_MODE=success PROJECT_STATE="$WORK/project-state-success" PROJECT_LOG="$WORK/project.log" PROJECT_GRAPHQL_VALIDATOR="$HERE/validate_project_graphql.py" NEW_SDD_DLL="$DLL" PATH="$WORK/project-bin:$DOTNET_DIR:/usr/bin:/bin" \
   bash -c "$project_resume" >"$WORK/project.out" 2>&1 || project_rc=$?
 if [ "$project_rc" -eq 0 ] \
   && [[ "$project_resume" != *'<workspace>'* ]] \
-  && [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 0 ] \
-  && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .verificationState=="verified-with-human-access-review" and .basePermission=="READ" and (.humanVerifiedFacts.effectiveExclusiveWriters | length)==2)' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null \
-  && jq -e '.securityObligations[] | select(.kind=="repository-issue-policy")' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null; then
+  && [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification")] | length' "$PROJECT_WORK/.fsgg/security-obligations.json")" -eq 0 ] \
+  && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .verificationState=="verified-with-human-access-review" and .basePermission=="READ" and (.humanVerifiedFacts.effectiveExclusiveWriters | length)==2)' "$PROJECT_WORK/.fsgg/security-obligations.json" >/dev/null \
+  && jq -e '.securityObligations[] | select(.kind=="repository-issue-policy")' "$PROJECT_WORK/.fsgg/security-obligations.json" >/dev/null; then
   ok "recorded Project resume preserves its workspace identity, executes, and clears only its base obligation"
 else
   bad "recorded Project human-verification resume must converge exact provenance" "command=$project_resume; rc=$project_rc: $(cat "$WORK/project.out")"
@@ -492,10 +495,10 @@ fi
 # output. The unexpected-writer leg proves the mutation payload itself is checked, not just reached.
 for project_case in mutation-failure grant-payload-mismatch unreadable missing; do
   CASE_PROJECT="$WORK/project-$project_case"; mkdir -p "$CASE_PROJECT/.fsgg"
-  printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$CASE_PROJECT/.fsgg/scaffold-provenance.json"
-  cp "$CASE_PROJECT/.fsgg/scaffold-provenance.json" "$CASE_PROJECT/before.json"
+  printf '%s\n' '{"schema":"fsgg.new-sdd-workspace-security-obligations/1","securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$CASE_PROJECT/.fsgg/security-obligations.json"
+  cp "$CASE_PROJECT/.fsgg/security-obligations.json" "$CASE_PROJECT/before.json"
   project_rc=0; run_project "$project_case" secure "$CASE_PROJECT" --project acme/Roadmap --public-board --trusted-writers alice,team:platform || project_rc=$?
-  if [ "$project_rc" -ne 0 ] && cmp -s "$CASE_PROJECT/before.json" "$CASE_PROJECT/.fsgg/scaffold-provenance.json" && ! grep -q 'TOKEN-SHOULD-NOT-LEAK' "$WORK/project.out"; then
+  if [ "$project_rc" -ne 0 ] && cmp -s "$CASE_PROJECT/before.json" "$CASE_PROJECT/.fsgg/security-obligations.json" && ! grep -q 'TOKEN-SHOULD-NOT-LEAK' "$WORK/project.out"; then
     ok "Project $project_case is a redacted no-verdict with durable state unchanged"
   else
     bad "Project $project_case must fail closed without corrupting provenance" "rc=$project_rc: $(cat "$WORK/project.out")"
@@ -506,25 +509,25 @@ done
 # requested value; the stale leg must fail and preserve provenance byte-for-byte.
 for visibility_case in visibility-change visibility-stale; do
   VIS_WORK="$WORK/project-$visibility_case"; mkdir -p "$VIS_WORK/.fsgg"
-  printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$VIS_WORK/.fsgg/scaffold-provenance.json"
-  cp "$VIS_WORK/.fsgg/scaffold-provenance.json" "$VIS_WORK/before.json"
+  printf '%s\n' '{"schema":"fsgg.new-sdd-workspace-security-obligations/1","securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$VIS_WORK/.fsgg/security-obligations.json"
+  cp "$VIS_WORK/.fsgg/security-obligations.json" "$VIS_WORK/before.json"
   rm -f "$WORK/project-state-$visibility_case"
   project_rc=0; run_project "$visibility_case" secure "$VIS_WORK" --project acme/Roadmap --public-board --trusted-writers alice,team:platform || project_rc=$?
   if [ "$visibility_case" = visibility-change ]; then
-    [ "$project_rc" -eq 1 ] && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .observedVisibility=="public")' "$VIS_WORK/.fsgg/scaffold-provenance.json" >/dev/null \
+    [ "$project_rc" -eq 1 ] && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .observedVisibility=="public")' "$VIS_WORK/.fsgg/security-obligations.json" >/dev/null \
       && ok "Project visibility mutation is re-read before partial receipt" \
       || bad "changed Project visibility must be re-read and persisted" "rc=$project_rc: $(cat "$WORK/project.out")"
   else
-    [ "$project_rc" -ne 0 ] && cmp -s "$VIS_WORK/before.json" "$VIS_WORK/.fsgg/scaffold-provenance.json" \
+    [ "$project_rc" -ne 0 ] && cmp -s "$VIS_WORK/before.json" "$VIS_WORK/.fsgg/security-obligations.json" \
       && ok "stale Project visibility reread fails closed with provenance unchanged" \
       || bad "stale Project visibility must not produce a receipt" "rc=$project_rc: $(cat "$WORK/project.out")"
   fi
 done
 
 PROJECT_BAD_PROVENANCE="$WORK/project-bad-provenance"; mkdir -p "$PROJECT_BAD_PROVENANCE/.fsgg"
-printf '{broken' > "$PROJECT_BAD_PROVENANCE/.fsgg/scaffold-provenance.json"
+printf '{broken' > "$PROJECT_BAD_PROVENANCE/.fsgg/security-obligations.json"
 project_rc=0; run_project success secure "$PROJECT_BAD_PROVENANCE" --project acme/Roadmap --public-board --trusted-writers alice,team:platform || project_rc=$?
-if [ "$project_rc" -ne 0 ] && grep -q 'security provenance persistence failed' "$WORK/project.out" && [ "$(cat "$PROJECT_BAD_PROVENANCE/.fsgg/scaffold-provenance.json")" = '{broken' ]; then
+if [ "$project_rc" -ne 0 ] && grep -q 'security obligations are unreadable' "$WORK/project.out" && [ "$(cat "$PROJECT_BAD_PROVENANCE/.fsgg/security-obligations.json")" = '{broken' ]; then
   ok "Project verified API result fails closed when durable provenance cannot be parsed"
 else
   bad "Project persistence failure must not become console-only success" "rc=$project_rc: $(cat "$WORK/project.out")"
@@ -533,10 +536,10 @@ fi
 # A private board already at the requested visibility is preserved: only the explicit writer route
 # runs, and the partial receipt records `private` without a visibility mutation.
 PRIVATE_WORK="$WORK/project-private"; mkdir -p "$PRIVATE_WORK/.fsgg"
-printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$PRIVATE_WORK/.fsgg/scaffold-provenance.json"
+printf '%s\n' '{"schema":"fsgg.new-sdd-workspace-security-obligations/1","securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$PRIVATE_WORK/.fsgg/security-obligations.json"
 : > "$WORK/project.log"
 project_rc=0; run_project private secure "$PRIVATE_WORK" --project acme/Roadmap --private-board --trusted-writers alice,team:platform || project_rc=$?
-if [ "$project_rc" -eq 1 ] && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .observedVisibility=="private")' "$PRIVATE_WORK/.fsgg/scaffold-provenance.json" >/dev/null \
+if [ "$project_rc" -eq 1 ] && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .observedVisibility=="private")' "$PRIVATE_WORK/.fsgg/security-obligations.json" >/dev/null \
   && ! grep -q 'updateProjectV2(input' "$WORK/project.log"; then
   ok "private Project visibility is preserved while explicit writers get a partial receipt"
 else
@@ -563,7 +566,7 @@ expect_ok "flags combine, and --ref takes a value" -- "$TGT" P --upgrade --no-go
 # matching durable repository obligation. This drives the built CLI through a hermetic gh GraphQL
 # response, rather than testing the JSON helper in isolation.
 SECURE="$WORK/secure-workspace"; mkdir -p "$SECURE/.fsgg" "$WORK/secure-bin"
-printf '%s\n' '{"securityObligations":[{"kind":"repository-issue-policy","target":"acme/app"},{"kind":"project-access","target":"acme/Roadmap"}]}' > "$SECURE/.fsgg/scaffold-provenance.json"
+printf '%s\n' '{"schema":"fsgg.new-sdd-workspace-security-obligations/1","securityObligations":[{"kind":"repository-issue-policy","target":"acme/app"},{"kind":"project-access","target":"acme/Roadmap"}]}' > "$SECURE/.fsgg/security-obligations.json"
 cat > "$WORK/secure-bin/gh" <<'EOF'
 #!/usr/bin/env bash
 case " $* " in
@@ -575,7 +578,7 @@ chmod +x "$WORK/secure-bin/gh"
 set +e
 secure_out="$(PATH="$WORK/secure-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$SECURE" --repo acme/app 2>&1)"; secure_rc=$?
 set -e
-if [ "$secure_rc" -eq 0 ] && printf '%s' "$secure_out" | grep -q 'verified:' && grep -q 'project-access' "$SECURE/.fsgg/scaffold-provenance.json" && grep -q 'verifiedSecurityReceipts' "$SECURE/.fsgg/scaffold-provenance.json" && grep -q '"priorPolicy": "COLLABORATORS_ONLY"' "$SECURE/.fsgg/scaffold-provenance.json" && grep -q '"actor": "fixture"' "$SECURE/.fsgg/scaffold-provenance.json"; then
+if [ "$secure_rc" -eq 0 ] && printf '%s' "$secure_out" | grep -q 'verified:' && grep -q 'project-access' "$SECURE/.fsgg/security-obligations.json" && grep -q 'verifiedSecurityReceipts' "$SECURE/.fsgg/security-obligations.json" && grep -q '"priorPolicy": "COLLABORATORS_ONLY"' "$SECURE/.fsgg/security-obligations.json" && grep -q '"actor": "fixture"' "$SECURE/.fsgg/security-obligations.json"; then
   ok "secure resume clears only its verified repository obligation and persists its receipt"
 else
   bad "secure resume must converge matching provenance" "rc=$secure_rc: $secure_out"
@@ -584,7 +587,7 @@ fi
 # Changed-and-verified repository path: the double is stateful so the production route must mutate,
 # re-read, retain prior OPEN in its receipt, and replace that receipt on an idempotent rerun.
 CHANGED="$WORK/changed-workspace"; mkdir -p "$CHANGED/.fsgg" "$WORK/changed-bin"
-printf '%s\n' '{"securityObligations":[{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$CHANGED/.fsgg/scaffold-provenance.json"
+printf '%s\n' '{"schema":"fsgg.new-sdd-workspace-security-obligations/1","securityObligations":[{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$CHANGED/.fsgg/security-obligations.json"
 cat > "$WORK/changed-bin/gh" <<'EOF'
 #!/usr/bin/env bash
 case " $* " in
@@ -596,23 +599,23 @@ esac
 EOF
 chmod +x "$WORK/changed-bin/gh"
 changed_rc=0; changed_out="$(REPO_CHANGED_STATE="$WORK/repo-changed" PATH="$WORK/changed-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$CHANGED" --repo acme/app 2>&1)" || changed_rc=$?
-if [ "$changed_rc" -eq 0 ] && jq -e '.verifiedSecurityReceipts[] | select(.kind=="repository-issue-policy" and .priorPolicy=="OPEN" and .finalPolicy=="COLLABORATORS_ONLY")' "$CHANGED/.fsgg/scaffold-provenance.json" >/dev/null; then
+if [ "$changed_rc" -eq 0 ] && jq -e '.verifiedSecurityReceipts[] | select(.kind=="repository-issue-policy" and .priorPolicy=="OPEN" and .finalPolicy=="COLLABORATORS_ONLY")' "$CHANGED/.fsgg/security-obligations.json" >/dev/null; then
   ok "repository OPEN policy is changed, re-read, and persisted with its prior policy"
 else
   bad "repository changed-and-verified route must persist the typed receipt" "rc=$changed_rc: $changed_out"
 fi
 REPO_CHANGED_STATE="$WORK/repo-changed" PATH="$WORK/changed-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$CHANGED" --repo acme/app >/dev/null
-if [ "$(jq '[.verifiedSecurityReceipts[] | select(.kind=="repository-issue-policy" and .repository=="acme/app")] | length' "$CHANGED/.fsgg/scaffold-provenance.json")" -eq 1 ]; then
+if [ "$(jq '[.verifiedSecurityReceipts[] | select(.kind=="repository-issue-policy" and .repository=="acme/app")] | length' "$CHANGED/.fsgg/security-obligations.json")" -eq 1 ]; then
   ok "repository secure rerun idempotently replaces its durable receipt"
 else
-  bad "repository secure rerun must not duplicate receipts" "$(cat "$CHANGED/.fsgg/scaffold-provenance.json")"
+  bad "repository secure rerun must not duplicate receipts" "$(cat "$CHANGED/.fsgg/security-obligations.json")"
 fi
 
 # A successful remote policy read is not a successful resume when its durable target is missing or
 # malformed. These cases pin F1's fail-closed persistence boundary through the production command.
 for provenance_case in missing malformed; do
   PROV_WORK="$WORK/provenance-$provenance_case"; mkdir -p "$PROV_WORK"
-  if [ "$provenance_case" = malformed ]; then mkdir -p "$PROV_WORK/.fsgg"; printf '{broken' > "$PROV_WORK/.fsgg/scaffold-provenance.json"; fi
+  if [ "$provenance_case" = malformed ]; then mkdir -p "$PROV_WORK/.fsgg"; printf '{broken' > "$PROV_WORK/.fsgg/security-obligations.json"; fi
   prov_rc=0; prov_out="$(PATH="$WORK/secure-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$PROV_WORK" --repo acme/app 2>&1)" || prov_rc=$?
   if [ "$prov_rc" -ne 0 ] && printf '%s' "$prov_out" | grep -q 'durable receipt failed'; then
     ok "repository $provenance_case provenance cannot be reported as secured"
@@ -625,7 +628,7 @@ done
 # stale post-write read, leaving the exact durable obligation in place and never echoing a token.
 for secure_case in mutation-failure stale-reread; do
   CASE_WORK="$WORK/$secure_case-workspace"; mkdir -p "$CASE_WORK/.fsgg" "$WORK/$secure_case-bin"
-  printf '%s\n' '{"securityObligations":[{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$CASE_WORK/.fsgg/scaffold-provenance.json"
+  printf '%s\n' '{"schema":"fsgg.new-sdd-workspace-security-obligations/1","securityObligations":[{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$CASE_WORK/.fsgg/security-obligations.json"
   cat > "$WORK/$secure_case-bin/gh" <<'EOF'
 #!/usr/bin/env bash
 case " $* " in
@@ -646,7 +649,7 @@ EOF
   set +e
   case_out="$(PATH="$WORK/$secure_case-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$CASE_WORK" --repo acme/app 2>&1)"; case_rc=$?
   set -e
-  if [ "$case_rc" -ne 0 ] && grep -q 'repository-issue-policy' "$CASE_WORK/.fsgg/scaffold-provenance.json" && ! printf '%s' "$case_out" | grep -q 'TOKEN-SHOULD-NOT-LEAK'; then
+  if [ "$case_rc" -ne 0 ] && grep -q 'repository-issue-policy' "$CASE_WORK/.fsgg/security-obligations.json" && ! printf '%s' "$case_out" | grep -q 'TOKEN-SHOULD-NOT-LEAK'; then
     ok "secure $secure_case fails closed and preserves its obligation without token output"
   else
     bad "secure $secure_case must fail closed" "rc=$case_rc: $case_out"
@@ -676,11 +679,11 @@ EOF
 chmod +x "$SEALED_BIN/gh"
 
 SEALED_REPO="$WORK/sealed-repo"; mkdir -p "$SEALED_REPO/.fsgg"
-printf '%s\n' '{"securityObligations":[{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$SEALED_REPO/.fsgg/scaffold-provenance.json"
-cp "$SEALED_REPO/.fsgg/scaffold-provenance.json" "$SEALED_REPO/before.json"
+printf '%s\n' '{"schema":"fsgg.new-sdd-workspace-security-obligations/1","securityObligations":[{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$SEALED_REPO/.fsgg/security-obligations.json"
+cp "$SEALED_REPO/.fsgg/security-obligations.json" "$SEALED_REPO/before.json"
 sealed_rc=0
 sealed_out="$(GH_TOKEN=fake GITHUB_TOKEN=fake SEALED_LOG="$SEALED_LOG" SEALED_MUTATION="$SEALED_MUTATION" PATH="$SEALED_BIN:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$SEALED_REPO" --repo acme/app 2>&1)" || sealed_rc=$?
-if [ "$sealed_rc" -ne 0 ] && cmp -s "$SEALED_REPO/before.json" "$SEALED_REPO/.fsgg/scaffold-provenance.json" \
+if [ "$sealed_rc" -ne 0 ] && cmp -s "$SEALED_REPO/before.json" "$SEALED_REPO/.fsgg/security-obligations.json" \
   && grep -q 'common v1 effect admission is unavailable' <<<"$sealed_out" \
   && grep -q 'repository(owner:' "$SEALED_LOG" && [ ! -e "$SEALED_MUTATION" ] && ! grep -q 'mutation' "$SEALED_LOG"; then
   ok "repository administration reads current state but stays pending without common effect admission"
@@ -689,12 +692,12 @@ else
 fi
 
 SEALED_PROJECT="$WORK/sealed-project"; mkdir -p "$SEALED_PROJECT/.fsgg"
-printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$SEALED_PROJECT/.fsgg/scaffold-provenance.json"
-cp "$SEALED_PROJECT/.fsgg/scaffold-provenance.json" "$SEALED_PROJECT/before.json"
+printf '%s\n' '{"schema":"fsgg.new-sdd-workspace-security-obligations/1","securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$SEALED_PROJECT/.fsgg/security-obligations.json"
+cp "$SEALED_PROJECT/.fsgg/security-obligations.json" "$SEALED_PROJECT/before.json"
 : > "$SEALED_LOG"
 sealed_rc=0
 sealed_out="$(GH_TOKEN=fake GITHUB_TOKEN=fake SEALED_LOG="$SEALED_LOG" SEALED_MUTATION="$SEALED_MUTATION" PATH="$SEALED_BIN:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$SEALED_PROJECT" --project acme/Roadmap --public-board --trusted-writers alice 2>&1)" || sealed_rc=$?
-if [ "$sealed_rc" -ne 0 ] && cmp -s "$SEALED_PROJECT/before.json" "$SEALED_PROJECT/.fsgg/scaffold-provenance.json" \
+if [ "$sealed_rc" -ne 0 ] && cmp -s "$SEALED_PROJECT/before.json" "$SEALED_PROJECT/.fsgg/security-obligations.json" \
   && grep -q 'common v1 effect admission is unavailable' <<<"$sealed_out" \
   && grep -q 'projectsV2(first:100)' "$SEALED_LOG" && grep -q 'user(login:$login)' "$SEALED_LOG" \
   && [ ! -e "$SEALED_MUTATION" ] && ! grep -q 'mutation' "$SEALED_LOG"; then
@@ -707,12 +710,12 @@ fi
 # reach the requested-public decision and become pending at the boundary before `gh` sees either
 # updateProjectV2 or the later writer-resolution/read path.
 SEALED_VISIBILITY="$WORK/sealed-project-visibility"; mkdir -p "$SEALED_VISIBILITY/.fsgg"
-printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$SEALED_VISIBILITY/.fsgg/scaffold-provenance.json"
-cp "$SEALED_VISIBILITY/.fsgg/scaffold-provenance.json" "$SEALED_VISIBILITY/before.json"
+printf '%s\n' '{"schema":"fsgg.new-sdd-workspace-security-obligations/1","securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$SEALED_VISIBILITY/.fsgg/security-obligations.json"
+cp "$SEALED_VISIBILITY/.fsgg/security-obligations.json" "$SEALED_VISIBILITY/before.json"
 : > "$SEALED_LOG"; rm -f "$SEALED_MUTATION"
 sealed_rc=0
 sealed_out="$(GH_TOKEN=fake GITHUB_TOKEN=fake SEALED_PROJECT_PUBLIC=false SEALED_LOG="$SEALED_LOG" SEALED_MUTATION="$SEALED_MUTATION" PATH="$SEALED_BIN:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$SEALED_VISIBILITY" --project acme/Roadmap --public-board --trusted-writers alice 2>&1)" || sealed_rc=$?
-if [ "$sealed_rc" -ne 0 ] && cmp -s "$SEALED_VISIBILITY/before.json" "$SEALED_VISIBILITY/.fsgg/scaffold-provenance.json" \
+if [ "$sealed_rc" -ne 0 ] && cmp -s "$SEALED_VISIBILITY/before.json" "$SEALED_VISIBILITY/.fsgg/security-obligations.json" \
   && grep -q 'common v1 effect admission is unavailable' <<<"$sealed_out" \
   && grep -q 'projectsV2(first:100)' "$SEALED_LOG" && ! grep -q 'user(login:$login)' "$SEALED_LOG" \
   && [ ! -e "$SEALED_MUTATION" ] && ! grep -q 'updateProjectV2\|mutation' "$SEALED_LOG"; then
