@@ -107,6 +107,8 @@
     <Compile Include="Scan.fs" />
     <Compile Include="OperationObservationReads.fsi" />
     <Compile Include="OperationObservationReads.fs" />
+    <Compile Include="ContextViewReads.fsi" />
+    <Compile Include="ContextViewReads.fs" />
   </ItemGroup>
 
   <ItemGroup>
