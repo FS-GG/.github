@@ -1,5 +1,16 @@
 # Registry changelog
 
+## 2026-10-30 — reconcile published FS.GG.UI 0.32.4 (FS-GG/.github#4817)
+
+Flip `fs-gg-ui-template` source, package and tag to **0.32.4**. The retained original producer is `4ede04be66cedffc8551cd14045bab714aa358a7` (candidate run 40737624380/a1, artifact 12838338215, custody `89ea6424…`).
+
+- **Tag settlement:** the three lightweight tags were created by fenced App-token settlement [40997578723/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/40997578723), with sameIntentConvergence Verified and the workflows restored.
+- **Publication:** the ADR-0097-locked publisher [40997955966/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/40997955966) ran at executor `f8f23a7a`. It pushed the canary FS.GG.UI.Build, then 19/19 to both feeds, with `feedSplit: none`.
+- **Readback:** an independent readback found 19/19 nuget.org nuspecs, and the BOM pins `[0.32.4]`. nuget.org entries equal the originals excluding `.signature.p7s`.
+- **Adoption:** Templates source adoption is FS.GG.Templates#806 (`fe24d308`), and Release C public-producer qualification passed on public 0.32.4 (run 41034550000).
+
+This closes the `feed` coherence drift, where the registry declared 0.32.3 while both feeds served 0.32.4. Installed and participant AT journeys remain open under #4817. 0.32.3 stays historical.
+
 ## 2026-10-25 — reconcile published Workspace.Template 0.20.0 (FS-GG/FS.GG.Templates#441)
 
 Reconcile `fs-gg-workspace-template` source/package **0.20.0** and `fs-gg-templates/v0.20.0` after the
@@ -184,6 +195,8 @@ review M4). The typed validator (`fsgg-sdd registry validate`) never saw that co
 no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
+
+- **2026-10-30** — RECONCILE PUBLISHED FS.GG.UI 0.32.4 (fs-gg-ui-template; .github#4817): retained original producer 4ede04be66cedffc8551cd14045bab714aa358a7, tags settled by fenced App-token settlement 40997578723/a1, ADR-0097-locked publisher 40997955966/a1 at executor f8f23a7a pushed 19/19 to both feeds (canary FS.GG.UI.Build, feedSplit none, nuget.org readback 19/19); Templates adoption #806 (fe24d308); closes the feed-coherence drift (registry 0.32.3 vs feeds 0.32.4); see the dated section above.
 
 - **2026-10-25** — — RECONCILE PUBLISHED WORKSPACE.TEMPLATE 0.20.0 (Workspace.Template 0.20.0 (Templates#441)): source 1b9b1ca92556eb1acd0e4d1c9cb851a8c7906f86, original publisher 40163553390/a1 on both feeds (589 signature-excluded entries), tag fs-gg-templates/v0.20.0 -> 2285deef…; adds the TypeScript, JavaScript, Rust and Go CLI workspace providers qualified through SDD CLI 2.5.1 / Governance CLI 1.15.0 (payload 825a0815…); see the dated section above for the full evidence.
 

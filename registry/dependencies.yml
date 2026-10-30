@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-10-25"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-10-30"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   fsquint: { name: FsQuint, role: "Independent public Quint–F# decoding, replay and optional tooling" }
@@ -553,9 +553,13 @@ contracts:
     # 5c74f2a and all 19 archives were read back from GitHub Packages and nuget.org. It adds the
     # source-complete authoring, input, runtime and presentation surfaces while preserving
     # omitted/default sdd, explicit none, typed-sdd and legacy spec-kit.
-    version: "0.32.3"   # SOURCE: original producer 4ec6eafbbbf02264db9b0db4780c590abe0bf9cd (source run 39509314882/a1, artifact 12305198394, custody 7dbd4329); all three 0.32.3 tags converge on it by same-intent settlement 39774890888/a1 (original transport outcome Unknown).
-    package-version: "0.32.3"   # FEED: protected publisher 39817794639/a1 at executor fc2b177e22d66032fe8c2ead4fc3e9845fc2a350; all 19 original archives published to both feeds with matching readbacks; nuget.org entries equal the originals excluding .signature.p7s. Templates source adoption is #728 (2f8d400a); published Workspace 0.19.2 (39845406998/a1), 0.19.3 (39910502481/a1) and current 0.20.0 (40163553390/a1) carry it; installed/full Wizard qualification of 0.20.0 remains open (FS-GG/.github#4709).
-    package-tag: "fs-gg-ui-template/v0.32.3"
+    version: "0.32.4"   # SOURCE: retained original producer 4ede04be66cedffc8551cd14045bab714aa358a7 (candidate run 40737624380/a1, artifact 12838338215, custody 89ea6424); all three 0.32.4 tags settled at it by fenced App-token settlement 40997578723/a1 (receipt passed, sameIntentConvergence Verified, cleanup restored).
+    package-version: "0.32.4"   # FEED: ADR-0097-locked publisher 40997955966/a1 at executor f8f23a7a3677da2fb3d2090119443059e160a68c; canary FS.GG.UI.Build then 19/19 pushed to both feeds, feedSplit none; independent readback 19/19 nuget.org nuspecs and BOM pins [0.32.4]; nuget.org entries equal the originals excluding .signature.p7s. Templates source adoption is FS-GG/FS.GG.Templates#806 (fe24d308); Release C public-producer qualification on public 0.32.4 passed (41034550000). Installed/participant AT journeys remain open (FS-GG/.github#4817).
+    package-tag: "fs-gg-ui-template/v0.32.4"
+    # PRIOR 0.32.3 publication (historical):
+    # version: "0.32.3"   # SOURCE: original producer 4ec6eafbbbf02264db9b0db4780c590abe0bf9cd (source run 39509314882/a1, artifact 12305198394, custody 7dbd4329); all three 0.32.3 tags converge on it by same-intent settlement 39774890888/a1 (original transport outcome Unknown).
+    # package-version: "0.32.3"   # FEED: protected publisher 39817794639/a1 at executor fc2b177e22d66032fe8c2ead4fc3e9845fc2a350; all 19 original archives published to both feeds with matching readbacks; nuget.org entries equal the originals excluding .signature.p7s. Templates source adoption is #728 (2f8d400a); published Workspace 0.19.2 (39845406998/a1), 0.19.3 (39910502481/a1) and current 0.20.0 (40163553390/a1) carry it; installed/full Wizard qualification of 0.20.0 remains open (FS-GG/.github#4709).
+    # package-tag: "fs-gg-ui-template/v0.32.3"
     # PRIOR 0.32.1 publication (historical):
     # version: "0.32.1"   # SOURCE: original producer 6c9f766fdd91483c2de6f061e75589e94852a265; all three 0.32.1 tags bind that source.
     # package-version: "0.32.1"   # FEED: accepted publisher 37461402933/a1 at executor 6ea40861d15b581735655fbe7253673bf1cee907; 19 original packages acknowledged and matched on both feeds. Notification, receiver adoption and installed use remain open.
