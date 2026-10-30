@@ -53,7 +53,12 @@ For an admitted routine item, the board is an asynchronous view rather than merg
    dispatch and before return. The root integrator decides and verifies guarded native updates;
    native closure and other planning effects retain their own authorization and independent readback.
 3. Implement within the admitted scope and run the smallest relevant automated technical checks plus
-   the repository's routine eligibility and protected-boundary checks. Put exactly one
+   the repository's routine eligibility and protected-boundary checks. When the change spans independent
+   concerns (for example source plus release route plus docs/registry, or two unrelated fixes), the owner
+   splits it into separately reviewable PRs, stacked or sequenced, before requesting review; #4941's four-PR
+   plan is the model. Before requesting review, run the same gate commands CI will run for the touched paths,
+   locally or on the PR, and state the results; do not request review on a head with known-red required
+   gates, except failures inherited from main, which must be named. Put exactly one
    `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` marker in
    the PR body. Use a native closing link only when that merge fulfills the issue's entire declared promise.
    Otherwise link the issue without closing it and retain its remaining assertions. Waits, scratch files and body files follow the
@@ -67,7 +72,9 @@ For an admitted routine item, the board is an asynchronous view rather than merg
    pass, use the repository's native merge boundary and read back the merged PR and merge commit.
    Continue applicable publication, installation, participant, recovery or native acceptance under
    their effect-specific authority. A source merge establishes only its accepted source slice.
-5. Read back every applicable accepted effect. Record accepted scope/date/evidence and remaining
+5. Read back every applicable accepted effect. The owner's report and the root's closing comment quote the
+   generator's own printed count (tests, scenarios, refusals), not a paraphrase; a claim that cannot be traced
+   to a generator output or a test assertion is reported as an Unknown. Record accepted scope/date/evidence and remaining
    assertions in the existing owning issue; close only its fulfilled promise with the correct native
    reason and authorized Status readback. Preserve partial close/planning effects without replaying
    both. Never roll up parents automatically. If the remainder is externally blocked, name its owner,
