@@ -13,44 +13,41 @@ retired `scripts/new-sdd-fullstack.sh` (see [ADR-0016](https://github.com/FS-GG/
 
 ## Current source and published boundary
 
-Wizard **0.23.0** is published: tag `new-sdd-workspace/v0.23.0` (release 429016553) and nuget.org
-`FS.GG.NewSddWorkspace` 0.23.0. It provides descriptor-driven catalog creation with stable SDD CLI
-**2.5.3 or newer**. Creation and dry-run admit that runtime before target mutation and recheck the
-exact producer immediately before scaffold. Legacy typed project knowledge retains its 2.1.0 floor;
-list/help require no catalog runtime.
+Wizard **0.23.1** is published: tag `new-sdd-workspace/v0.23.1` (release 429241547, source `e922a7c6`) and nuget.org
+`FS.GG.NewSddWorkspace` 0.23.1; it supersedes 0.23.0 (tag `new-sdd-workspace/v0.23.0`, release 429016553). Both provide
+descriptor-driven catalog creation with stable SDD CLI **2.5.3 or newer**. Creation and dry-run admit that runtime before
+target mutation and recheck the exact producer immediately before scaffold. Legacy typed project knowledge retains its
+2.1.0 floor; list/help require no catalog runtime.
 The catalog route described below describes the published FS.GG.Templates **0.20.1**
 (tag `fs-gg-templates/v0.20.1`, package `FS.GG.Workspace.Template::0.20.1`), the release that carries the
 common project-knowledge composition for the TypeScript, JavaScript, Rust and Go providers.
-The four-product public-tool journeys passed on Linux x64 **with `--no-coordination`**: the public Wizard 0.23.0,
-SDD 2.5.3 and Governance 1.15.0 installed from nuget.org created TypeScript, JavaScript, Rust and Go CLI workspaces
-against `fs-gg-templates/v0.20.1`, and 85 of 85 checks passed (creation, knowledge, Doctor, Governance Verify with all
-eight gates, and five refusal controls per product); see the
-[#3010 Step 3 result](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523620705). The retained receipts are
-in private custody; their manifest digest is `ea322f1526a048836deb2f1eaa2e817ccdaffc91647e4cc19cd69bd191e8d217`
-and the run summary `evidence/results.json` is `aa01a492c6ded094ac988cb2953d02ff8cfdb74e6a27ac3ac8abc9b3fc97737d`.
 
-**Known defect in 0.23.0: creation with default coordination yields an incoherent `doctor`.** With coordination
-on (the default), Wizard 0.23.0 writes a `securityObligations` key into `.fsgg/scaffold-provenance.json`. That file
-belongs to SDD, and SDD 2.5.3 rejects the unknown property: `doctor` reports `isCoherent:false` with
-`scaffold.provenanceMalformed` on all four catalog providers. The default-coordination journey found this (see the
-[#3010 result](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523944130)); the repair is tracked in
-.github#4964 (obligations move to a Wizard-owned file; Wizard 0.23.1) and its source is prepared, but it is not yet published.
-Until 0.23.1, use `--no-coordination` (the configuration the 85/85 result covers). Do not edit
-`.fsgg/scaffold-provenance.json` to make `doctor` pass: that hides the pending security obligations from SDD.
-The obligations were recorded as pending, never claimed satisfied, and `knowledge check` passed on all four products.
+**Acceptance.** The four-product public-tool journeys with `--no-coordination` passed 85 of 85 checks on Linux x64 with
+the public Wizard 0.23.0, SDD 2.5.3 and Governance 1.15.0 installed from nuget.org (see the
+[#3010 Step 3 result](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523620705); receipts manifest
+`ea322f1526a048836deb2f1eaa2e817ccdaffc91647e4cc19cd69bd191e8d217`, run summary
+`aa01a492c6ded094ac988cb2953d02ff8cfdb74e6a27ac3ac8abc9b3fc97737d`). The default-coordination journeys against the
+**published 0.23.1**, installed from nuget.org into the same contained no-credential carrier, passed on all four providers
+(82 checks; receipts manifest `2e6a4afb9703c95e507e7652523d1f5577658c1e01e0eeea63d21e5b07ce4a00`, see [#4964](https://github.com/FS-GG/.github/issues/4964)): `doctor`
+`isCoherent:true` with no diagnostics, both obligations recorded as pending in `.fsgg/security-obligations.json`, provenance
+free of the moved keys, the coordination kit byte-identical to the pinned commit `a9a6f77f`, the embedded
+`initialize-sdd-workspace` skill, an idempotent `retrofit`, and migration of a workspace created by 0.23.0.
 
-Default coordination also fetches the coordination kit over HTTPS from the moving `main` ref of this repository, so
-the materialized kit is not reproducible across fetches. The kit observed in the journey matched `main@a9a6f77f`
-byte for byte; the 0.23.1 source pins it (see below).
+**Fixed in 0.23.1: creation with default coordination used to yield an incoherent `doctor`.** Wizard 0.23.0 with
+coordination on (the default) wrote its `securityObligations` key into the SDD-owned `.fsgg/scaffold-provenance.json`, which
+SDD 2.5.3 rejects as an unknown property: `doctor` reported `isCoherent:false` with `scaffold.provenanceMalformed` on all four
+catalog providers (found by the default-coordination journey,
+[#3010 result](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523944130)). 0.23.1 keeps the Wizard's state in
+Wizard-owned files (see
+[Where the security state lives](#where-the-security-state-lives-fsggsecurity-obligationsjson)), migrates workspaces that
+0.23.0 already created on the next `secure`/`retrofit`/`--upgrade` run, and pins the coordination kit that 0.23.0 fetched
+from the moving `main` ref. Do not edit `.fsgg/scaffold-provenance.json` by hand to make `doctor` pass on a 0.23.0 workspace:
+that hides the pending security obligations from SDD; let a 0.23.1 run migrate them. The obligations were always recorded as
+pending, never claimed satisfied.
 
-Stated limits remain: the GitHub Packages feed was not read directly (the qualifying token received 403), only
-one Linux x64 carrier was exercised, no reproducibility pack exists, and independent custody of the advisory inputs
-is still owed.
-
-Prospective source **0.23.1** repairs both points (#4964): it keeps the Wizard's state in Wizard-owned files (see
-[Where the security state lives](#where-the-security-state-lives-fsggsecurity-obligationsjson)), migrates
-workspaces that 0.23.0 already created on the next `secure`/`retrofit`/`--upgrade` run, and pins the coordination
-kit. Wizard 0.23.1 itself is not published by this source change; until it is, the guidance above stands.
+Stated limits remain: the GitHub Packages feed was not read directly (the qualifying token received 403 or lacked
+`read:packages`), only one Linux x64 carrier was exercised, no reproducibility pack exists, and independent custody of the
+advisory inputs is still owed.
 
 ## Install
 
@@ -156,7 +153,7 @@ new-sdd-workspace ./Greeter "Greeter" --template go-cli --ref fs-gg-templates/v0
   then the product shape, then each descriptor prompt, then the policy file, and shows the resolved selection
   before it asks to create.
 
-The catalog route is published with Wizard 0.23.0 over Templates 0.20.1 and its public-tool journeys are
+The catalog route is published with Wizard 0.23.0 and 0.23.1 over Templates 0.20.1 and its public-tool journeys are
 recorded in [#3010](https://github.com/FS-GG/.github/issues/3010) (the limits are stated in the first section).
 The published Templates 0.20.0 polyglot payloads lack the common project-knowledge CI/checker composition that
 0.20.1 carries. Every catalog creation initializes the canonical store through the exact
@@ -312,7 +309,11 @@ stays best-effort and non-blocking, like the governance overlay: it warns and th
 a manifest path outside the fixed layout is a **refusal**: nothing from the kit is written (not even the
 board env), the step is reported `failed` and the run is incomplete (non-zero). An incomplete run skips every
 later step: repository security (5b), `fsgg-sdd doctor`, upgrade, typed knowledge and the initialization handoff.
-The scaffold itself is retained; re-run `new-sdd-workspace retrofit <workspace>` once the pin verifies. **Note:** `offer`/chores on a **non-FS-GG** board need an engine build that includes
+The scaffold itself is retained. Recovery needs two commands, because the skipped steps include the security one: run
+`new-sdd-workspace retrofit <workspace>` once the pin verifies (it restores the kit and env), and run
+`new-sdd-workspace secure --repo owner/repository` (no workspace argument) to apply and verify repository issue intake. No
+`.fsgg/security-obligations.json` was written, so the workspace-bound `secure <workspace> ...` resume forms report it missing
+until one exists; create the workspace again into a fresh target if the recorded Project-access obligation is wanted. **Note:** `offer`/chores on a **non-FS-GG** board need an engine build that includes
 #1140 (post-`0.4.0`); the default FS-GG board works on any engine (embedded lock table), so the
 scaffolder surfaces the caveat only when you retarget the board.
 
@@ -343,7 +344,8 @@ It is **idempotent** and never leaves partial state:
 - the **embedded** `initialize-sdd-workspace` skill is authoritative: the pin lists it under `embeddedSkills`, so the
   kit neither fetches nor vendors it, and creation, `--upgrade` and `retrofit` all install or reconcile it from the
   tool's own resource. A 0.23.0-era copy is therefore brought forward by `retrofit` (reported as drift), a current copy
-  is left untouched, and the older copy named by the pinned commit can never be restored.
+  is left untouched, and on this legacy route the older copy named by the pinned commit can never be restored (the
+  selected-product V2 route, `--board-kit-ref`, takes its kit from its own immutable producer revision and is unchanged).
   `scripts/new-sdd-workspace-kit-pin.py check` fails if a skill the Wizard embeds is neither excluded this way nor
   byte-equal to the pinned manifest row;
 - run again on an already-wired workspace it **refuses cleanly** ("already wired — no drift to re-emit")
