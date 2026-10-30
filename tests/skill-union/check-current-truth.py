@@ -25,7 +25,7 @@ ALL_SKILLS = (
     "work-board",
     "work-roadmap",
 )
-EXPLICIT_ONLY = {"cut-nuget-release", "drive-board", "p-add", "padd-item", "work-board", "work-roadmap"}
+EXPLICIT_ONLY = {"cut-nuget-release", "drive-board", "p-add", "padd-item", "work-roadmap"}
 
 
 def fail(message: str) -> None:
@@ -83,13 +83,25 @@ def check_host_policy(root: Path) -> None:
             expected = "false" if skill in EXPLICIT_ONLY else "implicit/default"
             fail(f"{skill}: invocation policy must be {expected}")
 
+    # work-roadmap still carries the portable host-loop rules. drive-board and work-board no longer do:
+    # #4680 (75ab98dd) rewrote work-board's host-loop around the canonical coordinator and #4900 rewrote
+    # it again, and drive-board's host-loop is a redirect to it. Their obligations are different now.
+    roadmap = (root / ROOTS[0] / "work-roadmap/references/host-loop.md").read_text()
+    for required in ("current host exposes", "isolated worktree", "FSGG_WORKER", "selector supported by the current host"):
+        if required not in roadmap:
+            fail(f"work-roadmap: host loop missing portability rule {required!r}")
+    board_loop = (root / ROOTS[0] / "work-board/references/host-loop.md").read_text()
+    if "provides no alternate scheduler" not in board_loop:
+        fail("work-board: host loop must remain the canonical reference without an alternate scheduler")
+    redirect = (root / ROOTS[0] / "drive-board/references/host-loop.md").read_text()
+    if "(../../work-board/references/host-loop.md)" not in redirect or "adds no" not in redirect:
+        fail("drive-board: host loop must stay a compatibility redirect to the canonical work-board host loop")
+    # Host-specific orchestration syntax must not return anywhere in the three coordinator skills.
     for skill in ("drive-board", "work-board", "work-roadmap"):
-        text = (root / ROOTS[0] / skill / "references/host-loop.md").read_text()
-        for required in ("current host exposes", "isolated worktree", "FSGG_WORKER", "selector supported by the current host"):
-            if required not in text:
-                fail(f"{skill}: host loop missing portability rule {required!r}")
-        if 'isolation: "worktree"' in text or "Agent tool" in text:
-            fail(f"{skill}: host-specific orchestration syntax returned")
+        for path in sorted((root / ROOTS[0] / skill).rglob("*.md")):
+            text = path.read_text()
+            if 'isolation: "worktree"' in text or "Agent tool" in text:
+                fail(f"{skill}: host-specific orchestration syntax returned in {path.relative_to(root / ROOTS[0])}")
 
 
 def check(root: Path) -> None:
@@ -98,13 +110,16 @@ def check(root: Path) -> None:
     for skill, text in docs.items():
         check_links(root, skill, text)
 
+    # lane-steward was rewritten by #4711 (0d85830e): it no longer prescribes applying a narrowing through
+    # `set-paths` or an additive `widen`. It proposes the narrower declaration to the accountable owner and
+    # states that no V1 scan/lanes/set-paths/widen/take/claim route is authorized for organization V2.
     lane = docs["lane-steward"]
-    if "scripts/fsgg-coord set-paths <issue> --paths" not in lane:
-        fail("lane-steward: narrowing must use set-paths")
-    if 'fsgg-coord widen <issue> --paths "<the above>"' in lane:
-        fail("lane-steward: obsolete additive widen narrowing recipe returned")
-    if "additive expansion only" not in lane or "scripts/fsgg-coord widen <issue> --paths" not in lane:
-        fail("lane-steward: widen must remain documented only for additive expansion")
+    if re.search(r"fsgg-coord\s+(?:set-paths|widen)\b", lane):
+        fail("lane-steward: obsolete V1 set-paths/widen recipe returned")
+    if "No V1 scan/lanes/set-paths,\nwiden, take or claim route is authorized for organization V2" not in lane:
+        fail("lane-steward: must state that no V1 narrowing/claim route is authorized for organization V2")
+    if "to its accountable owner" not in lane or "does not select,\nclaim, enroll" not in lane:
+        fail("lane-steward: diagnosis must propose to the accountable owner and not select, claim or enroll")
 
     publishing = docs["publishing-and-deployment"]
     stale_publishing = (
