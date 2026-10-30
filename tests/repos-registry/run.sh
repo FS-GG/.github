@@ -1416,6 +1416,19 @@ if bash "$REPOS_SH" validate >/dev/null 2>&1 \
   ok "the real roster records composition-registry-updated as a senderless listener, not as a declared Templates -> SDD edge"
 else bad "the Templates -> SDD edge decision is not reflected in the real roster"; fi
 
+# --- dependency-automation-pause: a recorded decision, validated (Refs #4730) ------------------------
+pause_ok="$WORK/pause-ok.yml"; { cat "$BASE"; printf 'dependency-automation-pause:\n  authority: FS-GG/.github#4334\n  owner: Root\n  reason: paused for cleanup\n'; } > "$pause_ok"; relock "$pause_ok"
+expect_pass "a well-formed dependency-automation-pause record validates" "$pause_ok"
+pause_bad="$WORK/pause-bad.yml"; { cat "$BASE"; printf 'dependency-automation-pause:\n  authority: FS-GG/.github#4334\n'; } > "$pause_bad"; relock "$pause_bad"
+expect_fail "a pause record without owner and reason is refused" 1 "'dependency-automation-pause' must be an object with non-empty string authority, owner and reason" "$pause_bad"
+# The real roster's record must agree with the real preset: both halves, or the audit reports a finding.
+if bash "$REPOS_SH" validate >/dev/null 2>&1 \
+   && [ "$(jq -r '.enabled' "$REPO_ROOT/default.json")" = "false" ] \
+   && grep -q '^dependency-automation-pause:' "$REPO_ROOT/registry/repos.yml" \
+   && grep -q 'authority: FS-GG/.github#4334' "$REPO_ROOT/registry/repos.yml"; then
+  ok "the real roster records the pause default.json enforces (#4334): preset disabled AND record present"
+else bad "the real preset and the real pause record disagree (lift the pause: delete the record in the same change)"; fi
+
 echo "repos-registry fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-registry fixture FAILED"; exit 1; }
 echo "repos-registry fixture — OK"

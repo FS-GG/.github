@@ -131,6 +131,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOS_SH="$HERE/repos.sh"
 REGISTRY=""                       # empty => repos.sh default
 DEPENDENCIES="$HERE/../registry/dependencies.yml"
+RENOVATE_PRESET="${REPOS_AUDIT_RENOVATE_PRESET:-$HERE/../default.json}"   # the org-shared preset; read for a recorded pause
 AUTHORITY="FS-GG/.github"         # the repo whose reusable workflows receivers call
 
 # THE SPARSE-CHECKOUT CLOSURE RULE, IMPORTED RATHER THAN RETYPED (#1529, closing #1522's reach).
@@ -181,6 +182,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --registry) need_val "$@"; REGISTRY="$2"; shift 2 ;;
     --dependencies) need_val "$@"; DEPENDENCIES="$2"; shift 2 ;;
+    --renovate-preset) need_val "$@"; RENOVATE_PRESET="$2"; shift 2 ;;
     --repos-sh) need_val "$@"; REPOS_SH="$2"; shift 2 ;;
     # Print the header block itself — every comment line after the shebang, up to the first line that
     # is not one. A hardcoded `sed -n '2,20p'` used to do this, and it had already rotted: the range
@@ -3151,6 +3153,46 @@ listener_only="$(echo "$dispatch_json" | jq -r '
       else [.target,."event-type"] | @tsv end
   end' 2>/dev/null)" || die "cannot enumerate listeners-without-sender — registry/repos.yml has an invalid shape."
 
+# --- a RECORDED, DELIBERATE pause of dependency automation (Refs #4730) ---------------------------
+# `default.json` is the org-shared Renovate preset every receiver extends. With `"enabled": false` no
+# receiver is offered ANY bump, so the bump-offer sweeps below would report every behind receiver as
+# "NO bump has been offered at all": fourteen findings (seven kit, seven engine) that all say one thing
+# the org already knows and chose. They are replaced by ONE owned finding, and only when BOTH halves
+# hold: the preset really disables Renovate, and registry/repos.yml records who decided it
+# (`dependency-automation-pause:` authority, owner, reason). Either half alone is its own finding and the
+# per-receiver findings stay, so a pause nobody recorded cannot hide anything, and a record left behind
+# after the pause was lifted cannot either:
+#   active             preset enabled, no record          -> normal findings
+#   paused-recorded    preset disabled, record present    -> ONE finding replaces the "no bump offered" ones
+#   paused-unrecorded  preset disabled, no record         -> normal findings + a finding for the missing record
+#   record-stale       preset enabled, record present     -> normal findings + a finding to delete the record
+# The kit-pin and engine-pin sweeps are untouched: a receiver behind is true whether or not Renovate runs.
+[ -f "$RENOVATE_PRESET" ] || die "the org Renovate preset is not at $RENOVATE_PRESET, so the audit cannot tell whether dependency automation is paused."
+preset_enabled="$(jq -r 'if (.enabled == false) then "disabled" else "enabled" end' < "$RENOVATE_PRESET" 2>/dev/null)" \
+  || die "cannot parse $RENOVATE_PRESET as JSON; no verdict on whether dependency automation is paused."
+pause_record="$(echo "$dispatch_json" | jq -r '
+  (.["dependency-automation-pause"] // null) as $p
+  | if $p == null then ""
+    elif ($p | type) != "object" or ($p.authority | type != "string" or length == 0)
+         or ($p.owner | type != "string" or length == 0) or ($p.reason | type != "string" or length == 0)
+    then error("dependency-automation-pause needs authority, owner and reason strings")
+    else [$p.authority, $p.owner] | @tsv end' 2>/dev/null)" \
+  || die "registry/repos.yml has an invalid dependency-automation-pause record (needs authority, owner and reason strings)."
+pause_authority="${pause_record%%$'\t'*}"; pause_owner="${pause_record#*$'\t'}"
+pause_findings=0; pause_suppressed=0; pause_repos=""
+if [ "$preset_enabled" = "disabled" ] && [ -n "$pause_record" ]; then pause_state="paused-recorded"
+elif [ "$preset_enabled" = "disabled" ]; then pause_state="paused-unrecorded"
+elif [ -n "$pause_record" ]; then pause_state="record-stale"
+else pause_state="active"; fi
+case "$pause_state" in
+  paused-unrecorded)
+    echo "::error::repos-audit: dependency automation is paused but UNRECORDED — $(basename "$RENOVATE_PRESET") sets \"enabled\": false and registry/repos.yml has no dependency-automation-pause record (authority, owner, reason). An unrecorded pause is not a decision anyone can find; per-receiver bump-offer findings stay until it is recorded or the pause is lifted."
+    pause_findings=$((pause_findings + 1)) ;;
+  record-stale)
+    echo "::error::repos-audit: registry/repos.yml records a dependency-automation-pause ($pause_authority) but $(basename "$RENOVATE_PRESET") no longer disables Renovate. The pause is over: delete the record. Normal bump-offer findings apply."
+    pause_findings=$((pause_findings + 1)) ;;
+esac
+
 dispatch_extract() { # <repo> <workflow-file>
   local repo="$1" file="$2" text parsed rc=0
   text="$(cat "$ABSENTOK_DIR/${repo//\//__}/$file")"
@@ -3548,7 +3590,7 @@ else
     case "$kind" in
       # The three states that mean a HUMAN MUST GO TICK SOMETHING are errors in their own right, with
       # their own annotation, so the operator reading the run sees the action and not merely the fact.
-      offer-none)         echo "::error::repos-audit: bump-offer — $a $b" ;;
+      offer-none)         if [ "$pause_state" = "paused-recorded" ]; then pause_repos="$pause_repos $a"; else echo "::error::repos-audit: bump-offer — $a $b"; fi ;;
       offer-ratelimited)  echo "::error::repos-audit: bump-offer — $a $b" ;;
       offer-superseded)   echo "::error::repos-audit: bump-offer — $a $b" ;;
       # A current offer is NOT an error here. The receiver is still behind and the kit-pin sweep has
@@ -3710,8 +3752,21 @@ if [ "$engoffer_subjects" -eq 0 ]; then
 else
   FSGG_SCRIPTS_DIR="$HERE" python3 -c "$OFFER_PY" "$ENGOFFER_DIR" "$ENGOFFER_DIR/manifest.tsv" >> "$ENGOFFER_FILE" || die "the engine bump-offer verdict program failed to run."
   engoffer_count() { grep -cE "^$1"$'\t' "$ENGOFFER_FILE" 2>/dev/null || true; }; engoffer_none="$(engoffer_count offer-none)"; engoffer_current="$(engoffer_count offer-current)"; engoffer_superseded="$(engoffer_count offer-superseded)"; engoffer_ratelimited="$(engoffer_count offer-ratelimited)"; engoffer_undet="$(engoffer_count offer-undetermined)"
-  while IFS=$'\t' read -r kind a b; do case "$kind" in offer-current) echo "  engine bump-offer: $a $b";; *) echo "::error::repos-audit: engine bump-offer — $a: $b";; esac; done < "$ENGOFFER_FILE"
+  while IFS=$'\t' read -r kind a b; do case "$kind" in offer-current) echo "  engine bump-offer: $a $b";; offer-none) if [ "$pause_state" = "paused-recorded" ]; then pause_repos="$pause_repos $a"; else echo "::error::repos-audit: engine bump-offer — $a: $b"; fi;; *) echo "::error::repos-audit: engine bump-offer — $a: $b";; esac; done < "$ENGOFFER_FILE"
   echo "repos-audit: engine bump-offer (#1803) — of $engoffer_subjects behind coordination-kit receiver(s), $engoffer_current have a CURRENT bump open, $engoffer_superseded superseded, $engoffer_ratelimited rate-limited, $engoffer_none have NO bump, $engoffer_undet undetermined. fake-cli is deliberately out of scope: this sweep grades only the engine the shim executes."
+fi
+
+# --- the recorded pause: ONE finding in place of the per-receiver "no bump offered" ones -----------
+if [ "$pause_state" = "paused-recorded" ]; then
+  pause_suppressed=$((offer_none + engoffer_none))
+  offer_none=0; engoffer_none=0   # they are accounted for by the one finding below, not by the exit tally
+  if [ "$pause_suppressed" -gt 0 ]; then
+    pause_list="$(printf '%s\n' $pause_repos | sort -u | tr '\n' ' ')"
+    echo "::error::repos-audit: dependency automation paused — $(basename "$RENOVATE_PRESET") sets \"enabled\": false, recorded in registry/repos.yml as authority $pause_authority, owner $pause_owner. $pause_suppressed kit/engine bump-offer finding(s) across: ${pause_list% } are expected while the pause stands and are not listed one by one. They return as normal findings the moment the pause is lifted. Owner action: $pause_owner decides when to lift it (remove the \"enabled\": false line, then delete the dependency-automation-pause record). The kit-pin and engine-pin freshness findings above are unaffected: a receiver is behind whether or not Renovate runs."
+    pause_findings=$((pause_findings + 1))
+  else
+    echo "repos-audit: dependency automation is paused (authority $pause_authority, owner $pause_owner), and no behind receiver was waiting on a bump, so there is nothing to report on its account."
+  fi
 fi
 
 # --- the view-root path requirement sweep (historical field: absence-cover; #1785/#1869) ---------
@@ -3935,7 +3990,7 @@ offer_actionable=$(( offer_none + offer_superseded + offer_ratelimited ))
 engoffer_actionable=$(( engoffer_none + engoffer_superseded + engoffer_ratelimited ))
 if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ "$kitpin_findings" -ne 0 ] \
    || [ "$viewgen_findings" -ne 0 ] || [ "$offer_actionable" -ne 0 ] || [ "$engoffer_actionable" -ne 0 ] || [ "$engman_findings" -ne 0 ] || [ "$engman_drift" -ne 0 ] \
-   || [ "$absentok_findings" -ne 0 ] || [ "$dispatch_findings" -ne 0 ] || [ "$issue_policy_findings" -ne 0 ]; then
+   || [ "$absentok_findings" -ne 0 ] || [ "$dispatch_findings" -ne 0 ] || [ "$issue_policy_findings" -ne 0 ] || [ "$pause_findings" -ne 0 ]; then
   [ "$gaps"  -eq 0 ] || echo "::error::repos-audit: $gaps declared receiver(s) have not wired their capability detector." >&2
   [ "$drift" -eq 0 ] || echo "::error::repos-audit: $drift repo(s) adopt a capability they do not declare — the roster does not describe the org." >&2
   [ "$sparse_findings" -eq 0 ] || echo "::error::repos-audit: $sparse_findings cross-repo sparse-checkout pattern(s) enumerate a file, are unanchored, glob, or select nothing. The fetched script loses its siblings and the caller's job dies at load, in THEIR pipeline rather than here (#1510/#1515/#1522)." >&2
@@ -3946,6 +4001,7 @@ if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ 
   [ "$absentok_findings" -eq 0 ] || echo "::error::repos-audit: $absentok_findings receiver(s) do not match the roster's historical \`absence-cover:\` word for them, or declare none. That word records whether an unexcused view-root assertion/materialize path is branch-required, and live workflows plus protection say otherwise (#1785/#1869)." >&2
   [ "$dispatch_findings" -eq 0 ] || echo "::error::repos-audit: $dispatch_findings repository_dispatch graph mismatch(es): a declared sender/listener/event-type is absent, or a live sender/listener is unrostered (#1919)." >&2
   [ "$issue_policy_findings" -eq 0 ] || echo "::error::repos-audit: $issue_policy_findings org-owned or rostered external repository/repositories allow issue creation beyond collaborators." >&2
+  [ "$pause_findings" -eq 0 ] || echo "::error::repos-audit: $pause_findings dependency-automation pause finding(s): an owned, recorded pause is reported once; an unrecorded pause or a stale record is a finding of its own (Refs #4730)." >&2
   [ "$offer_actionable" -eq 0 ] || echo "::error::repos-audit: $offer_actionable behind receiver(s) need a human to act at the PROPOSAL step, not the merge step — $offer_none have been offered NO kit bump at all, $offer_superseded have only a superseded one, $offer_ratelimited have a branch a rate limit is holding. Each annotation above names the checkbox and the issue. Nothing else in this org reports these states: the freshness sweep says only 'behind', which is equally true when a bump is sitting open and unmerged (#1768/#1533)." >&2
   [ "$engoffer_actionable" -eq 0 ] || echo "::error::repos-audit: $engoffer_actionable coordination-kit receiver(s) are behind fs.gg.coord.cli and need a proposal-step action — $engoffer_none have NO engine bump, $engoffer_superseded only a superseded one, $engoffer_ratelimited a held branch (#1803)." >&2
   exit 1

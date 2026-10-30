@@ -224,6 +224,21 @@ listeners-without-sender:
       `dispatches:` on 2026-10-30 (Root decision on #4730); re-declare it there, and delete this row, in
       the change that adds the sender.
 
+# A RECORDED, DELIBERATE PAUSE OF DEPENDENCY AUTOMATION. `default.json` (the org-shared Renovate preset) has
+# `"enabled": false`, so no receiver is offered any Kit or fs.gg.coord.cli bump. repos-audit reads both
+# halves: the preset really disables Renovate AND this record names who decided it. While both hold it
+# reports ONE owned "dependency automation paused" finding instead of one "no bump offered" finding per
+# receiver per sweep. Lifting the pause (remove the `enabled: false` line) makes the per-receiver findings
+# return, and then this record is stale and must be deleted; a pause with no record, or a record with no
+# pause, is a finding of its own. Not a mute button.
+dependency-automation-pause:
+  authority: FS-GG/.github#4334
+  owner: Root
+  reason: >-
+    Renovate is paused org-wide since the 2026-10-09 default-branch cleanup (#4334) and stays paused
+    because CI capacity is the binding constraint (Root decision on #4730, 2026-10-30). Restart needs an
+    explicit org-wide authorization.
+
 repos:
   - { id: .github,     full: FS-GG/.github,          role: authority, receives: [labels] }                                                                                          # NOT skill-union — the AUTHORITY asserts its own roots with skill-roots-selfcheck.yml, its own workflow. See the capability row.
   # NOT skill-union — and as of #1742 (2026-07-28) that is true of EVERY row in this block, not just

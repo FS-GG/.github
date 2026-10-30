@@ -790,6 +790,11 @@ cmd_validate() {
     echo "$json" | jq -e --arg r "$lws_t" '[.repos[].full] | index($r)' >/dev/null \
       || err "listeners-without-sender target '$lws_t' is not rostered."
   done < <(echo "$json" | jq -r '(.["listeners-without-sender"] // [])[] | .target')
+  # A recorded dependency-automation pause names its authority, owner and reason (repos-audit reads it).
+  echo "$json" | jq -e '(.["dependency-automation-pause"] // null) as $p
+      | $p == null or ($p | type == "object" and (.authority | type == "string" and length > 0)
+          and (.owner | type == "string" and length > 0) and (.reason | type == "string" and length > 0))' >/dev/null \
+    || err "'dependency-automation-pause' must be an object with non-empty string authority, owner and reason."
   local dispatch_dups; dispatch_dups="$(echo "$json" | jq -r '(.dispatches // []) | map([.producer,.target,."event-type"] | join("\u001f")) | group_by(.)[] | select(length>1)[0]')"
   [ -z "$dispatch_dups" ] || err "duplicate dispatch edge(s): $dispatch_dups"
 
