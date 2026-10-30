@@ -296,8 +296,9 @@ class FakeGh:
             with open({str(self.log)!r}, "a") as f:
                 f.write(json.dumps({{"argv": argv, "stdin": stdin}}) + "\\n")
             path = argv[1] if len(argv) > 1 else ""
+            line = " ".join(argv)
             for r in routes:
-                if r["match"] in " ".join(argv):
+                if r["match"] in line and (not r.get("endswith") or line.endswith(r["endswith"])):
                     sys.stdout.write(r.get("stdout", ""))
                     sys.stderr.write(r.get("stderr", ""))
                     sys.exit(r.get("rc", 0))
@@ -326,7 +327,7 @@ class FakeGh:
 
 
 def runs_route(workflow, event, runs, rc=0, stdout=None):
-    return {"match": f"workflows/{workflow}/runs?branch=main&event={event}",
+    return {"match": f"workflows/{workflow}/runs?branch=main&event={event}&status=completed",
             "stdout": stdout if stdout is not None else json.dumps({"workflow_runs": runs}), "rc": rc}
 
 
@@ -359,7 +360,18 @@ class Collect(unittest.TestCase):
             routes.append(runs_route(wfname, "push", [run("success", 1)]))
         for wfname in self.plan["latestSchedule"]:
             routes.append(runs_route(wfname, "schedule", [run("success", 2, event="schedule")]))
+            routes += self.fresh_schedule_routes(wfname, created="2026-10-31T06:00:00Z")
         return routes
+
+    def fresh_schedule_routes(self, wfname, created=None, state="active", registered="2026-01-01T00:00:00Z"):
+        runs = [] if created is None else [{"id": 3, "created_at": created, "html_url": "https://github.com/x/3"}]
+        return [
+            {"match": f"workflows/{wfname}/runs?branch=main&event=schedule&per_page=1", "stdout": json.dumps({"workflow_runs": runs})},
+            {"match": f"workflows/{wfname}", "endswith": f"workflows/{wfname}", "stdout": json.dumps({"state": state, "created_at": registered})},
+        ]
+
+    def without_schedule_routes(self, routes, wfname):
+        return [r for r in routes if f"workflows/{wfname}" not in r["match"] or "event=push" in r["match"]]
 
     def collect(self, needs=None, routes=None):
         self.gh.set(routes if routes is not None else self.green_routes())
@@ -394,7 +406,7 @@ class Collect(unittest.TestCase):
         self.assertEqual(doc["findings"][0]["evidence"][0]["sha"], "deadbeef00")
 
     def test_red_scheduled_canary_is_a_finding(self):
-        routes = [r for r in self.green_routes() if "workflows/canary.yml" not in r["match"]]
+        routes = [r for r in self.green_routes() if "workflows/canary.yml/runs?branch=main&event=schedule&status" not in r["match"]]
         routes += [runs_route("canary.yml", "schedule", [run("failure", 60, event="schedule")]), {"match": "runs/60/jobs", "stdout": ""}]
         doc = self.collect(routes=routes)
         self.assertEqual([f["key"] for f in doc["findings"]], ["wf:canary.yml"])
@@ -500,6 +512,173 @@ class Collect(unittest.TestCase):
         self.assertEqual(proc.returncode, MH.NO_VERDICT)
         self.assertIn("no longer matches", proc.stderr)
         self.assertFalse(out.exists())
+
+
+UTC = dt.timezone.utc
+
+
+class Cron(unittest.TestCase):
+    def gap(self, *exprs):
+        return MH.cadence(list(exprs), NOW)
+
+    def test_cadence_of_common_crons(self):
+        h = dt.timedelta(hours=1)
+        self.assertEqual(self.gap("23 * * * *"), h)
+        self.assertEqual(self.gap("17 6 * * *"), 24 * h)
+        self.assertEqual(self.gap("17 5 * * 1"), 7 * 24 * h)
+        self.assertEqual(self.gap("0 9 * * 1-5"), 72 * h)  # Friday to Monday
+        self.assertEqual(self.gap("2-57/5 * * * *"), dt.timedelta(minutes=5))
+        self.assertEqual(self.gap("*/15 * * * *"), dt.timedelta(minutes=15))
+
+    def test_union_of_crons_uses_the_longest_remaining_gap(self):
+        self.assertEqual(self.gap("0 0 * * *", "0 12 * * *"), dt.timedelta(hours=12))
+
+    def test_names_lists_steps_and_sunday_as_seven(self):
+        self.assertEqual(self.gap("0 0 * * MON"), dt.timedelta(days=7))
+        self.assertEqual(self.gap("0 0 * * 0,7"), dt.timedelta(days=7))
+        self.assertEqual(self.gap("0 */6 * * *"), dt.timedelta(hours=6))
+
+    def test_monthly_and_dom_or_dow_rule(self):
+        monthly = self.gap("0 0 1 * *")
+        self.assertIn(monthly.days, (28, 29, 30, 31))
+        # both day fields restricted: either matches (cron semantics), so more firings than the monthly alone
+        self.assertLess(self.gap("0 0 1 * 1"), monthly)
+
+    def test_invalid_or_too_sparse_crons_raise(self):
+        for bad in ("* * * *", "61 * * * *", "0 25 * * *", "*/0 * * * *", "a b c d e", "5-1 * * * *"):
+            with self.subTest(bad), self.assertRaises(ValueError):
+                self.gap(bad)
+        with self.assertRaises(ValueError):
+            self.gap("0 0 1 1 *")  # once a year: fewer than two firings in the horizon
+
+    def test_threshold_is_twice_the_cadence_with_a_floor(self):
+        self.assertEqual(MH.freshness_threshold(dt.timedelta(hours=1)), dt.timedelta(hours=2))
+        self.assertEqual(MH.freshness_threshold(dt.timedelta(hours=24)), dt.timedelta(hours=48))
+        self.assertEqual(MH.freshness_threshold(dt.timedelta(minutes=5)), MH.STALE_FLOOR)
+
+
+def ago(hours):
+    return (NOW - dt.timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class Freshness(unittest.TestCase):
+    def check(self, crons, newest_ago=None, state="active", registered_ago=1000):
+        meta = {"state": state, "created_at": ago(registered_ago)}
+        newest = None if newest_ago is None else {"id": 5, "created_at": ago(newest_ago), "html_url": "https://github.com/x/5"}
+        return MH.freshness("w.yml", crons, meta, newest, NOW)
+
+    def test_hourly_within_and_beyond_twice_the_cadence(self):
+        self.assertIsNone(self.check(["23 * * * *"], newest_ago=1.9))
+        late = self.check(["23 * * * *"], newest_ago=2.1)
+        self.assertEqual(late["conclusion"], "overdue")
+        self.assertIn("last scheduled run", late["detail"])
+
+    def test_daily_boundary_is_forty_eight_hours(self):
+        self.assertIsNone(self.check(["17 6 * * *"], newest_ago=47))
+        self.assertEqual(self.check(["17 6 * * *"], newest_ago=49)["conclusion"], "overdue")
+
+    def test_weekly_cron_allows_two_weeks(self):
+        self.assertIsNone(self.check(["17 5 * * 1"], newest_ago=13 * 24))
+        self.assertEqual(self.check(["17 5 * * 1"], newest_ago=15 * 24)["conclusion"], "overdue")
+
+    def test_five_minute_cron_is_not_paged_inside_the_floor(self):
+        self.assertIsNone(self.check(["2-57/5 * * * *"], newest_ago=1.5))
+        self.assertEqual(self.check(["2-57/5 * * * *"], newest_ago=2.5)["conclusion"], "overdue")
+
+    def test_never_run_is_a_finding_once_the_allowance_has_passed(self):
+        gone = self.check(["23 * * * *"], newest_ago=None, registered_ago=2.6)
+        self.assertEqual(gone["conclusion"], "overdue")
+        self.assertIn("never run", gone["detail"])
+        very_old = self.check(["17 6 * * *"], newest_ago=None, registered_ago=24 * 30)
+        self.assertEqual(very_old["conclusion"], "overdue")
+
+    def test_never_run_inside_the_allowance_is_pending_not_healthy_and_not_red(self):
+        pending = self.check(["17 6 * * *"], newest_ago=None, registered_ago=10)
+        self.assertEqual(pending["conclusion"], "pending")
+
+    def test_a_disabled_workflow_is_a_finding_even_if_it_ran_recently(self):
+        for state in ("disabled_inactivity", "disabled_manually"):
+            with self.subTest(state):
+                found = self.check(["23 * * * *"], newest_ago=0.5, state=state)
+                self.assertEqual(found["conclusion"], "overdue")
+                self.assertIn(state, found["detail"])
+
+    def test_missing_timestamps_are_value_errors_not_health(self):
+        with self.assertRaises(ValueError):
+            MH.freshness("w.yml", ["23 * * * *"], {"state": "active"}, None, NOW)
+        with self.assertRaises(ValueError):
+            MH.freshness("w.yml", ["23 * * * *"], {"state": "active", "created_at": ago(9)}, {"id": 1}, NOW)
+
+
+class FreshnessInCollect(Collect):
+    """Re-uses the Collect fixture (canary.yml and always.yml are scheduled)."""
+
+    def stale_doc(self, routes):
+        return self.collect(routes=routes)
+
+    def test_overdue_schedule_is_a_stale_finding_with_its_own_key(self):
+        routes = self.without_schedule_routes(self.green_routes(), "canary.yml")
+        routes += self.fresh_schedule_routes("canary.yml", created=ago(60))
+        routes += [runs_route("canary.yml", "schedule", [run("success", 2, event="schedule")])]
+        doc = self.stale_doc(routes)
+        self.assertEqual([f["key"] for f in doc["findings"]], ["stale:canary.yml"])
+        self.assertEqual(doc["counts"]["stale"], 1)
+        self.assertIn("overdue", MH.render_body(doc))
+
+    def test_never_run_schedule_is_a_finding_and_a_new_one_is_pending(self):
+        routes = self.without_schedule_routes(self.green_routes(), "canary.yml")
+        routes += self.fresh_schedule_routes("canary.yml", created=None, registered=ago(500))
+        routes += [runs_route("canary.yml", "schedule", [])]
+        self.assertEqual([f["key"] for f in self.stale_doc(routes)["findings"]], ["stale:canary.yml"])
+        routes = self.without_schedule_routes(self.green_routes(), "canary.yml")
+        routes += self.fresh_schedule_routes("canary.yml", created=None, registered=ago(3))
+        routes += [runs_route("canary.yml", "schedule", [])]
+        doc = self.stale_doc(routes)
+        self.assertEqual(doc["findings"], [])
+        self.assertEqual(doc["pendingFirstRun"], ["canary.yml"])
+
+    def test_red_and_stale_are_separate_findings(self):
+        routes = self.without_schedule_routes(self.green_routes(), "canary.yml")
+        routes += self.fresh_schedule_routes("canary.yml", created=ago(60))
+        routes += [runs_route("canary.yml", "schedule", [run("failure", 61, event="schedule")]), {"match": "runs/61/jobs", "stdout": ""}]
+        doc = self.stale_doc(routes)
+        self.assertEqual([f["key"] for f in doc["findings"]], ["stale:canary.yml", "wf:canary.yml"])
+
+    def test_freshness_read_errors_and_bad_shapes_are_unknown(self):
+        for label, extra in (
+            ("api", [{"match": "workflows/canary.yml/runs?branch=main&event=schedule&per_page=1", "rc": 1}]),
+            ("shape", [{"match": "workflows/canary.yml/runs?branch=main&event=schedule&per_page=1", "stdout": json.dumps({"workflow_runs": "x"})}]),
+            ("meta", [{"match": "workflows/canary.yml", "endswith": "workflows/canary.yml", "rc": 1}]),
+            ("meta-shape", [{"match": "workflows/canary.yml", "endswith": "workflows/canary.yml", "stdout": "[]"}]),
+        ):
+            with self.subTest(label):
+                routes = extra + self.green_routes()
+                doc = self.stale_doc(routes)
+                self.assertIn(("canary.yml", "freshness"), [(u["workflow"], u["source"]) for u in doc["unknown"]])
+                self.assertEqual(MH.plan_report(doc, None)["action"], "refuse")
+
+    def test_unparsable_cron_is_unknown_never_fresh(self):
+        self.plan["crons"]["canary.yml"] = ["not a cron"]
+        doc = self.stale_doc(self.green_routes())
+        self.assertIn(("canary.yml", "freshness"), [(u["workflow"], u["source"]) for u in doc["unknown"]])
+
+    def test_stale_finding_dedupes_and_clears_like_any_other(self):
+        stale = {"key": "stale:canary.yml", "workflow": "Canary", "file": "canary.yml", "failedJobs": [],
+                 "evidence": [{"event": "schedule", "conclusion": "overdue", "detail": "last scheduled run 2026-10-29T06:17Z, 50.5h ago; cadence 24.0h, allowance 48.0h"}]}
+        first = document([stale])
+        self.assertEqual(MH.plan_report(first, None)["action"], "create")
+        later = copy.deepcopy(first)
+        later["findings"][0]["evidence"][0]["detail"] = "last scheduled run 2026-10-29T06:17Z, 74.5h ago; cadence 24.0h, allowance 48.0h"
+        self.assertEqual(MH.plan_report(later, issue(first))["action"], "noop")
+        self.assertEqual(MH.plan_report(document(), issue(first))["action"], "close")
+
+    def test_observer_own_previous_nights_are_judged_for_freshness_only(self):
+        self.plan["latestSchedule"] = sorted(self.plan["latestSchedule"] + [MH.OBSERVER_WORKFLOW])
+        self.plan["crons"][MH.OBSERVER_WORKFLOW] = ["47 8 * * *"]
+        routes = self.without_schedule_routes(self.green_routes(), MH.OBSERVER_WORKFLOW) + self.fresh_schedule_routes(MH.OBSERVER_WORKFLOW, created=ago(60))
+        doc = self.stale_doc(routes)
+        self.assertEqual([f["key"] for f in doc["findings"]], [f"stale:{MH.OBSERVER_WORKFLOW}"])
+        self.assertFalse([c for c in self.gh.calls() if f"{MH.OBSERVER_WORKFLOW}/runs?branch=main&event=schedule&status" in " ".join(c["argv"])])
 
 
 # --------------------------------------------------------------------------------------------------
@@ -727,6 +906,20 @@ class RealRepository(unittest.TestCase):
             self.assertIn(name, self.plan["latestSchedule"], name)
         self.assertIn("kit-published-coherence.yml", self.plan["latestPush"])
         self.assertIn("projections.yml", self.plan["latestPush"])
+
+    def test_the_named_schedules_are_checked_for_freshness_with_their_real_cron(self):
+        now = dt.datetime(2026, 10, 31, 9, 0, tzinfo=dt.timezone.utc)
+        for name, expected in (("board-drift-observer.yml", dt.timedelta(hours=1)), ("v1-writer-census-drift.yml", dt.timedelta(days=1)),
+                               ("permission-coherence.yml", dt.timedelta(days=1)), ("skill-registry-autofix.yml", dt.timedelta(hours=1)),
+                               ("skill-registry-coherence.yml", dt.timedelta(days=1)), (MH.OBSERVER_WORKFLOW, dt.timedelta(days=1))):
+            self.assertIn(name, self.plan["latestSchedule"], name)
+            self.assertEqual(MH.cadence(self.plan["crons"][name], now), expected, name)
+
+    def test_every_scheduled_workflow_has_a_parsable_cron(self):
+        now = dt.datetime(2026, 10, 31, 9, 0, tzinfo=dt.timezone.utc)
+        self.assertEqual(sorted(self.plan["crons"]), sorted(self.plan["latestSchedule"]))
+        for name, crons in self.plan["crons"].items():
+            self.assertTrue(MH.cadence(crons, now) <= dt.timedelta(days=31), name)
 
     def test_every_covered_workflow_declares_workflow_call_and_is_eligible(self):
         for name in self.plan["covered"]:

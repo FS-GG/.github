@@ -16,7 +16,12 @@ main with no run to show it. This observer is the deterministic net under that: 
   2. LATEST RUN  reads the latest conclusive push-run and schedule-run conclusion of every workflow that
                  triggers on push to main or on a schedule (canaries such as `v1-writer-census-drift`, or
                  `installation-grants-current`, which needs secrets and so cannot be called);
-  3. REPORT      keeps ONE issue, "Main health: FS-GG/.github": opened or rewritten when the set of red
+  3. FRESHNESS   compares the newest scheduled run of every workflow that has a cron with that cron's cadence:
+                 a schedule that has not fired for more than twice its longest gap (never less than two hours),
+                 a scheduled workflow that has never fired since it was registered on main, and a scheduled
+                 workflow GitHub has disabled are findings. GitHub does not guarantee a schedule fires, and a
+                 silent scheduled canary is indistinguishable from a healthy one without this;
+  4. REPORT      keeps ONE issue, "Main health: FS-GG/.github": opened or rewritten when the set of red
                  workflows changes, commented once per change, closed when everything is green.
 
 It never edits a workflow, a branch or a board field. It is a detector.
@@ -53,7 +58,22 @@ then fails the run. There is no path from "could not read" to "healthy": the iss
 fresh run succeeded, every latest-run read succeeded, and nothing is red.
 
 A workflow that has NO conclusive run in the retention window is not unknown: it has not run, and `collect`
-says so in its log. A cancelled or skipped latest run is not conclusive and the next older run is used.
+says so in its log. (For a scheduled workflow, "has never run" is the freshness finding above, not health.) A cancelled or skipped latest run is not conclusive and the next older run is used.
+
+FRESHNESS DETAILS
+=================
+
+The cadence is read from the workflow's own `cron:` lines (union of all of them): the longest gap between
+consecutive firings over the next 62 days, so a weekday-only cron has a 3-day gap and a monthly one 31. Overdue
+means the newest run created by a `schedule` event on main is older than max(2 x cadence, 2 hours). The floor
+keeps a 5-minute cron from paging on GitHub's ordinary queueing delay. A scheduled workflow with no scheduled
+run is a finding once it has been registered for longer than that threshold, and is listed as pending before
+that. An unparsable cron, or a failed read, is UNKNOWN. A freshness finding has its own key (`stale:<file>`) so
+its start and end each produce one comment.
+
+THIS OBSERVER IS SCHEDULED TOO. If GitHub stops firing its cron nothing here can say so: the only reader of its
+staleness is another observer. The board-drift observer runs hourly and is the natural reader; see the pull
+request for the proposed reciprocal check.
 
 DEDUPE
 ======
@@ -107,6 +127,9 @@ NO_VERDICT = 2
 
 BODY_LIMIT = 60000
 MARKER_KEYS_LIMIT = 12000
+STALE_FACTOR = 2
+STALE_FLOOR = dt.timedelta(hours=2)
+CRON_HORIZON_DAYS = 62
 RUN_PAGE = 10  # completed runs read per workflow and event, to find the latest conclusive one
 GH_TIMEOUT = 90
 
@@ -286,6 +309,7 @@ def derive(root: Path) -> dict:
     callable_: set[str] = set()
     push_main: list[str] = []
     scheduled: list[str] = []
+    crons: dict[str, list[str]] = {}
     names: dict[str, str] = {}
     scopes: dict[str, list[str]] = {}
     for path in files:
@@ -300,6 +324,11 @@ def derive(root: Path) -> dict:
         names[path.name] = str(doc.get("name") or stem(path.name))
         if "workflow_call" in on:
             callable_.add(path.name)
+        if has_schedule(on):
+            # Includes this observer: a run that finds its own previous night missing catches a dropped night
+            # (not a permanent stop; nothing here can see that, see the module docstring).
+            scheduled.append(path.name)
+            crons[path.name] = [str(e.get("cron")) for e in on["schedule"] if isinstance(e, dict)]
         if path.name == OBSERVER_WORKFLOW:
             continue
         if on_main(push_branches(on)):
@@ -312,8 +341,6 @@ def derive(root: Path) -> dict:
                 else:
                     eligible.append(path.name)
                     scopes[path.name] = read_scopes(doc)
-        if has_schedule(on):
-            scheduled.append(path.name)
     covered = sorted(n for n in eligible if n in callable_)
     bad_stems = [n for n in covered if not re.fullmatch(r"[a-z][a-z0-9-]*\.yml", n)]
     if bad_stems:
@@ -328,6 +355,7 @@ def derive(root: Path) -> dict:
         "callScopes": {n: scopes[n] for n in covered},
         "latestPush": sorted(push_main),
         "latestSchedule": sorted(scheduled),
+        "crons": {n: crons[n] for n in sorted(crons)},
         "names": names,
     }
 
@@ -417,6 +445,124 @@ def cmd_plan(args: argparse.Namespace) -> int:
             print(f"main-health-observer: DRIFT: {line}", file=sys.stderr)
         return 1 if problems else 0
     return 0
+
+
+# --------------------------------------------------------------------------------------------------
+# Cron cadence. PURE.
+# --------------------------------------------------------------------------------------------------
+
+_MONTHS = {m: i + 1 for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split())}
+_DOWS = {d: i for i, d in enumerate("sun mon tue wed thu fri sat".split())}
+
+
+def _cron_field(text: str, lo: int, hi: int, names: dict[str, int] | None = None) -> tuple[set[int], bool]:
+    """(values, restricted). `restricted` is False for a bare `*`, which matters for the day-of-month/week rule."""
+    values: set[int] = set()
+    restricted = text != "*"
+    for part in text.split(","):
+        base, _, step_text = part.partition("/")
+        step = int(step_text) if step_text else 1
+        if step < 1:
+            raise ValueError("step")
+
+        def num(token: str) -> int:
+            token = token.lower()
+            return names[token[:3]] if names and token[:3] in names and not token.isdigit() else int(token)
+
+        if base == "*":
+            start, end = lo, hi
+        elif "-" in base:
+            a, b = base.split("-", 1)
+            start, end = num(a), num(b)
+        else:
+            start = num(base)
+            end = hi if step_text else start
+        if start < lo or end > hi or start > end:
+            raise ValueError("range")
+        values |= set(range(start, end + 1, step))
+        if step_text or "-" in base:
+            restricted = True
+    return values, restricted
+
+
+def cron_fires(expr: str, start: dt.datetime, days: int) -> list[dt.datetime]:
+    """Every firing of a 5-field cron from `start` (a UTC datetime) for `days` days, sorted."""
+    fields = expr.split()
+    if len(fields) != 5:
+        raise ValueError("five fields expected")
+    minutes, _ = _cron_field(fields[0], 0, 59)
+    hours, _ = _cron_field(fields[1], 0, 23)
+    doms, dom_r = _cron_field(fields[2], 1, 31)
+    months, _ = _cron_field(fields[3], 1, 12, _MONTHS)
+    dows, dow_r = _cron_field(fields[4], 0, 7, _DOWS)
+    dows = {d % 7 for d in dows}
+    out: list[dt.datetime] = []
+    day0 = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    for offset in range(days + 1):
+        day = day0 + dt.timedelta(days=offset)
+        if day.month not in months:
+            continue
+        dom_ok, dow_ok = day.day in doms, ((day.weekday() + 1) % 7) in dows
+        if dom_r and dow_r:
+            ok = dom_ok or dow_ok  # cron: both restricted means either
+        else:
+            ok = dom_ok and dow_ok
+        if not ok:
+            continue
+        for h in sorted(hours):
+            for m in sorted(minutes):
+                t = day.replace(hour=h, minute=m)
+                if t >= start:
+                    out.append(t)
+    return sorted(set(out))
+
+
+def cadence(crons: list[str], now: dt.datetime) -> dt.timedelta:
+    """Longest gap between consecutive firings of the union of `crons` over the horizon."""
+    fires: list[dt.datetime] = []
+    for expr in crons:
+        fires += cron_fires(expr, now, CRON_HORIZON_DAYS)
+    fires = sorted(set(fires))
+    if len(fires) < 2:
+        raise ValueError("fewer than two firings in the horizon")
+    return max(b - a for a, b in zip(fires, fires[1:]))
+
+
+def freshness_threshold(period: dt.timedelta) -> dt.timedelta:
+    return max(period * STALE_FACTOR, STALE_FLOOR)
+
+
+def hours(delta: dt.timedelta) -> str:
+    return f"{delta.total_seconds() / 3600:.1f}h"
+
+
+def freshness(name: str, crons: list[str], meta: dict, newest: dict | None, now: dt.datetime) -> dict | None:
+    """PURE. A freshness evidence dict for one scheduled workflow, 'pending' for a grace case, or None when fresh.
+
+    `meta` is the workflow object ({state, created_at}); `newest` the newest run created by a schedule event on main."""
+    period = cadence(crons, now)
+    limit = freshness_threshold(period)
+    state = meta.get("state")
+    if state != "active":
+        return {"event": "schedule", "conclusion": "overdue", "detail": f"workflow state is {state!r}; GitHub will not fire its schedule"}
+    if newest is None:
+        registered = parse_time(meta.get("created_at"))
+        if registered is None:
+            raise ValueError("workflow has no created_at")
+        if now - registered <= limit:
+            return {"event": "schedule", "conclusion": "pending",
+                    "detail": f"never run, registered {hours(now - registered)} ago, within the {hours(limit)} allowance"}
+        return {"event": "schedule", "conclusion": "overdue",
+                "detail": f"never run on a schedule since it was registered on main {hours(now - registered)} ago "
+                          f"(cadence {hours(period)}, allowance {hours(limit)})"}
+    last = parse_time(newest.get("created_at"))
+    if last is None:
+        raise ValueError("newest run has no created_at")
+    if now - last > limit:
+        return {"event": "schedule", "conclusion": "overdue", "runId": newest.get("id"), "url": newest.get("html_url"),
+                "detail": f"last scheduled run {last.strftime('%Y-%m-%dT%H:%MZ')}, {hours(now - last)} ago; "
+                          f"cadence {hours(period)}, allowance {hours(limit)}"}
+    return None
 
 
 # --------------------------------------------------------------------------------------------------
@@ -511,7 +657,10 @@ def collect(plan: dict, needs: object, repo: str, run_id: str | None, now: dt.da
             evidence.setdefault(name, []).append({"event": "fresh", "conclusion": "failure", "runId": run_id,
                                                   "url": f"https://github.com/{repo}/actions/runs/{run_id}" if run_id else None,
                                                   "sha": None, "at": None})
-    for event, workflows in (("push", plan["latestPush"]), ("schedule", plan["latestSchedule"])):
+    # The observer's own previous nights are judged for freshness below, not for conclusion: a failed night
+    # would otherwise keep a finding about this very workflow alive until the next night.
+    scheduled_others = [n for n in plan["latestSchedule"] if n != OBSERVER_WORKFLOW]
+    for event, workflows in (("push", plan["latestPush"]), ("schedule", scheduled_others)):
         for name in workflows:
             try:
                 latest = latest_conclusive(repo, name, event)
@@ -528,7 +677,33 @@ def collect(plan: dict, needs: object, repo: str, run_id: str | None, now: dt.da
                 superseded.setdefault(name, []).append(latest)  # a green fresh run on main outranks an older red
             else:
                 evidence.setdefault(name, []).append(latest)
+    stale: dict[str, dict] = {}
+    pending: list[str] = []
+    for name in plan["latestSchedule"]:
+        try:
+            meta = gh_json(f"repos/{repo}/actions/workflows/{name}")
+            runs = gh_json(f"repos/{repo}/actions/workflows/{name}/runs?branch=main&event=schedule&per_page=1")
+            listed = runs.get("workflow_runs") if isinstance(runs, dict) else None
+            if not isinstance(meta, dict) or not isinstance(listed, list):
+                raise RuntimeError("unexpected workflow or run-list shape")
+            verdict = freshness(name, plan["crons"][name], meta, listed[0] if listed else None, now)
+        except RuntimeError as exc:
+            unknown.append({"workflow": name, "source": "freshness", "why": str(exc)})
+            continue
+        except ValueError as exc:
+            unknown.append({"workflow": name, "source": "freshness", "why": f"cannot judge the schedule: {exc}"})
+            continue
+        clean["freshness"] = clean.get("freshness", 0) + 1
+        if verdict is None:
+            continue
+        if verdict["conclusion"] == "pending":
+            pending.append(name)
+        else:
+            stale[name] = verdict
     findings = []
+    for name in sorted(stale):
+        findings.append({"key": f"stale:{name}", "workflow": plan["names"].get(name, stem(name)), "file": name,
+                         "evidence": [stale[name]], "failedJobs": []})
     for name in sorted(evidence):
         details: list[str] = []
         for item in evidence[name]:
@@ -546,13 +721,16 @@ def collect(plan: dict, needs: object, repo: str, run_id: str | None, now: dt.da
             "evidence": evidence[name],
             "failedJobs": sorted(set(details)),
         })
+    findings.sort(key=lambda f: f["key"])
     return {
         "schema": FINDINGS_SCHEMA,
         "evaluatedAt": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repo": repo,
         "counts": {"covered": len(plan["covered"]), "fresh": clean["fresh"], "latestRunReads": clean["latestRuns"],
                    "red": len(findings), "unknown": len(unknown), "noRun": len(clean["noRun"]),
-                   "superseded": len(superseded)},
+                   "superseded": len(superseded), "freshness": clean.get("freshness", 0), "stale": len(stale),
+                   "pendingFirstRun": len(pending)},
+        "pendingFirstRun": pending,
         "noRun": clean["noRun"],
         "superseded": {k: [e["runId"] for e in v] for k, v in sorted(superseded.items())},
         "unknown": unknown,
@@ -580,9 +758,11 @@ def cmd_collect(args: argparse.Namespace) -> int:
     c = doc["counts"]
     print(f"main-health-observer: {c['red']} red, {c['unknown']} unknown; {c['fresh']} fresh run(s) judged of "
           f"{c['covered']} covered, {c['latestRunReads']} latest-run read(s), {c['noRun']} with no conclusive run, "
-          f"{c['superseded']} stale red superseded by a green fresh run")
+          f"{c['superseded']} stale red superseded by a green fresh run; {c['freshness']} schedule(s) checked for "
+          f"freshness, {c['stale']} overdue, {c['pendingFirstRun']} awaiting a first run")
     for f in doc["findings"]:
-        print(f"  red      {f['file']}: " + ", ".join(f"{e['event']} {e['conclusion']}" for e in f["evidence"]))
+        print(f"  {'stale' if f['key'].startswith('stale:') else 'red  '}    {f['file']}: "
+              + ", ".join(f"{e['event']} {e['conclusion']}" for e in f["evidence"]))
     for u in doc["unknown"]:
         print(f"  UNKNOWN  {u['workflow']} ({u['source']}): {u['why']}")
     return 0
@@ -623,6 +803,9 @@ def finding_lines(f: dict) -> list[str]:
     parts = []
     for e in f["evidence"]:
         link = f" ({e['url']})" if e.get("url") else ""
+        if e.get("detail"):
+            parts.append(f"schedule {e['conclusion']}: {e['detail']}{link}")
+            continue
         parts.append(f"{e['event']} run {e['conclusion']}{' at ' + e['sha'] if e.get('sha') else ''}{link}")
     line = f"- {code(f['file'])}: " + "; ".join(parts)
     if f.get("failedJobs"):
@@ -641,8 +824,8 @@ def render_body(doc: dict, limit: int = BODY_LIMIT) -> str:
         "push-run and schedule-run conclusion of each push or scheduled workflow. It never edits anything: the "
         "owner of each red workflow repairs it, and this issue is rewritten when the red set changes.",
         "",
-        f"{len(findings)} red workflow(s) ({c.get('fresh', '?')} fresh run(s) judged, {c.get('latestRunReads', '?')} "
-        "latest-run read(s)).",
+        f"{len(findings)} finding(s): red workflows and overdue schedules ({c.get('fresh', '?')} fresh run(s) judged, "
+        f"{c.get('latestRunReads', '?')} latest-run read(s), {c.get('freshness', '?')} schedule(s) checked for freshness).",
         "",
     ]
     foot = ["", f"Owner: {code('FS-GG/.github#4730')} (Design A, deterministic observation). Reopen or comment here is not "

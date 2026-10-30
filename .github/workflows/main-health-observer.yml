@@ -14,8 +14,15 @@ name: main-health-observer
 #   2. reads the latest conclusive push-run and schedule-run conclusion of every workflow that triggers on
 #      push to main or on a schedule (this is what covers canaries such as `v1-writer-census-drift` and
 #      `installation-grants-current`, which need secrets or run on their own schedule);
-#   3. keeps ONE issue, "Main health: FS-GG/.github": opened or rewritten when the set of red workflows
+#   3. compares the newest scheduled run of every workflow that has a cron with its cadence (read from the
+#      cron): overdue by more than twice the cadence, never run since it was registered, or disabled by
+#      GitHub is a finding. GitHub did not fire board-drift-observer.yml's hourly schedule after it merged;
+#      an unfired schedule looks exactly like a healthy one without this;
+#   4. keeps ONE issue, "Main health: FS-GG/.github": opened or rewritten when the set of red workflows
 #      changes, commented once per change, closed when everything is green.
+#
+# This observer is scheduled too, so its own staleness is invisible to it. It judges its previous night (a
+# dropped night is caught), but a permanent stop is caught only by another observer; see the pull request.
 #
 # It never edits a workflow, a branch or a board field. The design, the derivation of the list and the
 # fail-closed rules are in scripts/main-health-observer.py (read its module docstring first).
