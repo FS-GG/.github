@@ -1397,7 +1397,8 @@ expect_fail "a roster that says required-context-sweep without its capability ro
 # Dropping a repo from the sweep is visible: a mutant roster without Game's word no longer lists it.
 nogame="$WORK/sweep-no-game.yml"
 sed -E '/id: game,/ s/, required-context-sweep//' "$REPO_ROOT/registry/repos.yml" > "$nogame"; relock "$nogame"
-if ! bash "$REPOS_SH" list --registry "$nogame" --receives required-context-sweep --field id 2>/dev/null | grep -qx game; then
+nogame_ids="$(bash "$REPOS_SH" list --registry "$nogame" --receives required-context-sweep --field id 2>/dev/null || true)"
+if ! grep -qx game <<<"$nogame_ids"; then
   ok "mutant: Game without the word is absent from the sweep list (the pin above would catch it)"
 else bad "mutant roster still lists Game"; fi
 
