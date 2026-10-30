@@ -1,8 +1,8 @@
-"""Closed Creator023 normal-source qualification; deliberately grants no release effects.
+"""Closed Creator0231 normal-source qualification; deliberately grants no release effects.
 
-The normal Creator023 source composition follows the repository coherent-set scalar. Retained Creator020 source qualification
+The normal Creator0231 source composition follows the repository coherent-set scalar. Retained Creator020 source qualification
 and its separate genuine108 published-dependency mode keep their identities. Creator021,
-Creator022 and Creator023 are normal-source only; no source binding is an installed/publication receipt.
+Creator022, Creator023 and Creator0231 are normal-source only; no source binding is an installed/publication receipt.
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +20,7 @@ SOURCE_020 = SourceQualificationBinding("FS.GG.NewSddWorkspace", "0.20.0", "new-
 SOURCE_021 = SourceQualificationBinding("FS.GG.NewSddWorkspace", "0.21.0", "new-sdd-workspace/v0.21.0")
 SOURCE_022 = SourceQualificationBinding("FS.GG.NewSddWorkspace", "0.22.0", "new-sdd-workspace/v0.22.0")
 SOURCE_023 = SourceQualificationBinding("FS.GG.NewSddWorkspace", "0.23.0", "new-sdd-workspace/v0.23.0")
+SOURCE_0231 = SourceQualificationBinding("FS.GG.NewSddWorkspace", "0.23.1", "new-sdd-workspace/v0.23.1")
 SOURCE_020_COHERENT_VERSION = "0.110.0"
 def source_coherent_version(props):
     """Read one unconditional stable source scalar; never infer a published dependency."""
@@ -48,7 +49,7 @@ SOURCE_COHERENT_VERSION = source_coherent_version(Path(__file__).resolve().paren
 
 
 def qualification_version(binding):
-    """Retained published-dependency reader; SOURCE_021/SOURCE_022/SOURCE_023 have no admission here."""
+    """Retained published-dependency reader; SOURCE_021/SOURCE_022/SOURCE_023/SOURCE_0231 have no admission here."""
     if binding is None:
         return "0.19.0"  # Retain the consumed019 reader without broadening its authority.
     if binding is not SOURCE_020:

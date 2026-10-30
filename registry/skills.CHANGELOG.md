@@ -31,6 +31,8 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-10-30** — CREATOR0231 SOURCE INVENTORY (.github; #4964): regenerate the publishing-and-deployment release inventory and its driver-manifest/skills-registry digest for NewSddWorkspace source 0.23.1, and move the initialize-sdd-workspace coordination-kit skill (both roots, repos.lock and the coordination-kit manifest digest) to read the Wizard-owned `.fsgg/security-obligations.json`; published 0.23.0 and all release authority boundaries are unchanged.
+
 - **2026-10-30** — CREATOR023 SOURCE INVENTORY (.github; #3010): regenerate the publishing-and-deployment release inventory and its driver-manifest/skills-registry digest for NewSddWorkspace source 0.23.0; published 0.22.0 and all release authority boundaries are unchanged.
 
 - **2026-10-24** — PUBLICATION WRITER LOCK GUIDANCE (.github; #4753, ADR-0097): the operator-scope publishing-and-deployment skill gains the one org-wide publication writer lock paragraph; reconcile only its existing driver-manifest/skills-registry digest. No scope, owner, predicate or packaged-skill membership change.
