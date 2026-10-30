@@ -1,0 +1,26 @@
+# LEARN #4745 reader image (production proposal v1 §2, agreed 4516#6345416589). Build as fsgg-learn-qual only:
+#   podman build --network=none --pull=never --no-cache --timestamp 0 -f Containerfile -t learn-reader:r4 .
+# r2 (review 4516#6345725040): MSBUILDDISABLENODEREUSE=1; explicit CMD []; --timestamp 0; no duplicate 'learn' name.
+# r3 (4516#6346559621): PID 1 stays the base's catatonit (reaps orphans, forwards signals); REAL_DOTNET is the real file
+# /usr/share/dotnet/dotnet (P0: /usr/bin/dotnet is an absolute link to it).
+# r4 (4516#6347898882, option (a)): adds the statically linked socket probe /usr/local/libexec/learn/probe (root 0755),
+# built by the admitted learn-build-probe.sh from learn-probe.c (sha256 recorded in the build script's context pin).
+# Adds C5 (entrypoint) and C6 (slot helper + dotnet shim) and a non-root op user; changes nothing else in the base.
+FROM 20a6df20169ce6721ed91fddd0d24ae7fe8de655008b422df0c3299821b7d4b8
+ARG REAL_DOTNET=/usr/share/dotnet/dotnet
+USER 0:0
+COPY --chmod=0755 learn-entrypoint.sh /usr/local/libexec/learn/entrypoint
+COPY --chmod=0755 learn-slot.sh /usr/local/libexec/learn/slot
+COPY --chmod=0755 learn-dotnet-shim.sh /usr/local/libexec/learn/bin/dotnet
+COPY --chmod=0755 learn-probe /usr/local/libexec/learn/probe
+RUN set -eu; \
+    test -x /usr/bin/catatonit; test -x /usr/local/libexec/learn/probe; test -f "$REAL_DOTNET" && test ! -L "$REAL_DOTNET" && test -x "$REAL_DOTNET"; ln -s "$REAL_DOTNET" /usr/local/libexec/learn/real-dotnet; \
+    grep -q '^[^:]*:[^:]*:1000:' /etc/passwd || { ! grep -q '^learn:' /etc/passwd && echo 'learn:x:1000:1000:LEARN op user:/work/home:/sbin/nologin' >> /etc/passwd; }; \
+    grep -q '^[^:]*:[^:]*:1000:' /etc/group || { ! grep -q '^learn:' /etc/group && echo 'learn:x:1000:' >> /etc/group; }; \
+    grep -q '^[^:]*:[^:]*:1000:' /etc/passwd; grep -q '^[^:]*:[^:]*:1000:' /etc/group
+ENV PATH=/usr/local/libexec/learn/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    HOME=/work/home TMPDIR=/work/tmp DOTNET_CLI_HOME=/work/home \
+    DOTNET_CLI_USE_MSBUILD_SERVER=0 MSBUILDDISABLENODEREUSE=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 UseSharedCompilation=false
+USER 1000:1000
+ENTRYPOINT ["/usr/bin/catatonit", "--", "/usr/local/libexec/learn/entrypoint"]
+CMD []
