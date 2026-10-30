@@ -511,6 +511,17 @@ printf '%s' "$OUT" | grep -q 'closes no issue' \
 # broke this gate's own first draft. Those are not strings invented here.
 # ---------------------------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------------------------
+# The same rule, reaching the product repos (.github#4730): the keyword matrix, the code decision, and
+# the real `closing-keywords` job of kit-materialize.yml executed against a stub `gh`.
+# ---------------------------------------------------------------------------------------------
+echo
+if bash "$HERE/product-lint.sh"; then
+  ok "product-lint fixture (kit-materialize closing-keywords job and keyword matrix)"
+else
+  bad "product-lint fixture failed — see its FAIL lines above"
+fi
+
 echo
 echo "closing-keywords: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1

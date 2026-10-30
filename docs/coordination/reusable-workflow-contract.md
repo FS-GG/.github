@@ -739,3 +739,28 @@ Any one of these, and the decision is re-opened rather than eroded:
   change three required gates on the strength of a documentation sentence either.
 * A required verdict is measurably moved by a hub commit again, as in #1584. One instance is a
   measurement; a second is this decision being wrong.
+
+## A second worked instance: `materialize / closing-keywords`
+
+The PR-body closing-keyword lint ([#4730](https://github.com/FS-GG/.github/issues/4730)) is the same
+route again: a job in `kit-materialize.yml`, so every receiver that already calls that file reports it
+with no receiver-side edit. GitHub binds a closing keyword next to an issue reference and ignores the
+words around it, so a body saying a PR does *not* close an issue closes it; FS.GG.Game#731 did exactly
+that to FS.GG.Game#730.
+
+**The context string is `materialize / closing-keywords`**, and like `kit-bump-shape` it is required in
+zero repositories: a red is visible in the check list and blocks nothing. Arm it the way this page
+arms any context (dry run, watch it report, then `repos.sh require-context`), never first.
+
+| | |
+| --- | --- |
+| Rule | [`scripts/check-closing-keywords.py`](../../scripts/check-closing-keywords.py), the hub's own, fetched at the reusable workflow's own commit (`github.job_workflow_sha`) |
+| Subject | the PR body only, as raw text. Live read first, event payload as fallback, so a re-run after an edit judges the edit |
+| Fails | any of the nine GitHub keywords next to `#N`, `GH-N`, `owner/repo#N` or an issue URL, negated or not, in prose, a code span, a fence or an indented block |
+| Passes | `Refs #N`; a keyword with no reference after it; `resolving`/`closing`/`fixing` (not GitHub keywords); the **opt-in** declaration line, `Closes #N.` alone on a line |
+| Reach | all seven receivers on opened, synchronize and reopened. Re-run on a body edit automatically only in SDD, Rendering and Templates, whose callers list `edited`; Governance, Game, Audio and Net need `types: [opened, synchronize, reopened, edited]` added to their `kit-materialize.yml` caller |
+| Proof | [`tests/closing-keywords/product-lint.sh`](../../tests/closing-keywords/product-lint.sh): the keyword matrix, the code-span and fence decision, and the real job step run against a stub `gh` |
+
+Not covered, by design: the branch's commit messages (the hub's own check reads them; a receiver check
+would need a full-depth checkout on every pull request) and the PR title (GitHub never honours a keyword
+there).

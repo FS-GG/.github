@@ -1387,3 +1387,130 @@ jobs:
           # activated a missing, stale, unreadable, malformed, or unclassified authorization must be
           # red. `tests/receiver-validate/run.sh` asserts and inverts this exact consumed exit status.
           exit "$rc"
+
+  # ── the PR-body closing-keyword lint (.github#4730) ────────────────────────────────────────────
+  # WHY IT LIVES HERE. GitHub binds `close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved`
+  # followed by an issue reference and ignores every word around it, "not" included. FS.GG.Game#731
+  # said "does not close" an issue and, on merge, closed FS.GG.Game#730; FS.GG.Game#733 repeated the
+  # sentence and was caught by a reviewer. The hub's own `closing-keywords` check never reached a
+  # product repo, because a product repo cannot carry a copy of it (ADR-0067 §5 forbids a new copy and
+  # the kit's push token holds no `workflows: write`). Every receiver already calls THIS file, ungated,
+  # on `pull_request`, so a job added here reaches all seven with zero receiver-side edits — the route
+  # `bump-shape` and `receiver-validate` above take for the same reason.
+  #
+  # THE CONTEXT IS `materialize / closing-keywords`. Like `kit-bump-shape` it is REQUIRED IN ZERO
+  # REPOSITORIES by this change: a red here is visible in the check list and blocks no merge. Arming it
+  # is a separate decision, made through `scripts/repos.sh require-context` after the job has been seen
+  # to REPORT on real pull requests (docs/coordination/reusable-workflow-contract.md). Do not arm it
+  # first — a required context with no producer holds every pull request at "Expected" (#1508).
+  #
+  # THE RULE IS THE HUB'S, NOT A COPY. `scripts/check-closing-keywords.py` is fetched from the
+  # commit of THIS reusable workflow (`github.job_workflow_sha`, the lock-ranges / coordination-coherence
+  # pattern), so the verdict is a function of (body, the rule at the commit that is running) and the rule
+  # cannot drift from the hub's own `closing-keywords` check. The fetch names the DIRECTORY, never the
+  # script (#1515, `check-sparse-checkout-closure.py`).
+  #
+  # WHAT THE RULE ASSERTS HERE: the body is audited as RAW TEXT, because the text with the power to
+  # close is plain text, not rendered markdown. A closing keyword followed by an issue reference is a
+  # FINDING wherever it sits — negated ("does not close"), narrated, quoted, in a code span or in a
+  # fence. The ONE opt-in is the hub's documented declaration line: a line that is nothing but
+  # `Closes #N.` (optional bullet, optional full stop, the keyword repeated for each issue). `Refs #N`
+  # is not a keyword and passes. A closing verb with no reference after it ("close the file") passes.
+  # `resolving`/`closing` are not GitHub keywords and pass: nothing binds them.
+  #
+  # THE BODY IS READ LIVE, WITH THE EVENT PAYLOAD AS THE FALLBACK. A re-run of a job replays the
+  # ORIGINAL event payload, so a body fixed after the first red would stay red on "Re-run jobs" if the
+  # payload were the only source. The live read (public data, `github.token`, no extra scope — the same
+  # argument `receiver-validate` makes) is what makes a re-run after an edit judge the edited body. If
+  # the live read fails the payload body — the body at event time — is used and the log says so; a body
+  # is never skipped.
+  #
+  # WHEN IT RUNS: whenever the caller's `pull_request` (or `pull_request_target`) trigger fires. Every
+  # receiver fires on opened / synchronize / reopened. Only FS.GG.SDD, Rendering and Templates also
+  # list `edited` in their caller, so only they re-run automatically when the body is edited; Governance,
+  # Game, Audio and Net need a one-word caller edit (`types: [opened, synchronize, reopened, edited]`)
+  # for that, and until then a body edit is picked up by the next push or a manual re-run. The kit
+  # cannot supply it: a caller is a workflow file and the push token cannot write workflows.
+  #
+  # THE `if:` IS TRUE ON EVERY PULL REQUEST (#1508): narrowing it by branch, author, label or path would
+  # make the check run vanish for the pull requests it skips, which branch protection cannot tell from
+  # "has not reported yet". Applicability is decided inside the job, and an empty body is simply clean.
+  #
+  # IT READS NO SECRET, CHECKS OUT NO RECEIVER TREE AND RUNS NO PR-HEAD CODE: the body is attacker-
+  # controlled text and a fork head is a possible subject. The body reaches the shell only through
+  # `env:`, never through `${{ }}` inside `run:`.
+  closing-keywords:
+    name: closing-keywords
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch the hub's closing-keyword rule at this workflow's own commit
+        uses: actions/checkout@v7
+        with:
+          repository: FS-GG/.github
+          ref: ${{ github.job_workflow_sha }}
+          path: fsgg-hub
+          persist-credentials: false
+          sparse-checkout: |
+            /scripts/
+          sparse-checkout-cone-mode: false
+
+      - name: Lint the pull request body for closing keywords next to issue references
+        env:
+          EVENT_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          body="$RUNNER_TEMP/pr-body.md"
+          source_of_body=live
+          case "$PR_NUMBER" in ''|*[!0-9]*) echo "::error title=closing-keywords: no verdict::the event carries no pull request number"; exit 1 ;; esac
+          if live="$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.body // ""' 2>"$RUNNER_TEMP/live.err")"; then
+            printf '%s' "$live" > "$body"
+          else
+            source_of_body=event
+            printf '%s' "$EVENT_BODY" > "$body"
+            echo "::warning title=closing-keywords: live body unreadable::falling back to the body in the event payload"
+          fi
+          echo "closing-keywords: linting the pull request body (source: $source_of_body, $(wc -c < "$body") bytes)"
+          rc=0
+          out="$(python3 -I fsgg-hub/scripts/check-closing-keywords.py --body "$body" 2>&1)" || rc=$?
+          # Indented so that no line of attacker-controlled body text can open a workflow command.
+          [ -z "$out" ] || printf '%s\n' "$out" | sed 's/^/| /'
+          case "$rc" in
+            0)
+              echo "closing-keywords: OK" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            1)
+              # Only the lines the rule itself generates from regex-constrained tokens (keyword, ref,
+              # negator) go into the annotation; the quoted body excerpt stays in the log.
+              phrases="$(printf '%s\n' "$out" | grep -E '^  - line [0-9]+:' | sed -E 's/^  - //' | head -n 3 | paste -sd'|' - | sed -e 's/%/%25/g' -e 's/|/ ; /g')"
+              {
+                echo "### closing-keywords: a closing keyword sits next to an issue reference"
+                echo
+                echo 'GitHub closes the referenced issue when the PR merges and does **not** read the words'
+                echo 'around the keyword: "does not close" closes it, as do "won'"'"'t fix", a past tense,'
+                echo 'a quotation and a code span. Offending phrase(s):'
+                echo
+                printf '%s\n' "$out" | grep -E '^  - line [0-9]+:' | sed -E 's/^  - /    /'
+                echo
+                echo 'Fix the body, not the check: write `Refs #N` to link without closing, reword the verb'
+                echo '("addresses", "supersedes"), or declare an intended close on a line of its own,'
+                echo 'nothing else on it, e.g. `Closes #N.` Issue numbers in the explanation above that you'
+                echo 'do not recognise are FS-GG/.github issues (the rule is the hub'"'"'s).'
+                echo 'After editing, re-run this job: it re-reads the live body.'
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::error title=closing-keywords: closing keyword next to an issue reference::${phrases} -- GitHub ignores 'not'. Write 'Refs #N' to link without closing, or declare a close on its own line: 'Closes #N.'"
+              exit 1
+              ;;
+            3)
+              echo "::error title=closing-keywords: no verdict (permanent)::the rule could not read the pull request body"
+              exit 1
+              ;;
+            *)
+              echo "::error title=closing-keywords: inconclusive::check-closing-keywords.py exited $rc, which this job does not classify; treating as a failure"
+              exit 1
+              ;;
+          esac

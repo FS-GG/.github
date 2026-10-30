@@ -142,6 +142,21 @@ TWO SUBJECTS, BECAUSE THE BODY WAS ONLY EVER A PROXY (#684)
   Findings are reported per subject and by name, because the remedies differ: a body finding you fix
   by editing the body, a commit-message finding you cannot — you must rewrite the branch.
 
+THE OPT-IN, THE NON-KEYWORDS AND THE PRODUCT REPOS (.github#4730)
+  The one documented opt-in is the DECLARATION LINE: a line that is nothing but `Closes #N.` (optional
+  bullet, optional full stop, the keyword repeated for every issue). Everything else is a finding,
+  negated or not, in prose or in code. `Refs #N` is not a keyword and passes.
+
+  Only the nine words GitHub binds are keywords. `resolving`, `closing`, `fixing` bind nothing, so
+  "this is not resolving #N" is clean and stays clean: flagging it would be a false positive on a body
+  that cannot close anything. A keyword with no reference after it ("close the file") is also clean.
+  tests/closing-keywords/product-lint.sh pins all of this, keyword by keyword.
+
+  The rule reaches every coordination-kit receiver through the `closing-keywords` job of
+  .github/workflows/kit-materialize.yml (check context `materialize / closing-keywords`), which fetches
+  THIS file at that workflow's own commit and feeds it the live PR body (event payload as fallback).
+  FS.GG.Game#731 is the motivating case: a body saying it did not close an issue closed it.
+
 EXIT CODES  (the contract; the workflow greps nothing)
   0  every closing reference is declared (the declared set, if any, is printed)
   1  FINDING — the merge closes an issue no subject declared, or declares one it will not link
