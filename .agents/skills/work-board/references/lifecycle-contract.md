@@ -291,6 +291,12 @@ checkout to reviewed/delivered Git or canonical file tree; head_sha alone is ins
 accepted unchanged author tests just for reviewer independence; final-candidate required CI still runs.
 For hosted waits use bounded `--watch-checks --watch-seconds N` (1–600), retain native run/attempt logs and
 artifacts, and count watcher children. Unchanged polls need no model turn; watchers never deliver.
+Delegated workers and Root wait only through a bounded deterministic route: that watcher, `gh run watch`
+under a timeout, or a deterministic `until` condition with a hard deadline; never a model-driven polling loop
+with an iteration cap. An expired wait is not the awaited condition: an effect that depends on a condition
+proceeds only on that observed condition, never on a timer or iteration limit expiring. Keep scratch files
+and PR/comment body files in a per-session or per-task private `mktemp -d` directory, never at fixed
+filenames in a shared scratchpad; read a body file back before `gh pr edit --body-file` or posting it.
 Apply the [diagnostic execution policy](https://github.com/FS-GG/.github/blob/main/docs/coordination/diagnostic-execution.md)
 within original budgets, retaining independent failure collection, actual values and cleanup/reporting outcomes.
 
