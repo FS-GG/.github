@@ -100,7 +100,16 @@ module ContextView =
         | Unreadable of reason: string
 
     /// One curated Atlas record as read from the workspace archive.
-    type AtlasEntry = { Id: string; Kind: string; Status: string; Title: string; Record: string }
+    /// `Record` is the record's digest (its archive file name). `Supersedes` lists the digests this revision replaces
+    /// and `ConflictsWith` its declared conflicts. One ID can have several revisions; only an unsuperseded one is a head.
+    type AtlasEntry =
+        { Id: string
+          Kind: string
+          Status: string
+          Title: string
+          Record: string
+          Supersedes: string list
+          ConflictsWith: string list }
 
     type NavigationFacts =
         { Files: Map<string, FileFact>
@@ -145,7 +154,8 @@ module ContextView =
     /// the declared non-pattern touch-set paths. The IO edge answers with `FileFact`s; the core never touches disk.
     val requestedPaths: action: Action -> issue: IssueFact -> string list
 
-    /// The governing instruction files applicable to an action (a closed, ordered table).
+    /// The governing instruction files applicable to an action: a closed, ordered MINIMUM table. It is not every
+    /// instruction that may apply, and the view says so (`governingInstructionsScope`).
     val instructionPaths: Action -> string list
 
     /// Build and render the view. Deterministic: equal observations give equal bytes.

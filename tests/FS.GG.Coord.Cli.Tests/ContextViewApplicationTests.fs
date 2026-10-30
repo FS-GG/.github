@@ -146,7 +146,7 @@ let ``workspace navigation hashes files marks absence and refuses escapes and re
     Directory.CreateDirectory(Path.Combine(root, "src")) |> ignore
     let records = Path.Combine(root, "docs", "atlas", "records")
     Directory.CreateDirectory records |> ignore
-    File.WriteAllText(Path.Combine(records, "abc.json"), """{"id":"platform/x","kind":"decision","status":"recorded","title":"X"}""")
+    File.WriteAllText(Path.Combine(records, "abc.json"), """{"id":"platform/x","kind":"decision","status":"recorded","title":"X","supersedes":[],"conflictsWith":[]}""")
     match ContextViewApplication.readNavigation root [ "AGENTS.md"; "missing.md"; "src"; "../outside"; "/etc/passwd" ] with
     | Supplied nav ->
         Assert.Equal(File "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", nav.Files["AGENTS.md"])
@@ -177,3 +177,51 @@ let ``help documents every flag the parser accepts and the cap bounds`` () =
         Assert.Contains(flag, ContextViewApplication.usage)
     Assert.Contains(string DefaultCapBytes, ContextViewApplication.usage)
     Assert.Equal(Some 0, ContextViewApplication.tryRun [ "context-view"; "--help" ])
+
+[<Fact>]
+let ``a trailing separator on the workspace does not make every path unreadable`` () =
+    let root = temp ()
+    File.WriteAllText(Path.Combine(root, "AGENTS.md"), "hello")
+    let expected = File "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+    for spelling in [ root; root + "/"; root + "//"; Path.Combine(root, ".") + "/" ] do
+        match ContextViewApplication.readNavigation spelling [ "AGENTS.md"; "missing.md" ] with
+        | Supplied nav ->
+            Assert.Equal(expected, nav.Files["AGENTS.md"])
+            Assert.Equal(Absent, nav.Files["missing.md"])
+        | other -> failwithf "%s: %A" spelling other
+
+[<Fact>]
+let ``the archive reader carries supersedes and conflictsWith so the head can be resolved`` () =
+    let root = temp ()
+    let records = Path.Combine(root, "docs", "atlas", "records")
+    Directory.CreateDirectory records |> ignore
+    File.WriteAllText(Path.Combine(records, "aaa.json"), """{"id":"platform/x","kind":"decision","status":"recorded","title":"old","supersedes":[],"conflictsWith":[]}""")
+    File.WriteAllText(Path.Combine(records, "zzz.json"), """{"id":"platform/x","kind":"decision","status":"recorded","title":"new","supersedes":["aaa"],"conflictsWith":["q"]}""")
+    match ContextViewApplication.readNavigation root [] with
+    | Supplied { Atlas = Supplied entries } ->
+        let head = entries |> List.find (fun e -> e.Record = "zzz")
+        Assert.Equal<string list>([ "aaa" ], head.Supersedes)
+        Assert.Equal<string list>([ "q" ], head.ConflictsWith)
+    | other -> failwithf "%A" other
+    // a record whose chain fields are missing or mistyped makes the archive unavailable, not silently chainless
+    File.WriteAllText(Path.Combine(records, "bad.json"), """{"id":"platform/y","kind":"k","status":"s","title":"t","supersedes":"aaa","conflictsWith":[]}""")
+    match ContextViewApplication.readNavigation root [] with
+    | Supplied { Atlas = Unavailable _ } -> ()
+    | other -> failwithf "%A" other
+
+[<Fact>]
+let ``the result line names omitted mandatory sections so an empty shell is noticed`` () =
+    let directory = temp ()
+    let bulky = String.replicate 90 "- A long obligation sentence that must be carried whole or not at all.\n"
+    let big = JsonSerializer.Serialize {| number = 4940; title = "T"; state = "open"; updated_at = "2026-10-30T00:00:00Z"; body = body.Replace("- Deliver `x` verbatim.", bulky) |}
+    let respond (request: Request) = if request.Path.Contains "/issues/" then ok big else native request
+    let line, code = ContextViewApplication.execute (Recording respond) { arguments (Path.Combine(directory, "v.json")) with CapBytes = MinimumCapBytes; PullRequest = None }
+    Assert.Equal(0, code)
+    use result = JsonDocument.Parse line
+    let names = [ for n in result.RootElement.GetProperty("mandatoryOmissions").EnumerateArray() -> n.GetString() ]
+    Assert.Contains("doneWhen", names)
+    Assert.Equal("incomplete", result.RootElement.GetProperty("status").GetString())
+    // and an unbounded run reports none
+    let clean, _ = ContextViewApplication.execute (Recording native) (arguments (Path.Combine(directory, "w.json")))
+    use cleanResult = JsonDocument.Parse clean
+    Assert.Equal(0, cleanResult.RootElement.GetProperty("mandatoryOmissions").GetArrayLength())

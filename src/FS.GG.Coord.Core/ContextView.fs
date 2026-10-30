@@ -98,7 +98,14 @@ module ContextView =
         | Absent
         | Unreadable of reason: string
 
-    type AtlasEntry = { Id: string; Kind: string; Status: string; Title: string; Record: string }
+    type AtlasEntry =
+        { Id: string
+          Kind: string
+          Status: string
+          Title: string
+          Record: string
+          Supersedes: string list
+          ConflictsWith: string list }
 
     type NavigationFacts =
         { Files: Map<string, FileFact>
@@ -221,9 +228,18 @@ module ContextView =
                 else values <- Map.add name text values
             | many ->
                 gaps.Add(gap "duplicate-section" (severityOf name) name $"'## {name}' occurs {many.Length} times outside fenced code; no copy is chosen for the author")
-        for _, name in headings do
+        // An unrecognised heading ENDS the section before it, so that section's carried text stops there. When the
+        // truncated section is a carried field this is an obligation gap (the status becomes incomplete), never a
+        // silent shortening of the author's text.
+        headings
+        |> Array.iteri (fun index (_, name) ->
             if not (List.contains name fieldNames) then
-                gaps.Add(gap "unrecognised-section" Context name $"'## {name}' is not a six-field section and is not carried")
+                let before = if index > 0 then Some(snd headings[index - 1]) else None
+                match before with
+                | Some field when List.contains field fieldNames && field <> "Acceptance evidence" ->
+                    gaps.Add(gap "unrecognised-section" Obligation name $"'## {name}' is not a six-field section; it ends '## {field}', whose carried text stops there and may be truncated")
+                | _ ->
+                    gaps.Add(gap "unrecognised-section" Context name $"'## {name}' is not a six-field section and is not carried"))
         values, List.ofSeq gaps |> List.distinct
 
     // ---------------------------------------------------------------- touch-set, instructions, requested paths
@@ -241,13 +257,23 @@ module ContextView =
         | Declared tokens -> tokens
         | _ -> []
 
-    let requestedPaths action (issue: IssueFact) =
+    // The bounds that can bite. Each one that does is reported as a typed gap, never silently.
+    [<Literal>]
+    let private ReferenceCap = 32
+
+    [<Literal>]
+    let private PathCap = 64
+
+    let private allRequestedPaths action (issue: IssueFact) =
         let touched =
             touchTokens issue.Body
             |> List.choose (function
                 | Matchable path when not (isPattern path) -> Some(path.TrimEnd('/'))
                 | _ -> None)
-        (instructionPaths action @ touched) |> List.distinct |> List.truncate 64
+        (instructionPaths action @ touched) |> List.distinct
+
+    let requestedPaths action (issue: IssueFact) =
+        allRequestedPaths action issue |> List.truncate PathCap
 
     // ---------------------------------------------------------------- pure helpers
 
@@ -256,8 +282,10 @@ module ContextView =
 
     let private refPattern = Regex(@"(?<![A-Za-z0-9_/#])((?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[1-9][0-9]{0,8})\b", RegexOptions.CultureInvariant)
 
+    // Distinct matches, at most ReferenceCap, plus how many distinct matches there were.
     let private distinctMatches (pattern: Regex) (group: int) (text: string) =
-        pattern.Matches text |> Seq.map (fun m -> m.Groups[group].Value) |> Seq.distinct |> Seq.truncate 32 |> List.ofSeq
+        let all = pattern.Matches text |> Seq.map (fun m -> m.Groups[group].Value) |> Seq.distinct |> List.ofSeq
+        List.truncate ReferenceCap all, all.Length
 
     let private markerPattern =
         Regex(@"<!--\s*fsgg:routine-development/v1\s+head=([0-9a-f]{40})(?:\s[^>]*)?-->", RegexOptions.CultureInvariant)
@@ -484,13 +512,19 @@ module ContextView =
         let doneWhenReferences =
             match Map.tryFind "Done when" sections with
             | Some text ->
-                distinctMatches urlPattern 0 text
-                |> List.map (fun url -> JObj [ "url", JStr url; "state", JStr "not-fetched" ])
+                let urls, total = distinctMatches urlPattern 0 text
+                if total > ReferenceCap then
+                    add (gap "references-capped" Context "Done when" $"the Done when names {total} distinct issue or pull request links; only the first {ReferenceCap} are listed (the text itself is complete)")
+                urls |> List.map (fun url -> JObj [ "url", JStr url; "state", JStr "not-fetched" ])
             | None -> []
         let doneWhen = JObj(textOrGap "Done when" @ [ "references", JArr doneWhenReferences ])
         let blockedRefs =
             match Map.tryFind "Blocked on" sections with
-            | Some text -> distinctMatches refPattern 1 text |> List.map (fun r -> JObj [ "ref", JStr r; "state", JStr "not-fetched" ])
+            | Some text ->
+                let refs, total = distinctMatches refPattern 1 text
+                if total > ReferenceCap then
+                    add (gap "references-capped" Context "Blocked on" $"the Blocked on names {total} distinct references; only the first {ReferenceCap} are listed (the text itself is complete)")
+                refs |> List.map (fun r -> JObj [ "ref", JStr r; "state", JStr "not-fetched" ])
             | None -> []
         let prerequisites = JObj(textOrGap "Blocked on" @ [ "refs", JArr blockedRefs ])
         let phase =
@@ -506,6 +540,12 @@ module ContextView =
             | None -> JObj(("present", JBool false) :: (textOrGap "Acceptance evidence" |> List.filter (fun (k, _) -> k = "gap")))
 
         // ---- navigation
+        match o.IssueRead with
+        | Supplied issue ->
+            let wanted = (allRequestedPaths o.Action issue).Length
+            if wanted > PathCap then
+                add (gap "requested-paths-capped" Context subject $"{wanted} repository paths were wanted for verification; only the first {PathCap} are requested, the rest read as unchecked")
+        | _ -> ()
         let instructions =
             instructionPaths o.Action
             |> List.map (fun path ->
@@ -536,16 +576,29 @@ module ContextView =
                         |> Seq.map (fun m -> m.Groups[1].Value.TrimEnd('.', '-', '/'))
                         |> Seq.filter (fun id -> namespaces.Contains(id.Split('/')[0]))
                         |> Seq.distinct
-                        |> Seq.truncate 32
                         |> List.ofSeq
-                    let byId = entries |> List.map (fun e -> e.Id, e) |> Map.ofList
-                    let resolved, unresolved = candidates |> List.partition byId.ContainsKey
+                    if candidates.Length > ReferenceCap then
+                        add (gap "atlas-candidates-capped" Context subject $"{candidates.Length} Atlas-ID-shaped references were found; only the first {ReferenceCap} are resolved")
+                    let candidates = List.truncate ReferenceCap candidates
+                    // The archive is a supersession chain: one ID can have several revisions. Only a revision that no
+                    // record supersedes is a head. Zero or several heads is ambiguity, never an arbitrary pick.
+                    let superseded = entries |> List.collect _.Supersedes |> Set.ofList
+                    let revisionsOf id = entries |> List.filter (fun e -> e.Id = id)
+                    let headsOf id = revisionsOf id |> List.filter (fun e -> not (superseded.Contains e.Record))
+                    let unresolved = candidates |> List.filter (fun id -> (revisionsOf id).IsEmpty)
+                    let known = candidates |> List.filter (fun id -> not (revisionsOf id).IsEmpty)
+                    let resolvedEntries = known |> List.choose (fun id -> match headsOf id with [ e ] -> Some(e, (revisionsOf id).Length) | _ -> None)
+                    let ambiguous = known |> List.filter (fun id -> (headsOf id).Length <> 1)
                     let resolvedJson =
-                        resolved |> List.map (fun id ->
-                            let e = byId[id]
-                            JObj [ "id", JStr e.Id; "kind", JStr e.Kind; "status", JStr e.Status; "title", JStr e.Title; "record", JStr e.Record ])
+                        resolvedEntries |> List.map (fun (e, revisions) ->
+                            JObj [ "id", JStr e.Id; "kind", JStr e.Kind; "status", JStr e.Status; "title", JStr e.Title; "record", JStr e.Record
+                                   "revisions", JNum(int64 revisions); "conflictsWith", JArr(e.ConflictsWith |> List.map JStr) ])
+                    let ambiguousJson =
+                        ambiguous |> List.map (fun id ->
+                            JObj [ "id", JStr id; "headRecords", JArr(headsOf id |> List.map (fun e -> JStr e.Record)) ])
                     unresolved |> List.iter (fun id -> add (gap "atlas-id-unresolved" Context id "an Atlas-ID-shaped reference in the issue or pull request names no record in the workspace archive"))
-                    JObj [ "archive", JStr "supplied"; "resolved", JArr resolvedJson; "unresolved", JArr(unresolved |> List.map JStr)
+                    ambiguous |> List.iter (fun id -> add (gap "atlas-id-ambiguous" Context id $"the archive has {(headsOf id).Length} unsuperseded revisions of this ID (expected exactly one); none is chosen"))
+                    JObj [ "archive", JStr "supplied"; "resolved", JArr resolvedJson; "ambiguous", JArr ambiguousJson; "unresolved", JArr(unresolved |> List.map JStr)
                            "note", JStr "Records are curated knowledge, not authority; verify the cited source before reliance." ]
                 | Unavailable reason ->
                     add (gap "atlas-archive-unavailable" Context subject $"the Atlas archive could not be read: {reason}")
@@ -553,6 +606,7 @@ module ContextView =
                 | NotRequested -> JObj [ "archive", JStr "not-requested" ]
         let navigation =
             JObj [ "governingInstructions", JArr instructions
+                   "governingInstructionsScope", JStr "fixed-table-not-complete: a closed minimum list per action, not every instruction that may apply; read the full governing instructions"
                    "instructionPrecedence", JStr "Governing instructions remain complete and higher priority than this view."
                    "atlas", atlas ]
 

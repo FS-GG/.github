@@ -170,16 +170,24 @@ module ContextViewTests =
         Assert.Equal(capped.Omissions.Length, document.RootElement.GetProperty("omissions").GetArrayLength())
 
     [<Fact>]
-    let ``overflow drops whole sections from the lowest priority up and never cuts a surviving section`` () =
-        let doneWhen = bulky 12
-        let body = sixFields "o" doneWhen
-        let full = ok (build (observations body))
+    let ``overflow omits the lower-priority section and keeps Done when and Owner intact`` () =
+        // A small obligation and a large LOWER-priority Current deliverable: the cap must cost the deliverable.
+        let doneWhen = "- Deliver the view verbatim."
+        let deliverable = String.replicate 60 "A deliverable sentence that is long but of lower priority than every obligation. "
+        let body = (sixFields "o" doneWhen).Replace("Write the view.", deliverable)
+        let full = ok (build { observations body with CapBytes = 9999 })
         let capped = ok (build { observations body with CapBytes = MinimumCapBytes })
+        Assert.True(full.Bytes > MinimumCapBytes, $"non-vacuity: the full view must exceed the cap, it is {full.Bytes}")
+        Assert.True(capped.Bytes <= MinimumCapBytes)
         use fullDoc = parse full
         use cappedDoc = parse capped
         let order = [ "doneWhen"; "uncertainEffects"; "owner"; "touchSet"; "source"; "prerequisites"; "phase"; "currentDeliverable"; "acceptanceEvidence"; "navigation" ]
         let omitted = capped.Omissions |> List.map _.Section
-        // omitted sections are exactly a suffix of the priority order
+        Assert.Contains("currentDeliverable", omitted)
+        Assert.DoesNotContain("doneWhen", omitted)
+        Assert.DoesNotContain("owner", omitted)
+        Assert.Equal(doneWhen, cappedDoc.RootElement |> prop [ "doneWhen"; "text" ] |> _.GetString())
+        // the omitted sections are exactly a suffix of the priority order (lowest priority first)
         let suffix = order |> List.skipWhile (fun s -> not (List.contains s omitted))
         Assert.Equal<string list>(suffix |> List.sort, omitted |> List.sort)
         // every surviving section is byte-identical to its full-view rendering
@@ -375,7 +383,7 @@ module ContextViewTests =
 
     [<Fact>]
     let ``atlas ids are resolved against the archive and unknown ones are reported unresolved`` () =
-        let entry = { Id = "platform/dependency-direction"; Kind = "decision"; Status = "recorded"; Title = "Dependency direction"; Record = "abc" }
+        let entry = { Id = "platform/dependency-direction"; Kind = "decision"; Status = "recorded"; Title = "Dependency direction"; Record = "abc"; Supersedes = []; ConflictsWith = [] }
         let body = sixFields "o" "- see platform/dependency-direction and platform/not-a-record, plus src/platform/other" 
         let view =
             ok (build { observations body with Navigation = Supplied { Files = Map.empty; Atlas = Supplied [ entry ] } })
@@ -416,3 +424,127 @@ module ContextViewTests =
         Assert.Equal<string list>([ "#4753"; "FS-GG/Game#730" ], names)
         for r in refs.EnumerateArray() do
             Assert.Equal("not-fetched", r.GetProperty("state").GetString())
+
+    // ---------------------------------------------------------------- review F1: supersession chain
+
+    let private entry id record supersedes conflicts =
+        { Id = id; Kind = "decision"; Status = "recorded"; Title = $"title {record}"; Record = record; Supersedes = supersedes; ConflictsWith = conflicts }
+
+    let private withAtlas entries body =
+        build { observations body with Navigation = Supplied { Files = Map.empty; Atlas = Supplied entries } } |> ok
+
+    let private atlasOf (view: View) =
+        use document = parse view
+        let atlas = document.RootElement |> prop [ "navigation"; "atlas" ]
+        let ids (name: string) = [ for e in atlas.GetProperty(name).EnumerateArray() -> e.GetProperty("id").GetString(), (match e.TryGetProperty "record" with | true, r -> r.GetString() | _ -> "") ]
+        ids "resolved", [ for e in atlas.GetProperty("ambiguous").EnumerateArray() -> e.GetProperty("id").GetString() ]
+
+    [<Fact>]
+    let ``a supersession chain resolves to the unsuperseded head whatever the archive order`` () =
+        let old = entry "platform/x" "aaa" [] []
+        let head = entry "platform/x" "zzz" [ "aaa" ] []
+        let body = sixFields "o" "- see platform/x"
+        // the head sorts LAST here and FIRST there: neither order may change the answer
+        for entries in [ [ old; head ]; [ head; old ] ] do
+            let view = withAtlas entries body
+            let resolved, ambiguous = atlasOf view
+            Assert.Equal<(string * string) list>([ "platform/x", "zzz" ], resolved)
+            Assert.Empty ambiguous
+        // and the head can be the lexicographically FIRST digest too
+        let early = entry "platform/y" "000" [ "fff" ] []
+        let late = entry "platform/y" "fff" [] []
+        let resolved, _ = atlasOf (withAtlas [ early; late ] (sixFields "o" "- see platform/y"))
+        Assert.Equal<(string * string) list>([ "platform/y", "000" ], resolved)
+
+    [<Fact>]
+    let ``two unsuperseded revisions of one ID are an ambiguity gap and neither is chosen`` () =
+        let a = entry "platform/x" "aaa" [] [ "bbb" ]
+        let b = entry "platform/x" "bbb" [] [ "aaa" ]
+        let view = withAtlas [ a; b ] (sixFields "o" "- see platform/x")
+        let resolved, ambiguous = atlasOf view
+        Assert.Empty resolved
+        Assert.Equal<string list>([ "platform/x" ], ambiguous)
+        Assert.Contains(view.Gaps, fun g -> g.Code = "atlas-id-ambiguous" && g.Subject = "platform/x")
+        // a cycle leaves zero heads, which is also ambiguity and never a silent pick
+        let cyc = withAtlas [ entry "platform/x" "aaa" [ "bbb" ] []; entry "platform/x" "bbb" [ "aaa" ] [] ] (sixFields "o" "- see platform/x")
+        Assert.Contains(cyc.Gaps, fun g -> g.Code = "atlas-id-ambiguous")
+
+    // ---------------------------------------------------------------- review F3: caps are never silent
+
+    let private refsLine n = String.concat " " [ for i in 1..n -> $"#{i}" ]
+    let private urlsLine n = String.concat " " [ for i in 1..n -> $"https://github.com/FS-GG/.github/issues/{i}" ]
+    let private capped (code: string) (view: View) = view.Gaps |> List.exists (fun g -> g.Code = code)
+    let private listed (path: string list) (view: View) =
+        use document = parse view
+        (document.RootElement |> prop path).GetArrayLength()
+
+    [<Fact>]
+    let ``the 32 link boundary lists all 32 silently and gaps at 33`` () =
+        let at n = ok (build { observations (sixFields "o" (urlsLine n)) with CapBytes = MaximumCapBytes })
+        let atCap = at 32
+        Assert.Equal(32, listed [ "doneWhen"; "references" ] atCap)
+        Assert.False(capped "references-capped" atCap)
+        let over = at 33
+        Assert.Equal(32, listed [ "doneWhen"; "references" ] over)
+        Assert.True(capped "references-capped" over)
+        // the text itself stays complete when the listing is bounded
+        use document = parse over
+        Assert.Contains("/issues/33", document.RootElement |> prop [ "doneWhen"; "text" ] |> _.GetString())
+
+    [<Fact>]
+    let ``the 32 reference boundary of Blocked on gaps at 33`` () =
+        let blocked n = (sixFields "o" "- x").Replace("Nothing external. Waits for #4753 and FS-GG/Game#730.", refsLine n)
+        let at n = ok (build { observations (blocked n) with CapBytes = MaximumCapBytes })
+        Assert.Equal(32, listed [ "prerequisites"; "refs" ] (at 32))
+        Assert.False(capped "references-capped" (at 32))
+        Assert.Equal(32, listed [ "prerequisites"; "refs" ] (at 33))
+        Assert.True(capped "references-capped" (at 33))
+
+    [<Fact>]
+    let ``the 32 Atlas candidate boundary gaps at 33`` () =
+        let ids n = [ for i in 1..n -> $"platform/item-{i}" ]
+        let entries n = ids n |> List.map (fun id -> entry id (id.Replace("/", "-")) [] [])
+        let run n =
+            ok (build { observations (sixFields "o" (String.concat " " (ids n))) with
+                          CapBytes = MaximumCapBytes
+                          Navigation = Supplied { Files = Map.empty; Atlas = Supplied(entries n) } })
+        let at32, at33 = run 32, run 33
+        Assert.Equal(32, fst (atlasOf at32) |> List.length)
+        Assert.False(capped "atlas-candidates-capped" at32)
+        Assert.Equal(32, fst (atlasOf at33) |> List.length)
+        Assert.True(capped "atlas-candidates-capped" at33)
+
+    [<Fact>]
+    let ``the 64 requested path boundary gaps at 65`` () =
+        let instructions = (instructionPaths Implement).Length
+        let withPaths n =
+            let paths = [ for i in 1..n -> $"src/f{i}.fs" ] |> String.concat ", "
+            issueFact (sixFields "o" "- x" + $"\nPaths: {paths}\n")
+        let at64 = withPaths (64 - instructions)
+        let at65 = withPaths (65 - instructions)
+        Assert.Equal(64, (requestedPaths Implement at64).Length)
+        Assert.Equal(64, (requestedPaths Implement at65).Length)
+        let build' issue = ok (build { observations "" with IssueRead = Supplied issue; CapBytes = MaximumCapBytes })
+        Assert.False(capped "requested-paths-capped" (build' at64))
+        Assert.True(capped "requested-paths-capped" (build' at65))
+
+    // ---------------------------------------------------------------- review honesty fixes
+
+    [<Fact>]
+    let ``an unrecognised heading after Done when is an obligation gap and forces incomplete`` () =
+        let body = "## Owner\n\no\n\n## Done when\n\n- first half\n\n## Notes\n\n- second half the author meant to include\n\n## Current deliverable\n\nd\n\n## Next action\n\nn\n\n## Blocked on\n\nb\n\n## Acceptance evidence\n\ne\n"
+        let view = ok (build (observations body))
+        Assert.Equal(Incomplete, view.Status)
+        Assert.Contains(view.Gaps, fun g -> g.Code = "unrecognised-section" && g.Severity = Obligation && g.Subject = "Notes" && g.Detail.Contains "Done when")
+        // a heading that does not truncate a carried field stays a context gap and the view stays complete
+        let tail = "## Owner\n\no\n\n## Done when\n\nd\n\n## Current deliverable\n\nd\n\n## Next action\n\nn\n\n## Blocked on\n\nb\n\n## Acceptance evidence\n\ne\n\n## Appendix\n\nz\n"
+        let ok' = ok (build { observations tail with PullRequestRead = NotRequested })
+        Assert.Contains(ok'.Gaps, fun g -> g.Code = "unrecognised-section" && g.Severity = Context)
+        Assert.Equal(Complete, ok'.Status)
+
+    [<Fact>]
+    let ``governing instructions are labelled a fixed table and not complete`` () =
+        let view = ok (build (observations (sixFields "o" "- x")))
+        use document = parse view
+        let scope = document.RootElement |> prop [ "navigation"; "governingInstructionsScope" ] |> _.GetString()
+        Assert.StartsWith("fixed-table-not-complete", scope)

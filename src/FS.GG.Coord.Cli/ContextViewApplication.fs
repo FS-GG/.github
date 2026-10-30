@@ -118,8 +118,15 @@ module ContextViewApplication =
                                     match document.RootElement.TryGetProperty(name: string) with
                                     | true, v when v.ValueKind = JsonValueKind.String -> v.GetString()
                                     | _ -> raise (InvalidDataException name)
+                                let texts name =
+                                    match document.RootElement.TryGetProperty(name: string) with
+                                    | true, v when v.ValueKind = JsonValueKind.Array ->
+                                        [ for item in v.EnumerateArray() ->
+                                            if item.ValueKind = JsonValueKind.String then item.GetString() else raise (InvalidDataException name) ]
+                                    | _ -> raise (InvalidDataException name)
                                 Some { Id = text "id"; Kind = text "kind"; Status = text "status"; Title = text "title"
-                                       Record = Path.GetFileNameWithoutExtension file }
+                                       Record = Path.GetFileNameWithoutExtension file
+                                       Supersedes = texts "supersedes"; ConflictsWith = texts "conflictsWith" }
                             with
                             | :? JsonException | :? InvalidDataException | :? IOException | :? InvalidOperationException -> None)
                     let unreadable = parsed |> Array.filter Option.isNone |> Array.length
@@ -128,7 +135,8 @@ module ContextViewApplication =
             with :? IOException | :? UnauthorizedAccessException -> Unavailable "Atlas archive could not be listed"
 
     let readNavigation (root: string) (paths: string list) : Read<NavigationFacts> =
-        let full = Path.GetFullPath root
+        // GetFullPath keeps a trailing separator ("dir/"), which would defeat the containment prefix test below.
+        let full = Path.TrimEndingDirectorySeparator(Path.GetFullPath root)
         if not (Directory.Exists full) then Unavailable "workspace is not a directory"
         else
             let files = paths |> List.map (fun p -> p, fileFact full p) |> Map.ofList
@@ -193,6 +201,7 @@ module ContextViewApplication =
                                gaps = view.Gaps.Length
                                obligationGaps = view.Gaps |> List.filter (fun g -> g.Severity = Obligation) |> List.length
                                omissions = view.Omissions.Length
+                               mandatoryOmissions = view.Omissions |> List.filter _.Mandatory |> List.map _.Section
                                effects = "read-only; the only write is the new report file" |}
                     line, 0
                 with :? IOException | :? UnauthorizedAccessException ->
