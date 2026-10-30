@@ -20,6 +20,7 @@ import importlib.util
 import io
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -95,6 +96,12 @@ class Control(unittest.TestCase):
                      "scripts/new_sdd_workspace_successor_provider.py",
                      "scripts/new-sdd-workspace-successor-publish.py",
                      "scripts/creator023-coord-dependencies.json",
+                     "scripts/creator-current-coord-dependencies.json",
+                     "scripts/creator-current-coord-dependencies.py",
+                     "scripts/creator-frozen-coord-dependencies.py",
+                     "scripts/creator_source_qualification.py",
+                     "scripts/new-sdd-workspace-release.py",
+                     "scripts/new_sdd_workspace_promote_recovery.py",
                      ".github/workflows/release-new-sdd-workspace.yml",
                      ".github/workflows/release-new-sdd-workspace-successor-candidate.yml"):
             with self.subTest(path=path):
@@ -126,6 +133,8 @@ class Control(unittest.TestCase):
         self.assertIn("verdict stale-not-touched (exit 0)", out)
         self.assertNotIn("::warning", out)
         self.assertNotIn("::error", out)
+        self.assertIn("informational", summary)
+        self.assertNotIn("warning", summary.splitlines()[0])
 
     def test_report_directory_is_not_blanket_exempt(self):
         # Only an admitted report (right name, plain blob) is outside the seal; a script placed there is sealed.
@@ -146,17 +155,69 @@ class Control(unittest.TestCase):
         code, out, _ = self.run_gate(self.tree, self.sealed, None, "--strict")
         self.assertEqual(code, 0)
 
-    def test_the_release_surface_names_are_the_ones_the_spec_lists(self):
-        self.assertEqual(gate.release_paths([
+    def test_release_surface_blocks_the_files_the_publication_workflows_invoke_and_only_those(self):
+        blocking = [
             "scripts/new_sdd_workspace_successor_admission.py", "scripts/new_sdd_workspace_successor_execution.py",
             "scripts/new_sdd_workspace_successor_provider.py", "scripts/new-sdd-workspace-successor-publish.py",
+            "scripts/new-sdd-workspace-successor-artifact.py", "scripts/new-sdd-workspace-release.py",
+            "scripts/new_sdd_workspace_promote_recovery.py",
+            "scripts/creator-current-coord-dependencies.json", "scripts/creator-current-coord-dependencies.py",
+            "scripts/creator-frozen-coord-dependencies.json", "scripts/creator-frozen-coord-dependencies.py",
+            "scripts/creator_source_qualification.py",
             "scripts/creator021-coord-dependencies.json", "scripts/creator023-coord-dependencies.json",
             ".github/workflows/release-new-sdd-workspace.yml",
-            ".github/workflows/release-new-sdd-workspace-successor-candidate.yml"]).__len__(), 8)
-        self.assertEqual(gate.release_paths([
-            "scripts/NewSddWorkspace/Program.fs", "scripts/creator-current-coord-dependencies.json",
+            ".github/workflows/release-new-sdd-workspace-successor-candidate.yml"]
+        self.assertEqual(gate.release_paths(blocking), sorted(blocking))
+        # Root decisions: shared release_successor_* and the shipped Wizard source stay warn-only; so do
+        # tests, engine source, build configuration and the selftest workflow itself.
+        warn_only = [
+            "scripts/release_successor_provider.py", "scripts/release_successor_execution.py",
+            "scripts/NewSddWorkspace/Program.fs", "scripts/NewSddWorkspace/NewSddWorkspace.fsproj",
+            "tests/new-sdd-workspace-successor/run.py", "tests/release-successor-journal/run.py",
+            "src/FS.GG.Coord.Core/Types.fs", "Directory.Packages.props",
             ".github/workflows/new-sdd-workspace-selftest.yml", "scripts/check-wizard-graph-seal.py",
-            "tests/new-sdd-workspace-successor/run.py", "scripts/release_successor_provider.py"]), [])
+            "scripts/new-sdd-workspace-sub/nested.py"]  # a `*` does not cross a path segment
+        self.assertEqual(gate.release_paths(warn_only), [])
+
+    def test_the_classification_and_the_selftest_workflow_path_list_cannot_drift_apart(self):
+        import yaml
+        document = yaml.safe_load((ROOT / ".github/workflows/new-sdd-workspace-selftest.yml").read_text())
+        triggers = document.get("on", document.get(True))
+        for event in ("pull_request", "push"):
+            with self.subTest(event=event):
+                self.assertEqual(sorted(triggers[event]["paths"]), sorted(gate.SELFTEST_PATHS),
+                                 f"{event} paths of new-sdd-workspace-selftest.yml and SELFTEST_PATHS in "
+                                 "scripts/check-wizard-graph-seal.py differ: classify every path as blocking or warn-only")
+        # Drift is detected, not assumed: an unclassified or stale entry makes the comparison fail.
+        self.assertNotEqual(sorted(triggers["pull_request"]["paths"] + ["scripts/new-path/**"]), sorted(gate.SELFTEST_PATHS))
+        self.assertNotEqual(sorted(triggers["pull_request"]["paths"][1:]), sorted(gate.SELFTEST_PATHS))
+        # The surface is exactly the blocking classifications plus the declared extras.
+        self.assertEqual(set(gate.RELEASE_SURFACE),
+                         {p for p, blocking in gate.SELFTEST_PATHS.items() if blocking} | set(gate.EXTRA_RELEASE_PATHS))
+
+    def test_every_script_the_wizard_release_workflows_invoke_is_on_the_surface(self):
+        invoked = set()
+        for name in ("release-new-sdd-workspace.yml", "release-new-sdd-workspace-successor-candidate.yml"):
+            text = (ROOT / ".github/workflows" / name).read_text()
+            invoked |= set(re.findall(r"(?<![\w/.-])(scripts/[A-Za-z0-9_-]+\.py)\b", text))
+        self.assertIn("scripts/new_sdd_workspace_promote_recovery.py", invoked)
+        self.assertIn("scripts/creator-current-coord-dependencies.py", invoked)
+        self.assertIn("scripts/new-sdd-workspace-release.py", invoked)
+        self.assertEqual(sorted(invoked - set(gate.release_paths(invoked))), [],
+                         "a script a Wizard release workflow runs is not on the blocking surface")
+
+    def test_empty_base_and_empty_changed_file_are_refused_not_passed(self):
+        for argument in (["--base="], ["--base", ""], ["--changed-file="], ["--changed-file", "x", "--changed-file", ""]):
+            with self.subTest(argument=argument):
+                out = io.StringIO()
+                with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": ""}):
+                    self.assertEqual(gate.main(argument, out=out), 2, out.getvalue())
+                self.assertIn("UNUSABLE", out.getvalue())
+        # Control: omitting --base entirely is the documented no-change-information mode, not a refusal.
+        out = io.StringIO()
+        with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": ""}):
+            self.assertEqual(gate.main([], out=out, suite=type("S", (), {
+                "source_admission": ADMISSION, "working_source_tree": staticmethod(lambda: self.tree)})), 0)
 
     def test_the_gate_recomputes_with_the_suites_own_readers(self):
         # No second sealing algorithm: the computed value is exactly the suite's graph_seal over its tree.

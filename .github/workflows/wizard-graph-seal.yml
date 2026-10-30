@@ -22,7 +22,9 @@
 #
 # The PR is checked as the MERGE tree (the default pull_request checkout), because that is the tree
 # main will hold after the merge and the one the next release will seal. depth 2 is enough: the first
-# parent of the merge commit is the base the change is measured against.
+# parent of the merge commit (HEAD^1) is the base the change is measured against. It is read from the
+# checked-out commit, not from the event payload, whose base.sha can be stale; the step refuses to
+# measure anything that is not a two-parent merge commit.
 #
 # No `push:` trigger: a post-merge failure could not be acted on by the change that caused it, and the
 # annotation on the PR is the visibility this gate exists to provide.
@@ -55,9 +57,14 @@ jobs:
 
       - name: Check the Wizard graph seal against this change
         if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: python3 scripts/check-wizard-graph-seal.py --base "$BASE_SHA"
+        run: |
+          set -euo pipefail
+          parents="$(git rev-list --parents -n1 HEAD)"
+          if [ "$(wc -w <<<"$parents")" -ne 3 ]; then
+            echo "::error::HEAD is not a pull_request merge commit; the change cannot be measured"
+            exit 2
+          fi
+          python3 scripts/check-wizard-graph-seal.py --base HEAD^1
 
       - name: Report the Wizard graph seal (no change information)
         if: github.event_name != 'pull_request'

@@ -23,9 +23,16 @@ block every unrelated merge. The outcome therefore depends on what the change to
                                                        (`--strict`: FAIL, for use at release time)
 
 The Wizard release surface is the set of files whose change prepares or alters a Wizard release, and
-for which a stale seal is a real defect: the admission script (which holds the seal constant, so a
-change to the constant is covered by this pattern), the execution, provider and publisher scripts, the
-creator0*-coord-dependencies.json pins and the two Wizard release workflows.
+for which a stale seal is a real defect. It is defined by SELFTEST_PATHS and EXTRA_RELEASE_PATHS below:
+every path pattern of .github/workflows/new-sdd-workspace-selftest.yml is classified there as blocking
+or warn-only with a reason, plus the release files that workflow does not list. A control in
+tests/wizard-graph-seal/run.py fails when that workflow's list and this classification drift apart, and
+when a script the two Wizard release workflows invoke is not on the surface.
+
+Two classes are deliberately WARN-ONLY (decided by Root):
+  - scripts/release_successor_*.py (and its tests): shared with other products' releases; release-time
+    admission still fails closed on a stale seal, so a stale seal there is not silently accepted.
+  - scripts/NewSddWorkspace/** : the shipped Wizard source. Source changes reseal at release time.
 
 Exit status: 0 pass, 1 stale seal on a release-surface change (or --strict), 2 the gate could not
 compute a verdict (unreadable tree, unknown base). An unusable gate is never a pass.
@@ -34,7 +41,6 @@ compute a verdict (unreadable tree, unknown base). An unusable gate is never a p
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import importlib.util
 import os
 import pathlib
@@ -46,14 +52,48 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 SUITE = REPO / "tests/new-sdd-workspace-successor/run.py"
 ADMISSION = "scripts/new_sdd_workspace_successor_admission.py"
 
-# The Wizard release surface. A stale seal on a change that touches any of these is a defect.
-RELEASE_SURFACE = (
-    "scripts/new_sdd_workspace_successor_*.py",        # admission (holds KNOWN_GRAPH_SEAL), execution, provider
-    "scripts/new-sdd-workspace-successor-*.py",       # publisher and artifact entrypoints
-    "scripts/creator0*-coord-dependencies.json",      # the coherent-set pins a Wizard release builds against
-    ".github/workflows/release-new-sdd-workspace.yml",
-    ".github/workflows/release-new-sdd-workspace-successor-candidate.yml",
+# Every `pull_request:` path pattern of .github/workflows/new-sdd-workspace-selftest.yml, classified:
+# True = Wizard release surface (a stale seal FAILS), False = warn-only, with the reason. The keys must equal
+# that workflow's list exactly (a control enforces it), so a path added there cannot go unclassified.
+SELFTEST_PATHS = {
+    "scripts/NewSddWorkspace/**": False,                    # shipped Wizard source: reseals at release time (Root)
+    "scripts/creator-current-coord-dependencies.*": True,   # invoked by both release workflows (preflight/acquire/stage)
+    "scripts/creator_source_qualification.py": True,        # source qualification the release evidence is built on
+    "scripts/creator-frozen-coord-dependencies.*": True,    # frozen-pin helper the release qualification runs
+    "src/FS.GG.Coord.Cli/**": False,                        # engine source, consumed through the pinned package
+    "src/FS.GG.Coord.Cli.BoardOps/**": False,
+    "src/FS.GG.Coord.Cli.Kernel/**": False,
+    "src/FS.GG.Coord.Cli.Lifecycle/**": False,
+    "src/FS.GG.Coord.Core/**": False,
+    "src/FS.GG.Coord.GitHub/**": False,
+    "src/FS.GG.Telemetry.Client/**": False,
+    "src/FS.GG.Telemetry.Contracts/**": False,
+    "src/FS.GG.Telemetry.Dashboard/**": False,
+    "src/FS.GG.Telemetry.Store/**": False,
+    "tests/new-sdd-workspace/**": False,                    # tests cannot alter a release effect
+    "tests/new-sdd-workspace-successor/**": False,
+    "tests/release-effect-sealing/**": False,
+    "tests/release-successor-execution/**": False,
+    "tests/release-successor-journal/**": False,
+    "scripts/new-sdd-workspace-*.py": True,                 # release manifest checker, successor publisher/artifact
+    "scripts/new_sdd_workspace_successor_*.py": True,       # admission (holds KNOWN_GRAPH_SEAL), execution, provider
+    "scripts/release_successor_*.py": False,                # shared across products; admission fails closed (Root)
+    ".github/workflows/release-new-sdd-workspace*.yml": True,   # the two Wizard release workflows
+    "Directory.Build.props": False,                         # build configuration
+    "dist/dotnet/Directory.Build.props": False,
+    "Directory.Packages.props": False,
+    ".github/workflows/new-sdd-workspace-selftest.yml": False,   # the qualification workflow itself
+    "work/2968-new-sdd-workspace-0-10-1-release/**": False,      # completed 0.10.1 preparation
+    "readiness/2968-new-sdd-workspace-0-10-1-release/**": False,
+}
+
+# Release files the selftest workflow does not list.
+EXTRA_RELEASE_PATHS = (
+    "scripts/new_sdd_workspace_promote_recovery.py",        # invoked by release-new-sdd-workspace.yml
+    "scripts/creator0*-coord-dependencies.json",            # the coherent-set pins a Wizard release builds against
 )
+
+RELEASE_SURFACE = tuple(pattern for pattern, blocking in SELFTEST_PATHS.items() if blocking) + EXTRA_RELEASE_PATHS
 
 STALE_MESSAGE = ("Wizard seal is stale relative to this tree; "
                  "it must be resealed before the next Wizard release")
@@ -74,8 +114,22 @@ def load_suite():
     return module
 
 
+def glob_regex(pattern):
+    """GitHub path-filter semantics: `*` stays inside a segment, `**` crosses segments."""
+    out, i = [], 0
+    while i < len(pattern):
+        if pattern.startswith("**", i):
+            out.append(".*"); i += 2
+        elif pattern[i] == "*":
+            out.append("[^/]*"); i += 1
+        else:
+            out.append(re.escape(pattern[i])); i += 1
+    return re.compile("".join(out))
+
+
 def release_paths(paths):
-    return sorted(p for p in paths if any(fnmatch.fnmatchcase(p, pattern) for pattern in RELEASE_SURFACE))
+    expressions = [glob_regex(pattern) for pattern in RELEASE_SURFACE]
+    return sorted(p for p in paths if any(e.fullmatch(p) for e in expressions))
 
 
 def sealed_paths(paths, tree, admission):
@@ -146,7 +200,8 @@ def emit(out, status, code, message, computed, pinned, summary_path):
     if summary_path:
         try:
             with open(summary_path, "a", encoding="utf-8") as summary:
-                marker = {0: "ok" if status == "current" else "warning", 1: "FAILED"}[code]
+                marker = ("FAILED" if code == 1 else "ok" if status == "current"
+                          else "informational" if status == "stale-not-touched" else "warning")
                 summary.write(f"### Wizard graph seal: {marker}\n\n- {message}\n"
                               f"- computed `{computed}`\n- pinned `{pinned}`\n\n")
         except OSError as error:
@@ -170,8 +225,10 @@ def main(argv=None, out=None, suite=None):
         computed = admission.graph_seal(tree)
         pinned = admission.KNOWN_GRAPH_SEAL
         if args.changed_file is not None:
+            if not all(args.changed_file):
+                raise Unusable("an empty --changed-file path is not a path")
             changed = sorted(set(args.changed_file))
-        elif args.base:
+        elif args.base is not None:
             changed = changed_paths(args.base)
         else:
             changed = None
