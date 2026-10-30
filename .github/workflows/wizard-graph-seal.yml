@@ -8,9 +8,12 @@
 # scripts/check-wizard-graph-seal.py recomputes the seal with the suite's own readers and compares it
 # with the pin. Because the seal is MEANT to change with every non-report change to main, it is not an
 # always-red gate:
-#   - a stale seal on a PR that touches the Wizard release surface (the seal constant, the successor
-#     admission/execution/provider/publisher scripts, the creator0*-coord-dependencies.json pins, the two
-#     Wizard release workflows) FAILS this job;
+#   - a stale seal on a PR that touches the Wizard release surface FAILS this job. The surface is
+#     RELEASE_SURFACE in scripts/check-wizard-graph-seal.py: the creator current/frozen coord-dependency
+#     helpers and creator0*-coord-dependencies.json pins, creator_source_qualification.py, the
+#     new-sdd-workspace-*.py manifest/publisher scripts, new_sdd_workspace_successor_*.py (admission, which
+#     holds the seal, execution, provider), new_sdd_workspace_promote_recovery.py, and the
+#     release-new-sdd-workspace*.yml workflows;
 #   - a stale seal on any other PR that touches the sealed graph is an annotation and a job-summary
 #     line, and the job passes;
 #   - a PR that touches only admitted progress reports does not touch the sealed graph.
