@@ -70,6 +70,7 @@
       "repo": "FS-GG/FS.GG.Rendering",
       "workflows": [
         ".github/workflows/release-skills.yml",
+        ".github/workflows/release-tag-settlement.yml",
         ".github/workflows/release-tags.yml",
         ".github/workflows/release.yml"
       ],
