@@ -132,7 +132,12 @@ Keep existing journals/custody rather than a new recovery ledger.
 Observe results, reconcile scoped acceptance and blockers, update Status and verify native readback
 before selecting/admitting work; after dispatch, update Status and verify again. Reconcile after worker
 returns, CI/runtime completion, reviews, supplier replies and accepted closure, and before yielding or
-handoff. Update the Delivery first, then reassess its parent against its whole remaining promise.
+handoff. Any Root action that changes an item's actionability (a ruling that removes a blocker, a
+Delivery dispatch, a scope-completing merge, a new blocker, a supplier answer) writes its Status in
+that same turn through the guarded write; a brief or ruling without the matching write is incomplete.
+The scheduled `Board drift: Project 3` report issue only detects misses: Root resolves each finding
+with a Status write or a recorded disposition. Update the Delivery first, then reassess its parent
+against its whole remaining promise.
 Apply the six [Status definitions and guarded write procedure](status-lifecycle.md). Workers provide
 evidence; the root integrator owns decisions and serializes participating writers' mutations of the
 selected board and owning issue inputs within the admitted snapshot/write window, including body edits,

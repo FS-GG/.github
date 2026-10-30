@@ -1,0 +1,49 @@
+# Prove the board-drift observer's rules can say NO, and that a failed read stays red (Refs #4730).
+#
+# `scripts/board-drift-observer.py` is a detector whose worst failure is silence, so
+# `tests/board-drift-observer/run.sh` gives every rule (a)-(e) a positive and a negative leg, proves the
+# report issue is left alone when the finding set is unchanged and closed when it is empty, and proves a
+# fetch error, a partial page, an incomplete search or an unreadable snapshot yields no snapshot, no
+# findings and a non-zero exit. It also reads board-drift-observer.yml and asserts the credential split
+# (read App token in `board-drift-read`, `issues: write` only in `board-drift-report`) and that nothing in the workflow can
+# turn a failed read into a green "no drift".
+#
+# No schedule: the subject is entirely git-tracked files in this repo, and the fixture uses a recording
+# `gh` stub (no token, no network). The `paths:` lists on pull_request and push are IDENTICAL and must
+# stay so (check-paths-coherence.py).
+name: board-drift-observer-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/board-drift-observer.py"
+      - "scripts/board-drift-fetch.py"
+      - "tests/board-drift-observer/**"
+      - ".github/workflows/board-drift-observer.yml"
+      - ".github/workflows/board-drift-observer-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/board-drift-observer.py"
+      - "scripts/board-drift-fetch.py"
+      - "tests/board-drift-observer/**"
+      - ".github/workflows/board-drift-observer.yml"
+      - ".github/workflows/board-drift-observer-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: board-drift-observer-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the board-drift fixture (no network)
+        run: bash tests/board-drift-observer/run.sh
