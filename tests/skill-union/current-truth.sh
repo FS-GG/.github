@@ -54,7 +54,7 @@ for runtime in .agents/skills .claude/skills; do
 done
 expect_finding \
   "a resurrected V1 set-paths narrowing recipe is refused" \
-  "obsolete V1 set-paths/widen recipe returned" \
+  "obsolete V1 scan/lanes/set-paths/widen/take/claim recipe returned" \
   "$LANE"
 
 LANE_WIDEN="$WORK/lane-widen"
@@ -64,8 +64,32 @@ for runtime in .agents/skills .claude/skills; do
 done
 expect_finding \
   "a resurrected V1 widen recipe is refused" \
-  "obsolete V1 set-paths/widen recipe returned" \
+  "obsolete V1 scan/lanes/set-paths/widen/take/claim recipe returned" \
   "$LANE_WIDEN"
+
+LANE_CLAIM="$WORK/lane-claim"
+seed "$LANE_CLAIM"
+for runtime in .agents/skills .claude/skills; do
+  printf '\nTake it with `scripts/fsgg-coord claim <issue>` and `scripts/fsgg-coord lanes`.\n' >> "$LANE_CLAIM/$runtime/lane-steward/SKILL.md"
+done
+expect_finding \
+  "a resurrected V1 claim or lanes recipe is refused" \
+  "obsolete V1 scan/lanes/set-paths/widen/take/claim recipe returned" \
+  "$LANE_CLAIM"
+
+LANE_REFLOW="$WORK/lane-reflow"
+seed "$LANE_REFLOW"
+for runtime in .agents/skills .claude/skills; do
+  python3 - "$LANE_REFLOW/$runtime/lane-steward/SKILL.md" <<'PY'
+import re, sys
+path = sys.argv[1]
+text = open(path).read()
+# Reflow the two wrapped statements onto different line breaks; the meaning is unchanged.
+text = text.replace("set-paths,\nwiden,", "set-paths, widen,").replace("does not select,\nclaim,", "does not select, claim,")
+open(path, "w").write(text)
+PY
+done
+out="$(python3 "$CHECK" --root "$LANE_REFLOW" 2>&1)" && ok "a reflowed lane-steward statement is not a finding" || bad "a reflowed lane-steward statement is not a finding ($out)"
 
 LANE_AUTH="$WORK/lane-auth"
 seed "$LANE_AUTH"

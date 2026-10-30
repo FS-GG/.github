@@ -262,11 +262,11 @@ PROGRAM_PATH = "src/FS.GG.Coord.Cli/Program.fs"
 PROGRAM_PATH = "src/FS.GG.Coord.Cli/Program.fs"
 
 
-def pre_handler_arms(root: Path) -> list[str]:
+def pre_handler_arms(root: Path, listed: frozenset[str] = frozenset()) -> list[str]:
     """Every dispatch arm and dispatcher of Coord.Cli `main` that precedes the typed handler table."""
     try:
         text = (root / PROGRAM_PATH).read_text(encoding="utf-8")
-        return pre_handler_dispatch(text)
+        return pre_handler_dispatch(text, listed)
     except (OSError, UnicodeError) as error:
         raise CensusError(f"{PROGRAM_PATH} is unreadable: {error}") from error
     except DispatchScanError as error:
@@ -292,7 +292,7 @@ def validate_out_of_catalogue(root: Path, census: dict[str, Any]) -> int:
                     or not isinstance(route.get("justification"), str) or len(route["justification"].strip()) < 40):
                 raise CensusError(f"out-of-catalogue arm {row['arm']} has a malformed route")
         listed[row["arm"]] = row
-    actual = pre_handler_arms(root)
+    actual = pre_handler_arms(root, frozenset(listed))
     unlisted = [arm for arm in actual if arm not in listed]
     stale = sorted(set(listed) - set(actual))
     if unlisted:
