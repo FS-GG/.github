@@ -143,10 +143,17 @@ fi
 stage "SDD ship-verdict provenance"
 python3 "$ROOT/scripts/check-ship-verdict-provenance.py" --root "$ROOT"
 
-# Bound this script to four minutes beneath the unchanged five-minute job cap.
+# Bound this script to seven minutes beneath the ten-minute job cap in coord-engine.yml.
 # Hosted qualification must establish the whole job, including fixtures, fits that cap.
 # A timeout or unknown process/tool state stops collection; no dependent tests use stale outputs.
-deadline=240
+#
+# WHY 420 AND NOT 240. This budget exists to stop a runaway or hung run with a diagnosable exit 124 instead of
+# a silent runner cancellation. It is not a speed requirement. The locked restore and complete compiler barrier
+# below measured about 3m39s on a cold package cache (hosted run 41117100860, three consecutive attempts at
+# 4m12s, 4m14s and 4m17s all against the old 240 s limit), and the passing run on the neighbouring head took
+# 3m40s end to end, so 240 s left no headroom for runner variance. 420 s keeps roughly two minutes beyond a cold run. The job now saves its
+# package cache even when it fails, so a rerun starts warm.
+deadline=420
 run_dotnet() {
   local remaining=$((deadline - SECONDS)) status
   if [ "$remaining" -le 0 ]; then
