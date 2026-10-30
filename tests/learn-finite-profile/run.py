@@ -47,10 +47,13 @@ check(errors == [], f'shipped baseline verifies: {errors}')
 m = manifest(PROFILE)
 check(counts['journalFiles'] == len(m['files']) == 20, 'manifest lists the 20 files of the install journal')
 check(counts['imported'] == 10 and counts['notImported'] == 10, '10 imported, 10 not imported')
-check(counts['hashVerified'] == counts['imported'], 'every imported file is hash-verified')
-check(counts['scanned'] == counts['imported'], 'every imported file is scanned')
 check(counts['redactedFiles'] == 0, 'no file is redacted')
-check(counts['allowlistedScanMatches'] == 1, 'exactly one allowlisted scan match')
+check(counts['allowlistedScanMatches'] == 6, 'exactly six allowlisted scan matches, each with a reason')
+check(all(a.get('why') for a in m['scan']['allowlist']), 'every allowlist entry carries its reason')
+check(counts['sources'] == 2 and counts['importedSources'] == 2, 'both probe sources are imported')
+check(counts['hashVerified'] == counts['imported'] + counts['importedSources'] == 12, '12 imported files are hash-verified')
+check(counts['manualReads'] == 12 and counts['scanned'] == 12, 'every imported file is scanned and has a recorded manual read')
+check(counts['custodyReferences'] == 3 and counts['scanClasses'] == 16, '3 custody references and 16 scan classes')
 check(all(e.get('reason') for e in m['files'].values() if not e['imported']), 'every non-imported file has a reason')
 
 # 2. Mutations of the tree are refused.
@@ -91,20 +94,82 @@ with tempfile.TemporaryDirectory() as tmp:
     bad = copy.deepcopy(m)
     bad['scan']['allowlist'] = []
     write_manifest(root, bad)
-    check(has(vb.verify_repo(root)[0], 'scan finding email: user@30034.service'), 'removing the allowlist re-exposes the scan finding')
+    errs = vb.verify_repo(root)[0]
+    check(has(errs, 'scan finding email: user@30034.service') and has(errs, 'scan finding ipv6: 0::') and has(errs, 'scan finding person-context: Runs as eugen'), 'removing the allowlist re-exposes the findings')
     write_manifest(root, m)
 
-# 3. The scan finds each class and honours the allowlist.
+# 3. The scan finds each class and honours the allowlist, the person names and the public URL prefixes.
 samples = {
-    'token': 'x = "ghp_' + 'a' * 36 + '"', 'private-key': '-----BEGIN RSA PRIVATE KEY-----',
+    'token': 'x = "ghp_' + 'a' * 36 + '"', 'bearer': 'Authorization: Bearer abcdefgh12345678', 'private-key': '-----BEGIN RSA PRIVATE KEY-----',
     'secret-assignment': 'password = "x"', 'email': 'who@example.org', 'ipv4': 'host 192.168.1.9',
-    'private-hostname': 'telemetry.main.internal', 'person': 'owner Eugen', 'home-path': '/home/someone/x',
-    'ssh-key': 'ssh-ed25519 AAAA',
+    'ipv6': 'addr fe80::1ff:fe23:4567:890a', 'mac': 'link 00:1A:2b:3c:4D:5e', 'uuid': 'id 123e4567-e89b-12d3-a456-426614174000',
+    'url': 'see https://example.org/a/b', 'hostname': 'connect telemetry.main.internal', 'home-path': '/home/someone/x',
+    'ssh-key': 'ssh-ed25519 AAAA', 'mention': 'thanks @someone for this', 'person-context': 'Owner: Alexandra Example',
 }
 check(set(samples) == set(vb.SCAN), 'a sample exists for every scan class')
 for cls, text in samples.items():
     check(any(f[0] == cls for f in vb.scan_text('f.txt', text, set())), f'scan finds {cls}')
-check(vb.scan_text('f.txt', 'who@example.org', {('f.txt', 'who@example.org')}) == [], 'an allowlisted match is not reported')
+check(any(f[0] == 'ipv6' for f in vb.scan_text('f.txt', 'at ::1 now', set())), 'scan finds the loopback ::1')
+check(any(f[0] == 'ipv6' for f in vb.scan_text('f.txt', '2001:db8:0:0:0:0:0:1', set())), 'scan finds a full IPv6 address')
+for benign in ('18:35:18', '2026-10-22T18:35:18.880263+00:00', 'std::string', 'a/b/c.py', 'version 10.0.12', 'sha ' + 'ab' * 32, 'user@30034'):
+    check(not any(f[0] in ('ipv6', 'mac', 'uuid', 'hostname', 'ipv4') for f in vb.scan_text('f.txt', benign, set())), f'benign text is not flagged: {benign}')
+check(vb.scan_text('f.txt', 'who@example.org', {('f.txt', 'who@example.org'), ('f.txt', 'example.org')}) == [], 'allowlisted matches are not reported')
+check([f[0] for f in vb.scan_text('f.txt', 'who@example.org', {('f.txt', 'who@example.org')})] == ['hostname'], 'an allowlist entry covers only its own exact match')
+check(any(f[0] == 'person' for f in vb.scan_text('f.txt', 'written for Zed', set(), persons=['zed'])), 'a listed person name is flagged')
+check(vb.scan_text('f.txt', 'see https://github.com/FS-GG/.github/issues/1', set(), url_prefixes=['https://github.com/FS-GG/']) == [], 'a public org URL prefix is not flagged')
+check(any(f[0] == 'url' for f in vb.scan_text('f.txt', 'see https://github.com/other/x', set(), url_prefixes=['https://github.com/FS-GG/'])), 'another URL is flagged')
+check(vb.scan_text('f.txt', 'operator lock busy', set()) == [] and vb.scan_text('f.txt', 'the owner of the file', set()) == [], 'role words before common words are not flagged')
+
+# 3b. Sources, sameBytesAs, builtFrom, the manual-read gate and custody.
+with tempfile.TemporaryDirectory() as tmp:
+    root = clone(tmp)
+    m3 = manifest(root)
+    rp = os.path.join(root, 'baseline', 'source', 'learn-probe.c')
+    data = open(rp, 'rb').read()
+    open(rp, 'ab').write(b'\n')
+    check(has(vb.verify_repo(root)[0], 'source/learn-probe.c: sha256 mismatch'), 'a changed imported source is refused')
+    open(rp, 'wb').write(data)
+    bad = copy.deepcopy(m3)
+    bad['scan']['manualRead'] = [r for r in bad['scan']['manualRead'] if r['file'] != 'source/learn-probe.c']
+    write_manifest(root, bad)
+    check(has(vb.verify_repo(root)[0], 'source/learn-probe.c: no recorded manual read'), 'an imported file without a recorded manual read is refused')
+    bad = copy.deepcopy(m3)
+    bad['scan']['personNames'].append('probe')
+    write_manifest(root, bad)
+    check(has(vb.verify_repo(root)[0], 'scan finding person'), 'an added person name is searched for')
+    bad = copy.deepcopy(m3)
+    key = '/usr/local/libexec/fsgg-learn/reader-image/learn-slot.sh'
+    bad['files'][key]['sha256'] = '1' * 64
+    write_manifest(root, bad)
+    check(has(vb.verify_repo(root)[0], 'sameBytesAs'), 'a sameBytesAs claim with different bytes is refused')
+    bad = copy.deepcopy(m3)
+    bad['files']['/usr/local/libexec/fsgg-learn/reader-image-r4/learn-probe']['builtFrom'] = ['nope.c']
+    write_manifest(root, bad)
+    check(has(vb.verify_repo(root)[0], 'builtFrom nope.c is not a recorded source'), 'a builtFrom naming no source is refused')
+    bad = copy.deepcopy(m3)
+    bad['sources']['learn-probe.c']['reason'] = ''
+    bad['sources']['learn-probe.c']['imported'] = False
+    write_manifest(root, bad)
+    errs = vb.verify_repo(root)[0]
+    check(has(errs, 'source learn-probe.c: not imported without a reason') and has(errs, 'file under baseline/ is not in the manifest'), 'an un-imported source needs a reason and its file is then unlisted')
+    bad = copy.deepcopy(m3)
+    del bad['custody']
+    write_manifest(root, bad)
+    check(has(vb.verify_repo(root)[0], 'manifest lacks custody'), 'a manifest without custody is refused')
+    write_manifest(root, m3)
+    check(m3['custody']['pinsChecked'] == 24 and m3['custody']['pinsMismatched'] == 0, 'the custody pin check recorded 24 pins and 0 mismatches')
+    check(m3['custody']['acceptedInstalledManifestEqualsInstallManifest'] is True, 'the accepted installed manifest equals the install manifest')
+    check(len(m3['custody']['installScripts']) == 5 and sum('NOT in custody' in v for v in m3['custody']['installScripts'].values()) == 4,
+          'five install scripts are accounted for, four without custody source')
+    cust = os.path.join(tmp, 'custody')
+    for name, e in {**m3['sources'], **m3['custody']['files']}.items():
+        dst = os.path.join(cust, e.get('custodyName', name))
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        open(dst, 'wb').write(open(os.path.join(root, 'baseline', e['repoPath']), 'rb').read() if e.get('imported') else b'')
+    errs, c = vb.verify_custody(root, cust)
+    check(c['custodyEntries'] == 5 and c['custodyVerified'] == 2 and len(errs) == 3, 'custody check: the 2 imported sources match; the 3 reference files differ in the synthetic tree')
+    os.unlink(os.path.join(cust, 'learn-probe.c'))
+    check(has(vb.verify_custody(root, cust)[0], 'learn-probe.c: absent from custody'), 'a file absent from custody is refused')
 
 # 4. Install-journal comparison against a synthetic installed tree.
 def synthetic_install(tmp, mutate=None):
