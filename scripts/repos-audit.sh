@@ -3135,6 +3135,22 @@ dispatches="$(echo "$dispatch_json" | jq -r '
       else [.producer,.target,."event-type"] | @tsv end
   end' 2>/dev/null)" || die "cannot enumerate dispatch contracts — registry/repos.yml has an invalid dispatches shape."
 
+# A LISTENER WITH NO SENDER YET is a reviewed, falsifiable claim, never a mute button (Refs #4730).
+# `listeners-without-sender:` rows name a live listener whose sender has not been wired. The claim holds
+# only while BOTH are true: the listener is live, and no sender posts that event to that target. A
+# listener that disappeared makes the row stale (reds); a sender that appeared must be promoted into
+# `dispatches:` (the undeclared-sender finding reds). Without this key, deleting an unwired edge turns
+# the real listener into an undeclared one, and the finding merely changes its name.
+listener_only="$(echo "$dispatch_json" | jq -r '
+  if (.["listeners-without-sender"] // []) | type != "array" then error("listeners-without-sender is not an array") else
+    (.["listeners-without-sender"] // [])[]
+    | if type != "object" or (.target | type != "string" or length == 0)
+         or (."event-type" | type != "string" or length == 0)
+         or (.reason | type != "string" or length == 0)
+      then error("listeners-without-sender row needs target, event-type and reason strings")
+      else [.target,."event-type"] | @tsv end
+  end' 2>/dev/null)" || die "cannot enumerate listeners-without-sender — registry/repos.yml has an invalid shape."
+
 dispatch_extract() { # <repo> <workflow-file>
   local repo="$1" file="$2" text parsed rc=0
   text="$(cat "$ABSENTOK_DIR/${repo//\//__}/$file")"
@@ -3231,11 +3247,24 @@ while IFS=$'\t' read -r kind a b c; do
     S) if ! grep -qxF "$a"$'\t'"$b"$'\t'"$c" <<< "$dispatches"; then
          echo "::error::repos-audit: live dispatch sender $a -> $b ($c) is not declared in registry/repos.yml."
          dispatch_findings=$((dispatch_findings + 1)); fi ;;
-    L) if ! awk -F '\t' -v target="$a" -v event="$b" '$2 == target && $3 == event { found=1 } END { exit !found }' <<< "$dispatches"; then
+    L) if ! awk -F '\t' -v target="$a" -v event="$b" '$2 == target && $3 == event { found=1 } END { exit !found }' <<< "$dispatches" \
+          && ! grep -qxF "$a"$'\t'"$b" <<< "$listener_only"; then
          echo "::error::repos-audit: live repository_dispatch listener $a ($b) is not declared in registry/repos.yml."
          dispatch_findings=$((dispatch_findings + 1)); fi ;;
   esac
 done < "$DISPATCH_FILE"
+# The claim must stay true in both directions (see above).
+while IFS=$'\t' read -r lt le; do
+  [ -n "$lt" ] || continue
+  if ! grep -qxF $'L\t'"$lt"$'\t'"$le" "$DISPATCH_FILE"; then
+    echo "::error::repos-audit: listeners-without-sender claims $lt listens for '$le', but no such live repository_dispatch listener exists. Delete the stale claim."
+    dispatch_findings=$((dispatch_findings + 1))
+  fi
+  if awk -F '\t' -v target="$lt" -v event="$le" '$1 == "S" && $3 == target && $4 == event { found=1 } END { exit !found }' "$DISPATCH_FILE"; then
+    echo "::error::repos-audit: '$le' -> $lt is claimed as a listener WITHOUT a sender, but a live sender now posts it. Declare it under dispatches: and delete the listeners-without-sender claim."
+    dispatch_findings=$((dispatch_findings + 1))
+  fi
+done <<< "$listener_only"
 echo "repos-audit: repository_dispatch graph — $dispatch_declared declared edge(s), $dispatch_findings finding(s), $dispatch_refusals refusal(s)."
 
 # Per-capability, so a green audit is green FOR A NAMED REASON. The old summary was one aggregate
