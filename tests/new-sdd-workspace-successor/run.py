@@ -1332,18 +1332,60 @@ def immutable_fixture_tree(source):
     return {name: {**row, "path": name} for name, row in SourceCompatibility(GitObjects()).tree(source).items()}
 
 
+FIXTURE_PROVENANCE = {}
+_FIXTURE_REPORTED = set()
+
+
+def _announce_fixture_source(source, revision, current_seal):
+    """Say which tree the known-source positives actually ran against, once per process.
+
+    A stale KNOWN_GRAPH_SEAL must never read as current: when the working tree no longer matches the
+    seal the fixture falls back to an earlier commit, and that fallback is stated here, with the commit,
+    as stderr text and (under GitHub Actions) a workflow annotation and job-summary line.
+    """
+    import os
+    FIXTURE_PROVENANCE.clear()
+    FIXTURE_PROVENANCE.update(source=source, revision=revision, current_seal=current_seal,
+                              pinned_seal=source_admission.KNOWN_GRAPH_SEAL)
+    key = (source, revision, current_seal, source_admission.KNOWN_GRAPH_SEAL)
+    if key in _FIXTURE_REPORTED:
+        return
+    _FIXTURE_REPORTED.add(key)
+    if source == "current":
+        text = "known source fixture: the current tree matches KNOWN_GRAPH_SEAL; positives ran against the current tree"
+    else:
+        text = (f"known source fixture: FELL BACK to commit {revision}; the current tree seal {current_seal} "
+                f"differs from KNOWN_GRAPH_SEAL {source_admission.KNOWN_GRAPH_SEAL}. "
+                "Wizard seal is stale relative to this tree; it must be resealed before the next Wizard release")
+    print(text, file=sys.stderr)
+    if source != "current":
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            print(f"::warning title=Wizard known-source fixture fell back to {revision[:12]}::{text}", file=sys.stderr)
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            try:
+                with open(summary, "a", encoding="utf-8") as handle:
+                    handle.write(f"- Wizard known-source fixture fell back to `{revision}` (stale `KNOWN_GRAPH_SEAL`)\n")
+            except OSError:
+                pass
+
+
 def known_source_fixture():
     """Known positives are independent of future unrelated current-tree changes.
 
     The existing three maintained suite workflows use fetch-depth:0. If the
     current graph is unknown, shallow/missing history is an explicit fixture-input
     refusal; this function never fetches, rewrites the seal or skips positives.
+    The tree used is always announced (see `_announce_fixture_source`): a fallback to an earlier
+    commit means KNOWN_GRAPH_SEAL is stale, and that is stated rather than hidden.
     """
     def eligible(tree):
         return (tree.get(source_admission.POLICY_PATH, {}).get("sha") == source_admission._POLICY_BLOB
                 and source_admission.graph_seal(tree) == source_admission.KNOWN_GRAPH_SEAL)
     current = working_source_tree()
-    if eligible(current): return current
+    if eligible(current):
+        _announce_fixture_source("current", None, source_admission.graph_seal(current))
+        return current
     if fixture_git(["rev-parse", "--is-shallow-repository"]).strip() != b"false":
         raise RuntimeError("known source fixture requires retained complete history; no acquisition permitted")
     revisions = fixture_git(["log", "--no-show-signature", "--format=%H", f"-n{FIXTURE_HISTORY_LIMIT}",
@@ -1351,7 +1393,9 @@ def known_source_fixture():
     if len(revisions) > FIXTURE_HISTORY_LIMIT: raise RuntimeError("known source fixture history excessive")
     for revision in revisions:
         tree = immutable_fixture_tree(revision)
-        if eligible(tree): return tree
+        if eligible(tree):
+            _announce_fixture_source("fallback", revision, source_admission.graph_seal(current))
+            return tree
     raise RuntimeError("known source fixture unavailable within retained policy history")
 
 
@@ -1471,6 +1515,45 @@ class ReportSourceCompatibilityTests(unittest.TestCase):
                 api.add("d" * 40, "c" * 40, "2099-01-01-000009Z-control.md", b"seal mismatch control")
                 with self.assertRaisesRegex(source_admission.Refused, "determining source graph differs"):
                     SourceCompatibility(api).compatible("d" * 40, "c" * 40)
+
+    def test_known_fixture_names_the_commit_it_fell_back_to_and_says_the_seal_is_stale(self):
+        """A stale seal is reported, never presented as current."""
+        import copy, contextlib, io
+        sealed = copy.deepcopy(known_source_fixture())
+        unknown = copy.deepcopy(sealed); unknown["Directory.Build.props"]["sha"] = "9"*40
+        unknown_seal = source_admission.graph_seal(unknown)
+        self.assertNotEqual(unknown_seal, source_admission.KNOWN_GRAPH_SEAL)
+        def read(args):
+            if args[0] == "rev-parse": return b"false\n"
+            if args[0] == "log": return b"c"*40 + b"\n"
+            raise AssertionError(args)
+        with patch(__name__ + ".working_source_tree", return_value=unknown), \
+             patch(__name__ + ".fixture_git", side_effect=read), \
+             patch(__name__ + ".immutable_fixture_tree", return_value=sealed), \
+             patch(__name__ + "._FIXTURE_REPORTED", set()), \
+             patch.dict("os.environ", {"GITHUB_ACTIONS": "true"}), \
+             contextlib.redirect_stderr(io.StringIO()) as stderr:
+            tree = known_source_fixture()
+            provenance = dict(FIXTURE_PROVENANCE)
+        self.assertIs(tree, sealed)
+        self.assertEqual((provenance["source"], provenance["revision"]), ("fallback", "c"*40))
+        self.assertEqual(provenance["current_seal"], unknown_seal)
+        text = stderr.getvalue()
+        self.assertIn("FELL BACK to commit " + "c"*40, text)
+        self.assertIn(unknown_seal, text)
+        self.assertIn("Wizard seal is stale relative to this tree", text)
+        self.assertIn("::warning title=Wizard known-source fixture fell back to", text)
+        # Control: a current tree is announced as current, with no fallback commit and no warning.
+        with patch(__name__ + ".working_source_tree", return_value=sealed), \
+             patch(__name__ + "._FIXTURE_REPORTED", set()), \
+             patch.dict("os.environ", {"GITHUB_ACTIONS": "true"}), \
+             contextlib.redirect_stderr(io.StringIO()) as stderr:
+            self.assertIs(known_source_fixture(), sealed)
+            provenance = dict(FIXTURE_PROVENANCE)
+        self.assertEqual((provenance["source"], provenance["revision"]), ("current", None))
+        self.assertIn("matches KNOWN_GRAPH_SEAL", stderr.getvalue())
+        self.assertNotIn("FELL BACK", stderr.getvalue())
+        self.assertNotIn("::warning", stderr.getvalue())
 
     def test_known_fixture_fails_closed_for_shallow_missing_or_wrong_policy_history(self):
         import copy
