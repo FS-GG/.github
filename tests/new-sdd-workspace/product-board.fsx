@@ -72,8 +72,8 @@ let expectedCoherentVersion =
         match frozenSetting "FSGG_CREATOR_DEPENDENCY_MODE" with
         | Some "published-dependency" ->
             match frozenSetting "FSGG_CREATOR_PRODUCER_SOURCE", frozenSetting "FSGG_CREATOR_DEPENDENCIES" with
-            | Some source, Some dependencies -> Some source, Some dependencies, "scripts/creator022-coord-dependencies.json"
-            | _ -> failwith "published112 qualification requires both actual producer and dependency roots"
+            | Some source, Some dependencies -> Some source, Some dependencies, "scripts/creator023-coord-dependencies.json"
+            | _ -> failwith "published113 qualification requires both actual producer and dependency roots"
         | None | Some "source-only" ->
             frozenSetting "FsggFrozenCoordSource", frozenSetting "FsggFrozenCoordDependencies", "scripts/creator-frozen-coord-dependencies.json"
         | Some _ -> failwith "unknown Creator dependency qualification mode"

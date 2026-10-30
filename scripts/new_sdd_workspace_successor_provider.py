@@ -17,7 +17,7 @@ import urllib.request
 from fsgg_feed import _StripAuthOnRedirect
 from release_successor_execution import Dispatch, Effect, Observation, Refused as ExecutionRefused
 from release_successor_provider import GitHubAPI, LiveProvider, NotFound, Refused
-from new_sdd_workspace_successor_execution import PACKAGE, effects, CURRENT_022
+from new_sdd_workspace_successor_execution import PACKAGE, effects, CURRENT_023
 
 REPOSITORY = "FS-GG/.github"
 
@@ -70,7 +70,7 @@ def publisher_error(error):
 
 
 class WizardProvider(LiveProvider):
-    def __init__(self, api: GitHubAPI, manifest_path: pathlib.Path, github_token: str, nuget_key: str, *, release_binding=CURRENT_022):
+    def __init__(self, api: GitHubAPI, manifest_path: pathlib.Path, github_token: str, nuget_key: str, *, release_binding=CURRENT_023):
         self.api = api
         self.manifest_path = manifest_path
         self.root = manifest_path.parent

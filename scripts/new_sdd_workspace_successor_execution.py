@@ -30,12 +30,14 @@ CURRENT_019 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.19.0", "new-sdd-workspa
 CURRENT_020 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.20.0", "new-sdd-workspace/v0.20.0")
 # The published021 descriptor is retained for authenticated historical readback only.
 CURRENT_021 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.21.0", "new-sdd-workspace/v0.21.0")
+# The published022 descriptor is retained for authenticated historical readback only.
 CURRENT_022 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.22.0", "new-sdd-workspace/v0.22.0")
-PACKAGE, VERSION, TAG = CURRENT_022.package, CURRENT_022.version, CURRENT_022.tag
+CURRENT_023 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.23.0", "new-sdd-workspace/v0.23.0")
+PACKAGE, VERSION, TAG = CURRENT_023.package, CURRENT_023.version, CURRENT_023.tag
 
 
-def effects(manifest: dict, *, binding: ReleaseBinding = CURRENT_022) -> tuple[str, tuple[Effect, ...]]:
-    if binding is not CURRENT_022 and binding is not CURRENT_021 and binding is not CURRENT_020 and binding is not CURRENT_019 and binding is not CURRENT_017 and binding is not CURRENT_016 and binding is not HISTORICAL_013:
+def effects(manifest: dict, *, binding: ReleaseBinding = CURRENT_023) -> tuple[str, tuple[Effect, ...]]:
+    if binding is not CURRENT_023 and binding is not CURRENT_022 and binding is not CURRENT_021 and binding is not CURRENT_020 and binding is not CURRENT_019 and binding is not CURRENT_017 and binding is not CURRENT_016 and binding is not HISTORICAL_013:
         raise Refused("unknown Wizard release binding")
     if (
         manifest.get("schema") != "fsgg.new-sdd-workspace-release/1"
