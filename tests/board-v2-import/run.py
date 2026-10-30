@@ -1817,20 +1817,13 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         rows = {r['check']: r for r in json.loads(unknown.stdout)['findings']}
         self.assertEqual((11, 'RoutineGate/Unreadable', 'ClosingGate/Unreadable'), (unknown.returncode, rows['MarkerSingle']['gap'], rows['ClosingLinkDeclared']['gap']))
 
-    def test_the_installed_shim_reaches_the_engine_roots_and_the_same_code(self):
-        """Engine registration. Runs when FSGG_COORD_ENGINE_BIN names a built engine (CI jobs that build it set it); skipped otherwise."""
+    def test_the_engine_and_the_tool_produce_byte_identical_successor_outputs(self):
+        """Needs both a built engine (FSGG_COORD_ENGINE_BIN) and this tool; skipped otherwise."""
         engine = os.environ.get('FSGG_COORD_ENGINE_BIN')
         if not engine or not pathlib.Path(engine).exists():
             self.skipTest('no built engine (FSGG_COORD_ENGINE_BIN)')
         shim = ROOT / 'scripts' / 'fsgg-coord'
         run = lambda *a: subprocess.run(['bash', str(shim), *map(str, a)], capture_output=True, text=True, timeout=120, env=dict(os.environ, FSGG_COORD_ENGINE_BIN=engine))
-        helped = run('enrollment', '--help')
-        self.assertEqual(0, helped.returncode)
-        self.assertIn('route-preflight', helped.stdout)
-        unregistered = run('route-preflight', '--route', 'RoutineDelivery', '--stage', 'PlanSuccessor', '--repository', self.dir)
-        self.assertEqual((11, 'Unknown'), (unregistered.returncode, json.loads(unregistered.stdout)['overall']))
-        self.refused(run('enrollment', 'apply'), 'MalformedInput')
-        # The same inputs through the engine and through the tool give byte-identical successor outputs: one implementation.
         result, out = self.plan()
         self.assertEqual(0, result.returncode, result.stderr)
         via_engine = self.dir / 'via-engine'
@@ -1882,6 +1875,46 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
             self.refused(self.run_cli('plan-successor', '--request', out/'request.json', '--native-facts', link, '--repository', self.fixture['repository'],
                                       '--template-output', out/'t2.json', '--payload-output', out/'p2.json'), 'InputUnreadable')
             self.assertFalse((out / 't2.json').exists())
+
+
+class EngineShimTests(unittest.TestCase):
+    """Engine registration, needing only a built engine: runs in the job that builds it (FSGG_COORD_ENGINE_BIN); skipped otherwise."""
+
+    def setUp(self):
+        self.engine = os.environ.get('FSGG_COORD_ENGINE_BIN')
+        if not self.engine or not pathlib.Path(self.engine).exists():
+            self.skipTest('no built engine (FSGG_COORD_ENGINE_BIN)')
+
+    def run_shim(self, *args):
+        return subprocess.run(['bash', str(ROOT / 'scripts' / 'fsgg-coord'), *map(str, args)], capture_output=True, text=True, timeout=120,
+                              env=dict(os.environ, FSGG_COORD_ENGINE_BIN=self.engine))
+
+    def test_the_shim_answers_both_new_roots(self):
+        for root in ('enrollment', 'route-preflight'):
+            helped = self.run_shim(root, '--help')
+            self.assertEqual(0, helped.returncode, helped.stderr)
+            for word in ('enrollment plan', 'route-preflight', 'RoutineDelivery', 'PublicationWriterRegistration', '11 unknown'):
+                self.assertIn(word, helped.stdout)
+
+    def test_route_preflight_reaches_the_shared_preflight(self):
+        unregistered = self.run_shim('route-preflight', '--route', 'RoutineDelivery', '--stage', 'PlanSuccessor', '--repository', str(ROOT))
+        report = json.loads(unregistered.stdout)
+        self.assertEqual((11, 'Unknown', 'RouteRegistry'), (unregistered.returncode, report['overall'], report['findings'][0]['check']))
+        self.assertEqual('', unregistered.stderr)
+
+    def test_refusals_are_the_closed_code_and_print_nothing_else(self):
+        for arguments in (('enrollment', 'apply'), ('enrollment',), ('route-preflight', '--route', 'Nope', '--stage', 'PlanSuccessor', '--repository', 'x')):
+            refused = self.run_shim(*arguments)
+            self.assertEqual((2, '', 'board-v2 successor refused: MalformedInput\n'), (refused.returncode, refused.stdout, refused.stderr))
+        missing = self.run_shim('enrollment', 'plan', '--request', '/absent/request.json', '--native-facts', '/absent/f.json', '--repository', '/absent',
+                                '--template-output', '/tmp/never-template.json', '--payload-output', '/tmp/never-payload.json')
+        self.assertEqual((2, 'board-v2 successor refused: InputUnreadable\n'), (missing.returncode, missing.stderr))
+        self.assertFalse(pathlib.Path('/tmp/never-template.json').exists())
+
+    def test_the_existing_skill_preflight_root_is_not_shadowed(self):
+        skill = self.run_shim('preflight', 'assess')
+        self.assertNotIn('board-v2 successor refused', skill.stderr)
+        self.assertNotEqual('', skill.stderr + skill.stdout)
 
 
 if __name__ == '__main__':
