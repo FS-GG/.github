@@ -316,7 +316,7 @@ module ContextView =
                 | _ -> "pull-request-open-checks-unknown"
         | _ -> "unknown"
 
-    /// Everything the view says, as ordered sections plus gaps. Pure.
+    // Everything the view says, as ordered sections plus gaps. Pure.
     let private assemble (o: Observations) =
         let gaps = ResizeArray<Gap>()
         let add g = gaps.Add g
