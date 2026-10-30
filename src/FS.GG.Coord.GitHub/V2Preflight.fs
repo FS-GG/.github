@@ -19,9 +19,13 @@ module V2Preflight =
         | PlanSuccessor
         | PrepareSuccessor
         | BindRuntime
+        | OpenPullRequest
+        | MergePullRequest
+        | RegisterWriter
+        | RunWriter
 
     let routes = [ ProgrammeEnrollmentSuccessor; RoutineDelivery; PublicationWriterRegistration ]
-    let stages = [ PlanSuccessor; PrepareSuccessor; BindRuntime ]
+    let stages = [ PlanSuccessor; PrepareSuccessor; BindRuntime; OpenPullRequest; MergePullRequest; RegisterWriter; RunWriter ]
 
     let routeCode route =
         match route with
@@ -34,6 +38,10 @@ module V2Preflight =
         | PlanSuccessor -> "PlanSuccessor"
         | PrepareSuccessor -> "PrepareSuccessor"
         | BindRuntime -> "BindRuntime"
+        | OpenPullRequest -> "OpenPullRequest"
+        | MergePullRequest -> "MergePullRequest"
+        | RegisterWriter -> "RegisterWriter"
+        | RunWriter -> "RunWriter"
 
     type Check =
         | RouteRegistry
@@ -56,6 +64,22 @@ module V2Preflight =
         | MemoryHeadroom
         | ProjectAutoAdd
         | AdjacencyChurn
+        | SuccessorIntegrity
+        | SuccessorExtendsPredecessor
+        | BaseIsDefaultBranch
+        | RoutineBranch
+        | MarkerSingle
+        | MarkerHeadBound
+        | MarkerOperationAllowed
+        | ClosingLinkDeclared
+        | SinglePullRequest
+        | BaseCurrent
+        | WorkflowReadable
+        | WorkflowPublishes
+        | RegistryReadable
+        | NotYetRegistered
+        | WriterRegistered
+        | CoverageAudit
 
     let checkCode check =
         match check with
@@ -79,6 +103,22 @@ module V2Preflight =
         | MemoryHeadroom -> "MemoryHeadroom"
         | ProjectAutoAdd -> "ProjectAutoAdd"
         | AdjacencyChurn -> "AdjacencyChurn"
+        | SuccessorIntegrity -> "SuccessorIntegrity"
+        | SuccessorExtendsPredecessor -> "SuccessorExtendsPredecessor"
+        | BaseIsDefaultBranch -> "BaseIsDefaultBranch"
+        | RoutineBranch -> "RoutineBranch"
+        | MarkerSingle -> "MarkerSingle"
+        | MarkerHeadBound -> "MarkerHeadBound"
+        | MarkerOperationAllowed -> "MarkerOperationAllowed"
+        | ClosingLinkDeclared -> "ClosingLinkDeclared"
+        | SinglePullRequest -> "SinglePullRequest"
+        | BaseCurrent -> "BaseCurrent"
+        | WorkflowReadable -> "WorkflowReadable"
+        | WorkflowPublishes -> "WorkflowPublishes"
+        | RegistryReadable -> "RegistryReadable"
+        | NotYetRegistered -> "NotYetRegistered"
+        | WriterRegistered -> "WriterRegistered"
+        | CoverageAudit -> "CoverageAudit"
 
     // The next stage is the one about to run. Churn matters only where the installed caller is next;
     // bare unenrolled memberships are reported (as Unknown, their effect being unproven) from the first stage.
@@ -87,14 +127,28 @@ module V2Preflight =
           ProjectMembership; RepositoryInBinding; NotAlreadyEnrolled; RoadmapConflict; PlanGrammar; PlanBlob; RowCap
           PayloadBound; TemplateBound; ToolchainLock; MemoryHeadroom; ProjectAutoAdd ]
 
+    // BindRuntime acts on the successor: its private binding, the merge that delivered it and the public blob at
+    // that merge. The predecessor appears only as the thing the successor must extend.
     let private bindChecks =
-        [ ConstructorIdentity; PredecessorIntegrity; RuntimeBindingIntegrity; PlanGrammar; PlanBlob; ToolchainLock
+        [ ConstructorIdentity; SuccessorIntegrity; SuccessorExtendsPredecessor; PlanGrammar; PlanBlob; ToolchainLock
           MemoryHeadroom; ProjectAutoAdd; AdjacencyChurn ]
+
+    let private routineOpenChecks =
+        [ BaseIsDefaultBranch; RoutineBranch; MarkerSingle; MarkerHeadBound; MarkerOperationAllowed; ClosingLinkDeclared; SinglePullRequest ]
+
+    let private routineMergeChecks = routineOpenChecks @ [ BaseCurrent ]
+
+    let private registerChecks = [ WorkflowReadable; WorkflowPublishes; RegistryReadable; NotYetRegistered ]
+    let private runWriterChecks = [ RegistryReadable; WriterRegistered; CoverageAudit ]
 
     let checksFor route stage =
         match route, stage with
         | ProgrammeEnrollmentSuccessor, (PlanSuccessor | PrepareSuccessor) -> planChecks
         | ProgrammeEnrollmentSuccessor, BindRuntime -> bindChecks
+        | RoutineDelivery, OpenPullRequest -> routineOpenChecks
+        | RoutineDelivery, MergePullRequest -> routineMergeChecks
+        | PublicationWriterRegistration, RegisterWriter -> registerChecks
+        | PublicationWriterRegistration, RunWriter -> runWriterChecks
         | _ -> []
 
     type Supplier =
@@ -106,6 +160,9 @@ module V2Preflight =
         | ProtocolRelease
         | ToolchainCache
         | HostCapacity
+        | SuccessorCustody
+        | PullRequestOwner
+        | WriterRegistry
 
     let supplierCode supplier =
         match supplier with
@@ -117,6 +174,9 @@ module V2Preflight =
         | ProtocolRelease -> "ProtocolRelease"
         | ToolchainCache -> "ToolchainCache"
         | HostCapacity -> "HostCapacity"
+        | SuccessorCustody -> "SuccessorCustody"
+        | PullRequestOwner -> "PullRequestOwner"
+        | WriterRegistry -> "WriterRegistry"
 
     type Reason =
         | ConstructorDiffersFromMain
@@ -137,6 +197,19 @@ module V2Preflight =
         | BindingOverBound
         | LockedHashDiffersFromCache
         | InsufficientMemoryHeadroom
+        | SuccessorCommitmentMismatch
+        | SuccessorDoesNotExtendPredecessor
+        | PullRequestBaseNotDefault
+        | BranchNotRoutine
+        | MarkerMissingOrAmbiguous
+        | MarkerHeadDiffers
+        | OperationNotAllowed
+        | PullRequestAlreadyOpen
+        | PullRequestNotSingle
+        | WorkflowHasNoPublicationEffect
+        | WriterAlreadyRegistered
+        | WriterNotRegistered
+        | CoverageUnmet
 
     let reasonCode reason =
         match reason with
@@ -158,6 +231,19 @@ module V2Preflight =
         | BindingOverBound -> "BindingOverBound"
         | LockedHashDiffersFromCache -> "LockedHashDiffersFromCache"
         | InsufficientMemoryHeadroom -> "InsufficientMemoryHeadroom"
+        | SuccessorCommitmentMismatch -> "SuccessorCommitmentMismatch"
+        | SuccessorDoesNotExtendPredecessor -> "SuccessorDoesNotExtendPredecessor"
+        | PullRequestBaseNotDefault -> "PullRequestBaseNotDefault"
+        | BranchNotRoutine -> "BranchNotRoutine"
+        | MarkerMissingOrAmbiguous -> "MarkerMissingOrAmbiguous"
+        | MarkerHeadDiffers -> "MarkerHeadDiffers"
+        | OperationNotAllowed -> "OperationNotAllowed"
+        | PullRequestAlreadyOpen -> "PullRequestAlreadyOpen"
+        | PullRequestNotSingle -> "PullRequestNotSingle"
+        | WorkflowHasNoPublicationEffect -> "WorkflowHasNoPublicationEffect"
+        | WriterAlreadyRegistered -> "WriterAlreadyRegistered"
+        | WriterNotRegistered -> "WriterNotRegistered"
+        | CoverageUnmet -> "CoverageUnmet"
 
     let private supplierOf reason =
         match reason with
@@ -169,6 +255,10 @@ module V2Preflight =
         | RowCapExceeded | PayloadOverBound | BindingOverBound -> ProtocolRelease
         | LockedHashDiffersFromCache -> ToolchainCache
         | InsufficientMemoryHeadroom -> HostCapacity
+        | SuccessorCommitmentMismatch | SuccessorDoesNotExtendPredecessor -> SuccessorCustody
+        | PullRequestBaseNotDefault | BranchNotRoutine | MarkerMissingOrAmbiguous | MarkerHeadDiffers | PullRequestAlreadyOpen | PullRequestNotSingle -> PullRequestOwner
+        | OperationNotAllowed -> Root
+        | WorkflowHasNoPublicationEffect | WriterAlreadyRegistered | WriterNotRegistered | CoverageUnmet -> WriterRegistry
 
     type Input =
         | SourceRevision
@@ -183,7 +273,19 @@ module V2Preflight =
         | LockedHash
         | CachedHash
         | CgroupMemory
+        | HostMemory
         | Registry
+        | PlanBlobFact
+        | SuccessorPrivate
+        | SuccessorMerge
+        | SuccessorPublic
+        | PullRequestFact
+        | OpenPullRequestFact
+        | BaseHead
+        | RoutinePolicy
+        | WorkflowText
+        | WriterRegistryText
+        | CoverageGate
         | Planner
 
     type GapKind =
@@ -196,6 +298,10 @@ module V2Preflight =
         | ChurnObserved of count: int
         | BareMembershipsObserved of count: int
         | NotRegistered
+        | ReadFailed
+        | NotVisible
+        | BaseMoved
+        | ClosingLinkPresent of count: int
 
     type Gap = { Input: Input; Kind: GapKind }
 
@@ -213,6 +319,18 @@ module V2Preflight =
         | LockedHash -> "LockedHash"
         | CachedHash -> "CachedHash"
         | CgroupMemory -> "CgroupMemory"
+        | HostMemory -> "HostMemory"
+        | PlanBlobFact -> "PlanBlob"
+        | SuccessorPrivate -> "SuccessorPrivate"
+        | SuccessorMerge -> "SuccessorMerge"
+        | SuccessorPublic -> "SuccessorPublic"
+        | PullRequestFact -> "PullRequest"
+        | OpenPullRequestFact -> "OpenPullRequests"
+        | BaseHead -> "BaseHead"
+        | RoutinePolicy -> "RoutinePolicy"
+        | WorkflowText -> "Workflow"
+        | WriterRegistryText -> "WriterRegistry"
+        | CoverageGate -> "CoverageAudit"
         | Registry -> "Registry"
         | Planner -> "Planner"
 
@@ -227,6 +345,10 @@ module V2Preflight =
         | ChurnObserved count -> "ChurnObserved:" + string count
         | BareMembershipsObserved count -> "BareMembershipsObserved:" + string count
         | NotRegistered -> "NotRegistered"
+        | ReadFailed -> "ReadFailed"
+        | NotVisible -> "NotVisible"
+        | BaseMoved -> "BaseMoved"
+        | ClosingLinkPresent count -> "ClosingLinkPresent:" + string count
 
     let gapCode (gap: Gap) = inputCode gap.Input + "/" + kindCode gap.Kind
 
@@ -271,25 +393,67 @@ module V2Preflight =
         | Live
         | Supplied
 
+    type MainFreshness =
+        | LiveMain
+        | AssertedMain
+        | LocalTrackingRef
+
     type EnrollmentInputs =
         { Request: V2Enrollment.Request
           Facts: Observed<V2Enrollment.NativeFacts * FactsFreshness>
           ConstructorRevision: Observed<string>
           ProtectedMain: Observed<string>
+          ProtectedMainFreshness: MainFreshness
           PredecessorPrivate: Observed<string>
           PredecessorPublic: Observed<string>
           RuntimeBinding: Observed<string>
+          SuccessorPrivate: Observed<string>
+          SuccessorMergeSha: Observed<string>
+          SuccessorPublic: Observed<string>
           InstalledReaderSha256: Observed<string>
           KnownInstalledReaders: Set<string>
           LockedFSharpCoreHash: Observed<string>
           CachedFSharpCoreHash: Observed<string>
           MemoryHeadroomBytes: Observed<int64 option>
+          HostMemAvailableBytes: Observed<int64>
           MinimumHeadroomBytes: int64
           PayloadLimitBytes: int
           BindingLimitBytes: int
           ProjectItems: Observed<ProjectItem list>
+          InvisibleRepositories: Set<string>
           Now: DateTimeOffset
           ChurnWindow: TimeSpan }
+
+    type RoutinePolicy =
+        { BranchPrefix: string
+          AllowedOperations: string list
+          ProtectedOperations: string list }
+
+    type RoutineCandidate =
+        { BaseRef: string
+          BaseSha: string option
+          HeadRef: string
+          HeadSha: string
+          Title: string
+          Body: string }
+
+    type RoutineInputs =
+        { DefaultBranch: string
+          Candidate: Observed<RoutineCandidate>
+          Policy: Observed<RoutinePolicy>
+          LiveBaseSha: Observed<string>
+          OpenPullRequests: Observed<int> }
+
+    type CoverageAuditResult =
+        | Clean
+        | Unmet of count: int
+
+    type PublicationInputs =
+        { Repository: string
+          WorkflowPath: string
+          Workflow: Observed<string>
+          Registry: Observed<string>
+          CoverageAudit: Observed<CoverageAuditResult> }
 
     // ---- verdict constructors ----
 
@@ -309,17 +473,23 @@ module V2Preflight =
     type private Context =
         { Inputs: EnrollmentInputs
           Seams: V2Enrollment.Seams
+          Stage: Stage
           Binding: V2Projection.Binding option
+          // The binding whose rows count as enrolled at this stage: the successor's at BindRuntime.
+          StageBinding: V2Projection.Binding option
           Analysis: Result<V2Enrollment.Analysis, V2Enrollment.Refusal> option
           FactsKnown: V2Enrollment.NativeFacts option }
 
     let private emptyFacts : V2Enrollment.NativeFacts = { ProjectId = ""; Issues = []; PlanBlobs = [] }
 
-    let private context (seams: V2Enrollment.Seams) (inputs: EnrollmentInputs) : Context =
-        let binding =
-            match inputs.PredecessorPrivate with
-            | Known json -> (match V2Projection.decodeBinding json with Ok value -> Some value | Error _ -> None)
-            | NotObserved _ -> None
+    let private decodeBindingOf (observed: Observed<string>) =
+        match observed with
+        | Known json -> (match V2Projection.decodeBinding json with Ok value -> Some value | Error _ -> None)
+        | NotObserved _ -> None
+
+    let private context (seams: V2Enrollment.Seams) (stage: Stage) (inputs: EnrollmentInputs) : Context =
+        let binding = decodeBindingOf inputs.PredecessorPrivate
+        let stageBinding = if stage = BindRuntime then decodeBindingOf inputs.SuccessorPrivate else binding
         let facts = match inputs.Facts with Known(facts, _) -> Some facts | NotObserved _ -> None
         let analysis =
             match inputs.PredecessorPrivate, inputs.PredecessorPublic with
@@ -327,7 +497,7 @@ module V2Preflight =
                 // Without facts only the facts-independent findings are consulted; the rest report their own gap.
                 Some(V2Enrollment.analyzeWith seams privateJson publicJson inputs.Request (defaultArg facts emptyFacts))
             | _ -> None
-        { Inputs = inputs; Seams = seams; Binding = binding; Analysis = analysis; FactsKnown = facts }
+        { Inputs = inputs; Seams = seams; Stage = stage; Binding = binding; StageBinding = stageBinding; Analysis = analysis; FactsKnown = facts }
 
     let private predecessorGap (ctx: Context) : (Input * GapKind) option =
         match ctx.Inputs.PredecessorPrivate, ctx.Inputs.PredecessorPublic with
@@ -367,8 +537,17 @@ module V2Preflight =
         | NotObserved kind, _ -> unknown ConstructorIdentity SourceRevision kind []
         | _, NotObserved kind -> unknown ConstructorIdentity ProtectedMain kind []
         | Known built, Known main ->
-            if built = main then supported ConstructorIdentity "constructor source revision equals the intended protected main"
-            else unsupported ConstructorIdentity ConstructorDiffersFromMain []
+            let source =
+                match ctx.Inputs.ProtectedMainFreshness with
+                | LiveMain -> "live remote head"
+                | AssertedMain -> "revision asserted by the operator"
+                | LocalTrackingRef -> "local tracking ref; it may be stale"
+            if built = main then supported ConstructorIdentity ("constructor source revision equals the intended protected main (" + source + ")")
+            else
+                match ctx.Inputs.ProtectedMainFreshness with
+                // A difference from a ref that may be stale does not establish that the constructor is behind.
+                | LocalTrackingRef -> unknown ConstructorIdentity ProtectedMain NotLive []
+                | LiveMain | AssertedMain -> unsupported ConstructorIdentity ConstructorDiffersFromMain []
 
     let private predecessorIntegrity (ctx: Context) =
         match predecessorGap ctx, ctx.Analysis with
@@ -423,29 +602,102 @@ module V2Preflight =
             | hits -> unsupported IssueIdentity DuplicateRequestIssue (subjectsOf hits)
         | _ -> identity
 
-    let private planGrammar (ctx: Context) =
+    let private installedGrammarGate (ctx: Context) (evidenceKind: string) =
+        // The source grammar admits the references; whether the installed reader's grammar is the same is known
+        // only for artifacts in the table.
+        match ctx.Inputs.InstalledReaderSha256 with
+        | NotObserved kind -> unknown PlanGrammar InstalledReader kind []
+        | Known sha ->
+            if ctx.Inputs.KnownInstalledReaders.IsEmpty then unknown PlanGrammar KnownReaderTable NotSupplied []
+            elif ctx.Inputs.KnownInstalledReaders.Contains sha then supported PlanGrammar ("source grammar admits " + evidenceKind + " and the installed reader is in the known table")
+            else unknown PlanGrammar InstalledReader NotInKnownTable []
+
+    let private planningPlanGrammar (ctx: Context) =
         let protectedDocs = ctx.Inputs.Request.Issues |> List.filter (fun issue -> match issue.Plan with V2Enrollment.ProtectedDoc _ -> true | _ -> false)
         let source = fromAnalysis ctx PlanGrammar false V2Enrollment.PlanNotAdmitted PlanNotAdmitted "every plan reference is admitted by the source plan grammar"
         match source.Verdict with
-        | SupportedForNextStage _ when not protectedDocs.IsEmpty ->
-            // The source grammar admits the references; whether the installed reader's grammar is the same
-            // is known only for artifacts in the table.
-            match ctx.Inputs.InstalledReaderSha256 with
-            | NotObserved kind -> unknown PlanGrammar InstalledReader kind []
-            | Known sha ->
-                if ctx.Inputs.KnownInstalledReaders.IsEmpty then unknown PlanGrammar KnownReaderTable NotSupplied []
-                elif ctx.Inputs.KnownInstalledReaders.Contains sha then supported PlanGrammar "source grammar admits every reference and the installed reader is in the known table"
-                else unknown PlanGrammar InstalledReader NotInKnownTable []
+        | SupportedForNextStage _ when not protectedDocs.IsEmpty -> installedGrammarGate ctx "every reference"
         | _ -> source
 
-    let private planBlob (ctx: Context) =
+    // At BindRuntime the references that matter are the rows the successor binding actually carries and the
+    // predecessor did not: read from the successor's own payload, not from the request.
+    let private appendedRows (ctx: Context) : Result<(string * string * string) list, Input * GapKind> =
+        match ctx.StageBinding, ctx.Binding with
+        | None, _ -> Error(SuccessorPrivate, Unreadable)
+        | _, None -> Error(PredecessorPrivate, Unreadable)
+        | Some successor, Some predecessor ->
+            match V2Projection.programmeRows successor with
+            | Error _ -> Error(SuccessorPrivate, Unreadable)
+            | Ok rows -> Ok(rows |> List.filter (fun (_, node, _) -> not (predecessor.SelectedIssues.ContainsKey node)))
+
+    let private admittedDoc (ctx: Context) (repositories: Set<string>) (roadmap: string) =
+        match ctx.Seams.Grammar repositories roadmap with
+        | Ok(repository, reference, path) -> Some(repository, reference, path)
+        | Error _ -> None
+
+    let private bindingPlanGrammar (ctx: Context) =
+        match appendedRows ctx, ctx.StageBinding with
+        | Error(input, kind), _ -> unknown PlanGrammar input kind []
+        | Ok rows, Some successor ->
+            let isIssueUrl (roadmap: string) = roadmap = V2ProjectionSource.programmePlanIssueUrl
+            let refused = rows |> List.filter (fun (_, _, roadmap) -> not (isIssueUrl roadmap) && (admittedDoc ctx successor.Repositories roadmap).IsNone)
+            if not refused.IsEmpty then unsupported PlanGrammar PlanNotAdmitted (refused |> List.map (fun (issue, _, _) -> issue) |> capped)
+            elif rows |> List.forall (fun (_, _, roadmap) -> isIssueUrl roadmap) then supported PlanGrammar "every appended row names the programme plan issue"
+            else installedGrammarGate ctx "every appended reference"
+        | Ok _, None -> unknown PlanGrammar SuccessorPrivate Unreadable []
+
+    let private planGrammar (ctx: Context) = if ctx.Stage = BindRuntime then bindingPlanGrammar ctx else planningPlanGrammar ctx
+
+    let private planningPlanBlob (ctx: Context) =
         let docs = ctx.Inputs.Request.Issues |> List.filter (fun issue -> match issue.Plan with V2Enrollment.ProtectedDoc _ -> true | _ -> false)
         match predecessorGap ctx, ctx.Inputs.Facts with
         | _, NotObserved kind -> unknown PlanBlob NativeFacts kind []
         | _ when docs.IsEmpty -> supported PlanBlob "no protected document reference"
         | _, Known(_, Supplied) -> unknown PlanBlob NativeFacts NotLive []
         | _, Known(_, Live) ->
-            fromAnalysis ctx PlanBlob true V2Enrollment.PlanBlobAbsentOnMain PlanBlobAbsentOnMain "every protected document exists on main now"
+            let found = fromAnalysis ctx PlanBlob true V2Enrollment.PlanBlobAbsentOnMain PlanBlobAbsentOnMain "every protected document exists on main now"
+            match found.Verdict with
+            | Unsupported(PlanBlobAbsentOnMain, _) ->
+                // A 404 in a repository the reader may not see is not an absence.
+                let repositoryOf (reference: string) =
+                    ctx.Inputs.Request.Issues
+                    |> List.tryFind (fun issue -> String.Equals(issue.Ref, reference, StringComparison.OrdinalIgnoreCase))
+                    |> Option.bind (fun issue -> match issue.Plan with V2Enrollment.ProtectedDoc(repository, _) -> Some repository | _ -> None)
+                let hidden, visible =
+                    found.Subjects |> List.partition (fun reference ->
+                        match repositoryOf reference with
+                        | Some repository -> ctx.Inputs.InvisibleRepositories.Contains repository
+                        | None -> false)
+                if visible.IsEmpty && not hidden.IsEmpty then unknown PlanBlob PlanBlobFact NotVisible hidden
+                else { found with Subjects = visible }
+            | _ -> found
+
+    let private bindingPlanBlob (ctx: Context) =
+        match appendedRows ctx, ctx.StageBinding, ctx.Inputs.Facts with
+        | Error(input, kind), _, _ -> unknown PlanBlob input kind []
+        | _, _, NotObserved kind -> unknown PlanBlob NativeFacts kind []
+        | Ok rows, Some successor, Known(facts, freshness) ->
+            let docs = rows |> List.choose (fun (issue, _, roadmap) -> admittedDoc ctx successor.Repositories roadmap |> Option.map (fun (repository, reference, path) -> issue, repository, reference, path))
+            if docs.IsEmpty then supported PlanBlob "no appended protected document reference"
+            elif freshness = Supplied then unknown PlanBlob NativeFacts NotLive []
+            else
+                // Only a main reference can be checked against the facts, which describe main now.
+                let absent = ResizeArray<string>()
+                let hidden = ResizeArray<string>()
+                let unread = ResizeArray<string>()
+                for issue, repository, reference, path in docs do
+                    match facts.PlanBlobs |> List.tryFind (fun blob -> blob.Repository = repository && blob.Path = path) with
+                    | _ when reference <> "main" -> ()
+                    | None -> unread.Add issue
+                    | Some blob when blob.OnMain -> ()
+                    | Some _ -> if ctx.Inputs.InvisibleRepositories.Contains repository then hidden.Add issue else absent.Add issue
+                if absent.Count > 0 then unsupported PlanBlob PlanBlobAbsentOnMain (List.ofSeq absent |> capped)
+                elif hidden.Count > 0 then unknown PlanBlob PlanBlobFact NotVisible (List.ofSeq hidden |> capped)
+                elif unread.Count > 0 then unknown PlanBlob NativeFacts Incomplete (List.ofSeq unread |> capped)
+                else supported PlanBlob "every appended protected document exists on main now"
+        | Ok _, None, _ -> unknown PlanBlob SuccessorPrivate Unreadable []
+
+    let private planBlob (ctx: Context) = if ctx.Stage = BindRuntime then bindingPlanBlob ctx else planningPlanBlob ctx
 
     let private rowCap (ctx: Context) =
         match predecessorGap ctx, ctx.Analysis with
@@ -472,8 +724,8 @@ module V2Preflight =
         match predecessorGap ctx, ctx.Analysis with
         | Some(input, kind), _ -> Error(input, kind)
         | None, Some(Ok analysis) ->
-            match ctx.Inputs.PredecessorPrivate, ctx.Binding with
-            | Known privateJson, Some binding ->
+            match ctx.Inputs.PredecessorPrivate with
+            | Known privateJson ->
                 let nodeLength (issue: V2Enrollment.RequestIssue) =
                     match ctx.FactsKnown with
                     | Some facts ->
@@ -486,7 +738,6 @@ module V2Preflight =
                 let selected = issues |> List.sumBy (fun issue -> issue.Ref.Length + nodeLength issue + 8)
                 let base64 (bytes: int) = (bytes + 2) / 3 * 4
                 let privateBinding = privateJson.Length - base64 analysis.PredecessorPayloadBytes + base64 payload + selected
-                ignore binding
                 Ok(payload, privateBinding)
             | _ -> Error(PredecessorPrivate, Unreadable)
         | None, _ -> Error(Planner, NotEvaluated)
@@ -516,13 +767,21 @@ module V2Preflight =
             else unsupported ToolchainLock LockedHashDiffersFromCache []
 
     let private memoryHeadroom (ctx: Context) =
-        match ctx.Inputs.MemoryHeadroomBytes with
-        | NotObserved kind -> unknown MemoryHeadroom CgroupMemory kind []
-        | Known None -> supported MemoryHeadroom "no cgroup memory limit applies"
-        | Known(Some headroom) ->
-            if headroom < ctx.Inputs.MinimumHeadroomBytes then
-                { unsupported MemoryHeadroom InsufficientMemoryHeadroom [] with Subjects = [ string headroom + "<" + string ctx.Inputs.MinimumHeadroomBytes ] }
-            else supported MemoryHeadroom (string headroom + ">=" + string ctx.Inputs.MinimumHeadroomBytes + " bytes headroom")
+        // With no cgroup limit the host's MemAvailable is the bound; with one, the smaller of the two. An
+        // unreadable cgroup stays Unknown whatever the host reports, because it may be the tighter bound.
+        let effective =
+            match ctx.Inputs.MemoryHeadroomBytes, ctx.Inputs.HostMemAvailableBytes with
+            | NotObserved kind, _ -> Error(CgroupMemory, kind)
+            | Known(Some limit), Known host -> Ok(min limit host)
+            | Known(Some limit), NotObserved _ -> Ok limit
+            | Known None, Known host -> Ok host
+            | Known None, NotObserved kind -> Error(HostMemory, kind)
+        match effective with
+        | Error(input, kind) -> unknown MemoryHeadroom input kind []
+        | Ok headroom ->
+            let minimum = ctx.Inputs.MinimumHeadroomBytes
+            if headroom < minimum then { unsupported MemoryHeadroom InsufficientMemoryHeadroom [] with Subjects = [ string headroom + "<" + string minimum ] }
+            else supported MemoryHeadroom (string headroom + ">=" + string minimum + " bytes headroom")
 
     let private nameOf (item: ProjectItem) =
         match item.Content with
@@ -530,26 +789,33 @@ module V2Preflight =
         | OtherContent kind -> kind + ":" + item.ItemId
 
     let private projectAutoAdd (ctx: Context) =
-        match ctx.Inputs.ProjectItems, ctx.Inputs.PredecessorPrivate, ctx.Binding with
-        | NotObserved kind, _, _ -> unknown ProjectAutoAdd ProjectItems kind []
-        | _, NotObserved kind, _ -> unknown ProjectAutoAdd PredecessorPrivate kind []
-        | _, _, None -> unknown ProjectAutoAdd PredecessorPrivate Unreadable []
-        | Known items, _, Some binding ->
-            let enrolled (item: ProjectItem) =
-                match item.Content with
-                | IssueContent(_, node) -> binding.SelectedIssues.ContainsKey node
-                | _ -> false
-            let unenrolled = items |> List.filter (enrolled >> not)
-            let offenders = unenrolled |> List.filter (fun item -> not (item.HasStatus && item.HasTrack && item.HasWorkLevel))
-            if offenders.IsEmpty then supported ProjectAutoAdd (string unenrolled.Length + " unenrolled item(s), each with Status, Track and Work level")
+        match ctx.Inputs.ProjectItems, ctx.Inputs.PredecessorPrivate, ctx.Binding, ctx.StageBinding with
+        | NotObserved kind, _, _, _ -> unknown ProjectAutoAdd ProjectItems kind []
+        | _, NotObserved kind, _, _ -> unknown ProjectAutoAdd PredecessorPrivate kind []
+        | _, _, None, _ -> unknown ProjectAutoAdd PredecessorPrivate Unreadable []
+        | _, _, _, None -> unknown ProjectAutoAdd SuccessorPrivate Unreadable []
+        | Known items, _, Some predecessor, Some staged ->
+            // The inventory must contain every node the predecessor enrolled; otherwise it is not the whole
+            // Project, and an absence of bare memberships in it proves nothing.
+            let present = items |> List.choose (fun item -> match item.Content with IssueContent(_, node) -> Some node | _ -> None) |> Set.ofList
+            let missing = predecessor.SelectedIssues |> Map.toList |> List.filter (fun (node, _) -> not (present.Contains node)) |> List.map snd
+            if not missing.IsEmpty then unknown ProjectAutoAdd ProjectItems Incomplete (capped missing)
             else
-                // Each offender is named with exactly which of the three fields it lacks, so a fully bare
-                // membership can be told from a legacy one that merely lacks Track and Work level.
-                let named (item: ProjectItem) =
-                    let missing = [ (if item.HasStatus then None else Some "Status"); (if item.HasTrack then None else Some "Track"); (if item.HasWorkLevel then None else Some "Work level") ] |> List.choose id
-                    nameOf item + "[" + String.Join(",", missing) + "]"
-                // Unknown, not Unsupported: that these break the installed caller is unproven (see the gap kind).
-                unknown ProjectAutoAdd ProjectItems (BareMembershipsObserved offenders.Length) (offenders |> List.map named |> capped)
+                let enrolled (item: ProjectItem) =
+                    match item.Content with
+                    | IssueContent(_, node) -> staged.SelectedIssues.ContainsKey node
+                    | _ -> false
+                let unenrolled = items |> List.filter (enrolled >> not)
+                let offenders = unenrolled |> List.filter (fun item -> not (item.HasStatus && item.HasTrack && item.HasWorkLevel))
+                if offenders.IsEmpty then supported ProjectAutoAdd (string unenrolled.Length + " unenrolled item(s), each with Status, Track and Work level; every enrolled node is in the inventory")
+                else
+                    // Each offender is named with exactly which of the three fields it lacks, so a fully bare
+                    // membership can be told from a legacy one that merely lacks Track and Work level.
+                    let named (item: ProjectItem) =
+                        let missingFields = [ (if item.HasStatus then None else Some "Status"); (if item.HasTrack then None else Some "Track"); (if item.HasWorkLevel then None else Some "Work level") ] |> List.choose id
+                        nameOf item + "[" + String.Join(",", missingFields) + "]"
+                    // Unknown, not Unsupported: that these break the installed caller is unproven (see the gap kind).
+                    unknown ProjectAutoAdd ProjectItems (BareMembershipsObserved offenders.Length) (offenders |> List.map named |> capped)
 
     let private adjacencyChurn (ctx: Context) =
         match ctx.Inputs.ProjectItems with
@@ -564,6 +830,42 @@ module V2Preflight =
             let recent = items |> List.filter (fun item -> item.UpdatedAt >= since && not (related item))
             if recent.IsEmpty then supported AdjacencyChurn "no unrelated Project item updated within the window"
             else unknown AdjacencyChurn ProjectItems (ChurnObserved recent.Length) (recent |> List.map nameOf |> capped)
+
+    // ---- BindRuntime acts on the successor ----
+
+    let private hex40 (value: string) = Text.RegularExpressions.Regex.IsMatch(value, @"\A[0-9a-f]{40}\z")
+
+    let private successorGap (ctx: Context) : (Input * GapKind) option =
+        match ctx.Inputs.SuccessorPrivate, ctx.Inputs.SuccessorMergeSha, ctx.Inputs.SuccessorPublic with
+        | NotObserved kind, _, _ -> Some(SuccessorPrivate, kind)
+        | _, NotObserved kind, _ -> Some(SuccessorMerge, kind)
+        | _, _, NotObserved kind -> Some(SuccessorPublic, kind)
+        | Known _, Known merge, Known _ -> if hex40 merge then None else Some(SuccessorMerge, Unreadable)
+
+    let private successorIntegrity (ctx: Context) =
+        match successorGap ctx, ctx.Inputs.SuccessorPrivate, ctx.Inputs.SuccessorPublic with
+        | Some(input, kind), _, _ -> unknown SuccessorIntegrity input kind []
+        | None, Known privateJson, Known publicJson ->
+            let authenticated =
+                try
+                    match V2Projection.decodeBinding privateJson with
+                    | Ok binding -> V2Projection.isProgrammeBinding binding && (V2Projection.authenticateProgrammeEnrollment binding publicJson |> Result.isOk)
+                    | Error _ -> false
+                with _ -> false
+            if authenticated then supported SuccessorIntegrity "successor private pair authenticates against the public blob at the merge"
+            else unsupported SuccessorIntegrity SuccessorCommitmentMismatch []
+        | None, _, _ -> unknown SuccessorIntegrity SuccessorPrivate NotEvaluated []
+
+    let private successorExtendsPredecessor (ctx: Context) =
+        match successorGap ctx, ctx.Inputs.PredecessorPrivate, ctx.Inputs.SuccessorPrivate, ctx.Inputs.SuccessorPublic with
+        | Some(input, kind), _, _, _ -> unknown SuccessorExtendsPredecessor input kind []
+        | None, NotObserved kind, _, _ -> unknown SuccessorExtendsPredecessor PredecessorPrivate kind []
+        | None, Known before, Known after, Known publicJson ->
+            let verdict = V2Enrollment.verifyPair before after publicJson
+            if verdict.PrefixPreserved && verdict.HeaderPreserved && verdict.RecomputedCommitment && verdict.AppendedRows >= 1 then
+                supported SuccessorExtendsPredecessor (string verdict.AppendedRows + " appended row(s); predecessor prefix and header preserved; commitment recomputed")
+            else unsupported SuccessorExtendsPredecessor SuccessorDoesNotExtendPredecessor []
+        | None, _, _, _ -> unknown SuccessorExtendsPredecessor SuccessorPrivate NotEvaluated []
 
     let private evaluate (ctx: Context) (check: Check) : Finding =
         match check with
@@ -587,17 +889,190 @@ module V2Preflight =
         | MemoryHeadroom -> memoryHeadroom ctx
         | ProjectAutoAdd -> projectAutoAdd ctx
         | AdjacencyChurn -> adjacencyChurn ctx
+        | SuccessorIntegrity -> successorIntegrity ctx
+        | SuccessorExtendsPredecessor -> successorExtendsPredecessor ctx
+        | _ -> unknown check Registry NotRegistered []
+
+    let private reportOf route stage findings = { Route = route; Stage = stage; Findings = findings; Overall = overallOf findings }
+
+    let private unregistered route stage = reportOf route stage [ unknown RouteRegistry Registry NotRegistered [] ]
+
+    let unregisteredReport route stage = unregistered route stage
 
     let runWith (seams: V2Enrollment.Seams) (route: Route) (stage: Stage) (inputs: EnrollmentInputs) : Report =
-        let checks = checksFor route stage
-        let findings =
-            if checks.IsEmpty then [ unknown RouteRegistry Registry NotRegistered [] ]
-            else
-                let ctx = context seams inputs
-                checks |> List.map (fun check -> try evaluate ctx check with _ -> unknown check Registry NotEvaluated [])
-        { Route = route; Stage = stage; Findings = findings; Overall = overallOf findings }
+        // This entry evaluates the enrollment route only; the other routes have their own inputs and runners.
+        let checks = if route = ProgrammeEnrollmentSuccessor then checksFor route stage else []
+        if checks.IsEmpty then unregistered route stage
+        else
+            let ctx = context seams stage inputs
+            reportOf route stage (checks |> List.map (fun check -> try evaluate ctx check with _ -> unknown check Registry NotEvaluated []))
 
     let run route stage inputs = runWith V2Enrollment.defaultSeams route stage inputs
+
+    // ---- routine delivery ----
+
+    let private markerPattern = Text.RegularExpressions.Regex(@"<!--\s*fsgg:routine-development/v1\s+(?<fields>.*?)-->", Text.RegularExpressions.RegexOptions.Singleline ||| Text.RegularExpressions.RegexOptions.CultureInvariant)
+    let private markerField (fields: string) (name: string) =
+        fields.Split([| ' '; '\t'; '\r'; '\n' |], StringSplitOptions.RemoveEmptyEntries)
+        |> Array.tryPick (fun token -> if token.StartsWith(name + "=", StringComparison.Ordinal) then Some(token.Substring(name.Length + 1)) else None)
+
+    // A GitHub native closing keyword, then optionally a colon, then an issue reference.
+    let private closingPattern =
+        Text.RegularExpressions.Regex(
+            @"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+",
+            Text.RegularExpressions.RegexOptions.IgnoreCase ||| Text.RegularExpressions.RegexOptions.CultureInvariant)
+
+    let private routineFinding (check: Check) (inputs: RoutineInputs) : Finding =
+        let candidate = inputs.Candidate
+        let withCandidate (decide: RoutineCandidate -> Finding) =
+            match candidate with
+            | Known value -> decide value
+            | NotObserved kind -> unknown check PullRequestFact kind []
+        let markers (value: RoutineCandidate) = markerPattern.Matches value.Body |> Seq.toList
+        let singleMarker (value: RoutineCandidate) =
+            match markers value with
+            | [ one ] when value.Body.Split([| "fsgg:routine-development" |], StringSplitOptions.None).Length = 2 -> Some one.Groups.["fields"].Value
+            | _ -> None
+        match check with
+        | BaseIsDefaultBranch ->
+            withCandidate (fun value ->
+                if value.BaseRef = inputs.DefaultBranch then supported check "the pull request targets the default branch"
+                else unsupported check PullRequestBaseNotDefault [])
+        | RoutineBranch ->
+            match inputs.Policy with
+            | NotObserved kind -> unknown check RoutinePolicy kind []
+            | Known policy ->
+                withCandidate (fun value ->
+                    if value.HeadRef.StartsWith(policy.BranchPrefix, StringComparison.Ordinal) && policy.BranchPrefix.Length > 0 then supported check "head branch carries the routine prefix"
+                    else unsupported check BranchNotRoutine [])
+        | MarkerSingle ->
+            withCandidate (fun value ->
+                match singleMarker value with
+                | Some _ -> supported check "exactly one complete routine-development marker"
+                | None -> unsupported check MarkerMissingOrAmbiguous [])
+        | MarkerHeadBound ->
+            withCandidate (fun value ->
+                match singleMarker value |> Option.bind (fun fields -> markerField fields "head") with
+                | Some head when hex40 head && head = value.HeadSha -> supported check "the marker names the exact head"
+                | Some _ -> unsupported check MarkerHeadDiffers []
+                | None -> unsupported check MarkerMissingOrAmbiguous [])
+        | MarkerOperationAllowed ->
+            match inputs.Policy with
+            | NotObserved kind -> unknown check RoutinePolicy kind []
+            | Known policy ->
+                withCandidate (fun value ->
+                    match singleMarker value |> Option.bind (fun fields -> markerField fields "operation") with
+                    | Some operation when List.contains operation policy.AllowedOperations && not (List.contains operation policy.ProtectedOperations) ->
+                        supported check "the marker operation is allowed and not protected"
+                    | Some _ -> unsupported check OperationNotAllowed []
+                    | None -> unsupported check MarkerMissingOrAmbiguous [])
+        | ClosingLinkDeclared ->
+            withCandidate (fun value ->
+                let found = [ closingPattern.Matches value.Title; closingPattern.Matches value.Body ] |> List.collect (fun matches -> matches |> Seq.map _.Value |> Seq.toList)
+                if found.IsEmpty then supported check "no native closing keyword names an issue (references only)"
+                else unknown check PullRequestFact (ClosingLinkPresent found.Length) (found |> List.map (fun text -> Text.RegularExpressions.Regex.Replace(text, @"\s+", " ")) |> capped))
+        | SinglePullRequest ->
+            match inputs.OpenPullRequests with
+            | NotObserved kind -> unknown check OpenPullRequestFact kind []
+            | Known _ -> unknown check Registry NotEvaluated [] // decided by `runRoutine`, which knows the stage
+        | BaseCurrent ->
+            withCandidate (fun value ->
+                match value.BaseSha, inputs.LiveBaseSha with
+                | None, _ -> unknown check PullRequestFact NotSupplied []
+                | _, NotObserved kind -> unknown check BaseHead kind []
+                | Some recorded, Known live ->
+                    if recorded = live then supported check "the recorded base is the live default branch head"
+                    else unknown check BaseHead BaseMoved [])
+        | _ -> unknown check Registry NotRegistered []
+
+    let runRoutine (stage: Stage) (inputs: RoutineInputs) : Report =
+        let checks = checksFor RoutineDelivery stage
+        if checks.IsEmpty then unregistered RoutineDelivery stage
+        else
+            let one (check: Check) =
+                try
+                    match check, inputs.OpenPullRequests with
+                    // The open count means different things at the two stages: none yet before opening, exactly one before merging.
+                    | SinglePullRequest, Known count ->
+                        if stage = OpenPullRequest then
+                            if count = 0 then supported check "no pull request is open for the branch"
+                            else unsupported check PullRequestAlreadyOpen [ string count + " open" ]
+                        elif count = 1 then supported check "exactly one pull request is open for the branch"
+                        else unsupported check PullRequestNotSingle [ string count + " open" ]
+                    | _ -> routineFinding check inputs
+                with _ -> unknown check Registry NotEvaluated []
+            reportOf RoutineDelivery stage (checks |> List.map one)
+
+    // ---- publication writer registration ----
+
+    let private publishEffect =
+        Text.RegularExpressions.Regex(
+            @"dotnet nuget push|NuGet/login@|gh release (?:create|upload|edit|delete)|softprops/action-gh-release|git push[^\n]*(?:--tags|refs/tags|--atomic)",
+            Text.RegularExpressions.RegexOptions.CultureInvariant)
+
+    let private executableLines (text: string) =
+        text.Split('\n') |> Array.filter (fun line -> not (Text.RegularExpressions.Regex.IsMatch(line, @"^\s*#"))) |> Array.toList
+
+    let private writersAndExempt (repository: string) (json: string) : Result<Set<string> * Set<string>, unit> =
+        try
+            use document = JsonDocument.Parse json
+            let root = document.RootElement
+            let rows (name: string) =
+                root.GetProperty(name).EnumerateArray()
+                |> Seq.filter (fun row -> row.GetProperty("repo").GetString() = repository)
+                |> Seq.collect (fun row -> row.GetProperty("workflows").EnumerateArray() |> Seq.map _.GetString())
+                |> Set.ofSeq
+            if root.GetProperty("schema").GetInt32() <> 1 then Error()
+            else
+                let hasExempt, _ = root.TryGetProperty "exempt"
+                Ok(rows "writers", (if hasExempt then rows "exempt" else Set.empty))
+        with _ -> Error()
+
+    let runPublication (stage: Stage) (inputs: PublicationInputs) : Report =
+        let checks = checksFor PublicationWriterRegistration stage
+        if checks.IsEmpty then unregistered PublicationWriterRegistration stage
+        else
+            let registry = match inputs.Registry with Known json -> Some(writersAndExempt inputs.Repository json) | NotObserved _ -> None
+            let one (check: Check) =
+                try
+                    match check with
+                    | WorkflowReadable ->
+                        (match inputs.Workflow with
+                         | Known _ -> supported check "the workflow text was read"
+                         | NotObserved kind -> unknown check WorkflowText kind [])
+                    | WorkflowPublishes ->
+                        (match inputs.Workflow with
+                         | NotObserved kind -> unknown check WorkflowText kind []
+                         | Known text ->
+                            if executableLines text |> List.exists publishEffect.IsMatch then supported check "the workflow carries a publication effect token"
+                            else unsupported check WorkflowHasNoPublicationEffect [])
+                    | RegistryReadable ->
+                        (match inputs.Registry, registry with
+                         | NotObserved kind, _ -> unknown check WriterRegistryText kind []
+                         | _, Some(Ok _) -> supported check "the writer registry parses (schema 1)"
+                         | _ -> unknown check WriterRegistryText Unreadable [])
+                    | NotYetRegistered ->
+                        (match inputs.Registry, registry with
+                         | NotObserved kind, _ -> unknown check WriterRegistryText kind []
+                         | _, Some(Ok(writers, exempt)) ->
+                            if writers.Contains inputs.WorkflowPath || exempt.Contains inputs.WorkflowPath then unsupported check WriterAlreadyRegistered []
+                            else supported check "the workflow is neither a registered writer nor exempt"
+                         | _ -> unknown check WriterRegistryText Unreadable [])
+                    | WriterRegistered ->
+                        (match inputs.Registry, registry with
+                         | NotObserved kind, _ -> unknown check WriterRegistryText kind []
+                         | _, Some(Ok(writers, _)) ->
+                            if writers.Contains inputs.WorkflowPath then supported check "the workflow is a registered writer"
+                            else unsupported check WriterNotRegistered []
+                         | _ -> unknown check WriterRegistryText Unreadable [])
+                    | CoverageAudit ->
+                        (match inputs.CoverageAudit with
+                         | NotObserved kind -> unknown check CoverageGate kind []
+                         | Known Clean -> supported check "the maintained coverage gate reports zero unmet"
+                         | Known(Unmet count) -> { unsupported check CoverageUnmet [] with Subjects = [ string count + " unmet" ] })
+                    | _ -> unknown check Registry NotRegistered []
+                with _ -> unknown check Registry NotEvaluated []
+            reportOf PublicationWriterRegistration stage (checks |> List.map one)
 
     // ---- observation helpers ----
 

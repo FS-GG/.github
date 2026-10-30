@@ -29,25 +29,39 @@ module V2PreflightTests =
         node.["populationRevision"] <- JsonValue.Create population
         node.ToJsonString()
 
+    let private successorMerge = String.replicate 40 "5"
+
+    /// The successor pair a prepared cohort would deliver, and the public blob at its merge.
+    let private successorPair (privateJson: string) (publicJson: string) =
+        let built = plan privateJson publicJson request facts |> get
+        V2Projection.prepareProgrammeBinding built.TemplateJson built.Payload (fun () -> Array.create 32 9uy) |> getIo
+
     /// Healthy inputs over a real predecessor pair. Every control below changes one thing.
     let private healthy (count: int) : EnrollmentInputs =
         let privateJson, publicJson, _ = predecessor count ""
+        let successorPrivate, successorPublic = if count <= 97 then successorPair privateJson publicJson else privateJson, publicJson
         { Request = request
           Facts = Known(facts, Live)
           ConstructorRevision = Known main
           ProtectedMain = Known main
+          ProtectedMainFreshness = LiveMain
           PredecessorPrivate = Known privateJson
           PredecessorPublic = Known publicJson
           RuntimeBinding = Known(runtimeOf privateJson mergeSha)
+          SuccessorPrivate = Known successorPrivate
+          SuccessorMergeSha = Known successorMerge
+          SuccessorPublic = Known successorPublic
           InstalledReaderSha256 = Known reader
           KnownInstalledReaders = Set.ofList [ reader ]
           LockedFSharpCoreHash = Known hash
           CachedFSharpCoreHash = Known hash
           MemoryHeadroomBytes = Known(Some 4294967296L)
+          HostMemAvailableBytes = Known 8589934592L
           MinimumHeadroomBytes = 1073741824L
           PayloadLimitBytes = payloadLimitBytes
           BindingLimitBytes = bindingLimitBytes
           ProjectItems = Known(enrolledItems count)
+          InvisibleRepositories = Set.empty
           Now = now
           ChurnWindow = TimeSpan.FromMinutes 10.0 }
 
@@ -78,7 +92,7 @@ module V2PreflightTests =
 
     [<Fact>]
     let ``healthy inputs support every registered check of every enrolled stage and exit 0`` () =
-        for stage in stages do
+        for stage in [ PlanSuccessor; PrepareSuccessor; BindRuntime ] do
             let report = run ProgrammeEnrollmentSuccessor stage (healthy 5)
             Assert.Equal<Check list>(checksFor ProgrammeEnrollmentSuccessor stage, report.Findings |> List.map _.Check)
             for finding in report.Findings do
@@ -104,20 +118,33 @@ module V2PreflightTests =
         Assert.NotEqual(0, exitCode (overallOf []))
 
     [<Fact>]
-    let ``routes without registered checks are an explicit unknown, never supported`` () =
+    let ``a route and stage that do not belong together are an explicit unknown, never supported`` () =
         Assert.Equal(3, routes.Length)
-        for route in [ RoutineDelivery; PublicationWriterRegistration ] do
+        let enrollment = [ PlanSuccessor; PrepareSuccessor; BindRuntime ]
+        let routine = [ OpenPullRequest; MergePullRequest ]
+        let publication = [ RegisterWriter; RunWriter ]
+        let belongs route stage =
+            match route with
+            | ProgrammeEnrollmentSuccessor -> List.contains stage enrollment
+            | RoutineDelivery -> List.contains stage routine
+            | PublicationWriterRegistration -> List.contains stage publication
+        let mutable pairs = 0
+        for route in routes do
             for stage in stages do
-                Assert.Empty(checksFor route stage)
-                let report = run route stage (healthy 5)
-                Assert.Equal<Check list>([ RouteRegistry ], report.Findings |> List.map _.Check)
-                Assert.Equal(Unknown { Input = Registry; Kind = NotRegistered }, verdictOf report RouteRegistry)
-                Assert.Equal((AnyUnknown, 11), (report.Overall, exitCode report.Overall))
+                pairs <- pairs + 1
+                // Registered exactly where they belong together.
+                Assert.Equal(belongs route stage, not (checksFor route stage).IsEmpty)
+                if not (belongs route stage) then
+                    let report = run route stage (healthy 5)
+                    Assert.Equal<Check list>([ RouteRegistry ], report.Findings |> List.map _.Check)
+                    Assert.Equal(Unknown { Input = Registry; Kind = NotRegistered }, verdictOf report RouteRegistry)
+                    Assert.Equal((AnyUnknown, 11), (report.Overall, exitCode report.Overall))
+        Assert.Equal(21, pairs)
 
     [<Fact>]
     let ``codes are the closed printable case names`` () =
         Assert.Equal(3, (routes |> List.map routeCode |> Set.ofList).Count)
-        Assert.Equal(3, (stages |> List.map stageCode |> Set.ofList).Count)
+        Assert.Equal(7, (stages |> List.map stageCode |> Set.ofList).Count)
         Assert.Equal("ProjectAutoAdd", checkCode ProjectAutoAdd)
         Assert.Equal("Root", supplierCode Root)
         Assert.Equal("InstalledReader/NotInKnownTable", gapCode { Input = InstalledReader; Kind = NotInKnownTable })
