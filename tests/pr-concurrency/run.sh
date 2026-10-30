@@ -77,8 +77,11 @@ PY
     rc=0; out="$(python3 "$TOOL" --root "$d" 2>&1)" || rc=$?
     mutants=$((mutants+1))
     key="${want#model says it IS true that }"; key="${key#model says it is NOT true that }"
-    if [ "$rc" = 1 ] && printf '%s' "$out" | grep -F -- "$name.yml" | grep -qF -- "${key}"; then ok
-    else bad "$name $m was not refused for the right reason (rc=$rc, want '$key')" "$(printf '%s' "$out" | head -5)"; fi
+    mine="$(grep -F -- "$name.yml" <<<"$out" || true)"
+    case "$mine" in
+      *"$key"*) [ "$rc" = 1 ] && ok || bad "$name $m exited $rc, want 1" "$out" ;;
+      *) bad "$name $m was not refused for the right reason (rc=$rc, want '$key')" "$(sed -n 1,5p <<<"$out")" ;;
+    esac
   done
 done
 [ "$failcount" != 0 ] || echo "PASS  B  $mutants mutant(s) over ${#NAMES[@]} governed workflow(s) were each refused for the reason that mutation introduces"
