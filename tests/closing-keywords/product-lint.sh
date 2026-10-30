@@ -123,6 +123,40 @@ else
   bad "A-names  the finding must name 'not close #730' and the remedy (rc=$RC)" "$OUT"
 fi
 
+# TITLES (the coordinator's .github#4963 evidence). Under COMMIT_OR_PR_TITLE the title becomes the squash
+# commit subject, so a title is checked with the same grammar and the same negation handling, with NO
+# opt-in (a declaration line belongs in the body) and no code exemption (a title is plain text).
+title_on() {
+  set +e
+  OUT="$(python3 -I "$GATE" --title "$1" 2>&1)"
+  RC=$?
+  set -e
+}
+title_expect() { # title_expect <rc> <label> <title>
+  title_on "$3"
+  if [ "$RC" = "$1" ]; then ok "$2"; else bad "$2 (wanted rc=$1, got rc=$RC)" "$OUT"; fi
+}
+for kw in $KEYWORDS; do
+  title_expect 1 "T1  title '$kw #4730' fails"                          "docs: $kw #4730 documentation items"
+  title_expect 1 "T2  negated title 'do not $kw #4730' fails"           "docs: do not $kw #4730"
+  title_expect 1 "T3  cross-repo title '$kw FS-GG/.github#4730' fails"  "docs: $kw FS-GG/.github#4730"
+  title_expect 1 "T4  a title that is nothing but '$kw #4730.' has NO opt-in and fails" "$kw #4730."
+done
+title_expect 1 "T5  the .github#4963 title shape: 'docs: close #3010 documentation items'" "docs: close #3010 documentation items"
+title_expect 0 "T6  CAUSAL CONTROL: the same title with (Refs #N) passes"                  "docs: documentation items (Refs #3010)"
+title_expect 0 "T7  'Refs #N' title passes"                                                "Refs #3010: documentation items"
+title_expect 0 "T8  a title with a closing verb and no reference passes"                    "docs: close the loop on the kit"
+title_expect 0 "T9  non-keywords in a title pass"                                           "docs: resolving #3010 later"
+title_expect 1 "T10 a code span in a title is not a defence (plain text)"                   'docs: `close #3010` items'
+title_rc_empty() { set +e; python3 -I "$GATE" --title "" >/dev/null 2>&1; RC=$?; set -e; }
+title_rc_empty
+[ "$RC" = 3 ] && ok "T11 an EMPTY title is NO VERDICT (rc=3), never a pass" || bad "T11 empty title must be rc=3 (got $RC)"
+printf 'Refs #3010' > "$WORK/refs-body.md"
+set +e; python3 -I "$GATE" --title "docs: close #3010 items" --body "$WORK/refs-body.md" >/dev/null 2>&1; RC=$?; set -e
+[ "$RC" = 1 ] && ok "T12 a clean body does not excuse a closing title (body Refs #3010, title closes it)" || bad "T12 (rc=$RC)"
+title_on "docs: close #3010 items"
+if grep -q 'PR TITLE' <<<"$OUT" && grep -q 'close #3010' <<<"$OUT"; then ok "T13 the finding names the title and the phrase"; else bad "T13" "$OUT"; fi
+
 # =============================================================================================
 # B. THE JOB
 # =============================================================================================
@@ -192,7 +226,7 @@ PY
 python3 - "$META" <<'PY' && ok "B4  untrusted values reach the shell only through env:, no secret is read, no receiver tree is checked out" || bad "B4  the lint step interpolates an expression into run:, reads a secret or checks out the receiver"
 import json, sys
 d = json.load(open(sys.argv[1]))
-assert d["lint_env_keys"] == ["EVENT_BODY", "GH_TOKEN", "PR_NUMBER", "REPO"], d["lint_env_keys"]
+assert d["lint_env_keys"] == ["EVENT_BODY", "EVENT_TITLE", "GH_TOKEN", "PR_NUMBER", "REPO"], d["lint_env_keys"]
 assert d["lint_env"]["GH_TOKEN"] == "${{ github.token }}"
 assert d["run_has_expr"] is False
 assert d["any_secret_ref"] is False
@@ -201,31 +235,42 @@ assert d["timeout"] and int(d["timeout"]) <= 10
 PY
 
 # --- run the real step -----------------------------------------------------------------------
-# stub_gh <mode> <live-body-file>: mode `ok` prints the file, mode `fail` exits 1.
+# The stub `gh` answers `pulls/N` with a JSON document built from LIVE_TITLE and the live body, and
+# `pulls/N/commits` with the subjects in STUB_COMMITS; mode `fail` makes every call exit 1.
 mkstub() {
   mkdir -p "$WORK/bin"
   cat > "$WORK/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 if [ "${STUB_GH_MODE:-ok}" = fail ]; then echo "gh: HTTP 502" >&2; exit 1; fi
-cat "$STUB_GH_BODY"
+case "$*" in
+  *"/commits"*) cat "$STUB_COMMITS" ;;
+  *) cat "$STUB_GH_JSON" ;;
+esac
 STUB
   chmod +x "$WORK/bin/gh"
 }
 mkstub
 
-# job_on <live body|-> <event body> [gh mode] [pr number] [hub dir]  -> $RC $OUT, $SUMMARY (file)
+# Defaults a leg may override before calling job_on.
+LIVE_TITLE="docs: tidy the kit (Refs #4730)"
+EVENT_TITLE="docs: tidy the kit (Refs #4730)"
+COMMIT_SUBJECTS="tidy the kit"
+
+# job_on <live body> <event body> [gh mode] [pr number] [hub dir]  -> $RC $OUT, $SUMMARY (file)
 job_on() {
   local live="$1" event="$2" mode="${3:-ok}" prn="${4:-4730}" hub="${5:-$REPO_ROOT}"
   local t; t="$(mktemp -d "$WORK/job.XXXX")"
   mkdir -p "$t/ws" "$t/tmp"
   ln -s "$hub" "$t/ws/fsgg-hub"
-  printf '%s' "$live" > "$t/live.md"
+  python3 -I -c 'import json,sys; json.dump({"body": sys.argv[1], "title": sys.argv[2]}, open(sys.argv[3], "w"))' \
+    "$live" "$LIVE_TITLE" "$t/live.json"
+  printf '%s\n' "$COMMIT_SUBJECTS" > "$t/commits.txt"
   : > "$t/summary.md"
   set +e
   OUT="$( cd "$t/ws" && env -i PATH="$WORK/bin:$PATH" HOME="$t" \
       RUNNER_TEMP="$t/tmp" GITHUB_STEP_SUMMARY="$t/summary.md" \
-      STUB_GH_MODE="$mode" STUB_GH_BODY="$t/live.md" \
-      EVENT_BODY="$event" PR_NUMBER="$prn" REPO=FS-GG/FS.GG.Game GH_TOKEN=stub \
+      STUB_GH_MODE="$mode" STUB_GH_JSON="$t/live.json" STUB_COMMITS="$t/commits.txt" \
+      EVENT_BODY="$event" EVENT_TITLE="$EVENT_TITLE" PR_NUMBER="$prn" REPO=FS-GG/FS.GG.Game GH_TOKEN=stub \
       bash "$RUNSH" 2>&1 )"
   RC=$?
   set -e
@@ -250,7 +295,7 @@ if [ "$RC" = 0 ]; then
 else bad "B7  a re-run after fixing the body must judge the live body (rc=$RC)" "$OUT"; fi
 
 job_on '-' 'This PR does not close #730.' fail
-if [ "$RC" = 1 ] && grep -q '^::warning title=closing-keywords: live body unreadable' <<<"$OUT" \
+if [ "$RC" = 1 ] && grep -q '^::warning title=closing-keywords: live title and body unreadable' <<<"$OUT" \
    && grep -q 'source: event' <<<"$OUT"; then
   ok "B8  live read fails, the event-time body is the fallback, it is judged, and the log says so"
 else bad "B8  the event body must be the fallback (rc=$RC)" "$OUT"; fi
@@ -289,6 +334,36 @@ job_on 'Refs #1' 'Refs #1' ok 4730 "$WORK/hub7"
 mkdir -p "$WORK/hub0/scripts"
 job_on 'Refs #1' 'Refs #1' ok 4730 "$WORK/hub0"
 [ "$RC" = 1 ] && ok "B16 the rule absent from the fetch fails the job instead of passing" || bad "B16 (rc=$RC)" "$OUT"
+
+# --- TITLE through the job ---------------------------------------------------------------
+LIVE_TITLE="docs: close #3010 documentation items"; EVENT_TITLE="docs: documentation items (Refs #3010)"
+job_on 'Refs #3010' 'Refs #3010'
+if [ "$RC" = 1 ] && grep -q '^::error title=closing-keywords: closing keyword next to an issue reference::title: `close #3010`' <<<"$OUT" \
+   && grep -q 'close #3010' "$SUMMARY"; then
+  ok "B17 a closing LIVE title fails the job although the body is clean, and the annotation names the phrase"
+else bad "B17 (rc=$RC)" "$OUT"; fi
+
+LIVE_TITLE="docs: documentation items (Refs #3010)"; EVENT_TITLE="docs: close #3010 documentation items"
+job_on 'Refs #3010' 'Refs #3010'
+[ "$RC" = 0 ] && ok "B18 RETITLE then re-run: the live title is clean while the replayed payload title is stale, so it passes" || bad "B18 (rc=$RC)" "$OUT"
+
+LIVE_TITLE="-"; EVENT_TITLE="docs: close #3010 documentation items"
+job_on '-' 'Refs #3010' fail
+[ "$RC" = 1 ] && grep -q 'source: event' <<<"$OUT" && ok "B19 live read fails: the event title is the fallback, as a pair with the event body, and is judged" || bad "B19 (rc=$RC)" "$OUT"
+
+LIVE_TITLE="--help"; EVENT_TITLE="x"
+job_on 'Refs #1' 'Refs #1'
+[ "$RC" = 0 ] && ok "B20 a title that looks like an option is passed as data" || bad "B20 (rc=$RC)" "$OUT"
+
+# Commit subjects: WARNING ONLY.
+LIVE_TITLE="docs: tidy (Refs #4730)"; EVENT_TITLE="$LIVE_TITLE"; COMMIT_SUBJECTS="docs: close #4730 items"
+job_on 'Refs #4730' 'Refs #4730'
+if [ "$RC" = 0 ] && grep -q '^::warning title=closing-keywords: a commit subject has a closing keyword' <<<"$OUT"; then
+  ok "B21 a closing commit subject WARNS and does not fail the job"
+else bad "B21 (rc=$RC)" "$OUT"; fi
+COMMIT_SUBJECTS="tidy the kit"
+job_on 'Refs #4730' 'Refs #4730'
+if [ "$RC" = 0 ] && ! grep -q 'a commit subject has' <<<"$OUT"; then ok "B22 a clean commit subject warns nothing"; else bad "B22 (rc=$RC)" "$OUT"; fi
 
 echo
 echo "closing-keywords product-lint: $pass passed, $failcount failed"

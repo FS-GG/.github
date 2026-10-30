@@ -755,12 +755,11 @@ arms any context (dry run, watch it report, then `repos.sh require-context`), ne
 | | |
 | --- | --- |
 | Rule | [`scripts/check-closing-keywords.py`](../../scripts/check-closing-keywords.py), the hub's own, fetched at the reusable workflow's own commit (`github.job_workflow_sha`) |
-| Subject | the PR body only, as raw text. Live read first, event payload as fallback, so a re-run after an edit judges the edit |
+| Subject | the PR body as raw text, and the PR **title** (plain text, no opt-in: under `COMMIT_OR_PR_TITLE` it becomes the squash commit subject, as .github#4963 showed). Live read first, event payload as fallback, so a re-run after an edit or retitle judges the edit. Commit subjects are read through the API and only **warn** |
 | Fails | any of the nine GitHub keywords next to `#N`, `GH-N`, `owner/repo#N` or an issue URL, negated or not, in prose, a code span, a fence or an indented block |
 | Passes | `Refs #N`; a keyword with no reference after it; `resolving`/`closing`/`fixing` (not GitHub keywords); the **opt-in** declaration line, `Closes #N.` alone on a line |
 | Reach | all seven receivers on opened, synchronize and reopened. Re-run on a body edit automatically only in SDD, Rendering and Templates, whose callers list `edited`; Governance, Game, Audio and Net need `types: [opened, synchronize, reopened, edited]` added to their `kit-materialize.yml` caller |
 | Proof | [`tests/closing-keywords/product-lint.sh`](../../tests/closing-keywords/product-lint.sh): the keyword matrix, the code-span and fence decision, and the real job step run against a stub `gh` |
 
-Not covered, by design: the branch's commit messages (the hub's own check reads them; a receiver check
-would need a full-depth checkout on every pull request) and the PR title (GitHub never honours a keyword
-there).
+Not covered, by design: whole commit messages beyond their subject line (the hub's own check reads them;
+a receiver check would need a full-depth checkout on every pull request).

@@ -1410,6 +1410,14 @@ jobs:
   # cannot drift from the hub's own `closing-keywords` check. The fetch names the DIRECTORY, never the
   # script (#1515, `check-sparse-checkout-closure.py`).
   #
+  # THE TITLE IS A SECOND SUBJECT. The repository squash setting is COMMIT_OR_PR_TITLE, so on a
+  # multi-commit pull request the title becomes the squash commit subject, and a commit subject is
+  # parsed on landing: .github#4963 had a clean body and the title "docs: close #3010 ...", and only a
+  # reviewer caught it. The title is plain text, so it has no opt-in and no code exemption: any keyword
+  # next to a reference fails, negated or not. Retitling fires `edited`, so the receivers whose caller
+  # lists `edited` re-check it; the others pick it up on the next push or a manual re-run.
+  # COMMIT SUBJECTS are read through the API and only WARN (they cannot be fixed by editing a field).
+  #
   # WHAT THE RULE ASSERTS HERE: the body is audited as RAW TEXT, because the text with the power to
   # close is plain text, not rendered markdown. A closing keyword followed by an issue reference is a
   # FINDING wherever it sits — negated ("does not close"), narrated, quoted, in a code span or in a
@@ -1418,7 +1426,7 @@ jobs:
   # is not a keyword and passes. A closing verb with no reference after it ("close the file") passes.
   # `resolving`/`closing` are not GitHub keywords and pass: nothing binds them.
   #
-  # THE BODY IS READ LIVE, WITH THE EVENT PAYLOAD AS THE FALLBACK. A re-run of a job replays the
+  # THE TITLE AND BODY ARE READ LIVE, WITH THE EVENT PAYLOAD AS THE FALLBACK. A re-run of a job replays the
   # ORIGINAL event payload, so a body fixed after the first red would stay red on "Re-run jobs" if the
   # payload were the only source. The live read (public data, `github.token`, no extra scope — the same
   # argument `receiver-validate` makes) is what makes a re-run after an edit judge the edited body. If
@@ -1456,57 +1464,79 @@ jobs:
             /scripts/
           sparse-checkout-cone-mode: false
 
-      - name: Lint the pull request body for closing keywords next to issue references
+      - name: Lint the pull request title and body for closing keywords next to issue references
         env:
           EVENT_BODY: ${{ github.event.pull_request.body }}
+          EVENT_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
           body="$RUNNER_TEMP/pr-body.md"
-          source_of_body=live
+          title="$RUNNER_TEMP/pr-title.txt"
+          subjects="$RUNNER_TEMP/commit-subjects.txt"
+          source_of_text=live
           case "$PR_NUMBER" in ''|*[!0-9]*) echo "::error title=closing-keywords: no verdict::the event carries no pull request number"; exit 1 ;; esac
-          if live="$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.body // ""' 2>"$RUNNER_TEMP/live.err")"; then
-            printf '%s' "$live" > "$body"
+          # One live read yields both texts. Any failure to read OR to split it falls back, as a pair,
+          # to the event payload: never one text from each source.
+          if gh api "repos/$REPO/pulls/$PR_NUMBER" > "$RUNNER_TEMP/pr.json" 2>"$RUNNER_TEMP/live.err" \
+             && python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); open(sys.argv[2],"w").write(d["body"] or ""); open(sys.argv[3],"w").write(d["title"])' \
+                  "$RUNNER_TEMP/pr.json" "$body" "$title" 2>>"$RUNNER_TEMP/live.err"; then
+            :
           else
-            source_of_body=event
+            source_of_text=event
             printf '%s' "$EVENT_BODY" > "$body"
-            echo "::warning title=closing-keywords: live body unreadable::falling back to the body in the event payload"
+            printf '%s' "$EVENT_TITLE" > "$title"
+            echo "::warning title=closing-keywords: live title and body unreadable::falling back to the title and body in the event payload"
           fi
-          echo "closing-keywords: linting the pull request body (source: $source_of_body, $(wc -c < "$body") bytes)"
+          echo "closing-keywords: linting the pull request title and body (source: $source_of_text, $(wc -c < "$body") body bytes)"
           lint_rc=0
-          out="$(python3 -I fsgg-hub/scripts/check-closing-keywords.py --body "$body" 2>&1)" || lint_rc=$?
+          out="$(python3 -I fsgg-hub/scripts/check-closing-keywords.py --body "$body" --title="$(cat "$title")" 2>&1)" || lint_rc=$?
           # Indented so that no line of attacker-controlled body text can open a workflow command.
           [ -z "$out" ] || printf '%s\n' "$out" | sed 's/^/| /'
+          # COMMIT SUBJECTS: WARNING ONLY. A single-commit pull request squashes to its commit subject, and
+          # a branch cannot be repaired by editing a field, so this never fails the job (the hub's own
+          # check reads whole commit messages and does fail). Best effort: a failed read says nothing.
+          if gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/commits" --jq '.[].commit.message | split("\n")[0]' > "$subjects" 2>/dev/null \
+             && [ -s "$subjects" ]; then
+            sub_rc=0
+            sub_out="$(python3 -I fsgg-hub/scripts/check-closing-keywords.py --commits "$subjects" 2>&1)" || sub_rc=$?
+            if [ "$sub_rc" = 1 ]; then
+              sub_phrases="$(printf '%s\n' "$sub_out" | grep -E '^  - line [0-9]+:' | sed -E 's/^  - //' | head -n 3 | paste -sd'|' - | sed -e 's/%/%25/g' -e 's/|/ ; /g')"
+              echo "::warning title=closing-keywords: a commit subject has a closing keyword next to an issue reference::${sub_phrases} -- the subject becomes the squash commit subject on a single-commit merge. Reword the commit (this warning does not fail the check)."
+            fi
+          fi
           case "$lint_rc" in
             0)
               echo "closing-keywords: OK" >> "$GITHUB_STEP_SUMMARY"
               ;;
             1)
               # Only the lines the rule itself generates from regex-constrained tokens (keyword, ref,
-              # negator) go into the annotation; the quoted body excerpt stays in the log.
-              phrases="$(printf '%s\n' "$out" | grep -E '^  - line [0-9]+:' | sed -E 's/^  - //' | head -n 3 | paste -sd'|' - | sed -e 's/%/%25/g' -e 's/|/ ; /g')"
+              # negator) go into the annotation; the quoted excerpt stays in the log.
+              phrases="$(printf '%s\n' "$out" | grep -E '^  - (line [0-9]+|title):' | sed -E 's/^  - //' | head -n 3 | paste -sd'|' - | sed -e 's/%/%25/g' -e 's/|/ ; /g')"
               {
                 echo "### closing-keywords: a closing keyword sits next to an issue reference"
                 echo
                 echo 'GitHub closes the referenced issue when the PR merges and does **not** read the words'
                 echo 'around the keyword: "does not close" closes it, as do "won'"'"'t fix", a past tense,'
-                echo 'a quotation and a code span. Offending phrase(s):'
+                echo 'a quotation and a code span. The same goes for the **PR title**, which becomes the'
+                echo 'squash commit subject. Offending phrase(s):'
                 echo
-                printf '%s\n' "$out" | grep -E '^  - line [0-9]+:' | sed -E 's/^  - /    /'
+                printf '%s\n' "$out" | grep -E '^  - (line [0-9]+|title):' | sed -E 's/^  - /    /'
                 echo
-                echo 'Fix the body, not the check: write `Refs #N` to link without closing, reword the verb'
-                echo '("addresses", "supersedes"), or declare an intended close on a line of its own,'
-                echo 'nothing else on it, e.g. `Closes #N.` Issue numbers in the explanation above that you'
-                echo 'do not recognise are FS-GG/.github issues (the rule is the hub'"'"'s).'
-                echo 'After editing, re-run this job: it re-reads the live body.'
+                echo 'Fix the text, not the check: write `Refs #N` to link without closing, reword the verb'
+                echo '("addresses", "supersedes"), or, in the BODY only, declare an intended close on a line'
+                echo 'of its own, nothing else on it, e.g. `Closes #N.` A title has no opt-in: write'
+                echo '`(Refs #N)` there. Issue numbers in the explanation above that you do not recognise'
+                echo 'are FS-GG/.github issues (the rule is the hub'"'"'s).'
+                echo 'After editing, re-run this job: it re-reads the live title and body.'
               } >> "$GITHUB_STEP_SUMMARY"
-              echo "::error title=closing-keywords: closing keyword next to an issue reference::${phrases} -- GitHub ignores 'not'. Write 'Refs #N' to link without closing, or declare a close on its own line: 'Closes #N.'"
+              echo "::error title=closing-keywords: closing keyword next to an issue reference::${phrases} -- GitHub ignores 'not'. Write 'Refs #N' to link without closing, or declare a close on its own line in the body: 'Closes #N.'"
               exit 1
               ;;
             3)
-              echo "::error title=closing-keywords: no verdict (permanent)::the rule could not read the pull request body"
+              echo "::error title=closing-keywords: no verdict (permanent)::the rule could not read the pull request title or body"
               exit 1
               ;;
             *)
