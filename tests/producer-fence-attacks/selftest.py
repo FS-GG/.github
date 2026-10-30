@@ -117,6 +117,12 @@ def main() -> None:
         "flag on a continuation line": "gh api repos/FS-GG/.github/issues \\\n          --method POST",
         "write after a redirection": "gh api repos/FS-GG/.github/issues > /dev/null -f title=x",
         "graphql with fields": "gh api graphql -f query='mutation{x}'",
+        "write behind a command substitution in the endpoint": "gh api $(echo repos/FS-GG/.github/issues) -f title=x",
+        "flag inside a command substitution": 'gh api repos/FS-GG/.github/issues $(printf -- --method) POST',
+        "method after a substitution": "gh api repos/FS-GG/.github/issues $(echo ok) --method POST",
+        "write inside a substitution": "result=$(gh api repos/FS-GG/.github/issues -f title=x)",
+        "write inside a subshell": "(gh api repos/FS-GG/.github/issues -f title=x)",
+        "flag after a subshell close": "(gh api repos/FS-GG/.github/issues) --input payload.json",
     }
     for label, line in write_spellings.items():
         mutated = with_line(line)
@@ -131,6 +137,9 @@ def main() -> None:
         "header, redirection and a following command": "gh api --header 'Accept: application/vnd.github+json' repos/FS-GG/.github/pulls/1 > pr.json 2>&1 && git log -f",
         "a field flag on a different command after a boundary": "gh api repos/FS-GG/.github/pulls/1 ; curl -f https://example.invalid",
         "GET continued over a line": "gh api repos/FS-GG/.github/pulls/1 \\\n          --jq .number",
+        "GET inside a command substitution then a boundary": "out=$(gh api repos/FS-GG/.github/pulls/1 --jq .number) && curl -f https://example.invalid",
+        "GET in a subshell then a boundary": "(gh api repos/FS-GG/.github/pulls/1 --jq .number); curl -f https://example.invalid",
+        "GET piped into another command": "gh api repos/FS-GG/.github/pulls/1 | grep -f patterns",
     }
     for label, line in read_only_spellings.items():
         accepted = with_line(line)
@@ -138,6 +147,28 @@ def main() -> None:
             validator.validate_kit_read_only_successor(historical, successor_for(accepted), accepted)
         except SystemExit as error:
             raise SystemExit(f"producer-fence-validator-selftest: refused a read-only gh api GET ({label}): {error}")
+
+    # YAML folds a `>` scalar into one shell line, so a flag on the next physical line belongs to the command.
+    folded_write = (
+        "jobs:\n  a:\n    steps:\n      - run: >-\n"
+        "          gh api repos/FS-GG/.github/issues\n          -f title=x\n"
+    )
+    if not validator.gh_api_writes(folded_write):
+        raise SystemExit("producer-fence-validator-selftest: accepted a folded-scalar gh api write with the flag on the next line")
+    folded_method = folded_write.replace("-f title=x", "--method POST")
+    if not validator.gh_api_writes(folded_method):
+        raise SystemExit("producer-fence-validator-selftest: accepted a folded-scalar gh api --method POST on the next line")
+    plain_multiline = "      - run: gh api repos/FS-GG/.github/issues\n          --input payload.json\n"
+    if not validator.gh_api_writes(plain_multiline):
+        raise SystemExit("producer-fence-validator-selftest: accepted a plain multi-line scalar gh api write")
+    folded_read = folded_write.replace("-f title=x", "--jq .number")
+    literal_neighbour = (
+        "jobs:\n  a:\n    steps:\n      - run: |\n"
+        "          gh api repos/FS-GG/.github/pulls/1\n          curl -f https://example.invalid\n"
+    )
+    for label, text in (("folded GET", folded_read), ("literal block GET followed by curl -f", literal_neighbour)):
+        if validator.gh_api_writes(text):
+            raise SystemExit(f"producer-fence-validator-selftest: refused a read-only gh api ({label})")
 
     with tempfile.TemporaryDirectory() as temporary:
         temp = pathlib.Path(temporary)

@@ -13,6 +13,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from fsharp_dispatch_scan import DispatchScanError, pre_handler_dispatch  # noqa: E402  (pinned in the census)
+from gh_api_scan import gh_api_writes  # noqa: E402  (one tokeniser, shared with the producer fence)
+
 
 SCHEMA = "fsgg.v1-writer-census/1"
 CONTRACT_SCHEMA = "fsgg.coord.commands/1"
@@ -24,9 +28,14 @@ WRITER_DISPOSITIONS = {
 }
 # Scoped token mint/revoke is a provider effect, but it is outside the v1 data-writer
 # population protected by the accepted GS2-08.6 external-route oracle.
+# The v2 delivery boundary is the ADR-0091 head-conditioned pull-request merge of tools/routine-delivery.py.
+# It is a real provider effect, but it is the V2 routine route's own merge, outside the V1 coordination-data
+# writer population protected by the accepted GS2-08.6 external-route oracle; the label records that it is
+# not read-only, and a relabel to read-only is refused.
 NON_WRITER_DISPOSITIONS = {
     "local-only",
     "read-only",
+    "v2-delivery-boundary",
     "credential-lifecycle",
     "declaration-only",
     "build-only",
@@ -161,6 +170,10 @@ def discover(root: Path) -> tuple[dict[str, set[str]], int]:
         else:
             text = source_text(root / name)
         kinds = {kind for kind, pattern in SINK_PATTERNS if pattern.search(text)}
+        # `gh api` is a POST with a field flag or a request body and no method flag, which no fixed-width
+        # regex sees reliably; the shared tokeniser reads each invocation to its shell command boundary.
+        if text and gh_api_writes(text, yaml=name.endswith((".yml", ".yaml"))):
+            kinds.add("gh-api-write")
         if kinds or name in MANDATORY_SOURCES:
             found[name] = kinds
     return found, sum(1 for _, executable in population if executable)
@@ -216,8 +229,8 @@ def validate_source_rows(root: Path, census: dict[str, Any]) -> tuple[int, int]:
             raise CensusError(f"census source identity changed for {path}: expected {row['sha256']}, got {actual_digest}")
 
     direct = by_path.get("tools/routine-delivery.py", {})
-    if direct.get("disposition") != "read-only" or "dynamic-process" not in direct.get("sinkKinds", []):
-        raise CensusError("tools/routine-delivery.py sealed merge boundary must remain classified read-only")
+    if direct.get("disposition") != "v2-delivery-boundary" or "dynamic-process" not in direct.get("sinkKinds", []):
+        raise CensusError("tools/routine-delivery.py sealed merge boundary must remain classified v2-delivery-boundary")
     for path in (
         "src/FS.GG.Coord.Cli/TelemetryApplication.fs",
         "src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fs",
@@ -243,6 +256,72 @@ def validate_source_rows(root: Path, census: dict[str, Any]) -> tuple[int, int]:
         if by_path.get(path, {}).get("disposition") != disposition:
             raise CensusError(f"{path} must remain classified {disposition}")
     return len(discovered), executable_count
+
+
+PROGRAM_PATH = "src/FS.GG.Coord.Cli/Program.fs"
+PROGRAM_PATH = "src/FS.GG.Coord.Cli/Program.fs"
+
+
+def pre_handler_arms(root: Path) -> list[str]:
+    """Every dispatch arm and dispatcher of Coord.Cli `main` that precedes the typed handler table."""
+    try:
+        text = (root / PROGRAM_PATH).read_text(encoding="utf-8")
+        return pre_handler_dispatch(text)
+    except (OSError, UnicodeError) as error:
+        raise CensusError(f"{PROGRAM_PATH} is unreadable: {error}") from error
+    except DispatchScanError as error:
+        raise CensusError(f"{PROGRAM_PATH} {error}") from error
+
+
+def validate_out_of_catalogue(root: Path, census: dict[str, Any]) -> int:
+    rows = census.get("outOfCatalogueRoots")
+    if not isinstance(rows, list):
+        raise CensusError("census.outOfCatalogueRoots must be an array")
+    listed: dict[str, dict[str, Any]] = {}
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict) or not isinstance(row.get("arm"), str) or row.get("writes") not in {"always", "conditional", "never"}:
+            raise CensusError(f"census.outOfCatalogueRoots[{index}] is malformed")
+        if row["arm"] in listed:
+            raise CensusError(f"duplicate out-of-catalogue arm {row['arm']!r}")
+        justification = row.get("justification")
+        if not isinstance(justification, str) or len(justification.strip()) < 40:
+            raise CensusError(f"out-of-catalogue arm {row['arm']} lacks a specific justification")
+        for route in row.get("routes", []):
+            if (not isinstance(route, dict) or not isinstance(route.get("name"), str)
+                    or route.get("writes") not in {"always", "conditional", "never"}
+                    or not isinstance(route.get("justification"), str) or len(route["justification"].strip()) < 40):
+                raise CensusError(f"out-of-catalogue arm {row['arm']} has a malformed route")
+        listed[row["arm"]] = row
+    actual = pre_handler_arms(root)
+    unlisted = [arm for arm in actual if arm not in listed]
+    stale = sorted(set(listed) - set(actual))
+    if unlisted:
+        raise CensusError(
+            f"{PROGRAM_PATH} dispatches before the typed handlers without a census row (outOfCatalogueRoots): "
+            + "; ".join(unlisted))
+    if stale:
+        raise CensusError("census.outOfCatalogueRoots names arm(s) that main no longer dispatches: " + "; ".join(stale))
+    return len(actual)
+
+
+def validate_scanner_identities(root: Path, census: dict[str, Any]) -> int:
+    """The shared `gh api` tokeniser decides what counts as a write, so weakening it must show up as red."""
+    rows = census.get("scannerIdentities")
+    if not isinstance(rows, list) or not rows:
+        raise CensusError("census.scannerIdentities must be a non-empty array")
+    for index, row in enumerate(rows):
+        if (not isinstance(row, dict) or not isinstance(row.get("path"), str)
+                or not isinstance(row.get("sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", row["sha256"])):
+            raise CensusError(f"census.scannerIdentities[{index}] is malformed")
+        try:
+            actual = sha256(root / row["path"])
+        except OSError as error:
+            raise CensusError(f"scanner {row['path']} is unreadable: {error}") from error
+        if actual != row["sha256"]:
+            raise CensusError(
+                f"scanner identity changed for {row['path']}: expected {row['sha256']}, got {actual}; "
+                "re-pin only after the fence selftest and the census controls still refuse every write spelling")
+    return len(rows)
 
 
 def command_rows(census: dict[str, Any]) -> dict[str, str]:
@@ -316,6 +395,8 @@ def main() -> int:
         if census.get("schema") != SCHEMA:
             raise CensusError(f"writer census must use {SCHEMA}")
         commands = command_rows(census)
+        validate_scanner_identities(root, census)
+        arm_count = validate_out_of_catalogue(root, census)
         source_count, executable_count = validate_source_rows(root, census)
         contract = read_contract(args)
         if contract is not None:
@@ -325,6 +406,7 @@ def main() -> int:
         print(
             f"v1-writer-census: PASS ({mode}; {len(commands)} command roots: "
             f"{counts['always']} always, {counts['conditional']} conditional, {counts['never']} never; "
+            f"{arm_count} out-of-catalogue arms; "
             f"{source_count} source identities; {executable_count} tracked executables)"
         )
         return 0

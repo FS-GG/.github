@@ -30,60 +30,15 @@ module V2NativeResolve =
 
     type Resolved =
         { Facts: V2Enrollment.NativeFacts
-          Items: ProjectItem list
-          // Repositories in which a plan document read as 404 and the repository itself could not be read:
-          // the 404 may be invisibility, not absence.
-          HiddenRepositories: string list }
+          Items: ProjectItem list }
 
-    type PullRequest =
-        { Number: int
-          State: string
-          Title: string
-          Body: string
-          BaseRef: string
-          BaseSha: string
-          HeadRef: string
-          HeadSha: string }
+    // ---- the closed GET grammar ----
 
-    // ---- the closed GET grammar: a per-endpoint allowlist of exactly the endpoints this module uses ----
-
-    let private segmentPattern = Regex(@"\A[A-Za-z0-9_.-]{1,200}\z", RegexOptions.CultureInvariant)
-    let private numberPattern = Regex(@"\A[1-9][0-9]{0,9}\z", RegexOptions.CultureInvariant)
-    let private itemsQuery = Regex(@"\Aper_page=100&fields=[0-9]{1,12}(,[0-9]{1,12}){0,15}\z", RegexOptions.CultureInvariant)
-
-    // A segment is a name, never a traversal: "." and ".." as a whole segment are refused, while "a..b.md" is a name.
-    let private isName (segment: string) = segmentPattern.IsMatch segment && segment <> "." && segment <> ".."
-
-    // Whether `path` is exactly one of the allowlisted read endpoints, and `paginated` is what that endpoint needs.
-    let private allowedEndpoint (path: string) (paginated: bool) : bool =
-        if isNull path || path.Length > 1000 || not (path.StartsWith "/") then false
-        else
-            let pathPart, query =
-                match path.IndexOf '?' with
-                | -1 -> path, None
-                | at -> path.Substring(0, at), Some(path.Substring(at + 1))
-            let segments = pathPart.Substring(1).Split('/') |> Array.toList
-            let noQuery = query.IsNone
-            match segments with
-            // Project metadata, fields and items.
-            | [ "orgs"; owner; "projectsV2"; number ] -> isName owner && numberPattern.IsMatch number && noQuery && not paginated
-            | [ "orgs"; owner; "projectsV2"; number; "fields" ] -> isName owner && numberPattern.IsMatch number && query = Some "per_page=100" && paginated
-            | [ "orgs"; owner; "projectsV2"; number; "items" ] -> isName owner && numberPattern.IsMatch number && (query |> Option.exists itemsQuery.IsMatch) && paginated
-            // Repository visibility, one issue, one pull request, the open pull requests and the main head.
-            | [ "repos"; owner; repository ] -> isName owner && isName repository && noQuery && not paginated
-            | [ "repos"; owner; repository; "issues"; number ] -> isName owner && isName repository && numberPattern.IsMatch number && noQuery && not paginated
-            | [ "repos"; owner; repository; "pulls"; number ] -> isName owner && isName repository && numberPattern.IsMatch number && noQuery && not paginated
-            | [ "repos"; owner; repository; "pulls"; number; "commits" ] ->
-                isName owner && isName repository && numberPattern.IsMatch number && query = Some "per_page=100" && paginated
-            | [ "repos"; owner; repository; "pulls" ] -> isName owner && isName repository && query = Some "state=open&per_page=100" && paginated
-            | [ "repos"; owner; repository; "git"; "ref"; "heads"; "main" ] -> isName owner && isName repository && noQuery && not paginated
-            // A document on main: one to twelve path segments.
-            | "repos" :: owner :: repository :: "contents" :: (_ :: _ as document) ->
-                isName owner && isName repository && document.Length <= 12 && document |> List.forall isName && query = Some "ref=main" && not paginated
-            | _ -> false
+    let private pathPattern =
+        @"\A/(orgs|repos)/[A-Za-z0-9_.-]{1,100}(/[A-Za-z0-9_.%-]{1,200}){0,12}(\?[A-Za-z0-9_=,&.-]{1,300})?\z"
 
     let getArguments (path: string) (paginated: bool) : string list option =
-        if not (allowedEndpoint path paginated) then None
+        if isNull path || path.Length > 1000 || not (Regex.IsMatch(path, pathPattern, RegexOptions.CultureInvariant)) || path.Contains ".." then None
         else
             Some(
                 [ "api"; "--method"; "GET"; "-H"; "Accept: application/vnd.github+json"; "-H"; "X-GitHub-Api-Version: 2022-11-28" ]
@@ -232,19 +187,13 @@ module V2NativeResolve =
             Read(str "node_id" root, (tryProperty "pull_request" root).IsSome, repositoryFromUrl (str "repository_url" root))
         | Failed -> fail ()
 
-    // (on main, repository hidden). A 404 is absence only if the repository itself is readable; otherwise
-    // it may be invisibility, which is a different fact from absence.
-    let private blobOnMain (get: Get) (repository: string) (path: string) : bool * bool =
+    let private blobOnMain (get: Get) (repository: string) (path: string) : bool =
         match get' get ($"/repos/{repository}/contents/{path}?ref=main") false with
-        | NotFound ->
-            match get' get ($"/repos/{repository}") false with
-            | Body _ -> false, false
-            | NotFound -> false, true
-            | Failed -> fail ()
+        | NotFound -> false
         | Body body ->
             use document = parse body
             let root = document.RootElement
-            (root.ValueKind = JsonValueKind.Object && str "type" root = "file"), false
+            root.ValueKind = JsonValueKind.Object && str "type" root = "file"
         | Failed -> fail ()
 
     let resolve (get: Get) (binding: V2Projection.Binding) (request: V2Enrollment.Request) : Result<Resolved, V2Enrollment.Refusal> =
@@ -266,16 +215,13 @@ module V2NativeResolve =
                                Kind = (if isPullRequest then V2Enrollment.NativePullRequest else V2Enrollment.NativeIssue)
                                Repository = repository; ProjectMember = item.IsSome; Complete = true
                                HumanRoadmap = item |> Option.bind _.RoadmapRaw }: V2Enrollment.NativeIssueFact))
-                let reads =
+                let blobs =
                     request.Issues
                     |> List.choose (fun issue -> match issue.Plan with V2Enrollment.ProtectedDoc(repository, path) -> Some(repository, path) | _ -> None)
                     |> List.distinct
-                    |> List.map (fun (repository, path) -> repository, path, blobOnMain get repository path)
-                let blobs =
-                    reads |> List.map (fun (repository, path, (onMain, _)) ->
-                        ({ Repository = repository; Path = path; OnMain = onMain }: V2Enrollment.PlanBlobFact))
-                let hidden = reads |> List.choose (fun (repository, _, (_, isHidden)) -> if isHidden then Some repository else None) |> List.distinct
-                Ok { Facts = { ProjectId = projectId; Issues = issues; PlanBlobs = blobs }; Items = items; HiddenRepositories = hidden }
+                    |> List.map (fun (repository, path) ->
+                        ({ Repository = repository; Path = path; OnMain = blobOnMain get repository path }: V2Enrollment.PlanBlobFact))
+                Ok { Facts = { ProjectId = projectId; Issues = issues; PlanBlobs = blobs }; Items = items }
             with _ -> Error V2Enrollment.NativeReadFailed
 
     let encodeNativeFacts (facts: V2Enrollment.NativeFacts) : string =
@@ -303,63 +249,3 @@ module V2NativeResolve =
             blobs.Add row
         root.["planBlobs"] <- blobs
         root.ToJsonString()
-
-    // ---- the protected main head and pull requests (read-only) ----
-
-    let private validRepository (repository: string) =
-        Regex.IsMatch(repository, @"\A[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}\z", RegexOptions.CultureInvariant)
-
-    let readMainHead (get: Get) (repository: string) : Result<string, V2Enrollment.Refusal> =
-        try
-            if not (validRepository repository) then fail ()
-            match get' get ($"/repos/{repository}/git/ref/heads/main") false with
-            | Body body ->
-                use document = parse body
-                let sha = str "sha" (document.RootElement.GetProperty "object")
-                if Regex.IsMatch(sha, @"\A[0-9a-f]{40}\z") then Ok sha else fail ()
-            | _ -> fail ()
-        with _ -> Error V2Enrollment.NativeReadFailed
-
-    let private pullRequestOf (element: JsonElement) : PullRequest =
-        let side (name: string) = element.GetProperty name
-        { Number = element.GetProperty("number").GetInt32()
-          State = str "state" element
-          Title = str "title" element
-          Body = (match tryProperty "body" element with Some value when value.ValueKind = JsonValueKind.String -> value.GetString() | _ -> "")
-          BaseRef = str "ref" (side "base")
-          BaseSha = str "sha" (side "base")
-          HeadRef = str "ref" (side "head")
-          HeadSha = str "sha" (side "head") }
-
-    let readPullRequest (get: Get) (repository: string) (number: int) : Result<PullRequest, V2Enrollment.Refusal> =
-        try
-            if not (validRepository repository) || number < 1 then fail ()
-            match get' get ($"/repos/{repository}/pulls/{number}") false with
-            | Body body ->
-                use document = parse body
-                Ok(pullRequestOf document.RootElement)
-            | _ -> fail ()
-        with _ -> Error V2Enrollment.NativeReadFailed
-
-    let openPullRequestsFor (get: Get) (repository: string) (headRef: string) : Result<PullRequest list, V2Enrollment.Refusal> =
-        try
-            if not (validRepository repository) then fail ()
-            match get' get ($"/repos/{repository}/pulls?state=open&per_page=100") true with
-            | Body body ->
-                use document = parse body
-                Ok(flatten document |> List.map pullRequestOf |> List.filter (fun pr -> pr.HeadRef = headRef))
-            | _ -> fail ()
-        with _ -> Error V2Enrollment.NativeReadFailed
-
-    // The commit messages of a pull request, which are what a squash merge turns into its message.
-    let readPullRequestCommits (get: Get) (repository: string) (number: int) : Result<string, V2Enrollment.Refusal> =
-        try
-            if not (validRepository repository) || number < 1 then fail ()
-            match get' get ($"/repos/{repository}/pulls/{number}/commits?per_page=100") true with
-            | Body body ->
-                use document = parse body
-                let messages = flatten document |> List.map (fun commit -> str "message" (commit.GetProperty "commit"))
-                if messages.IsEmpty || messages.Length > 250 then fail ()
-                Ok(String.Join("\n\n", messages))
-            | _ -> fail ()
-        with _ -> Error V2Enrollment.NativeReadFailed
