@@ -1,5 +1,16 @@
 # Registry changelog
 
+## 2026-10-30 — reconcile published NewSddWorkspace 0.23.0 (FS-GG/.github#3010)
+
+Flip `new-sdd-workspace` `package-version` and `package-tag` to **0.23.0** and `new-sdd-workspace/v0.23.0`. The `version` line already read 0.23.0 as source/release-route preparation; it now records accepted publication, with the preparation text kept as a PRIOR chain. The tag points at source `5da304e37e61a335737e1c362919872778fdea60`.
+
+- **Candidate:** [41055024001/a1](https://github.com/FS-GG/.github/actions/runs/41055024001), artifact 12976324106 (raw zip `c2770241…`). The package is `e81657fb…` (93 entries) with producer payload `8c31c973…`, under release qualification `fsgg.creator023-release-qualification/1` over genuine promoted coherent 0.113.0.
+- **Preflight:** [41055967892](https://github.com/FS-GG/.github/actions/runs/41055967892) with `publish=false` and `verify_nuget_login=true` passed: fresh journal, no mutation, NuGet OIDC exchange worked.
+- **Publication:** [41056332123/a1](https://github.com/FS-GG/.github/actions/runs/41056332123) verified all eight effects (tag, draft, github, nuget, package-asset, manifest-asset, publication-journal-asset, promote) at final generation 17 on the fresh journal `board-v2-product-creator-023`. Release 429016553 is promoted but not latest; `coherent-set/v0.113.0` keeps that. Recorded executor-side deviation: the run used `verify_nuget_login=false` instead of the admitted same inputs, after the preflight had proven the login. It changes no effect identity.
+- **Readback:** the release asset is byte-identical to the candidate. The signed nuget.org archive (`39d17aeb…`) holds the same 93 entries plus only `.signature.p7s`, shares producer payload `8c31c973…`, and its nuspec names 0.23.0 at `5da304e3`. The GitHub feed returned 403 to root's token, so it rests on the hosted journal observation (`preparedArchiveEqual` and `producerPayloadEqual` true) plus the identical release asset.
+
+Installed and consumer adoption of Wizard 0.23.0 (public install, four-product creation against `fs-gg-templates/v0.20.1`, build, test, Doctor and knowledge on public tools) remains open under #3010 Step 3. Published 0.22.0 and its journals stay historical.
+
 ## 2026-10-30 — reconcile published Workspace.Template 0.20.1 (FS-GG/.github#3010)
 
 Reconcile `fs-gg-workspace-template` source/package **0.20.1** and `fs-gg-templates/v0.20.1`. The annotated tag
@@ -211,6 +222,8 @@ no gate behaviour changes — this is purely how humans record the log.
 ## Entries
 
 - **2026-10-30** — — CREATOR023 RELEASE ROUTE (.github; #3010): add the CURRENT_023 release route for NewSddWorkspace source 0.23.0 (typed provider catalog creation with stable SDD CLI 2.5.3 or newer, describing the published Templates 0.20.1) over genuine promoted coherent 0.113.0 (release 421880935, immutable source 79db622f) with the fresh journal board-v2-product-creator-023. The published 022 route, its 022r1 journal and the abandoned 022 journal stay immutable history. Published package-version/tag stay 0.22.0; no 023 candidate, preflight, publication or installed adoption is asserted, and Templates 0.20.1 is already published and reconciled separately.
+
+- **2026-10-30** — CREATOR023 PUBLICATION ACCEPTED (github; #3010): record candidate 41055024001/a1 (package e81657fb, 93 entries, producer payload 8c31c973…) and original publisher 41056332123/a1, all eight effects/final17 on fresh journal board-v2-product-creator-023, promoted release 429016553 (not latest) with tag new-sdd-workspace/v0.23.0 -> 5da304e3. Release asset and signed public NuGet 39d17aeb… share the producer payload (nuget.org adds only .signature.p7s); hosted GitHub-feed observation retained, local GitHub 403 remains a limit. Executor set verify_nuget_login=false on the publish run after a passing login preflight 41055967892 (recorded deviation, no effect identity change). Advances package-version/tag from 0.22.0; installed adoption remains separate; see the dated section above.
 
 - **2026-10-30** — RECONCILE PUBLISHED WORKSPACE.TEMPLATE 0.20.1 (fs-gg-workspace-template; .github#3010): register commit df896c4bd587b5ef8dd990bc39c0dcb661bf2193 (Templates#815) on qualified main fe24d308, original publisher 41042757474/a1 on both feeds (payload 7c48b222…, 620 entries; nuget.org adds only .signature.p7s), tag fs-gg-templates/v0.20.1 -> ff5caa76… peels to the register commit; adopts Rendering 0.32.4 (Templates#806) so the templates -> rendering edge advances to 0.32.4; four-product qualification accepted by root (#3010 comment 6520252958); see the dated section above.
 
