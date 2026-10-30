@@ -93,6 +93,7 @@ class NativeObservationTests(unittest.TestCase):
                             for name in profile["requiredGateChecks"]]
 
     def run_observation(self, rehearsal=False):
+        self._rehearsal = rehearsal
         def fake_run(args, **_kwargs):
             if args[:2] == ["git", "rev-parse"]:
                 return subprocess.CompletedProcess(args, 0, SOURCE + "\n", "")
@@ -143,7 +144,11 @@ class NativeObservationTests(unittest.TestCase):
                 body = {}  # Unknown target ancestry cannot qualify.
             elif match := re.search(r"/actions/runs/(\d+)$", path):
                 check = next(x for x in self.checks["check_runs"] if 1000 + x["id"] == int(match.group(1)))
-                policy = MODULE.QUALIFICATION.read_json(str(MODULE.POLICY_PATH))
+                # The mock world follows the policy the observation under test actually reads: the historical
+                # rehearsal fixture keeps its own (frozen) producers, so moving a producer in the live
+                # settlement policy (.github#4730: claim-generation left coherence.yml) must not rewrite it.
+                policy = MODULE.QUALIFICATION.read_json(str(
+                    MODULE.REHEARSAL_POLICY_PATH if getattr(self, "_rehearsal", False) else MODULE.POLICY_PATH))
                 profile = MODULE.QUALIFICATION.source_profile(
                     policy, self.env.get("FSGG_V2_SOURCE_PROFILE", ""))
                 producer = profile["checkProducers"][check["name"]]

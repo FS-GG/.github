@@ -261,7 +261,7 @@ assert "merge-base" in body, "the gate must compare against the merge-base, not 
 # .github#2447: the shipped workflow must actually pass the live-required plain top-level contexts
 # through, or the new tripwire above is dead code nobody wires up.
 assert "--required-context" in body, "the gate workflow never passes --required-context (.github#2447)"
-for expected in ("projection", "roster-closure", "drift", "reconcile"):
+for expected in ("projection", "roster-closure", "drift", "reconcile", "claim-generation"):
     assert expected in body, f"the gate workflow never names {expected!r} as a --required-context"
 assert "--required-context contract-coherence" not in body, (
     "the nested contract-coherence / coherence context must NOT be passed as --required-context — "

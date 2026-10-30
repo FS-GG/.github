@@ -716,6 +716,131 @@ expect "repair 1: an unusable --lease-minutes is refused up front, naming the fl
   "$W13" "$REPO" "item/2656-lease-expiry" "$HEAD_SHA" \
   "$(marker "$REPO#2656" 5300000001 "$HEAD_SHA")" --lease-minutes 9999999999
 
+# =============================================================================================
+# 14. THE MOVE OUT OF coherence.yml (.github#4730, CI load). The REQUIRED context `claim-generation` is
+# produced by `claim-generation.yml` and by nothing else, and only that workflow carries `edited`.
+#
+# The pull_request workflows run from the PR's merge commit, so each event evaluates ONE tree. This
+# section pins what makes a tree safe: exactly one workflow job reports the context, it reports it on
+# every pull request (no paths filter, no job-level `if:`, no `name:` override that would rename it),
+# and it keeps `edited` — while `coherence.yml` has neither the job nor `edited`. Each pin is then
+# inverted by a mutant, so the section can say NO: a missing producer, a duplicate producer, a lost
+# `edited`, an `edited` that came back to coherence.yml, a renamed check run, a path filter, a
+# job-level `if:`.
+# =============================================================================================
+REPO_ROOT="$(cd "$HERE/../.." && pwd)"
+MOVE_OUT="$(python3 - "$REPO_ROOT" <<'PY'
+import copy, glob, json, os, re, sys, yaml
+
+root = sys.argv[1]
+CONTEXT = "claim-generation"
+
+def load_all(overrides):
+    docs = {}
+    for path in sorted(glob.glob(os.path.join(root, ".github/workflows/*.yml"))):
+        name = os.path.basename(path)
+        text = overrides.get(name)
+        docs[name] = yaml.safe_load(text if text is not None else open(path, encoding="utf-8").read())
+    for name, text in overrides.items():
+        if name not in docs:
+            docs[name] = yaml.safe_load(text)
+    return docs
+
+def triggers(doc):
+    return doc.get("on", doc.get(True)) or {}
+
+def producers(docs):
+    """Every (workflow, job id) whose check-run name is CONTEXT: its `name:` if it has one, else its id."""
+    out = []
+    for wf, doc in docs.items():
+        for jid, job in (doc.get("jobs") or {}).items():
+            if isinstance(job, dict) and "uses" not in job and str(job.get("name", jid)) == CONTEXT:
+                out.append((wf, jid))
+    return out
+
+POLICY = os.path.join(root, "policy/v2-ci-ordinary-settlement.json")
+
+def settlement_producers(text):
+    """policy/v2-ci-ordinary-settlement.json names the workflow that must have produced each required
+    gate check; tools/v2-ci-ordinary-observe.py refuses a post-merge settlement whose check came from a
+    different workflow path or id. The id is not checkable offline, the path is."""
+    prof = json.loads(text)["qualification"]["checkProducers"]
+    return prof.get(CONTEXT, {})
+
+def verdict(docs, policy_text=None):
+    """Reasons this tree does not satisfy the move's invariants (empty list = it does)."""
+    out = []
+    pol = settlement_producers(policy_text if policy_text is not None else open(POLICY, encoding="utf-8").read())
+    if pol.get("path") != ".github/workflows/claim-generation.yml":
+        out.append(f"the V2 ordinary settlement policy names {pol.get('path')!r} as the producer of {CONTEXT!r}, so every post-merge settlement would refuse it")
+    prod = producers(docs)
+    if prod != [("claim-generation.yml", "claim-generation")]:
+        out.append(f"producers of {CONTEXT!r} are {prod}, want exactly [claim-generation.yml:claim-generation]")
+    cg = docs.get("claim-generation.yml")
+    if cg is not None:
+        pr = triggers(cg).get("pull_request") or {}
+        if "edited" not in (pr.get("types") or []):
+            out.append("claim-generation.yml lost `edited`: a worker's body PATCH would never re-evaluate the fence (#2488)")
+        if set(triggers(cg)) - {"pull_request"}:
+            out.append("claim-generation.yml has a trigger besides pull_request")
+        if {"paths", "paths-ignore", "branches", "branches-ignore"} & set(pr):
+            out.append("claim-generation.yml has a trigger filter: a filtered required check is never created (#1508)")
+        job = (cg.get("jobs") or {}).get("claim-generation") or {}
+        if "if" in job:
+            out.append("the claim-generation job carries a job-level `if:` the required-context gate cannot prove")
+        if "name" in job:
+            out.append("the claim-generation job has a `name:` override, which would rename the required check run")
+    co = docs.get("coherence.yml")
+    if co is not None:
+        types = (triggers(co).get("pull_request") or {}).get("types")
+        if "edited" in (types or []):
+            out.append("coherence.yml carries `edited` again: every body edit re-runs its five jobs (#4730)")
+    return out
+
+base = {}
+docs = load_all(base)
+assert verdict(docs) == [], f"the shipped tree is not the pinned shape: {verdict(docs)}"
+cg_text = open(os.path.join(root, ".github/workflows/claim-generation.yml"), encoding="utf-8").read()
+co_text = open(os.path.join(root, ".github/workflows/coherence.yml"), encoding="utf-8").read()
+
+def must_refuse(label, overrides, needle):
+    v = verdict(load_all(overrides))
+    assert any(needle in r for r in v), f"{label}: expected a refusal containing {needle!r}, got {v}"
+
+n = 0
+# M1 the job is deleted from its new home: the context has NO producer.
+must_refuse("M1 missing producer", {"claim-generation.yml": re.sub(r"\njobs:\n.*", "\njobs:\n  other:\n    runs-on: ubuntu-latest\n    steps: []\n", cg_text, flags=re.S)}, "producers of"); n += 1
+# M2 the job is also left in coherence.yml: TWO producers.
+dup = co_text.rstrip("\n") + "\n\n  claim-generation:\n    runs-on: ubuntu-latest\n    steps: []\n"
+must_refuse("M2 duplicate producer", {"coherence.yml": dup}, "producers of"); n += 1
+# M3 a second workflow also reports the context under a `name:`.
+other = "name: x\non:\n  pull_request:\njobs:\n  y:\n    name: claim-generation\n    runs-on: ubuntu-latest\n    steps: []\n"
+must_refuse("M3 renamed duplicate", {"other.yml": other}, "producers of"); n += 1
+# M4 `edited` dropped from the new workflow.
+must_refuse("M4 lost edited", {"claim-generation.yml": cg_text.replace("types: [opened, synchronize, reopened, edited]", "types: [opened, synchronize, reopened]", 1)}, "lost `edited`"); n += 1
+# M5 `edited` returns to coherence.yml.
+must_refuse("M5 edited back", {"coherence.yml": co_text.replace("types: [opened, synchronize, reopened]", "types: [opened, synchronize, reopened, edited]", 1)}, "carries `edited` again"); n += 1
+# M6 the job gets a `name:` override (the check run would no longer be `claim-generation`).
+must_refuse("M6 name override", {"claim-generation.yml": cg_text.replace("  claim-generation:\n    runs-on", "  claim-generation:\n    name: claim fence\n    runs-on", 1)}, "producers of"); n += 1
+# M7 a path filter on the new workflow.
+must_refuse("M7 path filter", {"claim-generation.yml": cg_text.replace("types: [opened, synchronize, reopened, edited]", "types: [opened, synchronize, reopened, edited]\n    paths: [\"scripts/**\"]", 1)}, "trigger filter"); n += 1
+# M8 a job-level `if:`.
+must_refuse("M8 job-level if", {"claim-generation.yml": cg_text.replace("  claim-generation:\n    runs-on", "  claim-generation:\n    if: github.event_name == 'pull_request'\n    runs-on", 1)}, "job-level `if:`"); n += 1
+# M9 an extra trigger (a push) on the new workflow.
+must_refuse("M9 extra trigger", {"claim-generation.yml": cg_text.replace("on:\n  pull_request:", "on:\n  push:\n    branches: [main]\n  pull_request:", 1)}, "trigger besides"); n += 1
+# M10 the settlement policy still names coherence.yml as the producer.
+pol_text = open(POLICY, encoding="utf-8").read()
+v = verdict(docs, pol_text.replace(".github/workflows/claim-generation.yml", ".github/workflows/coherence.yml", 1))
+assert any("settlement policy names" in r for r in v), f"M10: {v}"; n += 1
+print(f"{n} mutants refused")
+PY
+)"
+if [ "$MOVE_OUT" = "10 mutants refused" ]; then
+  ok "the move: claim-generation.yml is the ONLY producer of the required context, reports on every PR and keeps edited; coherence.yml has neither the job nor edited; 10 mutants (missing/duplicate/renamed producer, lost or returned edited, name override, path filter, job-level if, extra trigger, stale V2 settlement producer) are each refused"
+else
+  bad "the move out of coherence.yml is not the pinned shape, or the pin cannot say NO" "$MOVE_OUT"
+fi
+
 echo
 echo "claim-generation fixture: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ]
