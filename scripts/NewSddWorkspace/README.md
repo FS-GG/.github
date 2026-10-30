@@ -21,14 +21,33 @@ list/help require no catalog runtime.
 The catalog route described below describes the published FS.GG.Templates **0.20.1**
 (tag `fs-gg-templates/v0.20.1`, package `FS.GG.Workspace.Template::0.20.1`), the release that carries the
 common project-knowledge composition for the TypeScript, JavaScript, Rust and Go providers.
-The four-product public-tool journeys passed on Linux x64: the public Wizard 0.23.0, SDD 2.5.3 and
-Governance 1.15.0 installed from nuget.org created TypeScript, JavaScript, Rust and Go CLI workspaces against
-`fs-gg-templates/v0.20.1`, and 85 of 85 checks passed (creation, knowledge, Doctor, Governance Verify with all
+The four-product public-tool journeys passed on Linux x64 **with `--no-coordination`**: the public Wizard 0.23.0,
+SDD 2.5.3 and Governance 1.15.0 installed from nuget.org created TypeScript, JavaScript, Rust and Go CLI workspaces
+against `fs-gg-templates/v0.20.1`, and 85 of 85 checks passed (creation, knowledge, Doctor, Governance Verify with all
 eight gates, and five refusal controls per product); see the
-[#3010 Step 3 result](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523620705).
+[#3010 Step 3 result](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523620705). The retained receipts are
+in private custody; their manifest digest is `ea322f1526a048836deb2f1eaa2e817ccdaffc91647e4cc19cd69bd191e8d217`
+and the run summary `evidence/results.json` is `aa01a492c6ded094ac988cb2953d02ff8cfdb74e6a27ac3ac8abc9b3fc97737d`.
+
+**Known defect in 0.23.0: creation with default coordination yields an incoherent `doctor`.** With coordination
+on (the default), Wizard 0.23.0 writes a `securityObligations` key into `.fsgg/scaffold-provenance.json`. That file
+belongs to SDD, and SDD 2.5.3 rejects the unknown property: `doctor` reports `isCoherent:false` with
+`scaffold.provenanceMalformed` on all four catalog providers. The default-coordination journey found this (see the
+[#3010 result](https://github.com/FS-GG/.github/issues/3010#issuecomment-6523944130)); the repair is tracked in
+.github#4964 (obligations move to a Wizard-owned file; planned for Wizard 0.23.1) and is not yet published.
+Until 0.23.1, pass `--no-coordination` (the configuration the 85/85 result covers), or accept that default-coordination
+creations need the `securityObligations` key removed from `.fsgg/scaffold-provenance.json`, which restored
+`isCoherent:true` in that journey. The security obligations were recorded as pending, never claimed satisfied, and
+`knowledge check` passed on all four products. The key removal was observed by the qualification run, not
+a Wizard-supported operation; the pending obligations it carries are then not visible to SDD.
+
+Default coordination also fetches the coordination kit over HTTPS from the moving `main` ref of this repository, so
+the materialized kit is not reproducible across fetches. The kit observed in the journey matched `main@a9a6f77f`
+byte for byte; pinning it is part of #4964.
+
 Stated limits remain: the GitHub Packages feed was not read directly (the qualifying token received 403), only
 one Linux x64 carrier was exercised, no reproducibility pack exists, and independent custody of the advisory inputs
-is still owed. The cited result does not establish default-on coordination for a catalog provider.
+is still owed.
 
 ## Install
 
