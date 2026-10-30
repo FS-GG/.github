@@ -647,7 +647,7 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | `fsgg-contracts` | FS.GG.SDD | `7.6.0` | `7.6.0` |
 | `governance-config` | FS.GG.Governance | `0.3.0` | `0.3.0` |
 | `governance-reference-gate-set` | FS.GG.Governance | `1.8.0` | `1.8.0` |
-| `fs-gg-ui-template` | FS.GG.Rendering | `0.32.3` | `0.32.3` |
+| `fs-gg-ui-template` | FS.GG.Rendering | `0.32.4` | `0.32.4` |
 | `game-sim-core` | FS.GG.Game | `0.17.0` | `0.17.0` |
 | `wasm-shared-runtime` | FS.GG.Game | `0.7.0` | `0.7.0` |
 | `game-physics-box2d` | FS.GG.Game | `0.17.0` | `0.17.0` |
