@@ -6,6 +6,13 @@ name: routine-eligibility
 # Repository writers are trusted: this prevents mistakes and drift, but does not
 # claim protection from a writer able to alter Actions workflows or spoof a
 # name-based check context.
+#
+# Moved base (.github#4730): the event payload's base SHA is only a monotonic floor. The
+# base is resolved live at run time (a re-run therefore never reuses a stale base), the
+# policy and both executables come from that one live base, and the PR's change is the
+# merge-base(live base, head)..head diff recomputed against it. The event base must be an
+# ancestor of the live base and the head must not already be contained in it; the envelope
+# repeats and enforces both. A moved head is still refused, never followed.
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, edited]
@@ -20,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Evaluate with the PR base's policy and validator
+      - name: Evaluate with the live base's policy and validator
         shell: bash
         env:
           RECEIVER_FETCH_TOKEN: ${{ github.token }}
@@ -68,24 +75,49 @@ jobs:
           git -C "$inspect" init -q
           git -C "$inspect" remote add origin "https://github.com/$REPOSITORY.git"
           # Only this fixed-origin fetch receives the ephemeral header; no persistent credentials.
-          ROUTINE_FETCH_HEADER="AUTHORIZATION: basic $fetch_basic" GIT_TERMINAL_PROMPT=0 \
-            git -c credential.helper= -c http.followRedirects=false \
-            --config-env=http.https://github.com/.extraheader=ROUTINE_FETCH_HEADER \
-            -C "$inspect" fetch --quiet --no-tags --depth=1 origin \
-            "+refs/heads/${BASE_REF}:refs/remotes/origin/routine-base" \
-            "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/routine-head"
+          fetch_routine_refs() {
+            ROUTINE_FETCH_HEADER="AUTHORIZATION: basic $fetch_basic" GIT_TERMINAL_PROMPT=0 \
+              git -c credential.helper= -c http.followRedirects=false \
+              --config-env=http.https://github.com/.extraheader=ROUTINE_FETCH_HEADER \
+              -C "$inspect" fetch --quiet --no-tags "$@" origin \
+              "+refs/heads/${BASE_REF}:refs/remotes/origin/routine-base" \
+              "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/routine-head"
+          }
+          # Ancestry needs history that the depth-1 fetch lacks; this is the only deepening.
+          routine_connected() {
+            git -C "$inspect" merge-base --is-ancestor "$BASE_SHA" refs/remotes/origin/routine-base 2>/dev/null &&
+              git -C "$inspect" merge-base refs/remotes/origin/routine-base refs/remotes/origin/routine-head >/dev/null 2>&1
+          }
+          fetch_routine_refs --depth=1
+          observed_base="$(git -C "$inspect" rev-parse refs/remotes/origin/routine-base)"
+          if test "$observed_base" != "$BASE_SHA"; then
+            # Moved base: deepen a bounded number of times to connect the event base and the head.
+            for deepen in 64 256 1024 4096; do
+              if routine_connected; then break; fi
+              fetch_routine_refs --deepen="$deepen" || break
+            done
+            observed_base="$(git -C "$inspect" rev-parse refs/remotes/origin/routine-base)"
+          fi
           unset fetch_basic
 
-          observed_base="$(git -C "$inspect" rev-parse refs/remotes/origin/routine-base)"
           observed_head="$(git -C "$inspect" rev-parse refs/remotes/origin/routine-head)"
-          test "$observed_base" = "$BASE_SHA" || {
-            echo "routine-eligibility: fetched base $observed_base differs from event base $BASE_SHA" >&2
-            exit 1
-          }
           test "$observed_head" = "$HEAD_SHA" || {
             echo "routine-eligibility: fetched head $observed_head differs from event head $HEAD_SHA" >&2
             exit 1
           }
+          if test "$observed_base" != "$BASE_SHA"; then
+            # The live base is the trusted code source: it must be the event base's forward
+            # descendant and must not already contain (or be) the candidate head.
+            git -C "$inspect" merge-base --is-ancestor "$BASE_SHA" "$observed_base" 2>/dev/null || {
+              echo "routine-eligibility: event base $BASE_SHA is not an ancestor of live base $observed_base" >&2
+              exit 1
+            }
+            if git -C "$inspect" merge-base --is-ancestor "$HEAD_SHA" "$observed_base" 2>/dev/null; then
+              echo "routine-eligibility: head $HEAD_SHA is already contained in live base $observed_base" >&2
+              exit 1
+            fi
+            echo "routine-eligibility: base moved $BASE_SHA -> $observed_base; re-evaluating the unchanged head against the live base"
+          fi
 
           case "$HEAD_REF" in
             routine/*) ;;
@@ -95,11 +127,12 @@ jobs:
               ;;
           esac
 
-          # Both executable files come from the exact PR base. The candidate can
-          # replace or delete either path without influencing this invocation.
-          git -C "$inspect" show "$BASE_SHA:scripts/check-claim-generation.py" > "$trusted/check-claim-generation.py"
-          git -C "$inspect" show "$BASE_SHA:scripts/lib/gate.py" > "$trusted/lib/gate.py"
-          git -C "$inspect" show "$BASE_SHA:scripts/check-routine-eligibility-envelope.py" > "$trusted/check-routine-eligibility-envelope.py"
+          # Every executable file and the policy come from the one live base resolved above
+          # (equal to the event base when it has not moved). The candidate can replace or
+          # delete any path without influencing this invocation.
+          git -C "$inspect" show "$observed_base:scripts/check-claim-generation.py" > "$trusted/check-claim-generation.py"
+          git -C "$inspect" show "$observed_base:scripts/lib/gate.py" > "$trusted/lib/gate.py"
+          git -C "$inspect" show "$observed_base:scripts/check-routine-eligibility-envelope.py" > "$trusted/check-routine-eligibility-envelope.py"
           printf '%s' "$PR_BODY" > "$trusted/pr-body.md"
 
           python3 "$trusted/check-routine-eligibility-envelope.py" \

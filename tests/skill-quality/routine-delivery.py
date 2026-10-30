@@ -3254,7 +3254,10 @@ jobs:
         def transport(command, **kwargs):
             if command[0]=='git':
                 self.assertEqual(command[1:3],['-C',str(self.receiver)])
-                return subprocess.CompletedProcess(command,0,stdout=fixture_git(self.receiver,*command[3:]).decode(),stderr='')
+                try:
+                    return subprocess.CompletedProcess(command,0,stdout=fixture_git(self.receiver,*command[3:]).decode(),stderr='')
+                except subprocess.CalledProcessError as error:  # the envelope runs git with check=False
+                    return subprocess.CompletedProcess(command,error.returncode,stdout=(error.stdout or b'').decode(),stderr=(error.stderr or b'').decode())
             self.assertEqual(command[:2],[sys.executable,str(self.owner/'scripts/check-claim-generation.py')])
             self.assertEqual(kwargs['cwd'],self.receiver)
             return subprocess.CompletedProcess(command,0)
