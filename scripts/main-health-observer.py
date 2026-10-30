@@ -97,6 +97,7 @@ Exit codes: 0 success; 1 an unexpected error or a plan drift; 2 NO VERDICT (the 
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import datetime as dt
 import fnmatch
 import hashlib
@@ -130,6 +131,7 @@ MARKER_KEYS_LIMIT = 12000
 STALE_FACTOR = 2
 STALE_FLOOR = dt.timedelta(hours=2)
 CRON_HORIZON_DAYS = 62
+READ_WORKERS = 8  # concurrent REST reads; ~200 sequential reads would take minutes
 RUN_PAGE = 10  # completed runs read per workflow and event, to find the latest conclusive one
 GH_TIMEOUT = 90
 
@@ -647,6 +649,19 @@ def fresh_results(plan: dict, needs: object) -> tuple[dict[str, str], list[dict]
     return results, unknown
 
 
+def read_all(items: list, fn) -> list:
+    """Run independent reads `fn(item)` on a small pool, in item order. Each result is ('ok', value) or ('err', exc);
+    a read error never escapes as an exception, so the caller records it as UNKNOWN."""
+    def safe(item):
+        try:
+            return ("ok", fn(item))
+        except (RuntimeError, ValueError) as exc:
+            return ("err", exc)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=READ_WORKERS) as pool:
+        return list(pool.map(safe, items))
+
+
 def collect(plan: dict, needs: object, repo: str, run_id: str | None, now: dt.datetime) -> dict:
     fresh, unknown = fresh_results(plan, needs)
     evidence: dict[str, list[dict]] = {}
@@ -660,36 +675,38 @@ def collect(plan: dict, needs: object, repo: str, run_id: str | None, now: dt.da
     # The observer's own previous nights are judged for freshness below, not for conclusion: a failed night
     # would otherwise keep a finding about this very workflow alive until the next night.
     scheduled_others = [n for n in plan["latestSchedule"] if n != OBSERVER_WORKFLOW]
-    for event, workflows in (("push", plan["latestPush"]), ("schedule", scheduled_others)):
-        for name in workflows:
-            try:
-                latest = latest_conclusive(repo, name, event)
-            except RuntimeError as exc:
-                unknown.append({"workflow": name, "source": event, "why": str(exc)})
-                continue
-            clean["latestRuns"] += 1
-            if latest is None:
-                clean["noRun"].append(f"{name}:{event}")
-                continue
-            if latest["conclusion"] not in RED:
-                continue
-            if fresh.get(name) == "success":
-                superseded.setdefault(name, []).append(latest)  # a green fresh run on main outranks an older red
-            else:
-                evidence.setdefault(name, []).append(latest)
+    reads = [(event, name) for event, workflows in (("push", plan["latestPush"]), ("schedule", scheduled_others))
+             for name in workflows]
+    for (event, name), (status, latest) in zip(reads, read_all(reads, lambda t: latest_conclusive(repo, t[1], t[0]))):
+        if status == "err":
+            unknown.append({"workflow": name, "source": event, "why": str(latest)})
+            continue
+        clean["latestRuns"] += 1
+        if latest is None:
+            clean["noRun"].append(f"{name}:{event}")
+            continue
+        if latest["conclusion"] not in RED:
+            continue
+        if fresh.get(name) == "success":
+            superseded.setdefault(name, []).append(latest)  # a green fresh run on main outranks an older red
+        else:
+            evidence.setdefault(name, []).append(latest)
     stale: dict[str, dict] = {}
     pending: list[str] = []
-    for name in plan["latestSchedule"]:
-        try:
-            meta = gh_json(f"repos/{repo}/actions/workflows/{name}")
-            runs = gh_json(f"repos/{repo}/actions/workflows/{name}/runs?branch=main&event=schedule&per_page=1")
-            listed = runs.get("workflow_runs") if isinstance(runs, dict) else None
-            if not isinstance(meta, dict) or not isinstance(listed, list):
-                raise RuntimeError("unexpected workflow or run-list shape")
-            verdict = freshness(name, plan["crons"][name], meta, listed[0] if listed else None, now)
-        except RuntimeError as exc:
-            unknown.append({"workflow": name, "source": "freshness", "why": str(exc)})
+    def read_schedule(name: str):
+        meta = gh_json(f"repos/{repo}/actions/workflows/{name}")
+        runs = gh_json(f"repos/{repo}/actions/workflows/{name}/runs?branch=main&event=schedule&per_page=1")
+        listed = runs.get("workflow_runs") if isinstance(runs, dict) else None
+        if not isinstance(meta, dict) or not isinstance(listed, list):
+            raise RuntimeError("unexpected workflow or run-list shape")
+        return meta, listed
+
+    for name, (status, got) in zip(plan["latestSchedule"], read_all(plan["latestSchedule"], read_schedule)):
+        if status == "err":
+            unknown.append({"workflow": name, "source": "freshness", "why": str(got)})
             continue
+        try:
+            verdict = freshness(name, plan["crons"][name], got[0], got[1][0] if got[1] else None, now)
         except ValueError as exc:
             unknown.append({"workflow": name, "source": "freshness", "why": f"cannot judge the schedule: {exc}"})
             continue
@@ -701,19 +718,28 @@ def collect(plan: dict, needs: object, repo: str, run_id: str | None, now: dt.da
         else:
             stale[name] = verdict
     findings = []
+    jobs_for = sorted(evidence)
+    job_reads = {}
+    for name in jobs_for:
+        for item in evidence[name]:
+            job_reads[(name, item["event"], item["runId"])] = (name, item)
+
+    def read_jobs(key):
+        name, item = job_reads[key]
+        if item["event"] == "fresh":
+            return failed_jobs(repo, run_id, CHECK_PREFIX + stem(name) + " /") if run_id else []
+        return failed_jobs(repo, item["runId"])
+
+    keys = sorted(job_reads, key=lambda k: (k[0], k[1], str(k[2])))
+    job_details = dict(zip(keys, read_all(keys, read_jobs)))
     for name in sorted(stale):
         findings.append({"key": f"stale:{name}", "workflow": plan["names"].get(name, stem(name)), "file": name,
                          "evidence": [stale[name]], "failedJobs": []})
     for name in sorted(evidence):
         details: list[str] = []
         for item in evidence[name]:
-            try:
-                if item["event"] == "fresh":
-                    details += failed_jobs(repo, run_id, CHECK_PREFIX + stem(name) + " /") if run_id else []
-                else:
-                    details += failed_jobs(repo, item["runId"])
-            except RuntimeError:
-                details.append("(failed job names unavailable)")
+            status, got = job_details[(name, item["event"], item["runId"])]
+            details += got if status == "ok" else ["(failed job names unavailable)"]
         findings.append({
             "key": f"wf:{name}",
             "workflow": plan["names"].get(name, stem(name)),
