@@ -41,7 +41,11 @@ REPORT_FILE = "docs/reports/progressReports/2099-01-01-000000Z-control.md"
 
 
 def transcript(title, text):
-    print(f"--- {title}\n{text.rstrip()}", file=sys.stderr)
+    """Echo a control's output for the CI log. Workflow commands are defanged: the controls PROVE what the
+    gate would annotate, and must not themselves put error annotations on a passing check run."""
+    safe = "\n".join(("[workflow command, not executed] " + line) if line.startswith("::") else line
+                     for line in text.rstrip().splitlines())
+    print(f"--- {title}\n{safe}", file=sys.stderr)
 
 
 class Control(unittest.TestCase):
