@@ -21,7 +21,8 @@ name: skill-union-bundle
 
 # The fixture asserts current truth about the skills themselves (tests/skill-union/check-current-truth.py), so a
 # skill edit must run it: #4680/#4711 changed skills without touching a listed path and the fixture sat red on
-# main until this repair (#4730).
+# main until this repair (#4730). The fixture's link check also reads the ADRs and the one roadmap the publishing
+# skill links to, so those are listed too; no wider docs/roadmaps/** wildcard, which changes constantly.
 on:
   pull_request:
     paths:
@@ -32,6 +33,8 @@ on:
       - "tests/skill-union/**"
       - ".agents/skills/**"
       - ".claude/skills/**"
+      - "docs/adr/**"
+      - "docs/roadmaps/utel-release-successor.md"
       - ".github/workflows/skill-union-bundle.yml"
   push:
     branches: [main]
@@ -43,6 +46,8 @@ on:
       - "tests/skill-union/**"
       - ".agents/skills/**"
       - ".claude/skills/**"
+      - "docs/adr/**"
+      - "docs/roadmaps/utel-release-successor.md"
       - ".github/workflows/skill-union-bundle.yml"
   workflow_dispatch:
 

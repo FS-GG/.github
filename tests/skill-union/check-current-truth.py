@@ -114,11 +114,13 @@ def check(root: Path) -> None:
     # `set-paths` or an additive `widen`. It proposes the narrower declaration to the accountable owner and
     # states that no V1 scan/lanes/set-paths/widen/take/claim route is authorized for organization V2.
     lane = docs["lane-steward"]
-    if re.search(r"fsgg-coord\s+(?:set-paths|widen)\b", lane):
-        fail("lane-steward: obsolete V1 set-paths/widen recipe returned")
-    if "No V1 scan/lanes/set-paths,\nwiden, take or claim route is authorized for organization V2" not in lane:
+    if re.search(r"fsgg-coord\s+(?:scan|lanes|set-paths|widen|take|claim)\b", lane):
+        fail("lane-steward: obsolete V1 scan/lanes/set-paths/widen/take/claim recipe returned")
+    # The statements wrap across lines in the source; compare on normalised whitespace so a reflow is not a finding.
+    flat = re.sub(r"\s+", " ", lane)
+    if "No V1 scan/lanes/set-paths, widen, take or claim route is authorized for organization V2" not in flat:
         fail("lane-steward: must state that no V1 narrowing/claim route is authorized for organization V2")
-    if "to its accountable owner" not in lane or "does not select,\nclaim, enroll" not in lane:
+    if "to its accountable owner" not in flat or "does not select, claim, enroll" not in flat:
         fail("lane-steward: diagnosis must propose to the accountable owner and not select, claim or enroll")
 
     publishing = docs["publishing-and-deployment"]
