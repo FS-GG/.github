@@ -270,11 +270,35 @@ ruling states.
 - *Refusal:* the launcher refuses if free space on `vdb` is below the run's need plus
   64 GiB headroom, or if a v3 pilot unit (`v3-storage@*`) is active. Root admits no v3
   pilot start while a native window is open.
-- *I/O correspondence stays open.* Physical I/O contention on Home's HDD, which holds
-  the `vdb`, `vdf`, `vdc` and `vda` images, cannot be observed or controlled from fdev.
-  Per [Root decision 2](https://github.com/FS-GG/.github/issues/4778#issuecomment-6522829725),
-  this path does not claim I/O correspondence. #4778 closes only with genuine evidence
-  from Home or later, or by an explicit later ruling.
+- *I/O correspondence: identity and competitors established, quiet not.* Home answered
+  the storage questions and Root ruled ([ruling](https://github.com/FS-GG/.github/issues/4778#issuecomment-6526677331), clarifying
+  [Root decision 2](https://github.com/FS-GG/.github/issues/4778#issuecomment-6522829725)):
+  - *Backing identity and competitors (established by Home evidence):* the `vdb`, `vdf`,
+    `vdc` and `vda` images sit on one host rotational HDD with a single partition and the
+    mq-deadline scheduler, together with the other co-located fdev images. The host
+    co-tenants are an always-on media-library service (reads), a media conversion pipeline
+    (writes) and a game library (active when the owner plays); an idle backups directory is
+    also present. Home cannot guarantee a quiet disk. The fdev VM cgroup has no `io.max`
+    or `io.weight`.
+  - *Enforcement for each native window:*
+    - (a) inside fdev, `io.max` on `user-1000.slice` and the fsgg-store, LEARN and SC2
+      units for the HDD-backed devices, plus the scheduled lane drain;
+    - (b) on Home, Home stops the conversion pipeline, the only host writer, for the
+      named window, and the owner does not run the game library;
+    - (c) observation, with per-device `io.stat` and PSI in fdev and Home `iostat -dx` on
+      the HDD across the window, with media-library reads as an observed, unenforced
+      reader;
+    - (d) capacity, with bytes and inodes free on the HDD partition recorded before the
+      window. That needs one more small Home fact: `df` on the partition.
+  - *What satisfies it:* only that window's captured evidence, not the ruling. Guest PSI
+    or timing alone is never accepted. If Home's co-tenants prove uncontrolled, the
+    fallback is a separate I/O domain from Home or an explicit ruling that splits the
+    assertion into a tracked follow-up; the original operation and its holds are kept.
+    The assertion gates nothing downstream.
+  - *Recorded risk, host memory:* the host has about 5.9 GB available and no swap, and
+    the 32 GiB guest memfd is not reclaimable. Native windows run inside fdev's own
+    32 GiB and Home avoids heavy host workloads during a window.
+  - Atlas `environment/fdev-bulk-hdd-shared-and-host-memory` records these facts.
 
 **CPU and memory admission** ([Root decision 3](https://github.com/FS-GG/.github/issues/4778#issuecomment-6522829725)):
 
@@ -291,9 +315,13 @@ ruling states.
 
 The 4 vCPU / 16 GiB / 256 GiB profile is the one the source already selects. The target
 schema enforces it as floors. The BAR gate's 14 GiB of available guest memory and 80 GiB
-of free backing are observed inside the guest. fdev's virtio-gpu and HDA/PipeWire audio
-(Atlas `environment/fdev-gpu-and-audio`) are not used by this headless chain and are not
-passed into nested guests. They do widen fdev's host-facing surface; see prerequisites.
+of free backing are observed inside the guest. Home confirmed the fdev VMM device set
+([#4517](https://github.com/FS-GG/.github/issues/4517#issuecomment-6526676894); Atlas `environment/fdev-gpu-and-audio`): q35 with KVM, `virtio-gpu-gl-pci`
+with blob and DRM native context on the AMD iGPU render node only, output-only PipeWire
+audio with no capture, emulated input only, virtio-net with user-mode networking, and
+virtio-rng. This headless chain uses none of the GPU or audio devices and passes none into
+nested guests. DRM native context exposes the host amdgpu driver to fdev, a risk the owner
+accepted under the VM-only security zone ruling.
 
 **Holds.**
 
@@ -311,13 +339,13 @@ passed into nested guests. They do widen fdev's host-facing surface; see prerequ
 
 | Owning record | This path can establish | This path cannot establish |
 |---|---|---|
-| #4778 | The option (b) decision with capacity enforcement observed in a real run: identity, bytes, inodes, CPU and memory correspondence, refusal controls, lifecycle and independent retirement. Write exclusion is cooperative. | I/O correspondence, which stays open (decision 2); Home physical capacity; recovery of the historical B0 originals. |
+| #4778 | The option (b) decision with capacity enforcement observed in a real run: identity, bytes, inodes, CPU and memory correspondence, refusal controls, lifecycle and independent retirement. Write exclusion is cooperative. | I/O correspondence, which only a native window's captured evidence satisfies (§3); Home physical capacity; recovery of the historical B0 originals. |
 | #4650 (V3-ENV-01) | For the fdev nested profile: enforcing execution, committed export, independent cleanup, a qualified launcher source and its first genuine use. | Unattended allocation without a human or host agent, worker-loss recovery, reboot persistence, publication or installed adoption, benefit disposition. |
 | [#4820](https://github.com/FS-GG/.github/issues/4820) | Real use of the journal producer for Commit on fdev. | LEARN finite-profile .1–.3 acceptance. The Home-only export exception does not transfer. |
 | Coordination#1032 | The complete pinned FSBar headless-integration image from current accepted source, if M2 succeeds: manifests, image identity, the encrypted exported candidate, static ELF correspondence, bounded outputs, readback and retirement. | Loaded engine/plugin ABI, Count1 and the useful-play journeys ([#4842](https://github.com/FS-GG/.github/issues/4842)), product publication, installed B2 adoption. |
 | [#4815](https://github.com/FS-GG/.github/issues/4815) | At most a qualified BAR image as a later input to the BAR published replacement. | Receiver installation and retirement, the published replacements themselves, the migration inventory. |
 | [Coordination#1051](https://github.com/FS-GG/FS.GG.Coordination/issues/1051) | The same qualified image and launcher could host the FourD target row later, under FourD's own selection. | Any FourD lifecycle or native qualification. Nothing here selects it. |
-| [#4821](https://github.com/FS-GG/.github/issues/4821) | Nothing. | Two independent allocations. Guests on one fdev share a kernel and disks, which the 2026-10-24 ruling excludes. This stays separate. |
+| [#4821](https://github.com/FS-GG/.github/issues/4821) | Nothing. | The owner's [2026-10-30 ruling](https://github.com/FS-GG/.github/issues/4821#issuecomment-6526778146) no longer requires two machines: .6 is blank-slate portability and failure recovery on one machine, a fresh allocation from a stock, digest-verified guest image under fdev nested KVM with no carried state. This plan does not select it, and cross-machine independence is not claimed. |
 
 ## 5. Milestones
 
@@ -353,9 +381,9 @@ derivation: the input-image digest is checked before use.
 - *Prerequisites:*
   - M0 merged;
   - open decision 1 resolved;
-  - Home's confirmation of the current VMM device set
-    ([Root decision 6](https://github.com/FS-GG/.github/issues/4778#issuecomment-6522829725),
-    requested on #4517);
+  - Home's confirmation of the current VMM device set, which is met
+    ([Root decision 6](https://github.com/FS-GG/.github/issues/4778#issuecomment-6522829725);
+    [Home's confirmation on #4517](https://github.com/FS-GG/.github/issues/4517#issuecomment-6526676894));
   - lanes drained and `MemAvailable` ≥ 26 GiB;
   - the installed .NET 10.0.12 runtime rechecked at admission.
 - *Journey:*
@@ -418,8 +446,8 @@ state on `vdb`.
 
 ## Unknowns
 
-- How Home physically backs fdev's 32 GiB, and HDD contention between the attached
-  images.
+- Actual HDD contention between the attached images and the host co-tenants during a
+  native window, which only that window's captured evidence can establish.
 - Whether fdev's monotonic clock advances while Home pauses fdev.
 - Whether nested-SVM performance fits the bake clock and the BAR job's 90-minute budget.
   A timeout would be a retained first failure, not a reason to extend the clock.
@@ -427,7 +455,6 @@ state on `vdb`.
 - Whether a JIT runner self-updates.
 - Whether `bar_hosted_domain.py` accepts the fdev provider facts without a further
   source change.
-- The current Home VMM device set, until Home confirms it.
 
 ## Not selected by this plan
 
