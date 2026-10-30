@@ -245,7 +245,11 @@ The pending and verified security state belongs to the Wizard, not to SDD. It is
 `.fsgg/security-obligations.json`, never in the SDD-owned `.fsgg/scaffold-provenance.json`: SDD CLI 2.5.3
 validates provenance against a strict schema and reports `scaffold.provenanceMalformed` ("Unknown
 property") for any member it does not define, which made `fsgg-sdd doctor` incoherent for every
-default-coordination creation of Wizard 0.23.0 (#4964). SDD's schema is not widened.
+default-coordination creation of Wizard 0.23.0 (#4964). SDD's schema is not widened. Precisely: the Wizard no
+longer writes its own `securityObligations`, `verifiedSecurityReceipts` or `retrofits` members into provenance. The
+selected-product V2 route (`--board-binding`) still records a `productBoard` member there; that route is not part of
+default coordination, it applies to the provenance generation SDD 2.5.3 tolerates, and it was neither changed nor
+re-qualified here.
 
 ```json
 {
@@ -266,7 +270,9 @@ overwritten.
 Wizard run that touches the workspace migrates them tolerantly: `secure`, `retrofit` (every form) or an
 `--upgrade` run on the existing target. The migration merges the rows into the Wizard-owned file (a row
 already there with the same kind and target wins; nothing is duplicated), writes that file first, then
-removes exactly those two members from the provenance and leaves every other member as SDD wrote it. It is
+removes exactly those two members from the provenance and leaves every other member as SDD wrote it
+semantically (the file is re-serialised: members and values are preserved, whitespace and non-ASCII escaping may
+differ, so it is not byte-for-byte). It is
 idempotent and crash-safe: an interruption leaves the rows in both places and the next run converges. If it
 cannot complete (for example the Wizard-owned file is malformed) the provenance is left untouched, the run
 reports it and the command that triggered it proceeds; a provenance that is not readable JSON is left to
@@ -303,8 +309,10 @@ a pin and `check` re-derives it from git, so a pin cannot drift from the commit 
 Two failures are deliberately different. A kit file that **cannot be fetched** (network, HTTP status, size)
 stays best-effort and non-blocking, like the governance overlay: it warns and the env still lands, and
 `retrofit` adds the rest later. A fetched file whose digest **differs from the pin**, a malformed manifest or
-a manifest path outside the closed layout is a **refusal**: nothing from the kit is written (not even the
-board env), the step is reported `failed` and the run is incomplete (non-zero). **Note:** `offer`/chores on a **non-FS-GG** board need an engine build that includes
+a manifest path outside the fixed layout is a **refusal**: nothing from the kit is written (not even the
+board env), the step is reported `failed` and the run is incomplete (non-zero). An incomplete run skips every
+later step: repository security (5b), `fsgg-sdd doctor`, upgrade, typed knowledge and the initialization handoff.
+The scaffold itself is retained; re-run `new-sdd-workspace retrofit <workspace>` once the pin verifies. **Note:** `offer`/chores on a **non-FS-GG** board need an engine build that includes
 #1140 (post-`0.4.0`); the default FS-GG board works on any engine (embedded lock table), so the
 scaffolder surfaces the caveat only when you retarget the board.
 
@@ -332,6 +340,12 @@ It is **idempotent** and never leaves partial state:
   naming what was materialized vs re-emitted as drift). It never writes the SDD-owned
   `.fsgg/scaffold-provenance.json`, whose strict schema rejects unknown members; a `retrofits` member left
   there by an earlier Wizard is moved into the log first;
+- the **embedded** `initialize-sdd-workspace` skill is authoritative: the pin lists it under `embeddedSkills`, so the
+  kit neither fetches nor vendors it, and creation, `--upgrade` and `retrofit` all install or reconcile it from the
+  tool's own resource. A 0.23.0-era copy is therefore brought forward by `retrofit` (reported as drift), a current copy
+  is left untouched, and the older copy named by the pinned commit can never be restored.
+  `scripts/new-sdd-workspace-kit-pin.py check` fails if a skill the Wizard embeds is neither excluded this way nor
+  byte-equal to the pinned manifest row;
 - run again on an already-wired workspace it **refuses cleanly** ("already wired — no drift to re-emit")
   and appends no redundant log entry; if only some pieces drifted it **re-emits only those**;
 - run against a directory that is **not** a scaffolded workspace (no `.fsgg/`) it refuses with exit `2`

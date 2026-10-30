@@ -14,8 +14,9 @@ let sha (value: string) = sha256Hex (bytes value)
 // A tiny but structurally faithful kit.
 let skillText = "# skill\n"
 let referenceText = "reference\n"
+let embeddedText = "# embedded skill, older in the pinned kit\n"
 let manifest (skillSha: string) (referenceSha: string) (path: string) =
-    sprintf """{"schemaVersion":2,"skills":[{"id":"check-board","files":[{"path":"SKILL.md","sha256":"%s","executable":false},{"path":"%s","sha256":"%s","executable":true}]}]}""" skillSha path referenceSha
+    sprintf """{"schemaVersion":2,"skills":[{"id":"check-board","files":[{"path":"SKILL.md","sha256":"%s","executable":false},{"path":"%s","sha256":"%s","executable":true}]},{"id":"embedded-skill","files":[{"path":"SKILL.md","sha256":"%s","executable":false}]}]}""" skillSha path referenceSha (sha embeddedText)
 let manifestText = manifest (sha skillText) (sha referenceText) "references/run.sh"
 let shimText = "#!/usr/bin/env bash\necho shim\n"
 let toolsText = """{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.113.0","commands":["fsgg-coord-engine"]}}}"""
@@ -23,6 +24,7 @@ let toolsText = """{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"versi
 let pin: Pin =
     { Repository = "FS-GG/.github"
       Revision = String('a', 40)
+      EmbeddedSkills = [ "embedded-skill" ]
       ManifestSha256 = sha manifestText
       ShimSha256 = sha shimText
       ToolManifestSha256 = sha toolsText }
@@ -31,10 +33,13 @@ let served =
     dict [ "registry/coordination-kit-skill-manifest.json", manifestText
            ".claude/skills/check-board/SKILL.md", skillText
            ".claude/skills/check-board/references/run.sh", referenceText
+           ".claude/skills/embedded-skill/SKILL.md", embeddedText
            "scripts/fsgg-coord", shimText
            "dist/dotnet/.config/dotnet-tools.json", toolsText ]
 
+let requested = System.Collections.Generic.List<string>()
 let fetchFrom (overrides: (string * Result<byte[], string>) list) (path: string) =
+    requested.Add path
     match overrides |> List.tryFind (fun (p, _) -> p = path) with
     | Some(_, result) -> result
     | None ->
@@ -50,6 +55,22 @@ match fetchVerified pin (fetchFrom []) with
     expect (kit.Skills |> List.exists (fun f -> f.Path = "references/run.sh" && f.Executable && f.Content = referenceText)) "executable bit or content lost"
     expect (kit.Shim = Some shimText && kit.ToolManifest = Some toolsText && kit.Unavailable.IsEmpty) "shim, tools or unavailable list differ"
 | Error reasons -> fail (sprintf "valid kit refused: %A" reasons)
+
+// ── an embedded skill is excluded: not fetched, not listed, never vendored from the kit ─────────────────
+requested.Clear()
+(match fetchVerified pin (fetchFrom []) with
+ | Ok kit ->
+    expect (not (requested |> Seq.exists (fun p -> p.Contains "embedded-skill"))) "an embedded skill was fetched from the kit"
+    expect (kit.Skills |> List.forall (fun f -> f.Skill <> "embedded-skill") && kit.Listed |> List.forall (fun (id, _) -> id <> "embedded-skill")) "an embedded skill leaked into the kit"
+ | Error reasons -> fail (sprintf "valid kit refused: %A" reasons))
+// ... even when the pinned (older) copy would no longer match: it is simply never read
+(match fetchVerified pin (fetchFrom [ (".claude/skills/embedded-skill/SKILL.md", Ok(bytes "different\n")) ]) with
+ | Ok _ -> ()
+ | Error reasons -> fail (sprintf "an excluded skill's bytes must not matter: %A" reasons))
+// without the exclusion the same bytes are a mismatch, which is what the exclusion protects against
+(match fetchVerified { pin with EmbeddedSkills = [] } (fetchFrom [ (".claude/skills/embedded-skill/SKILL.md", Ok(bytes "different\n")) ]) with
+ | Error _ -> ()
+ | Ok _ -> fail "a non-excluded skill with changed bytes was accepted")
 
 // ── digest mismatch is a refusal, whichever file changed ───────────────────────────────────────────────
 let tampered (path: string) = [ (path, Ok(bytes "tampered\n")) ]
@@ -91,9 +112,12 @@ for bad in [ "../escape"; "/abs"; "a//b"; ".hidden/x"; "a\\b" ] do
 
 // ── pin document ─────────────────────────────────────────────────────────────────────────────────────────
 let pinJson revision manifestDigest extra =
-    sprintf """{"schema":"fsgg.new-sdd-workspace-coordination-kit-pin/1","repository":"FS-GG/.github","revision":"%s","anchors":{"registry/coordination-kit-skill-manifest.json":"%s","scripts/fsgg-coord":"%s","dist/dotnet/.config/dotnet-tools.json":"%s"}%s}""" revision manifestDigest pin.ShimSha256 pin.ToolManifestSha256 extra
+    sprintf """{"schema":"fsgg.new-sdd-workspace-coordination-kit-pin/1","repository":"FS-GG/.github","revision":"%s","anchors":{"registry/coordination-kit-skill-manifest.json":"%s","scripts/fsgg-coord":"%s","dist/dotnet/.config/dotnet-tools.json":"%s"},"embeddedSkills":["embedded-skill"]%s}""" revision manifestDigest pin.ShimSha256 pin.ToolManifestSha256 extra
 expect (parsePin (pinJson pin.Revision pin.ManifestSha256 "") = Ok pin) "a valid pin document did not parse"
-for invalidDoc in [ pinJson "main" pin.ManifestSha256 ""; pinJson (String('A', 40)) pin.ManifestSha256 ""; pinJson pin.Revision "abc" ""; pinJson pin.Revision pin.ManifestSha256 ",\"extra\":1"; "{}"; "not json" ] do
+for invalidDoc in [ pinJson "main" pin.ManifestSha256 ""; pinJson (String('A', 40)) pin.ManifestSha256 ""; pinJson pin.Revision "abc" ""; pinJson pin.Revision pin.ManifestSha256 ",\"extra\":1"; "{}"; "not json";
+                    (pinJson pin.Revision pin.ManifestSha256 "").Replace("[\"embedded-skill\"]", "[\"../x\"]");
+                    (pinJson pin.Revision pin.ManifestSha256 "").Replace("[\"embedded-skill\"]", "[\"a\",\"a\"]");
+                    (pinJson pin.Revision pin.ManifestSha256 "").Replace(",\"embeddedSkills\":[\"embedded-skill\"]", "") ] do
     match parsePin invalidDoc with
     | Error _ -> ()
     | Ok _ -> fail (sprintf "invalid pin accepted: %s" invalidDoc)

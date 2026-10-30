@@ -132,8 +132,24 @@ def main() -> int:
     check("the pin names a full commit and its anchors equal the blobs at that commit", pin.returncode == 0 and len(REVISION) == 40, pin.stdout + pin.stderr)
     check("the pinned revision is not a moving ref", REVISION not in ("main", "master") and all(c in "0123456789abcdef" for c in REVISION))
 
-    skill_paths = [p for p in kit_paths() if p.startswith(".claude/skills/")]
+    embedded = set(PIN["embeddedSkills"])
+    all_skill_paths = [p for p in kit_paths() if p.startswith(".claude/skills/")]
+    # Embedded skills are authoritative in the tool and are excluded from the kit (checked separately below).
+    skill_paths = [p for p in all_skill_paths if p.split("/")[2] not in embedded]
     victim = skill_paths[0]
+    embedded_files = {f"{sid}/{rel}": (ROOT / ".claude/skills" / sid / rel)
+                      for sid in sorted(embedded) for rel in ("SKILL.md", "agents/openai.yaml")}
+    old_skill = blob(".claude/skills/initialize-sdd-workspace/SKILL.md")
+    new_skill = (ROOT / ".claude/skills/initialize-sdd-workspace/SKILL.md").read_bytes()
+    check("the pinned kit still carries the pre-PR initialize skill, so the exclusion is what protects the embedded copy", old_skill != new_skill)
+
+    # ── guard: pin and embedded copies cannot silently disagree ─────────────────────────────────────
+    for label, mutated in (("an embedded skill that is not excluded", []), ("an exclusion for a skill the Wizard does not embed", ["no-such-skill"])):
+        with tempfile.TemporaryDirectory(prefix="kit-pin-guard-") as guard_dir:
+            bad = pathlib.Path(guard_dir) / "pin.json"
+            bad.write_text(json.dumps({**PIN, "embeddedSkills": mutated}, indent=2) + "\n")
+            run = subprocess.run([sys.executable, "-B", str(ROOT / "scripts/new-sdd-workspace-kit-pin.py"), "check", "--pin", str(bad)], capture_output=True, text=True)
+        check(f"kit-pin check refuses {label}", run.returncode != 0 and "embed" in (run.stderr + run.stdout), run.stdout + run.stderr)
 
     with tempfile.TemporaryDirectory(prefix="kit-pin-") as tmp:
         tmp_path = pathlib.Path(tmp)
@@ -159,6 +175,50 @@ def main() -> int:
             check("SDD-owned provenance was not created or written", not (ws / ".fsgg/scaffold-provenance.json").exists())
             rerun = retrofit(dll, work, server.base)
             check("a repeat retrofit is a clean no-op", rerun.returncode == 0 and "already wired" in rerun.stdout.lower(), rerun.stdout + rerun.stderr)
+
+        # ── the embedded initialize skill is authoritative: never restored from the pinned (older) kit ──────────
+        def skill_state(ws: pathlib.Path) -> dict[str, bytes]:
+            return {f"{root}/{key}": (ws / root / key).read_bytes() for root in (".claude/skills", ".agents/skills")
+                    for key in embedded_files if (ws / root / key).is_file()}
+        expected_skill = {f"{root}/{key}": path.read_bytes() for root in (".claude/skills", ".agents/skills") for key, path in embedded_files.items()}
+
+        work = tmp_path / "embedded-fresh"; work.mkdir()
+        with Server({}) as server:
+            created = work / "created"; created.mkdir()
+            wire = wiring(dll, wiring_fsx, work, server.base)
+            check("creation-time kit wiring vendors no embedded skill from the pinned kit",
+                  "OUTCOME Succeeded" in wire.stdout and not any((created / r / "initialize-sdd-workspace").exists() for r in (".claude/skills", ".agents/skills")), wire.stdout + wire.stderr)
+            # A freshly created 0.23.1 workspace carries the embedded skill (installed last by creation). Reproduce that
+            # end state, then retrofit it: the skill must be unchanged and no drift reported.
+            for rel, data in expected_skill.items():
+                target = created / rel; target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(data)
+            (created / ".fsgg").mkdir(exist_ok=True)
+            before = skill_state(created)
+            run = subprocess.run(["dotnet", dll, "retrofit", str(created)], env=env_for(work, server.base), capture_output=True, text=True, timeout=300)
+            flat = " ".join(run.stdout.split())
+            check("retrofit on a fresh 0.23.1 workspace leaves the embedded initialize skill unchanged",
+                  run.returncode == 0 and skill_state(created) == before == expected_skill, run.stdout + run.stderr)
+            check("retrofit on a fresh 0.23.1 workspace reports no drift for the embedded skill",
+                  "initialize-sdd-workspace" not in flat and "re-emitted" not in flat, flat[-600:])
+
+        work = tmp_path / "embedded-legacy"; work.mkdir()
+        with Server({}) as server:
+            old_ws = work / "ws"
+            (old_ws / ".fsgg").mkdir(parents=True)
+            for root in (".claude/skills", ".agents/skills"):
+                (old_ws / root / "initialize-sdd-workspace" / "agents").mkdir(parents=True)
+                (old_ws / root / "initialize-sdd-workspace/SKILL.md").write_bytes(old_skill)
+                (old_ws / root / "initialize-sdd-workspace/agents/openai.yaml").write_bytes(
+                    blob(".claude/skills/initialize-sdd-workspace/agents/openai.yaml"))
+            run = subprocess.run(["dotnet", dll, "retrofit", str(old_ws)], env=env_for(work, server.base), capture_output=True, text=True, timeout=300)
+            check("retrofit on a 0.23.0-shaped workspace brings the initialize skill forward to the embedded text",
+                  run.returncode == 0 and skill_state(old_ws) == expected_skill and b"security-obligations.json" in skill_state(old_ws)[".claude/skills/initialize-sdd-workspace/SKILL.md"],
+                  run.stdout + run.stderr)
+            check("that update is reported as drift, and the skill is not flipped back by a second retrofit",
+                  "initialize-sdd-workspace/SKILL.md" in " ".join(run.stdout.split()), run.stdout)
+            again = subprocess.run(["dotnet", dll, "retrofit", str(old_ws)], env=env_for(work, server.base), capture_output=True, text=True, timeout=300)
+            check("a repeat retrofit is a clean no-op that keeps the embedded skill",
+                  again.returncode == 0 and "already wired" in again.stdout.lower() and skill_state(old_ws) == expected_skill, again.stdout + again.stderr)
 
         # ── a legacy `retrofits` member is migrated by the next retrofit ──────────────────────────────
         work = tmp_path / "legacy"; work.mkdir()

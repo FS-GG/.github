@@ -4,8 +4,10 @@
 /// `.fsgg/scaffold-provenance.json` is owned by the SDD CLI and validated by a strict schema: SDD CLI
 /// 2.5.3 reports `scaffold.provenanceMalformed` ("Unknown property") for any key it does not define,
 /// which made `fsgg-sdd doctor` incoherent for every default-coordination creation. The Wizard
-/// therefore never writes into that file. Its security state lives in `.fsgg/security-obligations.json`
-/// with the same row content the provenance key used to carry.
+/// therefore no longer writes its own members (`securityObligations`, `verifiedSecurityReceipts`,
+/// `retrofits`) into that file. Its security state lives in `.fsgg/security-obligations.json` with the same
+/// row content the provenance key used to carry. (The selected-product V2 route still records `productBoard`
+/// in provenance; that is outside default coordination and unchanged here.)
 ///
 /// Everything here is local file work with no network and no process, so each decision is testable
 /// against a temporary directory. Writes are whole-file replacements through a sibling temporary file.

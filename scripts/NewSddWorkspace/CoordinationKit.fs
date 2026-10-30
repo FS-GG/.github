@@ -10,6 +10,7 @@ open System.Text.RegularExpressions
 type Pin =
     { Repository: string
       Revision: string
+      EmbeddedSkills: string list
       ManifestSha256: string
       ShimSha256: string
       ToolManifestSha256: string }
@@ -39,12 +40,15 @@ let sha256Hex (bytes: byte[]) =
 let private isDigest (value: string) = Regex.IsMatch(value, "^[0-9a-f]{64}$")
 let private isRevision (value: string) = Regex.IsMatch(value, "^[0-9a-f]{40}$")
 
+let private safeSkillId (value: string) =
+    Regex.IsMatch(value, "^[A-Za-z0-9][A-Za-z0-9._-]*$") && value <> ".."
+
 let parsePin (json: string) : Result<Pin, string> =
     try
         let root = JsonNode.Parse(json).AsObject()
         let members = root |> Seq.map (fun kv -> kv.Key) |> Set.ofSeq
 
-        if members <> Set.ofList [ "schema"; "repository"; "revision"; "anchors" ] then
+        if members <> Set.ofList [ "schema"; "repository"; "revision"; "anchors"; "embeddedSkills" ] then
             Error "coordination kit pin has a non-closed member set"
         elif root.["schema"].GetValue<string>() <> pinSchema then
             Error "coordination kit pin declares an unsupported schema"
@@ -57,15 +61,21 @@ let parsePin (json: string) : Result<Pin, string> =
             else
                 let digest (path: string) = anchors.[path].GetValue<string>()
 
+                let embedded =
+                    root.["embeddedSkills"].AsArray() |> Seq.map (fun n -> n.GetValue<string>()) |> List.ofSeq
+
                 let pin =
                     { Repository = root.["repository"].GetValue<string>()
                       Revision = root.["revision"].GetValue<string>()
+                      EmbeddedSkills = embedded
                       ManifestSha256 = digest manifestPath
                       ShimSha256 = digest shimPath
                       ToolManifestSha256 = digest toolManifestPath }
 
                 if pin.Repository <> "FS-GG/.github" then
                     Error "coordination kit pin names an unexpected repository"
+                elif embedded |> List.exists (fun id -> not (safeSkillId id)) || List.length (List.distinct embedded) <> List.length embedded then
+                    Error "coordination kit pin has a malformed or repeated embedded skill id"
                 elif not (isRevision pin.Revision) then
                     Error "coordination kit pin revision must be a full lowercase commit sha"
                 elif not (isDigest pin.ManifestSha256 && isDigest pin.ShimSha256 && isDigest pin.ToolManifestSha256) then
@@ -163,6 +173,7 @@ let fetchVerified (pin: Pin) (fetch: string -> Result<byte[], string>) : Result<
                             let f = file.AsObject()
                             id, f.["path"].GetValue<string>(), f.["executable"].GetValue<bool>(), f.["sha256"].GetValue<string>()))
                     |> List.ofSeq
+                    |> List.filter (fun (id, _, _, _) -> not (List.contains id pin.EmbeddedSkills))
                     |> Some
             with ex ->
                 refusals.Add(sprintf "%s: malformed (%s)" manifestPath ex.Message)

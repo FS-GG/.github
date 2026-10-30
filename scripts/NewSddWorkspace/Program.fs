@@ -1348,20 +1348,27 @@ let private embeddedText (name: string) =
     use reader = new StreamReader(stream)
     reader.ReadToEnd()
 
+/// The skills this tool embeds, with their files. An embedded skill is authoritative: the pinned coordination
+/// kit excludes it (`coordination-kit-pin.json` `embeddedSkills`), and creation, `--upgrade` and `retrofit`
+/// all install or reconcile it from these resources, so the pinned kit's older copy can never be restored.
+let embeddedSkills () : (string * (string * string) list) list =
+    [
+        "initialize-sdd-workspace",
+        [
+            "SKILL.md", embeddedText "NewSddWorkspace.InitializeSkill.SKILL.md"
+            "agents/openai.yaml", embeddedText "NewSddWorkspace.InitializeSkill.agents.openai.yaml"
+        ]
+    ]
+
 /// Materialize the bootstrap skill without a network dependency, record the pending state, and add
 /// conditional instructions to both agent entrypoints. An initialized marker is never downgraded by
 /// a later explicit reconcile/upgrade run.
 let private installInitializationHandoff (opts: Options) : Outcome =
     try
-        let files =
-            [
-                "SKILL.md", embeddedText "NewSddWorkspace.InitializeSkill.SKILL.md"
-                "agents/openai.yaml", embeddedText "NewSddWorkspace.InitializeSkill.agents.openai.yaml"
-            ]
-
         for root in [ ".claude/skills"; ".agents/skills" ] do
-            for rel, content in files do
-                writeUnder opts.Target (sprintf "%s/initialize-sdd-workspace/%s" root rel) content
+            for id, files in embeddedSkills () do
+                for rel, content in files do
+                    writeUnder opts.Target (sprintf "%s/%s/%s" root id rel) content
 
         let markerPath = Path.Combine(opts.Target, initializationMarker)
 
@@ -1759,6 +1766,13 @@ let private reconcileVerifiedKit (opts: RetrofitOptions) (kit: CoordinationKit.K
     for file in kit.Skills do
         for root in [ ".claude/skills"; ".agents/skills" ] do
             record (reconcileFile opts.Target (sprintf "%s/%s/%s" root file.Skill file.Path) file.Content file.Executable)
+
+    // The embedded skills are authoritative (the pinned kit excludes them): reconcile them against this
+    // tool's own resources, so a 0.23.0-era copy is brought forward and a current one is left untouched.
+    for id, files in embeddedSkills () do
+        for root in [ ".claude/skills"; ".agents/skills" ] do
+            for rel, content in files do
+                record (reconcileFile opts.Target (sprintf "%s/%s/%s" root id rel) content false)
 
     // The verified manifest closes the skill set: files outside it are stale kit remnants.
     if kit.HasSkillManifest then
@@ -4349,11 +4363,12 @@ let private runRetrofit (opts: RetrofitOptions) : int =
             AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s" (Markup.Escape p))
 
         if not (List.isEmpty report.Refused) then
-            // Pinned-kit verification failed: nothing was written and nothing existing was modified.
+            // Pinned-kit verification failed: nothing from the kit was written and no kit-owned file was modified
+            // (a legacy-state migration, which precedes the kit fetch, may already have run).
             let panel =
                 Panel(
                     sprintf
-                        "[red]the coordination kit failed pinned verification[/] — nothing was written.\n\n%s"
+                        "[red]the coordination kit failed pinned verification[/] — nothing from the kit was written.\n\n%s"
                         (String.Join("\n", report.Refused |> List.map (fun r -> "  • " + Markup.Escape r)))
                 )
 
@@ -4439,7 +4454,7 @@ let private runRetrofit (opts: RetrofitOptions) : int =
             // was materialized, so there is no partial state; report the failure and exit non-zero.
             let panel =
                 Panel(
-                    "[red]could not vendor the coordination kit[/] — every fetch from FS-GG/.github failed.\n\nCheck network reachability and re-run; nothing was written, so the workspace is unchanged."
+                    "[red]could not vendor the coordination kit[/] — every fetch from FS-GG/.github failed.\n\nCheck network reachability and re-run; nothing from the kit was written."
                 )
 
             panel.Header <- PanelHeader "[red]retrofit failed[/]"

@@ -14,10 +14,14 @@
 ///    path outside the closed layout is a refusal: nothing from the kit is written.
 module NewSddWorkspace.CoordinationKit
 
-/// The reviewed revision and the three anchors.
+/// The reviewed revision, the three anchors and the skills the Wizard embeds. An embedded skill is
+/// authoritative in this tool: its pinned-manifest row is never fetched, vendored or reconciled from the kit
+/// (the pin cannot name a post-merge commit that contains the embedded copy), and the Wizard installs and
+/// reconciles it from its own resource instead.
 type Pin =
     { Repository: string
       Revision: string
+      EmbeddedSkills: string list
       ManifestSha256: string
       ShimSha256: string
       ToolManifestSha256: string }
@@ -53,7 +57,8 @@ val embeddedPin: unit -> Result<Pin, string>
 /// (default `https://raw.githubusercontent.com`).
 val rawUrl: rawBase: string -> pin: Pin -> path: string -> string
 
-/// Fetch and verify the kit. `fetch` takes a repository-relative path and returns its exact bytes.
+/// Fetch and verify the kit. Skills named in `pin.EmbeddedSkills` are skipped entirely (not fetched, not
+/// listed). `fetch` takes a repository-relative path and returns its exact bytes.
 /// `Error` carries the refusal reasons (digest mismatch, malformed or out-of-layout manifest).
 val fetchVerified: pin: Pin -> fetch: (string -> Result<byte[], string>) -> Result<Kit, string list>
 
