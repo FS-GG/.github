@@ -190,7 +190,7 @@
 # nuget.org and reds daily while any receiver is behind. Nothing has to push for it to fire.
 
 schemaVersion: 11
-updated: 2026-10-10
+updated: 2026-10-30
 authority: FS-GG/.github
 
 # Cross-repository repository_dispatch contracts.  The sender's POST is successful even when the
@@ -199,6 +199,11 @@ dispatches:
   - { producer: FS-GG/FS.GG.Rendering, target: FS-GG/.github,          event-type: fs-gg-ui-template-released }
   - { producer: FS-GG/FS.GG.Rendering, target: FS-GG/FS.GG.Templates, event-type: fs-gg-ui-template-released }
   - { producer: FS-GG/FS.GG.Templates, target: FS-GG/FS.GG.SDD, event-type: composition-registry-updated }
+  # A repository posting a dispatch to ITSELF is an edge with producer == target. release-saga-start.yml
+  # starts the three publishers and then posts this event so release-saga-promote.yml reconciles durable
+  # state (#3341); repos-audit reads the post (`gh api repos/$GITHUB_REPOSITORY/dispatches -f event_type=`)
+  # as the sender half and the `repository_dispatch: types:` entry as the listener half.
+  - { producer: FS-GG/.github, target: FS-GG/.github, event-type: release-saga-reconcile }
 
 repos:
   - { id: .github,     full: FS-GG/.github,          role: authority, receives: [labels] }                                                                                          # NOT skill-union — the AUTHORITY asserts its own roots with skill-roots-selfcheck.yml, its own workflow. See the capability row.

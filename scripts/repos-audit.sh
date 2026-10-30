@@ -3155,6 +3155,24 @@ if isinstance(on, dict):
             for t in ts:
                 if isinstance(t, str) and t: print("L\t%s\t%s" % (repo, t))
 jobs = wf.get("jobs") if isinstance(wf, dict) else None
+# A repository can also post a dispatch to ITSELF with a plain `gh api .../repos/$GITHUB_REPOSITORY/dispatches
+# -f event_type=<name>` step (release-saga-start.yml -> release-saga-promote.yml, #3341). That is a sender
+# whose target is the producer; it must be declared like any other edge (producer == target), or a live
+# listener for it is reported as undeclared. Logical lines are joined across backslash continuations so the
+# event_type on the next physical line is still part of the same command.
+import re
+SELF_POST = re.compile(r"repos/(?:\$GITHUB_REPOSITORY|\$\{GITHUB_REPOSITORY\}|\$\{\{\s*github\.repository\s*\}\})/dispatches")
+EVENT = re.compile(r"event_type=([A-Za-z0-9._-]+)")
+if isinstance(jobs, dict):
+    for job in jobs.values():
+        if not isinstance(job, dict) or not isinstance(job.get("steps"), list): continue
+        for step in job["steps"]:
+            run = step.get("run") if isinstance(step, dict) else None
+            if not isinstance(run, str): continue
+            for line in re.sub(r"\\\n", " ", run).splitlines():
+                if line.lstrip().startswith("#") or not SELF_POST.search(line): continue
+                for ev in sorted(set(EVENT.findall(line))):
+                    print("S\t%s\t%s\t%s" % (repo, repo, ev))
 if isinstance(jobs, dict):
     for job in jobs.values():
         if not isinstance(job, dict): continue
@@ -3182,7 +3200,7 @@ while IFS= read -r repo; do
     # A malformed unrelated workflow cannot decide this graph's verdict.  Conversely, a file that
     # names either dispatch surface but will not parse is a no-verdict: it may carry a sender or
     # listener that a text scan cannot safely reconstruct.
-    if ! grep -qE 'repository_dispatch|dispatch-sender\.ya?ml' "$ddir/$wf"; then
+    if ! grep -qE 'repository_dispatch|dispatch-sender\.ya?ml|/dispatches' "$ddir/$wf"; then
       continue
     fi
     if ! dispatch_extract "$repo" "$wf" >> "$DISPATCH_FILE"; then
