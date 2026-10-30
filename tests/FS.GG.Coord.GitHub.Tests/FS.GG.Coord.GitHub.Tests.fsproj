@@ -48,6 +48,7 @@
     <Compile Include="ConnectionPaginationTests.fs" />
     <Compile Include="GraphQlBoundaryTests.fs" />
     <Compile Include="OperationObservationReadsTests.fs" />
+    <Compile Include="ContextViewReadsTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
