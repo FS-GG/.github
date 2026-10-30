@@ -117,7 +117,7 @@ expect 0 "A57 quoting the number without its hash breaks the adjacency" 'Not clo
 
 # The finding names the phrase and the issue, and the remedy.
 rule_on "This PR does not close #730."
-if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q 'not close #730' && printf '%s' "$OUT" | grep -q 'Refs #422'; then
+if [ "$RC" = 1 ] && grep -q 'not close #730' <<<"$OUT" && grep -q 'Refs #422' <<<"$OUT"; then
   ok "A-names  the finding names the offending phrase 'not close #730' and the Refs remedy"
 else
   bad "A-names  the finding must name 'not close #730' and the remedy (rc=$RC)" "$OUT"
@@ -189,7 +189,7 @@ assert w["sparse-checkout-cone-mode"] is False
 assert w["persist-credentials"] is False
 PY
 
-python3 - "$META" <<'PY' && ok "B4  untrusted values reach the shell only through env:, no secret is read, no receiver tree is checked out" || bad "B4  the lint step interpolates ${{ }} into run:, reads a secret or checks out the receiver"
+python3 - "$META" <<'PY' && ok "B4  untrusted values reach the shell only through env:, no secret is read, no receiver tree is checked out" || bad "B4  the lint step interpolates an expression into run:, reads a secret or checks out the receiver"
 import json, sys
 d = json.load(open(sys.argv[1]))
 assert d["lint_env_keys"] == ["EVENT_BODY", "GH_TOKEN", "PR_NUMBER", "REPO"], d["lint_env_keys"]
@@ -239,7 +239,7 @@ else bad "B5  a Refs-only body must pass (rc=$RC)" "$OUT"; fi
 
 job_on 'This PR does not close #730.' 'Refs #730'
 if [ "$RC" = 1 ] \
-   && printf '%s' "$OUT" | grep -q '^::error title=closing-keywords: closing keyword next to an issue reference::.*not close #730' \
+   && grep -q '^::error title=closing-keywords: closing keyword next to an issue reference::.*not close #730' <<<"$OUT" \
    && grep -q 'not close #730' "$SUMMARY"; then
   ok "B6  a live body with a negated close FAILS the job, and the annotation and summary name 'not close #730'"
 else bad "B6  the live body's finding must fail the job and name the phrase (rc=$RC)" "$OUT"; fi
@@ -250,8 +250,8 @@ if [ "$RC" = 0 ]; then
 else bad "B7  a re-run after fixing the body must judge the live body (rc=$RC)" "$OUT"; fi
 
 job_on '-' 'This PR does not close #730.' fail
-if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q '^::warning title=closing-keywords: live body unreadable' \
-   && printf '%s' "$OUT" | grep -q 'source: event'; then
+if [ "$RC" = 1 ] && grep -q '^::warning title=closing-keywords: live body unreadable' <<<"$OUT" \
+   && grep -q 'source: event' <<<"$OUT"; then
   ok "B8  live read fails, the event-time body is the fallback, it is judged, and the log says so"
 else bad "B8  the event body must be the fallback (rc=$RC)" "$OUT"; fi
 
@@ -266,7 +266,7 @@ job_on $'```\nthis does not close #730\n```' 'Refs #730'
 [ "$RC" = 1 ] && ok "B11 a fenced negated close fails through the job" || bad "B11 (rc=$RC)" "$OUT"
 
 job_on 'x' 'x' ok 'abc'
-[ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q 'no pull request number' \
+[ "$RC" = 1 ] && grep -q 'no pull request number' <<<"$OUT" \
   && ok "B12 a missing or non-numeric PR number is a failure, never a pass" || bad "B12 (rc=$RC)" "$OUT"
 
 # Workflow-command injection: no line of body text may start a workflow command.
@@ -281,9 +281,9 @@ mkdir -p "$WORK/hub3/scripts" "$WORK/hub7/scripts"
 printf '#!/usr/bin/env python3\nimport sys\nsys.exit(3)\n' > "$WORK/hub3/scripts/check-closing-keywords.py"
 printf '#!/usr/bin/env python3\nimport sys\nsys.exit(7)\n' > "$WORK/hub7/scripts/check-closing-keywords.py"
 job_on 'Refs #1' 'Refs #1' ok 4730 "$WORK/hub3"
-[ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q 'no verdict (permanent)' && ok "B14 rule exit 3 (no verdict) fails the job" || bad "B14 (rc=$RC)" "$OUT"
+[ "$RC" = 1 ] && grep -q 'no verdict (permanent)' <<<"$OUT" && ok "B14 rule exit 3 (no verdict) fails the job" || bad "B14 (rc=$RC)" "$OUT"
 job_on 'Refs #1' 'Refs #1' ok 4730 "$WORK/hub7"
-[ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q 'inconclusive' && ok "B15 an unclassified rule exit fails the job" || bad "B15 (rc=$RC)" "$OUT"
+[ "$RC" = 1 ] && grep -q 'inconclusive' <<<"$OUT" && ok "B15 an unclassified rule exit fails the job" || bad "B15 (rc=$RC)" "$OUT"
 
 # The rule file missing (a sparse fetch that brought nothing) must not read as a pass.
 mkdir -p "$WORK/hub0/scripts"

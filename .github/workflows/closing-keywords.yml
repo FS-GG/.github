@@ -45,11 +45,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
-      # No pip install: the gate is stdlib-only (re, pathlib) on purpose. A lint that reads a PR body
+      # PyYAML is for the FIXTURE only (product-lint.sh reads kit-materialize.yml to run the real job
+      # step). The gate itself is stdlib-only (re, pathlib) on purpose: a lint that reads a PR body
       # should not need a dependency, and a dependency is one more thing that can fail open on a runner.
+      # The `declared-closes` job below keeps plain setup-python and installs nothing.
+      - uses: ./.github/actions/setup-policy-python
       - name: Run the closing-keywords fixture (no network)
         run: bash tests/closing-keywords/run.sh
 
