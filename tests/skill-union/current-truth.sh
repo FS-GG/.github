@@ -29,9 +29,10 @@ seed() {
       cp -R "$ROOT/$runtime/$skill" "$target/$runtime/$skill"
     done
   done
-  mkdir -p "$target/docs/adr" "$target/.github/workflows"
-  cp "$ROOT/docs/adr/0012-dual-publish-to-nuget-org.md" "$target/docs/adr/"
-  cp "$ROOT/docs/adr/0013-trusted-publishing-oidc-for-nuget-org.md" "$target/docs/adr/"
+  mkdir -p "$target/docs" "$target/.github/workflows"
+  # The skills link to ADRs and roadmaps that change as the publication route changes (#4966 added a
+  # roadmap, #4943 an ADR), and a hand-listed copy rotted twice; the link check needs the whole targets.
+  cp -R "$ROOT/docs/adr" "$ROOT/docs/roadmaps" "$target/docs/"
   cp "$ROOT/.github/workflows/dispatch-sender.yml" "$target/.github/workflows/"
   cp "$ROOT/default.json" "$target/"
 }
@@ -49,13 +50,62 @@ expect_finding() {
 LANE="$WORK/lane"
 seed "$LANE"
 for runtime in .agents/skills .claude/skills; do
-  sed -i 's|scripts/fsgg-coord set-paths <issue> --paths|scripts/fsgg-coord widen <issue> --paths|' \
-    "$LANE/$runtime/lane-steward/SKILL.md"
+  printf '\nApply it with `scripts/fsgg-coord set-paths <issue> --paths "<the above>"`.\n' >> "$LANE/$runtime/lane-steward/SKILL.md"
 done
 expect_finding \
-  "an additive widen recipe cannot masquerade as narrowing" \
-  "narrowing must use set-paths" \
+  "a resurrected V1 set-paths narrowing recipe is refused" \
+  "obsolete V1 set-paths/widen recipe returned" \
   "$LANE"
+
+LANE_WIDEN="$WORK/lane-widen"
+seed "$LANE_WIDEN"
+for runtime in .agents/skills .claude/skills; do
+  printf '\nExpand with `scripts/fsgg-coord widen <issue> --paths "tests/new-surface/"`.\n' >> "$LANE_WIDEN/$runtime/lane-steward/SKILL.md"
+done
+expect_finding \
+  "a resurrected V1 widen recipe is refused" \
+  "obsolete V1 set-paths/widen recipe returned" \
+  "$LANE_WIDEN"
+
+LANE_AUTH="$WORK/lane-auth"
+seed "$LANE_AUTH"
+for runtime in .agents/skills .claude/skills; do
+  sed -i 's/route is authorized for organization V2/route is available for organization V2/' "$LANE_AUTH/$runtime/lane-steward/SKILL.md"
+done
+expect_finding \
+  "lane-steward cannot drop the statement that V1 routes are unauthorized" \
+  "no V1 narrowing/claim route is authorized" \
+  "$LANE_AUTH"
+
+BOARD_LOOP="$WORK/board-loop"
+seed "$BOARD_LOOP"
+for runtime in .agents/skills .claude/skills; do
+  printf '\nSpawn with isolation: "worktree" through the Agent tool.\n' >> "$BOARD_LOOP/$runtime/work-board/references/host-loop.md"
+done
+expect_finding \
+  "host-specific orchestration syntax in work-board is refused" \
+  "host-specific orchestration syntax returned" \
+  "$BOARD_LOOP"
+
+ROADMAP_LOOP="$WORK/roadmap-loop"
+seed "$ROADMAP_LOOP"
+for runtime in .agents/skills .claude/skills; do
+  sed -i 's/FSGG_WORKER/WORKER_ID/g' "$ROADMAP_LOOP/$runtime/work-roadmap/references/host-loop.md"
+done
+expect_finding \
+  "work-roadmap host loop keeps its portability rules" \
+  "host loop missing portability rule" \
+  "$ROADMAP_LOOP"
+
+IMPLICIT="$WORK/implicit"
+seed "$IMPLICIT"
+for runtime in .agents/skills .claude/skills; do
+  sed -i 's/allow_implicit_invocation: true/allow_implicit_invocation: false/' "$IMPLICIT/$runtime/work-board/agents/openai.yaml"
+done
+expect_finding \
+  "canonical work-board cannot silently become explicit-only" \
+  "work-board: invocation policy must be implicit/default" \
+  "$IMPLICIT"
 
 PUBLISH="$WORK/publish"
 seed "$PUBLISH"
