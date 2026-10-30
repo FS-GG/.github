@@ -1332,18 +1332,19 @@ def immutable_fixture_tree(source):
     return {name: {**row, "path": name} for name, row in SourceCompatibility(GitObjects()).tree(source).items()}
 
 
-def known_source_fixture():
-    """Known positives are independent of future unrelated current-tree changes.
+def _select_known_source(current):
+    """Choose the tree the known-source positives run against, and say how it was chosen.
 
-    The existing three maintained suite workflows use fetch-depth:0. If the
-    current graph is unknown, shallow/missing history is an explicit fixture-input
-    refusal; this function never fetches, rewrites the seal or skips positives.
+    Returns (tree, provenance). Pure selection: it announces nothing, so tests that inject a synthetic
+    working tree cannot produce a statement about the real one.
     """
     def eligible(tree):
         return (tree.get(source_admission.POLICY_PATH, {}).get("sha") == source_admission._POLICY_BLOB
                 and source_admission.graph_seal(tree) == source_admission.KNOWN_GRAPH_SEAL)
-    current = working_source_tree()
-    if eligible(current): return current
+    current_seal = source_admission.graph_seal(current)
+    base = {"currentSeal": current_seal, "pinnedSeal": source_admission.KNOWN_GRAPH_SEAL}
+    if eligible(current):
+        return current, {**base, "source": "current", "revision": None}
     if fixture_git(["rev-parse", "--is-shallow-repository"]).strip() != b"false":
         raise RuntimeError("known source fixture requires retained complete history; no acquisition permitted")
     revisions = fixture_git(["log", "--no-show-signature", "--format=%H", f"-n{FIXTURE_HISTORY_LIMIT}",
@@ -1351,8 +1352,57 @@ def known_source_fixture():
     if len(revisions) > FIXTURE_HISTORY_LIMIT: raise RuntimeError("known source fixture history excessive")
     for revision in revisions:
         tree = immutable_fixture_tree(revision)
-        if eligible(tree): return tree
+        if eligible(tree):
+            return tree, {**base, "source": "fallback", "revision": revision}
     raise RuntimeError("known source fixture unavailable within retained policy history")
+
+
+def known_source_fixture():
+    """Known positives are independent of future unrelated current-tree changes.
+
+    The existing three maintained suite workflows use fetch-depth:0. If the
+    current graph is unknown, shallow/missing history is an explicit fixture-input
+    refusal; this function never fetches, rewrites the seal or skips positives.
+    It announces nothing: which tree the REAL repository falls back to is stated once by
+    `report_known_source_provenance`, called from this file's entry point.
+    """
+    return _select_known_source(working_source_tree())[0]
+
+
+def report_known_source_provenance(stream=None, environ=None):
+    """State which tree the known-source positives use for the REAL working tree, once per run.
+
+    A stale KNOWN_GRAPH_SEAL must never read as current: when the working tree no longer matches the seal
+    the fixture falls back to an earlier commit, and that fallback is named here with the commit and both
+    seals (stderr, a workflow annotation under GitHub Actions, and a job-summary line). Called only from
+    the entry point, never from a test that injects its own tree.
+    """
+    import os
+    stream = sys.stderr if stream is None else stream
+    environ = os.environ if environ is None else environ
+    try:
+        _, found = _select_known_source(working_source_tree())
+    except RuntimeError as error:
+        print(f"known source fixture: provenance unavailable: {error}", file=stream)
+        return None
+    if found["source"] == "current":
+        print("known source fixture: the current tree matches KNOWN_GRAPH_SEAL; "
+              "positives ran against the current tree", file=stream)
+        return found
+    text = (f"known source fixture: FELL BACK to commit {found['revision']}; the current tree seal "
+            f"{found['currentSeal']} differs from KNOWN_GRAPH_SEAL {found['pinnedSeal']}. "
+            "Wizard seal is stale relative to this tree; it must be resealed before the next Wizard release")
+    print(text, file=stream)
+    if environ.get("GITHUB_ACTIONS") == "true":
+        print(f"::warning title=Wizard known-source fixture fell back to {found['revision'][:12]}::{text}", file=stream)
+    summary = environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        try:
+            with open(summary, "a", encoding="utf-8") as handle:
+                handle.write(f"- Wizard known-source fixture fell back to `{found['revision']}` (stale `KNOWN_GRAPH_SEAL`)\n")
+        except OSError:
+            pass
+    return found
 
 
 class ReportSourceAPI:
@@ -1471,6 +1521,58 @@ class ReportSourceCompatibilityTests(unittest.TestCase):
                 api.add("d" * 40, "c" * 40, "2099-01-01-000009Z-control.md", b"seal mismatch control")
                 with self.assertRaisesRegex(source_admission.Refused, "determining source graph differs"):
                     SourceCompatibility(api).compatible("d" * 40, "c" * 40)
+
+    def test_provenance_report_is_about_the_real_tree_only_and_writes_no_summary_from_controls(self):
+        """A real current tree announces "current"; a stale one names its fallback commit; injected trees say nothing."""
+        import copy, contextlib, io, os, tempfile
+        sealed = copy.deepcopy(known_source_fixture())
+        unknown = copy.deepcopy(sealed); unknown["Directory.Build.props"]["sha"] = "9"*40
+        unknown_seal = source_admission.graph_seal(unknown)
+        self.assertNotEqual(unknown_seal, source_admission.KNOWN_GRAPH_SEAL)
+        def read(args):
+            if args[0] == "rev-parse": return b"false\n"
+            if args[0] == "log": return b"c"*40 + b"\n"
+            raise AssertionError(args)
+        with tempfile.TemporaryDirectory() as directory:
+            summary = pathlib.Path(directory) / "summary.md"
+            environment = {"GITHUB_ACTIONS": "true", "GITHUB_STEP_SUMMARY": str(summary)}
+            # 1. Tests that inject a tree call known_source_fixture(); that announces nothing, anywhere.
+            with patch(__name__ + ".working_source_tree", return_value=unknown), \
+                 patch(__name__ + ".fixture_git", side_effect=read), \
+                 patch(__name__ + ".immutable_fixture_tree", return_value=sealed), \
+                 patch.dict(os.environ, environment), contextlib.redirect_stderr(io.StringIO()) as quiet:
+                self.assertIs(known_source_fixture(), sealed)
+            self.assertEqual(quiet.getvalue(), "")
+            self.assertFalse(summary.exists())
+            # 2. The report, for a stale working tree, names the fallback commit and both seals.
+            stream = io.StringIO()
+            with patch(__name__ + ".working_source_tree", return_value=unknown), \
+                 patch(__name__ + ".fixture_git", side_effect=read), \
+                 patch(__name__ + ".immutable_fixture_tree", return_value=sealed):
+                found = report_known_source_provenance(stream, environment)
+            text = stream.getvalue()
+            self.assertEqual((found["source"], found["revision"], found["currentSeal"]), ("fallback", "c"*40, unknown_seal))
+            self.assertIn("FELL BACK to commit " + "c"*40, text)
+            self.assertIn(unknown_seal, text)
+            self.assertIn("Wizard seal is stale relative to this tree", text)
+            self.assertIn("::warning title=Wizard known-source fixture fell back to", text)
+            self.assertIn("c"*40, summary.read_text())
+            # 3. The report, for a real current tree, says current: no fallback, no warning, no summary line.
+            summary.unlink()
+            stream = io.StringIO()
+            with patch(__name__ + ".working_source_tree", return_value=sealed):
+                found = report_known_source_provenance(stream, environment)
+            self.assertEqual((found["source"], found["revision"]), ("current", None))
+            self.assertIn("matches KNOWN_GRAPH_SEAL", stream.getvalue())
+            for absent in ("FELL BACK", "::warning", "stale"):
+                self.assertNotIn(absent, stream.getvalue())
+            self.assertFalse(summary.exists())
+            # 4. Unusable history is stated, not hidden and not a crash.
+            stream = io.StringIO()
+            with patch(__name__ + ".working_source_tree", return_value=unknown), \
+                 patch(__name__ + ".fixture_git", side_effect=lambda args: b"true\n"):
+                self.assertIsNone(report_known_source_provenance(stream, environment))
+            self.assertIn("provenance unavailable", stream.getvalue())
 
     def test_known_fixture_fails_closed_for_shallow_missing_or_wrong_policy_history(self):
         import copy
@@ -2382,4 +2484,5 @@ if __name__ == "__main__":
             evidence = closure
         print(json.dumps(evidence, sort_keys=True))
     else:
+        report_known_source_provenance()
         unittest.main()

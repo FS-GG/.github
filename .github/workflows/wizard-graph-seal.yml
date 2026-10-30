@@ -1,0 +1,71 @@
+# wizard-graph-seal — KNOWN_GRAPH_SEAL must not go stale unnoticed (.github#4730, #3010).
+#
+# `KNOWN_GRAPH_SEAL` in scripts/new_sdd_workspace_successor_admission.py seals the whole non-report
+# source graph of this repository. It goes stale whenever any non-report file changes, and nothing said
+# so: the successor suite's `known_source_fixture` falls back to an earlier matching commit, so a stale
+# seal looked current until a person recomputed it by hand during a Wizard publication.
+#
+# scripts/check-wizard-graph-seal.py recomputes the seal with the suite's own readers and compares it
+# with the pin. Because the seal is MEANT to change with every non-report change to main, it is not an
+# always-red gate:
+#   - a stale seal on a PR that touches the Wizard release surface (the seal constant, the successor
+#     admission/execution/provider/publisher scripts, the creator0*-coord-dependencies.json pins, the two
+#     Wizard release workflows) FAILS this job;
+#   - a stale seal on any other PR that touches the sealed graph is an annotation and a job-summary
+#     line, and the job passes;
+#   - a PR that touches only admitted progress reports does not touch the sealed graph.
+#
+# NO `paths:` FILTER, AND THAT IS DELIBERATE — the same decision pipefail-assertions.yml and
+# shell-lint.yml make. The sealed graph is every tracked non-report file, so any filter would silently
+# shrink the subject to less than the seal covers. The script decides applicability from the diff; the
+# job costs seconds (no SDK, no restore, no network beyond checkout and the YAML pin).
+#
+# The PR is checked as the MERGE tree (the default pull_request checkout), because that is the tree
+# main will hold after the merge and the one the next release will seal. depth 2 is enough: the first
+# parent of the merge commit (HEAD^1) is the base the change is measured against. It is read from the
+# checked-out commit, not from the event payload, whose base.sha can be stale; the step refuses to
+# measure anything that is not a two-parent merge commit.
+#
+# No `push:` trigger: a post-merge failure could not be acted on by the change that caused it, and the
+# annotation on the PR is the visibility this gate exists to provide.
+name: wizard-graph-seal
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wizard-graph-seal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  seal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - uses: ./.github/actions/setup-policy-python
+
+      # Prove the gate can still say NO (and "warn, pass") before believing it when it says yes.
+      - name: Prove the seal gate's controls (stale on release surface fails, stale elsewhere warns, current passes)
+        run: python3 tests/wizard-graph-seal/run.py
+
+      - name: Check the Wizard graph seal against this change
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          parents="$(git rev-list --parents -n1 HEAD)"
+          if [ "$(wc -w <<<"$parents")" -ne 3 ]; then
+            echo "::error::HEAD is not a pull_request merge commit; the change cannot be measured"
+            exit 2
+          fi
+          python3 scripts/check-wizard-graph-seal.py --base HEAD^1
+
+      - name: Report the Wizard graph seal (no change information)
+        if: github.event_name != 'pull_request'
+        run: python3 scripts/check-wizard-graph-seal.py
