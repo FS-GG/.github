@@ -153,7 +153,7 @@ def inventory(script, workflows):
     assert "if: github.event_name == 'workflow_dispatch' || needs.change-completeness.outputs.engine_changed == 'true'" in job_header
     assert "always()" not in job_header
     assert "continue-on-error:" not in workflows[0], "predecessor/engine must fail closed"
-    assert "timeout-minutes: 5" in workflows[0].split("  engine:\n", 1)[0]
+    assert "timeout-minutes: 10" in workflows[0].split("  engine:\n", 1)[0]
 
 workflows = [(root / f".github/workflows/coord-{name}.yml").read_text() for name in ("engine", "github")]
 inventory(source, workflows)
@@ -180,7 +180,7 @@ for mutation in (
     workflows[0].replace("needs: change-completeness", "needs: unrelated"),
     workflows[0].replace("if: github.event_name == 'workflow_dispatch' || needs.change-completeness.outputs.engine_changed == 'true'", "if: always()"),
     workflows[0].replace("  engine:\n", "  engine:\n    continue-on-error: true\n"),
-    workflows[0].replace("timeout-minutes: 5", "timeout-minutes: 15"),
+    workflows[0].replace("timeout-minutes: 10", "timeout-minutes: 25"),
 ):
     try: inventory(source, [mutation, workflows[1]])
     except AssertionError: pass
@@ -280,7 +280,7 @@ gate.write_text(original_gate)
 print("PASS  actual generated traversal/phase/cache-property mutations block dependent tests")
 # Reach the real elapsed-budget refusal without sleeping or invoking a compiler.
 budget_env = work / "elapsed-budget.sh"
-budget_env.write_text("SECONDS=240\n")
+budget_env.write_text("SECONDS=420\n")
 calls, diagnostic = invoke(["src/FS.GG.Coord.Core/Review.fs"], expected=1, engine=True,
                            extra_env={"BASH_ENV": str(budget_env)})
 assert not calls and "budget exhausted; coverage incomplete" in diagnostic
@@ -402,7 +402,7 @@ if [ "$static_only" = false ]; then
   # runs above use the maintained TRX reader over fake results, not a native PASS claim.
   # This fixture may run alone on a cold docs-only checkout. Bound both commands
   # by the same five-minute ceiling, including fixture elapsed time. In CI the
-  # existing outer five-minute JOB cap remains authoritative across all steps.
+  # outer ten-minute JOB cap remains authoritative across all steps.
   remaining=$((300 - SECONDS))
   [ "$remaining" -gt 0 ] || { echo "change-completeness fixture: native prerequisite budget exhausted" >&2; exit 124; }
   timeout --signal=TERM --kill-after=5s "${remaining}s" dotnet restore \
@@ -456,9 +456,34 @@ if grep -q 'paths:' <<<"$pull_request_trigger"; then
 else
   ok 'required change-completeness context reports on every pull-request head'
 fi
-grep -Fq 'timeout-minutes: 5' "$ROOT/.github/workflows/coord-engine.yml" \
-  && ok 'workflow encodes the five-minute target' \
-  || bad 'five-minute target is not encoded'
+predecessor_job="$(sed -n '/^  change-completeness:/,/^  engine:/p' "$ROOT/.github/workflows/coord-engine.yml" | grep -v '^[[:space:]]*#')"
+grep -Fq 'timeout-minutes: 10' <<<"$predecessor_job" \
+  && grep -Fq 'deadline=420' "$ROOT/scripts/change-completeness" \
+  && ok 'workflow encodes the ten-minute job cap above the 420 s script budget' \
+  || bad 'job cap and script budget are not encoded together'
+cache_saved_on_failure() {
+  grep -Fq 'actions/cache/restore@v6' <<<"$1" \
+    && grep -Fq 'actions/cache/save@v6' <<<"$1" \
+    && grep -Fq "always() && steps.nuget-cache.outputs.cache-hit != 'true'" <<<"$1" \
+    && ! grep -Fq 'cache: true' <<<"$1"
+}
+if cache_saved_on_failure "$predecessor_job"; then
+  ok 'package cache is saved even when a gate fails, so a rerun starts warm'
+else
+  bad 'package cache is not saved on failure'
+fi
+# Inversions: each way of going back to a cache that only a green job saves must be refused.
+for mutation in \
+  "${predecessor_job//always() && /}" \
+  "${predecessor_job//actions\/cache\/save@v6/actions\/cache@v6}" \
+  "${predecessor_job//global-json-file: global.json/global-json-file: global.json
+          cache: true}"; do
+  if cache_saved_on_failure "$mutation"; then
+    bad 'a cache that only a green job saves was accepted'
+  else
+    ok 'inversion refused: package cache saved only on success'
+  fi
+done
 
 focused_fixture_calls="$(awk '
   /^  change-completeness:/ { inside=1; next }
