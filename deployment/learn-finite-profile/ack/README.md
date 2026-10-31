@@ -11,18 +11,40 @@ PR) reads it.
 | r1 | r2 |
 |---|---|
 | directory `/etc/fsgg/learn/retirement-acks` | `retirement-acks/` under `/srv/bulk/services/usr-local-libexec-fsgg-learn` (read back through the mounted view `/usr/local/libexec/fsgg-learn`) |
-| chain checked from `/` | chain checked from `/srv/bulk/services` (`/srv/bulk` is developer-owned), plus the source directory must be the same inode as the mounted view |
-| `--ack`, `--remove` | `--ack`, `--remove`, and a read-only `--check` that exits 0 only when the ack is a root-owned regular file, closed to group and other writers, on a root-safe chain, with the given sha256 |
-| writes only | `--ack` also reports whether the mounted view shows the same bytes |
+| chain checked by path from `/`, then written by path | every directory from `/srv/bulk/services` down is opened once with `O_DIRECTORY|O_NOFOLLOW` through `openat`, `fstat`-checked on the descriptor, compared by device and inode with the mounted view, and **all writes go through those descriptors** |
+| `--ack`, `--remove` | `--ack`, `--remove`, and a read-only `--check` |
+| digest given as `--record-sha256` | digest given as `--record-sha256`, `--record-file`, or both (they must agree) |
+| writes only | after `--ack` the mounted view is read back; if it does not show the same bytes the file just written is **removed** and the run **refuses (exit 5)** |
 
-Unchanged: the content is exactly `<sha256>\n`, written `O_CREAT|O_EXCL|O_NOFOLLOW`, root:root 0644; the writer does not read the
-record; `--remove` unlinks only a regular root-owned file.
+## Pinned directory descriptors
+
+`/srv/bulk` is developer-owned, so a path check followed by a path-based write can be raced by renaming a directory between
+the two. r2 closes that window: the directory that was checked is the directory that is written, because the checked
+descriptor is the only handle used. A directory swapped in at the path after the pin is not written to (tested), and a swap
+before the pin is caught by the inode comparison with the mounted view. This is the pattern for the identical guard in
+`learn_seal_claim.py`, which is hardened in a separate PR.
+
+## `--check`
+
+Read-only. The view path is walked from `/` with pinned descriptors, as the operator walks it, so an unsafe ancestor of the
+view (not only of the view root) refuses. The acknowledgement must be a regular root-owned file, closed to group and other
+writers, at most 4096 bytes, and its content must equal the digest.
+
+## `--record-file`
+
+Computes the sha256 of the record's bytes (a regular file, at most 16 MiB, opened `O_NOFOLLOW`). With `--record-sha256` as well,
+the two must be equal, so the admitted digest and the record on disk are compared before anything is written. Without it, the
+digest is the admitted one as given, as in r1.
+
+Unchanged: the content is exactly `<sha256>\n`, written `O_CREAT|O_EXCL|O_NOFOLLOW`, root:root 0644; `--remove` unlinks only a
+regular root-owned file.
 
 The admitted ack content for `a0-20261022t192443z-f1-pre` is `3db3a5f3…7210e` (#4516 comment 6360174387). Whether and when to
 write it is Root's admission; this PR installs nothing. The write needs this script from a root-owned exec copy, the bind
 mounted, and the operator that reads the new directory (r6).
 
-Cooperative: `developer` has full sudo and can edit or delete any acknowledgement. The chain and same-inode checks catch a
-mistake or a swapped directory; they do not defend against Root.
+Cooperative: `developer` has full sudo and can edit or delete any acknowledgement. The pinned chain and the same-inode check
+catch a mistake or a swapped directory; they do not defend against Root.
 
-Gates: `python3 tests/learn-ack-writer/run.py`.
+Gates: `python3 tests/learn-ack-writer/run.py`. It includes cases that kill the mutants found in review: readback always true,
+`--check` walking from the view root, and a missing `O_NOFOLLOW` in `read_regular`.
