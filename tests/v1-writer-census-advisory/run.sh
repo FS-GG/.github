@@ -52,7 +52,7 @@ for r in walk(json.loads(t)):
 open(p, "w").write(t)
 PY
 }
-commit() { git -C "$R" add -A && git -C "$R" commit -q -m "$1"; }
+commit() { git -C "$R" add -A && git -C "$R" commit -q --allow-empty -m "$1"; }  # empty is fine: on a current trunk the baseline rehash changes nothing
 advise() { (cd "$R" && python3 scripts/check-v1-writer-census-advisory.py --base HEAD~1 --head HEAD 2>&1) || return $?; }
 expect() {  # <name> <want-rc> <needle> <must-not-contain-or-empty>
   local name="$1" want="$2" needle="$3" never="${4:-}" out rc=0
@@ -71,9 +71,10 @@ rehash "$R"; commit "baseline: census current"
 
 # 1. A census-tracked file edited without a rehash.
 printf '\n# an edit nobody rehashed\n' >> "$R/.github/workflows/coord-engine.yml"; commit "edit tracked file"
-expect "tracked file edited WITHOUT a rehash is flagged" 1 "rehash needed" ""
+expect "tracked file edited WITHOUT a rehash is flagged" 1 "the structural check refuses" ""
 expect "the flag names the file and that it is census-tracked" 1 ".github/workflows/coord-engine.yml (census-tracked)" ""
-expect "the flag says what to review before rehashing" 1 "Review the file's diff for a new sink, writer or permission" ""
+expect "the flag says what to review before rehashing" 1 "review its diff for a new sink, writer or permission" ""
+expect "the flag points at the refusal above and allows that the drift is not this PR's" 1 "see the refusal above" ""
 
 # 2. The same edit, row rehashed.
 rehash "$R" ".github/workflows/coord-engine.yml"; commit "rehash the row"
@@ -151,13 +152,24 @@ expect "deleting an untracked file INSIDE the population leaves no row dangling:
 git -C "$R" reset -q --hard green
 printf '\n# default-base edit\n' >> "$R/.github/workflows/coord-engine.yml"; commit "edit a tracked file"
 out="$( (cd "$R" && python3 scripts/check-v1-writer-census-advisory.py) 2>&1 )" || rc=$?
-grep -q "rehash needed" <<<"$out" && ok "called with NO --base/--head the defaults (HEAD^1..HEAD) see the PR's change" || bad "the default base must be HEAD^1" "$out"
+grep -q "the structural check refuses" <<<"$out" && ok "called with NO --base/--head the defaults (HEAD^1..HEAD) see the PR's change" || bad "the default base must be HEAD^1" "$out"
 out="$( (cd "$R" && python3 scripts/check-v1-writer-census-advisory.py --base HEAD --head HEAD) 2>&1 )" || true
 grep -q "no-op" <<<"$out" && ok "... and an empty range (base == head) is a no-op, so the default really is what judged the leg above" || bad "empty range must be a no-op" "$out"
 
 mkdir -p "$WORK/bare"; (cd "$WORK/bare" && git init -q && git commit -q --allow-empty -m a && git commit -q --allow-empty -m b)
 rc=0; out="$(cd "$WORK/bare" && python3 "$R/scripts/check-v1-writer-census-advisory.py" --root "$WORK/bare" --base HEAD~1 --head HEAD 2>&1)" || rc=$?
 [ "$rc" -eq 3 ] && grep -q "no verdict" <<<"$out" && ok "an unreadable census is exit 3 (no verdict), never a no-op" || bad "unreadable census must be exit 3" "rc=$rc $out"
+# The load-failure path: a checker that cannot be imported (or declares no population) is no verdict, never a no-op.
+mkdir -p "$WORK/broken/scripts" "$WORK/broken/docs/coordination"; cp "$R/docs/coordination/v1-writer-census.json" "$WORK/broken/docs/coordination/"
+printf 'def broken(:\n' > "$WORK/broken/scripts/check-v1-writer-census.py"
+rc=0; out="$(python3 "$R/scripts/check-v1-writer-census-advisory.py" --root "$WORK/broken" 2>&1)" || rc=$?
+[ "$rc" -eq 3 ] && grep -q "cannot load POPULATION_PREFIXES/BUILD_DECLARATIONS" <<<"$out" && ok "a checker that will not import is exit 3 (no verdict), never a no-op" || bad "a broken checker must be exit 3" "rc=$rc $out"
+printf 'POPULATION_PREFIXES = ()\nBUILD_DECLARATIONS = set()\n' > "$WORK/broken/scripts/check-v1-writer-census.py"
+rc=0; out="$(python3 "$R/scripts/check-v1-writer-census-advisory.py" --root "$WORK/broken" 2>&1)" || rc=$?
+[ "$rc" -eq 3 ] && grep -q "declares no population prefixes" <<<"$out" && ok "a checker that declares an empty population is exit 3 (it would no-op every PR)" || bad "an empty population must be exit 3" "rc=$rc $out"
+printf 'BUILD_DECLARATIONS = set()\n' > "$WORK/broken/scripts/check-v1-writer-census.py"
+rc=0; out="$(python3 "$R/scripts/check-v1-writer-census-advisory.py" --root "$WORK/broken" 2>&1)" || rc=$?
+[ "$rc" -eq 3 ] && ok "a checker missing POPULATION_PREFIXES is exit 3" || bad "a missing constant must be exit 3" "rc=$rc $out"
 rc=0; out="$(cd "$R" && python3 scripts/check-v1-writer-census-advisory.py --base does-not-exist --head HEAD 2>&1)" || rc=$?
 [ "$rc" -eq 3 ] && grep -q "no verdict" <<<"$out" && ok "an unreadable change set is exit 3 (no verdict)" || bad "unreadable change set must be exit 3" "rc=$rc $out"
 

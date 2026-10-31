@@ -45,7 +45,7 @@ WHY THESE (the basis, recorded rather than implied).
     then 6 down to 0 for the rest (twelve of them 0, being path-filtered selftests). Every one is read-only
     (`contents: read`, at most `packages: read`), so cancelling a superseded PR run cannot strand a write.
   * `v1-writer-census-advisory` is new (Root decision on #4730, option 2): an advisory, non-required pull_request
-    check, read-only (`contents: read`), born with the default block so it never adds a stale-head run.
+    check, read-only (`contents: read`), born with the default block so it never adds a stale-head run; its path-filtered selftest is governed the same way.
   * `routine-eligibility` (398 runs, the largest consumer) was held for #4994, which has merged. It runs on
     `pull_request_target` only, where `github.ref` is the default branch, so it has its own shape in
     PR_ONLY: group `<name>-${{ github.event.pull_request.number }}`, unconditional cancel.
@@ -117,7 +117,7 @@ GOVERNED = [
     "skill-quality", "skill-registry-autofix", "skill-registry-coherence", "skill-roots-selfcheck",
     "skill-union-selftest", "skill-view", "skill-view-parity", "skillmirror-redrive",
     "surface-impact-selftest", "sync-build-config-selftest", "telemetry-git-safety", "touch-set-drift",
-    "touch-set-drift-selftest", "usage-census-selftest", "v1-writer-census-advisory", "work-programme",
+    "touch-set-drift-selftest", "usage-census-selftest", "v1-writer-census-advisory", "v1-writer-census-advisory-selftest", "work-programme",
 ]
 
 # Workflows whose ONLY pull-request trigger is the single event they run on (`pull_request_target`, or

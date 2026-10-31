@@ -159,10 +159,11 @@ def main(argv: list[str]) -> int:
         print("census advisory: the structural check passes with this PR's changes.")
         return OK
     print(
-        "::error title=census advisory: rehash needed::A census-tracked file changed and "
-        f"{CENSUS} no longer matches it. Review the file's diff for a new sink, writer or permission; "
-        "if there is none, recompute that row's sha256 and keep its disposition and justification. "
-        "This check is advisory (not required): it exists so the drift is found on the PR that caused it."
+        "::error title=census advisory: the structural check refuses::The structural check refuses; see the "
+        "refusal above for which source or row it names. It may be drift this PR did not cause (trunk already "
+        f"failing), or a row that needs rehashing after this PR. If a census-tracked file changed, review its "
+        "diff for a new sink, writer or permission and, if there is none, recompute that row's sha256 in "
+        f"{CENSUS}, keeping its disposition and justification. This check is advisory (not required)."
     )
     return FLAG if result.returncode == 1 else NO_VERDICT
 
