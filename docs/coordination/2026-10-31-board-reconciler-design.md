@@ -3,8 +3,8 @@
 Design, 2026-10-31. Delivery [#5136](https://github.com/FS-GG/.github/issues/5136) under Outcome
 [#4730](https://github.com/FS-GG/.github/issues/4730) (COORD-EFF-02). This is phase 1 of #5136: the
 design only. It makes no board write and changes no code, contract or workflow. Root (Programme/root)
-owns approval, every decision listed in §13 and all acceptance. Phase 2 (implementation PRs, §12)
-starts only after this design is accepted.
+owns approval and all acceptance. [Root's decisions](https://github.com/FS-GG/.github/pull/5137#issuecomment-6548516184) on D1-D12 (2026-10-31) are folded in below and listed in §13.
+Phase 2 (implementation PRs, §12) starts only after this design passes independent review.
 
 ## Why
 
@@ -60,14 +60,14 @@ reads (batched, bounded)  ->  Snapshot  ->  derive (pure)  ->  Plan
                                                                '- Refuse   -> plan report only
 ```
 
-- **Command.** A new verb in the `board-v2` dispatch arm, provisionally `board-v2 reconcile`. The
-  kernel table already has a V1 `reconcile` (chore remedies, [`Options.fs`](../../src/FS.GG.Coord.Cli.Kernel/Options.fs)),
-  and the retired `coord-board-reconcile.yml` diagnostic shares the word, so Root picks the final name
-  (decision D1).
+- **Command.** A new verb in the `board-v2` dispatch arm, `board-v2 tend` (D1). Root chose the name
+  because the kernel table already has a V1 `reconcile` (chore remedies,
+  [`Options.fs`](../../src/FS.GG.Coord.Cli.Kernel/Options.fs)) and the retired `coord-board-reconcile.yml`
+  diagnostic shares that word. "The reconciler" in this document means this command.
 - **Modes.** Without `--apply` it only reads and writes the plan file. That is the default. `--apply`
   also needs an enable file (§8) and the writer lock.
-- **Modules.** Pure derivation in `FS.GG.Coord.GitHub/V2Reconcile.fs` beside the pure enrollment
-  planner; reads in `V2ReconcileReads.fs` through the existing batched acquisition
+- **Modules.** Pure derivation in `FS.GG.Coord.GitHub/V2Tend.fs` beside the pure enrollment
+  planner; reads in `V2TendReads.fs` through the existing batched acquisition
   ([`V2InspectionAcquisition`](../../src/FS.GG.Coord.GitHub/V2InspectionAcquisition.fs), 25 aliased
   queries per send); writes through new `V2Migration.Change` cases (§6); the CLI in
   `BoardV2Application`. The command is registered in the
@@ -132,10 +132,10 @@ plan (`requests`, `graphqlPoints`, `restCalls`), which is #5136 Done-when 4.
 
 ## 3. Derivation
 
-`V2Reconcile.derive : Parameters -> Snapshot -> Plan` is pure. Its only clock is `Snapshot.ObservedAt`,
+`V2Tend.derive : Parameters -> Snapshot -> Plan` is pure. Its only clock is `Snapshot.ObservedAt`,
 so one snapshot always gives the same plan (board-currency lesson 7). An effect ID is
 `<rule>:<item>:<field>:<target>` with no age or count, so an unchanged situation keeps its ID.
-Parameters are part of the rule-set version `fsgg:board-reconcile-rules/v1`.
+Parameters are part of the rule-set version `fsgg:board-tend-rules/v1`.
 
 | Parameter | v1 value | Why |
 |---|---|---|
@@ -164,12 +164,14 @@ Never overwrite a populated value. For an empty value:
 
 Never overwrite. For an empty value: the body's `Track:` declaration; otherwise, for a Delivery, its
 parent Outcome's Track; otherwise `Follow-up` (rule T1, auto-apply). `Follow-up` is the default because it
-claims less than `Active delivery`. Root confirms the default (decision D5).
+claims less than `Active delivery` (D5, accepted).
 
 ### Roadmap
 
 Never overwrite. For an enrolled card the desired value is its enrolled row's `roadmap`, because the
-binding is the authority. For an unenrolled Delivery it is the parent's enrolled Roadmap, with a
+binding is the authority. Roadmap is written only to enrolled cards (D6): for an unenrolled Delivery the
+reconciler computes the value for the enrollment request, and the field is filled from the enrolled row
+after `bind-runtime`. That value is the parent's enrolled Roadmap, with a
 `#anchor` dropped when the value is a protected document, which cannot carry one (the cohort-90 rule
 Root accepted). The value must pass `V2ProjectionSource.programmePlanBlobGrammar`, and its document must
 exist on `main` (rule RM1). A parent with no enrolled Roadmap (for example #5097), or a plan that does
@@ -205,11 +207,12 @@ Notes:
 - **S4 is narrower than #5136's wording.** "In review with no open PR" includes Deliveries whose
   implementation merged and which wait for acceptance; the status lifecycle defines In review as exactly
   that. Those go to P-ACCEPT, not back to In progress. S4 fires only when no PR of any state is linked.
-  Root confirms (decision D4).
+  Root accepted this (D4).
 - **S1 makes the reconciler a second Done writer.** It writes Done only where the built-in workflow did
   not: a card added after its issue closed, or closed before the workflow was on (cohort-90 found
   5 such cards). Both writers set the same value, so a race ends in the same state. This amends Root
-  decision 2 ("the only writer of Done"), so it needs Root approval (decision D2).
+  decision 2 ("the only writer of Done"); Root approved the amendment (D2). Phase 2 updates the
+  board-currency design's §2 and dispatch rule 3 to name the backstop.
 - **S9's Backlog fallback** claims the least ("no concrete next action is admitted").
 
 ### Status of an Outcome: the roll-up
@@ -232,8 +235,9 @@ Rule O1 applies the roll-up only between Backlog, Ready and In progress: the pre
 must both be one of those three. A Blocked target or preimage, and the Outcome All-In-review case, become
 proposals. In review and Done are never written to an Outcome automatically. The status lifecycle
 already says that "active child work can make an Outcome In progress" and that "one child PR cannot make
-the whole Outcome In review". Even so, the lifecycle contract's "never automatically climb parents" must
-be amended to allow this bounded roll-up (decision D3). A closed Outcome follows S1.
+the whole Outcome In review". Root approved amending the lifecycle contract's "never automatically
+climb parents" to allow this bounded roll-up (D3); the amendment lands in phase 2 before O1 is enabled.
+A closed Outcome follows S1.
 
 ### Enrollment state
 
@@ -241,7 +245,7 @@ An unenrolled card is an enrollment candidate when it is an issue (not a PR or d
 binding's repositories, is open, has a derivable Work level, and has an RM1 Roadmap. Native open
 sub-issues of enrolled Outcomes that have no Project 3 card at all are candidates too, because
 auto-add is off. Closed cards are not candidates: binding rows are append-only and the cap is 500, so a
-row is spent only on work that can still be scheduled (decision D7). Other cases:
+row is spent only on work that can still be scheduled (D7, accepted). Other cases:
 
 - a repository outside the binding (FsQuint#50, SC2.Client#49): a refusal, `outside-binding`, reported
   once and kept as a known exception;
@@ -275,19 +279,19 @@ type Plan =
 ```
 
 Every card lands in exactly one class for each field, and a test pins that. The plan file is
-`fsgg.board-reconcile-plan/1`, written with the existing exclusive 0600 custody.
+`fsgg.board-tend-plan/1`, written with the existing exclusive 0600 custody.
 
 ### (a) Apply: mechanically safe and reversible
 
 | Rule | Effect | Why it is mechanical | Reversal |
 |---|---|---|---|
-| W1, T1, RM1 | Fill an empty Work level, Track or Roadmap | Fills only an absent value from native hierarchy, an explicit body declaration or the enrolled row; a populated value is never touched (the migration route's existing absent-only rule) | `clearProjectV2ItemFieldValue` restores the empty preimage, which is recorded |
+| W1, T1, RM1 | Fill an empty Work level or Track (any card), or Roadmap (enrolled cards only, D6) | Fills only an absent value from native hierarchy, an explicit body declaration or the enrolled row; a populated value is never touched (the migration route's existing absent-only rule) | `clearProjectV2ItemFieldValue` restores the empty preimage, which is recorded |
 | S9 | Fill an empty Status | As above; the fallback is the least-claiming option | Clear the value |
 | S1 | Closed → Done | Native closure is Root's acceptance act; the built-in workflow already makes the same write | Set the recorded preimage option |
 | S3, S3b | → In review or In progress when an open linked PR exists | Decided from native PR state and body linkage, the same linkage the merge gate trusts; never from Blocked or Done | Set the recorded preimage |
 | S4 | In review → In progress when nothing is linked | Decided from a complete native timeline, after a settle window | Set the recorded preimage |
 | O1 | Outcome roll-up among Backlog, Ready and In progress | A function of children's Statuses over a complete child list | Set the recorded preimage |
-| E1 | Add membership for an enrollment candidate, with its fields filled in the same run | Every input is native; the card is never left bare (§7) | `deleteProjectV2Item` on a card the reconciler created and nobody has edited since |
+| E1 | Add membership for an enrollment candidate, with Status, Work level and Track filled in the same run (D12) | Every input is native; the card is never left bare (§7) | `deleteProjectV2Item` on a card the reconciler created and nobody has edited since |
 | E2 | Prepare the enrollment successor and open its carrier PR | Offline; the merge is Root's | Close the PR |
 | A1 | Archive Done beyond 200 (after the Python archiver retires) | #5119's guards | `unarchiveProjectV2Item` |
 
@@ -350,14 +354,14 @@ The reconciler extends it rather than adding a second writer:
    it is re-read. A transition that replaces a populated value (S3, S3b, S4, O1, S1) uses a group of
    one, keeping the merge gate's adjacency exactly; only absent-value fills use bigger groups.
 4. The same change is offered to `migration-apply` for #5123, so the enrollment initialization and the
-   reconciler share one writer (decision D8).
+   reconciler share one writer (D8, accepted; Root coordinates with the #5119 owner).
 
 ### Per effect
 
 1. The preimage is the snapshot value; an equal value is a no-op.
 2. Adjacent re-read (grouped as above); any difference refuses the effect this run.
 3. Durable possible-send custody: one record per item send in
-   `$XDG_STATE_HOME/fsgg/board-reconcile/<run>/`, keyed by item id and carrying the field, preimage and
+   `$XDG_STATE_HOME/fsgg/board-tend/<run>/`, keyed by item id and carrying the field, preimage and
    target. If it cannot be written, nothing is sent (`refused-custody`).
 4. One send.
 5. Independent readback. `written` only when the readback equals the preimage with only the selected
@@ -380,11 +384,13 @@ mutation sends plus about 10 group reads across two runs, instead of 30 applies.
 - **Enrolled** (rows in the private binding behind the public commitment): every Apply rule. A Roadmap
   must equal the enrolled row; a differing populated Roadmap is a refusal (`ConflictingHumanValue`, as
   in the planner).
-- **Unenrolled, enrollment candidates**: E1 adds or keeps the card and fills Work level, Track, Roadmap
-  and Status in the same run, so a bare card never stays on the board. Enrollment follows (§7).
-- **Unenrolled, not candidates** (outside the binding, no plan): S1 and A1 only. No other raw field
-  write, matching Root's cohort-90 instruction. Whether Root wants W1 and T1 on these cards too is
-  decision D6 (Root made 30 such writes by hand after cohort-90).
+- **Unenrolled cards** (candidates and non-candidates alike): absent-value fills of Status, Work level
+  and Track (S9, W1, T1) through the same item-scoped guard, so the board is complete (D6, overriding the
+  proposed "S1 and A1 only"; it matches Root's manual fills recorded on #4941). S1 and A1 also apply.
+  Roadmap and the enrollment rows stay enrolled-only. Transitions that replace a populated Status (S3,
+  S3b, S4, O1) apply to enrolled cards only, because D6 admits fills, not transitions; Root can widen
+  this later. For a candidate, E1 adds the card and makes the fills in the same run, so a bare card never
+  stays on the board; Roadmap follows enrollment (§7).
 
 ### Interaction with the merge gate and the Done workflow
 
@@ -404,10 +410,11 @@ mutation sends plus about 10 group reads across two runs, instead of 30 applies.
 The drift observer stays the only writer of the #4985 body. The reconciler adds append-only comments:
 
 - **Stable IDs.** `P:<rule>:<subject>:<reason>`, with the subject a public reference or the observer's
-  `private:<12 hex HMAC>` placeholder. That needs the `BOARD_DRIFT_HMAC_KEY` on fdev (decision D9).
-- **Once per ID.** A ledger in `$XDG_STATE_HOME/fsgg/board-reconcile/proposals.json` maps each ID to the
+  `private:<12 hex HMAC>` placeholder, using `BOARD_DRIFT_HMAC_KEY` held on fdev, mode 0600 in Root
+  custody (D9).
+- **Once per ID.** A ledger in `$XDG_STATE_HOME/fsgg/board-tend/proposals.json` maps each ID to the
   comment that first carried it and its state (live or cleared). A run posts one comment with only the
-  IDs not live in the ledger, carrying `<!-- fsgg:board-reconcile-proposals/v1 run=<id> -->`. An ID that
+  IDs not live in the ledger, carrying `<!-- fsgg:board-tend-proposals/v1 run=<id> -->`. An ID that
   clears is marked cleared with no comment. If it fires again later, it is a new occurrence and is posted
   again.
 - **Custody.** The run id is recorded before the post. After the post, the comment is read back by the
@@ -425,14 +432,14 @@ through the #4941 planner), made automatic.
 | Stage | Today (cohort-90) | Reconciler |
 |---|---|---|
 | Find candidates | Root lists them | From the snapshot (§3), no extra read |
-| Make the card | Auto-add (now off) | E1: `AddMembership` with fields filled in the same run |
-| Roadmap | Root ruling | RM1, codified |
+| Make the card | Auto-add (now off) | E1: `AddMembership` with Status, Work level and Track filled in the same run |
+| Roadmap | Root ruling | RM1, codified; computed for the request, written after `bind-runtime` |
 | Status targets | Root decided per card | The derivation in §3; closed cards are not enrolled |
 | `resolve-issues`, `route-preflight`, `plan`, `prepare`, `render-carrier` | Run by hand | Run in-process by the reconciler with the same inputs, once per batch |
 | `ConstructorIdentity` | `Unsupported` whenever `main` moves; Root asserted `--main-revision` | **Prerequisite #5113** (content-based identity). Until then E2 is refused with `constructor-identity`; asserting the revision automatically would defeat the check |
 | `ProjectAutoAdd` | `Unknown` on exactly the cohort's own bare cards | Prerequisite (small): the preflight accepts the request's rows as expected memberships, and E1 leaves no bare card |
 | Carrier PR | Opened by a worker | E2 opens one PR (only the manifest commitment changes); at most one open at a time, and new candidates wait for the next |
-| Merge | Root | Root, through the routine merge (decision D10 on whether a carrier-only PR may be merged automatically later) |
+| Merge | Root | Root, through the routine merge (D10). Automatic merge of carrier-only PRs is revisited after 3 clean unattended runs |
 | `bind-runtime` | By hand | After the merge, by the next run |
 | Reader identity after an upgrade | Hand rebind | **Prerequisite #5120** (a designed rebind stage checked against the executing assembly) |
 | Initialization | 30 applies at 4 cards per scope | §6 writer: about 1 send per item (fixes #5123 by construction) |
@@ -440,9 +447,10 @@ through the #4941 planner), made automatic.
 
 **Capacity is a prerequisite too.** Binding rows are append-only (the successor is a raw-byte splice that
 preserves the predecessor), archived enrolled rows are retained (#5132), and the cap is 500. With 207 rows
-and new Deliveries filed every day, the cap will be reached. Row retirement, meaning a successor that drops
-archived closed rows under a new commitment, needs its own design before auto-enroll runs unattended
-(decision D7). Until then E2 refuses above 450 rows and files a proposal.
+and new Deliveries filed every day, the cap will be reached. Row retirement, for example a successor that
+drops closed and archived rows from the manifest under a new commitment, gets its own design, and that
+design is a prerequisite for unattended auto-enroll (D7). It is a step in the phase 2 sequence (§12). Until
+it is accepted and delivered, E2 refuses above 450 rows and files a proposal.
 
 ## 8. Scheduling, locking and enablement
 
@@ -451,22 +459,24 @@ archived closed rows under a new commitment, needs its own design before auto-en
   already dispatched from fdev. A hosted workflow would need a new board writer identity; the
   board-currency design keeps the App read-only. A hosted plan-only job can be added later for
   visibility.
-- **Timer.** A user unit `fsgg-board-reconcile.timer`, hourly at minute 07, away from the observer's :23
+- **Timer.** A user unit `fsgg-board-tend.timer`, hourly at minute 07, away from the observer's :23
   cron, its :53 fdev dispatch and the 04:43 archive. `Persistent=true`, with a 120-second randomised delay.
 - **After merge.** After a successful merge and the gate's transition, `routine-delivery.py` runs
-  `systemctl --user start --no-block fsgg-board-reconcile.service` on fdev. This is best effort: a
+  `systemctl --user start --no-block fsgg-board-tend.service` on fdev. This is best effort: a
   failure to start never affects the merge. systemd does not queue a second start of an active oneshot
   unit, and the reconciler skips a run within 5 minutes of the last one unless `--force` is given.
 - **Lock.** Today `migration-apply` locks `Path.GetTempPath()/fsgg-v2-migration-PVT_kwDOEYAWY84Bldpa.lock`,
   and `Path.GetTempPath()` follows `TMPDIR`, so two writers with different `TMPDIR` values do not exclude
-  each other. That is a hazard in itself (this design's own brief had to warn about it). Phase 2 moves
-  every Project 3 writer to one fixed path,
+  each other. The refresh path's `fsgg-v2-observation-<project>.lock` has the same defect, and engine
+  tests that reach either lock contend with a live apply (#5126). Phase 2 PR 1 moves every Project 3
+  writer (`migration-apply`, `refresh`, the merge gate and the reconciler) to one fixed path,
   `$XDG_RUNTIME_DIR/fsgg/board-writer-PVT_kwDOEYAWY84Bldpa.lock`, and refuses to write if it is unset.
-  During the transition the reconciler also takes the legacy lock at the literal `/tmp` path. It takes
-  locks without waiting: a held lock gives a plan-only run with `lock-held`, never a queued writer. Tests
-  inject the lock directory.
+  The lock directory is injectable, tests inject a private one, and a test proves a test run never opens
+  the production path, which fixes #5126. During the transition writers also take the legacy lock at the
+  literal `/tmp` path. The reconciler takes locks without waiting: a held lock gives a plan-only run with
+  `lock-held`, never a queued writer.
 - **Dry run by default.** `--apply` is ignored unless
-  `$XDG_CONFIG_HOME/fsgg/board-reconcile.json` exists, is owned by the user with mode 0600, and lists the
+  `$XDG_CONFIG_HOME/fsgg/board-tend.json` exists, is owned by the user with mode 0600, and lists the
   enabled rules: `{"apply": ["S1","W1","T1"], "propose": true, "maxItemsPerRun": 100}`. Rules are enabled
   one at a time. Deleting the file, or `"apply": []`, is the kill switch. A run without the file still
   writes its plan, so the rollout can compare plans before any write.
@@ -515,7 +525,7 @@ e and s stay.
   write send count for 25, 100 and 114 items.
 - **Conformance.** The linkage corpus runs against `linkage_of()` and the F# implementation. During the
   migration, the overlapping currency rules are compared ID by ID on the same snapshots.
-- **Mutation.** A spec file `tests/coord-board-reconcile-mutation/specs.yml` for the existing
+- **Mutation.** A spec file `tests/coord-board-tend-mutation/specs.yml` for the existing
   `scripts/gate-mutate.py` harness, with one leg per guard: each Apply condition, the Blocked and Done
   protections, the settle windows, absent-only filling, the roll-up's completeness check, the custody
   write before send, no resend, the lock, the enable file and the issue-mutation refusal. Every leg must
@@ -548,33 +558,41 @@ e and s stay.
 
 One open PR per chain, each `Refs #5136`, each reviewed independently:
 
-1. Pure derivation, plan types, fixtures (§11), properties and the mutation spec. No IO.
-2. Batched reads, `board-v2 reconcile` plan-only, the cost counters and a live read-only measurement at the
+1. The fixed writer lock path for every Project 3 writer, with an injectable lock directory and the
+   test that no test opens the production path (§8). This also fixes #5126.
+2. Pure derivation, plan types, fixtures (§11), properties and the mutation spec. No IO.
+3. Batched reads, `board-v2 tend` plan-only, the cost counters and a live read-only measurement at the
    current board size.
-3. The writer extension (§6), the fixed lock path, custody and the merge-gate lock. If D8 is accepted,
-   this also delivers #5123.
-4. Proposals to #4985 with the ledger.
-5. The fdev units, the post-merge trigger and the enable file; 7 days plan-only, then Root enables rules
-   one at a time.
-6. Auto-enroll (§7), after #5113 and #5120 and the capacity decision.
-7. Retirement PRs, one per pair approved under §9.
+4. The writer extension (§6), custody and the merge gate's use of the shared lock. This also delivers
+   #5123 (D8).
+5. Proposals to #4985 with the ledger.
+6. The contract amendments Root approved: Done backstop (D2) in dispatch rule 3 and the board-currency
+   design, and the bounded Outcome roll-up (D3) in the lifecycle contract and status lifecycle.
+7. The fdev units, the post-merge trigger and the enable file; 7 days plan-only, then Root enables rules
+   one at a time (S1 and O1 only after PR 6).
+8. The row-retirement design (D7), a docs PR reviewed like this one.
+9. Auto-enroll (§7), after #5113, #5120 and the delivered row retirement.
+10. Retirement PRs, one per pair approved under §9.
 
-#5136 Done-when 2 is met after PR 3, Done-when 3 after PR 5 and the first retirement, and Done-when 4 is
-measured in PR 2 and again on the first enabled week.
+#5136 Done-when 2 is met after PR 4, Done-when 3 after PR 7 and the first retirement, and Done-when 4 is
+measured in PR 3 and again on the first enabled week.
 
-## 13. Decisions needed from Root
+## 13. Root's recorded decisions
 
-| ID | Decision | Proposed |
+From [Root's decisions](https://github.com/FS-GG/.github/pull/5137#issuecomment-6548516184), 2026-10-31:
+
+| ID | Decision | Root's ruling |
 |---|---|---|
-| D1 | Command name | `board-v2 reconcile` (in the board-v2 arm); alternative `board-v2 tend` if the V1 `reconcile` collision is unwanted |
-| D2 | Amend decision 2 so the reconciler is a backstop Done writer for closed cards after 15 minutes | Yes |
-| D3 | Amend the lifecycle contract and status lifecycle to allow the bounded Outcome roll-up O1 | Yes, limited to Backlog, Ready and In progress |
-| D4 | S4 narrowed: In review with a merged PR stays and becomes P-ACCEPT | Yes |
-| D5 | Track default `Follow-up` when nothing declares one | Yes |
-| D6 | Field fills (W1, T1) on unenrolled non-candidate cards | No; S1 and A1 only |
-| D7 | Do not enroll closed cards; design row retirement before unattended auto-enroll; refuse above 450 rows | Yes |
-| D8 | Share the item-scoped writer with `migration-apply` and take #5123 into PR 3 | Yes, with the #5119 owner's agreement |
-| D9 | Hold `BOARD_DRIFT_HMAC_KEY` on fdev for private placeholders in proposals | Yes, mode 0600 in Root custody |
-| D10 | Carrier PRs for enrollment: Root merges each one; automatic merge of carrier-only PRs is a later decision | Root merges |
-| D11 | Credential: the reconciler writes with Root's `gh` PAT on fdev, as the merge gate does; the App stays read-only | Yes |
-| D12 | E1 adds Project 3 membership for enrollment candidates and fills their fields in the same run. Built-in auto-add stays off (dispatch rule 5); this is an attended add that never leaves a bare card | Yes |
+| D1 | Command name | `board-v2 tend`, avoiding the V1 `reconcile` collision |
+| D2 | The reconciler is a backstop Done writer for a closed card 15 minutes after closure, if the workflow has not written Done | Yes; decision 2 is amended |
+| D3 | Bounded Outcome roll-up O1 | Yes, limited to Backlog, Ready and In progress; never Blocked, In review or Done automatically |
+| D4 | In review with a merged PR stays In review and becomes P-ACCEPT | Yes |
+| D5 | Track defaults to `Follow-up` when nothing declares one | Yes |
+| D6 | Field fills on unenrolled cards | **Overridden:** Status, Work level and Track absent-value fills are allowed on unenrolled cards through the same guarded item-scoped writer; Roadmap and manifest fields stay enrolled-only |
+| D7 | Do not enroll closed cards; refuse above 450 rows; row retirement | Yes; row retirement gets its own design, is a prerequisite for unattended auto-enroll, and is added to phase 2 (§12, PR 8) |
+| D8 | Share the item-scoped writer with `migration-apply` and take #5123 into the writer PR | Yes; Root coordinates with the #5119 owner |
+| D9 | Hold `BOARD_DRIFT_HMAC_KEY` on fdev for private placeholders in proposals | Yes |
+| D10 | Root merges enrollment carrier PRs | Yes, for now; automatic merge of carriers is revisited after 3 clean unattended runs |
+| D11 | The reconciler writes with Root's `gh` PAT on fdev, as the merge gate does; the App stays read-only | Yes |
+| D12 | E1 adds Project 3 membership for enrollment candidates and fills their fields in the same run; built-in auto-add stays off (dispatch rule 5) | Yes |
+| — | The `TMPDIR` lock hazard | One fixed lock path for every Project 3 writer in phase 2 PR 1, which also fixes #5126 |
