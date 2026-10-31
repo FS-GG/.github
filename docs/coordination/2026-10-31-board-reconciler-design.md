@@ -1,10 +1,11 @@
-# BOARD-RECONCILE-01: an F# reconciler that derives, plans and applies safe Project 3 fixes
+# BOARD-TEND-01: `board-v2 tend`, an F# reconciler that derives, plans and applies safe Project 3 fixes
 
 Design, 2026-10-31. Delivery [#5136](https://github.com/FS-GG/.github/issues/5136) under Outcome
 [#4730](https://github.com/FS-GG/.github/issues/4730) (COORD-EFF-02). This is phase 1 of #5136: the
 design only. It makes no board write and changes no code, contract or workflow. Root (Programme/root)
-owns approval and all acceptance. [Root's decisions](https://github.com/FS-GG/.github/pull/5137#issuecomment-6548516184) on D1-D12 (2026-10-31) are folded in below and listed in §13.
-Phase 2 (implementation PRs, §12) starts only after this design passes independent review.
+owns approval and all acceptance. [Root's decisions](https://github.com/FS-GG/.github/pull/5137#issuecomment-6548516184)
+on D1-D12 (2026-10-31) and Root's rulings on the first independent review are folded in below and listed
+in §13. Phase 2 (implementation PRs, §12) starts only after this design passes independent review.
 
 ## Why
 
@@ -12,7 +13,7 @@ The user asked for automatic checking, updating and fixing of Coordination Proje
 (`PVT_kwDOEYAWY84Bldpa`), done by deterministic F# machinery in the coordination engine rather than by
 manual Root passes and Python glue (#5136).
 
-Today the board has three detectors and two narrow writers. Every other field change is a manual Root
+Today the board has two detectors and four narrow writers. Every other field change is a manual Root
 write:
 
 | Piece | What it does | What it cannot do |
@@ -22,7 +23,7 @@ write:
 | [Merge gate](../../tools/routine-delivery.py) `--board-gate` (#5106) | One post-merge Delivery Status write (In review, or In progress with `fsgg:delivery-continues/v1`) through an item-scoped guard with durable custody | Any other field, any card other than the merged Delivery |
 | Built-in "Item closed → Done" workflow | Sets Done when an issue closes; Root decision 2 made it the only writer of Done | Cards added after closure, or closed before it was enabled |
 | `board-v2 migration-apply` | Absent-value initialization of explicitly declared values ([`V2Migration`](../../src/FS.GG.Coord.GitHub/V2Migration.fsi)) | Infer a value; replace a populated value; scale (#5123) |
-| [Done-retention archiver](https://github.com/FS-GG/.github/issues/5119) (#5119 PR 5, held, Python) | Archive Done beyond the newest 200 | Anything else |
+| [Done-retention archiver](https://github.com/FS-GG/.github/issues/5119) (#5119 PR 5, held; Python, hosted workflow) | Archive Done beyond the newest 200 | Anything else |
 
 The coordination engine does not derive Status, Track or Work level from native issue facts anywhere:
 `board-v2 refresh` writes only Observation, migration initializes only values its caller declares, and
@@ -42,10 +43,10 @@ These are the acceptance fixtures (§11). They come from #5136 and the cohort-90
 6. 25 Backlog cards had a body saying "Blocked on: Nothing".
 7. Outcome Status did not follow its children.
 8. Enrolling 114 new cards took about 3 hours, 63 migration invocations (31 prepares, 30 applies,
-   2 inspects) besides the enrollment stages, and seven Root rulings: a `--main-revision` assertion (#5113), a reader-identity hand
-   rebind (#5120), a 207-row inspect accepted as Unknown (#5121), a re-split into 29 scopes of at most
-   4 cards after 19 effects hit the 270-second ceiling (#5123), the Roadmap inheritance rule, closed
-   cards targeting Done, and 14 exclusions.
+   2 inspects) besides the enrollment stages, and seven Root rulings: a `--main-revision` assertion
+   (#5113), a reader-identity hand rebind (#5120), a 207-row inspect accepted as Unknown (#5121), a
+   re-split into 29 scopes of at most 4 cards after 19 effects hit the 270-second ceiling (#5123), the
+   Roadmap inheritance rule, closed cards targeting Done, and 14 exclusions.
 
 The live board at 20:40Z had 222 items, all issues, none archived: Done 123, Blocked 51, Ready 33,
 In progress 15, Backlog 0, In review 0; Work level Delivery 197, Outcome 25. That is one observation,
@@ -69,7 +70,7 @@ reads (batched, bounded)  ->  Snapshot  ->  derive (pure)  ->  Plan
 - **Modules.** Pure derivation in `FS.GG.Coord.GitHub/V2Tend.fs` beside the pure enrollment
   planner; reads in `V2TendReads.fs` through the existing batched acquisition
   ([`V2InspectionAcquisition`](../../src/FS.GG.Coord.GitHub/V2InspectionAcquisition.fs), 25 aliased
-  queries per send); writes through new `V2Migration.Change` cases (§6); the CLI in
+  queries per send); writes through the reconciler's own closed change type (§6); the CLI in
   `BoardV2Application`. The command is registered in the
   [writer census](v1-writer-census.json) as a writer.
 - **Not a revival.** ADR-0091 retired the legacy v1 automatic projection writer. This is a new V2
@@ -84,7 +85,10 @@ Native state only, as in the board-currency rule set:
 - per card: item id, `isArchived`, and the Status, Work level, Track and Roadmap values, each with its
   `updatedAt`;
 - per issue: node id, repository and `isPrivate`, `state`, `stateReason`, `closedAt`, `updatedAt`,
-  body, native parent, sub-issues (complete list), `blockedBy` (complete list);
+  body, `author`, `editor` and `lastEditedAt` (for S9's Root-authorship check), native parent,
+  sub-issues (complete list), `blockedBy` (complete list);
+- for enrollment candidates only: `Issue.projectItems(includeArchived: true)`, so an archived Project 3
+  item is seen (§3, enrollment state);
 - open pull requests in the organization: number, repository, `isDraft`, `updatedAt`, body;
 - for the few cards that need it (below): the issue's cross-reference timeline (PRs that mention it,
   with state, `mergedAt` and body) and its recent comments;
@@ -96,10 +100,14 @@ Native state only, as in the board-currency rule set:
 - local custody: the reconciler's own records and the merge gate's records
   (`$XDG_STATE_HOME/fsgg/board-gate`).
 
-A "linked PR" is a PR whose body references the issue through a `Refs` line or a closing keyword, using
-the same normalisation as the board-currency `linkage_of()` (CRLF to LF, code spans and fences
-removed). A PR is never a Delivery. Because R1 stays in Python (§9), one shared conformance corpus is
-run against both implementations so they cannot drift.
+A PR is **linked** to a Delivery when the board-currency `linkage_of()` verdict for that PR has no
+failures and names exactly that Delivery: the body references exactly one Project 3 Delivery through
+`Refs` or a closing keyword (after CRLF normalisation and removal of code spans and fences), the Delivery
+has a parent Outcome, and no reference is unreadable. This is the linkage the merge gate requires and
+lifecycle dispatch rule 1 asks for. A PR that mentions the Delivery but fails `linkage_of()` (no
+Delivery resolved, several Deliveries, no parent Outcome, an Unknown) is **loosely linked**: it never
+drives an automatic Status move, only a proposal. A PR is never a Delivery. Because R1 stays in Python
+(§9), one shared conformance corpus is run against both implementations so they cannot drift.
 
 ### Reads and their cost
 
@@ -107,16 +115,25 @@ run against both implementations so they cannot drift.
 |---|---|---:|---:|
 | A. Board and issue facts | `items(first:50)` with the four field values and the issue fields above, `subIssues(first:50)`, `blockedBy(first:50)`; the first page also carries the schema and workflows | 5 | 10 |
 | B. Open PRs | one organization search, `is:pr is:open`, 100 per page | 1 | 1 |
-| C. Targeted evidence | timeline cross-references (`last:25`) and `comments(last:20)`, 25 issues aliased per send, only for cards a rule needs (In review without an open PR, In progress without an open PR, Blocked without an open native blocker, Backlog candidates for Ready, Outcomes with every child closed) | 1-2 | 2-4 (worst case 20) |
+| C. Targeted evidence | timeline cross-references (`last:25`), `comments(last:20)` and, for enrollment candidates, `projectItems(includeArchived: true)`, 25 issues aliased per send, only for cards a rule needs (In review or In progress without an open linked PR, Blocked without an open native blocker, Backlog candidates for Ready, Outcomes with every child closed, enrollment candidates) | 3-4 | 5-7 (worst case 20) |
 | D. Overflow | sub-issue continuation pages for an Outcome with more than 50 children | 0-1 | 0-2 |
-| **Total** | | **7-9** | **13-17 (worst case 33)** |
+| **Total** | | **about 9-10** | **about 16-20 (worst case 33)** |
+
+The C row is derived from the live mix, not assumed. A read-only snapshot taken for the review at
+2026-10-31T21:19Z had 222 cards, 98 of them open, and 19 open PRs in the organization. 56 open cards
+needed a targeted read: 51 Blocked cards with no open native blocker (their `fsgg:blocked-on/v1` marker
+must be read) and 5 In progress or In review cards with no open PR referencing them. That is 3 sends of
+25, or 4 with the Outcome and candidate legs. At 500 cards the same proportions give about 126 open
+cards needing reads, 6 or 7 sends, and A doubles to 10, hence about 16-20. The worst case is every card
+needing a targeted read.
 
 - Pages stay at 50 items. Root's ruling on #5130 was to take no saving that raises points, and pages of
   50 with nested connections cost about 1-2 GraphQL points each, as the currency fetch measures today
   (5 requests, 5 points at 222 items).
 - No REST comment read happens in the board pass. A new comment moves the issue's `updatedAt`, so a
   comment's `createdAt` never exceeds it, and R4's activity maximum (issue `updatedAt`, the Status
-  value's `updatedAt`, linked PR `updatedAt`, comment `createdAt`) is the same without the comments. Comments are read only in C, and only for marker legs (`fsgg:blocked-on/v1`,
+  value's `updatedAt`, linked PR `updatedAt`, comment `createdAt`) is the same without the comments.
+  Comments are read only in C, and only for marker legs (`fsgg:blocked-on/v1`,
   `fsgg:outcome-closure-proposed/v1`, `fsgg:outcome-accepted/v1`).
 - Merged PRs are not searched org-wide. A rule that needs merged evidence (S4, P-ACCEPT) reads that
   card's timeline in C, so a PR merged months ago is still seen, unlike a 7-day search window.
@@ -125,7 +142,7 @@ run against both implementations so they cannot drift.
 
 **Budget.** The read ceiling is `8 + ceil(rows/50) + ceil(rows/25)` sends (22 at 222, 38 at 500), and
 the deadline is 120 seconds for reads. Writes have their own ceiling (§6). Hourly runs cost about
-24 × 17 ≈ 400 read sends a day at 500 items. For comparison, #5119 measured the hourly drift fetch at
+24 × 20 ≈ 480 read sends a day at 500 items. For comparison, #5119 measured the hourly drift fetch at
 26 calls after its cut, and a 500-row `inspect` at 175 sends against its 1,064 ceiling. The reconciler
 reads less than one inspection per run. Phase 2 measures the real per-run cost and prints it in the
 plan (`requests`, `graphqlPoints`, `restCalls`), which is #5136 Done-when 4.
@@ -137,6 +154,20 @@ so one snapshot always gives the same plan (board-currency lesson 7). An effect 
 `<rule>:<item>:<field>:<target>` with no age or count, so an unchanged situation keeps its ID.
 Parameters are part of the rule-set version `fsgg:board-tend-rules/v1`.
 
+**Derivation runs to a fixpoint.** Some rules read values other rules fill in the same run: T1 and W1
+read the parent's Track and Work level, and O1 reads the children's Statuses after S3, S3b or S4 moved
+them. `derive` therefore applies each round's Apply effects to an in-memory copy of the snapshot and
+derives again until a round adds nothing. Within a round, parents are evaluated before children for the
+fills and children before parents for the roll-up. Fills only move a field from empty to a value, and
+O1 depends only on children, so the iteration is monotone; it is capped at hierarchy depth plus 2 rounds,
+and reaching the cap is a refusal (`fixpoint-not-reached`), not a partial plan. Each effect records the
+effects it depends on. The writer sends a parent's effect before its children's, and while a parent's
+effect is pending, refused or uncertain, every effect that depends on it is deferred to the next run.
+Successive moves on one field collapse into one effect from the original preimage to the final target,
+carrying every rule in the chain (for example S9 then S3), and every rule in the chain must be enabled.
+With this, the idempotence property in §10 holds: applying a plan and deriving again yields no Apply
+effect.
+
 | Parameter | v1 value | Why |
 |---|---|---|
 | `activityHours` | 48 | The same as board-currency R4 |
@@ -145,9 +176,12 @@ Parameters are part of the rule-set version `fsgg:board-tend-rules/v1`.
 | `doneVisible` | 200 | #5119's retention bound |
 | `maxItemsPerRun` | 100 | Write ceiling per run (§6) |
 
-Body sections are read only in the closed grammar the dispatch rule writes: a first line
-`Work level: <v> · Track: <v> · Intended Status: <v>` (emphasis markup removed) and the `## Blocked on`,
-`## Done when` and `## Acceptance evidence` sections. Any other form is "not declared", never a guess.
+Body sections are read only in a closed grammar: a first line
+`Work level: <v> · Track: <v> · Intended Status: <v>` (the **intended-fields line**, emphasis markup
+removed, each value one of the field's option names) and the `## Blocked on`, `## Done when` and
+`## Acceptance evidence` sections. Dispatch rule 1 asks for these values but gives no exact grammar, so
+the contract-amendment PR (§12) codifies this grammar in the lifecycle contract before any rule that
+reads it is enabled. Any other form is "not declared", never a guess.
 
 ### Work level
 
@@ -181,7 +215,8 @@ a proposal: choosing an owning plan is Root's.
 ### Status of a Delivery
 
 Evaluated in order; the first rule that matches decides. `OPR` is the set of open non-draft linked PRs,
-`DPR` the open drafts and `MPR` the merged ones.
+`DPR` the open draft linked PRs and `MPR` the merged linked PRs, all in the strict `linkage_of()` sense
+(§2). `LPR` is the set of loosely linked PRs of any state.
 
 | Rule | Condition | Desired | Class |
 |---|---|---|---|
@@ -189,21 +224,30 @@ Evaluated in order; the first rule that matches decides. `OPR` is the set of ope
 | S2 | Open and Status Done | — | Propose `done-open` |
 | S3 | `OPR` not empty, Status Backlog, Ready or In progress | In review | Apply |
 | S3b | `OPR` empty, `DPR` not empty, Status Backlog or Ready | In progress | Apply |
-| S4 | Status In review, `OPR` and `DPR` empty, `MPR` empty, In review for longer than `reviewSettleHours`, timeline complete | In progress | Apply |
+| P-LINK | `OPR` and `DPR` empty, an open PR in `LPR` | — | Propose (the PR's `linkage_of()` failure is named) |
+| S4 | Status In review, `OPR`, `DPR`, `MPR` and `LPR` empty, In review for longer than `reviewSettleHours`, timeline complete | In progress | Apply |
 | P-ACCEPT | Status In review or In progress, `OPR` and `DPR` empty, `MPR` not empty, `## Acceptance evidence` present and not "None yet." | — | Propose `acceptance-ready` |
 | S5 | Status In progress, `OPR` and `DPR` empty, no activity within `activityHours` | — | Propose `stale-active` (to Ready, Blocked, or acceptance) |
-| P-READY | Status Backlog, enrolled, `## Blocked on` is "Nothing" or "Nothing external", no open native blocker | — | Propose Backlog → Ready |
+| P-READY | Status Backlog, `## Blocked on` is "Nothing" or "Nothing external", no open native blocker | — | Propose Backlog → Ready; for an unenrolled card the proposal says selection also needs enrollment or a `root-admit-unenrolled` marker |
 | P-UNBLOCK | Status Blocked, every native blocker and `fsgg:blocked-on/v1` blocker closed | — | Propose Blocked → Ready |
 | P-NOBLOCKER | Status Blocked, no blocker named | — | Propose (R3 `no-blocker`) |
-| S9 | Open, Status empty | The body's `Intended Status`, else S3/S3b's target when it applies, else Backlog | Apply |
+| S9 | Open, Status empty, and the intended-fields line says Backlog or says nothing | Backlog | Apply |
+| S9r | Open, Status empty, the intended-fields line says Ready, and the line is Root-authored (below) | Ready | Apply |
+| P-INTENT | Open, Status empty, the intended-fields line says anything else (In progress, In review, Blocked, Done), or says Ready without verified Root authorship | — | Propose the declared value; S9 still fills Backlog |
 
 Notes:
 
 - **Blocked is never written or overwritten automatically.** It records Root's judgement that a named
   prerequisite is missing, which is also why the merge gate refuses a Blocked preimage.
+- **S3 and S3b use only strict linkage.** An automatic move happens only for a PR whose `linkage_of()`
+  verdict has no failures and names exactly this Delivery, as the merge gate and dispatch rule 1 require.
+  Anything looser is P-LINK.
 - **S3 and the merge gate agree.** After a merge the gate writes In review, or In progress with
   `fsgg:delivery-continues/v1`. With no open PR left, S4 does not fire while `MPR` is not empty, and
   S3 does not fire without an open PR, so the reconciler never undoes the gate's write.
+- **A merge can race S3, S3b and S4.** The decision rests on the linked PR's state, so the adjacent
+  re-read before the send (§6) includes each deciding PR's `state`, `isDraft` and `mergedAt`. If any of
+  them differs from the snapshot, the effect is refused for this run and derived again next run.
 - **S4 is narrower than #5136's wording.** "In review with no open PR" includes Deliveries whose
   implementation merged and which wait for acceptance; the status lifecycle defines In review as exactly
   that. Those go to P-ACCEPT, not back to In progress. S4 fires only when no PR of any state is linked.
@@ -213,7 +257,13 @@ Notes:
   5 such cards). Both writers set the same value, so a race ends in the same state. This amends Root
   decision 2 ("the only writer of Done"); Root approved the amendment (D2). Phase 2 updates the
   board-currency design's §2 and dispatch rule 3 to name the backstop.
-- **S9's Backlog fallback** claims the least ("no concrete next action is admitted").
+- **S9 writes only Backlog, or Ready under S9r.** Backlog claims the least ("no concrete next action is
+  admitted"). Ready asserts an admitted next action, so S9r needs the intended-fields line to be
+  Root-authored, verified the way board-currency verifies Root markers: the issue's `author.login` is in
+  `rootLogins` and, if the body was ever edited, so is `editor.login`. As with those markers, this proves
+  Root's account, not Root's hands. Every other declared value is a proposal (P-INTENT). If an open
+  linked PR exists, the fixpoint then applies S3 or S3b to the filled Backlog, and the two collapse into
+  one effect.
 
 ### Status of an Outcome: the roll-up
 
@@ -243,8 +293,12 @@ A closed Outcome follows S1.
 
 An unenrolled card is an enrollment candidate when it is an issue (not a PR or draft) in one of the
 binding's repositories, is open, has a derivable Work level, and has an RM1 Roadmap. Native open
-sub-issues of enrolled Outcomes that have no Project 3 card at all are candidates too, because
-auto-add is off. Closed cards are not candidates: binding rows are append-only and the cap is 500, so a
+sub-issues of enrolled Outcomes that have no visible Project 3 card are candidates too, because auto-add
+is off. `ProjectV2.items` omits archived items, so before E1 a candidate is confirmed through
+`Issue.projectItems(includeArchived: true)`. If that shows an archived Project 3 item, the candidate is
+refused (`archived-member`): whether `addProjectV2ItemById` returns, restores or duplicates an archived
+item is not established, so it is Unknown, and the reconciler never sends the add. Closed cards are not
+candidates: binding rows are append-only and the cap is 500, so a
 row is spent only on work that can still be scheduled (D7, accepted). Other cases:
 
 - a repository outside the binding (FsQuint#50, SC2.Client#49): a refusal, `outside-binding`, reported
@@ -267,10 +321,11 @@ retired (§9) it remains the only archive writer, and the reconciler only plans 
 ```fsharp
 type Field = Status | WorkLevel | Track | Roadmap
 type Apply =
-    | SetField of item: ItemId * field: Field * preimage: string option * target: string * rule: RuleId
-    | AddMembership of issue: IssueRef * rule: RuleId
+    | SetField of item: ItemId * field: Field * preimage: string option * target: string * rules: RuleId list
+    | AddMembership of issueNodeId: string * rule: RuleId
     | Archive of item: ItemId * rule: RuleId
     | PrepareEnrollment of rows: EnrollmentRow list
+type Effect = { Id: string; Apply: Apply; DependsOn: string list; Deciding: DecidingFacts }
 type Proposal = { Id: string; Rule: RuleId; Subject: Subject; Suggested: string option; Evidence: string list }
 type Refusal = { Id: string; Rule: RuleId; Subject: Subject; Reason: RefusalReason }  // includes every Unknown
 type Plan =
@@ -286,21 +341,22 @@ Every card lands in exactly one class for each field, and a test pins that. The 
 | Rule | Effect | Why it is mechanical | Reversal |
 |---|---|---|---|
 | W1, T1, RM1 | Fill an empty Work level or Track (any card), or Roadmap (enrolled cards only, D6) | Fills only an absent value from native hierarchy, an explicit body declaration or the enrolled row; a populated value is never touched (the migration route's existing absent-only rule) | `clearProjectV2ItemFieldValue` restores the empty preimage, which is recorded |
-| S9 | Fill an empty Status | As above; the fallback is the least-claiming option | Clear the value |
+| S9, S9r | Fill an empty Status with Backlog, or Ready from a Root-authored intended-fields line | As above; Backlog is the least-claiming option, and Ready needs verified Root authorship | Clear the value |
 | S1 | Closed → Done | Native closure is Root's acceptance act; the built-in workflow already makes the same write | Set the recorded preimage option |
-| S3, S3b | → In review or In progress when an open linked PR exists | Decided from native PR state and body linkage, the same linkage the merge gate trusts; never from Blocked or Done | Set the recorded preimage |
-| S4 | In review → In progress when nothing is linked | Decided from a complete native timeline, after a settle window | Set the recorded preimage |
+| S3, S3b | → In review or In progress when a strictly linked open PR exists | Decided from native PR state and a `linkage_of()` verdict with no failures naming exactly this Delivery, which is what the merge gate requires; the PR facts are re-read before the send; never from Blocked or Done | Set the recorded preimage |
+| S4 | In review → In progress when nothing is linked, strictly or loosely | Decided from a complete native timeline after a settle window; the PR facts are re-read before the send | Set the recorded preimage |
 | O1 | Outcome roll-up among Backlog, Ready and In progress | A function of children's Statuses over a complete child list | Set the recorded preimage |
-| E1 | Add membership for an enrollment candidate, with Status, Work level and Track filled in the same run (D12) | Every input is native; the card is never left bare (§7) | `deleteProjectV2Item` on a card the reconciler created and nobody has edited since |
-| E2 | Prepare the enrollment successor and open its carrier PR | Offline; the merge is Root's | Close the PR |
+| E1 | Add membership for an enrollment candidate, with Status, Work level and Track filled in the same run (D12) | Every input is native, including the archived-item check; the card is never left bare (§7) | `deleteProjectV2Item`, only for an item that the reconciler's own E1 custody record proves it created, and only while its values are still the reconciler's |
+| E2 | Prepare the enrollment successor and open its carrier PR | Offline; the carrier's title, body and commit messages must pass `check-closing-keywords` before the push; the merge is Root's | Close the PR |
 | A1 | Archive Done beyond 200 (after the Python archiver retires) | #5119's guards | `unarchiveProjectV2Item` |
 
-Each Apply effect also has a preimage condition: if the adjacent re-read differs from the snapshot, the
-effect is refused for this run and derived again next run.
+Each Apply effect also has a preimage condition: if the adjacent re-read differs from the snapshot, in
+the item's fields or in its deciding PR facts, the effect is refused for this run and derived again next
+run.
 
 ### (b) Propose to Root
 
-S2 `done-open`, P-ACCEPT, S5 `stale-active`, P-READY, P-UNBLOCK, P-NOBLOCKER, Outcome Blocked or
+S2 `done-open`, P-ACCEPT, S5 `stale-active`, P-LINK, P-INTENT, P-READY, P-UNBLOCK, P-NOBLOCKER, Outcome Blocked or
 All-In-review roll-ups, `children-complete`, `no-open-delivery`, `work-level-undetermined`, Roadmap and plan gaps,
 board-currency R2 `outcome-unaccepted`, R8 `pr-open-on-closed` and R9 hierarchy findings. These ask for a
 judgement: whether the next action is admitted, whether acceptance is met, or which plan owns the work.
@@ -308,9 +364,10 @@ judgement: whether the next action is admitted, whether acceptance is met, or wh
 ### (c) Refuse or Unknown
 
 A truncated or unreadable input; null content; a draft or PR card; a field option missing from the
-schema; conflicting declarations; a repository outside the binding; an uncertain custody record (ours or
-the merge gate's) for the item; a held writer lock; an exhausted budget (reported as `deferred`, not
-Unknown). A refusal is never a pass ([#266](https://github.com/FS-GG/.github/issues/266)) and never
+schema; conflicting declarations; a repository outside the binding; an archived member (`archived-member`);
+an uncertain custody record (ours or the merge gate's) for the item; a fixpoint that does not settle; a
+held writer lock; an exhausted budget or a dependency on a deferred effect (both reported as `deferred`,
+not Unknown). A refusal is never a pass ([#266](https://github.com/FS-GG/.github/issues/266)) and never
 silently dropped: it is in the plan file, and a refusal that persists for 24 hours becomes a proposal.
 
 ## 5. The reconciler never closes an issue
@@ -318,14 +375,26 @@ silently dropped: it is in the plan file, and a refusal that persists for 24 hou
 Acceptance and closure stay Root's. P-ACCEPT and `children-complete` are proposals only. This is enforced
 by construction, not by care:
 
-- The writer's request builder accepts only the reconciler's `V2Migration.Change` cases: one
-  `updateProjectV2ItemFieldValue`, `clearProjectV2ItemFieldValue` (rollback only), `addProjectV2ItemById`,
-  `deleteProjectV2Item` (rollback of E1 only) and `archiveProjectV2Item`. It cannot construct an issue
-  mutation (`closeIssue`, `updateIssue`, `addSubIssue`, comment edits).
-- A test sends every other mutation name through the builder and expects a refusal, and a mutation leg
-  (§10) that admits `closeIssue` must turn that test red.
-- The only issue-side write is the proposals comment on #4985 (§6), made through a separate REST route
-  that can only create a comment on that one issue.
+- **A closed change type.** The reconciler has its own discriminated union, `TendChange`, with exactly
+  the cases `SetFieldValue`, `ClearFieldValue` (rollback only), `AddItem`, `RemoveCreatedItem` (E1
+  rollback only) and `ArchiveItem`. It is not a subtype of `V2Migration.Change` that a later case could
+  widen. Each case maps to one fixed GraphQL document whose only root field is
+  `updateProjectV2ItemFieldValue`, `clearProjectV2ItemFieldValue`, `addProjectV2ItemById`,
+  `deleteProjectV2Item` or `archiveProjectV2Item`.
+- **A transport-level allowlist.** The reconciler's transport parses every outgoing mutation document and
+  refuses, before dispatch, any document with a root field outside those five, as
+  `V2ObservationTransport` already admits only its one fixed document. An issue mutation (`closeIssue`,
+  `updateIssue`, `addSubIssue`, `addComment`) cannot leave the process even if a builder were wrong.
+- **Tests that can fail.** Instead of feeding names to a builder that cannot take one: (1) the tend
+  transport is handed hand-written documents for `closeIssue`, `updateIssue`, `addSubIssue` and
+  `addComment`, alone and aliased beside an allowed field, and each must be refused with zero recorded
+  sends; (2) every `TendChange` case is rendered and the set of root fields it produces must equal the
+  allowlist exactly. A mutation leg (§10) that adds `closeIssue` to the allowlist must turn (1) red.
+- **Carrier PRs.** E2 runs `check-closing-keywords` on the carrier's title, body and commit messages
+  before the push and refuses on any closing reference, because this repository squash-merges with the
+  commit messages.
+- **Comments.** The only issue-side write is the proposals comment on #4985 (§6), made through a separate
+  REST route whose allowlist is exactly `POST /repos/FS-GG/.github/issues/4985/comments`.
 
 ## 6. The write path
 
@@ -340,29 +409,40 @@ precondition: it re-reads the whole scope before every effect, which is why coho
 
 The reconciler extends it rather than adding a second writer:
 
-1. New `Change` cases `TransitionPlanningValue(item, field, from, to)`, `ClearPlanningValue` (rollback),
-   `ArchiveItem` and `RemoveCreatedItem` (rollback). Existing `AddMembership` and
-   `InitializePlanningValue` are reused.
+1. The reconciler's closed `TendChange` type and allowlisted transport (§5) sit on the shared custody
+   and dispatch machinery; `migration-apply` keeps its own `Change` type.
 2. An item-scoped precondition, generalising the guard Root accepted for the merge gate (#5106): the
    compared state is the item's complete reported field-value set, its item and project identities, the
-   field's schema and options, and the issue's determining facts (state, parent). An adjacent read must
-   equal the snapshot before the send. The readback must equal the preimage with only the selected field
-   moved.
-3. **Grouped reads, one send per item.** Up to 25 items are re-read in one aliased query. Each item's
-   field effects go in one mutation document: aliased `updateProjectV2ItemFieldValue` fields, run in
-   order. The group is read back in one aliased query. A group's window is at most 30 seconds, otherwise
-   it is re-read. A transition that replaces a populated value (S3, S3b, S4, O1, S1) uses a group of
-   one, keeping the merge gate's adjacency exactly; only absent-value fills use bigger groups.
-4. The same change is offered to `migration-apply` for #5123, so the enrollment initialization and the
-   reconciler share one writer (D8, accepted; Root coordinates with the #5119 owner).
+   field's schema and options, the issue's determining facts (state, parent), and for S3, S3b and S4 the
+   deciding PRs' `state`, `isDraft` and `mergedAt`. The readback must equal the preimage with only the
+   selected fields moved.
+3. **An immediate re-read before every send.** Each item's field effects go in one mutation document
+   (aliased `updateProjectV2ItemFieldValue` fields, run in order). The request sent immediately before
+   that mutation is a re-read of that item (and its deciding PRs), and every field in the mutation is
+   compared against it. No other request is interleaved and there is no group window; the custody record
+   is written between the two, which is a local write, not a request. The readback follows the send.
+4. **The remaining window.** GitHub's project field mutations take no expected value, so there is no
+   compare-and-swap. Between the re-read's response and the mutation taking effect, about one round
+   trip, a writer that does not take the lock (a person in the UI, the built-in Done workflow, a hosted
+   job) can change the field, and the reconciler's send then overwrites it. If the other write lands
+   after the reconciler's and before the readback, the readback shows it and the result is `uncertain`;
+   if it lands before the reconciler's, the readback cannot tell. The window is accepted because the lock removes every cooperative writer, the
+   Done workflow writes the same value S1 writes, and the preimage is recorded so any overwrite can be
+   reversed. A test pins the ordering: in the recorded call log, the request immediately before each
+   mutation is the re-read of the same item.
+5. The same item-scoped precondition is offered to `migration-apply` for #5123, so the enrollment
+   initialization and the reconciler share one write discipline (D8, accepted; Root coordinates with the
+   #5119 owner).
 
 ### Per effect
 
 1. The preimage is the snapshot value; an equal value is a no-op.
-2. Adjacent re-read (grouped as above); any difference refuses the effect this run.
-3. Durable possible-send custody: one record per item send in
-   `$XDG_STATE_HOME/fsgg/board-tend/<run>/`, keyed by item id and carrying the field, preimage and
-   target. If it cannot be written, nothing is sent (`refused-custody`).
+2. Immediate re-read of the item and its deciding PRs; any difference refuses the effect this run.
+3. Durable possible-send custody: one record per send in `$XDG_STATE_HOME/fsgg/board-tend/<run>/`,
+   carrying the fields, preimages and targets. A field send is keyed by item id. An E1 add is keyed by
+   the issue's node id, because the item id does not exist until GitHub returns it; the returned item id
+   is then written into the record, which is the only evidence `RemoveCreatedItem` accepts. If the record
+   cannot be written, nothing is sent (`refused-custody`).
 4. One send.
 5. Independent readback. `written` only when the readback equals the preimage with only the selected
    fields moved; the record is rewritten to `verified`.
@@ -373,11 +453,12 @@ The reconciler extends it rather than adding a second writer:
 
 ### Write budget
 
-At most `maxItemsPerRun` items (default 100) and `2 × ceil(items/25) + items` sends, with mutations at
-most one per second. GitHub documents a secondary limit of about 80 content-generating requests a minute
-and 500 an hour; whether field updates count is not established, so the pacing assumes they do. Steady
-state is a handful of items per run. The cohort-90 initialization (114 cards, 423 effects) becomes 114
-mutation sends plus about 10 group reads across two runs, instead of 30 applies.
+At most `maxItemsPerRun` items (default 100) and `3 × items` sends (re-read, mutation, readback), with
+mutations at most one per second. GitHub documents a secondary limit of about 80 content-generating
+requests a minute and 500 an hour; whether field updates count is not established, so the pacing assumes
+they do. Steady state is a handful of items per run. The cohort-90 initialization (114 cards, 423
+effects) becomes 114 mutation sends and 228 reads across two runs, a few minutes in all, instead of 63
+migration invocations over about 3 hours.
 
 ### Enrolled and unenrolled cards
 
@@ -387,10 +468,12 @@ mutation sends plus about 10 group reads across two runs, instead of 30 applies.
 - **Unenrolled cards** (candidates and non-candidates alike): absent-value fills of Status, Work level
   and Track (S9, W1, T1) through the same item-scoped guard, so the board is complete (D6, overriding the
   proposed "S1 and A1 only"; it matches Root's manual fills recorded on #4941). Root
-  [widened D6](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548590116) to the mechanically safe Status moves as well: S3 (open linked PR → In review),
+  [widened D6](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548590116) to the mechanically
+  safe Status moves as well: S3 (open linked PR → In review),
   S3b (only a draft PR linked → In progress), S4 (In review with nothing linked → In progress) and the O1
   roll-up within Backlog, Ready and In progress, all through the same guarded writer. S1 and A1 also
-  apply. Roadmap and the enrollment rows stay enrolled-only. For a candidate, E1 adds the
+  apply, and P-READY proposes Ready for an unenrolled Backlog card whose `## Blocked on` says "Nothing".
+  Roadmap and the enrollment rows stay enrolled-only. For a candidate, E1 adds the
   card and makes the fills in the same run, so a bare card never stays on the board; Roadmap follows
   enrollment (§7).
 
@@ -399,8 +482,12 @@ mutation sends plus about 10 group reads across two runs, instead of 30 applies.
 - The reconciler reads the merge gate's custody directory and refuses any item with a `possible-send`
   record (`gate-custody-uncertain`).
 - Both take the same writer lock (§8), so a post-merge write and a reconciler write never interleave.
-  The merge gate is Python; phase 2 adds the lock to it, with a cross-process test that the two exclude
-  each other.
+  The merge gate waits for the lock for at most 60 seconds. If it still cannot take it, it does not send:
+  it writes a **deferred-transition** custody record (repository, PR, Delivery, item, preimage and
+  target) and reports `boardTransition: deferred`. The next reconciler run applies that transition under
+  its own guards (preimage still one of the gate's writable values, immediate re-read, custody, one send,
+  readback) and then rewrites the record to `verified`, so no post-merge transition is lost. A deferred
+  record whose preimage no longer qualifies becomes a proposal.
 - S1 waits `doneSettleMinutes` after `closedAt`, so in the normal case the built-in workflow has already
   written Done and S1 is a no-op. If the workflow is read as disabled, S1 still applies: lifecycle
   rule 3 then makes the closer write Done through the guarded helper, and the reconciler is that helper.
@@ -434,7 +521,7 @@ through the #4941 planner), made automatic.
 | Stage | Today (cohort-90) | Reconciler |
 |---|---|---|
 | Find candidates | Root lists them | From the snapshot (§3), no extra read |
-| Make the card | Auto-add (now off) | E1: `AddMembership` with Status, Work level and Track filled in the same run |
+| Make the card | Auto-add (now off) | E1: `AddItem` (after the archived-member check) with Status, Work level and Track filled in the same run |
 | Roadmap | Root ruling | RM1, codified; computed for the request, written after `bind-runtime` |
 | Status targets | Root decided per card | The derivation in §3; closed cards are not enrolled |
 | `resolve-issues`, `route-preflight`, `plan`, `prepare`, `render-carrier` | Run by hand | Run in-process by the reconciler with the same inputs, once per batch |
@@ -444,7 +531,7 @@ through the #4941 planner), made automatic.
 | Merge | Root | Root, through the routine merge (D10). Automatic merge of carrier-only PRs is revisited after 3 clean unattended runs |
 | `bind-runtime` | By hand | After the merge, by the next run |
 | Reader identity after an upgrade | Hand rebind | **Prerequisite #5120** (a designed rebind stage checked against the executing assembly) |
-| Initialization | 30 applies at 4 cards per scope | §6 writer: about 1 send per item (fixes #5123 by construction) |
+| Initialization | 30 applies at 4 cards per scope | §6 writer: 3 sends per item and no whole-scope re-read, which delivers #5123 |
 | Population read | 207-row inspect accepted as Unknown | Fixed by #5127 (175 sends at 500); the reconciler's own read checks every enrolled node is a member |
 
 **Capacity is a prerequisite too.** Binding rows are append-only (the successor is a raw-byte splice that
@@ -471,17 +558,31 @@ it is accepted and delivered, E2 refuses above 450 rows and files a proposal.
   and `Path.GetTempPath()` follows `TMPDIR`, so two writers with different `TMPDIR` values do not exclude
   each other. The refresh path's `fsgg-v2-observation-<project>.lock` has the same defect, and engine
   tests that reach either lock contend with a live apply (#5126). Phase 2 PR 1 moves every Project 3
-  writer (`migration-apply`, `refresh`, the merge gate and the reconciler) to one fixed path,
-  `$XDG_RUNTIME_DIR/fsgg/board-writer-PVT_kwDOEYAWY84Bldpa.lock`, and refuses to write if it is unset.
+  writer to one fixed path, `$XDG_RUNTIME_DIR/fsgg/board-writer-PVT_kwDOEYAWY84Bldpa.lock`, and refuses
+  to write if it is unset. The writers are `migration-apply`, `refresh`, the merge gate, Root's manual
+  guarded route (the status-lifecycle procedure), the Python Done-retention archiver and the reconciler.
   The lock directory is injectable, tests inject a private one, and a test proves a test run never opens
-  the production path, which fixes #5126. During the transition writers also take the legacy lock at the
-  literal `/tmp` path. The reconciler takes locks without waiting: a held lock gives a plan-only run with
-  `lock-held`, never a queued writer.
+  the production path, which delivers #5126. During the transition writers also take the legacy lock at
+  the literal `/tmp` path.
+- **Lock semantics.** Every side uses `flock(2)` with `LOCK_EX` on the same path: the F# writers call it
+  explicitly rather than relying on .NET's `FileShare.None` emulation, which an environment variable can
+  disable, and the Python writers use `fcntl.flock`. A cross-process test proves an F# holder excludes a
+  Python taker and the reverse. The reconciler uses `LOCK_NB`: a held lock gives a plan-only run with
+  `lock-held`, never a queued writer. The merge gate waits up to 60 seconds and then defers (§6).
+- **A writer outside fdev cannot share the lock.** The Done-retention archiver currently runs as a hosted
+  workflow, where no fdev lock exists. Until it runs from fdev under the lock, or A1 replaces it, the
+  reconciler writes nothing to archive-eligible cards (Done and closed, beyond the newest 200), so the two
+  are disjoint by construction.
 - **Dry run by default.** `--apply` is ignored unless
   `$XDG_CONFIG_HOME/fsgg/board-tend.json` exists, is owned by the user with mode 0600, and lists the
-  enabled rules: `{"apply": ["S1","W1","T1"], "propose": true, "maxItemsPerRun": 100}`. Rules are enabled
+  enabled rules: `{"apply": ["W1","T1"], "propose": true, "maxItemsPerRun": 100}`. Rules are enabled
   one at a time. Deleting the file, or `"apply": []`, is the kill switch. A run without the file still
   writes its plan, so the rollout can compare plans before any write.
+- **Contract-gated rules.** S1, S3, S3b, S4, S9, S9r, O1 and E1 change what the lifecycle contract says
+  (D2, D3, the intended-fields grammar, and automatic Status moves and membership). The enable file may
+  list them only once the contract-amendment PR (§12) is on `main`: the reconciler reads the amendment's
+  marker `fsgg:board-tend-contract/v1` from `lifecycle-contract.md` at the installed revision and refuses
+  to enable a gated rule without it.
 
 ## 9. Migration from the Python observers
 
@@ -491,10 +592,10 @@ to each pair. During observation it runs plan-only, and phase 2 publishes a per-
 
 | Python rule(s) | Reconciler rule(s) | Order | Notes |
 |---|---|---|---|
-| drift d, currency R7 | W1, T1, RM1, S9 (apply); `work-level-undetermined` (propose) | First | Drift d and R7 are identical; the reconciler fixes rather than reports |
+| drift d, currency R7 | W1, T1, RM1, S9, S9r (apply); `work-level-undetermined`, P-INTENT (propose) | First | Drift d and R7 are identical; the reconciler fixes rather than reports |
 | drift x, currency U | Refuse class | First | The reconciler's Unknown is at least as wide as U |
 | drift b, currency R2 | S1 (apply), S2 (propose); R2 `outcome-unaccepted` (propose) | Second | b on PR cards: the board holds no PR cards today |
-| drift a, currency R8 | S3, S3b (apply); `pr-open-on-closed` (propose) | Second | a covers any card; the reconciler covers issue cards, which is every card now |
+| drift a, currency R8 | S3, S3b (apply); P-LINK, `pr-open-on-closed` (propose) | Second | a covers any card; the reconciler covers issue cards, which is every card now |
 | drift c, currency R4 | S4 (apply), S5 (propose), O1 (apply) | Third | 48 hours, with the Outcome legs |
 | currency R3 | P-UNBLOCK, P-NOBLOCKER | Third | |
 | currency R5, R6 | `children-complete`, `no-open-delivery` | Third | |
@@ -515,22 +616,34 @@ e and s stay.
 - **Properties.**
   - Determinism: permuting items, PRs and children gives the same plan.
   - Idempotence: applying the Apply class to the snapshot and deriving again gives an empty Apply class.
+    This holds because derivation runs to a fixpoint (§3); a fixture with a new Outcome, an unfilled
+    child and an open linked PR pins it.
+  - Dependencies: no effect is sent before an effect it depends on, and a refused parent effect defers
+    its dependants.
   - Safety: Apply never overwrites a populated Work level, Track or Roadmap, never writes Blocked, never
     moves off Blocked or Done, never sets Done on an open issue, and never writes In review or Done to an
     Outcome.
   - Partition: each card and field is in exactly one class.
-- **Writer.** Through `Fake.Recorder`: an adjacent read differs, custody cannot be written, the send
-  errors, the send times out after dispatch, the readback is malformed or shows another field moved, and
-  a crash between send and readback. Every case asserts the send count (0 or 1, never 2) and the custody
-  state.
+- **Writer.** Through `Fake.Recorder`: the re-read differs in a field or in a deciding PR's state,
+  draft flag or merge, custody cannot be written, the send errors, the send times out after dispatch, the
+  readback is malformed or shows another field moved, and a crash between send and readback. Every case
+  asserts the send count (0 or 1, never 2) and the custody state. One test asserts that the request
+  immediately before each mutation in the call log is the re-read of the same item.
+- **Never closing.** The transport refusal and root-field tests of §5.
+- **Lock.** The cross-process `flock` test (F# against Python, both directions), the merge gate's 60-second
+  wait ending in a deferred-transition record, and the reconciler applying that record next run.
+- **E1.** An archived member refuses the add; `RemoveCreatedItem` refuses an item without a matching
+  E1 custody record keyed by the issue node id.
 - **Budget.** Synthetic boards of 222 and 500 items assert read sends against the ceiling in §2, and the
   write send count for 25, 100 and 114 items.
 - **Conformance.** The linkage corpus runs against `linkage_of()` and the F# implementation. During the
   migration, the overlapping currency rules are compared ID by ID on the same snapshots.
 - **Mutation.** A spec file `tests/coord-board-tend-mutation/specs.yml` for the existing
-  `scripts/gate-mutate.py` harness, with one leg per guard: each Apply condition, the Blocked and Done
-  protections, the settle windows, absent-only filling, the roll-up's completeness check, the custody
-  write before send, no resend, the lock, the enable file and the issue-mutation refusal. Every leg must
+  `scripts/gate-mutate.py` harness, with one leg per guard: each Apply condition, strict linkage, the
+  PR-fact re-read, the Blocked and Done protections, the settle windows, absent-only filling, S9's
+  Backlog and Root-authorship limits, the fixpoint and dependency deferral, the roll-up's completeness
+  check, the archived-member refusal, the custody write before send, no resend, the lock, the enable
+  file and its contract gate, and the transport allowlist. Every leg must
   be killed, and its anchor check runs on each PR that touches the reconciler, as
   `tests/coord-engine-mutation/run.sh` does.
 - **Temporary paths.** Tests set a private `TMPDIR` and an injected lock directory. They never touch the
@@ -540,43 +653,53 @@ e and s stay.
 
 | # | Case (from #5136 and #5133) | Fixture asserts |
 |---|---|---|
-| 1 | No Status (11 cards) | S9: the declared `Intended Status`; otherwise S3 or S3b; otherwise Backlog |
+| 1 | No Status (11 cards) | S9 Backlog; S9r Ready only for a Root-authored line; any other declared value is P-INTENT; with a strictly linked open PR, one collapsed S9 + S3 effect |
 | 2 | Missing Work level or Track (128) | W1 from the parent and from the declaration; T1; a W1 conflict is refused |
 | 3 | Closed, not Done | S1 after the settle window; nothing inside it |
 | 4 | In review, no open PR (5) | Nothing linked: S4. Merged PR with evidence: P-ACCEPT, Status unchanged |
 | 5 | In progress, stale or finished (13 of 34) | Open PR: S3. Idle: S5. Merged with evidence: P-ACCEPT |
-| 6 | Backlog with "Blocked on: Nothing" (25) | P-READY only when enrolled with no open native blocker; never applied |
+| 6 | Backlog with "Blocked on: Nothing" (25) | P-READY when there is no open native blocker, enrolled or not (the unenrolled proposal names enrollment); never applied |
 | 7 | Outcome Status ignoring its children | O1 within Backlog, Ready, In progress; Blocked and All-In-review proposed; an incomplete child list is Unknown |
 | 8a | Roadmap inheritance with an anchor (Coordination#1026's 8 children) | RM1 drops the anchor; protected-document grammar passes |
 | 8b | Repository outside the binding (FsQuint#50) | `outside-binding`, reported once over several runs |
 | 8c | No admissible plan (SDK-PATCH-01), parent with no Roadmap (#4811 under #5097) | A proposal naming the plan owner; no write |
 | 8d | Closed card in the cohort (Unity.Client#28) | Done by S1; not an enrollment candidate |
 | 8e | `ConstructorIdentity` after `main` moves (#5113) | E2 refused until the prerequisite lands |
-| 8f | 114-card initialization (#5123) | At most 100 items in one run, about 1.1 sends per item, no whole-scope re-read |
+| 8f | 114-card initialization (#5123) | At most 100 items in one run, 3 sends per item, no whole-scope re-read |
 | 9 | Merge-gate interplay | After the gate's In review with a merged PR, the plan is empty for that item; a gate `possible-send` record refuses the item |
-| 10 | Never close | No plan, for any fixture, contains an issue mutation |
+| 10 | Never close | No plan, for any fixture, contains an issue mutation; the transport refuses hand-written issue mutations |
+| 11 | Loose linkage | A PR referencing two Deliveries, or a Delivery with no parent Outcome: P-LINK, no move |
+| 12 | Merge race | The deciding PR merges between snapshot and re-read: S3 refused this run |
+| 13 | Same-run dependency | A new Outcome and its child: the child's T1 follows the parent's; the plan is idempotent |
+| 14 | Archived member | A candidate with an archived Project 3 item: `archived-member`, no add |
+| 15 | Gate under contention | The gate's deferred-transition record is applied by the next run under the guards |
 
 ## 12. Phase 2 PR sequence
 
 One open PR per chain, each `Refs #5136`, each reviewed independently:
 
-1. The fixed writer lock path for every Project 3 writer, with an injectable lock directory and the
-   test that no test opens the production path (§8). This also fixes #5126.
-2. Pure derivation, plan types, fixtures (§11), properties and the mutation spec. No IO.
+1. The fixed writer lock path with `flock` semantics for every Project 3 writer, including the merge
+   gate's bounded wait and deferred-transition record; an injectable lock directory and the test that no
+   test opens the production path (§8). This PR owns the gate's lock and delivers #5126.
+2. Pure derivation to a fixpoint, plan types, fixtures (§11), properties and the mutation spec. No IO.
 3. Batched reads, `board-v2 tend` plan-only, the cost counters and a live read-only measurement at the
    current board size.
-4. The writer extension (§6), custody and the merge gate's use of the shared lock. This also delivers
-   #5123 (D8).
+4. The writer: `TendChange`, the transport allowlist, the immediate re-read, custody (E1 keyed by issue
+   node id) and applying the gate's deferred records. This also delivers #5123 (D8).
 5. Proposals to #4985 with the ledger.
-6. The contract amendments Root approved: Done backstop (D2) in dispatch rule 3 and the board-currency
-   design, and the bounded Outcome roll-up (D3) in the lifecycle contract and status lifecycle.
-7. The fdev units, the post-merge trigger and the enable file; 7 days plan-only, then Root enables rules
-   one at a time (S1 and O1 only after PR 6).
-8. The row-retirement design (D7), a docs PR reviewed like this one.
-9. Auto-enroll (§7), after #5113, #5120 and the delivered row retirement.
-10. Retirement PRs, one per pair approved under §9.
+6. The contract amendment, which gates S1, S3, S3b, S4, S9, S9r, O1 and E1: the Done backstop (D2) in
+   dispatch rule 3 and the board-currency design, the bounded Outcome roll-up (D3), the automatic Status
+   moves S3, S3b and S4, the intended-fields grammar and S9's limits, and E1's attended membership add,
+   in the lifecycle contract and status lifecycle, carrying the marker `fsgg:board-tend-contract/v1`.
+7. Release, install and qualify the coordination engine (0.114.1 or later, containing PRs 1-5) on fdev,
+   through the normal coherent release route, with installed readback.
+8. The fdev units, the post-merge trigger and the enable file; 7 days plan-only, then Root enables rules
+   one at a time, gated rules only after PR 6.
+9. The row-retirement design (D7), a docs PR reviewed like this one.
+10. Auto-enroll (§7), after #5113, #5120 and the delivered row retirement.
+11. Retirement PRs, one per pair approved under §9.
 
-#5136 Done-when 2 is met after PR 4, Done-when 3 after PR 7 and the first retirement, and Done-when 4 is
+#5136 Done-when 2 is met after PR 4, Done-when 3 after PR 8 and the first retirement, and Done-when 4 is
 measured in PR 3 and again on the first enabled week.
 
 ## 13. Root's recorded decisions
@@ -597,4 +720,19 @@ From [Root's decisions](https://github.com/FS-GG/.github/pull/5137#issuecomment-
 | D10 | Root merges enrollment carrier PRs | Yes, for now; automatic merge of carriers is revisited after 3 clean unattended runs |
 | D11 | The reconciler writes with Root's `gh` PAT on fdev, as the merge gate does; the App stays read-only | Yes |
 | D12 | E1 adds Project 3 membership for enrollment candidates and fills their fields in the same run; built-in auto-add stays off (dispatch rule 5) | Yes |
-| — | The `TMPDIR` lock hazard | One fixed lock path for every Project 3 writer in phase 2 PR 1, which also fixes #5126 |
+| — | The `TMPDIR` lock hazard | One fixed lock path for every Project 3 writer in phase 2 PR 1, which also delivers #5126 |
+
+Root's rulings on the first independent review of #5139 (REQUEST_CHANGES at `77320a0f`), 2026-10-31,
+relayed by the coordinator:
+
+| Finding | Ruling | Where |
+|---|---|---|
+| S3 and S3b linkage | Automatic only for a `linkage_of()` verdict with no failures naming exactly one Delivery; anything else is a proposal | §2, §3 (P-LINK) |
+| Merge race | The re-read includes the deciding PRs' state, draft flag and merge; a change refuses for this run | §3, §6 |
+| Writer and lock | Gate waits up to 60 s, then writes a deferred-transition record the reconciler applies; `flock` on both sides; writer list adds Root's manual route and the archiver; immediate per-item re-read with the remaining window documented and a test; E1 custody keyed by issue node id | §6, §8 |
+| S9 | Codify the intended-fields grammar in the lifecycle contract; apply only Backlog, and Ready when Root-authored; every other value is a proposal | §3, §12 |
+| Same-run dependencies | Derive to a fixpoint and defer dependants; idempotence holds and is tested | §3, §10 |
+| Archived cards | Confirm candidates through `Issue.projectItems(includeArchived: true)`; roll back only what custody proves was created; an archived member is Unknown and refused | §3, §4, §6 |
+| Never closing | Carrier keyword check before push; a closed `TendChange` type and a transport allowlist; tests that can fail | §5 |
+| Rollout | A contract-amendment PR gating S1, S3, S3b, S4, S9, O1 and E1; an engine release and installed qualification before the timer PR; PR 1 owns the gate's lock | §8, §12 |
+| Read cost | About 9-10 requests at 222 items and 16-20 at 500, from the live mix | §2 |
