@@ -55,7 +55,6 @@ on:
       - ".github/workflows/recipe-landable.yml"
       - ".github/workflows/registry-changelog.yml"
       - ".github/workflows/release-saga-tooling.yml"
-      - ".github/workflows/release-successor-authenticate-source.yml"
       - ".github/workflows/release-tag-anchors-selftest.yml"
       - ".github/workflows/repos-audit-selftest.yml"
       - ".github/workflows/repos-registry-selftest.yml"
@@ -75,7 +74,6 @@ on:
       - ".github/workflows/telemetry-git-safety.yml"
       - ".github/workflows/touch-set-drift.yml"
       - ".github/workflows/touch-set-drift-selftest.yml"
-      - ".github/workflows/update-fsgg-coord-cli-selftest.yml"
       - ".github/workflows/usage-census-selftest.yml"
       - ".github/workflows/work-programme.yml"
   push:
@@ -121,7 +119,6 @@ on:
       - ".github/workflows/recipe-landable.yml"
       - ".github/workflows/registry-changelog.yml"
       - ".github/workflows/release-saga-tooling.yml"
-      - ".github/workflows/release-successor-authenticate-source.yml"
       - ".github/workflows/release-tag-anchors-selftest.yml"
       - ".github/workflows/repos-audit-selftest.yml"
       - ".github/workflows/repos-registry-selftest.yml"
@@ -141,7 +138,6 @@ on:
       - ".github/workflows/telemetry-git-safety.yml"
       - ".github/workflows/touch-set-drift.yml"
       - ".github/workflows/touch-set-drift-selftest.yml"
-      - ".github/workflows/update-fsgg-coord-cli-selftest.yml"
       - ".github/workflows/usage-census-selftest.yml"
       - ".github/workflows/work-programme.yml"
   workflow_dispatch:

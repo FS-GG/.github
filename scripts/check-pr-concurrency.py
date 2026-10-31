@@ -40,7 +40,14 @@ WHY THESE (the basis, recorded rather than implied).
   * `routine-eligibility` (398 runs, the largest consumer) was held for #4994, which has merged. It runs on
     `pull_request_target` only, where `github.ref` is the default branch, so it has its own shape in
     PR_ONLY: group `<name>-${{ github.event.pull_request.number }}`, unconditional cancel.
-  * Excluded on purpose: `cross-repo-request-predicate` (also triggers on `issues`; two issue events at one
+  * Excluded on purpose: `release-successor-authenticate-source`, an inert protected-intake caller whose own
+    checker (`check-release-successor-authenticate.py`, 'extra source caller surface') accepts exactly the keys
+    name/on/permissions/jobs, so a top-level `concurrency` is refused there; relaxing a protected-intake
+    checker is not this gate's call. `update-fsgg-coord-cli-selftest`, which is red on any PR that touches it
+    (`test_fake_installer_inherits_runtime_resource_policy` compares an RLIMIT read in the parent with one read
+    in the installer's child: 18446744073709551615 expected, -1 got, on the runner at 2026-10-31; it passed on
+    2026-10-19 and passes locally), a latent red that path filtering hides and that concurrency would neither
+    cause nor fix. And `cross-repo-request-predicate` (also triggers on `issues`; two issue events at one
     commit would share a `github.sha` group, GitHub would drop the older PENDING run, and a predicate
     auto-comment would be lost) and `feed-autofix` (`repository_dispatch`, same collision). A
     `github.run_id` fallback would remove that hazard for all of them and is the better key for any
@@ -50,8 +57,8 @@ WHY THESE (the basis, recorded rather than implied).
     GOVERNED when it lands.
   * `wizard-graph-seal` already declares `<name>-${{ github.ref }}`, cancel true, and is one of the 73 PR
     workflows with a block of their own (many `<name>-${{ github.ref }}`, which also cancels main pushes).
-  On that tree 136 workflows trigger on pull_request or pull_request_target: 60 governed here, 74 with their
-  own block, 2 with none (the exclusions). Extending the list means reading each workflow first.
+  On that tree 136 workflows trigger on pull_request or pull_request_target: 58 governed here, 74 with their
+  own block, 4 with none (the exclusions). Extending the list means reading each workflow first.
 
 THE MODEL BELOW is this file's causal control. It evaluates the two declared expressions for a set of
 events and applies GitHub's documented group semantics, so "a superseded PR head is cancellable and a
@@ -96,12 +103,12 @@ GOVERNED = [
     "org-permission-policy", "org-policy", "parity-fixtures", "project-field-options",
     "protected-intake-preflight-selftest", "provisioned-podman-source", "recipe-followup",
     "recipe-landable", "registry-changelog", "release-saga-tooling",
-    "release-successor-authenticate-source", "release-tag-anchors-selftest", "repos-audit-selftest",
+    "release-tag-anchors-selftest", "repos-audit-selftest",
     "repos-registry-selftest", "rest-budget-preflight-selftest", "routine-eligibility-selftest",
     "skill-quality", "skill-registry-autofix", "skill-registry-coherence", "skill-roots-selfcheck",
     "skill-union-selftest", "skill-view", "skill-view-parity", "skillmirror-redrive",
     "surface-impact-selftest", "sync-build-config-selftest", "telemetry-git-safety", "touch-set-drift",
-    "touch-set-drift-selftest", "update-fsgg-coord-cli-selftest", "usage-census-selftest",
+    "touch-set-drift-selftest", "usage-census-selftest",
     "work-programme",
 ]
 
