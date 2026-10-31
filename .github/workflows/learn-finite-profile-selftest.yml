@@ -1,0 +1,38 @@
+# Gates for the LEARN finite-profile baseline (deployment/learn-finite-profile), Refs #4647.
+#
+# The baseline holds the admitted, installed bytes of the #4745 finite profile. This suite hashes every
+# imported file against BASELINE.json, refuses unlisted, missing, symlinked or altered files, re-runs the
+# secrets and identifier scan, and drives the install-journal comparison and the recorded-redaction rule
+# against synthetic trees. stdlib only; no credential, no network, no container.
+#
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a divergence.
+name: learn-finite-profile-selftest
+
+on:
+  pull_request:
+    paths:
+      - "deployment/learn-finite-profile/**"
+      - "tests/learn-finite-profile/**"
+      - ".github/workflows/learn-finite-profile-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deployment/learn-finite-profile/**"
+      - "tests/learn-finite-profile/**"
+      - ".github/workflows/learn-finite-profile-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Verify the baseline and run its gates
+        run: |
+          python3 deployment/learn-finite-profile/verify_baseline.py
+          python3 tests/learn-finite-profile/run.py
