@@ -2,7 +2,7 @@
 
 This carrier is the first real batched enrollment through the [#4941](https://github.com/FS-GG/.github/issues/4941) planner. It runs on installed coherent 0.114.0, with no per-cohort wrapper and no constructor rebuild. It delivers the public commitment of one successor pair. The pair appends 114 rows to the 93 rows of the predecessor (cohort 89, protected at `ebce547e7b2c4d61ec4d2673fdc2ee1b0572633d`), for 207 rows. No predecessor row, order or node id changes.
 
-The 114 rows are Delivery cards that Project 3's auto-add put on the board on 2026-10-31 with no Status, Track or Work level. Auto-add is now off. By repository: .github 62, Coordination 20, Unity.Client 8, Rendering 7, Game 6, Governance 4, SDD 4 and Templates 3. Root's decided targets for the 128 affected cards are 40 Done, 33 Backlog, 31 Blocked, 10 In progress, 7 Ready and 7 In review. Of the 40 Done cards, 33 already carry Done and lack only Track and Work level, and 7 are closed with every field empty. No card in the population was enrolled and closed but not Done.
+The 114 rows are Delivery cards that Project 3's auto-add put on the board on 2026-10-31 with no Status, Track or Work level. Auto-add is now off. By repository: .github 62, Coordination 20, Unity.Client 8, Rendering 7, Game 6, Governance 4, SDD 4 and Templates 3. Root's decided targets for the 128 affected cards were 40 Done, 33 Backlog, 31 Blocked, 10 In progress, 7 Ready and 7 In review. One retarget during the apply moved Unity.Client#28 from In review to Done (see below), which makes 41 Done targets. The live board, read before each card's first write, shows that 36 of those 41 already carried Done and lacked only Track and Work level. The other 5 were closed with every field empty. No card in the population was enrolled and closed but not Done.
 
 | Fact | Value |
 |---|---|
@@ -47,12 +47,44 @@ Root decided that each row inherits the Roadmap already enrolled for its native 
 - **Held cohort, SDK-PATCH-01.** [#4935](https://github.com/FS-GG/.github/issues/4935) and its children #4943–#4947, #5088, #5089, #5090, Templates#831 and Templates#832 have no admissible owning-plan document. [#5114](https://github.com/FS-GG/.github/issues/5114) owns adding one.
 - **Held: .github#4811.** It is now a native sub-issue of [#5097](https://github.com/FS-GG/.github/issues/5097) (OPS-MAINT), as Root decided. #5097 is itself unenrolled and declares no owning plan, so there is no Roadmap for #4811 to inherit, and it stays out of this cohort.
 
-## After merge
+## Apply record
 
-Root reviews and merges this carrier. Then:
+Root merged the carrier as [#5116](https://github.com/FS-GG/.github/pull/5116) (`dc9ac5b0780618bb3302a213a127fcace2185be7`, 16:40:23Z) after an independent approval. The manifest at that merge is byte-identical to the prepared public blob.
 
-1. `bind-runtime` changes only the successor private binding's `populationRevision` to the actual merge, after the `BindRuntime` preflight.
-2. The installed 0.114.0 reader qualifies the complete 207-row population read.
-3. Absent-value initialization of Status, Track, Roadmap and Work level for the 114 cards runs through `board-v2 migration-prepare` and `migration-apply`. The cap is 100 issues per scope, so it runs as two serialized batches with complete readback between them.
+All 114 cards now carry their decided Status, Track, Roadmap and Work level. A final GraphQL readback, one read per original batch scope, found 114 of 114 cards complete, with 0 wrong and 0 missing values.
 
-Existing values are never overwritten. The 33 cards already Done keep that value. Offline construction and this carrier grant no native write, implementation admission or Ready decision. Refs [#4941](https://github.com/FS-GG/.github/issues/4941) and [#4730](https://github.com/FS-GG/.github/issues/4730).
+| Field | Values now on the 114 cards |
+|---|---|
+| Status | Done 38, Blocked 29, Backlog 27, In progress 9, Ready 6, In review 5 |
+| Track | Active delivery 85, Follow-up 29 |
+| Work level | Delivery 114 |
+| Roadmap | the parent-inherited value enrolled for each row |
+
+The run sent 423 absent-value effects: Work level 114, Track 114, Roadmap 114 and Status 81. Each one has an HTTP 200 receipt and a native readback. The other 33 Status values already matched their targets and were left unchanged. No existing value was overwritten, and no raw `item-edit` write ran.
+
+### Stages and Root decisions
+
+1. **BindRuntime preflight.** It returned exit 11. Eight of its 9 checks were `SupportedForNextStage`. The remaining check, `ProjectAutoAdd`, was Unknown and named exactly the 14 excluded and held cards. `bind-runtime` printed "runtime binding written; population revision rebound; offline only", and the result differs from the private pair only in `populationRevision`.
+2. **Reader-identity rebind (Root-authorized hand step).** The installed 0.114.0 reader refused the binding: "selected binding does not match the loaded adapter assembly SHA-256". The binding still named the 0.113 reader, because `enrollment plan` copies the predecessor's identity fields and `bind-runtime` may change only `populationRevision`. Root authorized one rebind, written to a new file with the original kept:
+   - `artifactSha256` changed from `480106b6…cac2fd` to `f76941b2…cd1803a`;
+   - `recipeRevision` changed from `79db622f…` to `3c13e67f…`;
+   - the file sha256 changed from `8cf8c1aa…38ef` to `eba7a946…f9a5`, and the file is otherwise byte-identical;
+   - the installed `FS.GG.Coord.GitHub.dll` hashes to `f76941b2…` and embeds `1.0.0+3c13e67f56de25041c6a5f9de85c54d178134956`.
+   [#5120](https://github.com/FS-GG/.github/issues/5120) owns adding a designed stage for this rebind.
+3. **207-row qualification, accepted as Unknown.** `board-v2 inspect` accepted the rebound binding but exited 3 after 2,502 reads. Its membership gap reads "bounded refresh deadline/request ceiling reached". Main and the manifest were unchanged, and the 93-row qualification had completed in 1,741 reads. Root accepted the qualification as Unknown for this cohort only and did not retry it. [#5121](https://github.com/FS-GG/.github/issues/5121) owns the reader ceiling.
+4. **Batch 1.** This scope covered 16 cards, and its prepare found 55 changes, all matching the targets. The apply hit the 270-second invocation ceiling after 19 effects (16 Work level, 2 Track, 1 Roadmap). Every one of those 19 has a receipt and a correct readback, so Root recorded them as delivered. Each effect re-reads the whole scope; [#5123](https://github.com/FS-GG/.github/issues/5123) owns that cost.
+5. **Small scopes.** Root re-split the remaining 113 cards into 29 serialized scopes of at most 4 cards. Each scope ran a rate guard (at least 1,500 GraphQL and REST requests remaining), a fresh absent-only `migration-prepare` with 0 unexpected deltas, one apply and a GraphQL readback of that scope. Every apply exited 0 and read back with 0 wrong and 0 missing values. There were no ceiling partials and no rate pauses.
+6. **Retarget.** Root closed Unity.Client#28 at 16:31Z after accepting it, and the Item closed workflow then set its Status to Done. The first s19 prepare correctly refused to overwrite that value. The refusal was read-only and dispatched nothing. Root ruled that any card closed when its scope is prepared targets Done, so #28 went from In review to Done. It was the only retarget.
+
+### Observed cost
+
+- **Invocations:**
+  - planner: two `resolve-issues`, one each of `plan`, `prepare`, `render-carrier` and `bind-runtime`, and seven `route-preflight` runs;
+  - two `inspect` runs;
+  - 31 `migration-prepare`, including the refused s19 attempt;
+  - 30 `migration-apply`;
+  - one engine `migration-readback`.
+- **Wall clock:** planning started at 16:06:58Z and the last apply finished at 19:07:57Z. The apply phase alone ran from 16:55:04Z to 19:07:57Z. The small-scope applies took 6,219 s in total, between 79.5 s and 258.2 s each.
+- **Reads:** `inspect` reported its own 2,502. The engine does not count migration requests. During the small-scope run, GraphQL `rateLimit` fell by 3,487 points within reset windows. That is an upper bound, because other sessions share the same token.
+
+The 14 excluded and held cards keep their existing values. Enrollment and initialization grant no implementation admission or Ready decision. Refs [#4941](https://github.com/FS-GG/.github/issues/4941) and [#4730](https://github.com/FS-GG/.github/issues/4730).
