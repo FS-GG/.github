@@ -30,8 +30,13 @@ jobs:
           global-json-file: global.json
       - uses: ./.github/actions/setup-policy-python
       - name: Refuse malformed candidate gate behavior before costly qualification
-        run: python3 tests/release-successor-candidate/run.py
-      - name: Bind the current main source and stable version
+        run: |
+          set -euo pipefail
+          python3 tests/release-successor-candidate/run.py
+          python3 tests/release-source-closure/run.py
+      # The dispatch-time main SHA is pinned. A later main is admitted only when the pinned
+      # source is its ancestor and the release closure is unchanged between them (#5107).
+      - name: Bind the pinned dispatch source and stable version
         id: identity
         env:
           SOURCE_SHA: ${{ github.sha }}
@@ -41,7 +46,7 @@ jobs:
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REF" = refs/heads/main
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+          python3 scripts/release_source_closure.py check --route coherent-set --source "$SOURCE_SHA"
           version="$(dotnet msbuild src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -getProperty:Version | tr -d '[:space:]')"
           test "$version" = 0.114.0
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -174,14 +179,15 @@ jobs:
           python3 scripts/release-saga.py assert-artifacts \
             --manifest artifacts/packages/release-manifest.json
           cp artifacts/predecessor/stable-channel.json artifacts/packages/previous-stable-channel.json
-      - name: Refuse a changed main or newly occupied version before retention
+      - name: Refuse a changed release closure or newly occupied version before retention
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ github.sha }}
           VERSION: ${{ steps.identity.outputs.version }}
         run: |
           set -euo pipefail
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python3 scripts/release_source_closure.py check --route coherent-set --source "$SOURCE_SHA"
           python3 scripts/check-release-candidate-uniqueness.py \
             --version "$VERSION" --predecessor 0.113.0
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

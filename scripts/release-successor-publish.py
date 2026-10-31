@@ -22,6 +22,7 @@ import sys
 import time
 import zipfile
 
+import release_source_closure
 from release_successor_admission import SingleOperatorAdmission, publisher_context_authorized
 from release_successor_execution import Refused, advance, ordered_effects, full_transition
 from release_successor_journal import (ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical,
@@ -32,6 +33,7 @@ from release_successor_provider import (GitHubAPI, MetadataRequestBudget, INSTAL
                                        AUTH_PROTOCOL, AUTH_PROFILE, decode_auth_frame, validate_auth_binding, validate_auth_payload)
 
 REPOSITORY = "FS-GG/.github"
+CANDIDATE_CLOSURE = "coherent-set"
 SUCCESSOR_VERSION = CURRENT_RELEASE["version"]
 SUCCESSOR_PREDECESSOR = CURRENT_RELEASE["predecessor"]
 SUCCESSOR_REF = CURRENT_RELEASE["logicalRef"]
@@ -707,6 +709,16 @@ def classify_journal_destination(api, logical_ref):
     return not present, physical
 
 
+def candidate_closure_admitted(candidate_source, publisher_sha):
+    """Local Git proof that the publisher source descends from the candidate outside its closure."""
+    try:
+        release_source_closure.verify_local(CANDIDATE_CLOSURE, candidate_source, publisher_sha)
+    except release_source_closure.ClosureRefused as error:
+        print(f"Release successor candidate closure refused: {error}", file=sys.stderr)
+        return False
+    return True
+
+
 def prepare_release_journal(journal, ledger_api, admission, provider, api, manifest, intent,
                             candidate_source, publisher_sha, preflight_only, uniqueness, *,
                             recovery_checkpoint=False, original_0103_selection=None, original_tag_recovery=False):
@@ -721,8 +733,12 @@ def prepare_release_journal(journal, ledger_api, admission, provider, api, manif
             "original tag recovery requires the existing original journal; no genesis")
     if fresh:
         require(not recovery_checkpoint, "recovery checkpoint requires the existing original journal")
-        require(candidate_source == publisher_sha or original_0103_selection is not None,
-                "fresh publication requires candidate and publisher source to match")
+        # The journal intent still binds the exact candidate source; a later publisher source is
+        # admitted only as a descendant with an unchanged release closure (#5107).
+        require(candidate_source == publisher_sha or original_0103_selection is not None
+                or candidate_closure_admitted(candidate_source, publisher_sha),
+                "fresh publication requires candidate and publisher source to match "
+                "or the candidate to be an ancestor with an unchanged release closure")
         try:
             api.get(f"repos/FS-GG/.github/git/ref/tags/coherent-set/v{manifest['descriptor']['version']}")
         except NotFound:

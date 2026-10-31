@@ -42,8 +42,11 @@ jobs:
         run: |
           set -euo pipefail
           python3 tests/telemetry-host-successor/run.py
+          python3 tests/release-source-closure/run.py
           bash tests/telemetry-host-release/run.sh
-      - name: Bind CLR Host version and current source after read gate
+      # The dispatch-time main SHA is pinned. A later main is admitted only when the pinned
+      # source is its ancestor and the Host release closure is unchanged between them (#5107).
+      - name: Bind CLR Host version and pinned dispatch source after read gate
         env:
           SOURCE_SHA: ${{ github.sha }}
         run: |
@@ -52,7 +55,7 @@ jobs:
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REF" = refs/heads/main
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+          python3 scripts/release_source_closure.py check --route telemetry-host --source "$SOURCE_SHA"
           version="$(dotnet msbuild src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -getProperty:Version | tr -d '[:space:]')"
           test "$version" = 0.9.0
       - name: Test passive Host HTTP authority before browser qualification
@@ -107,10 +110,13 @@ jobs:
           bash tests/standalone-telemetry-host-package/run.sh "$package" artifacts/telemetry-host/package-evidence.json
           python3 -c 'import json,sys; e=json.load(open(sys.argv[1])); assert e["productionStorage"]=="eligible-linux-x64" and e["passiveReceiptQualified"] is True and e["failed"]==0' artifacts/telemetry-host/package-evidence.json
           bash tests/telemetry-host-release/run.sh
-      - name: Refuse changed main before retaining candidate
+      - name: Refuse a changed Host release closure before retaining candidate
         env:
           SOURCE_SHA: ${{ github.sha }}
-        run: test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python3 scripts/release_source_closure.py check --route telemetry-host --source "$SOURCE_SHA"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: telemetry-host-successor-candidate-${{ github.sha }}-${{ github.run_id }}

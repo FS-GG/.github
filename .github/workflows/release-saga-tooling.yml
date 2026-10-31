@@ -11,6 +11,7 @@ on:
       - "scripts/release_successor_auth_consumer.py"
       - "scripts/release-successor-publish.py"
       - "scripts/release-successor-artifact.py"
+      - "scripts/release_source_closure.py"
       - "scripts/release-saga-ci.sh"
       - "tests/release-saga/**"
       - "tests/release-successor-recovery/**"
@@ -18,6 +19,9 @@ on:
       - "tests/release-successor-execution/**"
       - "tests/release-successor-authentication/**"
       - "tests/release-successor-artifact/**"
+      - "tests/release-source-closure/**"
+      - ".github/workflows/release-successor-candidate.yml"
+      - ".github/workflows/release-telemetry-host-successor-candidate.yml"
       - "tests/bridge-release/**"
       - "tests/bridge-package/**"
       - "tests/bridge-receivers/**"
@@ -43,6 +47,7 @@ on:
       - "scripts/release_successor_auth_consumer.py"
       - "scripts/release-successor-publish.py"
       - "scripts/release-successor-artifact.py"
+      - "scripts/release_source_closure.py"
       - "scripts/release-saga-ci.sh"
       - "tests/release-saga/**"
       - "tests/release-successor-recovery/**"
@@ -50,6 +55,9 @@ on:
       - "tests/release-successor-execution/**"
       - "tests/release-successor-authentication/**"
       - "tests/release-successor-artifact/**"
+      - "tests/release-source-closure/**"
+      - ".github/workflows/release-successor-candidate.yml"
+      - ".github/workflows/release-telemetry-host-successor-candidate.yml"
       - "tests/bridge-release/**"
       - "tests/bridge-package/**"
       - "tests/bridge-receivers/**"
@@ -99,6 +107,8 @@ jobs:
         run: python3 tests/release-successor-authentication/run.py --current-source-suspension
       - name: Prove retained candidate identity and extraction
         run: python3 tests/release-successor-artifact/run.py
+      - name: Prove pinned release sources tolerate main moves only outside their closure
+        run: python3 tests/release-source-closure/run.py
       - name: Exercise immutable GS2-08.7 bridge and GS2-08.8 receiver
         run: |
           set -euo pipefail
