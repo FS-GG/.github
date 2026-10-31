@@ -114,11 +114,12 @@ module V2Projection =
     /// The ceiling of the coherent 0.114.0 readers (250). A population above it is readable only by a 500-row reader.
     val previousProgrammeRowCap: int
 
-    /// The bounded refresh/inspect request ceiling for a binding that selects this many rows: never below the
+    /// The CLI bounded transport's request ceiling (shared by inspect and refresh, scaled from inspect measurements
+    /// only; an unbatched refresh does not fit it above about 80 rows, #5131) for a binding that selects this many rows: never below the
     /// historical 500, and scaled by the selected population up to `maximumProgrammeRows`.
     val refreshRequestCeiling: selectedRows: int -> int
 
-    /// The bounded refresh/inspect deadline in seconds for a binding that selects this many rows: never below the
+    /// The CLI bounded transport's deadline in seconds (scaled from inspect measurements only) for a binding that selects this many rows: never below the
     /// historical 270, scaled by the selected population up to `maximumProgrammeRows` (410 seconds at 500 rows).
     val refreshDeadlineSeconds: selectedRows: int -> float
 
