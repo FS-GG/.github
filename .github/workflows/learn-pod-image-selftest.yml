@@ -1,0 +1,41 @@
+# Gates for the LEARN pod image source (deployment/learn-finite-profile/pod-image), Refs #4647.
+#
+# Runs the role entrypoint under /bin/sh with its paths in a temporary directory (the learn-pod-status/1 contract), executes the Containerfile's RUN step in a
+# sandbox against fixtures, and drives the builder's context verification, tool-tree extraction, runtime parsing and image gates against a fake podman. It builds no
+# image and starts no container. stdlib only; no credential, no network, no root, no systemd.
+#
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a divergence.
+name: learn-pod-image-selftest
+
+on:
+  pull_request:
+    paths:
+      - "deployment/learn-finite-profile/pod-image/**"
+      - "tests/learn-pod-image/**"
+      - ".github/workflows/learn-pod-image-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deployment/learn-finite-profile/pod-image/**"
+      - "tests/learn-pod-image/**"
+      - ".github/workflows/learn-pod-image-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# PR-keyed concurrency (#4730 CI-load): a newer run for the same pull request cancels the superseded one. The key falls back to `github.sha`
+# for push / workflow_dispatch so each keeps its own group and `cancel-in-progress` is false there.
+concurrency:
+  group: learn-pod-image-selftest-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the pod image gates
+        run: python3 tests/learn-pod-image/run.py

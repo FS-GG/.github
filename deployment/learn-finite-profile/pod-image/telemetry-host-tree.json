@@ -1,0 +1,287 @@
+{
+ "archiveSha256": "44273495ed12083b0c9762818ca0ef5688418e6fbc46bde9f2565b400c5aba89",
+ "fileCount": 55,
+ "files": [
+  {
+   "path": "Akka.FSharp.dll",
+   "sha256": "f7f292fa3bcae8400438e25b1b817376fb32516b946e0c85dd44ab8ad59fe4de",
+   "size": 72704
+  },
+  {
+   "path": "Akka.dll",
+   "sha256": "1ef266d80a923b25db758987a15e4db99acaa05863a236871bac4dbd6315c5b7",
+   "size": 946688
+  },
+  {
+   "path": "DotnetToolSettings.xml",
+   "sha256": "fc5bb1b1a670edc0b0bcd3e5b7b9fb53f305c94b1fd10fcd5555ea9c47a13282",
+   "size": 210
+  },
+  {
+   "path": "FS.GG.Coord.Core.dll",
+   "sha256": "965010ee65362f20e5828f6ea478cf369f3c2542b61b39cca81291a9402b59ce",
+   "size": 2968064
+  },
+  {
+   "path": "FS.GG.Coord.Core.pdb",
+   "sha256": "ce3d9d46caf0a4dc37b24820a3704856e6a12bc626cda8497c630ba3fbacbdd1",
+   "size": 630380
+  },
+  {
+   "path": "FS.GG.Coord.Core.xml",
+   "sha256": "9983d6fd4524f6f0ef6c1c028bf67e6db6ecf47d9a75f46fd861f587601b6ec6",
+   "size": 318357
+  },
+  {
+   "path": "FS.GG.Coord.GitHub.dll",
+   "sha256": "b8c0127d5bca07cfb6d67bbd37122f454b24310c925a313430f29fde41b0f102",
+   "size": 2235392
+  },
+  {
+   "path": "FS.GG.Coord.GitHub.pdb",
+   "sha256": "408c0a31fad93aa87cc595dc658ddd98ee99543fc1fc3a5064d25c5ec7d374b0",
+   "size": 553028
+  },
+  {
+   "path": "FS.GG.Coord.GitHub.xml",
+   "sha256": "9b55fffb38e8c373bf45a252a4a0056482d1e39ba6c6ecc0ecaa48eeb86af9f9",
+   "size": 264130
+  },
+  {
+   "path": "FS.GG.Telemetry.Client.dll",
+   "sha256": "94a7e9d2b05b20b22ed088857fb7c6dc4d14d995938512780f7fe5434b9d28b4",
+   "size": 86528
+  },
+  {
+   "path": "FS.GG.Telemetry.Client.pdb",
+   "sha256": "7c6d4f7c0c73f4d4515469729dbc07eb956d7baa62c8b2dce78202108ec55fd2",
+   "size": 20164
+  },
+  {
+   "path": "FS.GG.Telemetry.Client.xml",
+   "sha256": "d40489b9a9ade81a807e191b048547f4793dc0ec419c12349b8d66552f4f1770",
+   "size": 2056
+  },
+  {
+   "path": "FS.GG.Telemetry.Contracts.dll",
+   "sha256": "ba87107cd975cef4eaa46e22570f1fb23b4968d0779535563c4c3e6f4cc1bdef",
+   "size": 25600
+  },
+  {
+   "path": "FS.GG.Telemetry.Contracts.pdb",
+   "sha256": "ad42c69a280ea938b3b6348ec12990961a73e1931863085dec8b859e420e0636",
+   "size": 5848
+  },
+  {
+   "path": "FS.GG.Telemetry.Contracts.xml",
+   "sha256": "9102eaae04a6e2479413c3c6f363a1d2c8e3ba6d4e29e7a83a6d2eec7a94d4e5",
+   "size": 336
+  },
+  {
+   "path": "FS.GG.Telemetry.Dashboard.dll",
+   "sha256": "05ba6e4ef5ca9ffadaca9778d1eebf973ae94d7a8b6ac774a37be7d71eb056a8",
+   "size": 95232
+  },
+  {
+   "path": "FS.GG.Telemetry.Dashboard.pdb",
+   "sha256": "115be4b4825ea37afea4a7cdacd6ef19e40aa615733b0f01eb76a2aa51db00ee",
+   "size": 16192
+  },
+  {
+   "path": "FS.GG.Telemetry.Dashboard.xml",
+   "sha256": "7c2002ea25217b58b4eb73522d8c9878ac53fbcea803bd5eddebfc5a0a69786b",
+   "size": 133
+  },
+  {
+   "path": "FS.GG.Telemetry.Host.deps.json",
+   "sha256": "7b700203182025d0b07c97e890f0605bcadbb716b8932227855a835a4658be47",
+   "size": 16449
+  },
+  {
+   "path": "FS.GG.Telemetry.Host.dll",
+   "sha256": "5c2c5a9adb2665947af1f8757a9bec0fc651f8f8c2f58c9b3ba5332ed99a5b73",
+   "size": 588800
+  },
+  {
+   "path": "FS.GG.Telemetry.Host.pdb",
+   "sha256": "85a415be7d65cf87437eff834c3dccf21b54d4a45ab76e66e2f11a4ea1d1c9ca",
+   "size": 154804
+  },
+  {
+   "path": "FS.GG.Telemetry.Host.runtimeconfig.json",
+   "sha256": "2288776f3423eb70057d0e6304a94da3d632c3e8412d8586344d0dd5a2abe5e5",
+   "size": 500
+  },
+  {
+   "path": "FS.GG.Telemetry.Host.staticwebassets.endpoints.json",
+   "sha256": "c1686417e8d5c31bba969f12b6f3d2b35e6609adb5ca42f212261a3a02771aac",
+   "size": 53
+  },
+  {
+   "path": "FS.GG.Telemetry.Host.xml",
+   "sha256": "7a56766bb308dec801287e669891afce018397d82d4d5fd957a28b4defe7ecca",
+   "size": 5117
+  },
+  {
+   "path": "FS.GG.Telemetry.Store.dll",
+   "sha256": "9894810302f24914b3ef3d53686139d545a6bd02916bcfcf32360d0de89be936",
+   "size": 836608
+  },
+  {
+   "path": "FS.GG.Telemetry.Store.pdb",
+   "sha256": "2192b366c5d7002b574609c1afd9fbbc371a46f9a61be353743263014ad6d419",
+   "size": 178364
+  },
+  {
+   "path": "FS.GG.Telemetry.Store.xml",
+   "sha256": "417a0559c35fa58de6d8bbbffde81accdc2a7b778f1be18eb3335e7cf5f070dd",
+   "size": 5476
+  },
+  {
+   "path": "FSharp.Core.dll",
+   "sha256": "39b0b7f06c11bedd93f94b6f101fffd645f1c4437a5a6d3ee79259f855aeb11a",
+   "size": 2405672
+  },
+  {
+   "path": "FSharp.Quotations.Evaluator.dll",
+   "sha256": "10f9d981f5608ecdfa78b0287fd86cd65770df7032bbe4243f18ef016bbbbbe4",
+   "size": 276992
+  },
+  {
+   "path": "FsPickler.dll",
+   "sha256": "2dd70b0f268d78d45f06c7744b3ce7e587cb5d69340b7d63645a70033495ec10",
+   "size": 920064
+  },
+  {
+   "path": "Microsoft.Data.Sqlite.dll",
+   "sha256": "b98d957462be432895b00dccca012d3c127e118d3d4262418014b92c7bbd66cf",
+   "size": 177464
+  },
+  {
+   "path": "Microsoft.Win32.SystemEvents.dll",
+   "sha256": "ca495bf6c86b7f092d624928101985a941532d149dcd8acfea170f8a53be8850",
+   "size": 26224
+  },
+  {
+   "path": "Newtonsoft.Json.dll",
+   "sha256": "72cf291d4bab0edd08a9b07c6173e1e7ad1abb7ab727fd7044bf6305d7515661",
+   "size": 695336
+  },
+  {
+   "path": "SQLitePCLRaw.batteries_v2.dll",
+   "sha256": "1ee3c6ff4d39171690d6ff6f84b4d876ed038ca28e39bb6e74995f52d2aacf8b",
+   "size": 5632
+  },
+  {
+   "path": "SQLitePCLRaw.core.dll",
+   "sha256": "b72c9dfe1479a568d6b84e249eaf949e76c757888f8056fb6ddb9c0480e0dd25",
+   "size": 51712
+  },
+  {
+   "path": "SQLitePCLRaw.provider.e_sqlite3.dll",
+   "sha256": "1d4cb69b3aaf6a9cf40dfe179cc16dd678f12bc024b212d4297654e0a29e220d",
+   "size": 36864
+  },
+  {
+   "path": "System.Configuration.ConfigurationManager.dll",
+   "sha256": "d274bdd71f75f5005fcaec028921f71d89cb6d622022d74d2e07897a3a1d141a",
+   "size": 396424
+  },
+  {
+   "path": "System.Drawing.Common.dll",
+   "sha256": "89ea595ccb1fd1384480c1e30bd487c92af5d06d3b06f295323eff601acd9019",
+   "size": 427112
+  },
+  {
+   "path": "System.Security.Cryptography.ProtectedData.dll",
+   "sha256": "d186453eebba21e19a90e4fea16c11c3df59ed9610201c5a3c6d636b9864d840",
+   "size": 20592
+  },
+  {
+   "path": "System.Security.Permissions.dll",
+   "sha256": "62068c0f6bffb0eb4ec1c6a45a16784caee7565f6c5404d8342089f4ff4b3712",
+   "size": 104048
+  },
+  {
+   "path": "System.Windows.Extensions.dll",
+   "sha256": "810e8767d02d70af173bc33cc1048ff31a7df015fd46cf423a309cc89c50dc69",
+   "size": 25712
+  },
+  {
+   "path": "cs/FSharp.Core.resources.dll",
+   "sha256": "39abc8ba8136994f2486fbfb9bbb15dfc2e29573ee6b4ddb7c943aa641101836",
+   "size": 34088
+  },
+  {
+   "path": "de/FSharp.Core.resources.dll",
+   "sha256": "9f1195204de5486e502b08530499a3b47ae74d0802e97f9f5769a91a2f24340f",
+   "size": 35112
+  },
+  {
+   "path": "es/FSharp.Core.resources.dll",
+   "sha256": "cb1b86d6ece9335ac72891d764052385dcf84c17a784a763a4041e6c6a2538a5",
+   "size": 34088
+  },
+  {
+   "path": "fr/FSharp.Core.resources.dll",
+   "sha256": "6b1b09397595fea3dc159a78e5a4f28316d4a7b45d0017ededa43d9c8ea8e3af",
+   "size": 34640
+  },
+  {
+   "path": "it/FSharp.Core.resources.dll",
+   "sha256": "d666d34802d2e6518b70f259ae25578f97d4b54e1c4bc514e4283d6271624af5",
+   "size": 34088
+  },
+  {
+   "path": "ja/FSharp.Core.resources.dll",
+   "sha256": "a23e0b7b795fad83fbf7c7602229789ba78afa364e9a59c9cd2af94651e13195",
+   "size": 36648
+  },
+  {
+   "path": "ko/FSharp.Core.resources.dll",
+   "sha256": "42a346e25767af235c02287a4632d32e74f17fbe8fb2607f52493398c49044c2",
+   "size": 35664
+  },
+  {
+   "path": "libe_sqlite3.so",
+   "sha256": "eddcd4aa561d5b8f252db77e8272e7d1aed96bcab9fda3f177ca542f916290bf",
+   "size": 1470824
+  },
+  {
+   "path": "pl/FSharp.Core.resources.dll",
+   "sha256": "8aa4aa395b024fe48eb8e984eb10d8d212986255cdaeb999dc1a69ecc4c2fad6",
+   "size": 35152
+  },
+  {
+   "path": "pt-BR/FSharp.Core.resources.dll",
+   "sha256": "288d77fa358be771fd8191353a44f00422f84fc0ae601fcdcc407e37928d8b67",
+   "size": 33576
+  },
+  {
+   "path": "ru/FSharp.Core.resources.dll",
+   "sha256": "ac840e6612e162f3594437e1f333fb9bd00095760d332c1611075dbebb6cb861",
+   "size": 41256
+  },
+  {
+   "path": "tr/FSharp.Core.resources.dll",
+   "sha256": "a46090442f1e2c4c45443879d76981af4ba53b4b89775e88af3d19f58197826a",
+   "size": 33576
+  },
+  {
+   "path": "zh-Hans/FSharp.Core.resources.dll",
+   "sha256": "eaeb7b4703d337f53f155470502cbf3209705cd44ae71ffa7b90d765c16a61db",
+   "size": 32080
+  },
+  {
+   "path": "zh-Hant/FSharp.Core.resources.dll",
+   "sha256": "9619f737a5446b72be21313f18adab4359702b21e86ff3ca189a661c11f1f016",
+   "size": 31528
+  }
+ ],
+ "listSha256": "4b4006978a5ac45ffdbb328b51c3431acd80d3fa0c1efc667d05cfb4a42b3fca",
+ "package": "FS.GG.Telemetry.Host",
+ "root": "tools/net10.0/linux-x64/",
+ "schema": "learn-pod-telemetry-tree/1",
+ "totalBytes": 17519381,
+ "version": "0.8.0"
+}
