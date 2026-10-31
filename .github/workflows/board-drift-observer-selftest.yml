@@ -7,6 +7,9 @@
 # findings and a non-zero exit. It also reads board-drift-observer.yml and asserts the credential split
 # (read App token in `board-drift-read`, `issues: write` only in `board-drift-report`) and that nothing in the workflow can
 # turn a failed read into a green "no drift".
+# Rule s (a watched workflow's cron stopped firing: the nightly main-health observer past 2 days, this
+# observer's own previous scheduled run past 2 hours) has a fresh, stale, never-ran, absent, disabled and
+# unreadable leg, and its fetch (scripts/board-drift-schedule-fetch.py) is driven through a stub `gh`.
 #
 # The same job also runs `tests/board-currency/run.sh`: the board-currency rule set (R1-R9, U) that runs in
 # the observer's read job and that the report merges into the one findings issue, with its mutation controls.
@@ -21,6 +24,7 @@ on:
     paths:
       - "scripts/board-drift-observer.py"
       - "scripts/board-drift-fetch.py"
+      - "scripts/board-drift-schedule-fetch.py"
       - "tests/board-drift-observer/**"
       - ".github/workflows/board-drift-observer.yml"
       - ".github/workflows/board-drift-observer-selftest.yml"
@@ -34,6 +38,7 @@ on:
     paths:
       - "scripts/board-drift-observer.py"
       - "scripts/board-drift-fetch.py"
+      - "scripts/board-drift-schedule-fetch.py"
       - "tests/board-drift-observer/**"
       - ".github/workflows/board-drift-observer.yml"
       - ".github/workflows/board-drift-observer-selftest.yml"
