@@ -437,6 +437,11 @@ def analyze(
     return sorted(out, key=lambda f: (order[f["rule"]], f["ref"], f["key"]))
 
 
+def key_rule(key: str) -> str:
+    """The rule of a finding key (`<rule>|<ref>|<extra>`)."""
+    return key.split("|", 1)[0]
+
+
 def digest(findings: list[dict]) -> str:
     return hashlib.sha256("\n".join(sorted(f["key"] for f in findings)).encode()).hexdigest()
 
@@ -555,7 +560,9 @@ def render_body(findings: list[dict], snapshot_meta: dict, limit: int = BODY_LIM
     shown = 0
     full = False
     for title, group in sections:
-        header = ["", f"### {title}", ""]
+        # R1 churns with every merge, so its section leads with a count (Root decision on #5103).
+        count = f" ({len(group)})" if title.startswith("R1.") else ""
+        header = ["", f"### {title}{count}", ""]
         cost = sum(len(x) + 1 for x in header)
         if full or budget - cost < 0:
             break
@@ -628,11 +635,24 @@ def plan_report(findings: list[dict], existing: dict | None, snapshot_meta: dict
         previous_keys = set(previous["keys"])
         added = sorted(current_keys - previous_keys)
         removed = sorted(previous_keys - current_keys)
+        # Root decision (#5103 review): comment only when the drift set changes or a NEW non-R1 currency
+        # finding appears. R1 churns with every merge; it is shown as a count plus a list in the body only,
+        # and a change that touches nothing else rewrites the body without a comment or a reopen.
+        notable = [k for k in added + removed if key_rule(k) not in CURRENCY_RULES]
+        notable += [k for k in added if key_rule(k) in CURRENCY_RULES and key_rule(k) != "R1"]
+        if not notable:
+            return {"action": "update", "body": body, "comment": None}
+        listed_added = [k for k in added if key_rule(k) != "R1"]
+        listed_removed = [k for k in removed if key_rule(k) != "R1"]
+        r1_added = len(added) - len(listed_added)
+        r1_removed = len(removed) - len(listed_removed)
         comment = [f"Finding set changed: {len(added)} new, {len(removed)} cleared, {len(current_keys)} open."]
-        comment += [f"- new {code(key)}" for key in added[:50]]
-        comment += [f"- cleared {code(key)}" for key in removed[:50]]
-        if len(added) > 50 or len(removed) > 50:
+        comment += [f"- new {code(key)}" for key in listed_added[:50]]
+        comment += [f"- cleared {code(key)}" for key in listed_removed[:50]]
+        if len(listed_added) > 50 or len(listed_removed) > 50:
             comment.append("- (list truncated; the body holds the current set)")
+        if r1_added or r1_removed:
+            comment.append(f"- R1: {r1_added} new, {r1_removed} cleared (listed in the body only)")
     else:
         comment = [f"Finding set changed: {len(current_keys)} open (previous set not recorded in full)."]
     return {
@@ -705,8 +725,9 @@ def apply_plan(repo: str, plan: dict, existing: dict | None) -> str:
     if action == "reopen":
         patch["state"] = "open"
     gh_api([f"repos/{repo}/issues/{number}", "-X", "PATCH"], patch)
-    gh_api([f"repos/{repo}/issues/{number}/comments"], {"body": plan["comment"]})
-    return f"{'reopened' if action == 'reopen' else 'updated'} #{number}"
+    if plan.get("comment"):
+        gh_api([f"repos/{repo}/issues/{number}/comments"], {"body": plan["comment"]})
+    return f"{'reopened' if action == 'reopen' else 'updated'} #{number}" + ("" if plan.get("comment") else " (body only)")
 
 
 def snapshot_meta(snapshot: dict) -> dict:

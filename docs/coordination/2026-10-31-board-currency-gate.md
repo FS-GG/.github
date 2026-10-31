@@ -300,8 +300,11 @@ the same private-placeholder gate as drift findings, so a subject in a private o
 repository appears only as `private:<HMAC>`. The report job keeps one issue, **#4985, renamed "Board
 findings: Project 3"** (Root decision 3). The report still recognises the legacy title "Board drift:
 Project 3" and renames it on its next run, even when nothing else changed. Drift and currency findings
-share one body, one digest and one comment per change. Currency findings have no ack route: each clears
-when the native state it reads is fixed. A failed currency read leaves the run red and the issue
+share one body and one digest. A comment is posted only when the drift set changes or a new non-R1
+currency finding appears (Root decision on the #5103 review). R1 changes with almost every merge, so R1
+is shown in the body only, as a count plus a list. A change that touches nothing else rewrites the body
+without a comment and without reopening a closed issue. Currency findings have no ack route: each
+clears when the native state it reads is fixed. A failed currency read leaves the run red and the issue
 untouched, as a failed drift read does. The shadow workflow is retired, so the net change is one job
 fewer per hour. Failing the run on new finding IDs is phase 3.
 
@@ -370,6 +373,30 @@ Drift rules map onto these rules as follows:
 Rule e, the ruling heuristic, has no deterministic counterpart. In phase 2 both observers report to
 one tracking issue: #4985, renamed to the board-currency findings issue (decision 3). Drift rule s from
 #4990 (schedule watch; open at the time of writing, not merged) stays with the drift workflow.
+
+**Retiring the duplicated conditions.** In phase 2 the mapped pairs report the same card twice in one
+issue. The pairs are not identical:
+
+| Pair | How they differ |
+|---|---|
+| a / R8 | a covers any card a fresh PR refers to; R8 covers only Deliveries |
+| b / R2 | b also covers PR cards; R2 also covers Outcome acceptance |
+| c / R4 | c fires after 7 days; R4 fires after 48 hours, with Outcome legs |
+| d / R7 | the same condition |
+| x / U | U is the wider of the two |
+
+Both rules in each pair stay until Root retires them. The plan:
+
+1. **Observe.** Run phase 2 for at least seven days. For each pair, compare the IDs from the same run:
+   every card a drift rule names should also be named by its currency counterpart.
+2. **Decide.** Root rules on each pair separately. For each card a drift rule names that its counterpart
+   does not, Root either records the reason (for example, a or b on a PR card, which the R rules do not
+   cover by design) or asks for a currency rule change. A rule change is a new rule-set version.
+3. **Retire.** One PR per approved pair removes the drift rule, its ack route and its tests, keeping the
+   rest of the drift observer. Rule d and rule x go first, because their pairs are identical or the
+   currency rule is wider. Rules e and s are not duplicates and stay.
+
+Until a pair is retired, its drift findings keep their ack route and the currency findings keep none.
 
 ## 5. Interaction with existing pieces
 

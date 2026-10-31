@@ -1092,6 +1092,54 @@ class CurrencyConvergence(unittest.TestCase):
         self.assertEqual(OBS.plan_report(one, existing, self.META)["action"], "noop")
         self.assertEqual(OBS.plan_report(two, existing, self.META)["action"], "update")
 
+    def _existing(self, findings, state="open"):
+        return {"number": 4985, "state": state, "title": OBS.REPORT_TITLE, "body": OBS.render_body(findings, self.META)}
+
+    def test_r1_only_changes_rewrite_the_body_without_comment_or_reopen(self):
+        base = OBS.currency_findings(currency_doc(cfind()), self.KEY)
+        more = OBS.currency_findings(currency_doc(cfind(), cfind(rule="R1", subject="FS-GG/.github#10", reason="no-delivery")), self.KEY)
+        for state in ("open", "closed"):
+            added = OBS.plan_report(more, self._existing(base, state), self.META)
+            self.assertEqual((added["action"], added["comment"]), ("update", None), state)
+            removed = OBS.plan_report(base, self._existing(more, state), self.META)
+            self.assertEqual((removed["action"], removed["comment"]), ("update", None), state)
+        self.assertIn("(1)", added["body"])  # R1 shown as a count plus the list
+
+    def test_new_non_r1_currency_finding_comments_and_lists_no_r1_key(self):
+        base = OBS.currency_findings(currency_doc(cfind(rule="R1", subject="FS-GG/.github#10", reason="no-delivery")), self.KEY)
+        more = OBS.currency_findings(currency_doc(
+            cfind(rule="R1", subject="FS-GG/.github#10", reason="no-delivery"),
+            cfind(rule="R1", subject="FS-GG/.github#11", reason="no-delivery"), cfind()), self.KEY)
+        plan = OBS.plan_report(more, self._existing(base), self.META)
+        self.assertEqual(plan["action"], "update")
+        self.assertIn("R3|FS-GG/.github#2|no-blocker", plan["comment"])
+        self.assertNotIn("R1|", plan["comment"])
+        self.assertIn("R1: 1 new, 0 cleared", plan["comment"])
+        reopened = OBS.plan_report(more, self._existing(base, "closed"), self.META)
+        self.assertEqual(reopened["action"], "reopen")
+
+    def test_cleared_non_r1_currency_finding_is_quiet(self):
+        base = OBS.currency_findings(currency_doc(cfind()), self.KEY)
+        plan = OBS.plan_report(OBS.currency_findings(currency_doc(cfind(rule="R1", subject="FS-GG/.github#10",
+                                                                       reason="no-delivery")), self.KEY),
+                               self._existing(base), self.META)
+        self.assertEqual(plan["comment"], None)
+
+    def test_any_drift_change_comments(self):
+        cur = OBS.currency_findings(currency_doc(cfind(rule="R1", subject="FS-GG/.github#10", reason="no-delivery")), self.KEY)
+        drift = analyze(snapshot([item(100, status=None)]), NOW)
+        with_drift = OBS.plan_report(cur + drift, self._existing(cur), self.META)
+        self.assertTrue(with_drift["comment"])
+        cleared = OBS.plan_report(cur, self._existing(cur + drift), self.META)
+        self.assertTrue(cleared["comment"])
+
+    def test_apply_update_without_comment_posts_no_comment(self):
+        calls = self.record()
+        out = OBS.apply_plan("FS-GG/.github", {"action": "update", "body": "b", "comment": None}, {"number": 4985})
+        self.assertEqual(out, "updated #4985 (body only)")
+        self.assertFalse([a for a, _ in calls if a[0].endswith("/comments")])
+        self.assertEqual([p for a, p in calls if "PATCH" in a], [{"body": "b", "title": OBS.REPORT_TITLE}])
+
     def test_legacy_title_is_renamed_even_when_nothing_changed(self):
         one = OBS.currency_findings(currency_doc(cfind()), self.KEY)
         existing = {"number": 4985, "state": "open", "title": "Board drift: Project 3", "body": OBS.render_body(one, self.META)}
