@@ -11,9 +11,13 @@ WHAT IT DOES.
   1. Derive the tracked paths from the census itself, at run time: every `path` value anywhere in
      docs/coordination/v1-writer-census.json. There is no second list to drift.
   2. Read the PR's change set from git (`git diff --raw -z <base> <head>`).
-  3. The PR is TOUCHING when it changes a tracked path, the census file, this checker, or ADDS an
-     executable file (the structural check also counts the tracked executable population, so a new
-     executable with no row is drift too). Otherwise: print one line and exit 0 without running anything.
+  3. The PR is TOUCHING when it adds, modifies or changes the mode of ANY path the structural check puts in
+     its population (its own POPULATION_PREFIXES and BUILD_DECLARATIONS, imported from
+     scripts/check-v1-writer-census.py, never copied) or any executable file; or when it changes the census,
+     its checker or this script; or when it DELETES a path the census tracks (the row would dangle). The
+     structural check scans the whole population for sinks, so a brand-new non-executable workflow or script
+     carrying a publishing command is drift even though no census row names it yet. Otherwise: print one line and
+     exit 0 without running anything.
   4. When touching, run `check-v1-writer-census.py --structural` and report its verdict. A refusal is exit 1
      with the remedy: review the file's diff for a new sink, writer or permission, then rehash that row.
 
@@ -26,6 +30,7 @@ verdict (census unreadable, git unreadable). "I could not check" never shares a 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import subprocess
 import sys
@@ -39,6 +44,23 @@ OK, FLAG, NO_VERDICT = 0, 1, 3
 
 class NoVerdict(Exception):
     pass
+
+
+def population_rules(root: Path) -> tuple[tuple[str, ...], set[str]]:
+    """The structural check's own population definition, imported so there is no second list to drift."""
+    path = root / CHECKER
+    try:
+        spec = importlib.util.spec_from_file_location("v1_writer_census_checker", path)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        prefixes = tuple(module.POPULATION_PREFIXES)
+        declarations = set(module.BUILD_DECLARATIONS)
+    except Exception as error:  # an unloadable checker is no verdict, never a no-op
+        raise NoVerdict(f"cannot load POPULATION_PREFIXES/BUILD_DECLARATIONS from {CHECKER}: {error}") from error
+    if not prefixes:
+        raise NoVerdict(f"{CHECKER} declares no population prefixes; an empty population would no-op every PR")
+    return prefixes, declarations
 
 
 def tracked_paths(root: Path) -> set[str]:
@@ -66,8 +88,12 @@ def tracked_paths(root: Path) -> set[str]:
     return found
 
 
-def changes(root: Path, base: str, head: str) -> list[tuple[str, str]]:
-    """(path, new-mode) for every file the PR changes. Renames/copies count under their new name."""
+def changes(root: Path, base: str, head: str) -> list[tuple[str, str, str]]:
+    """(path, status, new-mode) for every file the PR changes.
+
+    `--no-renames` is load-bearing: with rename detection a record carries TWO paths and this parser would
+    read the old one. Without it a rename is a deletion plus an addition, each judged on its own path.
+    """
     try:
         raw = subprocess.run(
             ["git", "-C", str(root), "diff", "--raw", "-z", "--no-renames", base, head],
@@ -76,23 +102,28 @@ def changes(root: Path, base: str, head: str) -> list[tuple[str, str]]:
     except (OSError, subprocess.CalledProcessError) as error:
         raise NoVerdict(f"cannot read the change set {base}..{head}: {error}") from error
     parts = raw.split("\0")
-    out: list[tuple[str, str]] = []
+    out: list[tuple[str, str, str]] = []
     i = 0
     while i + 1 < len(parts) and parts[i].startswith(":"):
         meta = parts[i].split()  # :oldmode newmode oldsha newsha status
-        out.append((parts[i + 1], meta[1]))
+        out.append((parts[i + 1], meta[4][:1], meta[1]))
         i += 2
     return out
 
 
-def touching(tracked: set[str], diff: list[tuple[str, str]]) -> list[str]:
+def touching(tracked: set[str], diff: list[tuple[str, str, str]],
+             prefixes: tuple[str, ...], declarations: set[str]) -> list[str]:
     reasons: list[str] = []
-    for path, new_mode in diff:
+    for path, status, new_mode in diff:
         if path in tracked:
-            reasons.append(f"{path} (census-tracked)")
+            reasons.append(f"{path} ({'deleted, ' if status == 'D' else ''}census-tracked)")
         elif path in (CENSUS, CHECKER, SELF):
             reasons.append(f"{path} (the census or its checker)")
-        elif new_mode == "100755":
+        elif status == "D":
+            continue  # an untracked path that vanished leaves no row dangling
+        elif path.startswith(prefixes) or path in declarations:
+            reasons.append(f"{path} (in the structural check's population: a new or changed writer here is drift)")
+        elif int(new_mode, 8) & 0o100:
             reasons.append(f"{path} (executable; the structural check counts the executable population)")
     return reasons
 
@@ -106,13 +137,14 @@ def main(argv: list[str]) -> int:
     root = Path(args.root).resolve()
     try:
         tracked = tracked_paths(root)
-        reasons = touching(tracked, changes(root, args.base, args.head))
+        prefixes, declarations = population_rules(root)
+        reasons = touching(tracked, changes(root, args.base, args.head), prefixes, declarations)
     except NoVerdict as error:
         print(f"::error::census advisory: no verdict, {error}")
         return NO_VERDICT
     if not reasons:
-        print(f"census advisory: no-op. This PR touches none of the {len(tracked)} census-tracked paths, "
-              "adds no executable and does not edit the census, so the structural check was not run.")
+        print(f"census advisory: no-op. This PR touches none of the {len(tracked)} census-tracked paths, nothing "
+              "in the structural check's population, no executable and not the census, so it was not run.")
         return OK
     print("census advisory: this PR touches " + str(len(reasons)) + " census-relevant file(s):")
     for reason in reasons:
