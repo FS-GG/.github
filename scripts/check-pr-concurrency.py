@@ -9,16 +9,20 @@ completion and hold a runner for nothing. 223 stale-head runs a day completed fo
 WHAT EACH GOVERNED WORKFLOW MUST DECLARE, verbatim:
 
     concurrency:
-      group: <workflow name>-${{ github.event.pull_request.number || github.sha }}
+      group: <workflow name>-${{ github.event.pull_request.number || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-WHY `github.sha` AND NOT `github.ref` FOR A NON-PR EVENT. Root's decision keyed the fallback on
-`github.ref` so that "main push runs stay unchanged". That intent is not met by `github.ref` with
-`cancel-in-progress: false`: GitHub keeps at most ONE running and ONE pending run per group and
-discards an older pending run when a newer one arrives, whatever `cancel-in-progress` says. Two quick
-merges to main would then share the `refs/heads/main` group and the first merge's pending run would be
-dropped — a main push run that never reports. The commit sha gives every push, merge_group entry and
-dispatch its own group, so there is nothing to be pending-replaced and nothing to cancel.
+WHY `github.run_id` FOR A NON-PR EVENT (not `github.ref`, not `github.sha`). GitHub keeps at most ONE running
+and ONE pending run per group and discards an older pending run when a newer one arrives, whatever
+`cancel-in-progress` says. So any non-PR key that two events can share loses a run:
+  * `github.ref` (Root's first key): two quick merges to main share `refs/heads/main`, and the first
+    merge's pending run is dropped, a main push run that never reports.
+  * `github.sha` (the key #5001 merged with): every push and merge_group entry has its own commit, but
+    events that arrive at ONE commit share it: two `workflow_dispatch` runs, an `issues` burst, a
+    `repository_dispatch` pair, or a `schedule` tick on an unchanged main. The older pending one is dropped.
+A run id is unique to a run, so a non-PR event never shares a group with anything and there is nothing to
+cancel or replace. PR events still key on the PR number, so a superseded head is cancelled. (Root decision on
+#4730, replacing the sha fallback; the scenarios below include same-commit pairs, which the sha key fails.)
 
 A JOB-LEVEL `concurrency:` IS REFUSED TOO. GitHub accepts one on any job, with its own group and its own
 cancel flag, and it does not have to agree with the workflow-level block: a job-level
@@ -46,19 +50,18 @@ WHY THESE (the basis, recorded rather than implied).
     checker is not this gate's call. `update-fsgg-coord-cli-selftest`, which is red on any PR that touches it
     (`test_fake_installer_inherits_runtime_resource_policy` compares an RLIMIT read in the parent with one read
     in the installer's child: 18446744073709551615 expected, -1 got, on the runner at 2026-10-31; it passed on
-    2026-10-19 and passes locally), a latent red that path filtering hides and that concurrency would neither
-    cause nor fix. And `cross-repo-request-predicate` (also triggers on `issues`; two issue events at one
-    commit would share a `github.sha` group, GitHub would drop the older PENDING run, and a predicate
-    auto-comment would be lost) and `feed-autofix` (`repository_dispatch`, same collision). A
-    `github.run_id` fallback would remove that hazard for all of them and is the better key for any
-    workflow with event-driven triggers; changing the shape is a separate decision.
+    2026-10-19 and passes locally; filed as #5018), a latent red that path filtering hides and that
+    concurrency would neither cause nor fix.
+  * `cross-repo-request-predicate` (also triggers on `issues`) and `feed-autofix` (`repository_dispatch`) were
+    held back while the fallback was `github.sha`, because events at one commit would share a group. With
+    `github.run_id` that hazard is gone and both are governed.
   * `landed-revert-guard` (landed by #5008) already had the PR-only block; it is listed in PR_ONLY so the gate
     pins it. `claim-generation` (#5004, held) is not on main yet; its block is the default shape, so it goes in
     GOVERNED when it lands.
   * `wizard-graph-seal` already declares `<name>-${{ github.ref }}`, cancel true, and is one of the 73 PR
     workflows with a block of their own (many `<name>-${{ github.ref }}`, which also cancels main pushes).
-  On that tree 136 workflows trigger on pull_request or pull_request_target: 58 governed here, 74 with their
-  own block, 4 with none (the exclusions). Extending the list means reading each workflow first.
+  On that tree 136 workflows trigger on pull_request or pull_request_target: 60 governed here, 74 with their
+  own block, 2 with none (the exclusions). Extending the list means reading each workflow first.
 
 THE MODEL BELOW is this file's causal control. It evaluates the two declared expressions for a set of
 events and applies GitHub's documented group semantics, so "a superseded PR head is cancellable and a
@@ -76,6 +79,7 @@ Exit:   0 = every governed workflow declares the exact shape and the model agree
 from __future__ import annotations
 
 import argparse
+import itertools
 import re
 import sys
 from pathlib import Path
@@ -95,21 +99,20 @@ GOVERNED = [
     "c3-coordination-ordinary-enrollment-bridge-selftest",
     "c3-game-ordinary-enrollment-bridge-selftest", "c3-governance-ordinary-enrollment-bridge-selftest",
     "c3-net-ordinary-enrollment-bridge-selftest", "c3-rendering-ordinary-enrollment-bridge-selftest",
-    "coherence", "coord-report-selftest", "coordination-sync-selftest", "dispatch-preflight-selftest",
-    "fsc-progress-evidence", "fsgg-claim-fence", "fsgg-dispatch-broker-selftest", "generator-list",
-    "gs2-09-7-receiver-observer-probe-selftest", "kit-package-selftest",
-    "learn-finite-profile-selftest", "learn-seal-claim-selftest", "lock-range-coherence-selftest",
-    "lockfile-cold-selftest", "new-sdd-workspace-selftest", "observed-command-report-selftest",
-    "org-permission-policy", "org-policy", "parity-fixtures", "project-field-options",
-    "protected-intake-preflight-selftest", "provisioned-podman-source", "recipe-followup",
-    "recipe-landable", "registry-changelog", "release-saga-tooling",
-    "release-tag-anchors-selftest", "repos-audit-selftest",
-    "repos-registry-selftest", "rest-budget-preflight-selftest", "routine-eligibility-selftest",
-    "skill-quality", "skill-registry-autofix", "skill-registry-coherence", "skill-roots-selfcheck",
+    "coherence", "coord-report-selftest", "coordination-sync-selftest", "cross-repo-request-predicate",
+    "dispatch-preflight-selftest", "feed-autofix", "fsc-progress-evidence", "fsgg-claim-fence",
+    "fsgg-dispatch-broker-selftest", "generator-list", "gs2-09-7-receiver-observer-probe-selftest",
+    "kit-package-selftest", "learn-finite-profile-selftest", "learn-seal-claim-selftest",
+    "lock-range-coherence-selftest", "lockfile-cold-selftest", "new-sdd-workspace-selftest",
+    "observed-command-report-selftest", "org-permission-policy", "org-policy", "parity-fixtures",
+    "project-field-options", "protected-intake-preflight-selftest", "provisioned-podman-source",
+    "recipe-followup", "recipe-landable", "registry-changelog", "release-saga-tooling",
+    "release-tag-anchors-selftest", "repos-audit-selftest", "repos-registry-selftest",
+    "rest-budget-preflight-selftest", "routine-eligibility-selftest", "skill-quality",
+    "skill-registry-autofix", "skill-registry-coherence", "skill-roots-selfcheck",
     "skill-union-selftest", "skill-view", "skill-view-parity", "skillmirror-redrive",
     "surface-impact-selftest", "sync-build-config-selftest", "telemetry-git-safety", "touch-set-drift",
-    "touch-set-drift-selftest", "usage-census-selftest",
-    "work-programme",
+    "touch-set-drift-selftest", "usage-census-selftest", "work-programme",
 ]
 
 # Workflows whose ONLY pull-request trigger is the single event they run on (`pull_request_target`, or
@@ -120,7 +123,7 @@ GOVERNED = [
 PR_ONLY = ["landed-revert-guard", "routine-eligibility"]
 PR_ONLY_GROUP = "{name}-${{{{ github.event.pull_request.number }}}}"
 
-GROUP_FORMAT = "{name}-${{{{ github.event.pull_request.number || github.sha }}}}"
+GROUP_FORMAT = "{name}-${{{{ github.event.pull_request.number || github.run_id }}}}"
 CANCEL_EXPR = "${{ github.event_name == 'pull_request' }}"
 
 _EXPR = re.compile(r"^\$\{\{\s*(.*?)\s*\}\}$")
@@ -138,6 +141,7 @@ def _lookup(path: str, event: dict):
     table = {
         "github.event.pull_request.number": event.get("pr"),
         "github.sha": event.get("sha"),
+        "github.run_id": event.get("run_id"),
         "github.ref": event.get("ref"),
         "github.event_name": event.get("name"),
     }
@@ -168,20 +172,33 @@ def cancel_of(cancel, event: dict) -> bool:
     return _lookup(m.group("lhs"), event) == m.group("rhs")
 
 
+_RUNS = itertools.count(1000)
+
+
+def _event(name: str, pr: int | None, sha: str, ref: str) -> dict:
+    """One synthetic event. `run_id` is unique per call, as GitHub's is per run."""
+    return {"name": name, "pr": pr, "sha": sha, "ref": ref, "run_id": next(_RUNS)}
+
+
 def pr(number: int, sha: str, name: str = "pull_request") -> dict:
-    return {"name": name, "pr": number, "sha": sha, "ref": f"refs/pull/{number}/merge"}
+    return _event(name, number, sha, f"refs/pull/{number}/merge")
 
 
 def main_push(sha: str) -> dict:
-    return {"name": "push", "pr": None, "sha": sha, "ref": "refs/heads/main"}
+    return _event("push", None, sha, "refs/heads/main")
 
 
 def merge_group(sha: str) -> dict:
-    return {"name": "merge_group", "pr": None, "sha": sha, "ref": f"refs/heads/gh-readonly-queue/main/pr-1-{sha}"}
+    return _event("merge_group", None, sha, f"refs/heads/gh-readonly-queue/main/pr-1-{sha}")
 
 
 def dispatch(sha: str) -> dict:
-    return {"name": "workflow_dispatch", "pr": None, "sha": sha, "ref": "refs/heads/main"}
+    return _event("workflow_dispatch", None, sha, "refs/heads/main")
+
+
+def other(name: str, sha: str) -> dict:
+    """`schedule`, `issues`, `repository_dispatch`: all run at the default branch's current commit."""
+    return _event(name, None, sha, "refs/heads/main")
 
 
 def displaced(workflow: str, block: dict, running: dict, arriving: dict) -> str:
@@ -224,6 +241,13 @@ def scenarios(workflow: str, block: dict) -> list[tuple[str, bool, bool]]:
           displaced(workflow, block, merge_group("a" * 40), merge_group("b" * 40)) == "cancelled", False)
     claim("a manual dispatch is never cancelled by a later one",
           displaced(workflow, block, dispatch("a" * 40), dispatch("b" * 40)) == "cancelled", False)
+    # Events that arrive at ONE commit (a sha key shares a group between them).
+    for kind in ("workflow_dispatch", "schedule", "issues", "repository_dispatch", "push"):
+        first, second = other(kind, "c" * 40), other(kind, "c" * 40)
+        claim(f"two {kind} runs at one commit are not cancelled",
+              displaced(workflow, block, first, second) == "cancelled", False)
+        claim(f"two {kind} runs at one commit do not drop the older PENDING run",
+              pending_replaced(workflow, block, first, second), False)
     return out
 
 

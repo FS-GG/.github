@@ -709,7 +709,7 @@ TOP_KEYS = {"name", "on", "permissions", "jobs", "concurrency"}
 # own sha-keyed group and is never cancelled. Any other group or cancel expression is refused, so the
 # key cannot be turned into a way to cancel the run for the head a merge is waiting on.
 CONCURRENCY_EXPECTED = {
-    "group": "fsgg-claim-fence-${{ github.event.pull_request.number || github.sha }}",
+    "group": "fsgg-claim-fence-${{ github.event.pull_request.number || github.run_id }}",
     "cancel-in-progress": "${{ github.event_name == 'pull_request' }}",
 }
 JOB_KEYS = {"runs-on", "timeout-minutes", "steps", "permissions"}
@@ -1114,7 +1114,7 @@ MUTANTS = [
     ("R19a #4730: an unconditional `cancel-in-progress: true` could cancel a merge_group run",
      lambda t: t.replace("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", "cancel-in-progress: true", 1), CONCURRENCY),
     ("R19b #4730: a ref-keyed group would share one group across main pushes",
-     lambda t: t.replace("github.event.pull_request.number || github.sha", "github.event.pull_request.number || github.ref", 1), CONCURRENCY),
+     lambda t: t.replace("github.event.pull_request.number || github.run_id", "github.event.pull_request.number || github.ref", 1), CONCURRENCY),
     ("R19 F2b: `defaults: {run: {shell: bash}}` changes the shell EVERY step runs under",
      lambda t: t.replace("\njobs:\n", "\ndefaults:\n  run:\n    shell: bash\n\njobs:\n", 1), TOPKEY),
     # R20 (F2c) is asserted separately: it is about where a write LANDS, not about a verdict.

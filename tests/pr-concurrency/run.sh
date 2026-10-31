@@ -10,12 +10,13 @@
 #   M1 delete the concurrency block               -> "no workflow-level `concurrency:` mapping"
 #   M2 cancel-in-progress true (unconditional)    -> "cancel-in-progress is True"
 #   M3 cancel-in-progress false (never cancels)   -> MODEL: a PR push does NOT cancel the superseded run
-#   M4 fallback github.ref (Root's literal key)   -> MODEL: a main push's PENDING run IS dropped
+#   M4 fallback github.ref (Root's first key)     -> MODEL: a main push's PENDING run IS dropped
 #   M5 group without the PR number                -> MODEL: a PR push does NOT cancel the superseded run
 #   M6 group keyed on another workflow's name     -> "concurrency.group is"
 #   M7 an extra concurrency key                   -> "unexpected concurrency key"
 #   M8 `<name>-${{ github.ref }}` + cancel true   -> MODEL: a main push IS cancelled (the shape adr-coherence uses)
 #   M9 a job-level concurrency block, the workflow-level one left clean -> "job-level concurrency"
+#   M10 fallback github.sha (the #5001 key)      -> MODEL: two dispatches at one commit DO drop the older pending run
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -41,7 +42,7 @@ ALL=("${NAMES[@]}" "${PTNAMES[@]}")
 
 mutants=0
 for name in "${NAMES[@]}"; do
-  for m in M1 M2 M3 M4 M5 M6 M7 M8 M9; do
+  for m in M1 M2 M3 M4 M5 M6 M7 M8 M9 M10; do
     d="$WORK/$name-$m"; mkdir -p "$d/.github/workflows"
     # every governed file must exist in the mutant root, so copy them all and mutate only one
     for other in "${ALL[@]}"; do cp "$ROOT/.github/workflows/$other.yml" "$d/.github/workflows/"; done
@@ -62,9 +63,10 @@ new = {
   "M1": "",
   "M2": b.replace("${{ github.event_name == 'pull_request' }}", "true"),
   "M3": b.replace("${{ github.event_name == 'pull_request' }}", "false"),
-  "M4": b.replace("github.sha", "github.ref"),
-  "M5": re.sub(r"group: .*", f"group: {name}-${{{{ github.sha }}}}", b),
-  "M6": re.sub(r"group: .*", "group: some-other-workflow-${{ github.event.pull_request.number || github.sha }}", b),
+  "M4": b.replace("github.run_id", "github.ref"),
+  "M10": b.replace("github.run_id", "github.sha"),
+  "M5": re.sub(r"group: .*", f"group: {name}-${{{{ github.run_id }}}}", b),
+  "M6": re.sub(r"group: .*", "group: some-other-workflow-${{ github.event.pull_request.number || github.run_id }}", b),
   "M7": b + "  queue: max\n",
   "M8": re.sub(r"group: .*", f"group: {name}-${{{{ github.ref }}}}", b).replace("${{ github.event_name == 'pull_request' }}", "true"),
 }[m]
@@ -82,6 +84,7 @@ PY
       M7) want="unexpected concurrency key" ;;
       M8) want="model says it IS true that a main push does not cancel the previous main push run" ;;
       M9) want="job-level concurrency" ;;
+      M10) want="model says it IS true that two workflow_dispatch runs at one commit do not drop the older PENDING run" ;;
     esac
     rc=0; out="$(python3 "$TOOL" --root "$d" 2>&1)" || rc=$?
     mutants=$((mutants+1))
