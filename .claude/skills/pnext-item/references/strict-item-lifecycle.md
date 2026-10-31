@@ -318,8 +318,10 @@ As on the routine path, a PR `Refs` its Delivery issue (see the work-board dispa
 it; Root's acceptance closes the Delivery. `landingLinkageAuthorized` in `src/FS.GG.Coord.Core/Delivery.fs`
 accepts that linkage (.github#5100) when the PR closes no issue and `Refs` exactly one open Delivery
 that live sub-issue and parent reads prove is a native sub-issue of the claimed item; the merge fence
-re-proves it, and any failed read refuses. Such a landing ends at merge: the engine's terminal completion
-(§7) still requires canonical closing linkage, so it never closes or stamps the Outcome. Only an item whose
+re-proves it, and any failed read refuses. Such a Refs-only landing ends at merge: the engine's terminal
+completion (§7) still requires canonical closing linkage, so it never closes or stamps the Outcome and
+releases nothing. The Delivery stays open until Root's acceptance closes it, and the Outcome's claim and
+Status follow the board rules (Root and tend). Only an item whose
 merge fulfils its entire promise closes it — with a bare `Closes #<n>` (same repo) or `owner/repo#<n>` (cross repo),
 **never** the board's own `<repo>#<n>` shorthand, which GitHub's closing-keyword grammar does not parse
 and which then never closes the issue and cannot be repaired once merged (.github#2107). `verify-paths`,
