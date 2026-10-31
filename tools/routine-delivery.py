@@ -19,6 +19,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 import zipfile
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime, timedelta, timezone
@@ -1813,32 +1814,43 @@ BOARD_ENFORCE_REPOSITORY = "fs-gg/.github"
 class BoardCustody:
     """Durable possible-send custody for the one post-merge Status write (design §2b step 4).
 
-    One JSON record per (repository, PR, Delivery) under a private directory, written atomically and
-    fsynced BEFORE the send. A record that already exists means a send may have happened: the transition
-    then reads back only and never sends again, whatever the process history."""
+    One JSON record per (repository, PR), keyed by those two alone so a later run can find it before it
+    knows anything else, and carrying the Delivery, item, preimage and target. Written atomically and
+    fsynced BEFORE the send, and atomically rewritten to `verified` after a successful readback. A record
+    that exists means a send may have happened: no later run sends again for that PR."""
 
     def __init__(self, root: pathlib.Path) -> None:
         self.root = root
 
-    def path(self, repo: str, pr: int, delivery: str) -> pathlib.Path:
-        key = hashlib.sha256(f"{repo.lower()}#{pr}|{delivery.lower()}".encode()).hexdigest()[:32]
+    def path(self, repo: str, pr: int) -> pathlib.Path:
+        key = hashlib.sha256(f"{repo.lower()}#{pr}".encode()).hexdigest()[:32]
         return self.root / f"{key}.json"
 
-    def existing(self, repo: str, pr: int, delivery: str) -> dict | None:
-        path = self.path(repo, pr, delivery)
+    def existing(self, repo: str, pr: int) -> dict | None:
+        path = self.path(repo, pr)
         if not path.exists():
             return None
         record = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(record, dict) or record.get("schema") != BOARD_CUSTODY_SCHEMA:
+        if (not isinstance(record, dict) or record.get("schema") != BOARD_CUSTODY_SCHEMA
+                or record.get("repo", "").lower() != repo.lower() or record.get("pr") != pr
+                or not isinstance(record.get("delivery"), str) or record.get("state") not in ("possible-send", "verified")):
             raise RuntimeError("board custody record is malformed")
         return record
 
-    def write(self, repo: str, pr: int, delivery: str, record: dict) -> None:
+    def _private_root(self) -> None:
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
-        path = self.path(repo, pr, delivery)
+        info = self.root.stat()
+        if hasattr(os, "getuid") and info.st_uid != os.getuid():
+            raise RuntimeError("board custody directory is not owned by this user")
+        if stat.S_IMODE(info.st_mode) != 0o700:
+            os.chmod(self.root, 0o700)
+
+    def write(self, repo: str, pr: int, record: dict) -> None:
+        self._private_root()
+        path = self.path(repo, pr)
         fd, tmp = tempfile.mkstemp(dir=self.root, prefix=path.name + ".")
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(dict(record, schema=BOARD_CUSTODY_SCHEMA), handle, sort_keys=True)
+            json.dump(dict(record, schema=BOARD_CUSTODY_SCHEMA, repo=repo, pr=pr), handle, sort_keys=True)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp, path)
@@ -1854,9 +1866,30 @@ def default_board_custody_root() -> pathlib.Path:
     return pathlib.Path(state) / "fsgg" / "board-gate"
 
 
+def board_origin_is_github(url: str) -> bool:
+    """True only for FS-GG/.github on github.com: https://github.com/FS-GG/.github[.git][/] (no userinfo, port,
+    query or fragment), ssh://git@github.com/FS-GG/.github[.git] or git@github.com:FS-GG/.github[.git].
+    Host and path are compared exactly (case-insensitive); a suffix match is never enough."""
+    text = url.strip()
+    scp = re.fullmatch(r"git@github\.com:([^/]+/[^/]+?)(?:\.git)?/?", text, re.I)
+    if scp:
+        path = scp.group(1)
+    else:
+        parts = urllib.parse.urlsplit(text)
+        if (parts.scheme.lower() not in ("https", "ssh") or (parts.hostname or "").lower() != "github.com"
+                or parts.port is not None or parts.query or parts.fragment
+                or (parts.scheme.lower() == "https" and (parts.username or parts.password))
+                or (parts.scheme.lower() == "ssh" and parts.username != "git")):
+            return False
+        path = parts.path.strip("/")
+        path = path[:-4] if path.lower().endswith(".git") else path
+    return path.lower() == BOARD_ENFORCE_REPOSITORY
+
+
 def board_enforce_allowed() -> bool:
     """Enforce runs only from the FS-GG/.github checkout: the distributed receiver copy of this file never
-    enforces (design §2b). The checkout must hold the shared rules module and have FS-GG/.github as origin."""
+    enforces (design §2b). The checkout must hold the shared rules module and have FS-GG/.github on
+    github.com as origin (parsed exactly, see board_origin_is_github)."""
     root = pathlib.Path(__file__).resolve().parents[1]
     if not (root / "scripts" / "board-currency-rules.py").is_file():
         return False
@@ -1865,8 +1898,8 @@ def board_enforce_allowed() -> bool:
                               capture_output=True, text=True, timeout=30, check=False)
     except (OSError, subprocess.TimeoutExpired):
         return False
-    url = proc.stdout.strip().lower().removesuffix("/").removesuffix(".git")
-    return proc.returncode == 0 and (url.endswith("/" + BOARD_ENFORCE_REPOSITORY) or url.endswith(":" + BOARD_ENFORCE_REPOSITORY))
+    return proc.returncode == 0 and board_origin_is_github(proc.stdout)
+
 _BOARD_NAME = re.compile(r"[A-Za-z0-9_.-]{1,100}")
 _BOARD_TOKEN = re.compile(r"[a-z0-9-]{1,40}")
 _BOARD_NODE_ID = re.compile(r"[A-Za-z0-9_=-]{1,200}")
@@ -2141,10 +2174,17 @@ def board_transition(api: Any, rules: Any, repo: str, body: Any, delivery: str, 
     # Durable possible-send custody, written and fsynced before the send. Without it, enforce does not send.
     if custody is None:
         return "refused-custody"
+    # Defence in depth: a record for this PR means a send may already have happened (normally only seen on
+    # the merged-PR recovery path, which reads back instead). Never overwrite it and never send again.
     try:
-        custody.write(repo, pr, delivery, {"repo": repo, "pr": pr, "delivery": delivery, "itemId": before["itemId"],
-                                           "from": before["status"], "to": target, "state": "possible-send",
-                                           "recordedAt": datetime.now(timezone.utc).isoformat()})
+        if custody.existing(repo, pr) is not None:
+            return "uncertain"
+    except Exception:
+        return "uncertain"
+    try:
+        record = {"delivery": delivery, "itemId": before["itemId"], "from": before["status"], "to": target,
+                  "state": "possible-send", "recordedAt": datetime.now(timezone.utc).isoformat()}
+        custody.write(repo, pr, record)
     except Exception:
         return "refused-custody"
     print("fsgg routine board transition: possible-send recorded; one Status send follows", file=sys.stderr)
@@ -2156,23 +2196,39 @@ def board_transition(api: Any, rules: Any, repo: str, body: Any, delivery: str, 
         after = api.board_item(delivery)
     except Exception:
         return "uncertain"
-    return "written" if after == dict(before, status=target) else "uncertain"
-
-
-def board_custody_readback(api: Any, custody: BoardCustody, repo: str, pr: int, delivery: str) -> str | None:
-    """When custody already holds a possible send for this PR and Delivery, read back only: never send
-    again. Returns None when there is no record (the normal path)."""
+    if after != dict(before, status=target):
+        return "uncertain"
     try:
-        record = custody.existing(repo, pr, delivery)
+        custody.write(repo, pr, dict(record, state="verified", verifiedAt=datetime.now(timezone.utc).isoformat()))
+    except Exception:
+        pass  # the possible-send record stays; a later run reads back again and never resends
+    return "written"
+
+
+def board_custody_readback(api: Any, custody: BoardCustody, repo: str, pr: int) -> str | None:
+    """Read-only recovery for a PR whose custody record exists: a send may already have happened, so this
+    never sends. A `verified` record reports `written` without a read; a `possible-send` record is read back
+    and, when Status equals the recorded target, atomically rewritten to `verified`. Returns None when there
+    is no record."""
+    try:
+        record = custody.existing(repo, pr)
     except Exception:
         return "uncertain"
     if record is None:
         return None
+    if record["state"] == "verified":
+        return "written"
     try:
-        after = api.board_item(delivery)
+        after = api.board_item(record["delivery"])
     except Exception:
         return "uncertain"
-    return "written" if _board_item_valid(after) and after.get("status") == record.get("to") else "uncertain"
+    if not (_board_item_valid(after) and after.get("status") == record.get("to")):
+        return "uncertain"
+    try:
+        custody.write(repo, pr, dict(record, state="verified", verifiedAt=datetime.now(timezone.utc).isoformat()))
+    except Exception:
+        pass
+    return "written"
 
 
 def board_routine_body(body: Any) -> bool:
@@ -2198,6 +2254,8 @@ def summarize(
 ) -> tuple[int, Summary]:
     if board_gate not in BOARD_GATE_MODES:
         raise RuntimeError("board gate mode is not advisory or enforce")
+    if board_gate == "enforce" and not board_enforce_allowed():
+        raise RuntimeError("board gate enforce runs only from the FS-GG/.github checkout")
     if producer_source is not None and repo == FOURD_REPOSITORY and merge_method != "squash":
         raise RuntimeError("FourD producer installation requires the accepted squash merge method")
     if producer_source is not None and (publication_required or not coherent_workflow
@@ -2309,6 +2367,12 @@ def summarize(
                 disposition, coherent,
             )
     if is_merged(before):
+        # Crash recovery: a previous enforce run merged this PR and may have sent the Status write before it
+        # died. Its custody record is keyed by (repo, PR); read back only, never send.
+        if apply and board_gate == "enforce" and board_custody is not None:
+            recovered = board_custody_readback(api, board_custody, repo, pr_number)
+            if recovered is not None:
+                board.update(boardGateReason="custody-readback", boardTransition=recovered)
         coherent_disputed = coherent == "failed" or disposition in {"invalid", "deferred", "failed"}
         disputed = coherent_disputed or routine_state == "unresolved"
         merged_result = bound(
@@ -2380,9 +2444,7 @@ def summarize(
         # After the merged-PR and merge-commit readback, and only for a linked Delivery.
         # An overridden PR gets no Status transition: there is no verified Delivery to move.
         if gate is not None and gate.verdict == "linked" and gate.delivery is not None:
-            prior = (board_custody_readback(api, board_custody, repo, pr_number, gate.delivery)
-                     if board_gate == "enforce" and board_custody is not None else None)
-            board["boardTransition"] = prior if prior is not None else board_transition(
+            board["boardTransition"] = board_transition(
                 api, board_rules, repo, before.get("body"), gate.delivery, board_gate, pr_number, board_custody)
 
     request = merge_effect_request(

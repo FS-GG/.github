@@ -316,17 +316,26 @@ result carries `boardGate` (`linked`, `overridden`, `refused`, `unknown`, `unava
   **Root accepted this item-scoped substitute guard for this writer** (#5106 review): for the selected
   item it is at least as strict as the whole-project helpers, and its scope is disclosed here.
 - **Durable possible-send custody.** Before the send, enforce writes one JSON record per (repository,
-  PR, Delivery) to a private directory (`--board-gate-custody`, default `$XDG_STATE_HOME/fsgg/board-gate`,
-  mode 0700). The record is written atomically and fsynced, with the directory fsynced too. If it cannot be
-  written, nothing is sent (`refused-custody`). If a record already exists when the gate runs, a send may
-  already have happened: the gate reads back only and never sends again (`written` if Status equals the
-  recorded target, otherwise `uncertain`). The record holds identities and Status names only, never body
-  text.
-- **Enforce runs only from the FS-GG/.github checkout.** `--board-gate enforce` is refused unless the
-  running copy sits in a checkout that holds `scripts/board-currency-rules.py` and whose `origin` is
-  FS-GG/.github. The receiver copy distributed by the drivers package can therefore never enforce, and
-  the default in the distributed bytes stays `advisory` (a test and a mutant pin it). Flipping that
-  default is not how phase 3 starts: Root runs the `.github` copy with `--board-gate enforce`.
+  PR) to a private directory (`--board-gate-custody`, default `$XDG_STATE_HOME/fsgg/board-gate`). The
+  record carries the Delivery, item, preimage and target, and is keyed by repository and PR alone so a
+  later run can find it before it knows anything else. The directory must be owned by the running user and
+  is tightened to mode 0700. The record is written atomically and fsynced, with the directory fsynced too.
+  If it cannot be written, nothing is sent (`refused-custody`). After a readback that proves the target,
+  the record is atomically rewritten to `verified`. The record holds identities and Status names only.
+- **Crash recovery is read-only.** A run that died after the send leaves a `possible-send` record on a PR
+  that is now merged. The next enforce run takes the already-merged path, finds the record, and reads back
+  without sending: `boardGateReason: custody-readback` with `boardTransition: written` (Status equals the
+  recorded target, record rewritten to `verified`) or `uncertain` (anything else, including a failed or
+  malformed read; the record stays). A `verified` record reports `written` with no read. As defence in
+  depth, the write path also refuses to overwrite an existing record (`uncertain`, no send).
+- **Enforce runs only from the FS-GG/.github checkout.** `--board-gate enforce` is refused, by `main()` and
+  again by `summarize()` itself, unless the running copy sits in a checkout that holds
+  `scripts/board-currency-rules.py` and whose `origin` is exactly FS-GG/.github on github.com. The URL is
+  parsed, not suffix-matched: `https://github.com/FS-GG/.github[.git][/]` with no userinfo, port, query or
+  fragment, `ssh://git@github.com/FS-GG/.github[.git]`, or `git@github.com:FS-GG/.github[.git]`; host and
+  path compare case-insensitively. The receiver copy distributed by the drivers package can therefore never
+  enforce, and the default in the distributed bytes stays `advisory` (a test and a mutant pin it).
+  Flipping that default is not how phase 3 starts: Root runs the `.github` copy with `--board-gate enforce`.
 - **A PR is never a Delivery.** A reference that resolves to a pull request counts as off the board in
   all three places: the merge gate, the board-linkage check and the observer's `linkage_of()`.
 - **An overridden PR gets no Status transition.** Only a `linked` verdict names a verified Delivery to
