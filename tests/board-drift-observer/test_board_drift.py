@@ -619,6 +619,39 @@ class FetchMutantsAndVisibility(FetchHelper, unittest.TestCase):
         self.assertIn("/issues/101/", reads[0])
 
 
+class QuietCardsSkipCommentReads(FetchHelper, unittest.TestCase):
+    """#5119: a card whose issue was last updated before its Status change has no newer comment to read."""
+
+    def card(self, item_id, number, content_updated):
+        node = gh_item(item_id, number, "In progress", hours_ago(10))
+        node["content"]["updatedAt"] = content_updated
+        return node
+
+    def test_only_cards_updated_at_or_after_the_status_change_are_read(self):
+        nodes = [self.card("I1", 100, hours_ago(20)),      # quiet: updated before the status change
+                 self.card("I2", 101, hours_ago(10)),      # equal: read
+                 self.card("I3", 102, hours_ago(1)),       # updated since: read
+                 self.card("I4", 103, None),               # unknown: read
+                 self.card("I5", 104, "not-a-time")]       # unparseable: read
+        stub = GhStub(self, graphql_pages=[gql_page(nodes, len(nodes))],
+                      comments={"102": [{"id": 7, "user": {"login": "EHotwagner"}, "created_at": hours_ago(1), "html_url": "c", "body": "x"}]})
+        rc, exists, snap = self.fetch()
+        self.assertEqual((rc, exists), (0, True))
+        reads = sorted(c[1].split("/issues/")[1].split("/")[0] for c in stub.calls if "/comments?since=" in c[1])
+        self.assertEqual(reads, ["101", "102", "103", "104"])
+        by_number = {i["number"]: i for i in snap["items"]}
+        self.assertEqual(by_number[100]["comments"], [])
+        self.assertEqual(by_number[102]["comments"][0]["id"], 7)
+
+    def test_quiet_since_is_strict_and_fails_open_to_a_read(self):
+        self.assertTrue(FETCH.quiet_since({"contentUpdatedAt": "2026-10-31T10:00:00Z"}, "2026-10-31T10:00:01Z"))
+        self.assertFalse(FETCH.quiet_since({"contentUpdatedAt": "2026-10-31T10:00:00Z"}, "2026-10-31T10:00:00Z"))
+        self.assertFalse(FETCH.quiet_since({"contentUpdatedAt": "2026-10-31T10:00:02Z"}, "2026-10-31T10:00:01Z"))
+        self.assertFalse(FETCH.quiet_since({}, "2026-10-31T10:00:00Z"))
+        self.assertFalse(FETCH.quiet_since({"contentUpdatedAt": "2026-10-31T10:00:00"}, "2026-10-31T10:00:01Z"))
+        self.assertFalse(FETCH.quiet_since({"contentUpdatedAt": "2026-10-31T10:00:00Z"}, "garbage"))
+
+
 SECRET_REPO, SECRET_TITLE, SECRET_PR_TITLE = "FS-GG/Secret.Repo", "SECRET-CARD-TITLE", "SECRET-PR-TITLE"
 
 

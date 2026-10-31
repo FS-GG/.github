@@ -516,6 +516,26 @@ class Fetch(unittest.TestCase):
                         "subIssues": {"totalCount": 0, "nodes": []}, "blockedBy": {"totalCount": 0, "nodes": []}}}
     EMPTY_SEARCH = json.dumps({"incomplete_results": False, "total_count": 0, "items": []})
 
+    def test_board_is_read_in_pages_of_50_and_refused_beyond_500_items(self):
+        # #5119: the board limit is 500 items. Pages stay at 50 (pages of 100 cost more points), and an eleventh page
+        # is never requested: a board that still has more is refused, not read partially.
+        log = self.dir / "calls.log"
+        self.stub.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json,sys\n"
+            f"open({str(log)!r},'a').write(json.dumps(sys.argv[1:])+'\\n')\n"
+            f"sys.stdout.write({self.page([self.NODE], total=600, has_next=True)!r})\n")
+        self.stub.chmod(0o755)
+        out = self.dir / "snapshot.json"
+        env = dict(os.environ, BOARD_CURRENCY_GH=str(self.stub))
+        proc = subprocess.run([sys.executable, str(FETCH_PATH), "--out", str(out)], capture_output=True, text=True, env=env)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertFalse(out.exists())
+        calls = [json.loads(line) for line in log.read_text().splitlines()]
+        graphql = [call for call in calls if call[:2] == ["api", "graphql"]]
+        self.assertEqual(len(graphql), 10)
+        self.assertTrue(all(any("items(first:50, after:$cursor)" in arg for arg in call) for call in graphql))
+
     def test_success_normalizes_hierarchy(self):
         proc, out = self.run_fetch({"graphql": [0, self.page([self.NODE])], "search/issues": [0, self.EMPTY_SEARCH]})
         self.assertEqual(proc.returncode, 0, proc.stderr)
