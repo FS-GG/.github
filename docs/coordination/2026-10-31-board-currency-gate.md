@@ -117,7 +117,10 @@ carries a valid override, and marks the finding `carried`. The finding clears on
 references exactly one Delivery with a parent Outcome. An unlinked PR without an override drops off
 after `carryDays`; an overridden one stays until linked. For each PR whose body matches the override
 regex, the fetch reads `author`, `lastEditedAt` and `editor` (one batched GraphQL read) so the authorship
-rule can be checked; if that read fails, the override is not honoured. The evaluator stays a pure
+rule can be checked. If that read fails or is incomplete, the whole fetch fails and writes no snapshot,
+so an override is never silently dropped and reported as an ordinary R1 failure. The carry search runs
+one day at a time (about 110 routine merges a day), so GitHub's 1,000-result cap cannot wipe a run; a
+single day at the cap still refuses rather than reading a truncated day. The evaluator stays a pure
 function of the snapshot. `overridden`, carrying and the identity-less Unknown change verdicts, so they
 are rule-set version 2.
 
@@ -167,8 +170,9 @@ override below.
 | `<!-- fsgg:delivery-continues/v1 -->` | In a PR body: after this merge the Delivery stays In progress instead of In review (§2b). |
 | `<!-- fsgg:board-gate-override/v1 rule=R1 reason="…" -->` | In a PR body: a recorded override of the R1 gate. Exact grammar below. |
 
-**Override grammar, exactly.** The PR body, with code spans and fences removed, must match this
-regular expression (Python `re`, `MULTILINE`) **exactly once**:
+**Override grammar, exactly.** The PR body, with CRLF and lone CR line endings first normalised to LF
+and then code spans and fences removed, must match this regular expression (Python `re`, `MULTILINE`)
+**exactly once**:
 
 ```text
 ^<!-- fsgg:board-gate-override/v1 rule=R1 reason="(?P<reason>[^"\n]{1,200})" -->$
@@ -235,7 +239,10 @@ This is the evaluation order above for one PR, in `FS-GG/.github` only, implemen
   issues and pull-requests read, the same mint as `board-drift-read`.
 - **Non-routine PRs pass.** A PR whose body lacks `fsgg:routine-development/v1` is reported `skip` and
   the job succeeds, in every mode. Otherwise a required `board-linkage` would block every non-routine
-  merge under `enforce_admins`.
+  merge under `enforce_admins`. The skip is decided from the event payload in the first step, before
+  the App token is minted; the token mint and the evaluation run only for a routine PR. An App outage
+  therefore cannot block a non-routine merge. An unreadable payload is treated as routine, so the full
+  check (and its Unknown) decides rather than a silent skip.
 - **Rule-set v2.** The check imports the observer's own `override_of()` and `linkage_of()`, so the
   check, the gate and the observer cannot disagree. A valid override gives `overridden` without
   reading Project 3. The carry of unlinked and overridden PRs past the 24-hour window is the observer's

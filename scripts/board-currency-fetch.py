@@ -202,6 +202,20 @@ def normalize_item(node: dict) -> dict:
     return item
 
 
+def carry_search(owner: str, marker: str, start: dt.datetime, end: dt.datetime) -> list[dict]:
+    """The carry window searched one day at a time: each day stays far under GitHub's 1,000-result cap
+    (about 110 routine merges a day), so the cap can never wipe a whole run. A single day at the cap still
+    refuses (search_prs), rather than reading a truncated day."""
+    prs: list[dict] = []
+    cursor = start
+    while cursor < end:
+        stop = min(cursor + dt.timedelta(days=1), end)
+        span = f"{cursor.strftime('%Y-%m-%dT%H:%M:%SZ')}..{stop.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+        prs += search_prs(f"org:{owner}+is:pr+is:merged+{marker}+merged:{span}", merged=True)
+        cursor = stop
+    return prs
+
+
 def search_prs(query: str, merged: bool) -> list[dict]:
     prs: list[dict] = []
     page = 1
@@ -280,7 +294,8 @@ def needs_comments(item: dict, effective: dt.datetime, rules) -> bool:
 
 def fetch_editors(prs: list[dict], rules) -> None:
     """Add `edited`/`editor` to every PR whose body carries an override marker, so the rules can check
-    the authorship rule. A failed read leaves them absent, and the rules then do not honour the override."""
+    the authorship rule. A failed or incomplete read fails the whole fetch (no snapshot): an override must
+    never be silently dropped and reported as an ordinary R1 failure."""
     wanted = [pr for pr in prs if rules.OVERRIDE.search(rules.visible_text(pr.get("body")))]
     for start in range(0, len(wanted), 50):
         chunk = wanted[start:start + 50]
@@ -289,16 +304,14 @@ def fetch_editors(prs: list[dict], rules) -> None:
             owner, name = pr["repo"].split("/", 1)
             parts.append(f'p{n}: repository(owner:{json.dumps(owner)},name:{json.dumps(name)})'
                          f'{{ pullRequest(number:{int(pr["number"])}){{ lastEditedAt editor{{login}} author{{login}} }} }}')
-        try:
-            data = graphql("editors", ["-f", "query={" + " ".join(parts) + "}"])
-        except FetchError:
-            continue
+        data = graphql("editors", ["-f", "query={" + " ".join(parts) + "}"])
         for n, pr in enumerate(chunk):
             node = (data.get(f"p{n}") or {}).get("pullRequest")
-            if isinstance(node, dict):
-                pr["author"] = (node.get("author") or {}).get("login")
-                pr["edited"] = node.get("lastEditedAt") is not None
-                pr["editor"] = (node.get("editor") or {}).get("login")
+            if not isinstance(node, dict):
+                raise FetchError("an override-bearing PR's editor could not be read")
+            pr["author"] = (node.get("author") or {}).get("login")
+            pr["edited"] = node.get("lastEditedAt") is not None
+            pr["editor"] = (node.get("editor") or {}).get("login")
 
 
 def fetch_ref_states(refs: list[str]) -> dict[str, str]:
@@ -344,8 +357,7 @@ def main(argv: list[str] | None = None) -> int:
         carry_from = max(rules.parse_time(rules.PARAMS["carryFrom"]),
                          started - dt.timedelta(days=rules.PARAMS["carryDays"]))
         if carry_from < started - dt.timedelta(hours=rules.PARAMS["mergedWindowHours"]):
-            prs += search_prs(f"org:{args.owner}+is:pr+is:merged+{marker}+merged:%3E%3D"
-                              f"{carry_from.strftime('%Y-%m-%dT%H:%M:%SZ')}", merged=True)
+            prs += carry_search(args.owner, marker, carry_from, started)
         prs += search_prs(f"org:{args.owner}+is:pr+is:merged+%22fsgg:board-gate-override/v1%22+in:body", merged=True)
         unique: dict[tuple[str, int], dict] = {}
         for pr in prs:

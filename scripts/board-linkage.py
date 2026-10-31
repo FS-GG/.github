@@ -165,12 +165,36 @@ def evaluate(pr: dict, rules) -> tuple[str, str | None]:
     return "linked", None
 
 
+def precheck(event_path: str, output: str | None) -> int:
+    """Decide `skip` from the event payload alone, before any token exists: a non-routine PR must pass even
+    when the App token cannot be minted. Writes `routine=true|false` to GITHUB_OUTPUT. An unreadable
+    payload is treated as routine, so the full check (and its Unknown) decides rather than a silent skip."""
+    rules = rules_module()
+    try:
+        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+        body = ((event.get("pull_request") or {}).get("body"))
+        routine = rules.is_routine(body) if isinstance(event.get("pull_request"), dict) else True
+    except (OSError, json.JSONDecodeError, AttributeError):
+        routine = True
+    print(f"board-linkage: {'routine PR, evaluating' if routine else 'not a routine PR: skip (pass)'}")
+    if output:
+        with open(output, "a", encoding="utf-8") as handle:
+            handle.write(f"routine={'true' if routine else 'false'}\n")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--repo", required=True)
-    ap.add_argument("--pr", required=True, type=int)
+    ap.add_argument("--precheck-event", help="decide skip from this event payload only; no network, no token")
+    ap.add_argument("--repo")
+    ap.add_argument("--pr", type=int)
     ap.add_argument("--mode", choices=("advisory", "required"), default="advisory")
     args = ap.parse_args(argv)
+    if args.precheck_event:
+        return precheck(args.precheck_event, os.environ.get("GITHUB_OUTPUT"))
+    if not args.repo or args.pr is None:
+        print("board-linkage: --repo and --pr are required", file=sys.stderr)
+        return 2
     if not _REPO.fullmatch(args.repo) or args.pr <= 0:
         print("board-linkage: invalid --repo or --pr", file=sys.stderr)
         return 2
