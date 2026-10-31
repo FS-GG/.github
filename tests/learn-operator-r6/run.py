@@ -39,14 +39,14 @@ def load(names, **extra):
 
 
 # ============================================================ drift guard against the imported r5
-HUNKS, REMOVED, ADDED = 12, 20, 107                                      # pinned; see the README
+HUNKS, REMOVED, ADDED = 13, 20, 115                                      # pinned; see the README
 a = open(R5).read().splitlines()
 b = SRC.splitlines()
 ops = [o for o in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes() if o[0] != 'equal']
 removed, added = sum(o[2] - o[1] for o in ops), sum(o[4] - o[3] for o in ops)
 check(hashlib.sha256(open(R5, 'rb').read()).hexdigest().startswith('318edb4e'), 'the imported baseline is the admitted r5 (318edb4e)')
 if not os.environ.get('LEARN_R6_SKIP_DRIFT_GUARD'):                  # set only by the mutation analysis, so line-count changes are not what kills a mutant
-  check((len(ops), removed, added) == (HUNKS, REMOVED, ADDED), f'r6 differs from r5 in exactly 11 hunks, 20 lines removed, 89 added (got {len(ops)}, {removed}, {added})')
+  check((len(ops), removed, added) == (HUNKS, REMOVED, ADDED), f'r6 differs from r5 in exactly {HUNKS} hunks, {REMOVED} lines removed, {ADDED} added (got {len(ops)}, {removed}, {added})')
 for kept in ('IMAGE_ID = ', 'FIN = ', 'SECCOMP = ', 'PY_SHA = ', 'MAX_ACTIVE_OPS = 2', 'EVID_MAX_BYTES, EVID_MAX_ENTRIES', 'SLICE_MEMORY_MAX, SLICE_PIDS_MAX', 'HOST_UID_1000'):
     l5 = [x for x in a if x.startswith(kept)]
     check(l5 and l5 == [x for x in b if x.startswith(kept)], f'r6 keeps the r5 line {kept!r} byte for byte')
@@ -272,7 +272,8 @@ except RuntimeError:
 check(ns3['R']['runNonceSha256'] == hashlib.sha256(('ee' * 16).encode()).hexdigest(), 'the nonce hash is recorded even when start_pair raises')
 
 # ============================================================ recheck_sweep: the census taken again immediately before the start
-RS = load(['parse_unit_rows', 'classify_units', 'recheck_sweep'])['recheck_sweep']
+_rs = load(['parse_unit_rows', 'classify_units', 'recheck_sweep', 'start_census'])
+RS = _rs['recheck_sweep']
 U = lambda *rows: '\n'.join(rows) + '\n'
 check(RS('', 'op-r', 2) is None and RS(U('learn-op-a.service loaded active running A'), 'op-r', 2) is None, 'an empty census and one active reader op pass the recheck')
 check('a pod op became active' in (RS(U('learn-pod-p1.service loaded active running P'), 'op-r', 2) or ''), 'an active pod unit that appeared since the first census refuses at the start')
@@ -283,12 +284,25 @@ check(RS(U('learn-op-op-r-pre.service loaded active running P', 'learn-op-a.serv
 check(RS(U('learn-fin-op-r-pre.service loaded deactivating stop F'), 'op-r', 2) is None, '... even while its own precheck finalizer is deactivating')
 check('failed or transitioning' in (RS(U('learn-fin-other-pre.service loaded deactivating stop F'), 'op-r', 2) or ''), 'another op\'s precheck finalizer that is deactivating is not excused')
 check(RS(U('learn-pod-p1.service loaded inactive dead P'), 'op-r', 2) is None, 'an inactive pod unit does not refuse')
+# a pod is never excused, not even one named like this op's precheck unit
+for row, what in (('learn-pod-op-r-pre.service loaded active running P', 'active'), ('learn-pod-op-r.service loaded active running P', 'active, named for the op'),
+                  ('learn-pod-op-r-pre.service loaded activating start P', 'activating'), ('learn-pod-op-r-pre.service loaded failed failed P', 'failed'),
+                  ('learn-pod-op-r-pre.service loaded deactivating stop P', 'deactivating')):
+    check(RS(U(row), 'op-r', 2) is not None, f'a pod unit named for this op\'s precheck is never excused ({what})')
+# a failed census refuses, behaviourally (start_census runs the same code as main)
+SC = _rs['start_census']
+calls_ = []
+for rc_, out_, what in ((1, '', 'a non-zero rc with an empty list (a failed systemctl)'), (None, '', 'a timeout (rc None)'), (3, 'learn-op-a.service loaded active running A\n', 'a non-zero rc even with output')):
+    rc_got, why_ = SC('op-r', 2, run=lambda argv, t=0, rc=rc_, out=out_: (rc, out, ''))
+    check(rc_got == rc_ and why_ == 'unit census failed at the start', f'a failed census refuses: {what}')
+rc_got, why_ = SC('op-r', 2, run=lambda argv, t=0: (calls_.append(argv) or 0, '', ''))
+check(rc_got == 0 and why_ is None and calls_[0][-3:] == ['learn-op-*', 'learn-fin-*', 'learn-pod-*'], 'a successful empty census passes and lists reader ops, finalizers and pods')
+check(SC('op-r', 2, run=lambda argv, t=0: (0, U('learn-pod-p.service loaded active running P'), ''))[1].startswith('exclusion refused at the start'), 'a successful census with an active pod refuses through the same function')
 body = SRC.split('# ---------------- main ----------------', 1)[1]
-i_pre, i_re, i_start = body.index("if mode == '--precheck-only': finish(0)"), body.index('recheck_sweep(out, opid, MAX_ACTIVE_OPS)'), body.index('start_real(opid, argv, nonce)')
+i_pre, i_re, i_start = body.index("if mode == '--precheck-only': finish(0)"), body.index('start_census(opid, MAX_ACTIVE_OPS)'), body.index('start_real(opid, argv, nonce)')
 check(i_pre < i_re < i_start, 'the recheck runs after the precheck-only exit and immediately before start_real')
-check("'learn-pod-*'" in body[i_re - 300:i_re], 'the census taken at the start lists pod units too')
 check(body[i_re:i_start].count("refuse(") == 1 and "if why: refuse(why)" in body[i_re:i_start] and 'secrets.token_hex' in body[i_re:i_start], 'a recheck refusal stops the run before the nonce is drawn and before any unit starts')
-check("'unit census failed at the start'" in body, 'a failed census at the start refuses')
+check("'unit census failed at the start'" in SRC, 'a failed census at the start refuses')
 
 # ============================================================ end to end through the refusal gates
 SUBS = []
@@ -324,7 +338,7 @@ class P:
         self.returncode, self.stdout, self.stderr = rc, out.encode(), b''
 
 
-def run_operator(tmp, argv, units='', containers='', records=None, acks=None, custody=(), evid_dirs=(), memcur=0, mode_args=None, build_override=None):
+def run_operator(tmp, argv, units='', containers='', records=None, acks=None, custody=(), evid_dirs=(), memcur=0, mode_args=None, build_override=None, census_rc=0, podman_rc=0):
     home = os.path.join(tmp, 'home')
     state = os.path.join(home, '.local', 'state')
     for d in ('learn-custody', 'learn-evidence'):
@@ -364,9 +378,9 @@ def run_operator(tmp, argv, units='', containers='', records=None, acks=None, cu
         if argv_[:3] == ['podman', 'image', 'inspect']:
             return P(IMAGE_ID + '\n')
         if argv_[:2] == ['systemctl', '--user'] and 'list-units' in argv_:
-            return P(units)
+            return P(units, census_rc) if census_rc is not None else type('T', (), {'returncode': None, 'stdout': b'', 'stderr': b''})()
         if argv_[:2] == ['podman', 'ps']:
-            return P(containers)
+            return P(containers, podman_rc)
         raise AssertionError(f'unexpected command {argv_}')
     import subprocess
     saved = (subprocess.run, os.geteuid, os.umask(0o022), os.getcwd(), dict(os.environ), sys.argv, time.sleep)
@@ -420,6 +434,25 @@ with tempfile.TemporaryDirectory() as tmp:
     code, r, calls, state = run_operator(tmp, RUN, units='learn-op-a.service loaded active running A\nlearn-op-b.service loaded active running B\n')
     check(code == 5 and refused_with(r, 'concurrency refused: 2 ops already active'), 'the two-op cap is unchanged')
     check(r['gates']['exclusion'] == {'activePods': []}, '... and with no pod the exclusion gate records an empty list')
+
+# a failed FIRST census refuses (an empty list from a failed systemctl must not read as 'no units')
+with tempfile.TemporaryDirectory() as tmp:
+    code, r, calls, state = run_operator(tmp, RUN, census_rc=1)
+    check(code == 5 and refused_with(r, 'unit census failed') and 'exclusion' not in r['gates'], 'a failed systemctl (rc 1, empty list) refuses the run before any later gate')
+with tempfile.TemporaryDirectory() as tmp:
+    code, r, calls, state = run_operator(tmp, RUN, census_rc=None)
+    check(code == 5 and refused_with(r, 'unit census failed'), 'a census that timed out (rc None) refuses the run')
+with tempfile.TemporaryDirectory() as tmp:
+    code, r, calls, state = run_operator(tmp, RUN, census_rc=0)
+    check(not refused_with(r, 'unit census failed'), 'a successful empty census does not refuse')
+
+# a failed container census refuses (an empty list from a failed podman must not read as 'no orphan containers')
+with tempfile.TemporaryDirectory() as tmp:
+    code, r, calls, state = run_operator(tmp, RUN, podman_rc=125)
+    check(code == 5 and refused_with(r, 'container census failed') and 'sweep' not in r['gates'], 'a failed podman census (rc 125, empty list) refuses the run')
+with tempfile.TemporaryDirectory() as tmp:
+    code, r, calls, state = run_operator(tmp, RUN, podman_rc=0)
+    check(not refused_with(r, 'container census failed'), 'a successful empty container census does not refuse')
 
 # custody directory: an existing one refuses
 for label, kw in (('custody', dict(custody=['op-test-1'])), ('custody of the precheck id', dict(custody=['op-test-1-pre'])),

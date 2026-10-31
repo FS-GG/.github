@@ -26,7 +26,8 @@ The ordering contract below is implemented in `begin_input_access` and tested th
    held to process exit. The test holds it with r6's own code and requires the refusal, and the reverse.
 5. **Symmetric exclusion.** Refuse while **any `learn-op-*` reader op** (a precheck op included) **or any `learn-pod-*` unit** is active or
    transitioning (`failed`, `activating`, `deactivating`, `reloading`), a failed or transitioning `learn-fin-*` unit, or a leftover
-   `learn-pod-*` pod. A failed census (units or pods) refuses. This is the other direction of operator r6's exclusion.
+   `learn-pod-*` pod, or a `learn-op-*` container whose op unit is not active (the same orphan sweep as r6). A failed census (units, pods or
+   containers) refuses. This is the other direction of operator r6's exclusion.
 6. **Custody.** An existing custody or evidence directory for `<id>` or `<id>-pre`, or a unit named for the id, refuses.
 7. **Acknowledgements.** Operator r6's `retirement_gate` and `read_ack_pinned`, **verbatim**, against the persistent ack directory.
 8. **Evidence size.** Operator r6's `evidence_usage`, verbatim, with its 32 GiB cap.
@@ -44,7 +45,7 @@ RESULT before anything can start); **input** (`begin_input_access`).
 `begin_input_access` does, in this order, and a refusal at a step stops there:
 
 1. verify the claim (a refusal creates nothing);
-2. create the `input-read` marker `~/.local/state/learn-input/<op-id>/input-read` (directory 0700, file `O_EXCL` 0600, never removed);
+2. create the `input-read` marker `~/.local/state/learn-input/<op-id>/input-read` (directory 0700, file `O_EXCL` 0600, never removed; the file, its directory and that directory's parent are fsynced before the next step);
 3. set `gates.inputMounted` to true;
 4. mount the input.
 
