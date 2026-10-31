@@ -3393,12 +3393,17 @@ class BoardGateTests(unittest.TestCase):
     def setUp(self):
         self.assertIsNotNone(BOARD_RULES, "the shared rules module must load from this checkout")
 
-    def gate(self, api: BoardApi, mode: str, *, loader=None, apply: bool = True):
+    def gate(self, api: BoardApi, mode: str, *, loader=None, apply: bool = True, custody="fresh"):
+        if custody == "fresh":
+            tmp = tempfile.TemporaryDirectory()
+            self.addCleanup(tmp.cleanup)
+            custody = MODULE.BoardCustody(pathlib.Path(tmp.name) / "custody") if mode == "enforce" else None
+        self.last_custody = custody
         with contextlib.redirect_stderr(io.StringIO()) as log:
             code, result = MODULE.summarize(
                 api, repo="FS-GG/.github", pr_number=1, expected_head=HEAD, merge_method="squash",
                 publication_required=False, apply=apply, board_gate=mode,
-                board_rules_loader=loader or (lambda: BOARD_RULES))
+                board_rules_loader=loader or (lambda: BOARD_RULES), board_custody=custody)
         # Possible-send custody is recorded exactly when (and before) the one send is attempted.
         self.assertEqual(log.getvalue().count("possible-send recorded"), len(api.sends))
         self.assertTrue(all(api.custody), "possible-send must be recorded before the send")
@@ -3702,10 +3707,90 @@ class BoardGateTests(unittest.TestCase):
         with mock.patch.object(MODULE, "summarize", side_effect=fake_summarize), \
              mock.patch.object(MODULE, "discover_telemetry_config", return_value=None), \
              mock.patch.object(MODULE, "delivery_evidence", side_effect=RuntimeError("off")), \
+             mock.patch.object(MODULE, "board_enforce_allowed", return_value=True), \
              contextlib.redirect_stdout(io.StringIO()) as out:
             self.assertEqual(MODULE.main(base + ["--apply", "--board-gate", "enforce"]), 3)
         self.assertEqual(captured["board_gate"], "enforce")
+        self.assertIsInstance(captured["board_custody"], MODULE.BoardCustody)
         self.assertEqual(json.loads(out.getvalue())["boardGate"], "not-applicable")
+
+    # ---- pre-enforce controls: durable custody, .github-only enforce, PR-typed refs ----
+
+    def test_custody_is_durable_and_written_before_the_send(self):
+        before = board_item("In progress")
+        api = self.merging(board_body("Refs #900"), items=[before, before, board_item("In review")])
+        seen = {}
+        original = api.board_set_status
+        def send(*args):
+            record = self.last_custody.existing("FS-GG/.github", 1, BOARD_DELIVERY)
+            seen["record"] = record
+            return original(*args)
+        api.board_set_status = send
+        code, result = self.gate(api, "enforce")
+        self.assertEqual(result.boardTransition, "written")
+        self.assertEqual((seen["record"]["state"], seen["record"]["from"], seen["record"]["to"]),
+                         ("possible-send", "In progress", "In review"))
+        path = self.last_custody.path("FS-GG/.github", 1, BOARD_DELIVERY)
+        self.assertEqual(oct(path.parent.stat().st_mode & 0o777), "0o700")
+        self.assertNotIn("Private fixture prose", path.read_text())
+
+    def test_enforce_without_custody_or_with_unwritable_custody_never_sends(self):
+        before = board_item("In progress")
+        api = self.merging(board_body("Refs #900"), items=[before, before])
+        code, result = self.gate(api, "enforce", custody=None)
+        self.assertEqual((result.outcome, result.boardTransition, api.sends), ("delivered", "refused-custody", []))
+        with tempfile.TemporaryDirectory() as tmp:
+            blocker = pathlib.Path(tmp) / "file"
+            blocker.write_text("not a directory")
+            api = self.merging(board_body("Refs #900"), items=[before, before])
+            code, result = self.gate(api, "enforce", custody=MODULE.BoardCustody(blocker / "custody"))
+            self.assertEqual((result.boardTransition, api.sends), ("refused-custody", []))
+
+    def test_existing_custody_record_reads_back_and_never_sends_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            custody = MODULE.BoardCustody(pathlib.Path(tmp))
+            custody.write("FS-GG/.github", 1, BOARD_DELIVERY, {"state": "possible-send", "to": "In review"})
+            for status, expected in (("In review", "written"), ("In progress", "uncertain")):
+                with self.subTest(status=status):
+                    api = self.merging(board_body("Refs #900"), items=[board_item(status)])
+                    code, result = self.gate(api, "enforce", custody=custody)
+                    self.assertEqual((result.boardTransition, api.sends, api.item_reads), (expected, [], 1))
+
+    def test_advisory_never_touches_custody(self):
+        api = self.merging(board_body("Refs #900"), items=[board_item("In progress")])
+        code, result = self.gate(api, "advisory")
+        self.assertIsNone(self.last_custody)
+        self.assertEqual(result.boardTransition, "would-write:In review")
+
+    def test_enforce_runs_only_from_the_github_checkout(self):
+        def origin(url, code=0):
+            return subprocess.CompletedProcess([], code, url + "\n", "")
+        for url, allowed in (("git@github.com:FS-GG/.github.git", True), ("https://github.com/FS-GG/.github", True),
+                             ("https://github.com/fs-gg/.github.git/", True),
+                             ("https://github.com/FS-GG/FS.GG.Game.git", False),
+                             ("https://github.com/someone/FS-GG/.github-fork", False)):
+            with self.subTest(url=url), mock.patch.object(MODULE.subprocess, "run", return_value=origin(url)):
+                self.assertIs(MODULE.board_enforce_allowed(), allowed)
+        with mock.patch.object(MODULE.subprocess, "run", return_value=origin("", 1)):
+            self.assertFalse(MODULE.board_enforce_allowed())
+        with mock.patch.object(MODULE.subprocess, "run", side_effect=OSError("no git")):
+            self.assertFalse(MODULE.board_enforce_allowed())
+        base = ["--repo", "FS-GG/.github", "--pr", "1", "--head", HEAD]
+        with mock.patch.object(MODULE, "board_enforce_allowed", return_value=False), \
+             contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            MODULE.main(base + ["--apply", "--board-gate", "enforce"])
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            MODULE.main(base + ["--apply", "--board-gate-custody", "/x"])
+
+    def test_distributed_default_stays_advisory(self):
+        self.assertEqual(MODULE.parser().get_default("board_gate"), "advisory")
+
+    def test_pr_typed_reference_is_never_a_delivery(self):
+        node = {"__typename": "PullRequest", "number": 5, "state": "OPEN", "repository": {"nameWithOwner": "FS-GG/x"},
+                "projectItems": {"totalCount": 1, "nodes": [{"project": {"number": 3, "owner": {
+                    "__typename": "Organization", "login": "FS-GG"}}, "workLevel": {"name": "Delivery"},
+                    "status": {"name": "In progress"}}]}}
+        self.assertIsNone(MODULE.board_card(node))
 
     # ---- native adapter ----
 
@@ -3794,7 +3879,8 @@ class BoardGateTests(unittest.TestCase):
         self.assertEqual(cards["FS-GG/.github#800"]["workLevel"], "Outcome")
         self.assertIsNone(cards["FS-GG/.github#901"])
         self.assertTrue(cards["FS-GG/.github#902"]["unreadable"])
-        self.assertIsNone(cards["FS-GG/Other#5"]["parent"])
+        # A PR is never a Delivery: the gate, board-linkage and the observer agree (design §2b).
+        self.assertIsNone(cards["FS-GG/Other#5"])
         args = run.call_args.args[0]
         self.assertIn("o3=FS-GG", args); self.assertIn("n3=Other", args); self.assertIn("k3=5", args)
         with self.assertRaises(RuntimeError):

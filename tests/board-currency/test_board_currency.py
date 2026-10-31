@@ -868,6 +868,21 @@ class AnonymousUnreadable(unittest.TestCase):
         self.assertIn("R1:FS-GG/.github#10:no-delivery", ids(s))
 
 
+class PullRequestCards(unittest.TestCase):
+    """A PR card on the board is never a Delivery, as in board-linkage and the merge gate."""
+
+    def test_pr_card_with_delivery_level_does_not_link(self):
+        snap = healthy()
+        snap["items"].append({"itemId": "PVTI_pr", "type": "PullRequest", "repo": "FS-GG/.github", "number": 30,
+                              "state": "OPEN", "status": "In progress", "track": "Follow-up", "workLevel": "Delivery",
+                              "repoPrivate": False, "title": "pr card"})
+        snap["project"]["totalCount"] = 3
+        snap["pullRequests"] = [pr(10, "Refs #30" + ROUTINE)]
+        self.assertIn("R1:FS-GG/.github#10:no-delivery", ids(snap))
+        snap["pullRequests"] = [pr(10, "Refs #30, #2" + ROUTINE)]
+        self.assertFalse([i for i in ids(snap) if i.startswith("R1")])
+
+
 class LinkageFunction(unittest.TestCase):
     """linkage_of is the one R1 implementation the check and the gate import."""
 

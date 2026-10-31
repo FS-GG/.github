@@ -1806,6 +1806,67 @@ BOARD_MAX_REFS = 20
 BOARD_ROUTINE_MARKER = "fsgg:routine-development/v1"
 BOARD_CONTINUES = "<!-- fsgg:delivery-continues/v1 -->"
 BOARD_WRITABLE_PREIMAGES = ("Backlog", "Ready", "In progress", "In review")
+BOARD_CUSTODY_SCHEMA = "fsgg.routine-board-custody/1"
+BOARD_ENFORCE_REPOSITORY = "fs-gg/.github"
+
+
+class BoardCustody:
+    """Durable possible-send custody for the one post-merge Status write (design §2b step 4).
+
+    One JSON record per (repository, PR, Delivery) under a private directory, written atomically and
+    fsynced BEFORE the send. A record that already exists means a send may have happened: the transition
+    then reads back only and never sends again, whatever the process history."""
+
+    def __init__(self, root: pathlib.Path) -> None:
+        self.root = root
+
+    def path(self, repo: str, pr: int, delivery: str) -> pathlib.Path:
+        key = hashlib.sha256(f"{repo.lower()}#{pr}|{delivery.lower()}".encode()).hexdigest()[:32]
+        return self.root / f"{key}.json"
+
+    def existing(self, repo: str, pr: int, delivery: str) -> dict | None:
+        path = self.path(repo, pr, delivery)
+        if not path.exists():
+            return None
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(record, dict) or record.get("schema") != BOARD_CUSTODY_SCHEMA:
+            raise RuntimeError("board custody record is malformed")
+        return record
+
+    def write(self, repo: str, pr: int, delivery: str, record: dict) -> None:
+        self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path = self.path(repo, pr, delivery)
+        fd, tmp = tempfile.mkstemp(dir=self.root, prefix=path.name + ".")
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(dict(record, schema=BOARD_CUSTODY_SCHEMA), handle, sort_keys=True)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+        directory = os.open(self.root, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+
+def default_board_custody_root() -> pathlib.Path:
+    state = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
+    return pathlib.Path(state) / "fsgg" / "board-gate"
+
+
+def board_enforce_allowed() -> bool:
+    """Enforce runs only from the FS-GG/.github checkout: the distributed receiver copy of this file never
+    enforces (design §2b). The checkout must hold the shared rules module and have FS-GG/.github as origin."""
+    root = pathlib.Path(__file__).resolve().parents[1]
+    if not (root / "scripts" / "board-currency-rules.py").is_file():
+        return False
+    try:
+        proc = subprocess.run(["git", "-C", str(root), "config", "--get", "remote.origin.url"],
+                              capture_output=True, text=True, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    url = proc.stdout.strip().lower().removesuffix("/").removesuffix(".git")
+    return proc.returncode == 0 and (url.endswith("/" + BOARD_ENFORCE_REPOSITORY) or url.endswith(":" + BOARD_ENFORCE_REPOSITORY))
 _BOARD_NAME = re.compile(r"[A-Za-z0-9_.-]{1,100}")
 _BOARD_TOKEN = re.compile(r"[a-z0-9-]{1,40}")
 _BOARD_NODE_ID = re.compile(r"[A-Za-z0-9_=-]{1,200}")
@@ -1870,7 +1931,10 @@ def _board_project3(nodes: Any) -> list[dict]:
 
 
 def board_card(node: dict) -> dict | None:
-    """The rules module's card shape for one issue or PR; None when it is not on Project 3."""
+    """The rules module's card shape for one issue; None when it is not on Project 3 or is not an issue.
+    A PR is never a Delivery, matching board-linkage and the observer (linkage_of)."""
+    if node.get("__typename") == "PullRequest":
+        return None
     key = board_card_key(node)
     repo, number = key.rsplit("#", 1)[0], node["number"]
     items = node.get("projectItems")
@@ -2041,7 +2105,8 @@ def _board_item_valid(value: Any) -> bool:
             and (value["status"] is None or isinstance(value["status"], str)))
 
 
-def board_transition(api: Any, rules: Any, repo: str, body: Any, delivery: str, mode: str) -> str:
+def board_transition(api: Any, rules: Any, repo: str, body: Any, delivery: str, mode: str,
+                     pr: int = 0, custody: BoardCustody | None = None) -> str:
     """The one post-merge Delivery Status transition (design §2b steps 1-6). Never raises, never sets Done,
     never resends. Advisory mode reads only and reports what enforce would do."""
     refuse = "refused-preimage" if mode == "enforce" else "would-refuse-preimage"
@@ -2073,7 +2138,15 @@ def board_transition(api: Any, rules: Any, repo: str, body: Any, delivery: str, 
         return "refused-preimage"
     if adjacent != before:
         return "refused-preimage"
-    # Possible-send custody: from here on the only outcomes are a verified write or uncertain.
+    # Durable possible-send custody, written and fsynced before the send. Without it, enforce does not send.
+    if custody is None:
+        return "refused-custody"
+    try:
+        custody.write(repo, pr, delivery, {"repo": repo, "pr": pr, "delivery": delivery, "itemId": before["itemId"],
+                                           "from": before["status"], "to": target, "state": "possible-send",
+                                           "recordedAt": datetime.now(timezone.utc).isoformat()})
+    except Exception:
+        return "refused-custody"
     print("fsgg routine board transition: possible-send recorded; one Status send follows", file=sys.stderr)
     try:
         api.board_set_status(before["projectId"], before["itemId"], before["statusFieldId"], options[target])
@@ -2084,6 +2157,22 @@ def board_transition(api: Any, rules: Any, repo: str, body: Any, delivery: str, 
     except Exception:
         return "uncertain"
     return "written" if after == dict(before, status=target) else "uncertain"
+
+
+def board_custody_readback(api: Any, custody: BoardCustody, repo: str, pr: int, delivery: str) -> str | None:
+    """When custody already holds a possible send for this PR and Delivery, read back only: never send
+    again. Returns None when there is no record (the normal path)."""
+    try:
+        record = custody.existing(repo, pr, delivery)
+    except Exception:
+        return "uncertain"
+    if record is None:
+        return None
+    try:
+        after = api.board_item(delivery)
+    except Exception:
+        return "uncertain"
+    return "written" if _board_item_valid(after) and after.get("status") == record.get("to") else "uncertain"
 
 
 def board_routine_body(body: Any) -> bool:
@@ -2105,6 +2194,7 @@ def summarize(
     installation_prior: dict | None = None,
     board_gate: str = "advisory",
     board_rules_loader: Callable[[], Any] | None = None,
+    board_custody: BoardCustody | None = None,
 ) -> tuple[int, Summary]:
     if board_gate not in BOARD_GATE_MODES:
         raise RuntimeError("board gate mode is not advisory or enforce")
@@ -2288,9 +2378,12 @@ def summarize(
 
     def board_after_merge() -> None:
         # After the merged-PR and merge-commit readback, and only for a linked Delivery.
+        # An overridden PR gets no Status transition: there is no verified Delivery to move.
         if gate is not None and gate.verdict == "linked" and gate.delivery is not None:
-            board["boardTransition"] = board_transition(
-                api, board_rules, repo, before.get("body"), gate.delivery, board_gate)
+            prior = (board_custody_readback(api, board_custody, repo, pr_number, gate.delivery)
+                     if board_gate == "enforce" and board_custody is not None else None)
+            board["boardTransition"] = prior if prior is not None else board_transition(
+                api, board_rules, repo, before.get("body"), gate.delivery, board_gate, pr_number, board_custody)
 
     request = merge_effect_request(
         repo, pr_number, expected_head, base_ref, base_sha, merge_method,
@@ -2639,7 +2732,11 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--evidence-run", type=int, help="append verified PR checkout evidence from this native run")
     result.add_argument("--apply", action="store_true")
     result.add_argument("--board-gate", choices=BOARD_GATE_MODES, default="advisory",
-                        help="board-currency merge gate under --apply for routine PRs; advisory records only")
+                        help="board-currency merge gate under --apply for routine PRs; advisory records only. "
+                             "enforce runs only from the FS-GG/.github checkout")
+    result.add_argument("--board-gate-custody",
+                        help="private directory for durable possible-send records (enforce); "
+                             "default $XDG_STATE_HOME/fsgg/board-gate")
     result.add_argument("--install-routine-producer", action="store_true",
                         help="closed first installation only; never ordinary eligibility success")
     result.add_argument("--routine-producer-source", help="immutable protected FS-GG/.github template commit")
@@ -2655,6 +2752,10 @@ def main(argv: list[str]) -> int:
         parser().error("--pr must be positive")
     if not SHA_RE.fullmatch(args.head):
         parser().error("--head must be a lowercase 40-hex commit SHA")
+    if args.board_gate == "enforce" and not board_enforce_allowed():
+        parser().error("--board-gate enforce runs only from the FS-GG/.github checkout with the shared rules module")
+    if args.board_gate_custody is not None and args.board_gate != "enforce":
+        parser().error("--board-gate-custody requires --board-gate enforce")
     if args.evidence_run is not None and (args.evidence_run <= 0 or args.watch_checks):
         parser().error("--evidence-run requires a positive run ID and cannot combine with watch")
     if args.evidence_run is not None and args.install_routine_producer:
@@ -2761,6 +2862,8 @@ def main(argv: list[str]) -> int:
             apply=args.apply, coherent_workflow=args.coherent_workflow, candidate_observer=observer,
             producer_source=args.routine_producer_source if args.install_routine_producer else None,
             installation_prior=prior, board_gate=args.board_gate,
+            board_custody=(BoardCustody(pathlib.Path(args.board_gate_custody) if args.board_gate_custody
+                                        else default_board_custody_root()) if args.board_gate == "enforce" else None),
         )
     except (RuntimeError, AmbiguousWrite) as error:
         code = 3

@@ -20,6 +20,17 @@ SOURCE = ROOT / "tools/routine-delivery.py"
 
 # (name, exact original text, replacement). Every original must occur exactly once.
 MUTANTS = [
+    ("custody write failure ignored", '    except Exception:\n        return "refused-custody"\n',
+     '    except Exception:\n        pass\n'),
+    ("existing custody record ignored (resend)",
+     "            prior = (board_custody_readback(api, board_custody, repo, pr_number, gate.delivery)",
+     "            prior = (None and board_custody_readback(api, board_custody, repo, pr_number, gate.delivery)"),
+    ("enforce allowed from any copy", '    return proc.returncode == 0 and (url.endswith("/" + BOARD_ENFORCE_REPOSITORY)',
+     '    return True or (url.endswith("/" + BOARD_ENFORCE_REPOSITORY)'),
+    ("PR-typed card is a Delivery", '    if node.get("__typename") == "PullRequest":\n        return None\n', ""),
+    ("distributed default flipped to enforce",
+     'result.add_argument("--board-gate", choices=BOARD_GATE_MODES, default="advisory",',
+     'result.add_argument("--board-gate", choices=BOARD_GATE_MODES, default="enforce",'),
     ("enforce refusal still merges", 'if board_gate == "enforce" and gate.verdict == "refused":', "if False:"),
     ("enforce unknown merges (fail-open)",
      'if board_gate == "enforce" and gate.verdict in ("unknown", "unavailable"):',

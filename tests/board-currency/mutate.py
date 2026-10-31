@@ -89,6 +89,8 @@ MUTANTS = [
      "if parent and (False or parent_card"),
     ("anonymous card ignored for the R9 parent", "parent_unknown = parent and (parent_item is None and board.anonymous_unreadable",
      "parent_unknown = parent and (False"),
+    ("PR-typed card links as a Delivery", 'return None if isinstance(found, dict) and found.get("type") == "PullRequest" else found',
+     "return found"),
     ("partial snapshot accepted", 'if snapshot.get("complete") is not True:', "if False:"),
     ("count mismatch accepted", "if not isinstance(total, int) or total != len(items):", "if not isinstance(total, int):"),
     ("private subject published", 'return flag is False', "return flag is not True"),
