@@ -25,7 +25,7 @@ technical references. Remain independent of authorship; return an actual approve
 with concrete material findings and source locations. Confirm the reviewed candidate corresponds to the
 delivered Git/tree; a changed head requires a fresh exact-candidate decision. Re-run, or recount from
 source, every headline count the owner claims (tests, scenarios, refusals); report a claim that cannot be traced
-to a generator output or a test assertion as an Unknown. Check that fixtures and release controls derive dates and versions from observed state ([rule](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#qualify-the-actual-path-and-deliver-exact-source)). Accepted unchanged author
+to a generator output or a test assertion as an Unknown. Where the change adds or edits fixtures or release controls, check them per the [lifecycle-contract fixture rule](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#qualify-the-actual-path-and-deliver-exact-source). Accepted unchanged author
 tests need not be rerun merely for independence; final-candidate required CI still runs.
 Do not edit implementation, dispatch repair workers or grant native/publication authority. The same
 owner repairs the same PR. Own the disposition of material review findings using canonical intake;
