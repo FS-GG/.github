@@ -25,6 +25,12 @@ EXEMPTIONS = {
         "owner": "Programme/root",
         "tracking": "Refs #4730 (follow-up: move the read to a typed OperationalGraphQl verb)",
     },
+    "scripts/board-linkage.py": {
+        "reason": "App-token advisory PR check; it reads one PR's editor and each referenced issue's Project 3 "
+                  "item and native parent, which the typed verbs do not expose",
+        "owner": "Programme/root",
+        "tracking": "Refs #5094 (follow-up: move the read to a typed OperationalGraphQl verb)",
+    },
     "scripts/board-currency-fetch.py": {
         "reason": "App-token shadow observer; its Work level, native parent/sub-issue/blocked-by links and "
                   "issue state reasons are not exposed by the typed archive-scan",

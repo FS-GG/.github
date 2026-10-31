@@ -221,15 +221,34 @@ bypass to fall back on.
 
 ### (a) PR check `board-linkage`
 
-This is the order above for one PR, in `FS-GG/.github` only. It is its own light job named
-`board-linkage` in `routine-eligibility.yml`, because only a job publishes a context that branch
-protection can require; a step inside the `routine-eligibility` job cannot. It shares that workflow's
-`pull_request_target` trigger, including `edited` (fixing the body re-runs it), and its PR-keyed
-concurrency group. It checks out nothing from the candidate. It reads Project 3 with a read-only App
-token: organization-projects, issues and pull-requests read, the same mint as `board-drift-read`.
+This is the evaluation order above for one PR, in `FS-GG/.github` only, implemented by
+`scripts/board-linkage.py` and run by `.github/workflows/board-linkage.yml`.
 
-Product repositories do not get this check in this design, because the receiver workflow has no App
-secret. They are covered by (b), which every Root merge passes through.
+- **Its own light job.** The job is named `board-linkage`, because only a job publishes a context that
+  branch protection can require. It is a separate workflow, not a job in `routine-eligibility.yml`:
+  that file is a producer file distributed to receiver workspaces
+  (`src/FS.GG.Drivers/workspace-inventory.json`). Receivers have no App secret, and changing producer
+  bytes reopens the producer-installation contract. The workflow uses `pull_request_target`
+  (`opened`, `synchronize`, `reopened`, `edited`, so fixing the body re-runs it) with PR-keyed
+  concurrency. It checks out only the default branch, never the candidate, and reads the PR body
+  through the API as data. It reads Project 3 with a read-only App token: organization-projects,
+  issues and pull-requests read, the same mint as `board-drift-read`.
+- **Non-routine PRs pass.** A PR whose body lacks `fsgg:routine-development/v1` is reported `skip` and
+  the job succeeds, in every mode. Otherwise a required `board-linkage` would block every non-routine
+  merge under `enforce_admins`.
+- **Rule-set v2.** The check imports the observer's own `override_of()` and `linkage_of()`, so the
+  check, the gate and the observer cannot disagree. A valid override gives `overridden` without
+  reading Project 3. The carry of unlinked and overridden PRs past the 24-hour window is the observer's
+  side of the same v2 rules (§1, R1 persistence): the verdict this check gives an open PR is the verdict
+  the observer keeps reporting after the merge until the PR is linked.
+- **Advisory in phase 2.** It runs `--mode advisory`: every verdict exits 0, and `refused` or `unknown`
+  writes a warning annotation. Required mode (`--mode required`: exit 1 on `refused` or `unknown`) is
+  used only after the Root settings step above.
+- **Privacy.** Output names the PR, the verdict and the reason, never a referenced issue (it may be
+  private) and never body text.
+
+Product repositories do not get this check in this design, because they have no App secret. They are
+covered by (b), which every Root merge passes through.
 
 ### (b) Merge-time gate in `tools/routine-delivery.py`
 
@@ -354,9 +373,8 @@ one tracking issue: #4985, renamed to the board-currency findings issue (decisio
 - **Board-drift observer.** It is unchanged in phase 1. The shadow workflow chains on its completion
   through `workflow_run`. GitHub drops scheduled runs and fdev dispatches the observer hourly, so this
   gets the same cadence with no second schedule or dispatcher.
-- **`routine-eligibility`.** Its workflow hosts (a) as a separate `board-linkage` job; the existing
-  `routine-eligibility` job and envelope are unchanged. Its refusals and this gate's refusals stay
-  independent.
+- **`routine-eligibility`.** Unchanged. (a) is its own workflow (`board-linkage.yml`), so the
+  distributed producer file and its envelope are untouched. Their refusals stay independent.
 - **`routine-delivery.py`.** It hosts (b). The gate runs before the merge effect, and the transition
   runs after the existing readback. Neither changes publication, telemetry or evidence behaviour.
 - **CI load.** Phase 1 adds one light job per observer run and one step in the existing

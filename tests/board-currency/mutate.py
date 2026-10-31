@@ -93,6 +93,29 @@ MUTANTS = [
 ]
 
 
+# Mutants of scripts/board-linkage.py, run against test_board_linkage.py with BOARD_LINKAGE_SCRIPT.
+LINKAGE = HERE.parents[1] / "scripts/board-linkage.py"
+LINKAGE_MUTANTS = [
+    ("check: non-routine not skipped", 'if not rules.is_routine(pr.get("body")):\n        return "skip", None\n', ""),
+    ("check: override ignored", '    if rules.override_of(pr, roots) is not None:\n        return "overridden", None\n', ""),
+    ("check: other projects count", "if isinstance(i, dict) and (i.get(\"project\") or {}).get(\"number\") == PROJECT_NUMBER",
+     "if isinstance(i, dict)"),
+    ("check: truncated items trusted", 'if not isinstance(nodes, list) or items.get("totalCount") != len(nodes):',
+     "if not isinstance(nodes, list):"),
+    ("check: read failure passes", '        return "unknown", "board-read"\n', '        return "linked", None\n'),
+    ("check: required never fails", 'return 1 if args.mode == "required" and verdict in ("refused", "unknown") else 0', "return 0"),
+    ("check: advisory fails", 'return 1 if args.mode == "required" and verdict in ("refused", "unknown") else 0',
+     'return 1 if verdict in ("refused", "unknown") else 0'),
+]
+
+
+def run_linkage(script: Path) -> bool:
+    env = dict(os.environ, BOARD_LINKAGE_SCRIPT=str(script))
+    proc = subprocess.run([sys.executable, "-I", "-m", "unittest", "discover", "-s", str(HERE), "-p", "test_board_linkage.py"],
+                          capture_output=True, text=True, env=env, cwd=HERE.parents[1], timeout=300)
+    return proc.returncode == 0
+
+
 def run(module: Path) -> bool:
     env = dict(os.environ, BOARD_CURRENCY_RULES=str(module))
     proc = subprocess.run([sys.executable, "-I", "-m", "unittest", "discover", "-s", str(HERE), "-p", "test_*.py"],
@@ -118,7 +141,26 @@ def main() -> int:
             print(f"{'killed  ' if killed else 'SURVIVED'} {name}")
             if not killed:
                 survivors.append(name)
-    print(f"mutation controls: {len(MUTANTS) - len(survivors)}/{len(MUTANTS)} killed")
+        linkage = LINKAGE.read_text(encoding="utf-8")
+        if not run_linkage(LINKAGE):
+            print("mutation controls: the ORIGINAL board-linkage.py fails its fixture; fix that first")
+            return 1
+        for name, old, new in LINKAGE_MUTANTS:
+            count = linkage.count(old)
+            if count != 1:
+                print(f"mutation controls: mutant {name!r} anchor occurs {count} time(s), expected 1")
+                return 1
+            work = Path(tmp) / "linkage"
+            work.mkdir(exist_ok=True)
+            (work / "board-currency-rules.py").write_text(original, encoding="utf-8")
+            mutated = work / "board-linkage.py"
+            mutated.write_text(linkage.replace(old, new), encoding="utf-8")
+            killed = not run_linkage(mutated)
+            print(f"{'killed  ' if killed else 'SURVIVED'} {name}")
+            if not killed:
+                survivors.append(name)
+    total = len(MUTANTS) + len(LINKAGE_MUTANTS)
+    print(f"mutation controls: {total - len(survivors)}/{total} killed")
     return 1 if survivors else 0
 
 
