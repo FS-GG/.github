@@ -1,0 +1,5 @@
+{
+  "schema": "fsgg.landed-revert-allowlist/v1",
+  "note": "Path globs (fnmatch, against the repo-relative path) that scripts/check-landed-reverts.py skips because a PR may legitimately regenerate them from scratch. Every entry needs a reason. Empty on purpose: a replay of the last 281 merged PRs needed none.",
+  "entries": []
+}

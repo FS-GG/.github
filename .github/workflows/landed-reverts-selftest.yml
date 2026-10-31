@@ -1,0 +1,52 @@
+# Prove scripts/check-landed-reverts.py can still say NO -- and that it says YES to an edit (#4730).
+#
+# tests/landed-reverts/run.py builds synthetic repositories (stale tree, normal PR, edit, deletion, move,
+# rename, binary, declared revert, allowlist, lookback, and every fail-closed case) and replays the REAL
+# incident from objects on main: #4977's squash 99c83d57 against its parent must be refused, byte-identical
+# to the merged tree, and pass once #4968/#4976 are declared; three real PRs must pass. The real-incident
+# legs FAIL when history is missing -- a skipped replay must never read as a passed one -- so this job
+# checks out full history.
+#
+# Path-filtered on purpose: the gate itself (landed-revert-guard.yml) is the only unfiltered job, and an
+# ordinary PR does not re-prove it. The `paths:` lists on pull_request and push are IDENTICAL and must stay
+# so (check-paths-coherence.py). Mutation legs for this gate live in tests/gate-mutation/specs.yml.
+name: landed-reverts-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-landed-reverts.py"
+      - "scripts/lib/gate.py"
+      - "registry/landed-revert-allowlist.json"
+      - "tests/landed-reverts/**"
+      - ".github/workflows/landed-revert-guard.yml"
+      - ".github/workflows/landed-reverts-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-landed-reverts.py"
+      - "scripts/lib/gate.py"
+      - "registry/landed-revert-allowlist.json"
+      - "tests/landed-reverts/**"
+      - ".github/workflows/landed-revert-guard.yml"
+      - ".github/workflows/landed-reverts-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: landed-reverts-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run the landed-reverts fixture (no network)
+        run: bash tests/landed-reverts/run.sh

@@ -1,0 +1,67 @@
+# landed-revert-guard -- a PR's merge must not silently revert work that landed on its base (#4730).
+#
+# #4977's squash merge (99c83d57) deleted ~2,530 lines #4968 (dd7665f6) had delivered one commit earlier,
+# and main stayed green because the tests went with the code. scripts/check-landed-reverts.py computes
+# the real squash result (`git merge-tree`, byte-identical to the merged tree for 281/281 recent PRs),
+# finds base lines added within a lookback window that the result drops without replacing, and refuses
+# at 30 undeclared lines (fewer only warn). A deliberate revert is declared by naming the reverted
+# commits: `<!-- fsgg:declared-revert/v1 reverts=<sha|#PR>[,...] -->` in a commit message or the PR body.
+#
+# ONE LIGHT JOB, AND WHY EACH COST CHOICE (#4730 CI load):
+#   * No `paths:` filter. The subject is the merge result, and a revert can touch any file, so a filter
+#     would exempt exactly the PR that needs it. This is the only reason the job is unfiltered.
+#   * `opened, synchronize, reopened` only -- NOT `edited`. Body edits re-queued ~870 jobs a day. The
+#     body is read from the event payload; to declare after the fact, put the marker in a commit message
+#     (it also survives into the squash message, so the declaration is in history).
+#   * PR-keyed concurrency with cancel-in-progress, so a superseded push does not run to completion.
+#   * The fixture is a separate path-filtered workflow (landed-reverts-selftest.yml): ordinary PRs pay
+#     for the gate, not for proving the gate.
+#   * Stdlib git and Python only: no setup action, no install, no network after checkout (~15 s).
+#
+# THE BASE IS READ LIVE: after a full-history checkout it is origin/<base ref> as fetched by this job,
+# not the base sha frozen in the event payload, so a PR that waited in the queue is judged against what
+# is on the base now. It is advisory until `no-silent-revert` is added to the required contexts, which
+# is a repository-settings effect and is not made here.
+#
+# FAIL CLOSED: the script exits 0 only when it read the history and found nothing to refuse. A shallow
+# clone, an unreadable object or a head that does not merge cleanly is exit 3 (red), never green.
+name: landed-revert-guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: landed-revert-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  no-silent-revert:
+    name: no-silent-revert
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # fetch-depth 0: the branch point, the lookback window and `git blame` need the history; a shallow
+      # clone is refused by the script rather than guessed at.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The body is attacker-controlled text: it reaches the script through the environment and a file,
+      # never interpolated into the shell.
+      - name: Refuse a merge that reverts work landed on the base without declaring it
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          printf '%s' "$PR_BODY" > "$body"
+          base="$(git rev-parse --verify "refs/remotes/origin/${BASE_REF}^{commit}")"
+          python3 scripts/check-landed-reverts.py --base "$base" --head "$HEAD_SHA" --body-file "$body"
