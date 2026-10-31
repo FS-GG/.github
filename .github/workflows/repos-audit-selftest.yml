@@ -25,6 +25,9 @@ on:
     paths:
       - "scripts/repos-audit.sh"
       - "scripts/repos.sh"
+      # The org Renovate preset the audit reads for a recorded pause (#4334): flipping its `enabled` changes the
+      # audit's verdict, and the real-roster leg asserts the preset and the pause record agree.
+      - "default.json"
       - "tests/repos-audit/**"
       - ".github/workflows/repos-audit-selftest.yml"
       # The fixture also asserts the SHAPE of repos-audit.yml — that it renders a wiring gap and a
@@ -46,6 +49,9 @@ on:
     paths:
       - "scripts/repos-audit.sh"
       - "scripts/repos.sh"
+      # The org Renovate preset the audit reads for a recorded pause (#4334): flipping its `enabled` changes the
+      # audit's verdict, and the real-roster leg asserts the preset and the pause record agree.
+      - "default.json"
       - "tests/repos-audit/**"
       - ".github/workflows/repos-audit-selftest.yml"
       - ".github/workflows/repos-audit.yml"
