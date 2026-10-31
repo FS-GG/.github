@@ -7,6 +7,7 @@ mkdir -p "$work/src/FS.GG.Coord.GitHub" "$work/scripts" "$work/.github/workflows
 for f in projects-audit.sh repos-audit.sh coord-board-archive.py check-roster-closure.py; do : >"$work/scripts/$f"; done
 # The named exemption (scripts/board-drift-fetch.py, owner Programme/root, Refs #4730) is read, not skipped.
 printf '%s\n' 'info = page["pageInfo"]' >"$work/scripts/board-drift-fetch.py"
+printf '%s\n' 'info = page.get("pageInfo")' >"$work/scripts/board-currency-fetch.py"
 : >"$work/.github/workflows/coord-board-archive.yml"
 : >"$work/src/FS.GG.Coord.GitHub/GraphQl.fs"
 : >"$work/src/FS.GG.Coord.GitHub/GraphQlEnvelope.fs"

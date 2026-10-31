@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Mutation controls for scripts/board-currency-rules.py (Refs #4730).
+
+Each mutant is one deliberate defect in a rule's verdict. The fixture is re-run against a mutated copy
+of the module (BOARD_CURRENCY_RULES); a mutant that leaves every test green means no test pins that
+verdict, and this script exits 1 naming it. The original module must pass first.
+"""
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+SOURCE = HERE.parents[1] / "scripts/board-currency-rules.py"
+
+# (name, exact original text, replacement). Every original must occur exactly once.
+MUTANTS = [
+    ("R1 accepts zero Deliveries", "        if not deliveries:\n", "        if False:\n"),
+    ("R1 accepts several Deliveries", "        if len(deliveries) > 1:\n", "        if len(deliveries) > 2:\n"),
+    ("R1 ignores the closed Delivery", 'if state == "OPEN" and d.get("state") != "OPEN":', 'if False:'),
+    ("R1 ignores the Done Delivery", 'elif state == "OPEN" and d.get("status") == "Done":', 'elif False:'),
+    ("R1 drops the parent check", 'if parent_item is None or parent_item.get("workLevel") != "Outcome":\n            emit("R1"',
+     'if False:\n            emit("R1"'),
+    ("R1 scopes non-routine PRs", "        if not is_routine(pr.get(\"body\")):\n            continue\n", ""),
+    ("R1 ignores the merged window", "if merged_at is None or now - merged_at > merged_window:", "if merged_at is None:"),
+    ("Refs inside code spans count", 'return _INLINE.sub(" ", _FENCE.sub(" ", body if isinstance(body, str) else ""))',
+     'return body if isinstance(body, str) else ""'),
+    ("closing keywords are not references", "for pattern in (_REFS, _CLOSING):", "for pattern in (_REFS,):"),
+    ("R2 closed-not-done silenced", 'if not is_open and status != "Done":', 'if False:'),
+    ("R2 done-open silenced", 'if is_open and status == "Done":', 'if False:'),
+    ("R2 acceptance retroactive", "and closed_at is not None and closed_at >= effective):", "):"),
+    ("R2 accepts any author", 'picked = [c for c in comments if str(c.get("author", "")).lower() in roots and parse_time(c.get("createdAt"))]',
+     'picked = [c for c in comments if parse_time(c.get("createdAt"))]'),
+    ("R2 unread comments pass", 'if comments is None:\n                emit("U", subject, "r2-comments-unread"',
+     'if False:\n                emit("U", subject, "r2-comments-unread"'),
+    ("R3 closed blocker counts as open", 'if any(s == "OPEN" for s in blockers.values()) or via_child:',
+     'if blockers or via_child:'),
+    ("R3 truncated list trusted", "native_complete = native.get(\"total\") == len(native_nodes)", "native_complete = True"),
+    ("R3 oldest marker wins", "            newest = sorted(", "            newest = newest if newest is not None else sorted("),
+    ("R3 no child route", 'via_child = level == "Outcome" and any(', 'via_child = False and any('),
+    ("R4 window off by one", "if not known or now - max(known) > activity:", "if not known or now - max(known) >= activity:"),
+    ("R4 In review accepts drafts", 'evidence = open_prs if status == "In progress" else ready_prs', "evidence = open_prs"),
+    ("R4 outcome active child silenced", 'if status == "In progress" and not any(s in ACTIVE for s in child_status):',
+     'if False:'),
+    ("R4 outcome review silenced", 'if status == "In review" and any(s != "In review" for s in child_status):', 'if False:'),
+    ("R5 silenced", "if children and children_complete and not open_children:", "if False:"),
+    ("R5 pending flag dropped", 'pending = {"pending": "closure-proposed"} if comments and has_marker(comments, PROPOSED) else {}',
+     "pending = {}"),
+    ("R6 truncated children trusted", "                if not children_complete:\n                    emit(\"U\", subject, \"r6-children-unread\"",
+     "                if False:\n                    emit(\"U\", subject, \"r6-children-unread\""),
+    ("R6 any open child counts", 'elif not any(c is not None and c.get("workLevel") == "Delivery" for c in open_child_items):',
+     "elif not open_child_items:"),
+    ("R7 Track not required", '("Track", item.get("track"))', '("Track", "x")'),
+    ("R7 drafts pass", 'emit("R7", subject, "draft"', 'pass  # emit("R7", subject, "draft"'),
+    ("R8 draft PR counts", 'ready_prs = [x for x in open_prs if not x.get("draft")]', "ready_prs = open_prs"),
+    ("R8 pre-action silenced", 'if level == "Delivery" and ready_prs and status in PRE_ACTION:', "if False:"),
+    ("R8 closed Delivery silenced", 'if level == "Delivery" and ready_prs:\n                emit("R8"', 'if False:\n                emit("R8"'),
+    ("R9 orphan silenced", 'emit("R9", subject, "orphan-delivery"', 'pass  # emit("R9", subject, "orphan-delivery"'),
+    ("R9 outcome-under-delivery silenced", 'elif level == "Outcome" and parent_item is not None and parent_item.get("workLevel") == "Delivery":',
+     "elif False:"),
+    ("unreadable card passes", 'emit("U", subject, "unreadable"', 'pass  # emit("U", subject, "unreadable"'),
+    ("partial snapshot accepted", 'if snapshot.get("complete") is not True:', "if False:"),
+    ("count mismatch accepted", "if not isinstance(total, int) or total != len(items):", "if not isinstance(total, int):"),
+    ("private subject published", 'return flag is False', "return flag is not True"),
+]
+
+
+def run(module: Path) -> bool:
+    env = dict(os.environ, BOARD_CURRENCY_RULES=str(module))
+    proc = subprocess.run([sys.executable, "-I", "-m", "unittest", "discover", "-s", str(HERE), "-p", "test_*.py"],
+                          capture_output=True, text=True, env=env, cwd=HERE.parents[1], timeout=300)
+    return proc.returncode == 0
+
+
+def main() -> int:
+    original = SOURCE.read_text(encoding="utf-8")
+    if not run(SOURCE):
+        print("mutation controls: the ORIGINAL module fails its fixture; fix that first")
+        return 1
+    survivors = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, old, new in MUTANTS:
+            count = original.count(old)
+            if count != 1:
+                print(f"mutation controls: mutant {name!r} anchor occurs {count} time(s), expected 1")
+                return 1
+            mutated = Path(tmp) / "board-currency-rules.py"
+            mutated.write_text(original.replace(old, new), encoding="utf-8")
+            killed = not run(mutated)
+            print(f"{'killed  ' if killed else 'SURVIVED'} {name}")
+            if not killed:
+                survivors.append(name)
+    print(f"mutation controls: {len(MUTANTS) - len(survivors)}/{len(MUTANTS)} killed")
+    return 1 if survivors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

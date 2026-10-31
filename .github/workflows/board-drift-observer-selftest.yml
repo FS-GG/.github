@@ -8,6 +8,9 @@
 # (read App token in `board-drift-read`, `issues: write` only in `board-drift-report`) and that nothing in the workflow can
 # turn a failed read into a green "no drift".
 #
+# The same job also runs `tests/board-currency/run.sh`: the board-currency rule set (R1-R9, U) that runs in
+# shadow mode beside the observer (board-currency-shadow.yml), with its mutation controls.
+#
 # No schedule: the subject is entirely git-tracked files in this repo, and the fixture uses a recording
 # `gh` stub (no token, no network). The `paths:` lists on pull_request and push are IDENTICAL and must
 # stay so (check-paths-coherence.py).
@@ -21,6 +24,10 @@ on:
       - "tests/board-drift-observer/**"
       - ".github/workflows/board-drift-observer.yml"
       - ".github/workflows/board-drift-observer-selftest.yml"
+      - "scripts/board-currency-rules.py"
+      - "scripts/board-currency-fetch.py"
+      - "tests/board-currency/**"
+      - ".github/workflows/board-currency-shadow.yml"
   push:
     branches: [main]
     paths:
@@ -29,6 +36,10 @@ on:
       - "tests/board-drift-observer/**"
       - ".github/workflows/board-drift-observer.yml"
       - ".github/workflows/board-drift-observer-selftest.yml"
+      - "scripts/board-currency-rules.py"
+      - "scripts/board-currency-fetch.py"
+      - "tests/board-currency/**"
+      - ".github/workflows/board-currency-shadow.yml"
   workflow_dispatch:
 
 permissions:
@@ -47,3 +58,6 @@ jobs:
       - uses: ./.github/actions/setup-policy-python
       - name: Run the board-drift fixture (no network)
         run: bash tests/board-drift-observer/run.sh
+      # Same light job, one more step (#4730 CI load): the board-currency rules' fixture and mutation controls.
+      - name: Run the board-currency fixture and mutation controls (no network)
+        run: bash tests/board-currency/run.sh
