@@ -62,6 +62,7 @@ check(A.parse(['--ack', '--op-id', OP, '--record-sha256', SHA]) == ('--ack', OP,
 check(A.parse(['--check', '--op-id', OP, '--record-sha256', SHA])[0] == '--check', 'check arguments parse')
 check(A.parse(['--remove', '--op-id', OP]) == ('--remove', OP, None), 'remove arguments parse')
 for argv, needle, what in (([], 'usage', 'no arguments'), (['--ack', '--op-id', OP], 'usage', 'ack without a digest'),
+                           (['--check', '--op-id', OP], 'usage', 'check without a digest'),
                            (['--remove', '--op-id', OP, '--record-sha256', SHA], 'usage', 'remove with a sha'),
                            (['--remove', '--op-id', OP, '--record-file', '/x'], 'usage', 'remove with a record file'),
                            (['--frob', '--op-id', OP], 'usage', 'an unknown mode'),
@@ -82,18 +83,22 @@ with tempfile.TemporaryDirectory() as tmp:
     rec = os.path.join(tmp, 'record.json')
     open(rec, 'wb').write(b'{"schema":"learn-op-retirement-failure/1"}\n')
     want = hashlib.sha256(open(rec, 'rb').read()).hexdigest()
-    check(A.parse(['--ack', '--op-id', OP, '--record-file', rec]) == ('--ack', OP, want), '--record-file alone computes the digest')
-    check(A.parse(['--check', '--op-id', OP, '--record-file', rec, '--record-sha256', want]) == ('--check', OP, want), '--record-file with the matching --record-sha256 passes')
+    refused(lambda: A.parse(['--ack', '--op-id', OP, '--record-file', rec]), 'requires the admitted --record-sha256', '--ack with only a record file is refused: the digest must be the admitted one')
+    refused(lambda: A.parse(['--ack', '--op-id', OP, '--record-file', os.path.join(tmp, 'absent')]), 'requires the admitted --record-sha256', '--ack with only a missing record file is refused for the missing digest first')
+    check(A.parse(['--ack', '--op-id', OP, '--record-sha256', want, '--record-file', rec]) == ('--ack', OP, want), '--ack with --record-sha256 and a matching --record-file passes (cross-check)')
+    check(A.parse(['--ack', '--op-id', OP, '--record-sha256', SHA]) == ('--ack', OP, SHA), '--ack with --record-sha256 alone passes and writes the admitted digest as given')
+    check(A.parse(['--check', '--op-id', OP, '--record-file', rec]) == ('--check', OP, want), '--check with only a record file still works (read only)')
+    check(A.parse(['--check', '--op-id', OP, '--record-file', rec, '--record-sha256', want]) == ('--check', OP, want), '--check with the matching --record-sha256 passes')
     refused(lambda: A.parse(['--ack', '--op-id', OP, '--record-file', rec, '--record-sha256', SHA]), 'does not hash to the given', 'a record file that does not hash to the admitted digest is refused')
-    refused(lambda: A.parse(['--ack', '--op-id', OP, '--record-file', os.path.join(tmp, 'absent')]), 'cannot read the record file', 'a missing record file is refused')
-    refused(lambda: A.parse(['--ack', '--op-id', OP, '--record-file', tmp]), 'cannot read the record file', 'a directory as record file is refused')
+    refused(lambda: A.parse(['--ack', '--op-id', OP, '--record-sha256', SHA, '--record-file', os.path.join(tmp, 'absent')]), 'cannot read the record file', 'a missing record file is refused')
+    refused(lambda: A.parse(['--ack', '--op-id', OP, '--record-sha256', SHA, '--record-file', tmp]), 'cannot read the record file', 'a directory as record file is refused')
     link = os.path.join(tmp, 'link.json')
     os.symlink(rec, link)
-    refused(lambda: A.parse(['--ack', '--op-id', OP, '--record-file', link]), 'cannot read the record file', 'a symlinked record file is refused (O_NOFOLLOW)')
+    refused(lambda: A.parse(['--ack', '--op-id', OP, '--record-sha256', want, '--record-file', link]), 'cannot read the record file', 'a symlinked record file is refused (O_NOFOLLOW)')
     big = os.path.join(tmp, 'big.json')
     with open(big, 'wb') as f:
         f.truncate(A.RECORD_CAP + 1)
-    refused(lambda: A.parse(['--ack', '--op-id', OP, '--record-file', big]), 'not a bounded regular file', 'a record file over 16 MiB is refused')
+    refused(lambda: A.parse(['--ack', '--op-id', OP, '--record-sha256', want, '--record-file', big]), 'not a bounded regular file', 'a record file over 16 MiB is refused')
 
 # ---- MUTANT: read_regular must not follow a symlink
 with tempfile.TemporaryDirectory() as tmp:

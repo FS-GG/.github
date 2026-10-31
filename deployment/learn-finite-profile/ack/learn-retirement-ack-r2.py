@@ -3,11 +3,13 @@
 persistence: Root decision 4647#6533215654 item 3; design: docs/coordination/2026-10-30-learn-finite-executor-pod-design.md
 section 10). Refs FS-GG/.github#4647. Supersedes r1 (aadd55b1..., baseline/libexec/learn-retirement-ack.py).
 Root only, from a root-owned exec copy, and ONLY through an fdev admission that cites the op id and the record's sha256:
-    /usr/bin/python3 -I <copy>/learn-retirement-ack-r2.py --ack    --op-id <id> (--record-sha256 <64 hex> | --record-file <path>)
+    /usr/bin/python3 -I <copy>/learn-retirement-ack-r2.py --ack    --op-id <id> --record-sha256 <64 hex> [--record-file <path>]
     /usr/bin/python3 -I <copy>/learn-retirement-ack-r2.py --check  --op-id <id> (--record-sha256 <64 hex> | --record-file <path>)
     /usr/bin/python3 -I <copy>/learn-retirement-ack-r2.py --remove --op-id <id>
---record-file computes the sha256 of that file's bytes (a regular file, at most 16 MiB, opened O_NOFOLLOW). Given together with
---record-sha256 the two must be equal, so the admitted digest and the record on disk are compared before anything is written.
+--ack REQUIRES the admitted --record-sha256: what is written is the digest Root admitted, never one computed from a file at
+write time. --record-file is then a CROSS-CHECK ONLY: it computes the sha256 of that file's bytes (a regular file, at most
+16 MiB, opened O_NOFOLLOW) and the two must be equal, so the admitted digest and the record on disk are compared before
+anything is written. For the read-only --check either one is enough.
 What changed from r1: the acknowledgement directory is no longer /etc/fsgg/learn/retirement-acks (lost with the root disk on
 every fdev image upgrade). It is <fsgg-learn>/retirement-acks on the persistent bulk bind. The in-VM bind
 /usr/local/libexec/fsgg-learn is READ-ONLY, so the writer writes through the persistent source
@@ -233,19 +235,21 @@ def parse(argv):
     while i < len(argv):
         k = argv[i]
         if not k.startswith('--') or i + 1 >= len(argv) or k in opts:
-            refuse('usage: --ack|--check --op-id <id> (--record-sha256 <hex> | --record-file <path>) | --remove --op-id <id>')
+            refuse('usage: --ack --op-id <id> --record-sha256 <hex> [--record-file <path>] | --check --op-id <id> (--record-sha256 <hex> | --record-file <path>) | --remove --op-id <id>')
         opts[k] = argv[i + 1]
         i += 2
     allowed = {'--ack': {'--op-id', '--record-sha256', '--record-file'}, '--check': {'--op-id', '--record-sha256', '--record-file'},
                '--remove': {'--op-id'}}
     if mode not in allowed or '--op-id' not in opts or not set(opts) <= allowed[mode]:
-        refuse('usage: --ack|--check --op-id <id> (--record-sha256 <hex> | --record-file <path>) | --remove --op-id <id>')
+        refuse('usage: --ack --op-id <id> --record-sha256 <hex> [--record-file <path>] | --check --op-id <id> (--record-sha256 <hex> | --record-file <path>) | --remove --op-id <id>')
     if not OPID.match(opts['--op-id']):
         refuse('bad op id')
     if mode == '--remove':
         return mode, opts['--op-id'], None
     if '--record-sha256' not in opts and '--record-file' not in opts:
-        refuse('usage: --ack|--check needs --record-sha256 or --record-file')
+        refuse('usage: --ack needs --record-sha256; --check needs --record-sha256 or --record-file')
+    if mode == '--ack' and '--record-sha256' not in opts:
+        refuse('--ack requires the admitted --record-sha256 (--record-file is only a cross-check)')
     sha = opts.get('--record-sha256')
     if sha is not None and not HEX64.match(sha):
         refuse('record sha256 must be 64 lowercase hex')
