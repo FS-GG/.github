@@ -182,8 +182,9 @@ Moved base (`.github#4730`). The event payload's base is only a monotonic floor.
 differs, the workflow deepens a bounded number of times (64, 256, 1024, 4096) and the envelope then requires
 the event base to be an ancestor of the live base, the head not to be contained in it, and exactly one
 merge base; the PR's change is re-derived as `merge-base(live base, head)..head` and evaluated with the live
-policy. An unprovable move (rewound or diverged base, head already landed, criss-cross merge bases, history
-beyond the bound) refuses; a moved head, stale or forged marker, protected operation and empty change refuse
+policy. A move the fetched history cannot prove (rewound or diverged base, head already landed, more than one
+merge base, history beyond the bound) refuses. Merge-base counting runs over a bounded shallow fetch and is
+best-effort: an incomplete history refuses and never widens what is admitted; a moved head, stale or forged marker, protected operation and empty change refuse
 exactly as under an unmoved base. An unmoved base keeps the previous exact two-dot diff. A rerun of an event
 created before this workflow reached main still executes its old workflow bytes; trigger a new event
 (`edited`, `reopened` or `synchronize`) instead of rebasing.

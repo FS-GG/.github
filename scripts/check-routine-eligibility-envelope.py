@@ -49,7 +49,11 @@ def is_ancestor(git_dir: Path, ancestor: str, descendant: str) -> bool:
 
 
 def diff_base(git_dir: Path, event_base: str, live_base: str, head: str) -> str:
-    """Return the commit the PR's change is measured from, refusing every unprovable move."""
+    """Return the commit the PR's change is measured from; refuse a move this history cannot prove.
+
+    Merge-base counting runs over a bounded shallow fetch, so it is best-effort: an incomplete history
+    refuses (fail-closed) and never widens what is admitted.
+    """
     if live_base == event_base:
         return event_base
     if not is_ancestor(git_dir, event_base, live_base):
