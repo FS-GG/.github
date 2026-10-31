@@ -1,0 +1,21 @@
+# The `fable-package-consumer` job HEADER of FS.GG.Game's gate.yml, verbatim from origin/main on
+# 2026-10-30; the steps are cut to one. Its `name:` interpolates the matrix, and GitHub reports the
+# evaluated name as is (measured: `Lockstep conformance (dotnet)`, `(fable)`, `(browser)` on that
+# commit's check runs). This is what made the sweep exit 3 for Game from 2026-07-29.
+name: gate
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fable-package-consumer:
+    name: Lockstep conformance (${{ matrix.runtime }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [dotnet, fable, browser]
+    steps:
+      - uses: actions/checkout@v7

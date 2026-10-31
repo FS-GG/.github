@@ -100,6 +100,11 @@ EVERY ONE OF THESE IS AN ERROR, NOT A SKIP
   - A matrix this gate cannot enumerate (`include`/`exclude`/an expression). Guessing would produce
     a WRONG producible set — and a wrong set that happens to contain the required context is a
     VACUOUS GREEN over a deadlocked repo. Refuse instead.
+  - A job `name:` carrying an expression this gate cannot evaluate EXACTLY. Two shapes ARE evaluated
+    (Refs #4730): `${{ matrix.<axis> }}` references covering every axis of an enumerable matrix (GitHub
+    reports the evaluated name with no ` (v1, v2)` suffix), and a job-level
+    `if: github.repository == '<the subject repo>'` (true on every pull request to that repo).
+    Anything else, including a name that references only some axes, stays exit 3.
 
 WHAT IT DELIBERATELY DOES NOT JUDGE
   A required context whose `app_id` is not GitHub Actions. A third-party CI app's contexts are not
@@ -422,6 +427,46 @@ def matrix_suffixes(job: dict, subject: str) -> list[str]:
     return [f" ({', '.join(combo)})" for combo in itertools.product(*axes)]
 
 
+MATRIX_REF_RE = re.compile(r"\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}")
+
+
+def matrix_combinations(job: dict, subject: str) -> list[dict[str, str]]:
+    """The exact axis -> value mapping of every matrix combination, in `matrix_suffixes` order.
+
+    Shares `matrix_suffixes`'s refusals (it is called first), so a matrix this gate cannot enumerate
+    never reaches a name derivation. A job with no matrix yields one empty mapping.
+    """
+    matrix_suffixes(job, subject)  # raises GateError for anything that cannot be enumerated exactly
+    strategy = job.get("strategy")
+    if not isinstance(strategy, dict) or "matrix" not in strategy:
+        return [{}]
+    axes = {key: [str(v) for v in values] for key, values in strategy["matrix"].items()}
+    return [dict(zip(axes, combo)) for combo in itertools.product(*axes.values())]
+
+
+def named_by_matrix(job: dict, combo: dict[str, str]) -> str | None:
+    """The check-run name of a matrix job whose `name:` interpolates its matrix, or None.
+
+    GitHub evaluates `name: Lockstep conformance (${{ matrix.runtime }})` per combination and uses the
+    result AS IS: it does not append the ` (v1, v2)` suffix a default-named or literally-named matrix
+    job gets. Measured on FS.GG.Game@main, 2026-10-30: the job above reports exactly
+    `Lockstep conformance (dotnet)`, `(fable)` and `(browser)`, and the same repo's literally-named
+    `Deterministic gate (locked restore + build)` reports `... (ubuntu-latest)`.
+
+    Derived only when it is EXACT: the name must reference EVERY axis of the matrix and nothing else
+    that is an expression. A name that references only some axes is not proven to take the suffix, or
+    not, so it stays a refusal (the caller falls through to the old behaviour and its exit 3).
+    """
+    name = job.get("name")
+    if not combo or not isinstance(name, str):
+        return None
+    referenced = set(MATRIX_REF_RE.findall(name))
+    if referenced != set(combo):
+        return None
+    derived = MATRIX_REF_RE.sub(lambda m: combo[m.group(1)], name)
+    return None if "${{" in derived else derived
+
+
 class Workflows:
     """Workflow documents, resolved from the working tree or from the API at a pinned ref."""
 
@@ -484,7 +529,7 @@ def jobs_of(doc: dict, what: str) -> dict:
     return jobs
 
 
-def job_condition(job: dict, subject: str) -> tuple[bool, str | None, bool]:
+def job_condition(job: dict, subject: str, repo: str | None = None) -> tuple[bool, str | None, bool]:
     """Whether a job is proven to report on every normal pull request.
 
     Returns ``(always_runs, description, known_suppressed)``.  GitHub evaluates job-level
@@ -516,6 +561,15 @@ def job_condition(job: dict, subject: str) -> tuple[bool, str | None, bool]:
     # A conjunction of independently proven normal-PR predicates remains proven.  Keep this
     # intentionally narrow: OR, negation beyond !cancelled(), and arbitrary context expressions
     # all need runtime values this static gate does not possess.
+    # `github.repository` on a pull_request event is the BASE repository, which for the subject whose
+    # protection is being read is that subject itself (a fork's PR does not change it). So
+    # `github.repository == '<subject>'` is true on every normal PR to it; any other literal is not.
+    # Only an exact comparison against the subject is proven, never a prefix or an `!=`.
+    if repo:
+        proven_terms = proven_terms | {
+            f"github.repository=='{repo.lower()}'",
+            f'github.repository=="{repo.lower()}"',
+        }
     if normalized.split("&&") and all(term in proven_terms for term in normalized.split("&&")):
         return True, None, False
     if normalized == "false":
@@ -549,9 +603,15 @@ def contexts_of(
     out: set[str] = set()
     for job_id, job in jobs_of(doc, what).items():
         subject = f"{what} [{job_id}]"
-        always_runs, condition, known_suppressed = job_condition(job, subject)
-        for suffix in matrix_suffixes(job, subject):
-            display = f"{prefix}{display_name(job_id, job)}{suffix}"
+        always_runs, condition, known_suppressed = job_condition(job, subject, wf.repo)
+        suffixes = matrix_suffixes(job, subject)
+        combos = matrix_combinations(job, subject)
+        for suffix, combo in zip(suffixes, combos):
+            derived = named_by_matrix(job, combo)
+            if derived is not None:
+                display = f"{prefix}{derived}"
+            else:
+                display = f"{prefix}{display_name(job_id, job)}{suffix}"
             # An expression is resolved at run time, from values this gate cannot see. Deriving the
             # LITERAL `Build ${{ matrix.os }}` would produce a context that can never match the real
             # one — and the gate would then report exit 1: "this repo is deadlocked, every PR will
