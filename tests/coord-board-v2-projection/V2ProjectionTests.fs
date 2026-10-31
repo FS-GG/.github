@@ -152,9 +152,12 @@ let private archivedInspection (archive: bool) (unlist: bool) =
     let change (request: Transport.Request) (result: IoResult<Transport.Response>) =
         result |> Result.map (fun (response: Transport.Response) ->
             let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
-            if archive && request.Subject = "bound V2 successor planning memberships" then
+            if request.Subject = "bound V2 successor planning memberships" then
                 let node = root.["data"].["repository"].["issue"].["projectItems"].["nodes"].[0]
-                if node.["content"].["id"].GetValue<string>() = "I_arch_2" then node.["isArchived"] <- System.Text.Json.Nodes.JsonValue.Create true
+                // Every row's Observation is Verified, so an archived row would otherwise report and count as Verified.
+                node.["observation"].["name"] <- System.Text.Json.Nodes.JsonValue.Create "Verified"
+                node.["observation"].["optionId"] <- System.Text.Json.Nodes.JsonValue.Create "verified"
+                if archive && node.["content"].["id"].GetValue<string>() = "I_arch_2" then node.["isArchived"] <- System.Text.Json.Nodes.JsonValue.Create true
             elif unlist && request.Subject = "complete V2 project memberships" then
                 let items = root.["data"].["node"].["items"]
                 let nodes = items.["nodes"].AsArray()
@@ -180,6 +183,15 @@ let ``an enrolled row whose card is archived is an explicit archived membership,
         let flagged = item.Discrepancies |> List.contains V2ProjectionSource.archivedCardDiscrepancy
         Assert.True((flagged = (item.ExpectedNodeId = "I_arch_2")), item.ExpectedNodeId)
         Assert.True(item.Planning.Value.Archived = (item.ExpectedNodeId = "I_arch_2"))
+        // An archived row is never Verified; the others are.
+        Assert.Equal((if item.ExpectedNodeId = "I_arch_2" then V2ProjectionSource.archivedHealth else "Verified"), item.Evidence.Health)
+    Assert.Equal(2, report.Evidence.Verified)
+    // Action selection never selects an archived card: it is needs-decision with the archived reason.
+    let archivedItem = report.Items |> List.find (fun item -> item.ExpectedNodeId = "I_arch_2")
+    let context = ProgrammeFixture.context { report with Items = [ archivedItem ] }
+    let decision = (V2ProjectionSource.selectActions { report with Items = [ archivedItem ] } (Some context) report.NativeIntegrator.ObservedAt).Head
+    Assert.Equal("needs-decision", decision.Decision)
+    Assert.Contains(decision.Reasons, fun reason -> reason.Contains "archived (Done retention)")
 
 [<Fact>]
 let ``an enrolled row missing from the complete membership, or an archived card still listed, is a membership gap`` () =
@@ -192,6 +204,7 @@ let ``an enrolled row missing from the complete membership, or an archived card 
         Assert.Empty(report.Memberships |> List.filter _.Archived)
     let clean = archivedInspection false false
     Assert.True(clean.MembershipGap.IsNone, string clean.MembershipGap)
+    Assert.Equal(3, clean.Evidence.Verified)
     Assert.Empty(clean.Items |> List.collect _.Discrepancies |> List.filter ((=) V2ProjectionSource.archivedCardDiscrepancy))
 
 [<Fact>]
@@ -427,6 +440,21 @@ let ``lost protected population response preserves prior last verified evidence`
     Assert.True(report.Items[0].Projection.IsNone)
     Assert.Equal("Unknown", report.Items[0].Health)
     Assert.Empty(retry.Mutations)
+
+[<Fact>]
+let ``refresh reports an archived card as Archived, never Stale or Verified`` () =
+    // #5119: the writer's explicit archived refusal maps to the archived health, not to Stale.
+    let archived = ok ((match membership with Ok value -> value.Body | Error _ -> failwith "fixture").Replace("\"isArchived\":false", "\"isArchived\":true"))
+    let transport = scripted
+                        [ protectedBlob canonicalManifest
+                          native 2963 "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "canonical owning roadmap"
+                          organization; target; archived
+                          native 2964 "2026-10-02T01:00:00Z"
+                          Error(Http(403, "source denied")) ]
+    let report = V2ProjectionSource.runFixed transport canonicalBinding None
+    Assert.Equal<string list>([ V2ProjectionSource.archivedHealth; "Stale"; "Unknown" ], report.Items |> List.map (fun item -> item.Health))
+    Assert.Equal(0, report.Verified)
+    Assert.Empty(transport.Mutations)
 
 [<Fact>]
 let ``human owned field option drift is never repaired by refresh`` () =

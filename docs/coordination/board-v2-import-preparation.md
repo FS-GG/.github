@@ -568,9 +568,16 @@ now carries `isArchived`, and inspection cross-checks every selected row against
   manifest retirement is needed.
 - Any other disagreement is a `membership cross-check` gap: an unarchived card missing from `memberships`, or an archived card
   still listed in it.
-- The one-shot Observation writer refuses an archived card with an explicit 409 before any write.
-- `scripts/board_v2_native_results.py` accepts the optional `archived` key, and requires an archived membership to be enrolled
-  and to carry that discrepancy.
+- An archived row's health is `Archived`, never `Verified`, and it does not count toward `verified`. Action selection
+  treats it as needs-decision.
+- A row whose planning read failed has no archive fact and is not cross-checked. Its planning gap already makes it `Unknown`
+  and unselectable.
+- The one-shot Observation writer refuses an archived card with an explicit 409 before any write, and `refresh` reports
+  that row as `Archived`, not `Stale`.
+- `scripts/board_v2_native_results.py` accepts the optional `archived` key and refuses `archived: null`. An archived membership
+  must be enrolled and carry that discrepancy, and its item must be `Archived` with the same discrepancy. An item claiming
+  either without an archived membership refuses. An older validator refuses every 0.114.1 inspection, so qualify 0.114.1 with
+  a validator that includes this change.
 
 **Gate trust.** The routine gates (`check-claim-generation.py` with `lib/gate.py`, and `check-closing-keywords.py`) run from the
 exact base commit's blobs (`git show <base>:<path>`), the way `routine-eligibility.yml` does, never from the checkout, so a pull

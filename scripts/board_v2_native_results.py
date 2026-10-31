@@ -174,6 +174,7 @@ def decode_snapshot(tokens):
 INSPECTION_COMMON = set("schema bindingVersion organizationId owner projectNumber projectId projectTitle schemaVersion ownerKind repositories status roadmapFieldId track observation selectedIssues recipeRevision artifactSha256 populationRevision importRecipeRevision importArtifactSha256 protectedInputs selected attempted verified mutationAttempts populationGap cleanup items candidates".split())
 INSPECTION_PROGRAMME = set("enrollmentCommitmentSha256 membershipGap memberships nativeIntegrator integratorObservation selectionCoverage selection".split())
 ARCHIVED_CARD = "Board card is archived (Done retention); the enrolled row is retained, with no automatic retirement"
+ARCHIVED_HEALTH = "Archived"
 INSPECTION_ITEM = set("issue expectedNodeId native dependencyObservations dependencyReadComplete planObservation sourceCurrentness planning planningGap discrepancies health delivery publication nativeAcceptance reads mutationAttempts gap lastVerified".split())
 
 
@@ -247,10 +248,20 @@ def decode_inspection(report, expected_binding):
             # archived membership, never a missing one. Older producers omit the key; any other shape refuses.
             keys = {"itemId", "contentId", "kind", "issue", "enrolled", "discrepancy"}
             closed(member, keys | {"archived"} if "archived" in member else keys)
-            if member.get("archived") is not None:
-                require(isinstance(member["archived"], bool), "unsupported-result-shape")
+            if "archived" in member:
+                require(isinstance(member["archived"], bool), "unsupported-result-shape")  # null is not a value
                 require(not member["archived"] or (member["enrolled"] is True and member["discrepancy"] == ARCHIVED_CARD),
                         "inspection-archived-membership-differs")
+        # An archived enrolled card is never Verified: its item carries the archived health and discrepancy, and an
+        # item that claims either has an archived membership (#5119).
+        items_by_node = {item["expectedNodeId"]: item for item in report["items"]}
+        archived_nodes = {member["contentId"] for member in memberships if member.get("archived") is True}
+        for node, item in items_by_node.items():
+            claims = item["health"] == ARCHIVED_HEALTH or ARCHIVED_CARD in (item["discrepancies"] or [])
+            if node in archived_nodes or claims:
+                require(node in archived_nodes and item["health"] == ARCHIVED_HEALTH and ARCHIVED_CARD in (item["discrepancies"] or []),
+                        "inspection-archived-item-differs")
+        require(archived_nodes <= set(items_by_node), "inspection-archived-membership-differs")
         require(len({member["itemId"] for member in memberships}) == len(memberships)
                 and len({member["contentId"] for member in memberships}) == len(memberships)
                 and all(any(member["contentId"] == node and member["enrolled"] is True for member in memberships) for node in seen), "inspection-membership-identity-differs")

@@ -123,6 +123,9 @@ module V2Projection =
     /// historical 270, scaled by the selected population up to `maximumProgrammeRows` (410 seconds at 500 rows).
     val refreshDeadlineSeconds: selectedRows: int -> float
 
+    /// The one-shot Observation writer's explicit 409 message for an archived card (Done retention, #5119).
+    val archivedCardWriteRefusal: string
+
     /// Validate the reviewed binding without performing IO.
     val validateBinding: binding: Binding -> IoResult<unit>
 

@@ -438,6 +438,9 @@ module V2Projection =
                 Error(Malformed("immutable project owner", "organization identity differs from the reviewed binding"))
             else Ok())
 
+    // The one-shot writer's explicit refusal for an archived card (#5119); documented in the .fsi.
+    let archivedCardWriteRefusal = "the board card is archived (Done retention); no Observation write"
+
     let private exactMembership (transport: IGitHubTransport) (binding: Binding) (issue: IssueRef) expectedNativeId =
         let subject = $"{issue.Owner}/{issue.Repository}#{issue.Number} exact membership"
         let document =
@@ -752,7 +755,7 @@ module V2Projection =
                         match exactMembership transport binding request.Issue request.ExpectedNodeId with
                         | Error error -> Error error
                         // An archived card (Done retention, #5119) is reported, never written: the row stays enrolled.
-                        | Ok(_, _, _, true) -> Error(Http(409, "the board card is archived (Done retention); no Observation write"))
+                        | Ok(_, _, _, true) -> Error(Http(409, archivedCardWriteRefusal))
                         | Ok(itemId, nativeId, pages, false) ->
                             match fieldValueByItemId transport binding request.Issue nativeId itemId with
                             | Error error -> Error error
