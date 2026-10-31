@@ -52,8 +52,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # The body is attacker-controlled text: it reaches the script through the environment and a file,
-      # never interpolated into the shell.
+      # THE CHECK RUNS FROM THE BASE, NOT FROM THE PR. The checked-out tree is the PR head, so a PR that edits
+      # scripts/check-landed-reverts.py, scripts/lib/gate.py or registry/landed-revert-allowlist.json would
+      # otherwise be judged by its own edits. All three are read from the base commit with `git show`; a
+      # base that lacks the script fails the step (set -e) instead of passing. The allowlist is optional on
+      # the base (absent = empty). A PR may still edit this workflow file: that is the repository's
+      # writer-trust boundary (.fsgg/routine-development.json), the same one every required check has.
+      #
+      # The body is attacker-controlled text: it reaches the script through the environment and a file, never
+      # interpolated into the shell. The verdict is also written to the job summary, with the lines each
+      # declaration covered.
       - name: Refuse a merge that reverts work landed on the base without declaring it
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -61,7 +69,25 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
-          body="$(mktemp)"
-          printf '%s' "$PR_BODY" > "$body"
+          work="$(mktemp -d)"
+          printf '%s' "$PR_BODY" > "$work/body.md"
           base="$(git rev-parse --verify "refs/remotes/origin/${BASE_REF}^{commit}")"
-          python3 scripts/check-landed-reverts.py --base "$base" --head "$HEAD_SHA" --body-file "$body"
+          mkdir -p "$work/tool/lib"
+          git show "$base:scripts/check-landed-reverts.py" > "$work/tool/check-landed-reverts.py"
+          git show "$base:scripts/lib/gate.py" > "$work/tool/lib/gate.py"
+          if git cat-file -e "$base:registry/landed-revert-allowlist.json" 2>/dev/null; then
+            git show "$base:registry/landed-revert-allowlist.json" > "$work/allowlist.json"
+          else
+            printf '{"entries": []}\n' > "$work/allowlist.json"
+          fi
+          rc=0
+          python3 "$work/tool/check-landed-reverts.py" --base "$base" --head "$HEAD_SHA" \
+            --body-file "$work/body.md" --allowlist "$work/allowlist.json" > "$work/out.txt" 2>&1 || rc=$?
+          cat "$work/out.txt"
+          {
+            echo "### no-silent-revert (exit $rc)"
+            echo '```'
+            grep -v '^::' "$work/out.txt" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"

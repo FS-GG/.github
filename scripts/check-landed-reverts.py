@@ -17,8 +17,9 @@ deleted lines existed at the merge base. The check therefore measures recency, n
 
   B  = the branch point: the earliest commit the PR's own commits were built on
        (the oldest of the parents of `base..head` that are not themselves in `base..head`).
-  B' = B stepped back --lookback first-parent commits (default 100). Everything the base gained since
-       B' is "recently landed". The stale tree of the incident was ONE commit older than B.
+  B' = the floor of the lookback window: B stepped back --lookback first-parent commits (default 100) or
+       --lookback-days days of commit date (default 7), whichever reaches further. Everything the base
+       gained since B' is "recently landed". The stale tree of the incident was ONE commit older than B.
   R  = the squash result: `git merge-tree --write-tree base head`, i.e. the real three-way merge GitHub
        performs, not the head tree. (For #4977 it is byte-identical to the merged tree 610adc96.)
 
@@ -27,16 +28,18 @@ R neither replaces it with new text nor keeps it somewhere else in the same file
 
 EDITING vs REVERTING. This is the whole difficulty, and it is defined on the text, not on intent:
 
-  * EDIT   -- a hunk that removes recently landed lines AND adds at least one line whose text the file
-             never held in the window (`git rev-list floor..base -- path`, every version, plus the base
-             and the floor blob). The PR wrote something new where the landed lines were. Allowed.
-             "Text the file held" covers both sides of the landed change and every version between, so a
-             stale tree that is only PARTLY old still reads as the older text coming back.
-  * REVERT -- a hunk that removes recently landed lines and adds nothing new: a pure deletion, or a
-             replacement made only of text the file already held in the window (the older version
-             coming back). Counted toward the refusal bound unless declared.
+  * EDIT   -- credit is PER LINE, never per hunk. Each line the hunk adds whose text the file never held in
+             the window (`git rev-list floor..base -- path`, every version, plus the base and floor
+             blobs) offsets one dropped landed line. The PR wrote something new where the lines were.
+  * REVERT -- every dropped landed line left over: a pure deletion, a restored older version, a
+             replacement made of text the file already held. One new line beside a stale restore, or a
+             `# removed` comment after a deletion, hides one line, not the hunk. (An all-or-nothing hunk
+             rule hid 100 lines behind 1; the price of per-line credit is that consolidating 50 landed
+             lines into 20 new ones counts 30. Measured in the PR that introduced it.)
   * MOVE   -- a removed landed line whose text still occurs in the same file in R as often as before
              (cut and paste, reordering). Not counted.
+  * RESURRECTION -- a file the window deleted or renamed away that R has again counts its restored lines
+             (restored minus new) as dropped; it is attributed to the commit that removed it.
   * A file added after B' and absent from R, or whose blob in R equals its blob at B', is a whole-file
              REVERT. A binary file is judged by blob identity only (restored or deleted -> REVERT;
              otherwise EDIT).
@@ -54,20 +57,24 @@ binary file restored or deleted counts as the whole bound. Lower the bound only 
 DECLARING A REVERT. A deliberate revert is allowed, but the PR must say what it reverts, by commit, in
 the PR body or in any commit message of the branch:
 
-    <!-- fsgg:declared-revert/v1 reverts=dd7665f6,#4968 -->
+    <!-- fsgg:declared-revert/v1 reverts=dd7665f6,#4968,#4976:tests/** -->
 
-Tokens are commit SHAs (7-40 hex) or `#<PR>` (resolved to the squash commit whose subject ends `(#N)`).
-Each reverted line is attributed with `git blame` and is covered only when the commit that introduced
-it is named. Naming a commit that does not account for the reverted lines declares nothing. A commit
+Tokens are commit SHAs (7-40 hex) or `#<PR>` (resolved to the squash commit whose subject ends `(#N)`),
+optionally followed by `:<path-glob>` to limit the token to the files it is meant for. Each reverted line
+is attributed with `git blame` and is covered only when the commit that introduced it is named, within
+that token's scope; the output says how many lines each token covered, and a token that covered nothing. Naming a commit that does not account for the reverted lines declares nothing. A commit
 message marker lands in the squash message, so the declaration is durable in history; the body is read
 from the event payload and, deliberately, an edit to it does NOT re-run CI (#4730 CI load): to declare
 after the fact, push a commit whose message carries the marker.
 
 FAIL CLOSED (#266). Exit 0 is the only green. 1 = refused. 3 = no verdict: shallow history, an unreadable
-object, no common ancestor, a merge conflict, or more commits/files than the caps below. Never green.
+object, no common ancestor, a merge conflict, or any cap in CAPS reached (never a silent truncation). A
+maintainer can raise a cap with --max-<name>, up to ten times its default: docs/coordination/landed-revert-guard.md.
 
-REAL EXCLUSIONS ARE EXPLICIT. `registry/landed-revert-allowlist.json` lists path globs with a mandatory
-reason, for files a PR legitimately regenerates from scratch. An entry without a reason is an error.
+EXCLUSIONS ARE EXPLICIT AND COME FROM THE BASE. `registry/landed-revert-allowlist.json` lists path-segment
+globs (`*` never crosses `/`) with a mandatory reason, for files a PR legitimately regenerates from scratch.
+It is read from the base commit, never the PR head, so a PR cannot exempt itself; the workflow also runs
+this script and scripts/lib/gate.py from the base. A glob made only of wildcards is an error.
 """
 
 from __future__ import annotations
@@ -89,17 +96,24 @@ from lib.gate import ExitCode, GateError, run  # noqa: E402
 
 NAME = "check-landed-reverts"
 
-DEFAULT_LOOKBACK = 100
-MAX_PR_COMMITS = 2000      # commits in base..head; a bigger branch cannot be reasoned about here
-MAX_RAW_ENTRIES = 20000    # changed paths per raw diff
-MAX_CANDIDATES = 1500      # files changed both by the landed work and by the PR
-MAX_BLAME_FILES = 200
+DEFAULT_LOOKBACK = 100     # first-parent commits before the branch point still counted as landed ...
+DEFAULT_LOOKBACK_DAYS = 7  # ... or this many days before the branch point's commit date, whichever reaches further
 REFUSE_LINES = 30          # undeclared dropped landed lines at which the PR is refused; fewer only warn
-MAX_HISTORY_VERSIONS = 300
+# Every cap that can stop the check is a NO VERDICT (exit 3), never a silent truncation. A maintainer can
+# raise one with --max-<name> (at most 10x the default) after review: docs/coordination/landed-revert-guard.md.
+CAPS = {
+    "pr-commits": 2000,        # commits in base..head
+    "paths": 20000,            # changed paths per raw diff
+    "candidates": 1500,        # files changed by both the landed work and the PR
+    "blame-files": 200,        # files with dropped lines that need git blame
+    "history-versions": 300,   # versions of one file in the window
+    "window-commits": 3000,    # first-parent commits in the lookback window
+}
+CAP_CEILING = 10
 GIT_TIMEOUT = 180
 DEFAULT_ALLOWLIST = "registry/landed-revert-allowlist.json"
 MARKER_RE = re.compile(r"<!--\s*fsgg:declared-revert/v1\s+reverts=([^\s>]*)\s*-->")
-TOKEN_RE = re.compile(r"^(?:#(\d{1,7})|([0-9a-fA-F]{7,40}))$")
+TOKEN_RE = re.compile(r"^(?:#(\d{1,7})|([0-9a-fA-F]{7,40}))(?::(\S+))?$")
 HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
@@ -131,6 +145,27 @@ def commit_of(repo: str, rev: str, what: str) -> str:
     if not SHA_RE.fullmatch(out):
         raise GateError(f"{what} {rev!r} is not a commit this clone can read (shallow or unfetched?)")
     return out
+
+
+def cap_hit(name: str, seen: int) -> GateError:
+    return GateError(
+        f"{seen} exceeds the {name} cap {CAPS[name]}. This is NO VERDICT, not a pass: a maintainer reviews the PR and may "
+        f"re-run the check locally with --max-{name} (at most {CAP_CEILING}x the default); see "
+        f"docs/coordination/landed-revert-guard.md#override")
+
+
+def glob_match(pattern: str, path: str) -> bool:
+    """Path-segment glob: `*` and `?` never cross `/`; a whole `**` segment matches any number of segments."""
+    pat, seg = pattern.split("/"), path.split("/")
+
+    def walk(i: int, j: int) -> bool:
+        if i == len(pat):
+            return j == len(seg)
+        if pat[i] == "**":
+            return any(walk(i + 1, k) for k in range(j, len(seg) + 1))
+        return j < len(seg) and fnmatch.fnmatchcase(seg[j], pat[i]) and walk(i + 1, j + 1)
+
+    return walk(0, 0)
 
 
 @dataclass
@@ -165,8 +200,8 @@ def raw_diff(repo: str, a: str, b: str) -> list[Entry]:
             old_path = new_path = parts[i + 1]
             i += 2
         entries.append(Entry(status[0], old_path, new_path, fields[0], fields[1], fields[2], fields[3]))
-        if len(entries) > MAX_RAW_ENTRIES:
-            raise GateError(f"{a[:8]}..{b[:8]} changes more than {MAX_RAW_ENTRIES} paths; refusing to guess")
+        if len(entries) > CAPS["paths"]:
+            raise cap_hit("paths", len(entries))
     return entries
 
 
@@ -238,8 +273,8 @@ def branch_point(repo: str, base: str, head: str) -> str | None:
     if text(git(repo, "rev-parse", "--is-shallow-repository")).strip() != "false":
         raise GateError("the clone is shallow; the branch point and landed history cannot be established")
     rows = text(git(repo, "rev-list", "--parents", f"{base}..{head}")).splitlines()
-    if len(rows) > MAX_PR_COMMITS:
-        raise GateError(f"{len(rows)} commits in base..head exceeds the cap {MAX_PR_COMMITS}")
+    if len(rows) > CAPS["pr-commits"]:
+        raise cap_hit("pr-commits", len(rows))
     if not rows:
         return None
     own = {row.split()[0] for row in rows}
@@ -255,11 +290,25 @@ def branch_point(repo: str, base: str, head: str) -> str | None:
     return found[0]
 
 
-def lookback_commit(repo: str, point: str, depth: int) -> str:
-    rows = text(git(repo, "rev-list", "--first-parent", "-n", str(depth + 1), point)).split()
-    if not rows:
+def window_floor(repo: str, point: str, commits: int, days: int) -> str:
+    """The commit before the lookback window: `commits` first-parent steps back from the branch point, or the
+    last first-parent commit older than `days` before the branch point's commit date, whichever reaches further."""
+    by_count = text(git(repo, "rev-list", "--first-parent", "-n", str(commits + 1), point)).split()
+    if not by_count:
         raise GateError(f"cannot walk first-parent history from {point[:8]}")
-    return rows[-1]
+    floor = by_count[-1]
+    stamp = int(text(git(repo, "log", "-1", "--format=%ct", point)).strip())
+    recent = text(git(repo, "rev-list", "--first-parent", f"--after={stamp - days * 86400}", "-n",
+                      str(CAPS["window-commits"] + 1), point)).split()
+    if len(recent) > CAPS["window-commits"]:
+        raise cap_hit("window-commits", len(recent))
+    if recent:
+        before = text(git(repo, "rev-list", "--first-parent", "-n", "1", f"{recent[-1]}^", ok=(0, 128))).strip()
+        # Both candidates are on the same first-parent chain: keep the older one.
+        before = before if SHA_RE.fullmatch(before) else recent[-1]      # the window reaches the root commit
+        if git(repo, "merge-base", "--is-ancestor", before, floor, ok=(0, 1)).returncode == 0:
+            floor = before
+    return floor
 
 
 def squash_result(repo: str, base: str, head: str) -> str:
@@ -279,13 +328,14 @@ def squash_result(repo: str, base: str, head: str) -> str:
 @dataclass
 class Finding:
     path: str
-    kind: str                                   # "whole-file" | "binary" | "lines"
+    kind: str                                   # "whole-file" | "binary" | "lines" | "resurrected"
     lines: list[int]                            # base line numbers of the reverted landed lines
     weight: int = 0                             # what this finding adds to the refusal count
     commits: dict[str, str] = field(default_factory=dict)       # introducing commit -> subject
     per_line: dict[int, str] = field(default_factory=dict)      # reverted line -> introducing commit
     uncovered_lines: int = 0                    # weight not accounted for by a declared commit
     uncovered: set[str] = field(default_factory=set)            # introducing commits not declared
+    covered_by: dict[str, int] = field(default_factory=dict)    # declaration token -> lines it covered here
 
 
 def landed_lines(hunks: list[Hunk]) -> dict[int, str]:
@@ -298,7 +348,9 @@ def landed_lines(hunks: list[Hunk]) -> dict[int, str]:
 
 def file_history(repo: str, floor: str, base: str, path: str, blobs: list[str | None]) -> set[str]:
     """Every substantive line (stripped) the file held in any version committed in floor..base, plus `blobs`."""
-    shas = text(git(repo, "rev-list", f"{floor}..{base}", "--", path)).split()[:MAX_HISTORY_VERSIONS]
+    shas = text(git(repo, "rev-list", f"{floor}..{base}", "--", path)).split()
+    if len(shas) > CAPS["history-versions"]:
+        raise cap_hit("history-versions", len(shas))
     specs = [f"{c}:{path}" for c in shas] + [b for b in blobs if b]
     seen: set[str] = set()
     if not specs:
@@ -322,7 +374,7 @@ def file_history(repo: str, floor: str, base: str, path: str, blobs: list[str | 
 
 def analyse_file(repo: str, landed: Entry, effect: Entry, history: Callable[[], set[str]]) -> Finding | None:
     path = effect.old_path
-    before = None if landed.status == "A" else landed.old_sha          # blob at B'
+    before = None if landed.status == "A" else landed.old_sha          # blob at the floor
     now = effect.old_sha                                               # blob on the base
     after = None if effect.status == "D" else effect.new_sha           # blob in R
     binary_landed, landed_hunks = blob_hunks(repo, before, now)
@@ -349,8 +401,6 @@ def analyse_file(repo: str, landed: Entry, effect: Entry, history: Callable[[], 
         hit = [(h.old_start + i, c) for i, c in enumerate(h.minus) if (h.old_start + i) in added]
         if not hit:
             continue
-        if any(substantive(x) and x.strip() not in history() for x in h.plus):
-            continue            # EDIT: the PR wrote text this file never held in the window, before or after.
         if not loaded:          # MOVE: only text with a net loss in this file counts as dropped.
             base_count.update(x.strip() for x in blob_text(repo, now))
             result_count.update(x.strip() for x in blob_text(repo, after))
@@ -358,45 +408,80 @@ def analyse_file(repo: str, landed: Entry, effect: Entry, history: Callable[[], 
                 if count > result_count[key]:
                     lost[key] = count - result_count[key]
             loaded = True
+        dropped = []
         for n, content in hit:
             key = content.strip()
             if lost[key] > 0:
                 lost[key] -= 1
-                reverted.append(n)
+                dropped.append(n)
+        # EDIT credit is per line, never per hunk: only a plus line whose text the file never held in the window
+        # (before or after the landed work) offsets one dropped line. One new line beside a stale restore, or a
+        # `# removed` comment after a deletion, therefore hides one line, not the whole hunk.
+        fresh = sum(1 for x in h.plus if substantive(x) and x.strip() not in history()) if any(
+            substantive(x) for x in h.plus) else 0
+        reverted.extend(dropped[min(fresh, len(dropped)):])
     return Finding(path, "lines", sorted(reverted), weight=len(reverted)) if reverted else None
+
+
+def resurrected(repo: str, gone: Entry, back: Entry) -> Finding | None:
+    """A file the window deleted (or renamed away) that the PR's result has again."""
+    same = gone.old_sha == back.new_sha
+    old_binary, old_lines = blob_lines(repo, gone.old_sha)
+    new_binary, new_lines = blob_lines(repo, back.new_sha)
+    if old_binary or new_binary:
+        return Finding(back.new_path, "resurrected", [], weight=REFUSE_LINES) if same else None
+    old = Counter(x.strip() for x in old_lines if substantive(x))
+    new = Counter(x.strip() for x in new_lines if substantive(x))
+    held = sum(min(count, old[key]) for key, count in new.items())
+    weight = max(0, held - (sum(new.values()) - held))
+    return Finding(back.new_path, "resurrected", [], weight=weight) if weight else None
 
 
 def blob_text(repo: str, sha: str | None) -> list[str]:
     return [] if sha is None else blob_lines(repo, sha)[1]
 
 
-def load_allowlist(path: str) -> list[tuple[str, str]]:
-    if not os.path.exists(path):
-        return []
+def parse_allowlist(raw: str, source: str) -> list[tuple[str, str]]:
     try:
-        with open(path, encoding="utf-8") as handle:
-            doc = json.load(handle)
-    except (OSError, ValueError) as error:
-        raise GateError(f"cannot read the allowlist {path}: {error}") from error
+        doc = json.loads(raw)
+    except ValueError as error:
+        raise GateError(f"cannot parse the allowlist {source}: {error}") from error
     entries = doc.get("entries") if isinstance(doc, dict) else None
     if not isinstance(entries, list):
-        raise GateError(f"{path}: `entries` must be a list")
+        raise GateError(f"{source}: `entries` must be a list")
     out = []
     for entry in entries:
         glob = entry.get("glob") if isinstance(entry, dict) else None
         reason = entry.get("reason") if isinstance(entry, dict) else None
         if not isinstance(glob, str) or not glob or not isinstance(reason, str) or not reason.strip():
-            raise GateError(f"{path}: every entry needs a non-empty `glob` and a non-empty `reason`: {entry!r}")
+            raise GateError(f"{source}: every entry needs a non-empty `glob` and a non-empty `reason`: {entry!r}")
+        if all(set(part) <= {"*", "?"} for part in glob.split("/")):
+            raise GateError(f"{source}: glob {glob!r} names no file, only wildcards; that is an override, not an allowlist")
         out.append((glob, reason))
     return out
 
 
-def attribute(repo: str, base: str, finding: Finding) -> None:
+def load_allowlist(repo: str, base: str, override: str | None) -> list[tuple[str, str]]:
+    """The allowlist as it is on the BASE. A PR cannot exempt itself by editing the file in its own head."""
+    if override is not None:
+        try:
+            with open(override, encoding="utf-8") as handle:
+                return parse_allowlist(handle.read(), override)
+        except OSError as error:
+            raise GateError(f"cannot read the allowlist {override}: {error}") from error
+    if not text(git(repo, "ls-tree", "--name-only", base, "--", DEFAULT_ALLOWLIST)).strip():
+        return []
+    return parse_allowlist(text(git(repo, "show", f"{base}:{DEFAULT_ALLOWLIST}")), f"{base[:8]}:{DEFAULT_ALLOWLIST}")
+
+
+def attribute(repo: str, base: str, floor: str, finding: Finding) -> None:
     """Fill in which commits introduced the reverted lines (git blame on the base)."""
-    if finding.kind == "binary":
-        sha, _, subject = text(git(repo, "log", "-1", "--format=%H %s", base, "--", finding.path)).strip().partition(" ")
-        if sha:
-            finding.commits[sha] = subject
+    if finding.kind in ("binary", "resurrected"):
+        # The last commit in the window that touched the path: the one that changed or removed it.
+        sha = text(git(repo, "rev-list", "-n", "1", f"{floor}..{base}", "--", finding.path)).strip()
+        if not SHA_RE.fullmatch(sha):
+            raise GateError(f"no commit in the window touches {finding.path}")
+        finding.commits[sha] = text(git(repo, "log", "-1", "--format=%s", sha)).strip()
         return
     ranges: list[list[int]] = []
     for n in finding.lines:
@@ -417,9 +502,17 @@ def attribute(repo: str, base: str, finding: Finding) -> None:
         finding.commits[sha] = text(git(repo, "log", "-1", "--format=%s", sha)).strip()
 
 
-def declared_commits(repo: str, texts: list[str], floor: str, base: str) -> tuple[set[str], list[str]]:
-    """Resolve every token of every marker in `texts`. -> (commits, unresolved tokens)."""
-    commits: set[str] = set()
+@dataclass
+class Declaration:
+    token: str                      # as written, e.g. `#4968` or `dd7665f6:src/**`
+    commits: set[str]
+    scope: str | None               # path glob the declaration is limited to, or None for every path
+    covered: int = 0                # dropped lines this declaration accounted for
+
+
+def declarations(repo: str, texts: list[str], floor: str, base: str) -> tuple[list[Declaration], list[str]]:
+    """Resolve every token of every marker in `texts`. -> (declarations, unresolved tokens)."""
+    found: list[Declaration] = []
     unresolved: list[str] = []
     subjects: list[str] | None = None
     for blob in texts:
@@ -428,15 +521,28 @@ def declared_commits(repo: str, texts: list[str], floor: str, base: str) -> tupl
                 m = TOKEN_RE.match(token)
                 if not m:
                     unresolved.append(token)
-                elif m[1]:
+                    continue
+                commits: set[str] = set()
+                if m[1]:
                     if subjects is None:
                         subjects = text(git(repo, "log", "--format=%H %s", f"{floor}..{base}")).splitlines()
-                    hits = [r.split()[0] for r in subjects if r.endswith(f"(#{m[1]})")]
-                    commits.update(hits) if hits else unresolved.append(token)
+                    commits.update(r.split()[0] for r in subjects if r.endswith(f"(#{m[1]})"))
                 else:
                     sha = text(git(repo, "rev-parse", "--verify", "--quiet", f"{m[2]}^{{commit}}", ok=(0, 1))).strip()
-                    commits.add(sha) if SHA_RE.fullmatch(sha) else unresolved.append(token)
-    return commits, unresolved
+                    if SHA_RE.fullmatch(sha):
+                        commits.add(sha)
+                if commits:
+                    found.append(Declaration(token, commits, m[3]))
+                else:
+                    unresolved.append(token)
+    return found, unresolved
+
+
+def covering(decls: list[Declaration], commit: str, path: str) -> Declaration | None:
+    for d in decls:
+        if commit in d.commits and (d.scope is None or glob_match(d.scope, path)):
+            return d
+    return None
 
 
 @dataclass
@@ -448,7 +554,7 @@ class Result:
     result_tree: str | None
     candidates: int
     findings: list[Finding]
-    declared: set[str]
+    declared: list[Declaration]
     unresolved: list[str]
     allowlisted: list[str]
     refuse_lines: int = REFUSE_LINES
@@ -462,25 +568,28 @@ class Result:
         return self.undeclared >= self.refuse_lines
 
 
-def analyse(repo: str, base_rev: str, head_rev: str, *, lookback: int, bodies: list[str],
+def analyse(repo: str, base_rev: str, head_rev: str, *, lookback: int, lookback_days: int, bodies: list[str],
             allowlist: list[tuple[str, str]], refuse_lines: int = REFUSE_LINES) -> Result:
     base = commit_of(repo, base_rev, "base")
     head = commit_of(repo, head_rev, "head")
     point = branch_point(repo, base, head)
     if point is None:
-        return Result(base, head, None, None, None, 0, [], set(), [], [], refuse_lines)
-    floor = lookback_commit(repo, point, lookback)
+        return Result(base, head, None, None, None, 0, [], [], [], [], refuse_lines)
+    floor = window_floor(repo, point, lookback, lookback_days)
     tree = squash_result(repo, base, head)
-    landed = {e.new_path: e for e in raw_diff(repo, floor, base) if e.status != "D" and e.new_mode != "160000"}
-    effect = {e.old_path: e for e in raw_diff(repo, base, tree)
-              if e.status != "A" and e.old_mode != "160000" and e.new_mode != "160000"}
+    window = raw_diff(repo, floor, base)
+    landed = {e.new_path: e for e in window if e.status != "D" and e.new_mode != "160000"}
+    gone = {e.old_path: e for e in window if e.status in "DR" and e.old_mode != "160000"}
+    result = raw_diff(repo, base, tree)
+    effect = {e.old_path: e for e in result if e.status != "A" and e.old_mode != "160000" and e.new_mode != "160000"}
+    back = [e for e in result if e.status == "A" and e.new_path in gone and e.new_mode != "160000"]
     both = sorted(set(landed) & set(effect))
-    if len(both) > MAX_CANDIDATES:
-        raise GateError(f"{len(both)} files changed by both the landed work and the PR exceeds the cap {MAX_CANDIDATES}")
+    if len(both) + len(back) > CAPS["candidates"]:
+        raise cap_hit("candidates", len(both) + len(back))
     findings: list[Finding] = []
     skipped: list[str] = []
     for path in both:
-        if any(fnmatch.fnmatchcase(path, glob) for glob, _ in allowlist):
+        if any(glob_match(glob, path) for glob, _ in allowlist):
             skipped.append(path)
             continue
         memo: list[set[str]] = []
@@ -494,19 +603,38 @@ def analyse(repo: str, base_rev: str, head_rev: str, *, lookback: int, bodies: l
         found = analyse_file(repo, landed[path], effect[path], history)
         if found:
             findings.append(found)
-    if len(findings) > MAX_BLAME_FILES:
-        raise GateError(f"{len(findings)} files reverted exceeds the attribution cap {MAX_BLAME_FILES}")
+    for entry in back:
+        if any(glob_match(glob, entry.new_path) for glob, _ in allowlist):
+            skipped.append(entry.new_path)
+            continue
+        found = resurrected(repo, gone[entry.new_path], entry)
+        if found:
+            findings.append(found)
+    if len(findings) > CAPS["blame-files"]:
+        raise cap_hit("blame-files", len(findings))
     messages = text(git(repo, "log", "--format=%B", f"{base}..{head}"))
-    declared, unresolved = declared_commits(repo, [messages, *bodies], floor, base)
+    declared, unresolved = declarations(repo, [messages, *bodies], floor, base)
     for found in findings:
-        attribute(repo, base, found)
-        if found.kind == "binary":
-            found.uncovered = {c for c in found.commits if c not in declared}
-            found.uncovered_lines = found.weight if found.uncovered else 0
+        attribute(repo, base, floor, found)
+        if found.kind in ("binary", "resurrected"):
+            commit = next(iter(found.commits))
+            cover = covering(declared, commit, found.path)
+            if cover:
+                cover.covered += found.weight
+                found.covered_by[cover.token] = found.weight
+            else:
+                found.uncovered.add(commit)
+                found.uncovered_lines = found.weight
         else:
-            found.uncovered = {c for c in found.per_line.values() if c not in declared}
-            found.uncovered_lines = sum(1 for c in found.per_line.values() if c not in declared)
-    return Result(base, head, point, floor, tree, len(both), findings, declared, unresolved, skipped, refuse_lines)
+            for n, commit in found.per_line.items():
+                cover = covering(declared, commit, found.path)
+                if cover:
+                    cover.covered += 1
+                    found.covered_by[cover.token] = found.covered_by.get(cover.token, 0) + 1
+                else:
+                    found.uncovered.add(commit)
+                    found.uncovered_lines += 1
+    return Result(base, head, point, floor, tree, len(both) + len(back), findings, declared, unresolved, skipped, refuse_lines)
 
 
 def render(result: Result) -> str:
@@ -519,6 +647,10 @@ def render(result: Result) -> str:
         out.append(f"  {state} {found.kind} {found.path}: {found.weight} landed line(s) dropped")
         for sha, subject in sorted(found.commits.items()):
             out.append(f"      introduced by {sha[:8]} {subject}")
+    for d in result.declared:
+        scope = f" within {d.scope}" if d.scope else ""
+        note = "" if d.covered else " -- covers nothing in this merge (wrong commit, wrong scope, or not needed)"
+        out.append(f"  declaration {d.token}{scope}: covers {d.covered} dropped line(s){note}")
     if result.unresolved:
         out.append(f"  unresolvable declaration token(s): {', '.join(result.unresolved)}")
     undeclared = sorted({c for f in result.findings for c in f.uncovered})
@@ -526,7 +658,8 @@ def render(result: Result) -> str:
         out.append("")
         out.append("This merge removes content that landed on the base within the lookback window and puts")
         out.append("nothing new in its place. If that is intended, name the commits in a commit message of the")
-        out.append("branch (or in the PR body when the PR is opened):")
+        out.append("branch (or in the PR body when the PR is opened); append `:<path-glob>` to limit a name to")
+        out.append("the files you mean to revert:")
         out.append(f"    <!-- fsgg:declared-revert/v1 reverts={','.join(n[:12] for n in undeclared)} -->")
         out.append("If it is not intended, the branch carries an older copy of these files: rebuild it on the")
         out.append("current base instead of resolving the conflict toward the branch's side.")
@@ -541,13 +674,25 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--body-file", action="append", default=[], help="PR body to read declarations from")
     ap.add_argument("--lookback", type=int, default=DEFAULT_LOOKBACK,
                     help=f"first-parent commits before the branch point still counted as landed (default {DEFAULT_LOOKBACK})")
+    ap.add_argument("--lookback-days", type=int, default=DEFAULT_LOOKBACK_DAYS,
+                    help=f"also count anything landed within this many days before the branch point (default {DEFAULT_LOOKBACK_DAYS}); "
+                         f"the window is whichever of the two reaches further")
     ap.add_argument("--refuse-lines", type=int, default=REFUSE_LINES,
                     help=f"undeclared dropped landed lines at which the check refuses; fewer only warn (default {REFUSE_LINES})")
-    ap.add_argument("--allowlist", default=None, help=f"default: <repo>/{DEFAULT_ALLOWLIST}")
+    ap.add_argument("--allowlist", default=None,
+                    help=f"allowlist file; default: {DEFAULT_ALLOWLIST} as it is on the BASE, never the PR head")
+    for name, default in CAPS.items():
+        ap.add_argument(f"--max-{name}", type=int, default=default,
+                        help=f"cap on {name} (default {default}, at most {default * CAP_CEILING}); a hit is NO VERDICT")
     ap.add_argument("--json", action="store_true", help="print a machine-readable verdict")
     args = ap.parse_args(argv)
-    if not 0 <= args.lookback <= 5000 or args.refuse_lines < 1:
-        raise GateError("--lookback must be 0..5000 and --refuse-lines at least 1")
+    if not 0 <= args.lookback <= 5000 or not 0 <= args.lookback_days <= 365 or args.refuse_lines < 1:
+        raise GateError("--lookback must be 0..5000, --lookback-days 0..365 and --refuse-lines at least 1")
+    for name, default in CAPS.items():
+        value = getattr(args, f"max_{name.replace('-', '_')}")
+        if not 1 <= value <= default * CAP_CEILING:
+            raise GateError(f"--max-{name} must be between 1 and {default * CAP_CEILING}")
+        CAPS[name] = value
     bodies = []
     for path in args.body_file:
         try:
@@ -555,17 +700,19 @@ def main(argv: list[str]) -> int:
                 bodies.append(handle.read())
         except OSError as error:
             raise GateError(f"cannot read the PR body {path}: {error}") from error
-    allow_path = args.allowlist or os.path.join(args.repo, DEFAULT_ALLOWLIST)
-    result = analyse(args.repo, args.base, args.head, lookback=args.lookback, bodies=bodies,
-                     allowlist=load_allowlist(allow_path), refuse_lines=args.refuse_lines)
+    base = commit_of(args.repo, args.base, "base")
+    result = analyse(args.repo, base, args.head, lookback=args.lookback, lookback_days=args.lookback_days,
+                     bodies=bodies, allowlist=load_allowlist(args.repo, base, args.allowlist),
+                     refuse_lines=args.refuse_lines)
     if args.json:
         print(json.dumps({
             "base": result.base, "head": result.head, "branchPoint": result.point, "floor": result.floor,
-            "resultTree": result.result_tree, "candidates": result.candidates, "undeclaredLines": result.undeclared, "refused": result.refused,
+            "resultTree": result.result_tree, "candidates": result.candidates, "undeclaredLines": result.undeclared,
+            "refused": result.refused,
             "findings": [{"path": f.path, "kind": f.kind, "lines": f.weight, "undeclared": f.uncovered_lines,
-                          "commits": sorted(f.commits)} for f in result.findings],
-            "declared": sorted(result.declared), "unresolved": result.unresolved,
-            "allowlisted": result.allowlisted,
+                          "commits": sorted(f.commits), "coveredBy": f.covered_by} for f in result.findings],
+            "declarations": [{"token": d.token, "scope": d.scope, "covered": d.covered} for d in result.declared],
+            "unresolved": result.unresolved, "allowlisted": result.allowlisted,
         }, indent=2))
         print(render(result), file=sys.stderr)
     else:
