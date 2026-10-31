@@ -31,7 +31,9 @@ on:
       - ".github/workflows/coherence.yml"
       - ".github/workflows/coord-report-selftest.yml"
       - ".github/workflows/coordination-sync-selftest.yml"
+      - ".github/workflows/cross-repo-request-predicate.yml"
       - ".github/workflows/dispatch-preflight-selftest.yml"
+      - ".github/workflows/feed-autofix.yml"
       - ".github/workflows/fsc-progress-evidence.yml"
       - ".github/workflows/fsgg-claim-fence.yml"
       - ".github/workflows/fsgg-dispatch-broker-selftest.yml"
@@ -95,7 +97,9 @@ on:
       - ".github/workflows/coherence.yml"
       - ".github/workflows/coord-report-selftest.yml"
       - ".github/workflows/coordination-sync-selftest.yml"
+      - ".github/workflows/cross-repo-request-predicate.yml"
       - ".github/workflows/dispatch-preflight-selftest.yml"
+      - ".github/workflows/feed-autofix.yml"
       - ".github/workflows/fsc-progress-evidence.yml"
       - ".github/workflows/fsgg-claim-fence.yml"
       - ".github/workflows/fsgg-dispatch-broker-selftest.yml"
@@ -146,7 +150,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pr-concurrency-coherence-${{ github.event.pull_request.number || github.sha }}
+  group: pr-concurrency-coherence-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

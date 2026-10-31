@@ -39,12 +39,12 @@ permissions:
   contents: read
 
 # PR-keyed concurrency (#4730 CI-load): a newer run for the same pull request cancels the superseded
-# one, so a push or body edit no longer leaves the old head's run to finish and hold a runner. The key
-# falls back to `github.sha` (not `github.ref`) for push / merge_group / workflow_dispatch so each of
-# those keeps its own group and `cancel-in-progress` is false there: GitHub also discards a PENDING run
-# in a shared group even without cancel-in-progress, which `refs/heads/main` would do to main pushes.
+# one, so a push or body edit no longer leaves the old head's run to finish and hold a runner. Any
+# other event keys on `github.run_id`, which is unique to the run: GitHub discards an older PENDING run
+# in a shared group even without cancel-in-progress, so a key that two events can share (the branch ref
+# for pushes, or the commit sha for dispatches and issue events at one commit) would drop a run.
 concurrency:
-  group: board-paths-live-selftest-${{ github.event.pull_request.number || github.sha }}
+  group: board-paths-live-selftest-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
