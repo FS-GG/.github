@@ -1025,5 +1025,195 @@ class WorkflowShape(unittest.TestCase):
             self.assertNotIn(forbidden, (ROOT / "scripts/board-drift-fetch.py").read_text().replace("never writes a board field", ""))
 
 
+def currency_doc(*findings, schema="fsgg:board-currency-findings/v1"):
+    return {"schema": schema, "ruleset": "fsgg:board-currency-rules/v1", "findings": list(findings)}
+
+
+def cfind(rule="R3", subject="FS-GG/.github#2", reason="no-blocker", public=True, **kw):
+    base = {"id": f"{rule}:{subject}:{reason}", "rule": rule, "subject": subject, "reason": reason,
+            "text": "Blocked without a native blocked-by issue", "public": public, "title": "card 2"}
+    base.update(kw)
+    return base
+
+
+class CurrencyConvergence(unittest.TestCase):
+    """Phase 2: board-currency findings share the one report issue, digest and writer (Root decision 3)."""
+
+    KEY = TEST_KEY.encode()
+    META = {"number": 3, "fetchedAt": "2026-10-31T09:00:00Z", "items": 98, "currencyRuleset": "fsgg:board-currency-rules/v1"}
+
+    def test_public_subject_is_named_private_and_unknown_and_draft_are_placeholders(self):
+        out = OBS.currency_findings(currency_doc(
+            cfind(), cfind(subject="FS-GG/Secret#5", public=False, title="secret title"),
+            cfind(subject="FS-GG/Unknown#6", public=None), cfind(rule="R7", subject="draft:PVTI_x", reason="draft",
+                                                                public=False)), self.KEY)
+        refs = [r["ref"] for r in out]
+        self.assertIn("FS-GG/.github#2", refs)
+        dump = json.dumps(out)
+        for leaked in ("Secret", "secret title", "Unknown#6", "PVTI_x"):
+            self.assertNotIn(leaked, dump)
+        self.assertEqual(sum(1 for r in out if r["ref"].startswith("private:")), 3)
+        self.assertTrue(all(r["key"].startswith(r["rule"] + "|" + r["ref"] + "|") for r in out))
+
+    def test_placeholder_is_the_drift_placeholder_and_stable(self):
+        a = OBS.currency_findings(currency_doc(cfind(subject="FS-GG/Secret#5", public=False)), self.KEY)
+        b = OBS.currency_findings(currency_doc(cfind(subject="FS-GG/Secret#5", public=False)), self.KEY)
+        self.assertEqual(a, b)
+        self.assertEqual(a[0]["ref"], OBS.opaque("FS-GG/Secret#5", self.KEY))
+
+    def test_refuses_without_key_and_on_a_foreign_document(self):
+        with self.assertRaises(OBS.NoVerdict):
+            OBS.currency_findings(currency_doc(cfind()), None)
+        with self.assertRaises(OBS.NoVerdict):
+            OBS.currency_findings({"schema": "fsgg:board-drift-findings/v1", "findings": []}, self.KEY)
+        with self.assertRaises(OBS.NoVerdict):
+            OBS.currency_findings(currency_doc(cfind(rule="a")), self.KEY)
+
+    def test_v2_documents_are_accepted_and_pending_is_shown(self):
+        out = OBS.currency_findings(currency_doc(cfind(rule="R5", reason="children-complete", pending="closure-proposed"),
+                                                 schema="fsgg:board-currency-findings/v2"), self.KEY)
+        self.assertIn("closure-proposed", out[0]["text"])
+
+    def test_body_has_currency_sections_without_ack_and_names_both_rule_sets(self):
+        findings = OBS.currency_findings(currency_doc(cfind(), cfind(rule="R1", subject="FS-GG/.github#10",
+                                                                     reason="no-delivery")), self.KEY)
+        body = OBS.render_body(findings, self.META)
+        self.assertIn("### R1. Routine PR references exactly one open Delivery", body)
+        self.assertIn("### R3. Blocked names an open blocker", body)
+        self.assertIn("fsgg:board-currency-rules/v1", body)
+        for line in body.splitlines():
+            if line.startswith("- `FS-GG"):
+                self.assertNotIn("Ack:", line)
+
+    def test_a_currency_change_changes_the_digest_and_rewrites_the_issue(self):
+        one = OBS.currency_findings(currency_doc(cfind()), self.KEY)
+        two = OBS.currency_findings(currency_doc(cfind(), cfind(subject="FS-GG/.github#3")), self.KEY)
+        existing = {"number": 4985, "state": "open", "title": OBS.REPORT_TITLE, "body": OBS.render_body(one, self.META)}
+        self.assertEqual(OBS.plan_report(one, existing, self.META)["action"], "noop")
+        self.assertEqual(OBS.plan_report(two, existing, self.META)["action"], "update")
+
+    def _existing(self, findings, state="open"):
+        return {"number": 4985, "state": state, "title": OBS.REPORT_TITLE, "body": OBS.render_body(findings, self.META)}
+
+    def test_r1_only_changes_rewrite_the_body_without_comment_or_reopen(self):
+        base = OBS.currency_findings(currency_doc(cfind()), self.KEY)
+        more = OBS.currency_findings(currency_doc(cfind(), cfind(rule="R1", subject="FS-GG/.github#10", reason="no-delivery")), self.KEY)
+        for state in ("open", "closed"):
+            added = OBS.plan_report(more, self._existing(base, state), self.META)
+            self.assertEqual((added["action"], added["comment"]), ("update", None), state)
+            removed = OBS.plan_report(base, self._existing(more, state), self.META)
+            self.assertEqual((removed["action"], removed["comment"]), ("update", None), state)
+        self.assertIn("(1)", added["body"])  # R1 shown as a count plus the list
+
+    def test_new_non_r1_currency_finding_comments_and_lists_no_r1_key(self):
+        base = OBS.currency_findings(currency_doc(cfind(rule="R1", subject="FS-GG/.github#10", reason="no-delivery")), self.KEY)
+        more = OBS.currency_findings(currency_doc(
+            cfind(rule="R1", subject="FS-GG/.github#10", reason="no-delivery"),
+            cfind(rule="R1", subject="FS-GG/.github#11", reason="no-delivery"), cfind()), self.KEY)
+        plan = OBS.plan_report(more, self._existing(base), self.META)
+        self.assertEqual(plan["action"], "update")
+        self.assertIn("R3|FS-GG/.github#2|no-blocker", plan["comment"])
+        self.assertNotIn("R1|", plan["comment"])
+        self.assertIn("R1: 1 new, 0 cleared", plan["comment"])
+        reopened = OBS.plan_report(more, self._existing(base, "closed"), self.META)
+        self.assertEqual(reopened["action"], "reopen")
+
+    def test_cleared_non_r1_currency_finding_is_quiet(self):
+        base = OBS.currency_findings(currency_doc(cfind()), self.KEY)
+        plan = OBS.plan_report(OBS.currency_findings(currency_doc(cfind(rule="R1", subject="FS-GG/.github#10",
+                                                                       reason="no-delivery")), self.KEY),
+                               self._existing(base), self.META)
+        self.assertEqual(plan["comment"], None)
+
+    def test_any_drift_change_comments(self):
+        cur = OBS.currency_findings(currency_doc(cfind(rule="R1", subject="FS-GG/.github#10", reason="no-delivery")), self.KEY)
+        drift = analyze(snapshot([item(100, status=None)]), NOW)
+        with_drift = OBS.plan_report(cur + drift, self._existing(cur), self.META)
+        self.assertTrue(with_drift["comment"])
+        cleared = OBS.plan_report(cur, self._existing(cur + drift), self.META)
+        self.assertTrue(cleared["comment"])
+
+    def test_apply_update_without_comment_posts_no_comment(self):
+        calls = self.record()
+        out = OBS.apply_plan("FS-GG/.github", {"action": "update", "body": "b", "comment": None}, {"number": 4985})
+        self.assertEqual(out, "updated #4985 (body only)")
+        self.assertFalse([a for a, _ in calls if a[0].endswith("/comments")])
+        self.assertEqual([p for a, p in calls if "PATCH" in a], [{"body": "b", "title": OBS.REPORT_TITLE}])
+
+    def test_legacy_title_is_renamed_even_when_nothing_changed(self):
+        one = OBS.currency_findings(currency_doc(cfind()), self.KEY)
+        existing = {"number": 4985, "state": "open", "title": "Board drift: Project 3", "body": OBS.render_body(one, self.META)}
+        self.assertEqual(OBS.plan_report(one, existing, self.META)["action"], "rename")
+        self.assertEqual(OBS.plan_report([], dict(existing, state="closed"), self.META)["action"], "rename")
+
+    def record(self):
+        calls = []
+        original = OBS.gh_api
+        def fake(args, payload=None, *, allow_status=()):
+            calls.append((args, payload))
+            if args and args[0].endswith("/issues") and payload is not None:
+                return json.dumps({"number": 99})
+            return ""
+        OBS.gh_api = fake
+        self.addCleanup(setattr, OBS, "gh_api", original)
+        return calls
+
+    def test_apply_rename_and_every_patch_carries_the_new_title(self):
+        calls = self.record()
+        self.assertEqual(OBS.apply_plan("FS-GG/.github", {"action": "rename", "reason": "x"}, {"number": 4985}),
+                         "renamed #4985")
+        self.assertEqual(calls[-1][1], {"title": OBS.REPORT_TITLE})
+        OBS.apply_plan("FS-GG/.github", {"action": "update", "body": "b", "comment": "c"}, {"number": 4985})
+        patches = [p for a, p in calls if "PATCH" in a]
+        self.assertEqual(patches[-1]["title"], OBS.REPORT_TITLE)
+        OBS.apply_plan("FS-GG/.github", {"action": "close", "body": "b", "comment": "c"}, {"number": 4985})
+        patches = [p for a, p in calls if "PATCH" in a]
+        self.assertEqual(patches[-1]["title"], OBS.REPORT_TITLE)
+        OBS.apply_plan("FS-GG/.github", {"action": "create", "body": "b"}, None)
+        self.assertEqual([p for a, p in calls if a[0].endswith("/issues")][-1]["title"], "Board findings: Project 3")
+
+    def test_find_report_issue_recognises_the_legacy_title(self):
+        stub = GhStub(self, issues=[{"number": 4985, "state": "open", "title": "Board drift: Project 3", "body": ""}])
+        self.assertEqual(OBS.find_report_issue("FS-GG/.github")["number"], 4985)
+
+    def test_check_merges_currency_findings_and_records_the_ruleset(self):
+        with tempfile.TemporaryDirectory() as d:
+            snap, cur, out = Path(d, "s.json"), Path(d, "c.json"), Path(d, "f.json")
+            snap.write_text(json.dumps(snapshot([item(100)])))
+            cur.write_text(json.dumps(currency_doc(cfind(subject="FS-GG/Secret#5", public=False))))
+            with contextlib.redirect_stdout(io.StringIO()) as printed:
+                rc = OBS.main(["check", "--snapshot", str(snap), "--currency", str(cur), "--out", str(out),
+                               "--now", "2026-10-30T18:00:00Z"])
+            self.assertEqual(rc, 0)
+            doc = json.loads(out.read_text())
+            self.assertEqual(doc["meta"]["currencyRuleset"], "fsgg:board-currency-rules/v1")
+            self.assertEqual([f["rule"] for f in doc["findings"]], ["R3"])
+            self.assertNotIn("Secret", out.read_text() + printed.getvalue())
+
+    def test_check_with_a_bad_currency_file_is_no_verdict_and_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as d:
+            snap, cur, out = Path(d, "s.json"), Path(d, "c.json"), Path(d, "f.json")
+            snap.write_text(json.dumps(snapshot([item(100)])))
+            cur.write_text("{}")
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                rc = OBS.main(["check", "--snapshot", str(snap), "--currency", str(cur), "--out", str(out)])
+            self.assertEqual(rc, OBS.NO_VERDICT)
+            self.assertFalse(out.exists())
+
+    def test_workflow_reads_currency_before_evaluating_and_merges_it_in_the_keyed_step(self):
+        import yaml
+        doc = yaml.safe_load((ROOT / ".github/workflows/board-drift-observer.yml").read_text())
+        steps = doc["jobs"]["board-drift-read"]["steps"]
+        names = [s.get("name", "") for s in steps]
+        fetch = names.index("Read Project 3 for the board-currency rules (read-only)")
+        evaluate = names.index("Evaluate the drift rules")
+        self.assertLess(fetch, evaluate)
+        self.assertIn("board-currency-fetch.py", steps[fetch]["run"])
+        run = steps[evaluate]["run"]
+        self.assertLess(run.index("board-currency-rules.py check"), run.index("board-drift-observer.py check"))
+        self.assertIn('--currency "$SCRATCH/currency.json"', run)
+        self.assertFalse((ROOT / ".github/workflows/board-currency-shadow.yml").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

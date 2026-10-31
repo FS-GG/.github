@@ -834,55 +834,5 @@ class LinkageFunction(unittest.TestCase):
         board = {f"FS-GG/.github#{i['number']}": i for i in snap["items"]}
         failures, _ = R.linkage_of(snap["pullRequests"][0], board.get)
         self.assertEqual(failures, [("R1", "delivery-done"), ("R1", "no-parent-outcome")])
-
-
-class ShadowWorkflow(unittest.TestCase):
-    """The shadow workflow reads, evaluates and summarizes; it can write nothing and chains on the observer."""
-
-    @classmethod
-    def setUpClass(cls):
-        import yaml
-        cls.path = ROOT / ".github/workflows/board-currency-shadow.yml"
-        cls.text = cls.path.read_text()
-        cls.doc = yaml.safe_load(cls.text)
-        cls.on = cls.doc.get("on", cls.doc.get(True))
-
-    def test_chains_on_the_observer_and_has_no_schedule_of_its_own(self):
-        self.assertEqual(self.on["workflow_run"], {"workflows": ["board-drift-observer"], "types": ["completed"]})
-        self.assertIn("workflow_dispatch", self.on)
-        self.assertNotIn("schedule", self.on)
-        self.assertNotIn("pull_request", self.on)
-
-    def test_one_bounded_job_with_read_only_permissions(self):
-        self.assertEqual(list(self.doc["jobs"]), ["board-currency-shadow"])
-        job = self.doc["jobs"]["board-currency-shadow"]
-        self.assertIsInstance(job["timeout-minutes"], int)
-        self.assertEqual(self.doc["permissions"], {"contents": "read"})
-        self.assertEqual(job["permissions"], {"contents": "read"})
-        mint = [s for s in job["steps"] if "create-github-app-token" in s.get("uses", "")]
-        self.assertEqual(len(mint), 1)
-        scopes = {k: v for k, v in mint[0]["with"].items() if k.startswith("permission-")}
-        self.assertEqual(scopes, {"permission-organization-projects": "read", "permission-issues": "read",
-                                  "permission-pull-requests": "read"})
-
-    def test_writes_nothing_and_uploads_nothing(self):
-        for forbidden in ("upload-artifact", "issues: write", ": write", "item-edit", "updateProjectV2", "mutation",
-                          "gh issue", "gh pr comment", "continue-on-error", "always()"):
-            self.assertNotIn(forbidden, self.text.split("jobs:", 1)[1], forbidden)
-
-    def test_steps_fail_fast_in_order_and_actions_are_sha_pinned(self):
-        import re
-        steps = self.doc["jobs"]["board-currency-shadow"]["steps"]
-        for step in steps:
-            if "run" in step:
-                self.assertIn("set -euo pipefail", step["run"], step.get("name"))
-        runs = [s["run"] for s in steps if "run" in s]
-        order = [next(i for i, r in enumerate(runs) if word in r)
-                 for word in ("board-currency-fetch.py", "board-currency-rules.py check", "board-currency-rules.py report")]
-        self.assertEqual(order, sorted(order))
-        for uses in re.findall(r"uses:\s*(\S+)", self.text):
-            self.assertRegex(uses, r"@[0-9a-f]{40}$", uses)
-
-
 if __name__ == "__main__":
     unittest.main()
