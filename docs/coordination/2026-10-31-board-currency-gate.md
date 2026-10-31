@@ -290,10 +290,20 @@ Outcome is never rolled up automatically.
 
 ### (c) The hourly observer
 
-It evaluates every rule over a full snapshot. It maintains one tracking issue holding the current
-finding set, and its run fails, red, when a finding ID appears that was not in the previous set. That
-is how it fails loudly on new findings without re-alarming on known ones. In phase 1 it only writes its
-job summary. See §4 for how it converges with board-drift.
+It evaluates every rule over a full snapshot and maintains one tracking issue holding the current
+finding set. In phase 1 it only wrote a job summary (`board-currency-shadow.yml`).
+
+**Phase 2 (converged).** The board-drift observer is the single writer. Its read job takes a second,
+board-currency snapshot (`board-currency-fetch.py`), and its keyed check step evaluates the rules
+(`board-currency-rules.py check`). `board-drift-observer.py check --currency` merges the findings through
+the same private-placeholder gate as drift findings, so a subject in a private or unknown-visibility
+repository appears only as `private:<HMAC>`. The report job keeps one issue, **#4985, renamed "Board
+findings: Project 3"** (Root decision 3). The report still recognises the legacy title "Board drift:
+Project 3" and renames it on its next run, even when nothing else changed. Drift and currency findings
+share one body, one digest and one comment per change. Currency findings have no ack route: each clears
+when the native state it reads is fixed. A failed currency read leaves the run red and the issue
+untouched, as a failed drift read does. The shadow workflow is retired, so the net change is one job
+fewer per hour. Failing the run on new finding IDs is phase 3.
 
 ### Which writes are automatic
 
@@ -377,7 +387,8 @@ one tracking issue: #4985, renamed to the board-currency findings issue (decisio
   distributed producer file and its envelope are untouched. Their refusals stay independent.
 - **`routine-delivery.py`.** It hosts (b). The gate runs before the merge effect, and the transition
   runs after the existing readback. Neither changes publication, telemetry or evidence behaviour.
-- **CI load.** Phase 1 adds one light job per observer run and one step in the existing
+- **CI load.** Phase 2 retires the phase-1 shadow job: the currency read runs as one more step in
+  `board-drift-read`. Phase 1 added one light job per observer run and one step in the existing
   `board-drift-observer-selftest` fixture job. Phase 2 adds one light PR-triggered job, `board-linkage`
   (no candidate checkout, one GraphQL read, PR-keyed concurrency). That is the gate's only PR-triggered
   cost, and it has to be a job to be requirable.
