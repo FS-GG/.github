@@ -33,7 +33,8 @@ workflow_call trigger:
 WHAT COUNTS AS PROVISIONING, precisely (the first cut accepted too much): a `dotnet build|publish|run`
 naming FS.GG.Coord.Cli with an explicit Release configuration (the shim looks under bin/Release/, and
 `dotnet build` defaults to Debug); a `dotnet tool install` that installs fs.gg.coord.cli (not any tool);
-`dotnet tool restore`; or FSGG_COORD_ENGINE_BIN. The steps of a LOCAL composite action (`uses: ./...`) are
+`dotnet tool restore` only where `.config/dotnet-tools.json` declares the engine; or
+FSGG_COORD_ENGINE_BIN. Backslash-continued commands are read as one line. The steps of a LOCAL composite action (`uses: ./...`) are
 inlined, so a build or an engine call inside one is judged in order.
 
 KNOWN FALSE NEGATIVE, stated rather than hidden: a step that runs a script which runs ANOTHER script which
@@ -53,6 +54,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import json
 import os
 import re
 import sys
@@ -75,7 +77,7 @@ ENGINE_NAME_PY = re.compile(r"FSGG_COORD_(?:ENGINE_)?BIN|[\"']fsgg-coord[\"']")
 #   * a build must be a RELEASE build: the shim looks at src/FS.GG.Coord.Cli/bin/Release/..., and
 #     `dotnet build` defaults to Debug, so a bare or `-c Debug` build leaves the same exit 69 behind;
 #   * `dotnet tool install` counts only when it installs the engine (fs.gg.coord.cli), not any tool;
-#   * `dotnet tool restore` still counts (the receiver shape: the manifest names the engine).
+#   * `dotnet tool restore` counts only where the repo's `.config/dotnet-tools.json` names the engine.
 BUILD_CMD = re.compile(r"dotnet\s+(?:build|publish|run)\b([^\n]*)")
 RELEASE_FLAG = re.compile(r"(?:^|\s)(?:-c|--configuration)(?:\s+|=)Release\b", re.IGNORECASE)
 TOOL_RESTORE = re.compile(r"dotnet\s+tool\s+restore\b")
@@ -103,9 +105,31 @@ def triggers(doc: dict) -> dict:
 
 
 def strip_comments(text: str) -> str:
-    return "\n".join(
-        line for line in text.splitlines() if not line.lstrip().startswith("#")
-    )
+    """Drop comment lines, then join backslash-continued lines into one logical line, so a command split
+    over several physical lines (`dotnet build \\` / `project.fsproj \\` / `-c Release`) is read whole.
+    The order matters: a comment line ending in a backslash does not continue in shell."""
+    kept = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    return re.sub(r"\\[ \t]*\r?\n[ \t]*", " ", kept)
+
+
+def restore_provisions(root: str) -> bool:
+    """`dotnet tool restore` provisions the engine only where the repo's tool manifest declares it.
+
+    The restore resolves the manifest at `.config/dotnet-tools.json`; if that file does not name the
+    engine (this repo has no manifest at all: its engine is a source build), a restore restores
+    nothing the shim looks for. Accepting it unconditionally was a false negative.
+    """
+    path = os.path.join(root, ".config", "dotnet-tools.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            tools = (json.load(fh) or {}).get("tools") or {}
+    except (OSError, ValueError):
+        return False
+    for package, entry in tools.items():
+        commands = (entry or {}).get("commands") or [] if isinstance(entry, dict) else []
+        if str(package).lower() == "fs.gg.coord.cli" or "fsgg-coord-engine" in commands:
+            return True
+    return False
 
 
 def engine_scripts(root: str) -> set[str]:
@@ -133,7 +157,7 @@ def runs_engine(run: str, scripts: set[str]) -> bool:
     return any(re.search(re.escape(s) + r"(?![-\w.])", code) for s in scripts)
 
 
-def provisions_run(run: str) -> bool:
+def provisions_run(run: str, restore_ok: bool = False) -> bool:
     """Does this shell text build, install or restore an engine the shim can resolve?"""
     code = strip_comments(run)
     for m in BUILD_CMD.finditer(code):
@@ -143,11 +167,11 @@ def provisions_run(run: str) -> bool:
     for m in TOOL_INSTALL.finditer(code):
         if "fs.gg.coord.cli" in m.group(1).lower():
             return True
-    return bool(TOOL_RESTORE.search(code))
+    return restore_ok and bool(TOOL_RESTORE.search(code))
 
 
-def provisions(step: dict, wf_env: object, job_env: object) -> bool:
-    if provisions_run(str(step.get("run") or "")):
+def provisions(step: dict, wf_env: object, job_env: object, restore_ok: bool = False) -> bool:
+    if provisions_run(str(step.get("run") or ""), restore_ok):
         return True
     for env in (wf_env, job_env, step.get("env")):
         if isinstance(env, dict) and any(PROVISION_ENV.search(str(k)) for k in env):
@@ -195,6 +219,7 @@ def audit(root: str) -> tuple[list[str], int]:
     if not files:
         raise GateError(f"{wf_dir} contains no workflow files — there is nothing to audit")
     scripts = engine_scripts(root)
+    restore_ok = restore_provisions(root)
     findings: list[str] = []
     examined = 0
     for path in files:
@@ -221,7 +246,7 @@ def audit(root: str) -> tuple[list[str], int]:
             for i, step in enumerate(steps):
                 if not isinstance(step, dict):
                     continue
-                if provisions(step, doc.get("env"), job.get("env")):
+                if provisions(step, doc.get("env"), job.get("env"), restore_ok):
                     provisioned = True
                 if runs_engine(str(step.get("run") or ""), scripts) and not provisioned:
                     label = step.get("name") or step.get("id") or f"step {i + 1}"

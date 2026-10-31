@@ -82,7 +82,27 @@ expect "python script resolving FSGG_COORD_BIN, no build: refused" 1 "a.yml [j]"
 T="$(tree "$WORK/f")"; wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' "      - env: { FSGG_COORD_ENGINE_BIN: /x/y }" "        run: scripts/audit.sh"
 expect "explicit FSGG_COORD_ENGINE_BIN counts as provisioned" 0 "OK" "$T"
 T="$(tree "$WORK/g")"; wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' "      - run: dotnet tool restore" "      - run: scripts/audit.sh"
-expect "dotnet tool restore counts as provisioned" 0 "OK" "$T"
+expect "dotnet tool restore with NO tool manifest restores nothing: refused" 1 "a.yml [j]" "$T"
+mkdir -p "$T/.config"; printf '{"version":1,"isRoot":true,"tools":{"fantomas":{"version":"7.0.0","commands":["fantomas"]}}}' > "$T/.config/dotnet-tools.json"
+expect "dotnet tool restore whose manifest names only OTHER tools: refused" 1 "a.yml [j]" "$T"
+printf '{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.113.0","commands":["fsgg-coord-engine"]}}}' > "$T/.config/dotnet-tools.json"
+expect "dotnet tool restore whose manifest declares the engine counts" 0 "OK" "$T"
+# backslash continuations: a command split over lines is one command
+T="$(tree "$WORK/g2")"; wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' '      - run: |
+          dotnet build \
+            src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj \
+            --no-restore -c Release' "      - run: scripts/audit.sh"
+expect "a Release build split over backslash-continued lines provisions" 0 "OK" "$T"
+T="$(tree "$WORK/g3")"; wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' '      - run: |
+          dotnet build \
+            src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj \
+            -c Debug' "      - run: scripts/audit.sh"
+expect "a Debug build split over continued lines is still refused" 1 "a.yml [j]" "$T"
+T="$(tree "$WORK/g4")"; wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' '      - run: |
+          # dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj \
+          -c Release
+          true' "      - run: scripts/audit.sh"
+expect "a comment ending in a backslash does not splice the next line into a build" 1 "a.yml [j]" "$T"
 T="$(tree "$WORK/h")"; wf "$T" a.yml '{ pull_request: , schedule: [{ cron: "0 4 * * *" }] }' "      - run: scripts/audit.sh"
 wf "$T" b.yml '{ workflow_dispatch: }' "      - run: echo hi"
 expect "PR-triggered workflow is out of scope (it fails before merge)" 0 "OK" "$T"

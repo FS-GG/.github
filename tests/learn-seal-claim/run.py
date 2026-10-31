@@ -5,7 +5,7 @@ Drives the library functions the root CLI calls, against temporary trees owned b
 uid as a parameter; the CLI fixes it to 0 and refuses write commands unless root). stdlib only, offline, no container.
 Sections F1..F8 are the eight findings of the review of #5000; each has cases that failed against the previous head.
 Prints its own assertion count."""
-import contextlib, copy, importlib.util, io, json, os, shutil, stat, sys, tempfile
+import contextlib, copy, importlib.util, io, json, os, shutil, stat, sys, tempfile, time
 from datetime import datetime, timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -106,6 +106,9 @@ def claim(e, ident, op, snap, sealed, **kw):
 
 
 now = datetime.now(timezone.utc)
+# The vectors below are written against ONE frozen `now`. Anything the tool timestamps with its own clock and a vector then checks against `now + 5 s` would depend on how
+# long the run took. LEARN_SEAL_TEST_DELAY_S inserts an artificial delay right here (the CI workflow runs the suite once with it) so a vector that reads the wall clock fails.
+time.sleep(float(os.environ.get('LEARN_SEAL_TEST_DELAY_S', '0')))
 
 # ============================================================ F4: the subtree set is pinned
 with tempfile.TemporaryDirectory() as tmp:
@@ -875,7 +878,7 @@ with tempfile.TemporaryDirectory() as tmp:
 with tempfile.TemporaryDirectory() as tmp:
     e = Env(tmp)
     ident = H('a')
-    L.admit('op-r', H('1'), ident, H('2'), H('3'), [H('4')], 300, **e.kw())
+    L.admit('op-r', H('1'), ident, H('2'), H('3'), [H('4')], 300, now=now, **e.kw())
     base_chk = dict(path_root=e.root, op_id='op-r', argv_sha=H('1'), ident=ident, operator_sha=H('2'), finalizer_sha=H('3'), image_ids=[H('4')],
                     chain_start=e.services, owner_uid=UID, now=now + timedelta(seconds=5))
     check(L.check_admission(**base_chk) == [], 'check_admission passes through the pinned chain')
@@ -885,7 +888,7 @@ with tempfile.TemporaryDirectory() as tmp:
     os.chmod(adm_path, 0o644)
     os.unlink(adm_path)
     copy_path = os.path.join(e.root, 'admissions', 'valid-copy.admit')
-    L.admit('valid-copy', H('1'), ident, H('2'), H('3'), [H('4')], 300, **e.kw())
+    L.admit('valid-copy', H('1'), ident, H('2'), H('3'), [H('4')], 300, now=now, **e.kw())
     body = json.load(open(copy_path))
     body['opId'] = 'op-r'
     json.dump(body, open(copy_path, 'w'))
@@ -895,6 +898,31 @@ with tempfile.TemporaryDirectory() as tmp:
     shutil.copyfile(copy_path, adm_path)
     os.chmod(adm_path, 0o644)
     check(L.check_admission(**base_chk) == [], 'a regular copy of the same admission passes')
+
+
+# CONTROL for the clock: the tool's own clock is skewed two minutes ahead (an artificial delay between the vector's `now` and the moment the tool stamps an admission).
+# Stamped from the frozen `now`, the admission still passes; stamped from the tool's clock it is "dated in the future" for a check at now + 5 s, which is what made the
+# vector depend on how long the suite took.
+class Skewed(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return datetime.now(tz) + timedelta(seconds=120)
+
+
+with tempfile.TemporaryDirectory() as tmp_c:
+    ec = Env(tmp_c)
+    ident_c = H('a')
+    real_dt = L.datetime
+    L.datetime = Skewed
+    try:
+        L.admit('op-frozen', H('1'), ident_c, H('2'), H('3'), [H('4')], 300, now=now, **ec.kw())
+        L.admit('op-wall', H('1'), ident_c, H('2'), H('3'), [H('4')], 300, **ec.kw())
+    finally:
+        L.datetime = real_dt
+    chk_c = dict(path_root=ec.root, argv_sha=H('1'), ident=ident_c, operator_sha=H('2'), finalizer_sha=H('3'), image_ids=[H('4')], chain_start=ec.services, owner_uid=UID,
+                 now=now + timedelta(seconds=5))
+    check(L.check_admission(op_id='op-frozen', **chk_c) == [], 'control: an admission stamped from the frozen `now` passes whatever the tool\'s clock says')
+    check(any('dated in the future' in r for r in L.check_admission(op_id='op-wall', **chk_c)), 'control: an admission stamped from a clock two minutes ahead fails the same check (the old vector\'s failure mode)')
     real_fstat = os.fstat
 
     def fstat_foreign(fd):

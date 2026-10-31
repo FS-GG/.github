@@ -1015,6 +1015,85 @@ out="$(run 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'live dispatch sender.*not declared' \
     && printf '%s' "$out" | grep -q 'live repository_dispatch listener.*not declared'; } \
   && ok "omitting every dispatch declaration -> live graph fails closed" || bad "omitted dispatch graph" "rc=$rc: $out"
+# A repository posting a dispatch to ITSELF (producer == target) is a first-class edge (Refs #4730).
+# release-saga-start.yml posts `release-saga-reconcile` to its own repo and release-saga-promote.yml
+# listens; the listener alone was reported "not declared" with no way to declare it, which kept the
+# audit red from 2026-09-10. The post is read from a plain `gh api repos/$GITHUB_REPOSITORY/dispatches
+# -f event_type=` step, across backslash continuations, and never from a comment.
+self_wire() { # <post-event> <listener-event> [post-repo-expr]
+  wire FS-GG/FS.GG.Rendering; wire FS-GG/FS.GG.SDD
+  local rs='FS-GG__FS.GG.Rendering'
+  printf '%s\n%s\n%s\n' coord.yml start.yml listen.yml > "$FIX/$rs.list"
+  printf 'jobs:\n  coordination:\n    uses: FS-GG/.github/.github/workflows/coordination-coherence.yml@main\n' > "$FIX/$rs/coord.yml"
+  printf 'jobs:\n  start:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          gh api --method POST \\\n            "repos/%s/dispatches" \\\n            -f event_type=%s \\\n            -F "client_payload[x]=1"\n' "${3:-\$GITHUB_REPOSITORY}" "$1" > "$FIX/$rs/start.yml"
+  printf 'on: {repository_dispatch: {types: ["%s"]}}\njobs: {listen: {runs-on: ubuntu-latest}}\n' "$2" > "$FIX/$rs/listen.yml"
+}
+mkreg "$REG"
+cat >> "$REG" <<'YAML'
+dispatches:
+  - { producer: FS-GG/FS.GG.Rendering, target: FS-GG/FS.GG.Rendering, event-type: fixture-self }
+YAML
+self_wire fixture-self fixture-self
+if out="$(run 2>&1)"; then ok "declared self-dispatch post and listener -> audit passes"; else bad "declared self-dispatch" "$out"; fi
+self_wire fixture-self wrong-event
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'no matching repository_dispatch listener' <<<"$out"; } \
+  && ok "self-dispatch listener event mutation -> audit fails" || bad "self-dispatch listener mutation" "rc=$rc: $out"
+self_wire fixture-self fixture-self
+mkreg "$REG"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'live dispatch sender FS-GG/FS.GG.Rendering -> FS-GG/FS.GG.Rendering (fixture-self) is not declared' <<<"$out"; } \
+  && ok "undeclared self-dispatch post -> audit fails (the sender half is read, not skipped)" || bad "undeclared self-dispatch" "rc=$rc: $out"
+cat >> "$REG" <<'YAML'
+dispatches:
+  - { producer: FS-GG/FS.GG.Rendering, target: FS-GG/FS.GG.Rendering, event-type: fixture-self }
+YAML
+self_wire fixture-self fixture-self '${{ github.repository }}'
+if out="$(run 2>&1)"; then ok "the \${{ github.repository }} spelling of the self post is read the same way"; else bad "expression spelling" "$out"; fi
+self_wire fixture-self fixture-self FS-GG/FS.GG.SDD
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'no matching dispatch-sender.yml caller' <<<"$out"; } \
+  && ok "a post to ANOTHER repository is not read as a self post" || bad "other-repo post read as self" "rc=$rc: $out"
+
+# A listener whose sender is not wired yet is a reviewed, falsifiable claim (Refs #4730). Root dropped the
+# never-wired Templates -> SDD `composition-registry-updated` edge; deleting it alone would have turned
+# SDD's real listener into an "undeclared listener" finding. The claim holds only while the listener is
+# live AND nobody posts the event to it.
+nosender_wire() { # <listener-event>: SDD listens, nothing sends
+  dispatch_wire fixture-event "$1"
+  printf '%s\n' coord.yml > "$FIX/FS-GG__FS.GG.Rendering.list"
+  rm -f "$FIX/FS-GG__FS.GG.Rendering/dispatch.yml"
+}
+lws_reg() { mkreg "$REG"; cat >> "$REG" <<'YAML'
+listeners-without-sender:
+  - target: FS-GG/FS.GG.SDD
+    event-type: fixture-event
+    reason: sender not wired yet
+YAML
+}
+nosender_wire fixture-event
+mkreg "$REG"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'live repository_dispatch listener.*not declared' <<<"$out"; } \
+  && ok "a listener with no sender and no claim -> audit fails (control: the claim is what clears it)" || bad "unclaimed senderless listener" "rc=$rc: $out"
+lws_reg
+if out="$(run 2>&1)"; then ok "a claimed listener with no sender -> audit passes"; else bad "claimed senderless listener" "$out"; fi
+nosender_wire wrong-event
+lws_reg
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'claims FS-GG/FS.GG.SDD listens for .fixture-event., but no such live' <<<"$out"; } \
+  && ok "a claim whose listener is gone is stale -> audit fails" || bad "stale listener claim" "rc=$rc: $out"
+dispatch_wire fixture-event fixture-event
+lws_reg
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'claimed as a listener WITHOUT a sender, but a live sender now posts it' <<<"$out"; } \
+  && ok "a sender appearing for a claimed listener must be promoted -> audit fails" || bad "claim hides a live sender" "rc=$rc: $out"
+mkreg "$REG"; cat >> "$REG" <<'YAML'
+listeners-without-sender:
+  - { target: FS-GG/FS.GG.SDD, event-type: fixture-event }
+YAML
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -ne 0 ]; } && ok "a claim with no reason is refused (not a mute button)" || bad "reasonless claim accepted" "$out"
 mkreg "$REG"; wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 
 # --- fails closed when the roster is unreachable or empty (#316, child (h) of #266) ---

@@ -190,7 +190,7 @@
 # nuget.org and reds daily while any receiver is behind. Nothing has to push for it to fire.
 
 schemaVersion: 11
-updated: 2026-10-10
+updated: 2026-10-30
 authority: FS-GG/.github
 
 # Cross-repository repository_dispatch contracts.  The sender's POST is successful even when the
@@ -198,7 +198,31 @@ authority: FS-GG/.github
 dispatches:
   - { producer: FS-GG/FS.GG.Rendering, target: FS-GG/.github,          event-type: fs-gg-ui-template-released }
   - { producer: FS-GG/FS.GG.Rendering, target: FS-GG/FS.GG.Templates, event-type: fs-gg-ui-template-released }
-  - { producer: FS-GG/FS.GG.Templates, target: FS-GG/FS.GG.SDD, event-type: composition-registry-updated }
+  # DROPPED 2026-10-30 (Root decision on #4730): FS-GG/FS.GG.Templates -> FS-GG/FS.GG.SDD
+  # `composition-registry-updated`. The edge was declared on 2026-07-29 (#1950) but has never had a
+  # sender: FS.GG.Templates has no `dispatch-sender.yml` caller and no workflow, past or present, that
+  # posts the event (git history of its .github/ has no occurrence). The listener half is real
+  # (FS.GG.SDD composition-acceptance.yml), so the declaration produced a standing
+  # "no matching dispatch-sender.yml caller" finding for a contract that was never wired. Re-add this
+  # row, in the same change that adds the sender, once Templates actually posts the event.
+  # A repository posting a dispatch to ITSELF is an edge with producer == target. release-saga-start.yml
+  # starts the three publishers and then posts this event so release-saga-promote.yml reconciles durable
+  # state (#3341); repos-audit reads the post (`gh api repos/$GITHUB_REPOSITORY/dispatches -f event_type=`)
+  # as the sender half and the `repository_dispatch: types:` entry as the listener half.
+  - { producer: FS-GG/.github, target: FS-GG/.github, event-type: release-saga-reconcile }
+
+# A LIVE LISTENER WHOSE SENDER IS NOT WIRED YET. Each row is a reviewed claim that repos-audit keeps true in
+# both directions: the listener must still exist, and no sender may post the event to it (a sender that
+# appears has to be promoted into `dispatches:` above). It is not a mute button.
+listeners-without-sender:
+  - target: FS-GG/FS.GG.SDD
+    event-type: composition-registry-updated
+    reason: >-
+      FS.GG.SDD composition-acceptance.yml listens for the event FS.GG.Templates is meant to post after a
+      composition-registry update, but Templates has never had a sender (no dispatch-sender.yml caller and
+      no workflow posting the event in its history). The Templates -> SDD edge was dropped from
+      `dispatches:` on 2026-10-30 (Root decision on #4730); re-declare it there, and delete this row, in
+      the change that adds the sender.
 
 repos:
   - { id: .github,     full: FS-GG/.github,          role: authority, receives: [labels] }                                                                                          # NOT skill-union — the AUTHORITY asserts its own roots with skill-roots-selfcheck.yml, its own workflow. See the capability row.

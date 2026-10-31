@@ -46,9 +46,9 @@
     {
       "workflow": ".github/workflows/routine-eligibility.yml",
       "job": "routine-eligibility",
-      "step": "Evaluate with the PR base's policy and validator",
+      "step": "Evaluate with the live base's policy and validator",
       "classification": "mixed",
-      "rationale": "Bundles trusted base/head source fetching and routine policy assessment in one native step."
+      "rationale": "Bundles live-base and head source fetching with routine policy assessment in one native step."
     }
   ]
 }
