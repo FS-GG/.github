@@ -1099,11 +1099,19 @@ module Delivery =
         || snapshot.DeliveryReferenceLinkage
         || twoPhaseReceiptLanding snapshot
 
+    // Terminal completion closes and stamps the item, so it keeps requiring canonical closing linkage.
+    // A Refs-only Delivery landing (.github#5100) is told where its completion lives instead.
+    let private terminalLinkageRefusal snapshot =
+        if snapshot.DeliveryReferenceLinkage then
+            "terminal completion requires canonical closing linkage; a Refs-only Delivery landing ends at merge: the Delivery stays open until Root's acceptance closes it, and the Outcome's claim and Status follow the board rules, so the engine releases nothing"
+        else
+            "terminal completion requires canonical closing linkage; a markerless two-phase implementation must complete through its later receipt pull request"
+
     let private handoffProblem snapshot =
         if not snapshot.ItemBranchCanonical then
             Some "item branch is not canonical"
         elif not (landingLinkageAuthorized snapshot) then
-            Some "canonical closing linkage is missing"
+            Some "neither canonical closing linkage nor a verified Delivery reference is present"
         elif not snapshot.PathsVerified then
             Some "declared paths are not verified"
         else
@@ -1215,14 +1223,12 @@ module Delivery =
                         (AwaitPostMergeVerification reason)
                 | CompletionDecision.ProjectCompletion ->
                     if not snapshot.ClosingLinkageCanonical then
-                        NoVerdict
-                            "terminal completion requires canonical closing linkage; a markerless two-phase implementation must complete through its later receipt pull request"
+                        NoVerdict(terminalLinkageRefusal snapshot)
                     else
                         nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations Complete
                 | CompletionDecision.CleanupCompletedDelivery ->
                     if not snapshot.ClosingLinkageCanonical then
-                        NoVerdict
-                            "terminal completion requires canonical closing linkage; a markerless two-phase implementation must complete through its later receipt pull request"
+                        NoVerdict(terminalLinkageRefusal snapshot)
                     else
                         nextWithPostMergeVerification postMergeVerification snapshot Done CleanupWorktree
             | _ when Option.isNone snapshot.Freshness.PullRequest -> next snapshot Implementation ContinueImplementation

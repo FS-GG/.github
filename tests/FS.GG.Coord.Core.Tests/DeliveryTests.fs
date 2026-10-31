@@ -193,7 +193,7 @@ module DeliveryTests =
 
         transition
             Delivery.ReviewReady
-            (Delivery.RepairReviewHandoff "canonical closing linkage is missing")
+            (Delivery.RepairReviewHandoff "neither canonical closing linkage nor a verified Delivery reference is present")
             (Delivery.inspect invalid)
 
     let acceptanceReceipt head : Delivery.Obligation =
@@ -266,7 +266,7 @@ module DeliveryTests =
         for mutated in mutations do
             transition
                 Delivery.ReviewReady
-                (Delivery.RepairReviewHandoff "canonical closing linkage is missing")
+                (Delivery.RepairReviewHandoff "neither canonical closing linkage nor a verified Delivery reference is present")
                 (Delivery.inspect mutated)
 
     [<Fact>]
@@ -1538,7 +1538,7 @@ module DeliveryTests =
 
         transition
             Delivery.ReviewReady
-            (Delivery.RepairReviewHandoff "canonical closing linkage is missing")
+            (Delivery.RepairReviewHandoff "neither canonical closing linkage nor a verified Delivery reference is present")
             (Delivery.inspect unlinked)
 
     [<Fact>]
@@ -1553,6 +1553,44 @@ module DeliveryTests =
                 MergeReachable = true
             }
 
-        match Delivery.inspectWithPostMergeVerification (verified "merge-sha") merged with
-        | Delivery.NoVerdict reason -> Assert.Contains("terminal completion requires canonical closing linkage", reason)
-        | decision -> failwithf "expected the terminal refusal, got %A" decision
+        let refusal snapshot =
+            match Delivery.inspectWithPostMergeVerification (verified "merge-sha") snapshot with
+            | Delivery.NoVerdict reason -> reason
+            | decision -> failwithf "expected the terminal refusal, got %A" decision
+
+        let projected = refusal merged
+        Assert.Contains("terminal completion requires canonical closing linkage", projected)
+        Assert.Contains("Refs-only Delivery landing ends at merge", projected)
+        Assert.Contains("the engine releases nothing", projected)
+        Assert.DoesNotContain("two-phase", projected)
+
+        let cleanup =
+            refusal
+                { merged with
+                    IssueClosed = true
+                    BoardDone = true
+                    ClaimReleased = true
+                    CleanupEligible = true
+                }
+
+        Assert.Contains("Refs-only Delivery landing ends at merge", cleanup)
+
+    [<Fact>]
+    let ``#5100 identity is owner, repo and number: a same-numbered issue in another repo never qualifies`` () =
+        let otherRepoOutcome: Types.Ref = { outcome with Repo = "Game" }
+
+        // The Delivery's parent is FS-GG/Game#4730, not the item FS-GG/.github#4730.
+        match linkage None "Refs #5100" [ { nativeDelivery 5100 with Parent = Some otherRepoOutcome } ] with
+        | Error _ -> ()
+        | Ok delivery -> failwith $"a parent in another repo authorized %s{delivery.Canonical}"
+
+        // A candidate FS-GG/Game#4730 is not the item, and its own reads must still qualify it.
+        let foreign =
+            { nativeDelivery 4730 with
+                Candidate = otherRepoOutcome
+                Parent = Some { outcome with Number = 1 }
+            }
+
+        match linkage None "Refs FS-GG/Game#4730" [ foreign ] with
+        | Error _ -> ()
+        | Ok delivery -> failwith $"a foreign same-numbered candidate authorized %s{delivery.Canonical}"

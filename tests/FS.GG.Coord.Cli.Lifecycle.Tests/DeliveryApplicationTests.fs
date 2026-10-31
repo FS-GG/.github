@@ -2078,13 +2078,16 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
             Number = 4730
         }
 
-    let private subIssueListing (total: int) (children: int list) : string =
+    let private subIssueListingIn (total: int) (children: (string * int) list) : string =
         let nodes =
             children
-            |> List.map (fun n -> $"""{{"number":%d{n},"state":"OPEN","repository":{{"nameWithOwner":"FS-GG/.github"}}}}""")
+            |> List.map (fun (nwo, n) -> $"""{{"number":%d{n},"state":"OPEN","repository":{{"nameWithOwner":"%s{nwo}"}}}}""")
             |> String.concat ","
 
         $"""{{"data":{{"repository":{{"issue":{{"subIssues":{{"totalCount":%d{total},"nodes":[%s{nodes}]}}}}}}}}}}"""
+
+    let private subIssueListing (total: int) (children: int list) : string =
+        subIssueListingIn total (children |> List.map (fun n -> "FS-GG/.github", n))
 
     let private parentOf (state: string) (parent: int option) : string =
         let parentJson =
@@ -2174,6 +2177,15 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         |> ignore
 
         refused "parent read fails" None "Refs #5100" listed Map.empty |> ignore
+
+        // Identity is owner, repo and number: FS-GG/Game#5100 in the listing is not FS-GG/.github#5100.
+        refused
+            "only a same-numbered issue from another repo is listed"
+            None
+            "Refs #5100"
+            (subIssueListingIn 2 [ "FS-GG/.github", 5092; "FS-GG/Game", 5100 ])
+            parented
+        |> ignore
 
     [<Fact>]
     let ``#5100 the merge fence refuses when the Delivery reference no longer holds`` () =
