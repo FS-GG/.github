@@ -20,6 +20,46 @@ merges to main would then share the `refs/heads/main` group and the first merge'
 dropped — a main push run that never reports. The commit sha gives every push, merge_group entry and
 dispatch its own group, so there is nothing to be pending-replaced and nothing to cancel.
 
+A JOB-LEVEL `concurrency:` IS REFUSED TOO. GitHub accepts one on any job, with its own group and its own
+cancel flag, and it does not have to agree with the workflow-level block: a job-level
+`cancel-in-progress: true` on a stable group would cancel main-push or merge_group runs of that job
+while the workflow-level block (and every scenario modelled below) still reads clean. None of the 136
+pull_request-triggered workflows has one today, so refusing it costs nothing and closes the bypass.
+
+WHY THESE (the basis, recorded rather than implied).
+  * The first 17 are Root's decision on #4730 from the capacity analysis (stale-head runs that ran to
+    completion for lack of `concurrency`). Verified when #5001 added them: each triggers on `pull_request`
+    and had no workflow-level block.
+  * The next 41 are every other workflow that triggers on `pull_request` with no workflow-level block on
+    origin/main (bce309c8 + 4 commits), minus the exclusions below, ordered here by pull_request /
+    pull_request_target run count over 2026-10-24..2026-10-31 read from the Actions API (the analysis's own
+    per-workflow counts were not available to me): atlas 79, board-v2-import-preflight 42, work-programme 21,
+    registry-changelog 16, skill-union-selftest 12, sync-build-config-selftest 11, org-permission-policy 7,
+    then 6 down to 0 for the rest (twelve of them 0, being path-filtered selftests). Every one is read-only
+    (`contents: read`, at most `packages: read`), so cancelling a superseded PR run cannot strand a write.
+  * `routine-eligibility` (398 runs, the largest consumer) was held for #4994, which has merged. It runs on
+    `pull_request_target` only, where `github.ref` is the default branch, so it has its own shape in
+    PR_ONLY: group `<name>-${{ github.event.pull_request.number }}`, unconditional cancel.
+  * Excluded on purpose: `release-successor-authenticate-source`, an inert protected-intake caller whose own
+    checker (`check-release-successor-authenticate.py`, 'extra source caller surface') accepts exactly the keys
+    name/on/permissions/jobs, so a top-level `concurrency` is refused there; relaxing a protected-intake
+    checker is not this gate's call. `update-fsgg-coord-cli-selftest`, which is red on any PR that touches it
+    (`test_fake_installer_inherits_runtime_resource_policy` compares an RLIMIT read in the parent with one read
+    in the installer's child: 18446744073709551615 expected, -1 got, on the runner at 2026-10-31; it passed on
+    2026-10-19 and passes locally), a latent red that path filtering hides and that concurrency would neither
+    cause nor fix. And `cross-repo-request-predicate` (also triggers on `issues`; two issue events at one
+    commit would share a `github.sha` group, GitHub would drop the older PENDING run, and a predicate
+    auto-comment would be lost) and `feed-autofix` (`repository_dispatch`, same collision). A
+    `github.run_id` fallback would remove that hazard for all of them and is the better key for any
+    workflow with event-driven triggers; changing the shape is a separate decision.
+  * `landed-revert-guard` (landed by #5008) already had the PR-only block; it is listed in PR_ONLY so the gate
+    pins it. `claim-generation` (#5004, held) is not on main yet; its block is the default shape, so it goes in
+    GOVERNED when it lands.
+  * `wizard-graph-seal` already declares `<name>-${{ github.ref }}`, cancel true, and is one of the 73 PR
+    workflows with a block of their own (many `<name>-${{ github.ref }}`, which also cancels main pushes).
+  On that tree 136 workflows trigger on pull_request or pull_request_target: 58 governed here, 74 with their
+  own block, 4 with none (the exclusions). Extending the list means reading each workflow first.
+
 THE MODEL BELOW is this file's causal control. It evaluates the two declared expressions for a set of
 events and applies GitHub's documented group semantics, so "a superseded PR head is cancellable and a
 main push is not" is derived from the workflow text, not asserted next to it. tests/pr-concurrency/run.sh
@@ -50,12 +90,35 @@ except ImportError:  # pragma: no cover - the policy bootstrap installs PyYAML
 # with cancel-in-progress true (PR-keyed through refs/pull/N/merge, and it has no push trigger), so it
 # is deliberately NOT listed. routine-eligibility.yml is held back until #4994 merges.
 GOVERNED = [
-    "architecture-map", "coherence", "coordination-sync-selftest", "fsgg-claim-fence",
-    "fsgg-dispatch-broker-selftest", "generator-list", "new-sdd-workspace-selftest",
-    "recipe-followup", "recipe-landable", "repos-registry-selftest", "skill-quality",
-    "skill-registry-coherence", "skill-roots-selfcheck", "skill-view", "skill-view-parity",
-    "telemetry-git-safety", "touch-set-drift",
+    "architecture-map", "atlas", "board-paths-live-selftest", "board-v2-import-preflight",
+    "c3-audio-ordinary-enrollment-bridge-selftest",
+    "c3-coordination-ordinary-enrollment-bridge-selftest",
+    "c3-game-ordinary-enrollment-bridge-selftest", "c3-governance-ordinary-enrollment-bridge-selftest",
+    "c3-net-ordinary-enrollment-bridge-selftest", "c3-rendering-ordinary-enrollment-bridge-selftest",
+    "coherence", "coord-report-selftest", "coordination-sync-selftest", "dispatch-preflight-selftest",
+    "fsc-progress-evidence", "fsgg-claim-fence", "fsgg-dispatch-broker-selftest", "generator-list",
+    "gs2-09-7-receiver-observer-probe-selftest", "kit-package-selftest",
+    "learn-finite-profile-selftest", "learn-seal-claim-selftest", "lock-range-coherence-selftest",
+    "lockfile-cold-selftest", "new-sdd-workspace-selftest", "observed-command-report-selftest",
+    "org-permission-policy", "org-policy", "parity-fixtures", "project-field-options",
+    "protected-intake-preflight-selftest", "provisioned-podman-source", "recipe-followup",
+    "recipe-landable", "registry-changelog", "release-saga-tooling",
+    "release-tag-anchors-selftest", "repos-audit-selftest",
+    "repos-registry-selftest", "rest-budget-preflight-selftest", "routine-eligibility-selftest",
+    "skill-quality", "skill-registry-autofix", "skill-registry-coherence", "skill-roots-selfcheck",
+    "skill-union-selftest", "skill-view", "skill-view-parity", "skillmirror-redrive",
+    "surface-impact-selftest", "sync-build-config-selftest", "telemetry-git-safety", "touch-set-drift",
+    "touch-set-drift-selftest", "usage-census-selftest",
+    "work-programme",
 ]
+
+# Workflows whose ONLY pull-request trigger is the single event they run on (`pull_request_target`, or
+# `pull_request` with nothing else): every run is a PR run, so the key is the PR number alone (for
+# `pull_request_target`, `github.ref` is the DEFAULT branch, so it could not be the key anyway) and the
+# cancel is unconditional. Same closed grammar, its own shape. `landed-revert-guard` already had exactly
+# this block when #5008 landed it; listing it here makes the gate pin it.
+PR_ONLY = ["landed-revert-guard", "routine-eligibility"]
+PR_ONLY_GROUP = "{name}-${{{{ github.event.pull_request.number }}}}"
 
 GROUP_FORMAT = "{name}-${{{{ github.event.pull_request.number || github.sha }}}}"
 CANCEL_EXPR = "${{ github.event_name == 'pull_request' }}"
@@ -164,10 +227,27 @@ def scenarios(workflow: str, block: dict) -> list[tuple[str, bool, bool]]:
     return out
 
 
+def pr_only_scenarios(workflow: str, block: dict, event: str = "pull_request_target") -> list[tuple[str, bool, bool]]:
+    """The same causal claims for a PR-event-only workflow (every run is a PR run)."""
+    def ev(number: int, sha: str) -> dict:
+        ref = "refs/heads/main" if event == "pull_request_target" else f"refs/pull/{number}/merge"
+        return {"name": event, "pr": number, "sha": sha, "ref": ref}
+
+    out = []
+    out.append(("a PR push (new head) cancels the superseded head's run",
+                displaced(workflow, block, ev(7, "a" * 40), ev(7, "b" * 40)) == "cancelled", True))
+    out.append(("a PR body edit (same head) cancels the run it supersedes",
+                displaced(workflow, block, ev(7, "a" * 40), ev(7, "a" * 40)) == "cancelled", True))
+    out.append(("another PR's run is never cancelled",
+                displaced(workflow, block, ev(7, "a" * 40), ev(8, "a" * 40)) == "cancelled", False))
+    return out
+
+
 def audit(root: Path) -> tuple[int, list[str], int]:
     findings: list[str] = []
     checked = 0
-    for name in GOVERNED:
+    for name in GOVERNED + PR_ONLY:
+        target = name in PR_ONLY
         path = root / ".github/workflows" / f"{name}.yml"
         if not path.is_file():
             print(f"check-pr-concurrency: no verdict — {path} does not exist", file=sys.stderr)
@@ -181,15 +261,22 @@ def audit(root: Path) -> tuple[int, list[str], int]:
         if not isinstance(block, dict):
             findings.append(f"{name}.yml: no workflow-level `concurrency:` mapping")
             continue
-        want_group = GROUP_FORMAT.format(name=name)
+        trig = (doc.get("on", doc.get(True)) if isinstance(doc, dict) else None) or {}
+        event = "pull_request_target" if "pull_request_target" in trig else "pull_request"
+        want_group = (PR_ONLY_GROUP if target else GROUP_FORMAT).format(name=name)
+        want_cancel = True if target else CANCEL_EXPR
         if block.get("group") != want_group:
             findings.append(f"{name}.yml: concurrency.group is {block.get('group')!r}, want {want_group!r}")
-        if block.get("cancel-in-progress") != CANCEL_EXPR:
-            findings.append(f"{name}.yml: cancel-in-progress is {block.get('cancel-in-progress')!r}, want {CANCEL_EXPR!r}")
+        if block.get("cancel-in-progress") != want_cancel:
+            findings.append(f"{name}.yml: cancel-in-progress is {block.get('cancel-in-progress')!r}, want {want_cancel!r}")
         if set(block) - {"group", "cancel-in-progress"}:
             findings.append(f"{name}.yml: unexpected concurrency key(s) {sorted(set(block) - {'group', 'cancel-in-progress'})}")
+        for jid, job in (doc.get("jobs") or {}).items():
+            if isinstance(job, dict) and "concurrency" in job:
+                findings.append(f"{name}.yml: job `{jid}` declares its own job-level concurrency, which can cancel "
+                                "runs the workflow-level block leaves alone")
         try:
-            for text, observed, wanted in scenarios(name, block):
+            for text, observed, wanted in (lambda n, b: pr_only_scenarios(n, b, event) if target else scenarios(n, b))(name, block):
                 checked += 1
                 if observed != wanted:
                     findings.append(f"{name}.yml: model says it is NOT true that {text}" if wanted
@@ -203,9 +290,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--root", default=".")
     ap.add_argument("--list", action="store_true", help="print the governed workflow names and exit")
+    ap.add_argument("--list-pr-only", action="store_true", help="print the PR-event-only names and exit")
     args = ap.parse_args()
     if args.list:
         print("\n".join(GOVERNED))
+        return 0
+    if args.list_pr_only:
+        print("\n".join(PR_ONLY))
         return 0
     rc, findings, checked = audit(Path(args.root))
     if rc == 3:
@@ -213,7 +304,7 @@ def main() -> int:
     for line in findings:
         print(f"FINDING {line}")
     if rc == 0:
-        print(f"ok: {len(GOVERNED)} governed workflow(s) declare the PR-keyed shape; "
+        print(f"ok: {len(GOVERNED)} governed workflow(s) (+{len(PR_ONLY)} PR-event-only) declare the PR-keyed shape; "
               f"{checked} causal scenario(s) hold (cancel on supersede, no cancel or pending-drop on main push)")
     return rc
 
