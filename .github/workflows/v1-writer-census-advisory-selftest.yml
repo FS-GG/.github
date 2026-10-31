@@ -1,0 +1,47 @@
+# Gates the advisory v1-writer-census PR check (v1-writer-census-advisory.yml), Refs #4730.
+#
+# Drives scripts/check-v1-writer-census-advisory.py against a throwaway clone of this repository: a tracked-file
+# edit without a rehash is flagged, the rehashed edit passes, an untouched PR is a no-op, a new non-executable
+# writer is touching, renames and deletions are read correctly, the defaults are exercised, and a broken checker
+# is exit 3. No credential, no network.
+#
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a divergence.
+name: v1-writer-census-advisory-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-v1-writer-census-advisory.py"
+      - "scripts/check-v1-writer-census.py"
+      - "tests/v1-writer-census-advisory/**"
+      - ".github/workflows/v1-writer-census-advisory.yml"
+      - ".github/workflows/v1-writer-census-advisory-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-v1-writer-census-advisory.py"
+      - "scripts/check-v1-writer-census.py"
+      - "tests/v1-writer-census-advisory/**"
+      - ".github/workflows/v1-writer-census-advisory.yml"
+      - ".github/workflows/v1-writer-census-advisory-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# PR-keyed concurrency (#4730 CI-load): a newer run for the same pull request cancels the superseded
+# one. Any other event keys on `github.run_id`, which is unique to the run (the governed block; see
+# scripts/check-pr-concurrency.py).
+concurrency:
+  group: v1-writer-census-advisory-selftest-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fixture:
+    name: census advisory fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the census advisory fixture
+        run: bash tests/v1-writer-census-advisory/run.sh
