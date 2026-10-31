@@ -620,7 +620,7 @@ mutations:
     command: ["bash", "tests/landed-reverts/run.sh"]
     target: scripts/check-landed-reverts.py
     find: |-
-      reverted = dropped[min(fresh, len(dropped)):]
+      reverted = dropped[credit:]
     replace: |-
       reverted = dropped
     breaks: >-
@@ -634,7 +634,7 @@ mutations:
     command: ["bash", "tests/landed-reverts/run.sh"]
     target: scripts/check-landed-reverts.py
     find: |-
-      reverted = dropped[min(fresh, len(dropped)):]
+      reverted = dropped[credit:]
     replace: |-
       reverted = dropped[(len(dropped) if fresh else 0):]
     breaks: >-
@@ -933,6 +933,34 @@ mutations:
       
     breaks: >-
       the PR body is no longer handed to the script, so a body declaration is ignored and every declared revert is refused
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/credit-warning-silenced
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      if raw >= result.refuse_lines:
+    replace: |-
+      if False:
+    breaks: >-
+      a PR whose dropped lines are offset by new lines elsewhere in the file down to under the refusal bound no longer warns that 30 or more were dropped before credit, so the credit hides the size of the drop again
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/raw-count-equals-net
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      groups[key] = max(groups.get(key, 0), f.raw_uncovered)
+    replace: |-
+      groups[key] = max(groups.get(key, 0), f.uncovered_lines)
+    breaks: >-
+      the count before credit is computed from the net count, so the raw figure printed and used for the warning is always the credited one
     anchor:
       pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
       produced_by: tests/landed-reverts/run.py

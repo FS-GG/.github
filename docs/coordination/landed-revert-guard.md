@@ -23,7 +23,11 @@ holds the definitions. Delivered under [.github#4730](https://github.com/FS-GG/.
   are counted separately.
 - **Resurrection.** A file the window deleted or renamed away, and that the result has again, counts its
   restored lines the same way.
-- **Bound.** The check refuses at 30 undeclared dropped lines and warns below that. A restored or deleted binary
+- **Credit is visible.** The output states, per file, the lines dropped, how many new lines elsewhere in the
+  file offset them, and the net: "30 landed line(s) dropped, offset by 5 new line(s) elsewhere in the file, 25
+  net". When the dropped count before credit is 30 or more but the net is under the bound, the check passes with
+  a warning that says so, because the credit alone is what kept it under.
+- **Bound.** The check refuses at 30 undeclared net dropped lines and warns below that. A restored or deleted binary
   counts as the whole bound.
 
 ## Declaring a revert
@@ -75,12 +79,54 @@ the check can reason about, not that it is clean. The human route:
    may be raised to at most ten times its default; a larger value is itself a no-verdict.
 2. If it exits 0, or exits 1 with every drop declared and the declarations read as intended, the maintainer
    posts the output as a PR comment.
-3. If `no-silent-revert` is a required context, only the repository's existing administrator merge can pass the
-   red job. That merge, and its reason in the PR comment, is the override. It is the maintainer's decision and
-   is not automated; do not edit the allowlist or the workflow to get around a cap.
+3. If `no-silent-revert` is a required context, the red job blocks the merge, and `main` protection has
+   `enforce_admins: true` with no bypass actors, so there is no administrator merge. The real override is a
+   change to the protection itself, made by Root (the integrator) or a repository owner with admin rights, never
+   by the PR author. Record who did it, why and when in a PR comment, and restore it straight after the merge.
+   Do not edit the allowlist or the workflow to get around a cap.
 
-Whether the job should be required, and whether a cap override deserves an automated, maintainer-only path,
-are repository-settings decisions that belong to the integrator.
+### The two overrides
+
+Prefer the first: it touches one context and leaves every other protection as it is. Both need repository admin
+rights. These are the REST calls for branch protection; they are documented here and were not run when this was
+written, so read the state back after each one.
+
+**A. Remove the context from the required list for one merge, then put it back.**
+
+```bash
+# remove (the PR can now merge with the job red)
+echo '["no-silent-revert"]' | gh api -X DELETE \
+  repos/FS-GG/.github/branches/main/protection/required_status_checks/contexts --input -
+gh api repos/FS-GG/.github/branches/main/protection/required_status_checks/contexts   # readback: no-silent-revert absent
+
+# ... merge the PR ...
+
+# restore
+echo '["no-silent-revert"]' | gh api -X POST \
+  repos/FS-GG/.github/branches/main/protection/required_status_checks/contexts --input -
+gh api repos/FS-GG/.github/branches/main/protection/required_status_checks/contexts   # readback: no-silent-revert present
+```
+
+While the context is off the list, every PR on `main` is unprotected by it, not only the one being merged, so keep
+the window to the single merge. The other required contexts pin their app (`app_id` 15368, see `checks` in
+`gh api repos/FS-GG/.github/branches/main/protection/required_status_checks`); the POST above adds the context
+without a pin. If the flip made it pinned, restore it the way the flip did.
+
+**B. Relax `enforce_admins` for one merge, then enforce it again.** Broader, because an administrator then
+merges past every required context, not just this one. Use it only when A cannot apply.
+
+```bash
+gh api -X DELETE repos/FS-GG/.github/branches/main/protection/enforce_admins     # relax
+gh api repos/FS-GG/.github/branches/main/protection/enforce_admins -q .enabled   # readback: false
+
+# ... an administrator merges the PR ...
+
+gh api -X POST repos/FS-GG/.github/branches/main/protection/enforce_admins       # restore
+gh api repos/FS-GG/.github/branches/main/protection/enforce_admins -q .enabled   # readback: true
+```
+
+Whether a cap override deserves an automated, owner-only path is a repository-settings decision that belongs to
+the integrator.
 
 ## Protecting the check (proposed, not applied)
 

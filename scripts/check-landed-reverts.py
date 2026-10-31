@@ -51,7 +51,9 @@ computed squash result reproduced byte-for-byte), 16 dropped between 1 and 11 re
 without replacing them (the three inspected were deliberate: a trimmed paragraph, a retired path filter),
 and exactly one,
 #4977, dropped more, 2,294. So the check REFUSES (exit 1) at --refuse-lines undeclared dropped lines
-(default 30), and below that exits 0 with a `::warning` that names the files: loud, not blocking. A
+(default 30), and below that exits 0 with a `::warning` that names the files: loud, not blocking. The
+count before new-line credit is printed too ("N dropped, offset by M new lines elsewhere in the file"), and
+30 or more dropped before credit warns even when the credited net passes. A
 binary file restored or deleted counts as the whole bound. Lower the bound only with a replay behind it.
 
 DECLARING A REVERT. A deliberate revert is allowed, but the PR must say what it reverts, by commit, in
@@ -338,6 +340,9 @@ class Finding:
     uncovered: set[str] = field(default_factory=set)            # introducing commits not declared
     covered_by: dict[str, int] = field(default_factory=dict)    # declaration token -> lines it covered here
     blob: str = ""                              # identity of the file content dropped from; identical mirrors share it
+    raw_lines: list[int] = field(default_factory=list)  # every dropped landed line, before new-line credit (kind "lines")
+    offset: int = 0                             # dropped lines offset by new lines elsewhere in the file
+    raw_uncovered: int = 0                      # raw dropped lines not accounted for by a declaration
 
 
 def landed_lines(hunks: list[Hunk]) -> dict[int, str]:
@@ -425,8 +430,9 @@ def analyse_file(repo: str, landed: Entry, effect: Entry, history: Callable[[], 
     # line beside a stale restore, or a `# removed` comment after a deletion, hides one line, not the hunk.
     known = history()
     fresh = sum(1 for x in plus_all if substantive(x) and x.strip() not in known)
-    reverted = dropped[min(fresh, len(dropped)):]
-    return Finding(path, "lines", sorted(reverted), weight=len(reverted), blob=now) if reverted else None
+    credit = min(fresh, len(dropped))
+    reverted = dropped[credit:]
+    return Finding(path, "lines", sorted(reverted), weight=len(reverted), blob=now, raw_lines=sorted(dropped), offset=credit)
 
 
 def resurrected(repo: str, gone: Entry, back: Entry) -> Finding | None:
@@ -489,8 +495,11 @@ def attribute(repo: str, base: str, floor: str, finding: Finding) -> None:
             raise GateError(f"no commit in the window touches {finding.path}")
         finding.commits[sha] = text(git(repo, "log", "-1", "--format=%s", sha)).strip()
         return
+    wanted = finding.raw_lines or finding.lines
+    if not wanted:
+        return                  # fully offset by new lines: nothing is left to attribute or declare
     ranges: list[list[int]] = []
-    for n in finding.lines:
+    for n in wanted:
         if ranges and n == ranges[-1][1] + 1:
             ranges[-1][1] = n
         else:
@@ -502,7 +511,7 @@ def attribute(repo: str, base: str, floor: str, finding: Finding) -> None:
         m = re.match(r"^([0-9a-f]{40}) \d+ (\d+)", row)
         if m:
             finding.per_line[int(m[2])] = m[1]
-    if set(finding.per_line) != set(finding.lines):
+    if set(finding.per_line) != set(wanted):
         raise GateError(f"git blame did not attribute every reverted line of {finding.path}")
     for sha in set(finding.per_line.values()):
         finding.commits[sha] = text(git(repo, "log", "-1", "--format=%s", sha)).strip()
@@ -579,6 +588,16 @@ class Result:
         return sum(groups.values())
 
     @property
+    def raw_undeclared(self) -> int:
+        """Undeclared dropped lines BEFORE new-line credit, identical mirrors counted once. This is what the
+        credit hides: a PR can be far below the refusal bound only because new lines elsewhere offset the drops."""
+        groups: dict[tuple, int] = {}
+        for f in self.findings:
+            key = (f.blob, f.kind, tuple(f.raw_lines or f.lines), f.weight + f.offset) if f.blob else (f.path,)
+            groups[key] = max(groups.get(key, 0), f.raw_uncovered)
+        return sum(groups.values())
+
+    @property
     def mirrors(self) -> list[list[str]]:
         """Groups of findings counted once because they are identical copies of one file."""
         groups: dict[tuple, list[str]] = {}
@@ -648,16 +667,21 @@ def analyse(repo: str, base_rev: str, head_rev: str, *, lookback: int, lookback_
                 found.covered_by[cover.token] = found.weight
             else:
                 found.uncovered.add(commit)
-                found.uncovered_lines = found.weight
+                found.uncovered_lines = found.raw_uncovered = found.weight
         else:
-            for n, commit in found.per_line.items():
+            net = set(found.lines)
+            for n in found.raw_lines or found.lines:
+                commit = found.per_line[n]
                 cover = covering(declared, commit, found.path)
-                if cover:
-                    cover.covered += 1
-                    found.covered_by[cover.token] = found.covered_by.get(cover.token, 0) + 1
-                else:
-                    found.uncovered.add(commit)
-                    found.uncovered_lines += 1
+                if n in net:
+                    if cover:
+                        cover.covered += 1
+                        found.covered_by[cover.token] = found.covered_by.get(cover.token, 0) + 1
+                    else:
+                        found.uncovered.add(commit)
+                        found.uncovered_lines += 1
+                if not cover:
+                    found.raw_uncovered += 1
     return Result(base, head, point, floor, tree, len(both) + len(back), findings, declared, unresolved, skipped, refuse_lines)
 
 
@@ -686,10 +710,16 @@ def render(result: Result) -> str:
     out = [f"{NAME}: base {result.base[:8]} head {result.head[:8]} branch-point {(result.point or '-')[:8]} "
            f"lookback-floor {(result.floor or '-')[:8]} candidates {result.candidates} "
            f"files-with-dropped-landed-lines {len(result.findings)} undeclared-lines {result.undeclared} "
-           f"refuse-at {result.refuse_lines}"]
+           f"dropped-before-credit {result.raw_undeclared} refuse-at {result.refuse_lines}"]
     for found in result.findings:
-        state = "undeclared" if found.uncovered_lines else "declared"
-        out.append(f"  {state} {found.kind} {found.path}: {found.weight} landed line(s) dropped")
+        if not found.weight and not found.offset:
+            continue
+        state = "undeclared" if found.uncovered_lines else ("declared" if found.weight else "offset")
+        if found.offset:
+            out.append(f"  {state} {found.kind} {found.path}: {found.weight + found.offset} landed line(s) dropped, "
+                       f"offset by {found.offset} new line(s) elsewhere in the file, {found.weight} net")
+        else:
+            out.append(f"  {state} {found.kind} {found.path}: {found.weight} landed line(s) dropped")
         for sha, subject in sorted(found.commits.items()):
             out.append(f"      introduced by {sha[:8]} {subject}")
     for d in result.declared:
@@ -756,9 +786,9 @@ def main(argv: list[str]) -> int:
         print(json.dumps({
             "base": result.base, "head": result.head, "branchPoint": result.point, "floor": result.floor,
             "resultTree": result.result_tree, "candidates": result.candidates, "undeclaredLines": result.undeclared,
-            "refused": result.refused,
+            "rawDroppedLines": result.raw_undeclared, "refused": result.refused,
             "mirrors": result.mirrors,
-            "findings": [{"path": f.path, "kind": f.kind, "lines": f.weight, "undeclared": f.uncovered_lines,
+            "findings": [{"path": f.path, "kind": f.kind, "lines": f.weight, "offset": f.offset, "undeclared": f.uncovered_lines,
                           "commits": sorted(f.commits), "coveredBy": f.covered_by} for f in result.findings],
             "declarations": [{"token": d.token, "scope": d.scope, "covered": d.covered} for d in result.declared],
             "unresolved": result.unresolved, "allowlisted": result.allowlisted,
@@ -766,9 +796,16 @@ def main(argv: list[str]) -> int:
         print(render(result), file=sys.stderr)
     else:
         print(render(result))
-    if result.undeclared and not result.refused:
-        print(f"::warning title={NAME}: {result.undeclared} landed line(s) dropped::below the refusal bound "
-              f"of {result.refuse_lines}; check the listed files are meant to lose those lines.", file=sys.stderr)
+    if not result.refused:
+        raw = result.raw_undeclared
+        if raw >= result.refuse_lines:
+            print(f"::warning title={NAME}: {raw} landed line(s) dropped before new-line credit::{result.undeclared} remain "
+                  f"after {raw - result.undeclared} were offset by new lines elsewhere in the same file. Below the refusal "
+                  f"bound of {result.refuse_lines} only because of that credit; check the listed files are meant to lose "
+                  f"those lines.", file=sys.stderr)
+        elif result.undeclared:
+            print(f"::warning title={NAME}: {result.undeclared} landed line(s) dropped::below the refusal bound "
+                  f"of {result.refuse_lines}; check the listed files are meant to lose those lines.", file=sys.stderr)
     if result.refused:
         print(f"::error title={NAME}: this merge reverts landed work::{result.undeclared} line(s) that landed on the base "
               f"are dropped without being replaced or declared. See the job log for the files and the declaration form.",
