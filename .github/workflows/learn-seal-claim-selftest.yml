@@ -1,0 +1,35 @@
+# Gates for the LEARN input sealing, claim and admission tooling (deployment/learn-finite-profile/seal), Refs #4647.
+#
+# Drives the library functions the root CLI calls against temporary trees: manifest identity, quiesce proof, seal and
+# copy verification, write-path guards, the O_EXCL claim, void corroboration, supersede of a consumed claim and the
+# admission pins. stdlib only; no credential, no network, no container, no root.
+#
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a divergence.
+name: learn-seal-claim-selftest
+
+on:
+  pull_request:
+    paths:
+      - "deployment/learn-finite-profile/seal/**"
+      - "tests/learn-seal-claim/**"
+      - ".github/workflows/learn-seal-claim-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deployment/learn-finite-profile/seal/**"
+      - "tests/learn-seal-claim/**"
+      - ".github/workflows/learn-seal-claim-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the seal and claim gates
+        run: python3 tests/learn-seal-claim/run.py
