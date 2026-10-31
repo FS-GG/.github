@@ -778,6 +778,99 @@ with tempfile.TemporaryDirectory() as tmp:
         L.admit('op-nest', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, source_root=sr, view_root=e.root, services=e.services, owner_uid=UID)
         check(len(os.listdir('/proc/self/fd')) == before, 'a call with a pinned path does not open another pin')
 
+# the /proc refusal and the pinned-root assertion (non-blocking items of the review of #5010)
+with tempfile.TemporaryDirectory() as tmp:
+    e = Env(tmp)
+    real_isdir = os.path.isdir
+    try:
+        os.path.isdir = lambda p: False if p == '/proc/self/fd' else real_isdir(p)
+        refused(lambda: L.admit('op-noproc', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, **e.kw()), '/proc is not available', 'a write function refuses when /proc is not available')
+        refused(lambda: L.pinned_source(e.root, e.root, e.services, UID).__enter__(), '/proc is not available', 'pinned_source refuses when /proc is not available')
+    finally:
+        os.path.isdir = real_isdir
+    check(not os.path.lexists(os.path.join(e.root, 'admissions')), 'the /proc refusal created nothing')
+    check(L._PINS == {}, 'no pin is registered outside pinned_source')
+    with L.pinned_source(e.root, e.root, e.services, UID) as sr:
+        L.assert_pinned_root(sr)
+        fdn = int(sr.rsplit('/', 1)[1])
+        check(L._PINS.get(fdn) == (os.stat(e.root).st_dev, os.stat(e.root).st_ino), 'a live pin is registered with the directory\'s device and inode')
+        check(L.admit('op-open', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, source_root=sr, view_root=e.root, services=e.services, owner_uid=UID)['admission'] == sr + '/admissions/op-open.admit',
+              'a live pin passes through (the nested-call path)')
+    check(L._PINS == {}, 'the pin is deregistered when the body ends')
+    # a syntactic variant of a LIVE pin must be refused by the regex itself, not only by the registry
+    with L.pinned_source(e.root, e.root, e.services, UID) as live:
+        n_ = live.rsplit('/', 1)[1]
+        for bad, what in ((live + '\n', 'a trailing newline'), (live + '/', 'a trailing slash'), (live + '/x', 'a sub-path'), (live + '/..', 'a .. tail'),
+                          (live + ' ', 'a trailing space'), (f'{L.PINNED_PREFIX}0{n_}', 'a leading zero'), (f'{L.PINNED_PREFIX}{n_}x', 'a suffix'),
+                          (f'{L.PINNED_PREFIX}+{n_}', 'a plus sign')):
+            refused(lambda b=bad: L.assert_pinned_root(b), 'not a pinned root', f'a live pin with {what} is refused')
+            refused(lambda b=bad: L.admit('op-var', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, source_root=b, view_root=e.root, services=e.services, owner_uid=UID),
+                    'not a pinned root', f'admit refuses a live pin with {what}')
+        check(not os.path.lexists(os.path.join(e.root, 'admissions', 'op-var.admit')), 'no variant of a live pin wrote anything')
+    try:
+        with L.pinned_source(e.root, e.root, e.services, UID) as sr2:
+            raise RuntimeError('boom')
+    except RuntimeError:
+        pass
+    check(L._PINS == {}, 'the pin is deregistered when the body raises')
+    # the reviewer's bypass: an UNRELATED open directory descriptor, even a world-writable one, is not a pin
+    other = os.path.join(tmp, 'unrelated')
+    os.mkdir(other)
+    os.chmod(other, 0o777)
+    ofd = os.open(other, os.O_RDONLY | os.O_DIRECTORY)
+    ffd = os.open(os.path.join(tmp, 'plain-file'), os.O_RDWR | os.O_CREAT, 0o600)
+    kwp = dict(view_root='/nonexistent-view', services='/nonexistent-services', owner_uid=UID)
+    try:
+        for bad, what in ((f'{L.PINNED_PREFIX}{ofd}', 'an unrelated open directory descriptor (world-writable, not a pin)'),
+                          (f'{L.PINNED_PREFIX}{ffd}', 'a descriptor that is not a directory'), (f'{L.PINNED_PREFIX}999999', 'a descriptor that is not open'),
+                          (f'{L.PINNED_PREFIX}{ofd}/claims', 'a sub-path of a descriptor'), (f'{L.PINNED_PREFIX}{ofd}/..', 'a .. tail'),
+                          (f'{L.PINNED_PREFIX}{ofd}/', 'a trailing slash'), (f'{L.PINNED_PREFIX}{ofd}\n', 'a trailing newline'),
+                          (f'{L.PINNED_PREFIX}0{ofd}', 'a leading zero'), (f'{L.PINNED_PREFIX}00', 'a double zero'),
+                          (L.PINNED_PREFIX, 'an empty tail'), (f'{L.PINNED_PREFIX}abc', 'a non-numeric tail'), (f'{L.PINNED_PREFIX}-1', 'a negative descriptor'),
+                          (f'{L.PINNED_PREFIX}{ofd}x', 'a tail with a suffix'), (f'{L.PINNED_PREFIX}9' * 1 + '9' * 40, 'a descriptor number far beyond any limit'),
+                          (f'{L.PINNED_PREFIX}' + '9' * 400, 'a 400-digit descriptor number')):
+            refused(lambda b=bad: L.admit('op-bad', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, source_root=b, **kwp), 'not a pinned root', f'{what} is refused before anything is written')
+            refused(lambda b=bad: L.assert_pinned_root(b), 'not a pinned root', f'{what} is refused by assert_pinned_root')
+        check(os.listdir(other) == [], 'nothing was written into the unrelated world-writable directory')
+        # a descriptor number reused after the pin closed
+        with L.pinned_source(e.root, e.root, e.services, UID) as sr3:
+            pfd = int(sr3.rsplit('/', 1)[1])
+        fillers = []
+        reused = os.open(other, os.O_RDONLY | os.O_DIRECTORY)
+        while reused < pfd:                                   # lower free numbers are taken first; walk up to the closed pin's number
+            fillers.append(reused)
+            reused = os.open(other, os.O_RDONLY | os.O_DIRECTORY)
+        for f_ in fillers:
+            os.close(f_)
+        check(reused == pfd, 'the closed pin\'s descriptor number is reused by an unrelated directory')
+        refused(lambda: L.admit('op-stale', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, source_root=f'{L.PINNED_PREFIX}{reused}', **kwp), 'not a live pin', 'a reused descriptor number is refused')
+        # a registered number whose descriptor now refers to another directory
+        L._PINS[reused] = (os.stat(e.root).st_dev, os.stat(e.root).st_ino)
+        refused(lambda: L.assert_pinned_root(f'{L.PINNED_PREFIX}{reused}'), 'no longer refers to the pinned directory', 'a registered descriptor that refers to another directory is refused')
+        L._PINS.pop(reused)
+        os.close(reused)
+        L._PINS[ffd] = (0, 0)
+        refused(lambda: L.assert_pinned_root(f'{L.PINNED_PREFIX}{ffd}'), 'is not a directory', 'a registered descriptor that is not a directory is refused')
+        L._PINS.pop(ffd)
+        L._PINS[999999] = (0, 0)
+        refused(lambda: L.assert_pinned_root(f'{L.PINNED_PREFIX}999999'), 'is not open in this process', 'a registered but closed descriptor is refused')
+        L._PINS.pop(999999)
+        L._PINS[10 ** 30] = (0, 0)
+        refused(lambda: L.assert_pinned_root(f'{L.PINNED_PREFIX}{10 ** 30}'), 'is not open in this process', 'a registered descriptor number beyond the OS limit refuses instead of raising OverflowError')
+        L._PINS.pop(10 ** 30)
+    finally:
+        for f_ in (ofd, ffd):
+            if f_ >= 0:
+                try:
+                    os.close(f_)
+                except OSError:
+                    pass
+    check(L._PINS == {}, 'the registry is empty again after the descriptor tests')
+    readme = open(os.path.join(os.path.dirname(TOOL), 'README.md')).read()
+    check('open_dir_chain' in readme.split('## Admission reader')[1].split('| Id |')[0] and 'pinned reader' in readme and 'assert_pinned_root' in readme,
+          'the README operator-copy note covers the pinned reader, open_dir_chain and the pinned-root assertion')
+    check('live pin' in readme and 'registry' in readme, 'the README says the pass-through accepts only a live, registered pin')
+
 # check_admission reads through a pinned chain too
 with tempfile.TemporaryDirectory() as tmp:
     e = Env(tmp)

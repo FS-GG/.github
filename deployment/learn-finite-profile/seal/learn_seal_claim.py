@@ -179,9 +179,36 @@ def pinned_source(source_root, view_root, services, owner_uid=0):
         a = os.fstat(fd)
         if (a.st_dev, a.st_ino) != (v.st_dev, v.st_ino):
             refuse('the persistent source directory is not the mounted view (swapped or not mounted)')
+        _PINS[fd] = (a.st_dev, a.st_ino)             # a live pin of THIS tool, valid until the body ends
         yield f'{PINNED_PREFIX}{fd}'
     finally:
+        _PINS.pop(fd, None)
         os.close(fd)
+
+
+PINNED_ROOT = re.compile(r'/proc/self/fd/(0|[1-9][0-9]*)')
+_PINS = {}                                           # fd -> (st_dev, st_ino) of every live pin made by pinned_source
+
+
+def assert_pinned_root(path):
+    """A path that carries the pinned prefix passes through only if it is exactly /proc/self/fd/<n> (no leading zero, no suffix, no
+    trailing newline) AND <n> is a LIVE PIN registered by pinned_source whose descriptor still refers to the pinned directory. Any other
+    open directory descriptor of this process (an unrelated or world-writable directory, or a descriptor number that was reused after
+    the pin closed) is refused, so the pass-through cannot be used to bypass the chain and view checks."""
+    m = PINNED_ROOT.fullmatch(path)
+    if not m:
+        refuse(f'not a pinned root: {path!r} must be exactly {PINNED_PREFIX}<n> with no leading zero')
+    num = int(m.group(1))
+    if num not in _PINS:
+        refuse(f'not a pinned root: descriptor {m.group(1)} is not a live pin of this tool')
+    try:
+        st = os.fstat(num)
+    except (OSError, OverflowError):
+        refuse(f'not a pinned root: descriptor {m.group(1)} is not open in this process')
+    if not stat.S_ISDIR(st.st_mode):
+        refuse(f'not a pinned root: descriptor {m.group(1)} is not a directory')
+    if (st.st_dev, st.st_ino) != _PINS[num]:
+        refuse(f'not a pinned root: descriptor {m.group(1)} no longer refers to the pinned directory (closed and reused)')
 
 
 def _show(value, pinned, shown):
@@ -205,6 +232,7 @@ def pinned(fn):
         bound.apply_defaults()
         sr = bound.arguments['source_root']
         if sr.startswith(PINNED_PREFIX):
+            assert_pinned_root(sr)
             return fn(*bound.args, **bound.kwargs)
         with pinned_source(sr, bound.arguments['view_root'], bound.arguments['services'], bound.arguments.get('owner_uid', 0)) as p:
             bound.arguments['source_root'] = p

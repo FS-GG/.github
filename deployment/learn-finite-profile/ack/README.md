@@ -13,7 +13,7 @@ PR) reads it.
 | directory `/etc/fsgg/learn/retirement-acks` | `retirement-acks/` under `/srv/bulk/services/usr-local-libexec-fsgg-learn` (read back through the mounted view `/usr/local/libexec/fsgg-learn`) |
 | chain checked by path from `/`, then written by path | every directory from `/srv/bulk/services` down is opened once with `O_DIRECTORY|O_NOFOLLOW` through `openat`, `fstat`-checked on the descriptor, compared by device and inode with the mounted view, and **all writes go through those descriptors** |
 | `--ack`, `--remove` | `--ack`, `--remove`, and a read-only `--check` |
-| digest given as `--record-sha256` | digest given as `--record-sha256`, `--record-file`, or both (they must agree) |
+| digest given as `--record-sha256` | `--ack` still requires the admitted `--record-sha256`; `--record-file` is an optional cross-check (the two must agree); `--check` accepts either |
 | writes only | after `--ack` the mounted view is read back; if it does not show the same bytes the file just written is **removed** and the run **refuses (exit 5)** |
 
 ## Pinned directory descriptors
@@ -30,11 +30,11 @@ Read-only. The view path is walked from `/` with pinned descriptors, as the oper
 view (not only of the view root) refuses. The acknowledgement must be a regular root-owned file, closed to group and other
 writers, at most 4096 bytes, and its content must equal the digest.
 
-## `--record-file`
+## `--record-file` is a cross-check, not a source
 
-Computes the sha256 of the record's bytes (a regular file, at most 16 MiB, opened `O_NOFOLLOW`). With `--record-sha256` as well,
-the two must be equal, so the admitted digest and the record on disk are compared before anything is written. Without it, the
-digest is the admitted one as given, as in r1.
+`--ack` requires the admitted `--record-sha256`: what is written is the digest Root admitted, never one computed from a file
+at write time. `--record-file` (a regular file, at most 16 MiB, opened `O_NOFOLLOW`) is optional and only compares: its
+sha256 must equal `--record-sha256`, or nothing is written. For the read-only `--check`, either option is enough.
 
 Unchanged: the content is exactly `<sha256>\n`, written `O_CREAT|O_EXCL|O_NOFOLLOW`, root:root 0644; `--remove` unlinks only a
 regular root-owned file.
