@@ -87,7 +87,7 @@ let private organization = ok """{"data":{"organization":{"id":"O_fsgg","login":
 let private target = ok (exactProject binding.ProjectId binding.Observation.Id)
 
 let private membershipFor projectId contentId =
-    ok $"""{{"data":{{"repository":{{"nameWithOwner":"FS-GG/.github","issue":{{"id":"I_native","number":2963,"projectItems":{{"totalCount":1,"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[{{"id":"PVTI_2963","project":{{"id":"{projectId}"}},"content":{{"id":"{contentId}","number":2963,"repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}]}}}}}}}}}}"""
+    ok $"""{{"data":{{"repository":{{"nameWithOwner":"FS-GG/.github","issue":{{"id":"I_native","number":2963,"projectItems":{{"totalCount":1,"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[{{"id":"PVTI_2963","isArchived":false,"project":{{"id":"{projectId}"}},"content":{{"id":"{contentId}","number":2963,"repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}]}}}}}}}}}}"""
 
 let private membership = membershipFor binding.ProjectId "I_native"
 
@@ -130,6 +130,82 @@ let ``one shot writes only the reviewed Observation field`` () =
         Assert.False(transport.Logged "PVTF_roadmap_v2")
         Assert.False(transport.Logged "PVTSSF_track_v2")
     | other -> failwith $"expected one owned projection write, got %A{other}"
+
+[<Fact>]
+let ``an archived board card is reported and never written`` () =
+    // #5119: Done retention archives cards; an archived enrolled card is an explicit refusal before any write.
+    let archived = ok ((match membership with Ok value -> value.Body | Error _ -> failwith "fixture").Replace("\"isArchived\":false", "\"isArchived\":true"))
+    let transport = scripted [ organization; target; archived; observation (Some "Stale"); mutationSuccess ]
+    match runOneShot (verified "revision") transport binding request with
+    | Error(Http(409, message)) ->
+        Assert.Contains("archived (Done retention)", message)
+        Assert.Empty(transport.Mutations)
+    | other -> failwithf "expected an explicit archived-card refusal, got %A" other
+
+let private archivedCohort () =
+    let rows = [ 1 .. 3 ] |> List.map (fun number -> $"I_arch_{number}", { ProgrammeFixture.issue with Number = 7000 + number }, "docs/coordination/programme.md")
+    let selected = ProgrammeFixture.enroll { ProgrammeFixture.successorBinding () with SelectedIssues = rows |> List.map (fun (id, issue, _) -> id, $"{issue.Owner}/{issue.Repository}#{issue.Number}") |> Map.ofList } rows
+    rows, selected
+
+let private archivedInspection (archive: bool) (unlist: bool) =
+    let rows, selected = archivedCohort ()
+    let change (request: Transport.Request) (result: IoResult<Transport.Response>) =
+        result |> Result.map (fun (response: Transport.Response) ->
+            let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+            if request.Subject = "bound V2 successor planning memberships" then
+                let node = root.["data"].["repository"].["issue"].["projectItems"].["nodes"].[0]
+                // Every row's Observation is Verified, so an archived row would otherwise report and count as Verified.
+                node.["observation"].["name"] <- System.Text.Json.Nodes.JsonValue.Create "Verified"
+                node.["observation"].["optionId"] <- System.Text.Json.Nodes.JsonValue.Create "verified"
+                if archive && node.["content"].["id"].GetValue<string>() = "I_arch_2" then node.["isArchived"] <- System.Text.Json.Nodes.JsonValue.Create true
+            elif unlist && request.Subject = "complete V2 project memberships" then
+                let items = root.["data"].["node"].["items"]
+                let nodes = items.["nodes"].AsArray()
+                for index in nodes.Count - 1 .. -1 .. 0 do
+                    if nodes.[index].["content"].["id"].GetValue<string>() = "I_arch_2" then nodes.RemoveAt index
+                items.["totalCount"] <- System.Text.Json.Nodes.JsonValue.Create nodes.Count
+            { response with Body = root.ToJsonString() })
+    let reads = ProgrammeFixture.successorTransportFor selected rows (Some "Delivery") change
+    let report = V2ProjectionSource.inspectFixed reads selected None
+    Assert.Empty reads.Mutations
+    report
+
+[<Fact>]
+let ``an enrolled row whose card is archived is an explicit archived membership, never a missing row`` () =
+    let report = archivedInspection true true
+    Assert.True(report.MembershipGap.IsNone, string report.MembershipGap)
+    Assert.True(report.Evidence.PopulationGap.IsNone, string report.Evidence.PopulationGap)
+    let archived = report.Memberships |> List.filter _.Archived
+    Assert.Equal<string list>([ "I_arch_2" ], archived |> List.map _.ContentId)
+    Assert.True(archived.Head.Enrolled)
+    Assert.Equal<string list>([ "I_arch_1"; "I_arch_2"; "I_arch_3" ], report.Memberships |> List.filter _.Enrolled |> List.map _.ContentId |> List.sort)
+    for item in report.Items do
+        let flagged = item.Discrepancies |> List.contains V2ProjectionSource.archivedCardDiscrepancy
+        Assert.True((flagged = (item.ExpectedNodeId = "I_arch_2")), item.ExpectedNodeId)
+        Assert.True(item.Planning.Value.Archived = (item.ExpectedNodeId = "I_arch_2"))
+        // An archived row is never Verified; the others are.
+        Assert.Equal((if item.ExpectedNodeId = "I_arch_2" then V2ProjectionSource.archivedHealth else "Verified"), item.Evidence.Health)
+    Assert.Equal(2, report.Evidence.Verified)
+    // Action selection never selects an archived card: it is needs-decision with the archived reason.
+    let archivedItem = report.Items |> List.find (fun item -> item.ExpectedNodeId = "I_arch_2")
+    let context = ProgrammeFixture.context { report with Items = [ archivedItem ] }
+    let decision = (V2ProjectionSource.selectActions { report with Items = [ archivedItem ] } (Some context) report.NativeIntegrator.ObservedAt).Head
+    Assert.Equal("needs-decision", decision.Decision)
+    Assert.Contains(decision.Reasons, fun reason -> reason.Contains "archived (Done retention)")
+
+[<Fact>]
+let ``an enrolled row missing from the complete membership, or an archived card still listed, is a membership gap`` () =
+    for archive, unlist in [ false, true; true, false ] do
+        let report = archivedInspection archive unlist
+        let gap = report.MembershipGap |> Option.map Errors.explain |> Option.defaultValue ""
+        Assert.Contains("membership cross-check", gap)
+        Assert.Contains("1 enrolled row(s) disagree", gap)
+        Assert.True(report.Evidence.PopulationGap.IsSome)
+        Assert.Empty(report.Memberships |> List.filter _.Archived)
+    let clean = archivedInspection false false
+    Assert.True(clean.MembershipGap.IsNone, string clean.MembershipGap)
+    Assert.Equal(3, clean.Evidence.Verified)
+    Assert.Empty(clean.Items |> List.collect _.Discrepancies |> List.filter ((=) V2ProjectionSource.archivedCardDiscrepancy))
 
 [<Fact>]
 let ``duplicate retry re-reads and emits no second mutation`` () =
@@ -366,6 +442,21 @@ let ``lost protected population response preserves prior last verified evidence`
     Assert.Empty(retry.Mutations)
 
 [<Fact>]
+let ``refresh reports an archived card as Archived, never Stale or Verified`` () =
+    // #5119: the writer's explicit archived refusal maps to the archived health, not to Stale.
+    let archived = ok ((match membership with Ok value -> value.Body | Error _ -> failwith "fixture").Replace("\"isArchived\":false", "\"isArchived\":true"))
+    let transport = scripted
+                        [ protectedBlob canonicalManifest
+                          native 2963 "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "canonical owning roadmap"
+                          organization; target; archived
+                          native 2964 "2026-10-02T01:00:00Z"
+                          Error(Http(403, "source denied")) ]
+    let report = V2ProjectionSource.runFixed transport canonicalBinding None
+    Assert.Equal<string list>([ V2ProjectionSource.archivedHealth; "Stale"; "Unknown" ], report.Items |> List.map (fun item -> item.Health))
+    Assert.Equal(0, report.Verified)
+    Assert.Empty(transport.Mutations)
+
+[<Fact>]
 let ``human owned field option drift is never repaired by refresh`` () =
     for option in [ "status_ready"; "track_active"; "observation_verified" ] do
         let drifted = target |> Result.map (fun response -> { response with Body = response.Body.Replace(option, "changed_identity") })
@@ -387,7 +478,7 @@ let ``source snapshot changing before field mutation preserves human and owned v
 let ``membership page ceiling remains Unknown rather than absent`` () =
     let page index =
         let body =
-            $"""{{"data":{{"repository":{{"nameWithOwner":"FS-GG/.github","issue":{{"id":"I_native","number":2963,"projectItems":{{"totalCount":11,"pageInfo":{{"hasNextPage":true,"endCursor":"cursor-{index}"}},"nodes":[{{"id":"foreign-item-{index}","project":{{"id":"foreign-project-{index}","number":77}},"content":{{"id":"I_native","number":2963,"repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}]}}}}}}}}}}"""
+            $"""{{"data":{{"repository":{{"nameWithOwner":"FS-GG/.github","issue":{{"id":"I_native","number":2963,"projectItems":{{"totalCount":11,"pageInfo":{{"hasNextPage":true,"endCursor":"cursor-{index}"}},"nodes":[{{"id":"foreign-item-{index}","isArchived":false,"project":{{"id":"foreign-project-{index}","number":77}},"content":{{"id":"I_native","number":2963,"repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}]}}}}}}}}}}"""
         ok body
     let transport = scripted ([ organization; target ] @ ([ 1..10 ] |> List.map page))
     match runOneShot (verified "revision") transport binding request with

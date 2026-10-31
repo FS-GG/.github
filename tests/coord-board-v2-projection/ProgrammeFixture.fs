@@ -201,7 +201,7 @@ module ProgrammeFixture =
                     wire ({| organization = {| login = "FS-GG"; projectV2 = {| id = project; number = 3; title = "Coordination V2"; fields = connection [ select "Status" value.Status; box {| id = "roadmap"; name = "Roadmap"; dataType = "TEXT" |}; select "Track" value.Track; select "Observation" value.Observation ] |} |} |})
                 | Query(document, _) when document.Contains("items(first: 50") ->
                     wire ({| node = {| id = project; items = connection [ {| id = "PVTI_current"; content = {| __typename = "Issue"; id = "I_outcome"; number = 4634; repository = {| nameWithOwner = "FS-GG/.github" |} |} |}; {| id = "PVTI_extra"; content = {| __typename = "Issue"; id = "I_extra"; number = 5000; repository = {| nameWithOwner = "FS-GG/.github" |} |} |} ] |} |})
-                | Query(document, _) when document.Contains("projectItems(first:") -> wire ({| repository = {| nameWithOwner = "FS-GG/.github"; issue = {| id = "I_outcome"; number = 4634; projectItems = connection [ {| id = "PVTI_current"; project = {| id = project |}; content = content |} ] |} |} |})
+                | Query(document, _) when document.Contains("projectItems(first:") -> wire ({| repository = {| nameWithOwner = "FS-GG/.github"; issue = {| id = "I_outcome"; number = 4634; projectItems = connection [ {| id = "PVTI_current"; isArchived = false; project = {| id = project |}; content = content |} ] |} |} |})
                 | Query(_, _) when request.Subject = "fresh V2 Observation dispatch identity" ->
                     wire ({| node = {| id = "PVTI_current"; project = {| id = project |}; content = content |} |})
                 | Query(document, _) when document.Contains("fieldValueByName(name: \"Observation\")") && not (document.Contains("status: fieldValueByName")) ->
@@ -269,7 +269,7 @@ module ProgrammeFixture =
                     let content = {| id = id; number = issue.Number; repository = {| nameWithOwner = repository |} |}
                     wire ({| repository = {| nameWithOwner = repository;
                                              issue = {| id = id; number = issue.Number;
-                                                        projectItems = connection [ {| id = "synthetic-member-" + id; project = {| id = project |}; content = content |} ] |} |} |})
+                                                        projectItems = connection [ {| id = "synthetic-member-" + id; isArchived = false; project = {| id = project |}; content = content |} ] |} |} |})
                 | Transport.Query(document, variables) when document.Contains("status: fieldValueByName") ->
                     let id, issue, roadmap = current variables |> Option.get
                     let select fieldId name option =
@@ -390,7 +390,7 @@ module ProgrammeFixture =
                     let select fieldId name option =
                         {| __typename = "ProjectV2ItemFieldSingleSelectValue"; name = name; optionId = option; field = {| id = fieldId |} |}
                     let memberItem =
-                        {| id = "synthetic-member-" + id; project = {| id = project |}
+                        {| id = "synthetic-member-" + id; isArchived = false; project = {| id = project |}
                            content = {| id = id; number = issue.Number; repository = {| nameWithOwner = repository |} |}
                            status = select "status" "Blocked" "Blocked"; track = select "track" "Active delivery" "active"
                            workLevel = (match level with Some name -> box (select "work-level" name selected.WorkLevel.Value.Options[name]) | None -> null)

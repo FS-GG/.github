@@ -543,6 +543,37 @@ class BoardNativeResultsTests(unittest.TestCase):
         expected = {key: report[key] for key in ("bindingVersion", "schemaVersion", "projectId", "selectedIssues")}
         return report, expected
 
+    def archived(self, **item_changes):
+        report, expected = self.inspection(5)
+        report["memberships"][0].update(archived=True, discrepancy=self.decoder["ARCHIVED_CARD"])
+        report["items"][0].update(health=self.decoder["ARCHIVED_HEALTH"], discrepancies=[self.decoder["ARCHIVED_CARD"]])
+        report["items"][0].update(item_changes)
+        return report, expected
+
+    def test_archived_enrolled_membership_is_explicit_and_closed(self):
+        # #5119: an archived enrolled card is an explicit archived membership whose item is Archived, never Verified.
+        report, expected = self.inspection(5)
+        self.decoder["decode_inspection"](report, expected)  # older producers omit `archived`
+        report["memberships"][0].update(archived=False)
+        self.decoder["decode_inspection"](report, expected)
+        self.decoder["decode_inspection"](*self.archived())
+        refusals = []
+        for change in (dict(enrolled=False), dict(discrepancy=None), dict(archived="yes"), dict(archived=None), dict(extra=1)):
+            report, expected = self.archived()
+            report["memberships"][0].update(change)
+            refusals.append((report, expected))
+        refusals += [self.archived(health="Verified"), self.archived(health="Unknown"), self.archived(discrepancies=[])]
+        report, expected = self.inspection(5)  # `archived: null` refuses on its own, not only through the item check
+        report["memberships"][0].update(archived=None)
+        refusals.append((report, expected))
+        for item_changes in (dict(health=self.decoder["ARCHIVED_HEALTH"]), dict(discrepancies=[self.decoder["ARCHIVED_CARD"]])):
+            report, expected = self.inspection(5)  # an item claiming archived without an archived membership
+            report["items"][0].update(item_changes)
+            refusals.append((report, expected))
+        for report, expected in refusals:
+            with self.assertRaises(self.decoder["Unknown"]):
+                self.decoder["decode_inspection"](report, expected)
+
     def test_state_only_dependency_observation_accepts_actual_producer_shape(self):
         report, expected = self.inspection(5)
         dependency = {"issue": {"owner": "Synthetic", "repository": "Dependency", "number": 2},

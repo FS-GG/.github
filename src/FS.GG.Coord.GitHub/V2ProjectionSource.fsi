@@ -176,7 +176,14 @@ module V2ProjectionSource =
     /// in-flight work, bounded full connection reads, head-bound reviews/checks and final head barriers.
     /// Fixed queries/selected GET reads only. No writer, mutation or durable retry composition.
     val createInspectionTransport: binding: Binding -> token: string -> IoResult<IGitHubTransport * System.IDisposable>
+    /// The item discrepancy reported for an enrolled row whose board card is archived (Done retention, #5119).
+    val archivedCardDiscrepancy: string
+    /// The health of an enrolled row whose board card is archived: never Verified, never counted as verified, and
+    /// always needs-decision in action selection (#5119).
+    val archivedHealth: string
     /// Reuse admitted source collection and exact planning readers. Never calls runOneShot or any writer.
+    /// A programme inspection cross-checks every selected row's planning membership against the complete project
+    /// membership: an archived card becomes an explicit archived membership; any other disagreement is a membership gap.
     val inspectFixed: transport: IGitHubTransport -> binding: Binding -> previous: BatchReport option -> InspectionReport
     /// Internal causal qualification control; never selected by a production caller.
     val internal inspectUnbatched: transport: IGitHubTransport -> binding: Binding -> previous: BatchReport option -> InspectionReport

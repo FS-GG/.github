@@ -123,6 +123,9 @@ module V2Projection =
     /// historical 270, scaled by the selected population up to `maximumProgrammeRows` (410 seconds at 500 rows).
     val refreshDeadlineSeconds: selectedRows: int -> float
 
+    /// The one-shot Observation writer's explicit 409 message for an archived card (Done retention, #5119).
+    val archivedCardWriteRefusal: string
+
     /// Validate the reviewed binding without performing IO.
     val validateBinding: binding: Binding -> IoResult<unit>
 
@@ -170,15 +173,20 @@ module V2Projection =
             IoResult<Report>
 
     /// Complete exact-project population. Unexpected members remain visible but unenrolled.
+    /// A complete-membership row. `readMemberships` pages the project `items` connection, which excludes archived cards,
+    /// so it always yields `Archived = false`; inspection adds an explicit `Archived = true` row for an enrolled issue
+    /// whose card is archived (Done retention, #5119).
     type Membership =
-        { ItemId: string; ContentId: string; Kind: string; Issue: IssueRef option; Enrolled: bool }
+        { ItemId: string; ContentId: string; Kind: string; Issue: IssueRef option; Enrolled: bool; Archived: bool }
     val readMemberships: transport: IGitHubTransport -> binding: Binding -> IoResult<Membership list>
 
     /// Fresh immutable owner/schema/native membership and four planning values. Performs queries only;
     /// unseeded fields remain None, incomplete or mismatched identities remain errors. No projection.
     /// `WorkLevel` is read in the same membership query for a binding-5 successor with a bound Work level field
     /// (#5119): `Some("Unknown", None)` when unset, `Some(name, Some optionId)` when set, `None` when not read.
+    /// `Archived` is the card's native `isArchived`: an issue's `projectItems` include archived cards, while the
+    /// project `items` connection (and so `readMemberships`) excludes them, so callers must reconcile it explicitly.
     type PlanningObservation =
         { ItemId: string; Status: string option; Roadmap: string option; Track: string option
-          Observation: string option; MembershipPages: int; WorkLevel: (string * string option) option }
+          Observation: string option; MembershipPages: int; WorkLevel: (string * string option) option; Archived: bool }
     val readPlanning: transport: IGitHubTransport -> binding: Binding -> request: Request -> IoResult<PlanningObservation>

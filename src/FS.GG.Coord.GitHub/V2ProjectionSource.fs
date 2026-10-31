@@ -43,6 +43,11 @@ module V2ProjectionSource =
           PopulationGap: IoError option
           Cleanup: string }
 
+    // The discrepancy an inspection reports for an enrolled row whose board card is archived (#5119); documented in the .fsi.
+    let archivedCardDiscrepancy = "Board card is archived (Done retention); the enrolled row is retained, with no automatic retirement"
+    // The health of an archived enrolled row (#5119): distinct from Verified, Stale and Unknown; documented in the .fsi.
+    let archivedHealth = "Archived"
+
     let private query document variables subject : Transport.Request =
         { Method = "POST"; Path = "graphql"; Query = []; Body = Query(document, variables)
           Budget = GraphQl; IfNoneMatch = None; Subject = subject }
@@ -613,7 +618,12 @@ module V2ProjectionSource =
                       Delivery = "Unknown: no source-delivery acceptance reader selected"
                       Publication = "Unknown: no publication acceptance reader selected"
                       NativeAcceptance = "Unknown: no operation acceptance reader selected"
-                      Health = match result with Ok _ -> "Verified" | Error(Http(409, _)) -> "Stale" | _ -> "Unknown"
+                      Health =
+                        match result with
+                        | Ok _ -> "Verified"
+                        | Error(Http(409, message)) when message = V2Projection.archivedCardWriteRefusal -> archivedHealth
+                        | Error(Http(409, _)) -> "Stale"
+                        | _ -> "Unknown"
                       Reads = reads; MutationAttempts = mutations
                       MembershipPages = projection |> Option.map (fun report -> report.ProjectReads - (if report.Mutations = 0 then 3 else 4))
                       Projection = projection; Gap = match result with Error error -> Some error | _ -> None
@@ -1057,6 +1067,43 @@ module V2ProjectionSource =
                             WorkItem = item.WorkItem |> Option.map (fun facts -> {facts with Complete = false; Sha256 = None; Gap = Some gap})
                             Evidence = {item.Evidence with Health = "Unknown"; Gap = Some(Malformed("native hierarchy consistency", gap))} })
 
+
+    // Cross-check every selected row's planning membership against the complete project membership (#5119). An issue's
+    // `projectItems` include an archived card while the project `items` connection excludes it, so before this an
+    // archived enrolled card read as a normal planning row and silently vanished from `memberships`. Now:
+    // - an archived planning card absent from `memberships` becomes an explicit `Archived = true` membership and its
+    //   item carries `archivedCardDiscrepancy`;
+    // - an unarchived planning card absent from `memberships`, or an archived one present in it, is an inconsistency
+    //   reported as a membership gap, never a silent missing row.
+    let private reconcileArchivedMemberships (binding: Binding) (selected: Selected list) (items: InspectionItem list) (members: Membership list) (membershipGap: IoError option) =
+        if not (isProgrammeBinding binding) || membershipGap.IsSome then items, members, None
+        else
+            let listed = members |> List.map _.ContentId |> Set.ofList
+            let rows = List.zip selected items
+            let archived =
+                rows |> List.choose (fun (row, item) ->
+                    match item.Planning with
+                    | Some planning when planning.Archived && not (listed.Contains row.NodeId) ->
+                        Some { ItemId = planning.ItemId; ContentId = row.NodeId; Kind = "Issue"; Issue = Some row.Issue; Enrolled = true; Archived = true }
+                    | _ -> None)
+            let inconsistent =
+                rows |> List.filter (fun (row, item) ->
+                    match item.Planning with
+                    | Some planning -> planning.Archived = listed.Contains row.NodeId
+                    | None -> false)
+            let archivedIds = archived |> List.map _.ContentId |> Set.ofList
+            // An archived row is never Verified and never counts toward `Verified`: it carries its own health and the
+            // discrepancy, and selectActions treats it as needs-decision. A row whose planning read failed has no
+            // archive fact and is not cross-checked here; its planning gap already makes it Unknown and unselectable.
+            let items = items |> List.map (fun item ->
+                if archivedIds.Contains item.ExpectedNodeId then
+                    { item with Discrepancies = item.Discrepancies @ [ archivedCardDiscrepancy ]; Evidence = { item.Evidence with Health = archivedHealth } }
+                else item)
+            let gap =
+                if inconsistent.IsEmpty then None
+                else Some(Malformed("membership cross-check", $"%d{inconsistent.Length} enrolled row(s) disagree between the issue membership and the complete project membership; reconcile before selection"))
+            items, members @ archived, gap
+
     let private inspectWithAcquisition batched (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
         let reads = inspectionReads transport binding
         let intakeObservedAt = DateTimeOffset.UtcNow
@@ -1160,7 +1207,9 @@ module V2ProjectionSource =
                         | Ok(text, _, finalBlob) when finalBlob = blob && Result.isOk (programmePopulation binding text) -> membershipGap
                         | _ -> Some(Malformed("programme enrollment", "final-enrollment-currentness-unavailable-or-changed"))
                 let items = if binding.BindingVersion = 5 then reconcileHierarchy items else items
-                { Binding = binding; Memberships = members; MembershipGap = membershipGap; NativeIntegrator = integration
+                let items, members, crossCheckGap = reconcileArchivedMemberships binding selected items members membershipGap
+                let enrollmentGap = match enrollmentGap with Some _ -> enrollmentGap | None -> crossCheckGap
+                { Binding = binding; Memberships = members; MembershipGap = (match membershipGap with Some _ -> membershipGap | None -> crossCheckGap); NativeIntegrator = integration
                   Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) (protectedEnrollmentInputs binding current blob) enrollmentGap; Items = items }
 
     let inspectFixed transport binding previous = inspectWithAcquisition true transport binding previous
@@ -1285,6 +1334,8 @@ module V2ProjectionSource =
                     result "unknown" [ "Current issue/dependency/plan/planning read is unavailable or changed" ]
                 elif report.Binding.BindingVersion = 5 && (item.WorkItem |> Option.forall (fun facts -> not facts.Complete || facts.Sha256.IsNone || facts.WorkLevel = "Unknown")) then
                     result "unknown" [ "Explicit Work level and complete current native hierarchy/classification are required" ]
+                elif item.Discrepancies |> List.contains archivedCardDiscrepancy then
+                    result "needs-decision" [ "Board card is archived (Done retention); unarchive or retire the enrolled row before any action" ]
                 elif report.Binding.BindingVersion = 5 && (item.WorkItem |> Option.exists (fun facts -> facts.WorkLevel = "Outcome")) then
                     result "needs-decision" [ "Outcome nodes retain accountable acceptance; select an explicitly enrolled Delivery node instead" ]
                 elif item.Owner |> Option.forall String.IsNullOrWhiteSpace then
