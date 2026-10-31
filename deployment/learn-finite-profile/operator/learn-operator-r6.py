@@ -320,6 +320,13 @@ def recheck_sweep(out, opid, max_ops):
     return None
 
 
+def start_census(opid, max_ops, run=None):
+    """r6 hardening: take the census and apply recheck_sweep to it. A census that did not succeed (a non-zero or missing return code, which is what
+    a failed systemctl or a timeout gives, with an empty list) refuses instead of reading as 'no units'. Returns (rc, refusal reason or None)."""
+    rc, out, _ = (run or globals()['run'])(['systemctl', '--user', 'list-units', '--all', '--no-legend', '--plain', 'learn-op-*', 'learn-fin-*', 'learn-pod-*'], 30)
+    return rc, (recheck_sweep(out, opid, max_ops) if rc == 0 else 'unit census failed at the start')
+
+
 def used_ids(opid, custody_root, evid_root):
     """r6: existing custody or evidence directories for the op id or its precheck id; any of them refuses the run"""
     return [p for p in (f'{custody_root}/{opid}', f'{custody_root}/{opid}-pre', f'{evid_root}/{opid}', f'{evid_root}/{opid}-pre') if os.path.lexists(p)]
@@ -367,9 +374,11 @@ try:
     R['gates']['operatorLockWaitSeconds'] = round(time.monotonic() - t_lock, 1)
     # (2) sweep
     rc, out, _ = run(['systemctl', '--user', 'list-units', '--all', '--no-legend', '--plain', 'learn-op-*', 'learn-fin-*', 'learn-pod-*'], 30)
+    if rc != 0: refuse('unit census failed')              # r6: a failed systemctl prints nothing, which would read as 'no units' (fail closed)
     rows = parse_unit_rows(out)
     busy, active_ops, active_pods = classify_units(rows)
     rc, out, _ = run(['podman', 'ps', '-a', '--filter', 'name=^learn-op-', '--format', '{{.Names}}'], 30)
+    if rc != 0: refuse('container census failed')         # r6: likewise, a failed podman prints nothing, which would read as 'no orphans'
     orphans = [n for n in out.split() if n not in active_ops]
     R['gates']['sweep'] = {'units': [' '.join(r_[:4]) for r_ in rows], 'busy': busy, 'orphans': orphans, 'activeOps': sorted(active_ops)}
     if busy or orphans: refuse('sweep refused (failed/transitioning units or orphan containers; siblings untouched)')
@@ -455,8 +464,7 @@ try:
     if not all(pc_.values()): refuse('precheck failed: ' + ','.join(k for k, v in pc_.items() if not v) + ' - the real op is NOT started')
     if mode == '--precheck-only': finish(0)
     # (5) the real op
-    rc, out, _ = run(['systemctl', '--user', 'list-units', '--all', '--no-legend', '--plain', 'learn-op-*', 'learn-fin-*', 'learn-pod-*'], 30)
-    why = recheck_sweep(out, opid, MAX_ACTIVE_OPS) if rc == 0 else 'unit census failed at the start'
+    rc, why = start_census(opid, MAX_ACTIVE_OPS)
     R['gates']['startCensus'] = {'rc': rc, 'refused': why}
     if why: refuse(why)
     nonce = secrets.token_hex(16)

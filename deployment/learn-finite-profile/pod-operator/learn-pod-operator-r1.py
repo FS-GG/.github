@@ -362,6 +362,14 @@ def verify_claim(env, ident, opid):
     return claim, sha_bytes(raw), sid
 
 
+def fsync_dir(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def create_marker(marker_root, opid, claim_sha, now):
     """The input-read marker is owned by THIS operator: <marker_root>/<op-id>/input-read, directory 0700, file O_EXCL. It is created before the
     first read or mount of the input and never removed. A second attempt for the same op id refuses."""
@@ -377,6 +385,8 @@ def create_marker(marker_root, opid, claim_sha, now):
         f.write(json.dumps({'opId': opid, 'claimSha256': claim_sha, 'utc': now().isoformat()}, sort_keys=True) + '\n')
         f.flush()
         os.fsync(f.fileno())
+    fsync_dir(d)                                         # the file's directory entry, then the marker directory's entry in its parent:
+    fsync_dir(marker_root)                               # the marker must survive a crash before the input is touched
     return p
 
 
@@ -471,11 +481,18 @@ def gates(env, deps, R, mode, opid, argv_raw, ident):
     if rc2 != 0:
         refuse('the pod census failed')
     leftover = sorted(n for n in pods.split() if n.startswith('learn-pod-'))
-    R['gates']['exclusion'] = {'conflicts': conflicts, 'leftoverPods': leftover}
+    rc3, names, _ = deps['run'](['podman', 'ps', '-a', '--filter', 'name=^learn-op-', '--format', '{{.Names}}'], 30)
+    if rc3 != 0:
+        refuse('the container census failed')
+    active_ops = {r_[0][:-len('.service')] for r_ in rows if r_[0].startswith('learn-op-') and r_[2] == 'active'}
+    orphans = sorted(n for n in names.split() if n not in active_ops)           # as operator r6: a learn-op-* container whose op unit is not active
+    R['gates']['exclusion'] = {'conflicts': conflicts, 'leftoverPods': leftover, 'orphanContainers': orphans}
     if conflicts:
         refuse('exclusion refused: an op or pod is active or transitioning: ' + ','.join(conflicts))
     if leftover:
         refuse('exclusion refused: a pod exists: ' + ','.join(leftover))
+    if orphans:
+        refuse('exclusion refused: orphan learn-op-* containers: ' + ','.join(orphans))
     # 6 custody
     used = used_ids(opid, p['custody'], p['evidence'])
     if used or any(r_[0].startswith((f'learn-op-{opid}', f'learn-fin-{opid}', f'learn-pod-{opid}')) for r_ in rows):

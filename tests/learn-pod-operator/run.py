@@ -86,11 +86,15 @@ check(M.PROD['image_ids'] == [] and M.PROD['finalizer_sha'] is None and not M.PR
 # ============================================================ fixtures
 class World:
     """A temporary account, view and slice. The view is root-safe for the running user (owner_uid = UID, chain start = the temporary base)."""
-    def __init__(self, tmp):
+    def __init__(self, tmp, nested=False):
         self.base = os.path.join(tmp, 'top')
         os.makedirs(self.base)
         os.chmod(self.base, 0o755)
-        self.view = os.path.join(self.base, 'view')
+        self.mid = os.path.join(self.base, 'mid')
+        if nested:
+            os.makedirs(self.mid)
+            os.chmod(self.mid, 0o755)
+        self.view = os.path.join(self.mid if nested else self.base, 'view')
         self.home = os.path.join(tmp, 'home')
         self.slice = os.path.join(tmp, 'slice')
         self.state = os.path.join(self.home, '.local', 'state')
@@ -103,7 +107,7 @@ class World:
         self.set_slice(mem_current=0, pids_current=30)
         self.meminfo = os.path.join(tmp, 'meminfo')
         self.set_meminfo(16 << 30)
-        self.fin = os.path.join(self.view, 'learn-finalizer-r5.py')
+        self.fin = os.path.join(self.base if nested else self.view, 'learn-finalizer-r5.py')
         open(self.fin, 'w').write('# finalizer r5 fixture\n')
         os.chmod(self.fin, 0o644)
         self.fin_sha = hashlib.sha256(open(self.fin, 'rb').read()).hexdigest()
@@ -111,7 +115,7 @@ class World:
         self.ident = hashlib.sha256(b'source').hexdigest()
         self.argv = '["/opt/fsgg/orchestration/host/fsgg-coord-orchestration-host","serve"]'
         self.self_sha = hashlib.sha256(open(POD, 'rb').read()).hexdigest()
-        self.units, self.pods, self.images = '', '', {self.image}
+        self.units, self.pods, self.containers, self.images = '', '', '', {self.image}
         self.now = datetime.now(timezone.utc)
         self.euid = 424242
 
@@ -139,6 +143,9 @@ class World:
                 return 0, self.units, ''
             if argv[:3] == ['podman', 'pod', 'ps']:
                 return 0, self.pods, ''
+            if argv[:2] == ['podman', 'ps']:
+                pref = argv[argv.index('--filter') + 1].split('=^', 1)[1]                    # emulate --filter name=^<prefix>
+                return 0, ''.join(l + '\n' for l in self.containers.split() if l.startswith(pref)), ''
             raise AssertionError(f'unexpected command {argv}')
         d = {'run': run, 'geteuid': lambda: self.euid, 'now': lambda: self.now, 'sleep': lambda s: None, 'monotonic': iter(range(0, 10 ** 6)).__next__,
              'nonce': lambda: 'cd' * 16, 'start_pod': lambda claim, sid: None}
@@ -431,6 +438,107 @@ with tempfile.TemporaryDirectory() as tmp:
     check(ok['custodyDisk'] is False and ok['memory'] and ok['pids'] and ok['memAvailable'], 'less than 1 GiB of custody disk refuses (headroom function)')
     ok, vals = M.headroom(w.slice, w.meminfo, w.state)
     check(all(ok.values()) and vals['memMax'] == str(6 << 30), 'the fixtures have headroom everywhere')
+
+# ============================================================ hardening: orphan container sweep, evidence-size branches, the admission chain start
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    w.admit('op-pod-20')
+    w.containers = 'learn-op-ghost\nunrelated\n'
+    code, r, d = go(w, PRE, 'op-pod-20')
+    check(code == 5 and has(r, 'orphan learn-op-* containers: learn-op-ghost') and r['gates']['exclusion']['orphanContainers'] == ['learn-op-ghost'],
+          'a learn-op-* container whose op unit is not active refuses a pod op (parity with operator r6)')
+    ps = [c for c in d['calls'] if c[:2] == ['podman', 'ps']][0]
+    check(ps == ['podman', 'ps', '-a', '--filter', 'name=^learn-op-', '--format', '{{.Names}}'], 'the sweep asks for learn-op-* containers exactly as operator r6 does')
+    w.containers = 'unrelated\nlearn-pod-x-infra\n'
+    code, r, d = go(w, PRE, 'op-pod-20')
+    check(not has(r, 'orphan') and r['gates']['exclusion']['orphanContainers'] == [], 'other containers are not orphans')
+    code, r, d = go(w, PRE, 'op-pod-20', deps={'run': lambda argv, timeout=60, cap=0: (1, '', 'boom') if argv[:2] == ['podman', 'ps'] else (
+        (0, argv[-1] + '\n', '') if argv[:3] == ['podman', 'image', 'inspect'] else (0, '', ''))})
+    check(has(r, 'container census failed'), 'a failed container census refuses (fail closed)')
+    w.containers = ''
+    code, r, d = go(w, PRE, 'op-pod-20')
+    check(not has(r, 'orphan') and not has(r, 'container census'), 'with no containers the sweep passes')
+
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    ev = os.path.join(w.state, 'learn-evidence')
+    os.makedirs(os.path.join(ev, 'op-a'))
+    os.makedirs(os.path.join(ev, 'op-b'))
+    real_entries = M.EVID_MAX_ENTRIES
+    try:
+        M.EVID_MAX_ENTRIES = 1
+        code, r, d = go(w, PRE, 'op-pod-21')
+        check(has(r, 'evidence size refused') and r['gates']['evidenceUsage']['entries'] >= 2, 'an evidence root over the entry cap refuses')
+    finally:
+        M.EVID_MAX_ENTRIES = real_entries
+    real_usage = M.evidence_usage
+    try:
+        M.evidence_usage = lambda root: {'bytes': 0, 'entries': 0, 'error': 'unreadable ' + root}
+        code, r, d = go(w, PRE, 'op-pod-21')
+        check(has(r, 'evidence size refused') and 'error' in r['gates']['evidenceUsage'], 'an evidence tree that cannot be measured refuses (the error branch)')
+    finally:
+        M.evidence_usage = real_usage
+    if os.geteuid() != 0:                                                       # a real unreadable subdirectory (root ignores modes)
+        os.chmod(os.path.join(ev, 'op-a'), 0o000)
+        try:
+            code, r, d = go(w, PRE, 'op-pod-21')
+            check(has(r, 'evidence size refused') and 'unreadable' in r['gates']['evidenceUsage'].get('error', ''), 'a real unreadable evidence subdirectory refuses')
+        finally:
+            os.chmod(os.path.join(ev, 'op-a'), 0o755)
+    code, r, d = go(w, PRE, 'op-pod-21')
+    check(not has(r, 'evidence size refused'), 'a readable, small evidence tree passes')
+
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp, nested=True)
+    w.admit('op-pod-22')
+    code, r, d = go(w, PRE, 'op-pod-22')
+    check(not has(r, 'admission refused') and r['gates']['admission']['reasons'] == [], 'with every directory between the chain start and the view safe, the admission passes')
+    os.chmod(w.mid, 0o777)
+    code, r, d = go(w, PRE, 'op-pod-22')
+    check(code == 5 and has(r, 'admission refused') and any('admission path not root-safe at ' + w.mid in x for x in r['gates']['admission']['reasons']),
+          'a world-writable directory BETWEEN the chain start and the view refuses at the admission gate, naming that directory')
+    os.chmod(w.mid, 0o775)
+    code, r, d = go(w, PRE, 'op-pod-22')
+    check(has(r, 'admission path not root-safe'), 'a group-writable directory between the chain start and the view refuses too')
+    os.chmod(w.mid, 0o755)
+    moved = os.path.join(tmp, 'moved')
+    os.rename(w.mid, moved)
+    os.symlink(moved, w.mid)
+    code, r, d = go(w, PRE, 'op-pod-22')
+    check(has(r, 'admission refused'), 'a symlinked directory between the chain start and the view refuses')
+    os.unlink(w.mid)
+    os.rename(moved, w.mid)
+    os.chmod(w.base, 0o777)
+    code, r, d = go(w, PRE, 'op-pod-22')
+    check(has(r, 'admission refused') or has(r, 'not root-safe'), 'an unsafe chain start refuses')
+    os.chmod(w.base, 0o755)
+
+# the marker directory and its parent are fsynced after the file
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    markers = os.path.join(w.state, 'learn-input')
+    w.claim_files('op-pod-23')
+    synced = []
+    real_fsync = os.fsync
+
+    def spy(fd):
+        try:
+            synced.append(os.readlink(f'/proc/self/fd/{fd}'))
+        except OSError:
+            synced.append('?')
+        return real_fsync(fd)
+    os.fsync = spy
+    try:
+        M.begin_input_access(w.env(), {'gates': {'inputMounted': False}}, 'op-pod-23', w.ident, lambda c, sid: None, lambda: w.now)
+    finally:
+        os.fsync = real_fsync
+    d_ = os.path.join(markers, 'op-pod-23')
+    check(synced[-3:] == [os.path.join(d_, 'input-read'), d_, markers], 'the marker file is fsynced, then its directory, then the directory\'s parent, in that order')
+    try:
+        M.fsync_dir(os.path.join(tmp, 'absent'))
+        check(False, 'fsync_dir does not swallow a missing directory')
+    except OSError:
+        check(True, 'fsync_dir does not swallow a missing directory')
 
 # ============================================================ --precheck-only never succeeds in this revision; with the flag set it is the claim tool's precheck
 with tempfile.TemporaryDirectory() as tmp:

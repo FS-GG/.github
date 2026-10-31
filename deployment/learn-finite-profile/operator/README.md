@@ -4,7 +4,7 @@
 diff. Refs FS-GG/.github#4647; design: `docs/coordination/2026-10-30-learn-finite-executor-pod-design.md` section 10 and
 section 14.1. Source only: it installs and runs nothing. Root installs it from a root-owned copy and admits every run.
 
-Against r5 the diff is 12 hunks, 20 lines removed and 107 added (pinned by the test). Everything else is r5 byte for byte,
+Against r5 the diff is 13 hunks, 20 lines removed and 115 added (pinned by the test). Everything else is r5 byte for byte,
 including `IMAGE_ID` (reader image r4), `FIN` and `FIN_SHA` (finalizer r4), the seccomp pin, the limits, the units, the headroom
 gates, the precheck and the custody paths.
 
@@ -32,6 +32,10 @@ gates, the precheck and the custody paths.
    precheck-only exit and before the nonce is drawn and `start_real` is called, and refuses (`exclusion refused at the start`, `sweep
    refused at the start`, `concurrency refused at the start`, or `unit census failed at the start`). This op's own precheck units are not
    counted against it. The result is recorded as `gates.startCensus`.
+   A pod is never excused, not even one named `learn-pod-<id>-pre`: only `learn-op-<id>-pre` and `learn-fin-<id>-pre` are this op's own.
+6. **A failed census refuses.** r5 read an empty `list-units` or `podman ps` as 'no units' and 'no orphan containers' even when the command
+   failed. r6 refuses (`unit census failed`, `container census failed`) when the first census fails; the census before the start is
+   `start_census`, which refuses on any return code other than 0, a timeout included.
 
 ## What r6 does not contain, on purpose
 
