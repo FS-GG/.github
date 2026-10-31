@@ -145,6 +145,47 @@ PY
 done
 [ "$failcount" != 0 ] || echo "PASS  B2 $ptm mutant(s) over ${#PTNAMES[@]} PR-event-only workflow(s) were each refused for the reason that mutation introduces"
 
+# B3. The issue-keyed workflow (check-then-act auto-comment) must serialise events for ONE issue.
+#   V1 drop the issue operand -> MODEL: two `issues` events for one issue no longer share a group
+#   V2 cancel-in-progress true -> MODEL: a running `issues` run IS cancelled by the next event for its issue
+#   V3 key on the issue alone  -> MODEL: a PR push no longer cancels the superseded head
+mapfile -t ISSUENAMES < <(python3 "$TOOL" --list-issue-keyed)
+[ "${#ISSUENAMES[@]}" -gt 0 ] || { echo "FAIL  no issue-keyed workflows listed"; exit 1; }
+ivm=0
+for name in "${ISSUENAMES[@]}"; do
+  for m in V1 V2 V3; do
+    d="$WORK/$name-$m"; mkdir -p "$d/.github/workflows"
+    for other in "${ALL[@]}"; do cp "$ROOT/.github/workflows/$other.yml" "$d/.github/workflows/"; done
+    python3 - "$d/.github/workflows/$name.yml" "$m" <<'PY'
+import re, sys
+path, m = sys.argv[1:3]
+t = open(path, encoding="utf-8").read()
+block = re.search(r"^concurrency:\n(?:  .*\n)+", t, re.M)
+b = block.group(0)
+new = {
+  "V1": b.replace("github.event.issue.number || ", ""),
+  "V2": b.replace("${{ github.event_name == 'pull_request' }}", "true"),
+  "V3": b.replace("github.event.pull_request.number || ", ""),
+}[m]
+assert new != b, f"{m} did not change {path}"
+open(path, "w", encoding="utf-8").write(t.replace(b, new, 1))
+PY
+    case "$m" in
+      V1) key="two \`issues\` events for ONE issue share a group" ;;
+      V2) key="a running \`issues\` run is never cancelled" ;;
+      V3) key="a PR push (new head) cancels the superseded head's run" ;;
+    esac
+    rc=0; out="$(python3 "$TOOL" --root "$d" 2>&1)" || rc=$?
+    ivm=$((ivm+1))
+    mine="$(grep -F -- "$name.yml" <<<"$out" || true)"
+    case "$mine" in
+      *"$key"*) [ "$rc" = 1 ] && ok || bad "$name $m exited $rc, want 1" "$out" ;;
+      *) bad "$name $m was not refused for the right reason (rc=$rc, want '$key')" "$(sed -n 1,5p <<<"$out")" ;;
+    esac
+  done
+done
+[ "$failcount" != 0 ] || echo "PASS  B3 $ivm mutant(s) over ${#ISSUENAMES[@]} issue-keyed workflow(s) were each refused for the reason that mutation introduces"
+
 # C. A missing governed workflow is NO VERDICT (3), never a pass.
 d="$WORK/missing"; mkdir -p "$d/.github/workflows"
 for other in "${ALL[@]:1}"; do cp "$ROOT/.github/workflows/$other.yml" "$d/.github/workflows/"; done

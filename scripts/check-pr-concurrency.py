@@ -24,6 +24,9 @@ A run id is unique to a run, so a non-PR event never shares a group with anythin
 cancel or replace. PR events still key on the PR number, so a superseded head is cancelled. (Root decision on
 #4730, replacing the sha fallback; the scenarios below include same-commit pairs, which the sha key fails.)
 
+ONE ISSUE-KEYED EXCEPTION (ISSUE_KEYED below): `cross-repo-request-predicate` keys its `issues` events on the
+issue number, with the same cancel rule, because its auto-comment step is check-then-act.
+
 A JOB-LEVEL `concurrency:` IS REFUSED TOO. GitHub accepts one on any job, with its own group and its own
 cancel flag, and it does not have to agree with the workflow-level block: a job-level
 `cancel-in-progress: true` on a stable group would cancel main-push or merge_group runs of that job
@@ -102,14 +105,14 @@ GOVERNED = [
     "coherence", "coord-report-selftest", "coordination-sync-selftest", "cross-repo-request-predicate",
     "dispatch-preflight-selftest", "feed-autofix", "fsc-progress-evidence", "fsgg-claim-fence",
     "fsgg-dispatch-broker-selftest", "generator-list", "gs2-09-7-receiver-observer-probe-selftest",
-    "kit-package-selftest", "learn-finite-profile-selftest", "learn-seal-claim-selftest",
-    "lock-range-coherence-selftest", "lockfile-cold-selftest", "new-sdd-workspace-selftest",
-    "observed-command-report-selftest", "org-permission-policy", "org-policy", "parity-fixtures",
-    "project-field-options", "protected-intake-preflight-selftest", "provisioned-podman-source",
-    "recipe-followup", "recipe-landable", "registry-changelog", "release-saga-tooling",
-    "release-tag-anchors-selftest", "repos-audit-selftest", "repos-registry-selftest",
-    "rest-budget-preflight-selftest", "routine-eligibility-selftest", "skill-quality",
-    "skill-registry-autofix", "skill-registry-coherence", "skill-roots-selfcheck",
+    "kit-package-selftest", "learn-finite-profile-selftest", "learn-pod-operator-selftest",
+    "learn-seal-claim-selftest", "lock-range-coherence-selftest", "lockfile-cold-selftest",
+    "new-sdd-workspace-selftest", "observed-command-report-selftest", "org-permission-policy",
+    "org-policy", "parity-fixtures", "project-field-options", "protected-intake-preflight-selftest",
+    "provisioned-podman-source", "recipe-followup", "recipe-landable", "registry-changelog",
+    "release-saga-tooling", "release-tag-anchors-selftest", "repos-audit-selftest",
+    "repos-registry-selftest", "rest-budget-preflight-selftest", "routine-eligibility-selftest",
+    "skill-quality", "skill-registry-autofix", "skill-registry-coherence", "skill-roots-selfcheck",
     "skill-union-selftest", "skill-view", "skill-view-parity", "skillmirror-redrive",
     "surface-impact-selftest", "sync-build-config-selftest", "telemetry-git-safety", "touch-set-drift",
     "touch-set-drift-selftest", "usage-census-selftest", "work-programme",
@@ -124,6 +127,16 @@ PR_ONLY = ["landed-revert-guard", "routine-eligibility"]
 PR_ONLY_GROUP = "{name}-${{{{ github.event.pull_request.number }}}}"
 
 GROUP_FORMAT = "{name}-${{{{ github.event.pull_request.number || github.run_id }}}}"
+
+# ISSUE-KEYED VARIANT. `cross-repo-request-predicate` also runs on `issues` (opened, edited), and its
+# auto-comment step is check-then-act: it looks for its marker comment and posts one if absent. Two close
+# events for ONE issue running at once can both find no marker and both post. So `issues` runs key on the
+# issue number, which serialises them (one running, at most one pending; `cancel-in-progress` stays false,
+# so a running comment-poster is never cancelled, and a pending replacement is fine because the newer
+# event carries the newer issue body). Other issues' events and every PR event are untouched. Issue and
+# PR numbers share one number space, so the issue key cannot collide with a PR key.
+ISSUE_KEYED = ["cross-repo-request-predicate"]
+ISSUE_GROUP = "{name}-${{{{ github.event.pull_request.number || github.event.issue.number || github.run_id }}}}"
 CANCEL_EXPR = "${{ github.event_name == 'pull_request' }}"
 
 _EXPR = re.compile(r"^\$\{\{\s*(.*?)\s*\}\}$")
@@ -140,6 +153,7 @@ def _lookup(path: str, event: dict):
     """Resolve a github-context path against a synthetic event; absent or 0 is falsy (None)."""
     table = {
         "github.event.pull_request.number": event.get("pr"),
+        "github.event.issue.number": event.get("issue"),
         "github.sha": event.get("sha"),
         "github.run_id": event.get("run_id"),
         "github.ref": event.get("ref"),
@@ -175,9 +189,9 @@ def cancel_of(cancel, event: dict) -> bool:
 _RUNS = itertools.count(1000)
 
 
-def _event(name: str, pr: int | None, sha: str, ref: str) -> dict:
+def _event(name: str, pr: int | None, sha: str, ref: str, issue: int | None = None) -> dict:
     """One synthetic event. `run_id` is unique per call, as GitHub's is per run."""
-    return {"name": name, "pr": pr, "sha": sha, "ref": ref, "run_id": next(_RUNS)}
+    return {"name": name, "pr": pr, "sha": sha, "ref": ref, "run_id": next(_RUNS), "issue": issue}
 
 
 def pr(number: int, sha: str, name: str = "pull_request") -> dict:
@@ -196,9 +210,9 @@ def dispatch(sha: str) -> dict:
     return _event("workflow_dispatch", None, sha, "refs/heads/main")
 
 
-def other(name: str, sha: str) -> dict:
+def other(name: str, sha: str, issue: int | None = None) -> dict:
     """`schedule`, `issues`, `repository_dispatch`: all run at the default branch's current commit."""
-    return _event(name, None, sha, "refs/heads/main")
+    return _event(name, None, sha, "refs/heads/main", issue)
 
 
 def displaced(workflow: str, block: dict, running: dict, arriving: dict) -> str:
@@ -216,7 +230,7 @@ def pending_replaced(workflow: str, block: dict, pending: dict, arriving: dict) 
     return group_of(workflow, block["group"], pending) == group_of(workflow, block["group"], arriving)
 
 
-def scenarios(workflow: str, block: dict) -> list[tuple[str, bool, bool]]:
+def scenarios(workflow: str, block: dict, issue_keyed: bool = False) -> list[tuple[str, bool, bool]]:
     """(description, observed, wanted) — each is one causal claim derived from the declared block."""
     out = []
 
@@ -243,11 +257,27 @@ def scenarios(workflow: str, block: dict) -> list[tuple[str, bool, bool]]:
           displaced(workflow, block, dispatch("a" * 40), dispatch("b" * 40)) == "cancelled", False)
     # Events that arrive at ONE commit (a sha key shares a group between them).
     for kind in ("workflow_dispatch", "schedule", "issues", "repository_dispatch", "push"):
+        if issue_keyed and kind == "issues":
+            continue  # replaced by the issue-keyed claims below: same-issue events DO share a group
         first, second = other(kind, "c" * 40), other(kind, "c" * 40)
         claim(f"two {kind} runs at one commit are not cancelled",
               displaced(workflow, block, first, second) == "cancelled", False)
         claim(f"two {kind} runs at one commit do not drop the older PENDING run",
               pending_replaced(workflow, block, first, second), False)
+    if issue_keyed:
+        a, b, c = other("issues", "c" * 40, 7), other("issues", "c" * 40, 7), other("issues", "c" * 40, 8)
+        claim("two `issues` events for ONE issue share a group, so the check-then-act step runs one at a time",
+              pending_replaced(workflow, block, a, b), True)
+        claim("a running `issues` run is never cancelled by the next event for its issue",
+              displaced(workflow, block, a, b) == "cancelled", False)
+        claim("`issues` events for DIFFERENT issues do not replace each other's pending run",
+              pending_replaced(workflow, block, a, c), False)
+        claim("an `issues` run does not cancel or replace a PR run",
+              displaced(workflow, block, pr(7, "d" * 40), a) == "cancelled" or pending_replaced(workflow, block, pr(9, "d" * 40), a), False)
+    else:
+        a, b = other("issues", "c" * 40, 7), other("issues", "c" * 40, 7)
+        claim("two `issues` events for one issue do not share a group (this workflow is not issue-keyed)",
+              pending_replaced(workflow, block, a, b), False)
     return out
 
 
@@ -287,7 +317,7 @@ def audit(root: Path) -> tuple[int, list[str], int]:
             continue
         trig = (doc.get("on", doc.get(True)) if isinstance(doc, dict) else None) or {}
         event = "pull_request_target" if "pull_request_target" in trig else "pull_request"
-        want_group = (PR_ONLY_GROUP if target else GROUP_FORMAT).format(name=name)
+        want_group = (PR_ONLY_GROUP if target else ISSUE_GROUP if name in ISSUE_KEYED else GROUP_FORMAT).format(name=name)
         want_cancel = True if target else CANCEL_EXPR
         if block.get("group") != want_group:
             findings.append(f"{name}.yml: concurrency.group is {block.get('group')!r}, want {want_group!r}")
@@ -300,7 +330,7 @@ def audit(root: Path) -> tuple[int, list[str], int]:
                 findings.append(f"{name}.yml: job `{jid}` declares its own job-level concurrency, which can cancel "
                                 "runs the workflow-level block leaves alone")
         try:
-            for text, observed, wanted in (lambda n, b: pr_only_scenarios(n, b, event) if target else scenarios(n, b))(name, block):
+            for text, observed, wanted in (lambda n, b: pr_only_scenarios(n, b, event) if target else scenarios(n, b, name in ISSUE_KEYED))(name, block):
                 checked += 1
                 if observed != wanted:
                     findings.append(f"{name}.yml: model says it is NOT true that {text}" if wanted
@@ -314,10 +344,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--root", default=".")
     ap.add_argument("--list", action="store_true", help="print the governed workflow names and exit")
+    ap.add_argument("--list-issue-keyed", action="store_true", help="print the issue-keyed names and exit")
     ap.add_argument("--list-pr-only", action="store_true", help="print the PR-event-only names and exit")
     args = ap.parse_args()
     if args.list:
         print("\n".join(GOVERNED))
+        return 0
+    if args.list_issue_keyed:
+        print("\n".join(ISSUE_KEYED))
         return 0
     if args.list_pr_only:
         print("\n".join(PR_ONLY))
