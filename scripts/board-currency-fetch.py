@@ -40,6 +40,10 @@ import tempfile
 from pathlib import Path
 
 SNAPSHOT_SCHEMA = "fsgg:board-currency-snapshot/v1"
+# Markers count only in Root-author comments, so those bodies are kept WHOLE: a newer marker past a cut
+# could otherwise be missed (newest blocked-on marker wins). Other authors' comments feed only R4's
+# activity set, which reads createdAt, so their bodies are bounded. `truncated` records any cut; the
+# marker rules return Unknown if a Root comment ever carries it.
 COMMENT_BODY_LIMIT = 4000
 
 QUERY = """
@@ -244,14 +248,20 @@ def repo_visibility(repo: str, known: dict[str, bool | None]) -> bool | None:
     return known[repo]
 
 
-def fetch_comments(repo: str, number: int) -> list[dict]:
+def fetch_comments(repo: str, number: int, roots: set[str]) -> list[dict]:
     out = gh("comments", ["api", f"repos/{repo}/issues/{number}/comments?per_page=100", "--paginate", "--jq", ".[]"])
     try:
         rows = [json.loads(line) for line in out.splitlines() if line.strip()]
     except json.JSONDecodeError:
         raise FetchError("comments output is not parseable") from None
-    return [{"id": c.get("id"), "author": (c.get("user") or {}).get("login", ""), "createdAt": c.get("created_at"),
-             "body": (c.get("body") or "")[:COMMENT_BODY_LIMIT]} for c in rows]
+    out = []
+    for c in rows:
+        author = (c.get("user") or {}).get("login", "")
+        body = c.get("body") or ""
+        keep = body if str(author).lower() in roots else body[:COMMENT_BODY_LIMIT]
+        out.append({"id": c.get("id"), "author": author, "createdAt": c.get("created_at"), "body": keep,
+                    "truncated": len(keep) < len(body)})
+    return out
 
 
 def needs_comments(item: dict, effective: dt.datetime, rules) -> bool:
@@ -310,17 +320,19 @@ def main(argv: list[str] | None = None) -> int:
         effective = rules.parse_time(rules.PARAMS["effectiveFrom"])
         on_board = {rules.ref_key(i["repo"], i["number"]) for i in items if i.get("repo")}
         wanted: set[str] = set()
+        roots = {login.lower() for login in rules.PARAMS["rootLogins"]}
         for item in items:
             if needs_comments(item, effective, rules):
-                item["comments"] = fetch_comments(item["repo"], item["number"])
-                roots = {login.lower() for login in rules.PARAMS["rootLogins"]}
+                item["comments"] = fetch_comments(item["repo"], item["number"], roots)
                 marker = rules.blocked_on_refs(rules.root_comments(item, roots) or [])
                 wanted.update(ref for ref in marker or [] if ref not in on_board)
         ref_states = fetch_ref_states(sorted(wanted))
     except FetchError as exc:
+        Path(args.out).unlink(missing_ok=True)  # never leave an earlier run's snapshot to be read as this one
         print(f"board-currency-fetch: FAILED (no snapshot written): {exc}", file=sys.stderr)
         return 1
     except Exception as exc:  # noqa: BLE001 - a traceback would print source lines and values
+        Path(args.out).unlink(missing_ok=True)
         print(f"board-currency-fetch: FAILED (no snapshot written): unexpected {type(exc).__name__}", file=sys.stderr)
         return 1
 
