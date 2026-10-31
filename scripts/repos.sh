@@ -69,7 +69,7 @@ REG_DEFAULT="$ROOT_DEFAULT/registry/repos.yml"
 
 # The controlled set of capabilities a repo may `receive`. A `receives` value outside this set is a
 # validation error — so a typo can't silently exclude a repo from a fabric. Grow it deliberately.
-KNOWN_CAPS='["labels","coordination-kit","build-config","lockfile-sync","contract-coherence","skill-union"]'
+KNOWN_CAPS='["labels","coordination-kit","build-config","lockfile-sync","contract-coherence","required-context-sweep","skill-union"]'
 
 # CAPS THAT MUST KEEP A `capabilities:` ROW EVEN AT ZERO RECEIVERS (#1806). The closure check below
 # this one is keyed on the ROSTER (what repos[] actually `receives`) and is deliberately vacuous for a
