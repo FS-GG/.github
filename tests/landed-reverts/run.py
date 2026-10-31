@@ -61,9 +61,13 @@ def put(repo: Path, name: str, body: str | bytes) -> None:
     path.write_bytes(body if isinstance(body, bytes) else body.encode())
 
 
-def commit(repo: Path, message: str) -> str:
+def commit(repo: Path, message: str, when: str | None = None) -> str:
     git(repo, "add", "-A")
-    git(repo, "commit", "-q", "--allow-empty", "-m", message)
+    env = dict(ENV, GIT_COMMITTER_DATE=when, GIT_AUTHOR_DATE=when) if when else ENV
+    done = subprocess.run(["git", "-C", str(repo), "commit", "-q", "--allow-empty", "-m", message],
+                          capture_output=True, text=True, env=env)
+    if done.returncode != 0:
+        raise RuntimeError(done.stderr)
     return git(repo, "rev-parse", "HEAD")
 
 
@@ -89,15 +93,20 @@ def build(work: Path) -> tuple[Path, dict[str, str]]:
     put(repo, "f.txt", lines("base", 40))
     put(repo, "g.txt", lines("other", 20))
     put(repo, "bin.dat", b"\0\1" * 100)
-    c0 = commit(repo, "initial")
+    put(repo, "r.txt", lines("old", 20))
+    put(repo, "del.txt", lines("retired", 60))
+    put(repo, "registry/landed-revert-allowlist.json", '{"entries": []}\n')
+    c0 = commit(repo, "initial", "2026-01-01T00:00:00+0000")
+    (repo / "del.txt").unlink()
+    put(repo, "r.txt", lines("new", 50))
     put(repo, "f.txt", lines("base", 40) + lines("feature", 45))
     put(repo, "h.txt", lines("module", 45))
     put(repo, "bin.dat", b"\0\2" * 100)
-    c1 = commit(repo, "land the feature (#12)")
+    c1 = commit(repo, "land the feature (#12)", "2026-01-01T01:00:00+0000")
     put(repo, "k.txt", lines("unrelated", 5))
-    c1b = commit(repo, "unrelated (#13)")
+    c1b = commit(repo, "unrelated (#13)", "2026-03-01T00:00:00+0000")
     put(repo, "f.txt", "base 0 = changed_by_main()\n" + "".join(lines("base", 40).splitlines(True)[1:]) + lines("feature", 45))
-    c2 = commit(repo, "later change to line one (#14)")
+    c2 = commit(repo, "later change to line one (#14)", "2026-03-02T00:00:00+0000")
     return repo, {"c0": c0, "c1": c1, "c1b": c1b, "c2": c2}
 
 
@@ -236,10 +245,98 @@ def synthetic(work: Path) -> None:
 
     # ---- the lookback parameter: why the check is about recency, not the merge base ------------------
     old = stale(repo, "old-stale", c["c1b"], c["c0"], files=("f.txt", "h.txt"))
-    rc0, _, out0 = gate(repo, main, old, "--lookback", "0")
+    rc0, _, out0 = gate(repo, main, old, "--lookback", "0", "--lookback-days", "0")
     rc1, doc1, out1 = gate(repo, main, old)
     check(rc0 == 0 and rc1 == 1,
-          "content landed BEFORE the branch point is invisible at lookback 0 and found by the default window", out0 + out1)
+          "content landed BEFORE the branch point is invisible with no window and found by the default window", out0 + out1)
+
+    # ---- F1: edit credit is per line, never per hunk ---------------------------------------------------
+    branch(repo, "coedit", c["c2"])
+    put(repo, "r.txt", lines("old", 20) + "// PR note: census v2\n")
+    head = commit(repo, "stale restore of r.txt plus one co-edit in the same hunk")
+    rc, doc, out = gate(repo, main, head)
+    check(rc == 1 and doc and doc["undeclaredLines"] == 49,
+          "F1 a stale restore of 50 landed lines plus ONE new line in the same hunk -> REFUSED (49 counted, one credited)", out)
+    branch(repo, "placeholder", c["c2"])
+    put(repo, "r.txt", "# removed\n")
+    head = commit(repo, "delete the landed block, leave a comment")
+    rc, doc, out = gate(repo, main, head)
+    check(rc == 1 and doc and doc["undeclaredLines"] == 49,
+          "F1 deleting 50 landed lines and leaving a `# removed` comment -> REFUSED (49 counted)", out)
+    branch(repo, "rewrite50", c["c2"])
+    put(repo, "r.txt", lines("brandnew", 50))
+    head = commit(repo, "rewrite the landed block with new text")
+    rc, doc, out = gate(repo, main, head)
+    check(rc == 0 and doc and doc["undeclaredLines"] == 0, "F1 control: 50 landed lines replaced by 50 new ones -> passes", out)
+    branch(repo, "compress", c["c2"])
+    put(repo, "r.txt", lines("brandnew", 20))
+    head = commit(repo, "consolidate the landed block")
+    rc, doc, out = gate(repo, main, head)
+    check(rc == 1 and doc and doc["undeclaredLines"] == 30,
+          "F1 consolidating 50 landed lines into 20 new ones counts the 30 that vanished (the documented price)", out)
+
+    # ---- F2: the allowlist is the BASE's, and a glob does not cross `/` --------------------------------
+    sneak = stale(repo, "sneak", c["c1b"], c["c0"], files=("f.txt", "h.txt"))
+    put(repo, "registry/landed-revert-allowlist.json", json.dumps({"entries": [{"glob": "**/*.txt", "reason": "x"}, {"glob": "*.txt", "reason": "x"}]}))
+    head = commit(repo, "also add an allowlist that exempts everything")
+    rc, doc, out = gate(repo, main, head)
+    check(rc == 1 and doc and doc["allowlisted"] == [], "F2 a PR that adds its own allowlist entries does not exempt itself", out)
+    branch(repo, "main2", c["c2"])
+    put(repo, "registry/landed-revert-allowlist.json", json.dumps({"entries": [{"glob": "*.txt", "reason": "regenerated"}]}))
+    main2 = commit(repo, "base allowlist")
+    head = stale(repo, "under-main2", c["c1b"], c["c0"], files=("f.txt", "h.txt"))
+    rc, doc, out = gate(repo, main2, head)
+    check(rc == 0 and doc and sorted(doc["allowlisted"]) == ["f.txt", "h.txt"], "F2 an entry on the base allowlist exempts the path it names", out)
+    branch(repo, "main3", c["c2"])
+    put(repo, "registry/landed-revert-allowlist.json", json.dumps({"entries": [{"glob": "*", "reason": "everything"}]}))
+    main3 = commit(repo, "a base allowlist that names no file")
+    rc, doc, out = gate(repo, main3, head)
+    check(rc == 3, "F2 an allowlist glob made only of wildcards is refused as an override, not read as an allowlist", out)
+    mod = load_gate()
+    check(mod.glob_match("*.txt", "f.txt") and not mod.glob_match("*.txt", "sub/f.txt") and mod.glob_match("**/*.txt", "a/b/f.txt")
+          and mod.glob_match("src/*", "src/a") and not mod.glob_match("src/*", "src/a/b") and mod.glob_match("a/**", "a/b/c"),
+          "F2 `*` stays inside one path segment; only a whole `**` segment spans directories")
+
+    # ---- F3: declarations may be scoped, and say what they covered --------------------------------------
+    scoped = stale(repo, "scoped", c["c1b"], c["c0"], files=("f.txt", "h.txt"))
+    body = work / "scope.md"
+    body.write_text("<!-- fsgg:declared-revert/v1 reverts=#12:f.txt -->\n")
+    rc, doc, out = gate(repo, main, scoped, "--body-file", str(body))
+    got = {d["token"]: d["covered"] for d in doc["declarations"]} if doc else {}
+    check(rc == 1 and got.get("#12:f.txt", 0) > 0 and doc["undeclaredLines"] > 0,
+          "F3 `#12:f.txt` covers f.txt only: h.txt is still undeclared -> REFUSED", out)
+    body.write_text("<!-- fsgg:declared-revert/v1 reverts=#12:f.txt,#12:h.txt -->\n")
+    rc, doc, out = gate(repo, main, scoped, "--body-file", str(body))
+    got = {d["token"]: d["covered"] for d in doc["declarations"]} if doc else {}
+    check(rc == 0 and len(got) == 2 and all(v > 0 for v in got.values()) and "covers" in out,
+          "F3 two scoped declarations together cover both files, and each reports its own line count", out)
+    body.write_text("<!-- fsgg:declared-revert/v1 reverts=#12:g.txt -->\n")
+    rc, doc, out = gate(repo, main, scoped, "--body-file", str(body))
+    check(rc == 1 and "covers nothing" in out, "F3 a declaration whose scope matches nothing is reported as covering nothing", out)
+
+    # ---- F4: caps are no-verdicts, the window reaches back in time, deleted files do not come back ------
+    rc, _, out = gate(repo, main, git(repo, "rev-parse", "edit"), "--max-history-versions", "1")
+    check(rc == 3 and "history-versions" in out, "F4 a file with more versions than the history cap -> NO VERDICT (3), not a silent truncation", out)
+    rc, _, out = gate(repo, main, git(repo, "rev-parse", "edit"), "--max-history-versions", "100000")
+    check(rc == 3, "F4 a cap override above ten times the default is itself refused", out)
+    rc, doc, out = gate(repo, main, git(repo, "rev-parse", "edit"))
+    check(rc == 0, "F4 the same PR passes under the default caps", out)
+
+    branch(repo, "resurrect", c["c2"])
+    put(repo, "del.txt", lines("retired", 60))
+    head = commit(repo, "bring del.txt back")
+    rc, doc, out = gate(repo, main, head)
+    check(rc == 1 and doc and any(f["kind"] == "resurrected" for f in doc["findings"]) and doc["undeclaredLines"] == 60,
+          "F4 a file the window deleted, restored byte for byte by a stale tree -> REFUSED (resurrected, 60)", out)
+    rc, doc, out = gate(repo, main, head, "--body-file", str(_body(work, "<!-- fsgg:declared-revert/v1 reverts=#12 -->")))
+    check(rc == 0, "F4 ... and the deleting commit, named, declares it", out)
+    branch(repo, "reborn", c["c2"])
+    put(repo, "del.txt", lines("fresh", 60))
+    head = commit(repo, "a new del.txt with new content")
+    rc, doc, out = gate(repo, main, head)
+    check(rc == 0 and doc and doc["undeclaredLines"] == 0, "F4 control: re-creating the deleted path with new content -> passes", out)
+
+    windowed(work)
 
     # ---- fail closed ---------------------------------------------------------------------------------
     rc, _, out = gate(repo, main, "0" * 40)
@@ -258,6 +355,44 @@ def synthetic(work: Path) -> None:
     check(rc == 3 and "the clone is shallow" in out, "a shallow clone -> NO VERDICT (3), never a green over history it cannot see", out)
     rc, doc, out = gate(repo, main, c["c1"])
     check(rc == 0 and doc and doc["branchPoint"] is None, "a head already contained in the base -> nothing to judge, exit 0", out)
+
+
+def _body(work: Path, content: str) -> Path:
+    path = work / "decl.md"
+    path.write_text(content + "\n")
+    return path
+
+
+def load_gate():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("check_landed_reverts", GATE)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["check_landed_reverts"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def windowed(work: Path) -> None:
+    """A stale tree more than 100 commits old but inside the day window: found by the window, missed without it."""
+    repo = work / "windowed"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    put(repo, "f.txt", lines("base", 40))
+    commit(repo, "initial", "2026-01-01T00:00:00+0000")
+    put(repo, "f.txt", lines("base", 40) + lines("feature", 45))
+    commit(repo, "land the feature (#12)", "2026-01-01T01:00:00+0000")
+    for i in range(120):
+        put(repo, f"fill/{i}.txt", f"{i}\n")
+        commit(repo, f"filler {i} (#{100 + i})", f"2026-01-01T02:{i % 60:02d}:00+0000")
+    tip = git(repo, "rev-parse", "HEAD")
+    git(repo, "checkout", "-q", "-B", "old-stale", tip)
+    put(repo, "f.txt", lines("base", 40))
+    head = commit(repo, "a stale tree 120 commits behind its parent", "2026-01-02T00:00:00+0000")
+    rc, doc, out = gate(repo, tip, head)
+    check(rc == 1 and doc and doc["undeclaredLines"] == 45,
+          "F4 content landed 121 commits before the branch point but inside the day window -> REFUSED", out)
+    rc, doc, out = gate(repo, tip, head, "--lookback-days", "0")
+    check(rc == 0, "F4 ... and the same PR is not seen by the commit-count window alone", out)
 
 
 def real_incident() -> None:
