@@ -22,19 +22,15 @@ at the existing execution, review, return and handoff boundaries.
 
 The objective is accepted completion of every item in that scope. Recover existing owners,
 worktrees, PRs, attempts, pending replies and original effects before selecting work. Preserve each
-Outcome's whole promise, including publication, installed adoption and recovery. Execute enrolled
-Deliveries through [$pnext-item](../pnext-item/SKILL.md); decompose Outcomes only through canonical
+Outcome's whole promise, including publication, installed adoption and recovery. Execute enrolled (or Root-admitted
+unenrolled, pending batch enrollment) Deliveries through [$pnext-item](../pnext-item/SKILL.md); decompose Outcomes only through canonical
 intake and the admitted membership route. A merged PR or a worker's return is a coordination boundary:
 read back acceptance, reconcile the parent and immediately return to selection.
 
 ## File the Delivery before dispatch
 
-No dispatch without its native Delivery issue, linked as a sub-issue under its Outcome and carrying
-owner, Done when, Work level, Track, Status and `Refs` only; the PR `Refs` that Delivery. Shaping an
-Outcome files its remaining acceptance as open Deliveries, and all sub-issues closed never means
-Outcome done. Enroll each pass's new Deliveries in one batch through the #4941 planner once the
-250-row cap is installed, and keep project auto-add of sub-issues off. See the
-[rules](../work-board/references/lifecycle-contract.md#file-the-delivery-issue-at-dispatch).
+Admit no dispatch, and file no Outcome shaping, without the native Delivery issues the
+[filing rules](../work-board/references/lifecycle-contract.md#file-the-delivery-issue-at-dispatch) require.
 
 ## Keep useful work moving in parallel
 

@@ -77,8 +77,8 @@ Separately qualified legacy PRODUCT behavior keeps its explicit product-only con
 Read every current Outcome's full original promise and owning plan during a clearing shaping pass.
 Identify accepted scope, residual independently useful results, shared prerequisites, suppliers and the
 next executable window. Reuse existing children/PRs. File the remaining acceptance as open Deliveries
-(Backlog until executable); do not file a speculative card for work whose shape is still Unknown, but name
-that Unknown and its owner in the parent/plan. Children represent independently useful
+(Backlog until executable), per the
+[filing rules](lifecycle-contract.md#file-the-delivery-issue-at-dispatch). Children represent independently useful
 results, never implementation/review/test steps. Do not create a card per paragraph, completed milestone,
 test or checkpoint. A source-only Delivery must be independently useful and retain
 its dependent installed/recovery/publication acceptance in the parent.
@@ -87,8 +87,3 @@ Native hierarchy expresses decomposition; prerequisites express real sequencing.
 have one owner. Blocked parents/siblings do not automatically block disjoint child work. Missing, partial,
 truncated, changed or cyclic relationship facts remain Unknown for the affected join, never empty lists.
 All children closed cannot establish undecomposed parent acceptance. No automatic parent rollup/close.
-
-Shaping or re-shaping an Outcome files its remaining acceptance as open Deliveries, each with its
-native Delivery issue under the
-[dispatch rule](lifecycle-contract.md#file-the-delivery-issue-at-dispatch). Outcome Done requires
-Root acceptance, which is closing the Outcome, never merely all sub-issues closed.

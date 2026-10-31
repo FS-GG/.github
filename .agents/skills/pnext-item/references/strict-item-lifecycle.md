@@ -314,7 +314,9 @@ both records through distinct phase identities; absence of another agent is not 
 
 ## 6. Merge and obligations
 
-Ensure the PR closes the item — with a bare `Closes #<n>` (same repo) or `owner/repo#<n>` (cross repo),
+A Delivery issue (see the work-board dispatch rules) is never closed by its PR: the PR `Refs` the Delivery
+with no closing keyword, and Root's acceptance closes it. For any other item, ensure the PR closes it — with
+a bare `Closes #<n>` (same repo) or `owner/repo#<n>` (cross repo),
 **never** the board's own `<repo>#<n>` shorthand, which GitHub's closing-keyword grammar does not parse
 and which then never closes the issue and cannot be repaired once merged (.github#2107). `verify-paths`,
 run right after opening the PR (§5), now catches this while it is still free to fix — do not wait for it

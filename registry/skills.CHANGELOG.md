@@ -31,7 +31,7 @@ advances the pin to that CLI.
 
 ## Entries
 
-- **2026-10-31** — DELIVERY-AT-DISPATCH RULES (.github; #4730): re-digest the `.github`-authored `work-board` driver and `work-board-coord` operator skills after their `SKILL.md` files gained the file-the-Delivery-at-dispatch rule (native Delivery issue before dispatch, shaping files remaining acceptance, close-with-citation, batched enrollment, auto-add off); the rows carry the `driver-skill-manifest.json` digests. No scope, owner or predicate change.
+- **2026-10-31** — DELIVERY-AT-DISPATCH RULES (.github; #4730, Delivery #5098): the rules (native Delivery issue before dispatch, Outcome shaping files remaining acceptance, Root-accepted closure, batched enrollment, auto-add off) are stated once in `work-board/references/lifecycle-contract.md`, with pointers from `work-board/SKILL.md`, `work-board-coord/SKILL.md`, `work-board/references/intake.md` and `work-board/references/status-lifecycle.md`; `pnext-item/SKILL.md` and `pnext-item/references/strict-item-lifecycle.md` now say a PR `Refs` its Delivery and never closes it. Re-digest the `.github`-authored `work-board` driver and `work-board-coord` operator rows in `skills.yml` (their `SKILL.md` changed; the rows carry the `driver-skill-manifest.json` digests), refresh the coordination-kit manifest and `repos.lock` for `pnext-item`, and set `updated:` to this date. No scope, owner or predicate change.
 
 - **2026-10-30** — WORK-BOARD CLOSURE-COUNT POINTER (.github; #4730): re-digest the `.github`-authored driver `work-board` after its `SKILL.md` gained one sentence (Root's closing comment quotes the generator's own printed counts); the row carries the `driver-skill-manifest.json` digest. No scope, owner or predicate change.
 

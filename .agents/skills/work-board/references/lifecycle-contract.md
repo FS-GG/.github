@@ -60,9 +60,10 @@ repurposing, seventh body field or runtime classification fallback is permitted.
 product binding3/schema1 retain their actual qualified behavior until explicit successor adoption;
 reading these instructions neither creates the field nor changes enrollment, binding or installed selector.
 
-Only explicitly enrolled Delivery nodes may be selected by the new model. Outcome nodes are never
+Only explicitly enrolled Delivery nodes, or unenrolled ones Root has admitted pending batch enrollment,
+may be selected by the new model. Outcome nodes are never
 implementation assignments; missing/conflicting classification refuses that selection. A linked but
-unenrolled child remains visible and unschedulable. Preserve the complete membership population and
+unenrolled child remains visible and unschedulable unless so admitted. Preserve the complete membership population and
 known/Unknown reservations. A blocked parent/sibling is not an automatic prerequisite for a disjoint
 child; relevant native/plan/action prerequisites still bind. Incomplete parent child coverage withholds
 parent rollup, not a child's independently complete action facts. Missing/null/partial/truncated or changed
@@ -74,8 +75,8 @@ Reconcile closure against the actual scoped promise and evidence. Read-only insp
 when, Blocked on, Acceptance evidence and native state reason/date; it does not interpret arbitrary prose
 as accepted work. A merged source PR cannot establish installed acceptance. Native completed differs from
 not planned, and stale Done/closed disagreement remains a discrepancy to resolve. The accountable owner
-records accepted scope/date/evidence, closes the exact native issue with the correct reason and updates
-Status only through the authorized native route, then reconciles parent remaining assertions. Preserve
+records accepted scope/date/evidence; the exact native issue is closed with the correct reason (a
+Delivery per rule 3 above, by Root's acceptance) and Status updated only through the authorized native route, then reconciles parent remaining assertions. Preserve
 partial effects and original identity after interruption; resume only the remaining independently read-back
 effect. Never use legacy Done.rollUpParents or automatically climb/close parents. All children closed,
 healthy inspection, deferred work or successful Observation refresh cannot satisfy missing parent scope.
@@ -97,19 +98,24 @@ The board falls behind when work runs under an Outcome with no Delivery of its o
 it current; they add no ledger, packet or actor, and they do not enroll, schedule or grant Ready.
 
 1. **No dispatch without a Delivery issue.** Admit a dispatch only once its native Delivery issue
-   exists. That issue is linked as a native sub-issue under its Outcome. Its body gives only the
-   owner, Done when, the intended Work level (Delivery), Track and Status, and `Refs` links with no
-   closing keyword. The PR's `Refs` points to that Delivery, never to the Outcome. File it first, through the admitted
-   native intake route, rather than dispatching and back-filling later.
+   exists; an existing Delivery issue already linked under its Outcome satisfies this. The issue is a
+   native sub-issue of its Outcome, and its body gives only the owner, Done when, the intended Work
+   level (Delivery), Track and Status, and `Refs` links. The PR `Refs` that Delivery, never the
+   Outcome, and never uses a closing keyword. Urgent or Outcome-less work files its Delivery first
+   under the standing Outcome #5097 [OPS-MAINT], with a one-line body (owner, Done when, `Refs`).
+   There is no bypass.
 2. **Shaping an Outcome files its remaining work.** When an Outcome is shaped or re-shaped, its
    remaining acceptance is filed as open Deliveries, each under rule 1. "All sub-issues closed" never
    stands in for "Outcome done": Outcome Done requires Root acceptance, which is closing the Outcome.
-3. **Closing a Delivery.** Close a Done Delivery with a comment citing its merge commits and recorded
-   verdicts, or "Unknown: no recorded independent verdict" where none exists. With the project
-   workflow "Item closed" to Done on, closing is the Done transition; do not also write Status.
-4. **Enrollment.** Each clearing pass enrolls its new Delivery issues in one batch through the #4941
+3. **Closing a Delivery.** Root, or a Root-delegated acceptance, closes an accepted Delivery with a
+   comment citing its merge commits and recorded verdicts, or "Unknown: no recorded independent
+   verdict" where none exists. With the project workflow "Item closed" to Done on, closing is the Done
+   transition; with it off, the closer also writes Done through the guarded Status helper. Read the
+   state first: `gh api graphql -f query='{organization(login:"FS-GG"){projectV2(number:3){workflows(first:20){nodes{number name enabled}}}}}'`.
+4. **Enrollment.** Each clearing pass enrolls its new Delivery issues in batches through the #4941
    planner once the 250-row cap is installed. Until then they remain native sub-issues, visible and
-   unschedulable, and their bodies already carry the Work level, Track and Status the batch will use.
+   unschedulable unless Root explicitly admits one as unenrolled pending batch enrollment. Their bodies
+   already carry the Work level, Track and Status the batch will use.
 5. **Auto-add stays off.** Keep the project workflow "Auto-add sub-issues to project" disabled and read
    it back before and after any bulk sub-issue linking. Unattended cards break `migration-prepare`
    and `inspect`, and enrollment is not a child link.
