@@ -19,10 +19,11 @@ HEAD="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 OTHER="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
 # The policy is the single source of the expected producer; the fixture reads it rather than hard-coding.
-read -r WFID WFPATH WFEVENT < <(python3 - "$ROOT" <<'PY'
+read -r WFID WFPATH WFEVENT APPID < <(python3 - "$ROOT" <<'PY'
 import json, sys
-r = json.load(open(sys.argv[1] + "/policy/v2-ci-ordinary-settlement.json"))["qualification"]["checkProducers"]["claim-generation"]
-print(r["workflowId"], r["path"], r["event"])
+q = json.load(open(sys.argv[1] + "/policy/v2-ci-ordinary-settlement.json"))["qualification"]
+r = q["checkProducers"]["claim-generation"]
+print(r["workflowId"], r["path"], r["event"], q["requiredCheckAppId"])
 PY
 )
 
@@ -47,14 +48,15 @@ chmod +x "$WORK/bin/gh"
 new_world() {  # new_world <name> -> prints dir, with empty checks
   local d="$WORK/$1"; mkdir -p "$d"; : > "$d/checks.ndjson"; echo "$d"
 }
-check() {  # check <world> <id> <status> <conclusion> <run-id|none>
-  local url="https://github.com/$REPO/actions/runs/$5/job/$2"
+check() {  # check <world> <id> <status> <conclusion> <run-id|none> [job-id-in-url [app-id]]
+  local job="${6:-$2}" app="${7:-$APPID}"
+  local url="https://github.com/$REPO/actions/runs/$5/job/$job"
   [ "$5" != none ] || url="null"
-  python3 - "$1/checks.ndjson" "$2" "$3" "$4" "$url" <<'PY'
+  python3 - "$1/checks.ndjson" "$2" "$3" "$4" "$url" "$app" <<'PY'
 import json, sys
-p, i, s, c, u = sys.argv[1:6]
+p, i, s, c, u, a = sys.argv[1:7]
 open(p, "a").write(json.dumps({"id": int(i), "status": s, "conclusion": c,
-    "details_url": None if u == "null" else u, "name": "claim-generation"}) + "\n")
+    "details_url": None if u == "null" else u, "name": "claim-generation", "app_id": int(a)}) + "\n")
 PY
 }
 run() {  # run <world> <run-id> <workflow_id> <path> <event> <head>
@@ -104,6 +106,34 @@ expect "B7 the right path under another workflow id is refused" 1 "workflowId=11
 
 W=$(new_world down); touch "$W/api-down"
 expect "C1 an unreadable API is exit 2, never a pass" 2 "retry; not a pass" "$W"
+
+# Observer parity (tools/v2-ci-ordinary-observe.py producer/select): check id == job id in details_url,
+# and the check's app is the policy's requiredCheckAppId.
+W=$(new_world reused-job-url); check "$W" 1 completed success 100; run "$W" 100 "$WFID" "$WFPATH" "$WFEVENT" "$HEAD"
+check "$W" 55 completed success 100 1
+expect "E1 a check run that reuses a real job's URL (its own id differs from that job) is refused" 1 "check id 55 is not the job id 1" "$W"
+
+W=$(new_world id-differs); check "$W" 7 completed success 100 8; run "$W" 100 "$WFID" "$WFPATH" "$WFEVENT" "$HEAD"
+expect "E2 a check whose id differs from the job named in its URL is refused" 1 "check id 7 is not the job id 8" "$W"
+
+W=$(new_world wrong-app); check "$W" 1 completed success 100 1 99999; run "$W" 100 "$WFID" "$WFPATH" "$WFEVENT" "$HEAD"
+expect "E3 a check published by another app is refused" 1 "app id 99999" "$W"
+
+# Unreadable responses are exit 2, never 1 and never a traceback.
+W=$(new_world html-checks); printf '<!DOCTYPE html><html><body>Unicorn! Bad gateway</body></html>\n' > "$W/checks.ndjson"
+expect "F1 an HTML body for the check-runs query is exit 2" 2 "response is not JSON" "$W"
+
+W=$(new_world html-run); check "$W" 1 completed success 100; printf '<html>502</html>' > "$W/run-100.json"
+expect "F2 an HTML body for the Actions run read is exit 2" 2 "response is not JSON" "$W"
+
+W=$(new_world truncated-run); check "$W" 1 completed success 100; printf '{"id": 100, "workflow_id"' > "$W/run-100.json"
+expect "F3 a truncated JSON run body is exit 2" 2 "response is not JSON" "$W"
+
+W=$(new_world array-run); check "$W" 1 completed success 100; printf '[1,2,3]' > "$W/run-100.json"
+expect "F4 JSON of the wrong shape (an array) is exit 2" 2 "not an object" "$W"
+
+W=$(new_world scalar-check); printf '"just a string"\n' > "$W/checks.ndjson"
+expect "F5 a check-runs line that is JSON but not an object is exit 2" 2 "not an object" "$W"
 
 W=$(new_world good2); check "$W" 1 completed success 100; run "$W" 100 "$WFID" "$WFPATH" "$WFEVENT" "$HEAD"
 rc=0; out="$(W="$W" PATH="$WORK/bin:$PATH" python3 "$TOOL" --repo "$REPO" --head "not-a-sha" --root "$ROOT" 2>&1)" || rc=$?
