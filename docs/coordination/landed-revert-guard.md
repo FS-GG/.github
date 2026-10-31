@@ -102,14 +102,14 @@ API=repos/FS-GG/.github/branches/main/protection/required_status_checks
 # remove (the PR can now merge with the job red)
 gh api "$API" -q '{strict: .strict, checks: (.checks | map(select(.context != "no-silent-revert")) | map({context, app_id}))}' \
   | gh api -X PATCH "$API" --input -
-gh api "$API" -q '.checks[].context'          # readback: no-silent-revert absent, the other eight present
+gh api "$API" -q '.checks | map(.context)'    # readback: no-silent-revert absent, the other eight present
 
 # ... merge the PR ...
 
 # restore, with the app pin
 gh api "$API" -q '{strict: .strict, checks: ((.checks | map({context, app_id})) + [{context: "no-silent-revert", app_id: 15368}] | unique_by(.context))}' \
   | gh api -X PATCH "$API" --input -
-gh api "$API" -q '.checks[] | select(.context == "no-silent-revert")'   # readback: app_id 15368
+gh api "$API" -q '.checks | map(select(.context == "no-silent-revert"))'   # readback: app_id 15368
 ```
 
 While the context is off the list, every PR on `main` is unprotected by it, not only the one being merged, so keep
@@ -136,7 +136,7 @@ the integrator.
 Owner action, and a repository setting, so this PR does not do it. The restore command above is also the flip:
 it adds `no-silent-revert` with `app_id` 15368 to the existing `checks` array and leaves `strict` as it is.
 Run it once the warning band has been reviewed and the job has a green run on the base, and read it back with
-`gh api repos/FS-GG/.github/branches/main/protection/required_status_checks -q '.checks[] | select(.context == "no-silent-revert")'`.
+`gh api repos/FS-GG/.github/branches/main/protection/required_status_checks -q '.checks | map(select(.context == "no-silent-revert"))'`.
 
 ## Protecting the check (proposed, not applied)
 
