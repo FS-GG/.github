@@ -314,10 +314,13 @@ both records through distinct phase identities; absence of another agent is not 
 
 ## 6. Merge and obligations
 
-On the routine path a PR `Refs` its Delivery issue (see the work-board dispatch rules) and never closes it;
-Root's acceptance closes the Delivery. This strict route keeps the engine's canonical closing linkage
-(`landingLinkageAuthorized` in `src/FS.GG.Coord.Core/Delivery.fs`, which refuses a landing without it) until the
-engine learns about Delivery issues. So on this route ensure the PR closes the item — with a bare `Closes #<n>` (same repo) or `owner/repo#<n>` (cross repo),
+As on the routine path, a PR `Refs` its Delivery issue (see the work-board dispatch rules) and never closes
+it; Root's acceptance closes the Delivery. `landingLinkageAuthorized` in `src/FS.GG.Coord.Core/Delivery.fs`
+accepts that linkage (.github#5100) when the PR closes no issue and `Refs` exactly one open Delivery
+that live sub-issue and parent reads prove is a native sub-issue of the claimed item; the merge fence
+re-proves it, and any failed read refuses. Such a landing ends at merge: the engine's terminal completion
+(§7) still requires canonical closing linkage, so it never closes or stamps the Outcome. Only an item whose
+merge fulfils its entire promise closes it — with a bare `Closes #<n>` (same repo) or `owner/repo#<n>` (cross repo),
 **never** the board's own `<repo>#<n>` shorthand, which GitHub's closing-keyword grammar does not parse
 and which then never closes the issue and cannot be repaired once merged (.github#2107). `verify-paths`,
 run right after opening the PR (§5), now catches this while it is still free to fix — do not wait for it
@@ -373,7 +376,7 @@ no-op PATCH-skip (see the bullets below).
 
 `stage: reviewReady` is a stop about the **handoff**, and it is the likeliest one to meet here, because
 `Delivery.inspect` tests these facts *before* it ever reads the review chain. `action:
-repairReviewHandoff` means the item branch is not canonical, the canonical closing linkage is missing,
+repairReviewHandoff` means the item branch is not canonical, neither canonical closing linkage nor a verified Delivery reference is present,
 the declared paths are not verified, or the post-merge obligations are undeclared; `action: moveToReview`
 means the board row is not `In review`. Two of those reach past this call — closing linkage cannot be
 fixed once merged (`.github#2107`), and an undeclared obligation blocks the item's own completion, because
