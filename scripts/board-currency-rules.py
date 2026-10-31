@@ -208,12 +208,20 @@ def blocked_on_refs(comments: list[dict]) -> list[str] | None:
     return newest
 
 
+def override_text(body: object) -> str:
+    """The text the override regex is applied to: CRLF and lone CR normalised to LF (so `^...$` means the
+    same on every client), then code spans and fences removed. The one helper used by both override_of()
+    and the fetch's selection of PRs whose editor must be read, so the two can never disagree."""
+    text = body if isinstance(body, str) else ""
+    return visible_text(text.replace("\r\n", "\n").replace("\r", "\n"))
+
+
 def override_of(pr: dict, roots: set[str]) -> str | None:
     """The override reason when the PR body carries a valid override, else None.
 
     `pr` carries `body`, `author` and `edited`; when `edited` is true it also carries `editor`. A missing
     `edited` is not proof of an unedited body, so it is not an override (the conservative reading)."""
-    matches = list(OVERRIDE.finditer(visible_text(pr.get("body"))))
+    matches = list(OVERRIDE.finditer(override_text(pr.get("body"))))
     if len(matches) != 1 or not matches[0].group("reason").strip():
         return None
     if str(pr.get("author") or "").lower() not in roots or not isinstance(pr.get("edited"), bool):

@@ -592,6 +592,49 @@ class Fetch(unittest.TestCase):
         pr7 = [p for p in json.loads(out.read_text())["pullRequests"] if p["number"] == 7][0]
         self.assertEqual((pr7["author"], pr7["edited"], pr7["editor"]), (ROOT_LOGIN, True, ROOT_LOGIN))
 
+    def test_failed_override_editor_read_fails_the_fetch(self):
+        body = 'x\n<!-- fsgg:board-gate-override/v1 rule=R1 reason="r" -->\n'
+        search = json.dumps({"incomplete_results": False, "total_count": 1, "items": [{
+            "repository_url": "https://api.github.com/repos/FS-GG/.github", "number": 7, "title": "t",
+            "state": "open", "updated_at": RECENT, "body": body, "user": {"login": ROOT_LOGIN}}]})
+        for editors in ([1, ""], [0, json.dumps({"data": {"p0": {"pullRequest": None}}})]):
+            proc, out = self.run_fetch({"pullRequest(number": editors, "graphql": [0, self.page([self.NODE])],
+                                        "is:open": [0, search], "search/issues": [0, self.EMPTY_SEARCH]})
+            self.assertNotEqual(proc.returncode, 0, editors)
+            self.assertFalse(out.exists())
+
+    def test_crlf_override_pr_gets_its_editor_read(self):
+        # The fetch must select override PRs with the same normalisation as override_of(), or a CRLF
+        # override is never given its editor and is silently not honoured.
+        body = 'x\r\n<!-- fsgg:board-gate-override/v1 rule=R1 reason="why" -->\r\n'
+        search = json.dumps({"incomplete_results": False, "total_count": 1, "items": [{
+            "repository_url": "https://api.github.com/repos/FS-GG/.github", "number": 7, "title": "t",
+            "state": "open", "updated_at": RECENT, "body": body, "user": {"login": ROOT_LOGIN}}]})
+        editors = json.dumps({"data": {"p0": {"pullRequest": {"lastEditedAt": None, "editor": None,
+                                                              "author": {"login": ROOT_LOGIN}}}}})
+        proc, out = self.run_fetch({"pullRequest(number": [0, editors], "graphql": [0, self.page([self.NODE])],
+                                    "is:open": [0, search], "search/issues": [0, self.EMPTY_SEARCH]})
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        pr7 = [p for p in json.loads(out.read_text())["pullRequests"] if p["number"] == 7][0]
+        self.assertIs(pr7["edited"], False)
+        self.assertIsNotNone(R.override_of(pr7, {"ehotwagner"}))
+
+    def test_fetch_selection_and_override_of_share_one_helper(self):
+        text = FETCH_PATH.read_text()
+        self.assertIn("rules.override_text(", text)
+        self.assertNotIn("rules.visible_text(", text)
+
+    def test_carry_search_is_chunked_by_day(self):
+        F = load(FETCH_PATH, "board_currency_fetch_unit")
+        calls = []
+        F.search_prs = lambda query, merged: calls.append(query) or []
+        start = __import__("datetime").datetime(2026, 11, 1, tzinfo=__import__("datetime").timezone.utc)
+        end = start + __import__("datetime").timedelta(days=6, hours=5)
+        F.carry_search("FS-GG", "M", start, end)
+        self.assertEqual(len(calls), 7)
+        self.assertTrue(calls[0].endswith("merged:2026-11-01T00:00:00Z..2026-11-02T00:00:00Z"))
+        self.assertTrue(calls[-1].endswith("merged:2026-11-07T00:00:00Z..2026-11-07T05:00:00Z"))
+
     def test_the_fetch_writes_no_board_field(self):
         text = FETCH_PATH.read_text()
         for forbidden in ("mutation", "item-edit", "updateProjectV2", "-X POST", "--method"):
@@ -705,6 +748,10 @@ class R1Override(unittest.TestCase):
         ]
         for body in bad:
             self.assertIsNone(R.override_of(self.pr(body), self.ROOTS), body)
+
+    def test_crlf_and_cr_line_endings_are_normalised(self):
+        self.assertIsNotNone(R.override_of(self.pr(OVR.replace("\n", "\r\n") + "\r\n"), self.ROOTS))
+        self.assertIsNotNone(R.override_of(self.pr("x\r" + OVR.lstrip("\n") + "\r"), self.ROOTS))
 
     def test_authorship(self):
         self.assertIsNone(R.override_of(self.pr(OVR, author="someone"), self.ROOTS))

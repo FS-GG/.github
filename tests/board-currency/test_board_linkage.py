@@ -141,6 +141,34 @@ class Check(unittest.TestCase):
         self.assertNotIn("PrivateThing", proc.stdout + proc.stderr)
         self.assertNotIn("#77", proc.stdout + proc.stderr)
 
+    def precheck(self, payload):
+        event = self.dir / "event.json"
+        out = self.dir / "out.txt"
+        out.unlink(missing_ok=True)
+        event.write_text(payload if isinstance(payload, str) else json.dumps(payload))
+        env = dict(os.environ, GITHUB_OUTPUT=str(out), BOARD_LINKAGE_GH=str(self.dir / "absent-gh"))
+        proc = subprocess.run([sys.executable, str(SCRIPT), "--precheck-event", str(event)],
+                              capture_output=True, text=True, env=env)
+        return proc, out.read_text() if out.exists() else ""
+
+    def test_precheck_skips_a_non_routine_pr_without_any_call(self):
+        proc, out = self.precheck({"pull_request": {"body": "Refs #1"}})
+        self.assertEqual((proc.returncode, out), (0, "routine=false\n"))
+        self.assertEqual(self.calls(), [])
+
+    def test_precheck_evaluates_a_routine_pr(self):
+        proc, out = self.precheck({"pull_request": {"body": "Refs #2" + ROUTINE}})
+        self.assertEqual((proc.returncode, out), (0, "routine=true\n"))
+
+    def test_precheck_with_an_unreadable_payload_does_not_skip(self):
+        for payload in ("not json", {"no_pr": True}, {"pull_request": None}):
+            proc, out = self.precheck(payload)
+            self.assertEqual((proc.returncode, out), (0, "routine=true\n"), payload)
+
+    def test_null_body_is_not_routine(self):
+        proc, out = self.precheck({"pull_request": {"body": None}})
+        self.assertEqual(out, "routine=false\n")
+
     def test_the_check_writes_nothing(self):
         text = SCRIPT.read_text()
         for forbidden in ("mutation", "item-edit", "-X POST", "--method", "gh issue", "gh pr comment"):
@@ -171,14 +199,28 @@ class Workflow(unittest.TestCase):
     def test_advisory_only_and_no_candidate_checkout(self):
         job = self.doc["jobs"]["board-linkage"]
         runs = [s["run"] for s in job["steps"] if "run" in s]
-        self.assertEqual(len(runs), 1)
-        self.assertIn("--mode advisory", runs[0])
-        self.assertIn("set -euo pipefail", runs[0])
+        self.assertEqual(len(runs), 2)
+        self.assertIn("--precheck-event", runs[0])
+        self.assertIn("--mode advisory", runs[1])
+        for run in runs:
+            self.assertIn("set -euo pipefail", run)
         for step in job["steps"]:
             self.assertNotIn("ref", step.get("with", {}))  # checkout stays on the default branch
         for forbidden in ("github.event.pull_request.body", "head.sha", "head.ref", "continue-on-error",
                           ": write", "--mode required"):
             self.assertNotIn(forbidden, self.text.split("jobs:", 1)[1], forbidden)
+
+    def test_skip_is_decided_before_the_token_is_minted(self):
+        steps = self.doc["jobs"]["board-linkage"]["steps"]
+        names = [s.get("name", "") for s in steps]
+        pre = names.index("Decide skip from the event payload (no token)")
+        mint = next(i for i, s in enumerate(steps) if "create-github-app-token" in s.get("uses", ""))
+        self.assertLess(pre, mint)
+        self.assertNotIn("secrets", json.dumps(steps[pre]))
+        self.assertNotIn("GH_TOKEN", json.dumps(steps[pre]))
+        for i, step in enumerate(steps):
+            if i > pre and ("create-github-app-token" in step.get("uses", "") or "run" in step):
+                self.assertEqual(step.get("if"), "steps.precheck.outputs.routine == 'true'", step.get("name"))
 
     def test_read_only_token_and_pinned_actions(self):
         import re
