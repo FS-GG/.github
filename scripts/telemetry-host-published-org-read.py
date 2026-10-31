@@ -22,24 +22,24 @@ import zipfile
 from fsgg_feed import _StripAuthOnRedirect
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = "74cbd6f0b1b598d48556eb854c4ba6a3c3abda54"
-PACKAGE = "FS.GG.Telemetry.Host.0.8.0.nupkg"
-TAG = "telemetry-host/v0.8.0"
-CONTENT = "sha256:0dab8fe535fbe5b2b95f099fd6005ec92a3f749fdc9cea98c1cfb1946ffee41e"
-PAYLOAD = "sha256:f036808546d75e62e9fdf5fc8de518a0e4de055efa3ef6e742db8dd1ee1802ee"
-MANIFEST_SHA = "c4af467ae6bca804c53debf7ba0e3e0b86db9d117ab4d69c52c5999e6b523054"
-JOURNAL_SHA = "90b2684db25e78abe51ea2fda77699b0a3bae5644d0cd0e85b7a7d8947d61408"
-RELEASE_ID = 419394647
+SOURCE = "77871510fcd176d0d4e913079ad8b726a7196095"
+PACKAGE = "FS.GG.Telemetry.Host.0.9.0.nupkg"
+TAG = "telemetry-host/v0.9.0"
+CONTENT = "sha256:ed30feaf23019b81cd14f898a1fccf95ea9a846acb19a9377d41e692586247a5"
+PAYLOAD = "sha256:8fe78cb3cf6d265ca61f86e3edd6a752da3b9f94a702a059e2ae337a0664d0e6"
+MANIFEST_SHA = "a6566a0a8c47be1b553c5d9b057a661fa23d45e305189042d51a66add3ecbc92"
+JOURNAL_SHA = "7b121a6092eadc8db5f9d993acd439d55094b888202944122c3b9ed1d6bd4a9d"
+RELEASE_ID = 429603937
 API = "https://api.github.com/repos/FS-GG/.github"
 TAG_URL = API + "/git/ref/tags/" + TAG
 RELEASE_URL = API + "/releases/tags/" + TAG
-ORG_URL = "https://nuget.pkg.github.com/FS-GG/download/fs.gg.telemetry.host/0.8.0/fs.gg.telemetry.host.0.8.0.nupkg"
-ASSETS = {"manifest.json": (662076940, 768, MANIFEST_SHA),
-          "publication-journal.json": (662078749, 831, JOURNAL_SHA)}
+ORG_URL = "https://nuget.pkg.github.com/FS-GG/download/fs.gg.telemetry.host/0.9.0/fs.gg.telemetry.host.0.9.0.nupkg"
+ASSETS = {"manifest.json": (693844755, 768, MANIFEST_SHA),
+          "publication-journal.json": (693846994, 831, JOURNAL_SHA)}
 PINS = {"telemetry-host-release.py": "b87002d3192c2cf70d9974a8d7a6b2c3cdca248378c171f04b81519d14c40f7e",
         "release-saga.py": "24bdfa2a4c1491ecc1ddf24f797a072372fdce14881d413d9301b739dc77501c",
         "fsgg_feed.py": "f7650429432417af72168c288cdee347b338328848870cb4f2f18d6b62d0733f"}
-CHOICES = ("coherent-0113-absence", "host-080-org-artifact")
+CHOICES = ("coherent-0113-absence", "host-090-org-artifact")
 FILES = {PACKAGE, "manifest.json", "publication-journal.json", "local-feed-observation.json",
          "native-before.json", "native-after.json", "observation.json"}
 
@@ -243,7 +243,7 @@ def observe(reader, out, identity, host, deadline):
         save(name, raw)
     manifest = host.load_manifest(out / "manifest.json")
     require(manifest["sourceSha"] == SOURCE and manifest["producerPayloadSha256"] == PAYLOAD and
-            manifest["version"] == "0.8.0", "published-manifest")
+            manifest["version"] == "0.9.0", "published-manifest")
     journal = strict((out / "publication-journal.json").read_bytes())
     require(journal.get("schema") == "fsgg.telemetry-host-release-journal/v1" and
             journal.get("manifestSha256") == CONTENT and set(journal.get("observations", {})) == {"github", "nuget"}, "published-journal")
