@@ -386,11 +386,11 @@ mutation sends plus about 10 group reads across two runs, instead of 30 applies.
   in the planner).
 - **Unenrolled cards** (candidates and non-candidates alike): absent-value fills of Status, Work level
   and Track (S9, W1, T1) through the same item-scoped guard, so the board is complete (D6, overriding the
-  proposed "S1 and A1 only"; it matches Root's manual fills recorded on #4941). Root widened D6 to the
-  mechanically safe Status moves as well: S3 (open linked PR → In review), S4 (In review with nothing
-  linked → In progress) and the O1 roll-up within Backlog, Ready and In progress, all through the same
-  guarded writer. S1 and A1 also apply. S3b (draft only → In progress) is not in the widened set and
-  stays enrolled-only. Roadmap and the enrollment rows stay enrolled-only. For a candidate, E1 adds the
+  proposed "S1 and A1 only"; it matches Root's manual fills recorded on #4941). Root
+  [widened D6](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548590116) to the mechanically safe Status moves as well: S3 (open linked PR → In review),
+  S3b (only a draft PR linked → In progress), S4 (In review with nothing linked → In progress) and the O1
+  roll-up within Backlog, Ready and In progress, all through the same guarded writer. S1 and A1 also
+  apply. Roadmap and the enrollment rows stay enrolled-only. For a candidate, E1 adds the
   card and makes the fills in the same run, so a bare card never stays on the board; Roadmap follows
   enrollment (§7).
 
@@ -590,7 +590,7 @@ From [Root's decisions](https://github.com/FS-GG/.github/pull/5137#issuecomment-
 | D3 | Bounded Outcome roll-up O1 | Yes, limited to Backlog, Ready and In progress; never Blocked, In review or Done automatically |
 | D4 | In review with a merged PR stays In review and becomes P-ACCEPT | Yes |
 | D5 | Track defaults to `Follow-up` when nothing declares one | Yes |
-| D6 | Field fills on unenrolled cards | **Overridden:** Status, Work level and Track absent-value fills are allowed on unenrolled cards through the same guarded item-scoped writer; Roadmap and manifest fields stay enrolled-only. **Widened** by Root later the same day (relayed by the coordinator; not yet recorded on GitHub): the Status moves S3, S4 and O1 (within Backlog, Ready and In progress) are also allowed on unenrolled cards through the same writer |
+| D6 | Field fills on unenrolled cards | **Overridden:** Status, Work level and Track absent-value fills are allowed on unenrolled cards through the same guarded item-scoped writer; Roadmap and manifest fields stay enrolled-only. **Widened** by Root later the same day ([comment](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548590116)): the Status moves S3, S3b, S4 and O1 (within Backlog, Ready and In progress) are also allowed on unenrolled cards through the same writer |
 | D7 | Do not enroll closed cards; refuse above 450 rows; row retirement | Yes; row retirement gets its own design, is a prerequisite for unattended auto-enroll, and is added to phase 2 (§12, PR 8) |
 | D8 | Share the item-scoped writer with `migration-apply` and take #5123 into the writer PR | Yes; Root coordinates with the #5119 owner |
 | D9 | Hold `BOARD_DRIFT_HMAC_KEY` on fdev for private placeholders in proposals | Yes |
