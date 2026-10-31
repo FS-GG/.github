@@ -38,6 +38,7 @@ on:
       - "tests/preset-repo-scope-coherence/**"
       - "default.json"
       - "registry/repos.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

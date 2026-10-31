@@ -37,6 +37,7 @@ on:
       - "scripts/check-coherent-set-version.py"
       - "tests/coherent-set-version/**"
       - ".github/workflows/coherent-set-version.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

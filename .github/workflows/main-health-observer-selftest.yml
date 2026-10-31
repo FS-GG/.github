@@ -1,0 +1,53 @@
+# Prove the main-health observer can say NO, and that an unjudged check can never become a green report (Refs #4730).
+#
+# `scripts/main-health-observer.py` is a detector whose worst failure is silence, so
+# `tests/main-health-observer/run.sh` gives every exclusion in the derivation a positive and a negative leg,
+# proves the observer workflow's check jobs equal the derived list (and that more than 50 are refused), and
+# proves a cancelled, skipped or missing check, an API error, an unreadable response and a workflow that
+# drifted from the list each yield UNKNOWN or NO VERDICT and an untouched issue. It also reads
+# main-health-observer.yml and asserts the credential split and that nothing can turn an unjudged check into
+# a closed issue.
+#
+# The derivation reads every workflow, so this selftest runs on every workflow edit: that is the point. A
+# workflow that gains a secret after opting in to the observer is caught here, on the PR, not at 08:47 UTC.
+# The step `plan --check` is the same comparison the observer's collect job repeats on main each night.
+#
+# The `paths:` lists on pull_request and push are IDENTICAL and must stay so (check-paths-coherence.py).
+# `workflow_call` makes the observer run this selftest against main nightly too.
+name: main-health-observer-selftest
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/setup-policy-python/**"
+      - "scripts/main-health-observer.py"
+      - "tests/main-health-observer/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/setup-policy-python/**"
+      - "scripts/main-health-observer.py"
+      - "tests/main-health-observer/**"
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-health-observer-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the main-health fixture (no network)
+        run: bash tests/main-health-observer/run.sh
+      - name: The observer workflow matches the list derived from the workflows
+        run: python3 scripts/main-health-observer.py plan --check

@@ -70,6 +70,7 @@ on:
       - ".agents/skills/**"
       - ".agent-skill-roots"
       - ".github/workflows/skill-view-parity.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

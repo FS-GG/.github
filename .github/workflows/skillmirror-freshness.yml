@@ -61,6 +61,7 @@ on:
     # so the API reads do not contend. This is the trigger that catches a library change nobody here
     # will ever see an event for: it touches no file in this repository at all.
     - cron: "11 7 * * *"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

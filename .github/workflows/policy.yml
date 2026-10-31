@@ -50,6 +50,7 @@ on:
       - "tests/historical-evidence/**"
       - "tests/m6-cutover-acceptance/**"
       - "docs/reports/evidence/**"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

@@ -6,6 +6,7 @@ on:
   push:
     branches: [main]
     paths: ["readiness/**", "scripts/check-ship-verdict-provenance.py", "tests/ship-verdict-provenance/**", ".github/workflows/ship-verdict-provenance.yml"]
+  workflow_call:
   workflow_dispatch:
 
 permissions:

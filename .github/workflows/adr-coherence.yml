@@ -37,6 +37,7 @@ on:
       - "scripts/check-adr-coherence.py"
       - "tests/adr-coherence/**"
       - ".github/workflows/adr-coherence.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

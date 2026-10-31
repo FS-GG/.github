@@ -95,6 +95,7 @@ on:
   # A producer body change stales the registry with no .github commit — only the schedule catches it.
   schedule:
     - cron: "17 6 * * *"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

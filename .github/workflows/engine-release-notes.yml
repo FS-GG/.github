@@ -48,6 +48,7 @@ on:
       - "tests/kit-bump-shape/release-manifest-*.json"
       - ".github/workflows/engine-release-notes.yml"
       - ".github/workflows/release-coord-engine.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
