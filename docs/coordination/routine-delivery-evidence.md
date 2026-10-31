@@ -174,8 +174,20 @@ feature or infer policy from a 403 response.
 The default-branch eligibility workflow uses the receiver's automatic Actions token with contents-read
 permission only. The raw token is removed before child processes; only the fixed-origin fetch receives
 an ephemeral exact-host header, with redirects and credential helpers disabled. No candidate checkout
-or execution occurs; the validator and its dependencies still come exclusively from the verified event
-base. Local observer Checks-read and workflow-push permissions are separate capabilities.
+or execution occurs; the validator, its dependencies and the policy come exclusively from the one live
+default-branch base resolved at run time (equal to the event base unless main moved; never from the
+candidate). Local observer Checks-read and workflow-push permissions are separate capabilities.
+
+Moved base (`.github#4730`). The event payload's base is only a monotonic floor. When the fetched base
+differs, the workflow deepens a bounded number of times (64, 256, 1024, 4096) and the envelope then requires
+the event base to be an ancestor of the live base, the head not to be contained in it, and exactly one
+merge base; the PR's change is re-derived as `merge-base(live base, head)..head` and evaluated with the live
+policy. A move the fetched history cannot prove (rewound or diverged base, head already landed, more than one
+merge base, history beyond the bound) refuses. Merge-base counting runs over a bounded shallow fetch and is
+best-effort: an incomplete history refuses and never widens what is admitted; a moved head, stale or forged marker, protected operation and empty change refuse
+exactly as under an unmoved base. An unmoved base keeps the previous exact two-dot diff. A rerun of an event
+created before this workflow reached main still executes its old workflow bytes; trigger a new event
+(`edited`, `reopened` or `synchronize`) instead of rebasing.
 
 Shared source delivery precedes regenerating the five-file receiver patch. Its actual unchanged-base
 verify run, authenticated required-check observation and normal first-install merge/readback must then
