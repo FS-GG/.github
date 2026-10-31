@@ -76,7 +76,7 @@ when, Blocked on, Acceptance evidence and native state reason/date; it does not 
 as accepted work. A merged source PR cannot establish installed acceptance. Native completed differs from
 not planned, and stale Done/closed disagreement remains a discrepancy to resolve. The accountable owner
 records accepted scope/date/evidence; the exact native issue is closed with the correct reason (a
-Delivery per rule 3 above, by Root's acceptance) and Status updated only through the authorized native route, then reconciles parent remaining assertions. Preserve
+Delivery per rule 3 below, by Root's acceptance) and Status updated only through the authorized native route, then reconciles parent remaining assertions. Preserve
 partial effects and original identity after interruption; resume only the remaining independently read-back
 effect. Never use legacy Done.rollUpParents or automatically climb/close parents. All children closed,
 healthy inspection, deferred work or successful Observation refresh cannot satisfy missing parent scope.
@@ -114,8 +114,11 @@ it current; they add no ledger, packet or actor, and they do not enroll, schedul
    state first: `gh api graphql -f query='{organization(login:"FS-GG"){projectV2(number:3){workflows(first:20){nodes{number name enabled}}}}}'`.
 4. **Enrollment.** Each clearing pass enrolls its new Delivery issues in batches through the #4941
    planner once the 250-row cap is installed. Until then they remain native sub-issues, visible and
-   unschedulable unless Root explicitly admits one as unenrolled pending batch enrollment. Their bodies
-   already carry the Work level, Track and Status the batch will use.
+   unschedulable unless Root explicitly admits one as unenrolled pending batch enrollment. Root records an
+   admission as a Root comment on the Delivery issue whose body is exactly
+   `<!-- fsgg:root-admit-unenrolled/v1 -->`, and dispatches it outside inspection's selection, whose
+   candidate set covers enrolled nodes only. Their bodies already carry the Work level, Track and
+   Status the batch will use.
 5. **Auto-add stays off.** Keep the project workflow "Auto-add sub-issues to project" disabled and read
    it back before and after any bulk sub-issue linking. Unattended cards break `migration-prepare`
    and `inspect`, and enrollment is not a child link.

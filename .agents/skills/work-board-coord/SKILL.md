@@ -29,7 +29,8 @@ read back acceptance, reconcile the parent and immediately return to selection.
 
 ## File the Delivery before dispatch
 
-Admit no dispatch, and file no Outcome shaping, without the native Delivery issues the
+Dispatch only with a native Delivery issue, and shape an Outcome by filing its remaining acceptance as
+Deliveries, as the
 [filing rules](../work-board/references/lifecycle-contract.md#file-the-delivery-issue-at-dispatch) require.
 
 ## Keep useful work moving in parallel

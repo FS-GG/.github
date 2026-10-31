@@ -427,4 +427,4 @@ skills:
   # Reconciled, not hand-authored: scope/sha256/materializes-when verbatim from the manifest
   # entry, `source` from its `supplied-by`. Re-home and annotate these into the block they
   # belong to, then set `updated:` and prepend a registry/skills.CHANGELOG.md entry.
-  - { id: work-board-coord,       scope: operator,owner: .github,         source: .github/.claude/skills/work-board-coord/SKILL.md, sha256: 80b60f20c6e39b76b93b2c9d736750722b5041c7c263c592b4c51f2cdae03043, materializes-when: "false" }
+  - { id: work-board-coord,       scope: operator,owner: .github,         source: .github/.claude/skills/work-board-coord/SKILL.md, sha256: 6e3a5d260d19d53c8c231549f372dd38db4b0645382b2e6488297c38c05c8001, materializes-when: "false" }

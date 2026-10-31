@@ -164,11 +164,13 @@ Inspection `fsgg.coord.board-v2-inspection/3` adds per-item workItem classificat
 direct-child identities, completeness/gap/observation time/digest and raw closure stateReason, closedAt,
 Done when, Blocked on and Acceptance evidence. Acceptance remains Unverified by inspection. Null,
 permission denial, partial pagination, truncation, identity contradiction and cycles are scoped gaps,
-never empty coverage. Visible unenrolled children remain unschedulable. Incomplete parent coverage fences
+never empty coverage. Visible unenrolled children remain unschedulable by inspection; a Root-admitted unenrolled Delivery is
+dispatched by Root outside inspection's selection ([admission marker](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#file-the-delivery-issue-at-dispatch)). Incomplete parent coverage fences
 rollup, without fencing an independently complete child's action join.
 
 Integrator `fsgg.coord.board-v2-integrator-observations/2` binds each selected slice to hierarchySha256
-alongside existing native body/source/attempt joins. Only exact enrolled Delivery nodes are candidates;
+alongside existing native body/source/attempt joins. Inspection's candidate set covers exact enrolled Delivery nodes only (see the
+[admission marker](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#file-the-delivery-issue-at-dispatch) for Root-admitted unenrolled ones);
 Outcome or Unknown classification refuses fresh selection. Existing action/prerequisite/intake/current
 owner/PR/head/touch-set/reservation/remaining-capacity checks remain. A parent's/sibling's Blocked value
 is not automatically inherited; explicit relevant prerequisites remain binding. Existing original owner/
