@@ -53,12 +53,16 @@ permissions:
   issues: read     # reads fsgg:claim marker comments on the item the PR's branch names — a valid
                    # GITHUB_TOKEN scope, unlike `administration` (.github#2342).
 
-# PR-keyed concurrency (#4730 CI-load): this workflow re-runs on every body edit, so a newer event for the
-# same pull request cancels the superseded run instead of letting it finish. The cancelled run is for a
-# body or head that is no longer current, and the newer run reports the context for the current one.
+# PR-keyed concurrency (#4730 CI-load), the SAME shape scripts/check-pr-concurrency.py governs on the other
+# PR workflows: this workflow re-runs on every body edit, so a newer event for the same pull request
+# cancels the superseded run instead of letting it finish. The cancelled run is for a body or head that is
+# no longer current, and the newer run reports the context for the current one. The `github.sha` fallback
+# and the pull_request-only cancel are inert while this workflow triggers on pull_request alone; they are
+# kept so a trigger added later cannot make main-push or merge_group runs share a group or be cancelled.
+# tests/claim-generation/run.sh pins this block exactly.
 concurrency:
-  group: claim-generation-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: claim-generation-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Merge fence, slice 1 (.github#2342 — slice 1 of .github#1858's replacement-plan step 2, "fence
@@ -164,6 +168,9 @@ jobs:
 
       - name: Run the claim-generation fixture (no network)
         run: bash tests/claim-generation/run.sh
+
+      - name: Run the claim-producer fixture (no network)
+        run: bash tests/claim-producer/run.sh
 
       # The body AND the branch name go through the ENVIRONMENT, never interpolated into a `run:`
       # block. Both are attacker-controlled text — closing-keywords.yml states the same rule for the

@@ -746,6 +746,12 @@ def load_all(overrides):
             docs[name] = yaml.safe_load(text)
     return docs
 
+# The shape scripts/check-pr-concurrency.py governs on the other PR workflows (#5001).
+CONCURRENCY = {
+    "group": "claim-generation-${{ github.event.pull_request.number || github.sha }}",
+    "cancel-in-progress": "${{ github.event_name == 'pull_request' }}",
+}
+
 def triggers(doc):
     return doc.get("on", doc.get(True)) or {}
 
@@ -778,6 +784,8 @@ def verdict(docs, policy_text=None):
         out.append(f"producers of {CONTEXT!r} are {prod}, want exactly [claim-generation.yml:claim-generation]")
     cg = docs.get("claim-generation.yml")
     if cg is not None:
+        if cg.get("concurrency") != CONCURRENCY:
+            out.append(f"claim-generation.yml concurrency is {cg.get('concurrency')!r}, not the governed shape {CONCURRENCY!r}")
         pr = triggers(cg).get("pull_request") or {}
         if "edited" not in (pr.get("types") or []):
             out.append("claim-generation.yml lost `edited`: a worker's body PATCH would never re-evaluate the fence (#2488)")
@@ -828,6 +836,12 @@ must_refuse("M7 path filter", {"claim-generation.yml": cg_text.replace("types: [
 must_refuse("M8 job-level if", {"claim-generation.yml": cg_text.replace("  claim-generation:\n    runs-on", "  claim-generation:\n    if: github.event_name == 'pull_request'\n    runs-on", 1)}, "job-level `if:`"); n += 1
 # M9 an extra trigger (a push) on the new workflow.
 must_refuse("M9 extra trigger", {"claim-generation.yml": cg_text.replace("on:\n  pull_request:", "on:\n  push:\n    branches: [main]\n  pull_request:", 1)}, "trigger besides"); n += 1
+# M11 the concurrency block is deleted (this used to pass).
+must_refuse("M11 no concurrency", {"claim-generation.yml": re.sub(r"\nconcurrency:\n(?:  .*\n)+", "\n", cg_text, count=1)}, "concurrency is None"); n += 1
+# M12 an unconditional cancel, M13 a ref-keyed group, M14 a group without the sha fallback.
+must_refuse("M12 unconditional cancel", {"claim-generation.yml": cg_text.replace("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", "cancel-in-progress: true", 1)}, "governed shape"); n += 1
+must_refuse("M13 ref group", {"claim-generation.yml": cg_text.replace("number || github.sha", "number || github.ref", 1)}, "governed shape"); n += 1
+must_refuse("M14 no sha fallback", {"claim-generation.yml": cg_text.replace("number || github.sha", "number", 1)}, "governed shape"); n += 1
 # M10 the settlement policy still names coherence.yml as the producer.
 pol_text = open(POLICY, encoding="utf-8").read()
 v = verdict(docs, pol_text.replace(".github/workflows/claim-generation.yml", ".github/workflows/coherence.yml", 1))
@@ -835,8 +849,8 @@ assert any("settlement policy names" in r for r in v), f"M10: {v}"; n += 1
 print(f"{n} mutants refused")
 PY
 )"
-if [ "$MOVE_OUT" = "10 mutants refused" ]; then
-  ok "the move: claim-generation.yml is the ONLY producer of the required context, reports on every PR and keeps edited; coherence.yml has neither the job nor edited; 10 mutants (missing/duplicate/renamed producer, lost or returned edited, name override, path filter, job-level if, extra trigger, stale V2 settlement producer) are each refused"
+if [ "$MOVE_OUT" = "14 mutants refused" ]; then
+  ok "the move: claim-generation.yml is the ONLY producer of the required context, reports on every PR and keeps edited; coherence.yml has neither the job nor edited; 14 mutants (missing/duplicate/renamed producer, lost or returned edited, name override, path filter, job-level if, extra trigger, stale V2 settlement producer, deleted or altered concurrency) are each refused"
 else
   bad "the move out of coherence.yml is not the pinned shape, or the pin cannot say NO" "$MOVE_OUT"
 fi
