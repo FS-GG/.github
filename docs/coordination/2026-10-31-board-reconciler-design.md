@@ -577,3 +577,4 @@ measured in PR 2 and again on the first enabled week.
 | D9 | Hold `BOARD_DRIFT_HMAC_KEY` on fdev for private placeholders in proposals | Yes, mode 0600 in Root custody |
 | D10 | Carrier PRs for enrollment: Root merges each one; automatic merge of carrier-only PRs is a later decision | Root merges |
 | D11 | Credential: the reconciler writes with Root's `gh` PAT on fdev, as the merge gate does; the App stays read-only | Yes |
+| D12 | E1 adds Project 3 membership for enrollment candidates and fills their fields in the same run. Built-in auto-add stays off (dispatch rule 5); this is an attended add that never leaves a bare card | Yes |
