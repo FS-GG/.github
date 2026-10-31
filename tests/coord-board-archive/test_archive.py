@@ -46,6 +46,14 @@ def scan_page(rows: list[dict], total: int | None = None, board: int = 222, has_
                       "nodes": [node(r) for r in rows]}}}}}
 
 
+def live_page(blockers_by_card: list[list[str]] | None = None, total: int | None = None, has_next: bool = False, truncated: bool = False) -> dict:
+    cards = blockers_by_card if blockers_by_card is not None else []
+    nodes = [{"id": f"PVTI_live_{i}", "content": {"__typename": "Issue", "blockedBy": {
+        "totalCount": len(b) + (1 if truncated else 0), "nodes": [{"id": x} for x in b]}}} for i, b in enumerate(cards)]
+    return {"data": {"organization": {"projectV2": {"items": {"totalCount": len(nodes) if total is None else total,
+            "pageInfo": {"hasNextPage": has_next, "endCursor": "l1" if has_next else None}, "nodes": nodes}}}}}
+
+
 def item_read(r: dict, archived: bool | None = None, project: str = PROJECT, status: str = "Done", **content) -> dict:
     c = {"__typename": r["kind"], "id": r["contentId"], "state": r["state"], "closedAt": r["closedAt"]}
     c.update(content)
@@ -59,7 +67,7 @@ state_path = sys.argv[0] + ".state.json"
 state = json.load(open(state_path))
 args = sys.argv[1:]
 query = next((a[len("query="):] for a in args if a.startswith("query=")), "")
-kind = "mutation" if "archiveProjectV2Item" in query else "item" if "node(id:" in query else "scan"
+kind = "mutation" if "archiveProjectV2Item" in query else "item" if "node(id:" in query else "live" if "-status:Done" in query else "scan"
 state["calls"].append({"kind": kind, "args": args})
 queue = state["responses"][kind]
 reply = queue.pop(0) if queue else {"exit": 9}
@@ -71,7 +79,7 @@ sys.stdout.write(json.dumps(reply["body"]))
 
 
 class Stub:
-    def __init__(self, test: unittest.TestCase, scan=(), item=(), mutation=()):
+    def __init__(self, test: unittest.TestCase, scan=(), item=(), mutation=(), live=None):
         self.dir = tempfile.TemporaryDirectory()
         test.addCleanup(self.dir.cleanup)
         self.path = Path(self.dir.name, "gh")
@@ -79,7 +87,8 @@ class Stub:
         self.path.chmod(self.path.stat().st_mode | stat.S_IXUSR)
         wrap = lambda xs: [x if isinstance(x, dict) and "exit" in x else {"body": x} for x in xs]
         self.state = Path(str(self.path) + ".state.json")
-        self.state.write_text(json.dumps({"calls": [], "responses": {"scan": wrap(scan), "item": wrap(item), "mutation": wrap(mutation)}}))
+        live = [live_page()] if live is None else live
+        self.state.write_text(json.dumps({"calls": [], "responses": {"scan": wrap(scan), "item": wrap(item), "mutation": wrap(mutation), "live": wrap(live)}}))
         previous = os.environ.get("COORD_ARCHIVE_GH")
         os.environ["COORD_ARCHIVE_GH"] = str(self.path)
         test.addCleanup(lambda: os.environ.__setitem__("COORD_ARCHIVE_GH", previous) if previous else os.environ.pop("COORD_ARCHIVE_GH", None))
@@ -183,6 +192,34 @@ class Scan(unittest.TestCase):
             Stub(self, scan=replies)
             with self.assertRaises(A.Refused, msg=name):
                 A.scan("FS-GG", 3)
+
+
+class LiveBlockers(unittest.TestCase):
+    def test_a_done_card_a_live_card_is_blocked_by_stays_visible(self):
+        old = "2020-01-01T00:00:00Z"
+        rows = [row(1, old), row(2, old), row(3, old)]
+        archive, kept, unranked = A.plan(rows, 0, {"I_2"})
+        self.assertEqual([r["number"] for r in archive], [1, 3])
+        self.assertEqual([(r["number"], why) for r, why in unranked], [(2, "a live card is still blocked by it: stays visible")])
+
+    def test_live_blockers_are_read_completely_or_refused(self):
+        Stub(self, live=[live_page([["I_2", "I_9"], []])])
+        self.assertEqual(A.live_blockers("FS-GG", 3), {"I_2", "I_9"})
+        for name, replies in {"truncated list": [live_page([["I_2"]], truncated=True)],
+                              "count mismatch": [live_page([["I_2"]], total=2)],
+                              "partial pages": [live_page([[]], total=9, has_next=True)] * 5,
+                              "errors": [{"errors": [{"message": "x"}]}]}.items():
+            Stub(self, live=replies)
+            with self.assertRaises(A.Refused, msg=name):
+                A.live_blockers("FS-GG", 3)
+
+    def test_the_dry_run_reports_a_protected_card(self):
+        rows = [row(n, closed=f"2026-10-{n:02d}T00:00:00Z") for n in range(1, 6)]
+        Stub(self, scan=[scan_page(rows)], live=[live_page([["I_1"]])])
+        code, out, _ = run(["--keep", "2"])
+        self.assertEqual(code, 0)
+        self.assertIn("plan to archive 2", out)
+        self.assertIn("KEEP FS-GG/.github#1: a live card is still blocked by it", out)
 
 
 class Execute(unittest.TestCase):

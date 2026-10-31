@@ -27,7 +27,9 @@ THE GUARDS, ALL FAIL-CLOSED
 
 1. Done only. A card is a candidate only when its Status is Done, its content is an issue or pull request whose
    state is terminal (CLOSED, or MERGED for a PR), and its `closedAt` parses. Anything else stays visible, with
-   its reason reported. A Done card over an open issue is drift that must stay visible.
+   its reason reported. A Done card over an open issue is drift that must stay visible. A Done card that a live
+   (not Done) card still names as a native `blockedBy` blocker stays visible too; the live cards' blocker lists are
+   read completely or the run refuses. This is the "never a live row's blocker" guard the reconciler design keeps.
 2. Newest 200 kept. Candidates are ranked by `closedAt` descending, with ties broken by repository, number and
    item id, so the selection never depends on connection order. The first `--keep` stay; only the rest are
    planned.
@@ -52,6 +54,14 @@ Archiving an enrolled row is safe. The coherent 0.114.1 reader reports an archiv
 archived membership with a "Board card is archived (Done retention)" discrepancy (#5119), not as a missing row.
 The custody record marks every archived card `enrolled: true/false` from the private runtime binding's
 `selectedIssues`. Do not archive an enrolled card while a reader older than 0.114.1 is the installed reader.
+
+LOCKING (#5136 design, section 8)
+=================================
+
+While it runs as a hosted workflow, this tool cannot share the fdev board-writer lock. Root accepted the design's
+mitigation: the reconciler (tend) writes nothing to archive-eligible cards (Done and closed, beyond the newest 200),
+so the two writers are disjoint by construction. Once #5141 lands, real runs move to fdev and take
+`$XDG_RUNTIME_DIR/fsgg/board-writer-<project>.lock` with `fcntl.flock(LOCK_EX)` around every send.
 
 Environment: GH_TOKEN with organization Projects read, plus write for `--execute`. COORD_ARCHIVE_GH overrides the
 `gh` binary (tests).
@@ -91,6 +101,18 @@ query($owner:String!,$number:Int!,$cursor:String){
           ... on DraftIssue{ id }
         }
       }
+    }
+  }}
+}
+"""
+
+LIVE = """
+query($owner:String!,$number:Int!,$cursor:String){
+  organization(login:$owner){ projectV2(number:$number){
+    items(first:100, after:$cursor, query:"-status:Done"){
+      totalCount
+      pageInfo{ hasNextPage endCursor }
+      nodes{ id content{ __typename ... on Issue{ blockedBy(first:50){ totalCount nodes{ id } } } } }
     }
   }}
 }
@@ -210,7 +232,51 @@ def scan(owner: str, number: int) -> tuple[dict, list[dict]]:
     return project, rows
 
 
-def plan(rows: list[dict], keep: int = KEEP) -> tuple[list[dict], list[dict], list[tuple[dict, str]]]:
+def live_blockers(owner: str, number: int) -> set[str]:
+    """Content ids every live (not Done) card names as a native blocker, read completely, or Refused.
+
+    A Done card that a live card is still blocked by stays visible: the guard the reconciler design keeps from the
+    previous archiver ("never a live row's blocker"). A truncated blocker list refuses rather than guesses.
+    """
+    protected: set[str] = set()
+    cursor: str | None = None
+    total: int | None = None
+    seen = 0
+    for _ in range(MAX_PAGES):
+        data = graphql(LIVE, {"owner": owner, "number": number, "cursor": cursor})
+        node = (data.get("organization") or {}).get("projectV2")
+        page = node.get("items") if isinstance(node, dict) else None
+        if not isinstance(page, dict):
+            raise Refused("no live items page (token scope or project number?)")
+        nodes, info, count = page.get("nodes"), page.get("pageInfo") or {}, page.get("totalCount")
+        if not isinstance(nodes, list) or not isinstance(count, int) or "hasNextPage" not in info:
+            raise Refused("a live page is missing nodes, totalCount or pageInfo")
+        if total is not None and count != total:
+            raise Refused("the live count changed while it was read")
+        total = count
+        for card in nodes:
+            seen += 1
+            content = (card or {}).get("content") or {}
+            if content.get("__typename") != "Issue":
+                continue
+            blockers = content.get("blockedBy") or {}
+            listed = blockers.get("nodes")
+            if not isinstance(listed, list) or blockers.get("totalCount") != len(listed):
+                raise Refused("a live card's blocker list is truncated or unreadable")
+            protected.update(b.get("id") for b in listed if isinstance(b, dict) and b.get("id"))
+        if not info["hasNextPage"]:
+            break
+        cursor = info.get("endCursor")
+        if not cursor:
+            raise Refused("a live page says hasNextPage without an endCursor")
+    else:
+        raise Refused(f"live cards still have more pages after {MAX_PAGES}: refusing a partial read")
+    if total is None or seen != total:
+        raise Refused("the live cards read differ from the live count")
+    return protected
+
+
+def plan(rows: list[dict], keep: int = KEEP, protected: set[str] | None = None) -> tuple[list[dict], list[dict], list[tuple[dict, str]]]:
     """Split Done rows into (archive, kept, not-rankable-with-reason). Pure, so every guard is testable.
 
     Ranked: Done, issue or PR, terminal state, parseable `closedAt`, not already archived. Newest first by
@@ -236,6 +302,8 @@ def plan(rows: list[dict], keep: int = KEEP) -> tuple[list[dict], list[dict], li
             unranked.append((row, "closedAt is unreadable: never archived"))
         elif not isinstance(row.get("number"), int) or not row.get("repo"):
             unranked.append((row, "unreadable repository or number: never archived"))
+        elif protected and row["contentId"] in protected:
+            unranked.append((row, "a live card is still blocked by it: stays visible"))
         else:
             ranked.append((closed, str(row["repo"]), int(row["number"]), str(row["itemId"]), row))
     ranked.sort(key=lambda entry: (-entry[0].timestamp(), entry[1], entry[2], entry[3]))
@@ -357,6 +425,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         enrolled = enrolled_nodes(args.enrollment_binding)
         project, rows = scan(args.owner, args.project)
+        protected = live_blockers(args.owner, args.project)
     except Refused as exc:
         print(f"coord-board-archive: REFUSED, nothing archived: {exc}", file=sys.stderr)
         return 1
@@ -364,7 +433,7 @@ def main(argv: list[str] | None = None) -> int:
         print("coord-board-archive: REFUSED, nothing archived: the project id differs from --expect-project-id", file=sys.stderr)
         return 1
 
-    archive, kept, unranked = plan(rows, args.keep)
+    archive, kept, unranked = plan(rows, args.keep, protected)
     print(f"board: {project.get('totalCount')} item(s) (limit {BOARD_LIMIT}); Done: {len(rows)}; "
           f"ranked {len(archive) + len(kept)}, keep newest {len(kept)}, plan to archive {len(archive)}")
     for row, why in unranked:
