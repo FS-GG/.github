@@ -474,7 +474,19 @@ module BoardV2Application =
     type private MigrationAdmission =
         { Prepared: V2Migration.Prepared; Directory: string; WindowUntil: DateTimeOffset }
 
-    let private executeMigration (connection: V2MigrationTransport.IConnection) (syncDirectory: string -> unit) (clock: TimeProvider) (command: MigrationCommand) =
+    /// Resolves the shared writer lock for a project and a legacy lock name (board-reconciler design §8, #5126).
+    /// Production resolves `V2WriterLock.production`; every test seam injects a private directory instead.
+    type private WriterLock = string -> string -> V2WriterLock.Location
+
+    let private productionWriterLock : WriterLock =
+        fun projectId legacyName ->
+            match V2WriterLock.production projectId legacyName with
+            | Ok location -> location
+            | Error reason -> raise (IOException reason)
+
+    let private injectedWriterLock (directory: string) : WriterLock = V2WriterLock.inDirectory directory
+
+    let private executeMigration (writerLock: WriterLock) (connection: V2MigrationTransport.IConnection) (syncDirectory: string -> unit) (clock: TimeProvider) (command: MigrationCommand) =
         let privateWrite = privateWrite syncDirectory
         let privateJson = privateJson syncDirectory
         let utf8 = System.Text.UTF8Encoding(false, true)
@@ -553,8 +565,7 @@ module BoardV2Application =
                                     elif not fresh.Snapshot.CanUpdate then Error "native-project-update-capability-absent"
                                     else
                                         let admission: MigrationAdmission = { Prepared = { fresh with PreparedPath = Some boundPath }; Directory = directory; WindowUntil = windowUntil }
-                                        let lockPath = Path.Combine(Path.GetTempPath(), "fsgg-v2-migration-PVT_kwDOEYAWY84Bldpa.lock")
-                                        use lease = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+                                        use lease = V2WriterLock.acquire (writerLock "PVT_kwDOEYAWY84Bldpa" V2WriterLock.migrationLegacyName)
                                         let rec effects (sequence: int) (expected: V2Migration.Prepared) =
                                             if clock.GetUtcNow() >= admission.WindowUntil then Error "planning-window-expired"
                                             else
@@ -707,15 +718,15 @@ module BoardV2Application =
             | Error code -> terminal code None
         with error -> terminal "invocation-io-or-unexpected-failure" (Some(error.GetType().FullName))
 
-    let runMigrationWithCustody (connection: V2MigrationTransport.IConnection) (syncDirectory: string -> unit) (clock: TimeProvider) (arguments: string list) =
+    let runMigrationWithCustody (lockDirectory: string) (connection: V2MigrationTransport.IConnection) (syncDirectory: string -> unit) (clock: TimeProvider) (arguments: string list) =
         try
             match migrationSyntax arguments with
-            | Ok command -> executeMigration connection syncDirectory clock command
+            | Ok command -> executeMigration (injectedWriterLock lockDirectory) connection syncDirectory clock command
             | Error _ -> 1
         with _ -> 1
 
-    let runMigrationWithConnection (connection: V2MigrationTransport.IConnection) (arguments: string list) =
-        runMigrationWithCustody connection syncMigrationDirectory TimeProvider.System arguments
+    let runMigrationWithConnection (lockDirectory: string) (connection: V2MigrationTransport.IConnection) (arguments: string list) =
+        runMigrationWithCustody lockDirectory connection syncMigrationDirectory TimeProvider.System arguments
 
     let private parseSyntax arguments =
         let rec flags values = function
@@ -814,11 +825,10 @@ module BoardV2Application =
     let private refuse message =
         eprintfn "fsgg-coord-engine: board-v2 refresh refused: %s" message
         1
-    let private execute (transport: IGitHubTransport) ((binding: Binding), previous, reportPath, _) =
+    let private execute (writerLock: WriterLock) (transport: IGitHubTransport) ((binding: Binding), previous, reportPath, _) =
         try
             let report =
-                let lockPath = Path.Combine(Path.GetTempPath(), "fsgg-v2-observation-" + binding.ProjectId + ".lock")
-                use lease = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+                use lease = V2WriterLock.acquire (writerLock binding.ProjectId (V2WriterLock.observationLegacyName binding.ProjectId))
                 V2ProjectionSource.runFixed (bounded binding transport) binding previous
             let evidence = match box transport with :? V2ObservationTransport.IDispatchEvidence as evidence -> evidence.DispatchReceipts | _ -> []
             let report = { report with NativeDispatch = evidence; Cleanup = "Root-local project exclusive OS handle released; no distributed lease or background work" }
@@ -836,14 +846,14 @@ module BoardV2Application =
             if report.Evidence.PopulationGap.IsSome || report.MembershipGap.IsSome || (report.Items |> List.exists (fun item -> item.SourceCurrentness <> "Current" || item.PlanningGap.IsSome)) then 3 else 0
         with error -> refuse (if isProgrammeBinding binding then "private inspection/report failed" else "inspection/report failed: " + error.Message)
 
-    let runWithTransportAndInput transport (reader: TextReader) arguments =
+    let runWithTransportAndInput (lockDirectory: string) transport (reader: TextReader) arguments =
         match prepare reader arguments with
         | Error message -> refuse message
         | Ok input ->
             match arguments with
             | "inspect" :: _ -> executeInspection transport input
-            | _ -> execute transport input
-    let runWithTransport transport arguments = runWithTransportAndInput transport Console.In arguments
+            | _ -> execute (injectedWriterLock lockDirectory) transport input
+    let runWithTransport (lockDirectory: string) transport arguments = runWithTransportAndInput lockDirectory transport Console.In arguments
 
     let tryRun arguments =
         match arguments with
@@ -859,7 +869,7 @@ module BoardV2Application =
                         | Error _ -> 1
                         | Ok connection ->
                             use connection = connection
-                            executeMigration connection syncMigrationDirectory TimeProvider.System selected
+                            executeMigration productionWriterLock connection syncMigrationDirectory TimeProvider.System selected
                 with _ -> 1)
         | "board-v2" :: rest ->
             Some(match prepare Console.In rest with
@@ -877,5 +887,5 @@ module BoardV2Application =
                      | Error error -> refuse (Errors.explain error)
                      | Ok(transport, lifetime) ->
                          use lifetime = lifetime
-                         match rest with "inspect" :: _ -> executeInspection transport input | _ -> execute transport input)
+                         match rest with "inspect" :: _ -> executeInspection transport input | _ -> execute productionWriterLock transport input)
         | _ -> None

@@ -3393,18 +3393,28 @@ class BoardGateTests(unittest.TestCase):
     def setUp(self):
         self.assertIsNotNone(BOARD_RULES, "the shared rules module must load from this checkout")
 
-    def gate(self, api: BoardApi, mode: str, *, loader=None, apply: bool = True, custody="fresh"):
+    def private_lock(self, **kwargs):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        directory = pathlib.Path(tmp.name)
+        return MODULE.BoardWriterLock(MODULE.board_writer_lock_paths(directory, directory), **kwargs)
+
+    def gate(self, api: BoardApi, mode: str, *, loader=None, apply: bool = True, custody="fresh", lock="fresh"):
         if custody == "fresh":
             tmp = tempfile.TemporaryDirectory()
             self.addCleanup(tmp.cleanup)
             custody = MODULE.BoardCustody(pathlib.Path(tmp.name) / "custody") if mode == "enforce" else None
+        if lock == "fresh":
+            lock = self.private_lock() if mode == "enforce" else None
         self.last_custody = custody
+        self.last_lock = lock
         with contextlib.redirect_stderr(io.StringIO()) as log, \
              mock.patch.object(MODULE, "board_enforce_allowed", return_value=True):
             code, result = MODULE.summarize(
                 api, repo="FS-GG/.github", pr_number=1, expected_head=HEAD, merge_method="squash",
                 publication_required=False, apply=apply, board_gate=mode,
-                board_rules_loader=loader or (lambda: BOARD_RULES), board_custody=custody)
+                board_rules_loader=loader or (lambda: BOARD_RULES), board_custody=custody, board_lock=lock)
+        self.last_log = log.getvalue()
         # Possible-send custody is recorded exactly when (and before) the one send is attempted.
         self.assertEqual(log.getvalue().count("possible-send recorded"), len(api.sends))
         self.assertTrue(all(api.custody), "possible-send must be recorded before the send")
@@ -3756,7 +3766,8 @@ class BoardGateTests(unittest.TestCase):
              mock.patch.object(MODULE, "board_enforce_allowed", return_value=True):
             MODULE.summarize(api, repo="FS-GG/.github", pr_number=1, expected_head=HEAD, merge_method="squash",
                              publication_required=False, apply=True, board_gate="enforce",
-                             board_rules_loader=lambda: BOARD_RULES, board_custody=custody)
+                             board_rules_loader=lambda: BOARD_RULES, board_custody=custody,
+                             board_lock=self.private_lock())
         self.assertEqual(len(api.sends), 1)
         self.assertEqual(custody.existing("FS-GG/.github", 1)["state"], "possible-send")
 
@@ -4000,6 +4011,270 @@ class BoardGateTests(unittest.TestCase):
         with mock.patch.object(api, "_run", return_value={"data": {"repository": {"pullRequest": dict(node, number=2)}}}):
             with self.assertRaises(RuntimeError):
                 api.board_pr("FS-GG/.github", 1)
+
+
+class BoardWriterLockReplayTests(unittest.TestCase):
+    """The shared writer lock, deferred-transition custody, the start-of-run sweep and replay (board-reconciler
+    design §6 and §8, #5136 PR 1, #5126)."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = pathlib.Path(tmp.name)
+        self.custody = MODULE.BoardCustody(self.dir / "custody")
+
+    def lock(self, **kwargs):
+        return MODULE.BoardWriterLock(MODULE.board_writer_lock_paths(self.dir / "lock", self.dir / "legacy"), **kwargs)
+
+    def record(self, pr, state, *, delivery=BOARD_DELIVERY, merged_at="2026-10-31T10:00:00Z", frm="In progress",
+               to="In review", item="PVTI_item"):
+        record = {"delivery": delivery, "itemId": item, "from": frm, "to": to, "state": state}
+        if merged_at is not None:
+            record["mergedAt"] = merged_at
+        self.custody.write("FS-GG/.github", pr, record)
+
+    def state(self, pr):
+        return self.custody.existing("FS-GG/.github", pr)["state"]
+
+    def replay(self, items, *, lock=None, send=None, current=None):
+        api = BoardApi([], body="", items=items, send=send)
+        with contextlib.redirect_stderr(io.StringIO()) as log:
+            counts = MODULE.board_replay(api, self.custody, lock or self.lock(wait=0), current)
+        self.assertEqual(log.getvalue().count("possible-send recorded"), len(api.sends))
+        return api, counts
+
+    # ---- the lock ----
+
+    def test_production_paths_need_xdg_runtime_dir_and_use_the_literal_tmp_legacy_path(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(RuntimeError):
+                MODULE.board_writer_lock_paths()
+        with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": "/run/user/1000"}, clear=True):
+            self.assertEqual(MODULE.board_writer_lock_paths(), [
+                pathlib.Path("/run/user/1000/fsgg/board-writer-PVT_kwDOEYAWY84Bldpa.lock"),
+                pathlib.Path("/tmp/fsgg-v2-migration-PVT_kwDOEYAWY84Bldpa.lock")])
+
+    def test_paths_agree_with_the_engine_writers(self):
+        source = (ROOT / "src/FS.GG.Coord.GitHub/V2WriterLock.fs").read_text(encoding="utf-8")
+        for name in (MODULE.BOARD_WRITER_LOCK_NAME.replace("PVT_kwDOEYAWY84Bldpa", ""),
+                     MODULE.BOARD_LEGACY_LOCK_NAME.replace("PVT_kwDOEYAWY84Bldpa", "")):
+            self.assertIn(name.removesuffix(".lock"), source)
+        self.assertIn('"/tmp"', source)
+        self.assertIn('"XDG_RUNTIME_DIR"', source)
+
+    def test_lock_excludes_a_second_holder_on_either_path_and_releases(self):
+        first = self.lock(wait=0)
+        self.assertTrue(first.acquire())
+        self.assertFalse(self.lock(wait=0).acquire())
+        first.release()
+        legacy_only = MODULE.BoardWriterLock([self.dir / "legacy" / MODULE.BOARD_LEGACY_LOCK_NAME], wait=0)
+        self.assertTrue(legacy_only.acquire())
+        self.assertFalse(self.lock(wait=0).acquire(), "the legacy engine lock must also exclude the gate")
+        legacy_only.release()
+        again = self.lock(wait=0)
+        self.assertTrue(again.acquire())
+        again.release()
+
+    def test_bounded_wait_polls_until_60_seconds_then_gives_up(self):
+        holder = self.lock(wait=0)
+        self.assertTrue(holder.acquire())
+        self.addCleanup(holder.release)
+        now = [0.0]
+        slept = []
+        def sleep(seconds):
+            slept.append(seconds)
+            now[0] += seconds
+        waiter = self.lock(clock=lambda: now[0], sleep=sleep)
+        self.assertEqual(waiter.wait, 60.0)
+        self.assertFalse(waiter.acquire())
+        self.assertAlmostEqual(sum(slept), 60.0)
+        self.assertEqual(waiter.held, [])
+
+    def test_missing_runtime_dir_refuses_the_write_not_the_merge(self):
+        args = MODULE.parser().parse_args(["--repo", "FS-GG/.github", "--pr", "1", "--head", HEAD,
+                                           "--apply", "--board-gate", "enforce"])
+        with mock.patch.dict(os.environ, {}, clear=True), contextlib.redirect_stderr(io.StringIO()):
+            self.assertIsNone(MODULE.board_lock_from_args(args))
+        api = BoardApi([], body="", items=[board_item("In progress")])
+        result = MODULE.board_transition(api, BOARD_RULES, "FS-GG/.github", board_body("Refs #900"), BOARD_DELIVERY,
+                                         "enforce", 1, self.custody, None)
+        self.assertEqual((result, api.sends), ("refused-lock", []))
+
+    # ---- deferral when the lock stays busy ----
+
+    def test_busy_lock_defers_with_merged_at_and_never_sends(self):
+        holder = self.lock(wait=0)
+        self.assertTrue(holder.acquire())
+        self.addCleanup(holder.release)
+        api = BoardApi([], body="", items=[board_item("In progress")])
+        result = MODULE.board_transition(api, BOARD_RULES, "FS-GG/.github", board_body("Refs #900"), BOARD_DELIVERY,
+                                         "enforce", 1, self.custody, self.lock(wait=0), "2026-10-31T12:00:00Z")
+        self.assertEqual((result, api.sends, api.item_reads), ("deferred", [], 1))
+        record = self.custody.existing("FS-GG/.github", 1)
+        self.assertEqual((record["state"], record["from"], record["to"], record["mergedAt"]),
+                         ("deferred", "In progress", "In review", "2026-10-31T12:00:00Z"))
+        # A second deferral for the same PR never overwrites the record.
+        api = BoardApi([], body="", items=[board_item("Ready")])
+        result = MODULE.board_transition(api, BOARD_RULES, "FS-GG/.github", board_body("Refs #900"), BOARD_DELIVERY,
+                                         "enforce", 1, self.custody, self.lock(wait=0), "2026-10-31T13:00:00Z")
+        self.assertEqual((result, self.custody.existing("FS-GG/.github", 1)["from"]), ("uncertain", "In progress"))
+
+    def test_validator_accepts_every_state_and_refuses_others(self):
+        for index, state in enumerate(MODULE.BOARD_CUSTODY_STATES, start=1):
+            self.record(index, state)
+            self.assertEqual(self.state(index), state)
+        self.assertEqual(set(MODULE.BOARD_CUSTODY_STATES),
+                         {"possible-send", "verified", "deferred", "superseded", "refused", "not-applicable"})
+        self.custody.write("FS-GG/.github", 99, {"delivery": BOARD_DELIVERY, "state": "sent-maybe"})
+        with self.assertRaises(RuntimeError):
+            self.custody.existing("FS-GG/.github", 99)
+
+    # ---- replay ----
+
+    def test_replay_moves_to_possible_send_before_the_one_send_then_verifies(self):
+        self.record(1, "deferred")
+        before = board_item("In progress")
+        writes = []
+        real = self.custody.write
+        sent = []
+        api = BoardApi([], body="", items=[before, board_item("In review")])
+        original_send = api.board_set_status
+        def send(*args):
+            original_send(*args)
+            sent.append(args)
+        api.board_set_status = send
+        def spy(repo, pr, record):
+            writes.append((record["state"], len(sent)))
+            real(repo, pr, record)
+        with mock.patch.object(self.custody, "write", side_effect=spy), contextlib.redirect_stderr(io.StringIO()):
+            counts = MODULE.board_replay(api, self.custody, self.lock(wait=0))
+        self.assertEqual(api.sends, [("PVT_project", "PVTI_item", "PVTSSF_status", BOARD_OPTION["In review"])])
+        self.assertEqual(writes, [("possible-send", 0), ("verified", 1)])
+        self.assertEqual((self.state(1), counts["verified"]), ("verified", 1))
+
+    def test_replay_refuses_on_any_preimage_mismatch(self):
+        for status in ("Ready", "In review", "Blocked", None):
+            with self.subTest(status=status):
+                self.record(1, "deferred")
+                api, counts = self.replay([board_item(status)])
+                self.assertEqual((api.sends, self.state(1), counts["refused"]), ([], "refused", 1))
+
+    def test_replay_of_a_closed_delivery_is_not_applicable(self):
+        self.record(1, "deferred")
+        api, counts = self.replay([board_item("In progress", state="CLOSED")])
+        self.assertEqual((api.sends, self.state(1), counts["not-applicable"]), ([], "not-applicable", 1))
+
+    def test_newest_record_per_delivery_supersedes_older_and_replay_runs_in_merge_order(self):
+        other = "FS-GG/.github#901"
+        self.record(1, "deferred", merged_at="2026-10-31T09:00:00Z")
+        self.record(2, "deferred", merged_at="2026-10-31T11:00:00Z")
+        self.record(3, "deferred", delivery=other, merged_at="2026-10-31T10:00:00Z", item="PVTI_other")
+        other_item = dict(board_item("In progress"), itemId="PVTI_other")
+        api, counts = self.replay([other_item, dict(other_item, status="In review"),
+                                   board_item("In progress"), board_item("In review")])
+        self.assertEqual([send[1] for send in api.sends], ["PVTI_other", "PVTI_item"])  # merge order
+        self.assertEqual((self.state(1), self.state(2), self.state(3)), ("superseded", "verified", "verified"))
+        self.assertEqual(counts["superseded"], 1)
+
+    def test_older_deferred_never_sends_when_a_newer_record_is_past_deferred(self):
+        for newer in ("verified", "possible-send", "refused", "not-applicable", "superseded"):
+            with self.subTest(newer=newer):
+                self.record(1, "deferred", merged_at="2026-10-31T09:00:00Z")
+                self.record(2, newer, merged_at="2026-10-31T11:00:00Z")
+                items = [board_item("In review")] if newer == "possible-send" else []
+                api, _ = self.replay(items)
+                self.assertEqual((api.sends, self.state(1), api.item_reads), ([], "superseded", len(items)))
+
+    def test_record_without_merged_at_is_ordered_oldest(self):
+        self.record(1, "deferred", merged_at=None)
+        self.record(2, "deferred", merged_at="2026-10-31T09:00:00Z")
+        api, _ = self.replay([board_item("In progress"), board_item("In review")])
+        self.assertEqual((len(api.sends), self.state(1), self.state(2)), (1, "superseded", "verified"))
+
+    def test_crash_between_supersession_and_possible_send_sends_at_most_once_for_the_newer(self):
+        self.record(1, "deferred", merged_at="2026-10-31T09:00:00Z")
+        self.record(2, "deferred", merged_at="2026-10-31T11:00:00Z")
+        real = self.custody.write
+        def crash(repo, pr, record):
+            if record["state"] == "possible-send":
+                raise KeyboardInterrupt("crash before possible-send")
+            real(repo, pr, record)
+        with mock.patch.object(self.custody, "write", side_effect=crash), self.assertRaises(KeyboardInterrupt), \
+             contextlib.redirect_stderr(io.StringIO()):
+            MODULE.board_replay(BoardApi([], body="", items=[board_item("In progress")]), self.custody, self.lock(wait=0))
+        self.assertEqual((self.state(1), self.state(2)), ("superseded", "deferred"))
+        api, _ = self.replay([board_item("In progress"), board_item("In review")])
+        self.assertEqual((len(api.sends), self.state(1), self.state(2)), (1, "superseded", "verified"))
+
+    def test_replay_readback_that_does_not_prove_the_target_stays_possible_send(self):
+        for after in (board_item("In progress"), board_item("In review", values=['{"text":"Changed"}']), RuntimeError("read")):
+            with self.subTest(after=after):
+                self.record(1, "deferred")
+                api, counts = self.replay([board_item("In progress"), after])
+                self.assertEqual((len(api.sends), self.state(1), counts["uncertain"]), (1, "possible-send", 1))
+
+    def test_lock_that_errors_refuses_the_write(self):
+        broken = mock.Mock(acquire=mock.Mock(side_effect=OSError("no lock directory")))
+        api = BoardApi([], body="", items=[board_item("In progress")])
+        result = MODULE.board_transition(api, BOARD_RULES, "FS-GG/.github", board_body("Refs #900"), BOARD_DELIVERY,
+                                         "enforce", 1, self.custody, broken)
+        self.assertEqual((result, api.sends), ("refused-lock", []))
+        self.assertIsNone(self.custody.existing("FS-GG/.github", 1))
+
+    def test_uncertain_replay_send_keeps_possible_send_and_is_never_resent(self):
+        self.record(1, "deferred")
+        api, counts = self.replay([board_item("In progress")], send=RuntimeError("network"))
+        self.assertEqual((len(api.sends), self.state(1), counts["uncertain"]), (1, "possible-send", 1))
+        api, counts = self.replay([board_item("In progress")])  # the sweep reads back only
+        self.assertEqual((api.sends, self.state(1), counts["swept-uncertain"]), ([], "possible-send", 1))
+
+    # ---- the read-only sweep ----
+
+    def test_sweep_reads_back_possible_send_records_and_never_sends(self):
+        self.record(1, "possible-send")
+        api, counts = self.replay([board_item("In review")])
+        self.assertEqual((api.sends, self.state(1), counts["swept-verified"]), ([], "verified", 1))
+        self.record(2, "possible-send")
+        api, counts = self.replay([board_item("In progress")])
+        self.assertEqual((api.sends, self.state(2), counts["swept-uncertain"]), ([], "possible-send", 1))
+
+    def test_sweep_skips_the_current_prs_own_record(self):
+        self.record(1, "possible-send")
+        api, counts = self.replay([], current=("FS-GG/.github", 1))
+        self.assertEqual((api.item_reads, self.state(1)), (0, "possible-send"))
+
+    def test_busy_lock_at_start_of_run_replays_nothing(self):
+        self.record(1, "deferred")
+        holder = self.lock(wait=0)
+        self.assertTrue(holder.acquire())
+        self.addCleanup(holder.release)
+        api, counts = self.replay([])
+        self.assertEqual((api.item_reads, self.state(1), counts["lock-busy"]), (0, "deferred", 1))
+
+    def test_no_pending_record_takes_no_lock_and_reads_nothing(self):
+        self.record(1, "verified")
+        lock = mock.Mock(wraps=self.lock(wait=0))
+        api, counts = self.replay([], lock=lock)
+        self.assertEqual((api.item_reads, lock.acquire.call_count), (0, 0))
+
+    def test_enforce_invocation_replays_another_prs_deferred_record_first(self):
+        self.record(7, "deferred", delivery="FS-GG/.github#901", item="PVTI_other")
+        other = dict(board_item("In progress"), itemId="PVTI_other")
+        before = board_item("In progress")
+        pr = board_routine_pr(board_body("Refs #900"))
+        api = BoardApi([pr, pr, merged()], [{"merged": True, "sha": MERGE}], body=board_body("Refs #900"),
+                       items=[other, dict(other, status="In review"), before, before, board_item("In review")])
+        with contextlib.redirect_stderr(io.StringIO()) as log, \
+             mock.patch.object(MODULE, "board_enforce_allowed", return_value=True):
+            code, result = MODULE.summarize(
+                api, repo="FS-GG/.github", pr_number=1, expected_head=HEAD, merge_method="squash",
+                publication_required=False, apply=True, board_gate="enforce",
+                board_rules_loader=lambda: BOARD_RULES, board_custody=self.custody, board_lock=self.lock(wait=0))
+        self.assertEqual((code, result.boardTransition), (0, "written"))
+        self.assertEqual([send[1] for send in api.sends], ["PVTI_other", "PVTI_item"])
+        self.assertEqual((self.state(7), self.state(1)), ("verified", "verified"))
+        self.assertIn("fsgg routine board replay: verified=1", log.getvalue())
+        self.assertNotIn("#901", log.getvalue())
 
 
 if __name__ == "__main__":

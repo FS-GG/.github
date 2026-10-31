@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Mutation controls for the board-currency merge gate in tools/routine-delivery.py (Refs #5094).
 
-Each mutant is one deliberate defect in the gate or its post-merge Status transition. BoardGateTests is
-re-run against a mutated copy of the helper (ROUTINE_DELIVERY_UNDER_TEST); a mutant that leaves every
+Each mutant is one deliberate defect in the gate, its post-merge Status transition, the shared writer lock or
+the deferred-transition replay (#5136 PR 1). BoardGateTests and BoardWriterLockReplayTests are re-run against a
+mutated copy of the helper (ROUTINE_DELIVERY_UNDER_TEST); a mutant that leaves every
 test green means no test pins that behaviour, and this script exits 1 naming it. The unmutated helper
 must pass first.
 """
@@ -81,12 +82,50 @@ MUTANTS = [
     ("live option identity not checked", 'if not isinstance(status, str) or by_name.get(status) != status_nodes[0].get("optionId"):',
      "if not isinstance(status, str):"),
     ("exiting rules module ends the helper", "    except (Exception, SystemExit):\n        # A broken", "    except Exception:\n        # A broken"),
+    # ---- the shared writer lock, deferral, sweep and replay (board-reconciler design §6/§8, #5136 PR 1) ----
+    ("send without the writer lock", '    if not locked:\n        try:\n            created = custody.create_exclusive(',
+     '    if False:\n        try:\n            created = custody.create_exclusive('),
+    ("lock error treated as held", '    try:\n        locked = lock.acquire()\n    except Exception:\n        return "refused-lock"\n',
+     '    try:\n        locked = lock.acquire()\n    except Exception:\n        locked = True\n'),
+    ("legacy engine lock not taken", '    return [directory / BOARD_WRITER_LOCK_NAME, legacy / BOARD_LEGACY_LOCK_NAME]',
+     '    return [directory / BOARD_WRITER_LOCK_NAME]'),
+    ("lock does not use LOCK_NB", "fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)", "fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)"),
+    ("bounded wait gives up at once", "            if self.clock() >= deadline:\n                return False\n",
+     "            return False\n"),
+    ("production lock without XDG_RUNTIME_DIR", '        if not runtime:\n            raise RuntimeError(', '        if False:\n            raise RuntimeError('),
+    ("deferred record overwrites an existing one", "            except FileExistsError:\n                return False\n",
+     "            except FileExistsError:\n                os.replace(tmp, path)\n                return True\n"),
+    ("deferred record lacks mergedAt", '"state": "deferred", "mergedAt": merged_at,', '"state": "deferred",'),
+    ("validator rejects deferred states",
+     'BOARD_CUSTODY_STATES = ("possible-send", "verified", "deferred", "superseded", "refused", "not-applicable")',
+     'BOARD_CUSTODY_STATES = ("possible-send", "verified")'),
+    ("start-of-run replay skipped", "        replay = +board_replay(api, board_custody, board_lock, (repo, pr_number))  # drop zero counts\n",
+     "        replay = Counter()\n"),
+    ("replay runs without the lock", '    if not locked:\n        counts["lock-busy"] += 1\n        return counts\n', ""),
+    ("sweep resends", '            outcome = board_custody_readback(api, custody, record["repo"], record["pr"])\n',
+     '            api.board_set_status("PVT_project", record["itemId"], "PVTSSF_status", "opt3")\n'
+     '            outcome = board_custody_readback(api, custody, record["repo"], record["pr"])\n'),
+    ("older deferred not superseded", '                if older["state"] == "deferred":\n                    custody.write(',
+     '                if False:\n                    custody.write('),
+    ("supersession ignores records past deferred", '            if group[-1]["state"] == "deferred":\n                pending.append(group[-1])\n',
+     '            deferred = [r for r in group if r["state"] == "deferred"]\n            if deferred:\n                pending.append(deferred[-1])\n'),
+    ("replay not in merge order", "        for record in sorted(pending, key=_board_order):", "        for record in reversed(pending):"),
+    ("missing mergedAt ordered newest", "    return (1, merged) if isinstance(merged, str) else (0, \"\")",
+     "    return (1, merged) if isinstance(merged, str) else (2, \"\")"),
+    ("replay ignores the recorded preimage", ' or item["status"] != record.get("from")\n', "\n"),
+    ("closed Delivery replayed", '    if item["state"] == "CLOSED":\n        custody.write(repo, pr, dict(record, state="not-applicable"))\n        return "not-applicable"\n', ""),
+    ("possible-send not written before the replay send",
+     '    custody.write(repo, pr, dict(record, state="possible-send"))\n    print("fsgg routine board replay', '    print("fsgg routine board replay'),
+    ("replay readback not verified", '    if after != dict(item, status=target):\n        return "uncertain"\n    try:\n        custody.write(repo, pr, dict(record, state="verified"',
+     '    try:\n        custody.write(repo, pr, dict(record, state="verified"'),
+    ("sweep reads the current PR's own record", "                    current is not None and (record[\"repo\"].lower(), record[\"pr\"]) == (current[0].lower(), current[1])):",
+     "                    False):"),
 ]
 
 
 def run(source: Path) -> bool:
     env = dict(os.environ, ROUTINE_DELIVERY_UNDER_TEST=str(source), PYTHONDONTWRITEBYTECODE="1")
-    done = subprocess.run([sys.executable, str(HERE / "routine-delivery.py"), "BoardGateTests"],
+    done = subprocess.run([sys.executable, str(HERE / "routine-delivery.py"), "BoardGateTests", "BoardWriterLockReplayTests"],
                           env=env, capture_output=True, text=True, timeout=300, check=False)
     return done.returncode == 0
 
@@ -107,7 +146,7 @@ def main() -> int:
         target = mirror / "tools/routine-delivery.py"
         target.write_text(text, encoding="utf-8")
         if not run(target):
-            print("routine-delivery board mutate: the unmutated helper fails BoardGateTests", file=sys.stderr)
+            print("routine-delivery board mutate: the unmutated helper fails the board tests", file=sys.stderr)
             return 1
         survivors = []
         for name, original, replacement in MUTANTS:

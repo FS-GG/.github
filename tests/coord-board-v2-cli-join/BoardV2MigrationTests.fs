@@ -30,14 +30,14 @@ module BoardV2MigrationTests =
         let native = Native snapshot
         let run (arguments: string list) =
             use connection = native.Connection()
-            BoardV2Application.runMigrationWithConnection connection arguments
+            BoardV2Application.runMigrationWithConnection (TestLock.fresh ()) connection arguments
         member _.Directory = directory
         member _.Native = native
         member _.Scope with get() = scope and set value = scope <- value
         member _.Run arguments = run arguments
         member _.RunWithCustody(syncDirectory: string -> unit, clock: TimeProvider, arguments: string list) =
             use connection = native.Connection()
-            BoardV2Application.runMigrationWithCustody connection syncDirectory clock arguments
+            BoardV2Application.runMigrationWithCustody (TestLock.fresh ()) connection syncDirectory clock arguments
         member _.Prepare(name: string) =
             let input = Path.Combine(directory, name + "-scope.json")
             let report = Path.Combine(directory, name + "-prepared.json")
@@ -1108,7 +1108,7 @@ module BoardV2MigrationTests =
                     member _.RemainingTime = remaining()
                     member _.Dispatch(prepared: Prepared, change: Change, until: DateTimeOffset) = connection.Dispatch(prepared, change, until)
                     member _.Dispose() = () }
-            Assert.Equal(3, BoardV2Application.runMigrationWithCustody bounded ignore clock args)
+            Assert.Equal(3, BoardV2Application.runMigrationWithCustody (TestLock.fresh ()) bounded ignore clock args)
             Assert.Single fixture.Native.Mutations |> ignore
             let elapsed = clock.GetUtcNow() - (if mode = "planning" then planningUntil - TimeSpan.FromSeconds 0.5 else started)
             Assert.Equal<TimeSpan>((if mode = "after-wait" then TimeSpan.FromSeconds 1.0 else TimeSpan.Zero), elapsed)
@@ -1134,7 +1134,7 @@ module BoardV2MigrationTests =
                         while fixture.Native.Requests.Length - initialReads + fixture.Native.Mutations.Length < 499 do
                             connection.Reads.Send request |> get |> ignore
                     sourceClock.CreateTimer(callback, state, dueTime, period) }
-        Assert.Equal(3, BoardV2Application.runMigrationWithCustody connection ignore clock (fixture.ApplyArguments path))
+        Assert.Equal(3, BoardV2Application.runMigrationWithCustody (TestLock.fresh ()) connection ignore clock (fixture.ApplyArguments path))
         Assert.True filled
         Assert.Single fixture.Native.Mutations |> ignore
         Assert.Equal(500, fixture.Native.Requests.Length - initialReads + fixture.Native.Mutations.Length)

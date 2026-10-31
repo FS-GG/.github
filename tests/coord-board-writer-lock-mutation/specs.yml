@@ -1,0 +1,95 @@
+# Mutation legs for the shared board writer lock in the coordination engine (FS-GG/.github#5136 PR 1, #5126;
+# board-reconciler design §8). Each leg reverts ONE guard and requires the coord-board-v2-cli-join tests to fail.
+# The Python side (tools/routine-delivery.py) has its own committed harness,
+# tests/skill-quality/routine-delivery-board-mutate.py, run by tests/skill-quality/run.sh.
+#
+#     TMPDIR=<private> scripts/gate-mutate.py --specs tests/coord-board-writer-lock-mutation/specs.yml
+#
+# Each leg rebuilds the engine and runs about 90 tests (about a minute), so this is an on-demand sweep, run when
+# V2WriterLock.fs or the board-v2 lock seams change, like tests/coord-engine-mutation.
+mutations:
+  - id: WL1/flock-removed
+    gate: "V2WriterLock takes an explicit flock(2) LOCK_EX on every path"
+    command: ["bash", "tests/coord-board-writer-lock-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2WriterLock.fs
+    find: |-
+      elif Native.flock(descriptor, lockExclusive ||| lockNonBlocking) = 0 then Some descriptor
+    replace: |-
+      elif true then Some descriptor
+    breaks: >-
+      the engine opens the lock file but never locks it, so two engine writers, or an engine and a Python writer,
+      interleave on Project 3
+    anchor:
+      pattern: 'board-writer-lock leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-writer-lock-mutation/leg.sh
+
+  - id: WL2/shared-lock-instead-of-exclusive
+    gate: "the lock is exclusive, not shared"
+    command: ["bash", "tests/coord-board-writer-lock-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2WriterLock.fs
+    find: |-
+      let private lockExclusive = 2
+    replace: |-
+      let private lockExclusive = 1
+    breaks: >-
+      LOCK_SH lets every engine writer hold the lock at once, so the shared lock excludes nothing
+    anchor:
+      pattern: 'board-writer-lock leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-writer-lock-mutation/leg.sh
+
+  - id: WL3/legacy-lock-dropped
+    gate: "during the transition a lease also takes the installed engine's legacy /tmp lock"
+    command: ["bash", "tests/coord-board-writer-lock-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2WriterLock.fs
+    find: |-
+      Location [ Path.Combine(directory, fileName projectId); Path.Combine(directory, legacyName) ]
+    replace: |-
+      Location [ Path.Combine(directory, fileName projectId) ]
+    breaks: >-
+      a new writer no longer excludes an installed (pre-release) engine that only takes the legacy lock
+    anchor:
+      pattern: 'board-writer-lock leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-writer-lock-mutation/leg.sh
+
+  - id: WL4/partial-lease-kept
+    gate: "a lease is all or none: a failed path releases what was taken"
+    command: ["bash", "tests/coord-board-writer-lock-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2WriterLock.fs
+    find: |-
+      (new Lease(List.rev taken) :> IDisposable).Dispose()
+    replace: |-
+      ()
+    breaks: >-
+      a writer that fails on the legacy path keeps the new lock, so every later writer refuses until the process exits
+    anchor:
+      pattern: 'board-writer-lock leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-writer-lock-mutation/leg.sh
+
+  - id: WL5/production-without-xdg-runtime-dir
+    gate: "production refuses without an absolute XDG_RUNTIME_DIR"
+    command: ["bash", "tests/coord-board-writer-lock-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2WriterLock.fs
+    find: |-
+      if String.IsNullOrEmpty runtime || not (Path.IsPathRooted runtime) then
+    replace: |-
+      if String.IsNullOrEmpty runtime then
+    breaks: >-
+      a relative XDG_RUNTIME_DIR resolves against the working directory, so two writers started in different
+      directories take different locks: the TMPDIR hazard again
+    anchor:
+      pattern: 'board-writer-lock leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-writer-lock-mutation/leg.sh
+
+  - id: WL6/seam-ignores-injected-directory
+    gate: "the refresh and migration seams lock in the injected directory, never the production one (#5126)"
+    command: ["bash", "tests/coord-board-writer-lock-mutation/leg.sh"]
+    target: src/FS.GG.Coord.Cli/BoardV2Application.fs
+    find: |-
+      let private injectedWriterLock (directory: string) : WriterLock = V2WriterLock.inDirectory directory
+    replace: |-
+      let private injectedWriterLock (directory: string) : WriterLock = productionWriterLock
+    breaks: >-
+      every test seam resolves the production lock, so a test run contends with a live apply on fdev (#5126)
+    anchor:
+      pattern: 'board-writer-lock leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-writer-lock-mutation/leg.sh
