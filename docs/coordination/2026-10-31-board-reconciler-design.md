@@ -247,19 +247,24 @@ can wait, and only on time and the parent's membership. Never overwrite a popula
 
 ### Track
 
-Never overwrite. For an empty value, in order:
+Never overwrite. For an empty value:
 
-1. **Declaration (T1d).** The body's `Track:` value.
-2. **Inheritance (T1i).** A card that is structurally a leaf under a Project 3 parent whose Work level is
-   (or structurally will be) Outcome inherits that parent's Track, whether or not its own Work level has
-   been written yet ([round-5 ruling](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548947046)). A young leaf whose W1h write is still in its 24-hour window
-   therefore inherits its parent's Track at once.
-3. **Default (T1f).** `Follow-up`. It is a fallback: it waits for the parent's Track to settle, and it
-   also waits while the card's own Work level is pending (for example W1h still deferring), so it never
-   falls through to `Follow-up` on a card that may yet inherit.
+1. **A declared Track wins (T1d)** ([round-6 ruling](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548973997), mirroring W1h(c)). If the intended-fields
+   line declares a Track, T1i and T1f never write that card's Track. With T1d enabled, T1d writes the
+   declared value. While T1d is off, the declaration is a refusal-only read: the effect is deferred, and
+   on expiry it becomes a `track-declared-pending` proposal.
+2. **Inheritance (T1i), a heuristic.** An undeclared card that is structurally a leaf under a Project 3
+   parent whose Work level is (or structurally will be) Outcome inherits that parent's Track, whether or
+   not its own Work level has been written yet ([round-5 ruling](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548947046)). A young leaf whose W1h write
+   is still in its 24-hour window therefore inherits at once. In live data, though, inheritance
+   disagrees with about 36% of the existing Delivery-Outcome pairs whose Tracks people set, so T1i is not
+   in the recommended unattended starting set (§8). While it is not enabled, its would-be value is shown
+   in the plan for the comparison, and the field expires into a `track-undetermined` proposal.
+3. **Default (T1f).** `Follow-up`, only for an undeclared card with no Project 3 parent. It is a
+   fallback: it applies only once settled, and it waits while the card's own Work level is pending (for
+   example W1h still deferring).
 
-All three auto-apply. `Follow-up` is the default because it claims less than `Active delivery` (D5,
-accepted).
+`Follow-up` is the default because it claims less than `Active delivery` (D5, accepted).
 
 ### Roadmap
 
@@ -697,10 +702,15 @@ it is accepted and delivered, E2 refuses above 450 rows and files a proposal.
   are disjoint by construction. Root accepted this mitigation.
 - **Dry run by default.** `--apply` is ignored unless
   `$XDG_CONFIG_HOME/fsgg/board-tend.json` exists, is owned by the user with mode 0600, and lists the
-  enabled rules, for example `{"apply": ["W1h","T1i","T1f"], "propose": true, "maxItemsPerRun": 100}`,
-  which needs no contract amendment. Rules are enabled one at a time. Deleting the file, or
+  enabled rules. The recommended unattended starting set is
+  `{"apply": ["W1h","T1f"], "propose": true, "maxItemsPerRun": 100}`, which needs no contract amendment
+  ([round-6 ruling](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548973997)). Rules are enabled one at a time. Deleting the file, or
   `"apply": []`, is the kill switch. A run without the file still writes its plan, so the rollout can
   compare plans before any write.
+- **T1i joins only after a comparison.** T1i is a heuristic. It enters the unattended set only after a
+  7-day plan-only comparison shows its would-be Track disagrees with at most 5% of the Tracks people have
+  set on existing Delivery-Outcome pairs. The plan reports that disagreement rate on every run, so the
+  comparison is a count from the reconciler's own output, not a separate study.
 - **Contract-gated rules.** S1, S3, S3b, S4, S9, S9r, O1, E1 and the declaration branches W1d and T1d
   change what the lifecycle contract says (D2, D3, the intended-fields grammar, and automatic Status moves
   and membership). The hierarchy and default branches W1h, T1i and T1f, and gate replay `GR`, are not
@@ -754,6 +764,10 @@ e and s stay.
   - Visibility and fallbacks: an effect is visible to later cards in the same round; a fallback (T1f, S9,
     O1's empty fill) never applies while an input it could inherit from is pending; a cycle collapses
     into one unit decided by declarations or proposed.
+  - Declared Track: T1i and T1f never write a card whose intended-fields line declares a Track; while
+    T1d is off the effect is deferred and expires into `track-declared-pending`.
+  - T1i comparison: the plan's disagreement rate between T1i's would-be values and human-set Tracks on
+    existing pairs is computed and reported.
   - Track on young leaves: T1i inherits from a Project 3 Outcome parent before the leaf's Work level is
     written; T1f never applies while the card's own Work level or its parent's Track is pending; a
     settle-window deferral's expiry counts from the end of the window.
@@ -835,12 +849,14 @@ e and s stay.
 | 17 | Abandoned PR | In review with only a closed unmerged PR: S4 applies |
 | 18 | Search lag | An open PR missing from the search but present in the timeline: no move this run, a move next run once indexed; a PR in the search but closed in the timeline: no move |
 | 19 | Deferred record replay | The gate's next invocation replays its `deferred` record when Status equals the preimage, and proposes when it does not |
-| 20 | Fallback wait | A new Outcome whose Track comes from a declaration and a child with none, the child under 24 hours old (its W1h still deferring): the child inherits the parent's Track (T1i) at once and never takes `Follow-up` |
+| 20 | Fallback wait | A new Outcome whose Track comes from a declaration and a child with none, the child under 24 hours old (its W1h still deferring): with T1i enabled the child inherits the parent's Track at once; with T1i off it shows the would-be value and expires into `track-undetermined`; in neither case does it take `Follow-up` |
 | 21 | W1 conflict | A declaration of Outcome on a leaf whose parent has sub-issues: structurally a Delivery, so refused as `work-level-conflict`, not written |
 | 22 | Replay order | Two deferred records for one Delivery from two merges: only the newer is replayed; the older becomes `superseded` and is never sent; records for different Deliveries replay in merge order |
 | 23 | Expired deferral | A fallback whose input stays pending becomes a proposal on its third run, or after 24 hours, whichever comes first; when the input later settles, the effect applies and the proposal clears |
 | 24 | Young or unparented leaf | A leaf issue 2 hours old under a Project 3 Outcome: W1h defers, then writes Delivery after 24 hours; a leaf whose parent is off the board: deferred, then proposed; a leaf whose body declares Outcome while W1d is off: refused |
 | 25 | Crash during replay | Two `deferred` records for one Delivery and a crash after the older is rewritten to `superseded`: the next invocation sends at most once, for the newer record only; a newer `verified` record keeps an older `deferred` one from ever sending |
+| 26 | Declared Follow-up under an Active delivery parent | T1i does not write `Active delivery`; with T1d off the effect defers and then becomes `track-declared-pending`; with T1d on, T1d writes `Follow-up` |
+| 27 | Declared Active delivery on a parentless card | T1f does not write `Follow-up`; with T1d off it defers and then becomes `track-declared-pending`; with T1d on, T1d writes `Active delivery` |
 
 ## 12. Phase 2 PR sequence
 
@@ -943,3 +959,10 @@ nonmaterial list:
 |---|---|---|
 | T1f on young leaves | T1i inherits through the structural classification, before the leaf's Work level is written; T1f also waits for the card's own pending Work level; fixture 20 holds for a child under 24 hours old | §3, §10, §11 |
 | Nonmaterial | A settle-window deferral's expiry starts when the window ends; "older than some other record"; older `deferred` records are also superseded when a newer record is already non-`deferred`; pre-PR-1 records without `mergedAt` are ordered oldest | §3, §6, §10 |
+
+[Root's rulings](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548973997) on the round-6 re-review of #5139 (at `15e48d7d`), 2026-10-31:
+
+| Finding | Ruling | Where |
+|---|---|---|
+| Declared Track overwritten | A declared Track wins: T1i and T1f never write it; while T1d is off it is a refusal-only read, deferred and expiring into `track-declared-pending`; two fixtures | §3, §10, §11 |
+| T1i is a heuristic | Inheritance disagrees with about 36% of live pairs, so T1i stays out of the unattended starting set until a 7-day plan-only comparison shows at most 5% disagreement; the starting set is `["W1h","T1f"]`, and T1f applies only to undeclared, parentless, settled cards | §3, §8 |
