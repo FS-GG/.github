@@ -2710,7 +2710,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "3008677b36dec29a4f6df18500cfb3aa79e00c7a9b48c2e1a97eb1665ddcbe6a",
-      "tree-sha256": "69fdb2688a4253eafdef2facc1707d1040f6773299dbae6ef1beb554a41900fd",
+      "tree-sha256": "64b28cf2157efe61ce6ba19613a3c182beb3af24f9c4f1a210577376d402c171",
       "files": [
         {
           "path": "SKILL.md",
@@ -2784,7 +2784,7 @@
         },
         {
           "path": "references/lifecycle-contract.md",
-          "sha256": "5d364c114d886ea803c536b7e840ca83053f7088ebd59b9f5c1152bef93b12a5",
+          "sha256": "86e01a6b87e10de1b04a8372c0e915092d2b500f9184c965d7cca3733539985a",
           "executable": false
         },
         {

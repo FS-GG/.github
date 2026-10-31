@@ -312,6 +312,17 @@ for confirmation alone. Required CI and ADR-0084 coherent validation still run. 
 reported separately; required pending/failed checks block their dependent delivery or effect.
 Read [delivery reliability](delivery-reliability.md) for recurring qualification failures.
 
+Fixtures and release controls (the gates, pins and checks that decide whether a release may proceed)
+derive time and versions from observed state: they must not hard-code a wall-clock date, a published
+version or tag, or ambient environment such as `XDG_*` config or an interpreter constant
+(#4993, #5007, FS.GG.Coordination#1092, #5018, #5032). Each uses an injected clock, a value derived from
+observed state (for example, select a version above the existing tags), an isolated fixture or sandbox,
+or a value normalised per interpreter. A pin declared as the control's subject and checked against its
+authoritative source (kit and CLI pins, frozen routes, the consumed-operation controls) is not a
+hard-code, and a literal date or version is fine as test input under an injected clock. The author
+confirms this and names the clock, source or sandbox for each such fixture in the PR body; the reviewer
+checks it.
+
 Use `tools/pr-lane-admission.py` for stable campaign/chain, exact pushed head and normal metadata.
 Keep one open PR per coherent chain and at most two managed PRs per repository across campaigns.
 Preserve metadata through canonical body/head updates. Assemble compatible source/version/Atlas edits
