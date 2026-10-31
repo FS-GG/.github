@@ -28,6 +28,8 @@ on:
       - "scripts/board-currency-fetch.py"
       - "tests/board-currency/**"
       - ".github/workflows/board-currency-shadow.yml"
+      - "scripts/board-linkage.py"
+      - ".github/workflows/board-linkage.yml"
   push:
     branches: [main]
     paths:
@@ -40,6 +42,8 @@ on:
       - "scripts/board-currency-fetch.py"
       - "tests/board-currency/**"
       - ".github/workflows/board-currency-shadow.yml"
+      - "scripts/board-linkage.py"
+      - ".github/workflows/board-linkage.yml"
   workflow_dispatch:
 
 permissions:

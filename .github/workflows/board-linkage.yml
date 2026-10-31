@@ -1,0 +1,65 @@
+name: board-linkage
+
+# ADVISORY PR CHECK (Refs #5094). Design: docs/coordination/2026-10-31-board-currency-gate.md §2(a).
+#
+# Rule R1 for one pull request: a routine PR references exactly one Project 3 Delivery that has a parent
+# Outcome (or carries a valid recorded override). It imports the observer's own `linkage_of()` and
+# `override_of()` (scripts/board-currency-rules.py, rule-set v2), so check, merge gate and observer agree.
+# A PR without the routine marker is skipped and passes, so non-routine merges are never blocked.
+#
+# Phase 2 is ADVISORY: `--mode advisory` exits 0 on every verdict and writes a warning for refused or
+# unknown. It is NOT a required context. The binding control is the merge gate in
+# tools/routine-delivery.py; making this check required is a separate Root settings step (add the
+# `board-linkage` context with app_id 15368 to main's protection, with readback), because enforce_admins is
+# true and a required red check would block every merge.
+#
+# WHY A SEPARATE WORKFLOW: routine-eligibility.yml is a producer file distributed to receiver workspaces
+# (src/FS.GG.Drivers/workspace-inventory.json); receivers have no App secret, and changing producer bytes
+# reopens the producer-installation contract. This workflow lives in FS-GG/.github only.
+#
+# pull_request_target: the workflow and script come from the default branch; no candidate revision is
+# checked out or run. The PR body is read as data through the API, never interpolated into a shell.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: board-linkage-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  board-linkage:
+    name: board-linkage
+    if: github.event.pull_request.base.ref == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Mint a read-only installation token for Project 3, issues and pull requests
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-organization-projects: read
+          permission-issues: read
+          permission-pull-requests: read
+
+      - name: Evaluate R1 for this pull request (advisory)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          python3 scripts/board-linkage.py --repo "$REPO" --pr "$PR" --mode advisory
