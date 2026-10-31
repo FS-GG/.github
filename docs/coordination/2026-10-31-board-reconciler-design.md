@@ -181,7 +181,9 @@ parent's Track, and O1 reads the children's Statuses after S3, S3b or S4 moved t
    24 hours, whichever comes first. The reconciler counts runs and first-deferral time in its local state
    directory; that record is an input to `derive`, so derivation stays a pure function of its inputs.
    Proposing does not give up the effect: if its inputs settle later and its rule is enabled, it is
-   still applied automatically, and its proposal clears.
+   still applied automatically, and its proposal clears. For a deferral caused by a settle window (W1h's
+   leaf window), the runs and hours are counted from the moment the window ends, not from the first
+   deferral.
 5. **Termination.** Fills only move a field from empty to a value, and never again. S3, S3b and S4 exclude
    each other on the PR facts (an open non-draft linked PR, only a draft one, none at all), so no move
    on a Delivery can be undone by another move in the same derivation. O1 reads only its children's
@@ -245,10 +247,19 @@ can wait, and only on time and the parent's membership. Never overwrite a popula
 
 ### Track
 
-Never overwrite. For an empty value, in order: the body's `Track:` declaration (T1d); otherwise, for a
-Delivery, its parent Outcome's Track (T1i); otherwise `Follow-up` (T1f, a fallback that waits for the
-parent's Track to settle). All three auto-apply. `Follow-up` is the default because it claims less than
-`Active delivery` (D5, accepted).
+Never overwrite. For an empty value, in order:
+
+1. **Declaration (T1d).** The body's `Track:` value.
+2. **Inheritance (T1i).** A card that is structurally a leaf under a Project 3 parent whose Work level is
+   (or structurally will be) Outcome inherits that parent's Track, whether or not its own Work level has
+   been written yet ([round-5 ruling](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548947046)). A young leaf whose W1h write is still in its 24-hour window
+   therefore inherits its parent's Track at once.
+3. **Default (T1f).** `Follow-up`. It is a fallback: it waits for the parent's Track to settle, and it
+   also waits while the card's own Work level is pending (for example W1h still deferring), so it never
+   falls through to `Follow-up` on a card that may yet inherit.
+
+All three auto-apply. `Follow-up` is the default because it claims less than `Active delivery` (D5,
+accepted).
 
 ### Roadmap
 
@@ -571,9 +582,11 @@ migration invocations over about 3 hours.
     durably rewrites the record to `refused` and raises a proposal; nothing is sent.
   - **Supersession, crash-safe** ([round-4 ruling 1](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548916283)). Every record stores its PR's `mergedAt`.
     Supersession is decided per Delivery over **all** of that Delivery's records, whatever their state,
-    ordered by `mergedAt`. A `deferred` record older than any other record for the same Delivery never
-    sends. Before the newest record moves to `possible-send`, every older `deferred` record is durably
-    rewritten to `superseded` (written, fsynced, directory fsynced). A crash at any point therefore
+    ordered by `mergedAt`; a record written before PR 1, which has no `mergedAt`, is ordered oldest. A
+    `deferred` record older than some other record for that Delivery never sends. Before the newest
+    record moves to `possible-send`, every older `deferred` record is durably rewritten to `superseded`
+    (written, fsynced, directory fsynced); when a newer record is already in a non-`deferred` state, the
+    older `deferred` records are rewritten to `superseded` the same way. A crash at any point therefore
     leaves at most the newest record able to send.
   - **State machine.** `deferred → possible-send → verified`, with `deferred → superseded`,
     `deferred → refused` and `deferred → not-applicable` as terminal exits. `deferred`, `superseded`,
@@ -741,6 +754,9 @@ e and s stay.
   - Visibility and fallbacks: an effect is visible to later cards in the same round; a fallback (T1f, S9,
     O1's empty fill) never applies while an input it could inherit from is pending; a cycle collapses
     into one unit decided by declarations or proposed.
+  - Track on young leaves: T1i inherits from a Project 3 Outcome parent before the leaf's Work level is
+    written; T1f never applies while the card's own Work level or its parent's Track is pending; a
+    settle-window deferral's expiry counts from the end of the window.
   - Structure: W1h decides Work level in one pass without reading any other field, and a declaration that
     disagrees with it is refused. The leaf branch writes Delivery only with a Project 3 parent, an issue at
     least 24 hours old and no differing declaration; a differing declaration refuses it even while W1d is
@@ -761,8 +777,9 @@ e and s stay.
   `deferred`, `superseded` and `not-applicable`; the gate never sending for a `deferred` PR outside
   replay; replay in merge order, with older records for the same Delivery superseded and never sent; a
   preimage mismatch ending in `refused` with a proposal; supersession decided over all of a Delivery's
-  records by the stored `mergedAt`; older `deferred` records durably `superseded` before the newest
-  becomes `possible-send`, with a crash injected between the two writes; a closed Delivery's record
+  records by the stored `mergedAt`, with pre-PR-1 records ordered oldest; older `deferred` records
+  durably `superseded` before the newest becomes `possible-send`, and also when a newer record is already
+  non-`deferred`; with a crash injected between the two writes; a closed Delivery's record
   becoming `not-applicable`; `possible-send` written before the replay send; the
   read-only `possible-send` sweep at the start of each gate invocation sending nothing; and a reconciler
   replay under `GR`.
@@ -818,7 +835,7 @@ e and s stay.
 | 17 | Abandoned PR | In review with only a closed unmerged PR: S4 applies |
 | 18 | Search lag | An open PR missing from the search but present in the timeline: no move this run, a move next run once indexed; a PR in the search but closed in the timeline: no move |
 | 19 | Deferred record replay | The gate's next invocation replays its `deferred` record when Status equals the preimage, and proposes when it does not |
-| 20 | Fallback wait | A new Outcome whose Track comes from a declaration and a child with none: the child inherits it (T1i) and never takes `Follow-up` first |
+| 20 | Fallback wait | A new Outcome whose Track comes from a declaration and a child with none, the child under 24 hours old (its W1h still deferring): the child inherits the parent's Track (T1i) at once and never takes `Follow-up` |
 | 21 | W1 conflict | A declaration of Outcome on a leaf whose parent has sub-issues: structurally a Delivery, so refused as `work-level-conflict`, not written |
 | 22 | Replay order | Two deferred records for one Delivery from two merges: only the newer is replayed; the older becomes `superseded` and is never sent; records for different Deliveries replay in merge order |
 | 23 | Expired deferral | A fallback whose input stays pending becomes a proposal on its third run, or after 24 hours, whichever comes first; when the input later settles, the effect applies and the proposal clears |
@@ -919,3 +936,10 @@ nonmaterial list:
 | 1. Crash-safe replay | A terminal `deferred → refused` for a preimage mismatch, raising a proposal; supersession decided per Delivery over all its records by the stored `mergedAt`; an older `deferred` record never sends; older records durably `superseded` before the newest moves to `possible-send` | §6, §10, §11 |
 | 2. W1h leaf branch | Delivery only with a Project 3 parent, an issue at least 24 hours old and no differing declaration (a refusal-only read while W1d is off); otherwise deferred with the usual expiry | §3, §10, §11 |
 | Nonmaterial | Liveness bound max(k, 3 runs) or 24 hours; an expired, proposed deferral is still applied when it settles, and its proposal clears | §3, §10 |
+
+[Root's rulings](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548947046) on the round-5 re-review of #5139 (at `98faef72`), 2026-10-31:
+
+| Finding | Ruling | Where |
+|---|---|---|
+| T1f on young leaves | T1i inherits through the structural classification, before the leaf's Work level is written; T1f also waits for the card's own pending Work level; fixture 20 holds for a child under 24 hours old | §3, §10, §11 |
+| Nonmaterial | A settle-window deferral's expiry starts when the window ends; "older than some other record"; older `deferred` records are also superseded when a newer record is already non-`deferred`; pre-PR-1 records without `mergedAt` are ordered oldest | §3, §6, §10 |
