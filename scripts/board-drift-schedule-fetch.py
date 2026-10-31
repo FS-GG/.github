@@ -18,7 +18,8 @@ Only a misconfigured call (no repository, no workflow) exits non-zero.
 
 A DISPATCH BY THE DISPATCHER FULFILS THE SCHEDULE (Root decision on #4990). GitHub drops cron runs; the hourly
 fdev dispatcher fires the observer with `workflow_dispatch` as the designed fallback. A dispatch run qualifies
-only when its event is `workflow_dispatch` and both its `actor` and `triggering_actor` are `--dispatcher-login`
+only when its event is `workflow_dispatch`, it ran on `main` (a feature-branch dry run must not mask a dead
+schedule: the read is filtered with `branch=main` and each row's `head_branch` is checked), and both its `actor` and `triggering_actor` are `--dispatcher-login`
 (the token owner). A dispatch by anyone else, or a re-run (a different triggering actor), does not. The fetch
 records the newest qualifying run; whether it is recent enough is the judgement's, against the same limit.
 
@@ -42,6 +43,7 @@ from pathlib import Path
 SCHEDULE_SCHEMA = "fsgg:board-drift-schedule/v1"
 RUNS_PER_PAGE = 5
 DISPATCH_RUNS_PER_PAGE = 10
+DEFAULT_BRANCH = "main"
 
 
 def now_iso(now: dt.datetime | None = None) -> str:
@@ -96,14 +98,14 @@ def read_workflow(repo: str, file: str, current_run: str | None, dispatcher: str
         newest = max(others, key=lambda r: r["created_at"])
         entry["newestScheduleRunAt"], entry["newestScheduleRunId"] = newest["created_at"], newest["id"]
 
-    status, runs = gh_json(f"repos/{repo}/actions/workflows/{file}/runs?event=workflow_dispatch&per_page={DISPATCH_RUNS_PER_PAGE}")
+    status, runs = gh_json(f"repos/{repo}/actions/workflows/{file}/runs?event=workflow_dispatch&branch={DEFAULT_BRANCH}&per_page={DISPATCH_RUNS_PER_PAGE}")
     if status != "ok" or not isinstance(runs, dict) or not isinstance(runs.get("workflow_runs"), list):
         return entry
     # No qualifying row in the page is not an error: the dispatcher is only a second way to fulfil the
     # schedule. A failed or malformed read IS (above): the judgement must not call a schedule stale when
     # it could not look at the fallback.
     dispatched = [r for r in runs["workflow_runs"] if isinstance(r, dict) and str(r.get("id")) != str(current_run)
-                  and r.get("event") == "workflow_dispatch" and r.get("created_at")
+                  and r.get("event") == "workflow_dispatch" and r.get("head_branch") == DEFAULT_BRANCH and r.get("created_at")
                   and login(r.get("actor")) == dispatcher and login(r.get("triggering_actor")) == dispatcher]
     if dispatched:
         newest = max(dispatched, key=lambda r: r["created_at"])

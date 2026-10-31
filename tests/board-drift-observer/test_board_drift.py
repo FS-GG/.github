@@ -1527,7 +1527,7 @@ class ScheduleFetch(unittest.TestCase):
         self.state = Path(d.name, "state.json")
         replies = dict(replies)
         for path in [k for k in replies if "/actions/workflows/" in k and "/runs" not in k]:
-            replies.setdefault(path + "/runs?event=workflow_dispatch&per_page=10", {"total_count": 0, "workflow_runs": []})
+            replies.setdefault(path + "/runs?event=workflow_dispatch&branch=main&per_page=10", {"total_count": 0, "workflow_runs": []})
         self.state.write_text(json.dumps({"calls": [], "replies": replies}))
         env = {"BOARD_DRIFT_GH": str(gh), "FAKE_SCHED_STATE": str(self.state), "GITHUB_RUN_ID": "9"}
         prev = {k: os.environ.get(k) for k in env}
@@ -1552,13 +1552,13 @@ class ScheduleFetch(unittest.TestCase):
                 {"total_count": len(rows) if total is None else total, "workflow_runs": rows})
 
     @staticmethod
-    def row(rid, hours, event="schedule", actor=DISPATCHER, triggering=None):
-        return {"id": rid, "event": event, "created_at": hours_ago(hours), "actor": {"login": actor},
+    def row(rid, hours, event="schedule", actor=DISPATCHER, triggering=None, branch="main"):
+        return {"id": rid, "event": event, "created_at": hours_ago(hours), "head_branch": branch, "actor": {"login": actor},
                 "triggering_actor": {"login": triggering or actor}}
 
     @staticmethod
     def dispatch(file, rows):
-        return (f"repos/{REPO}/actions/workflows/{file}/runs?event=workflow_dispatch&per_page=10",
+        return (f"repos/{REPO}/actions/workflows/{file}/runs?event=workflow_dispatch&branch=main&per_page=10",
                 {"total_count": len(rows), "workflow_runs": rows})
 
     def replies(self, *pairs):
@@ -1616,6 +1616,17 @@ class ScheduleFetch(unittest.TestCase):
         e = doc["workflows"][0]
         self.assertEqual((e["state"], e["newestDispatchRunAt"]), ("ok", None))
         self.assertEqual(s_findings(doc | {"workflows": [e, sched_entry(PEER, 1)]}), [(f"workflow:{SELF_WF}", "stale")])
+
+    def test_a_dispatch_on_another_branch_does_not_fulfil_the_schedule_and_the_read_is_filtered_to_main(self):
+        rows = [self.row(3, 0.2, "workflow_dispatch", branch="feature/dry-run"),
+                {"id": 4, "event": "workflow_dispatch", "created_at": hours_ago(0.1), "actor": {"login": DISPATCHER},
+                 "triggering_actor": {"login": DISPATCHER}}]
+        self.stub(self.replies(self.wf(SELF_WF), self.runs(SELF_WF, [self.row(2, 30)]), self.dispatch(SELF_WF, rows)))
+        _, doc = self.fetch(SELF_WF)
+        e = doc["workflows"][0]
+        self.assertEqual((e["state"], e["newestDispatchRunAt"]), ("ok", None))
+        self.assertEqual(s_findings(doc | {"workflows": [e, sched_entry(PEER, 1)]}), [(f"workflow:{SELF_WF}", "stale")])
+        self.assertTrue([c for c in json.loads(self.state.read_text())["calls"] if "event=workflow_dispatch&branch=main&" in c])
 
     def test_a_failed_or_malformed_dispatch_read_is_unreadable_never_a_stale_schedule(self):
         path = self.dispatch(SELF_WF, [])[0]
