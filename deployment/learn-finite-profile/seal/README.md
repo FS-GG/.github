@@ -130,3 +130,15 @@ command, so `seal` also checks the real elapsed time since M1 against the clock 
 `developer` has full sudo and can edit or remove any file this tool writes. The records detect mistakes; they do not defend
 against Root. All writes go through `/srv/bulk/services/usr-local-libexec-fsgg-learn`, behind a root-owned chain check from
 `/srv/bulk/services` and a same-inode check against the mounted view.
+
+### Pinned directory descriptors
+
+`/srv/bulk` is developer-owned, so a path check followed by path-based writes can be raced by renaming a directory between the
+two. Each write function (`seal`, `claim`, `void`, `supersede`, `admit`) now pins the source directory once: every directory
+from `/srv/bulk/services` down is opened with `O_DIRECTORY|O_NOFOLLOW` through `openat`, `fstat`-checked on its descriptor
+(root-owned, not group/other-writable), and compared by device and inode with the mounted view. The operation then runs on
+`/proc/self/fd/<fd>`, a path that resolves to the pinned directory whatever happens to the name afterwards; everything below it
+is root-owned, mode-checked and not writable by the developer. An internal call that already carries a pinned path (the claim
+inside `supersede`) does not pin again, so one operation cannot straddle two directories. Results report the path the operator
+named, not the `/proc` path. `check_admission` reads through the same kind of pinned chain from its chain start. This needs
+`/proc` mounted; the tool refuses otherwise. It is the same pattern as the acknowledgement writer r2 (#5009).
