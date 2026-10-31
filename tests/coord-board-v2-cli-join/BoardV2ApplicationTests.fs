@@ -124,6 +124,62 @@ let ``successor actual CLI reconciles twenty two items before its unchanged requ
         Assert.Empty reads.Mutations
     finally Directory.Delete(directory, true)
 
+let private cohortOf (count: int) =
+    let rows = [ for index in 1 .. count -> $"I_cap_{index}", { ProgrammeFixture.issue with Number = 6000 + index }, "docs/coordination/programme.md" ]
+    let selected =
+        ProgrammeFixture.enroll
+            { ProgrammeFixture.successorBinding () with
+                SelectedIssues = rows |> List.map (fun (id, issue, _) -> id, $"{issue.Owner}/{issue.Repository}#{issue.Number}") |> Map.ofList } rows
+    rows, selected
+
+[<Fact>]
+let ``actual CLI inspects a full 500-row cohort inside its scaled request ceiling`` () =
+    // #5119: the flat 500-send ceiling was exhausted by the 207-row cohort-90 inspection. The ceiling now scales with the
+    // selected population, so the full 500-row cap is readable; the same run needs more than the old flat 500 sends.
+    let rows, selected = cohortOf V2Projection.maximumProgrammeRows
+    let reads = ProgrammeFixture.successorTransportFor selected rows (Some "Delivery") ProgrammeFixture.unchanged
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-cap500-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+    try
+        let input, output = Path.Combine(directory, "binding.json"), Path.Combine(directory, "report.json")
+        File.WriteAllText(input, ProgrammeFixture.bindingJsonFor selected)
+        let code = BoardV2Application.runWithTransport reads ["inspect"; "--binding-file"; input; "--report-file"; output]
+        use report = JsonDocument.Parse(File.ReadAllText output)
+        let root = report.RootElement
+        let sends = reads.GraphQlCalls + reads.RestCalls
+        let populationGap, membershipGap = root.GetProperty("populationGap").ToString(), root.GetProperty("membershipGap").ToString()
+        Assert.True((code = 0), $"exit={code}; sends={sends}; populationGap={populationGap}; membershipGap={membershipGap}")
+        Assert.Equal(500, root.GetProperty("selected").GetInt32())
+        Assert.Equal(500, root.GetProperty("memberships").GetArrayLength())
+        Assert.InRange(sends, 501, V2Projection.refreshRequestCeiling 500)
+        Assert.Empty reads.Mutations
+    finally Directory.Delete(directory, true)
+
+[<Fact>]
+let ``actual CLI refuses a 501-row binding before any send`` () =
+    let rows, selected = cohortOf (V2Projection.maximumProgrammeRows + 1)
+    let reads = ProgrammeFixture.successorTransportFor selected rows (Some "Delivery") ProgrammeFixture.unchanged
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-cap501-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+    try
+        let input, output = Path.Combine(directory, "binding.json"), Path.Combine(directory, "report.json")
+        File.WriteAllText(input, ProgrammeFixture.bindingJsonFor selected)
+        let code = BoardV2Application.runWithTransport reads ["inspect"; "--binding-file"; input; "--report-file"; output]
+        Assert.NotEqual(0, code)
+        Assert.Equal(0, reads.GraphQlCalls + reads.RestCalls)
+        Assert.False(File.Exists output)
+    finally Directory.Delete(directory, true)
+
+[<Fact>]
+let ``the refresh request ceiling keeps the historical floor and scales to the row cap`` () =
+    Assert.Equal(500, V2Projection.refreshRequestCeiling 0)
+    Assert.Equal(500, V2Projection.refreshRequestCeiling 22)
+    Assert.Equal(500, V2Projection.refreshRequestCeiling 109)
+    Assert.Equal(892, V2Projection.refreshRequestCeiling 207)
+    Assert.Equal(2064, V2Projection.refreshRequestCeiling 500)
+    Assert.Equal(2064, V2Projection.refreshRequestCeiling 501)
+    Assert.Equal(500, V2Projection.refreshRequestCeiling -1)
+
 [<Fact>]
 let ``report history roundtrip strips current authority while retaining last verification`` () =
     let issue = { Owner = "FS-GG"; Repository = ".github"; Number = 2963 }

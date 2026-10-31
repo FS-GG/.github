@@ -6,7 +6,7 @@ namespace FS.GG.Coord.Tests.Base
 // do not use it from production code. Drop it only together with `V2EnrollmentDifferentialTests.fs`.
 //
 // ONE DOCUMENTED EDIT: the PR 1 line `let rowCap = 100` is re-pointed at the lifted reader ceiling
-// (`V2Projection.maximumProgrammeRows`), because the row ceiling was lifted from 100 to 250 on purpose (#4941 PR 4) and the
+// (`V2Projection.maximumProgrammeRows`), because the row ceiling was lifted from 100 to 250 (#4941 PR 4) and then 500 (#5119) on purpose and the
 // differential must compare everything else. The differential test restores that one line and checks the pinned hash of
 // the original body, so any other edit is detected.
 module V2EnrollmentPr1 =

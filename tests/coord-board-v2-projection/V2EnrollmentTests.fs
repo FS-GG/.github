@@ -152,21 +152,21 @@ module V2EnrollmentTests =
         Assert.Equal(false, (verifyPair "{" successorPrivate successorPublic).PrefixPreserved)
 
     [<Fact>]
-    let ``the planner row ceiling is the reader ceiling, lifted from 100 to 250 together`` () =
-        Assert.Equal((250, 100), (rowCap, legacyRowCap))
-        Assert.Equal((250, 100), (V2Projection.maximumProgrammeRows, V2Projection.legacyProgrammeRowCap))
+    let ``the planner row ceiling is the reader ceiling, lifted from 100 to 250 to 500 together`` () =
+        Assert.Equal((500, 250, 100), (rowCap, previousRowCap, legacyRowCap))
+        Assert.Equal((500, 250, 100), (V2Projection.maximumProgrammeRows, V2Projection.previousProgrammeRowCap, V2Projection.legacyProgrammeRowCap))
         let extraIssue = { request.Issues.[0] with Ref = "FS-GG/.github#80003" }
         let extraFact = fact "FS-GG/.github#80003" "I_synthetic_new3"
-        // Old-cap controls: 98+2 = 100 and 99+2 = 101 are both accepted by the planner and by the installed constructor now.
-        for count, total in [ 98, 100; 99, 101; 100, 102 ] do
+        // Old-cap controls: 98+2 = 100, 99+2 = 101 and 248+2 / 249+2 around the 0.114.0 ceiling are all accepted now.
+        for count, total in [ 98, 100; 99, 101; 100, 102; 248, 250; 249, 251 ] do
             let p, q, _ = predecessor count ""
             let built = plan p q request facts |> get
             Assert.Equal(total, built.TotalRows)
             Assert.True(V2Projection.prepareProgrammeBinding built.TemplateJson built.Payload (fun () -> Array.create 32 1uy) |> Result.isOk, string total)
-        // New-bound controls: 248+2 = 250 is accepted, 249+2 = 251 is refused by the planner...
-        let privateJson, publicJson, _ = predecessor 248 ""
-        Assert.Equal(250, (plan privateJson publicJson request facts |> get).TotalRows)
-        let over, overPublic, _ = predecessor 249 ""
+        // New-bound controls: 498+2 = 500 is accepted, 499+2 = 501 is refused by the planner...
+        let privateJson, publicJson, _ = predecessor 498 ""
+        Assert.Equal(500, (plan privateJson publicJson request facts |> get).TotalRows)
+        let over, overPublic, _ = predecessor 499 ""
         Assert.Equal(Error RowCapExceeded, plan over overPublic request facts |> Result.map ignore)
         // ...and by the installed constructor itself, so the two ceilings cannot drift apart silently.
         let tooMany = { request with Issues = request.Issues @ [ extraIssue ] }
@@ -178,9 +178,9 @@ module V2EnrollmentTests =
         let template = JsonNode.Parse result.TemplateJson
         template["selectedIssues"].AsObject().Add("I_synthetic_new3", JsonValue.Create "FS-GG/.github#80003")
         Assert.True(V2Projection.prepareProgrammeBinding (compact template) beyond (fun () -> Array.create 32 1uy) |> Result.isError)
-        // The 250-row boundary on the constructor directly: the very same bytes at 250 rows are accepted.
-        let ok250 = plan privateJson publicJson request facts |> get
-        Assert.True(V2Projection.prepareProgrammeBinding ok250.TemplateJson ok250.Payload (fun () -> Array.create 32 1uy) |> Result.isOk)
+        // The 500-row boundary on the constructor directly: the very same bytes at 500 rows are accepted.
+        let ok500 = plan privateJson publicJson request facts |> get
+        Assert.True(V2Projection.prepareProgrammeBinding ok500.TemplateJson ok500.Payload (fun () -> Array.create 32 1uy) |> Result.isOk)
 
     [<Fact>]
     let ``refusal codes are the closed printable case names and carry no input`` () =

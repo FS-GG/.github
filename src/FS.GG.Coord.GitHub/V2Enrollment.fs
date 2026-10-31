@@ -10,6 +10,7 @@ module V2Enrollment =
 
     let rowCap = V2Projection.maximumProgrammeRows
     let legacyRowCap = V2Projection.legacyProgrammeRowCap
+    let previousRowCap = V2Projection.previousProgrammeRowCap
 
     type Refusal =
         | DuplicateIssue

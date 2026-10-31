@@ -170,11 +170,22 @@ module V2Projection =
             Ok(Convert.ToHexStringLower(SHA256.HashData bytes))
         with _ -> enrollmentFailure()
 
-    // The programme population ceiling. It was 100 (#4941); lifted to 250 in the coordinated reader and engine release.
-    // Both the private payload row count and the binding's selected-issue count are bounded by this one value. The byte
-    // bounds (128KiB payload, 256KiB binding) are unchanged and still refuse fat rows long before this many.
+    // The programme population ceiling. It was 100 (#4941), then 250 (coherent 0.114.0), and is 500 (#5119): the
+    // Coordination board and its readers are limited to 500 items. Both the private payload row count and the binding's
+    // selected-issue count are bounded by this one value. The byte bounds (128KiB payload, 256KiB binding) are unchanged;
+    // the cohort-90 binding measured 37,938 payload and 62,651 binding bytes at 207 rows, about 92KiB and 150KiB at 500.
     let legacyProgrammeRowCap = 100
-    let maximumProgrammeRows = 250
+    // The Coordination board item limit (#5119): the complete-membership read refuses a larger board.
+    let maximumBoardItems = 500
+    let previousProgrammeRowCap = 250
+    let maximumProgrammeRows = 500
+
+    // The bounded refresh/inspect request ceiling, scaled by the selected population (#5119). It was a flat 500 sends,
+    // which the 207-row cohort-90 inspection exhausted (2,502 reads, all rows Unknown). The measured fixture cost of the
+    // batched inspection is about 3.1 sends per row (635 at 207 rows); 4 per row plus a fixed 64 keeps headroom, and the
+    // old 500 stays the floor so no smaller binding loses budget. Above maximumProgrammeRows the binding is refused
+    // before any send, so the ceiling never needs to exceed the value at that cap.
+    let refreshRequestCeiling (selectedRows: int) = max 500 (64 + 4 * min (max selectedRows 0) maximumProgrammeRows)
 
     let private payloadRows (binding: Binding) (bytes: byte array) : IoResult<(string * string * string) list> =
         try
@@ -537,7 +548,7 @@ module V2Projection =
                                         if binding.SelectedIssues.ContainsKey id && not enrolled then Error(Malformed(subject, "enrolled node has mismatched native identity"))
                                         else Ok { ItemId = item; ContentId = id; Kind = kind; Issue = issue; Enrolled = enrolled }
                             GraphQl.page subject "project memberships" (fun (value: Membership) -> value.ItemId) decode (project.GetProperty "items"))
-                GraphQl.drain subject "project memberships" { MaxPages = 10; MaxItems = 500 } fetch |> Result.bind (fun members ->
+                GraphQl.drain subject "project memberships" { MaxPages = 10; MaxItems = maximumBoardItems } fetch |> Result.bind (fun members ->
                     if (members |> List.map _.ContentId |> Set.ofList |> Set.count) <> members.Length then Error(Malformed(subject, "duplicate content memberships"))
                     else Ok members)))
 

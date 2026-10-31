@@ -284,6 +284,10 @@ module GraphQl =
 
                         match total with
                         | Error error -> Error error
+                        // A connection that reports more items than the explicit limit is refused on its first page,
+                        // without paging up to the limit first (#5119: a board above 500 items is refused, not paged).
+                        | Ok(Some reported) when reported > limits.MaxItems ->
+                            Error(Malformed(subject, $"%s{what} reports %d{reported} items, above the explicit %d{limits.MaxItems}-item limit"))
                         | Ok stableTotal ->
                             match page.Keys |> List.tryFind (fun itemKey -> Set.contains itemKey seenKeys) with
                             | Some duplicate ->
