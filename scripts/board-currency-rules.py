@@ -20,7 +20,7 @@ SHAPE
                                               same findings)
   this file `report`      -> markdown        (shadow report; counts, and public findings only)
 
-RULE SET  fsgg:board-currency-rules/v1
+RULE SET  fsgg:board-currency-rules/v2
 ======================================
 
 Every rule reads only native state carried in the snapshot: issue/PR state and state reason, PR body,
@@ -31,6 +31,10 @@ comments. Each finding has a stable ID `<rule>:<subject>:<reason>` with no ages 
       window, references (Refs or a closing keyword) EXACTLY ONE Project 3 item whose Work level is
       Delivery; that Delivery has a parent that is a Project 3 Outcome; and while the PR is open the
       Delivery is open and not Done.
+      v2: a routine PR merged on or after carryFrom stays under R1 for carryDays while unlinked (marked
+      `carried`); a PR carrying a valid override (OVERRIDE, Root author and editor) is reported as
+      `overridden`, at any age, until it is linked. linkage_of() is the one R1 implementation that the
+      board-linkage check and the merge gate also import.
   R2  Closure and Done agree: a closed item is Done; a Done item is closed; an Outcome closed as
       completed on or after the rule set's effective date carries a Root `fsgg:outcome-accepted/v1`
       marker.
@@ -53,7 +57,8 @@ comments. Each finding has a stable ID `<rule>:<subject>:<reason>` with no ages 
   U   The input needed for a verdict could not be read. Unknown is never a pass (.github#266). That covers
       an unreadable card; comments that were not read (R2, R3, R4) or a Root comment the fetch truncated
       with no marker visible (R2, R3); an unresolved blocker; a truncated sub-issue or blocked-by list;
-      and an unreadable parent card (R1, R9).
+      and an unreadable parent card (R1, R9). v2: when an unreadable card has no identity, every
+      reference, parent or open-child lookup that misses the board is Unknown (the miss could be it).
 
 An Outcome with a Root `fsgg:outcome-closure-proposed/v1` marker still yields R5/R6 (the board still
 claims open work that is not open) with `pending: "closure-proposed"`, so the report separates findings
@@ -84,7 +89,7 @@ import re
 import sys
 from pathlib import Path
 
-RULESET = "fsgg:board-currency-rules/v1"
+RULESET = "fsgg:board-currency-rules/v2"
 SNAPSHOT_SCHEMA = "fsgg:board-currency-snapshot/v1"
 FINDINGS_SCHEMA = "fsgg:board-currency-findings/v1"
 NO_VERDICT = 2
@@ -93,6 +98,10 @@ NO_VERDICT = 2
 PARAMS = {
     "activityHours": 48,
     "mergedWindowHours": 24,
+    # v2: a routine PR merged on or after carryFrom stays under R1 for carryDays while it is unlinked, and an
+    # overridden one for as long as it stays unlinked (design §1, R1 persistence).
+    "carryDays": 7,
+    "carryFrom": "2026-11-01T00:00:00Z",
     "effectiveFrom": "2026-10-31T00:00:00Z",
     "rootLogins": ["EHotwagner"],
 }
@@ -112,6 +121,10 @@ RULE_TITLES = {
 }
 
 ROUTINE_MARKER = "fsgg:routine-development/v1"
+# The override grammar, exactly (design §1): one match in the body's visible text, a reason with a
+# non-whitespace character, and a Root author and (if the body was ever edited) a Root last editor.
+OVERRIDE = re.compile(
+    r'^<!-- fsgg:board-gate-override/v1 rule=R1 reason="(?P<reason>[^"\n]{1,200})" -->$', re.M)
 ACCEPTED = re.compile(r"<!--\s*fsgg:outcome-accepted/v1\b[^>]*-->")
 PROPOSED = re.compile(r"<!--\s*fsgg:outcome-closure-proposed/v1\b[^>]*-->")
 BLOCKED_ON = re.compile(r"<!--\s*fsgg:blocked-on/v1\b([^>]*)-->")
@@ -195,6 +208,66 @@ def blocked_on_refs(comments: list[dict]) -> list[str] | None:
     return newest
 
 
+def override_of(pr: dict, roots: set[str]) -> str | None:
+    """The override reason when the PR body carries a valid override, else None.
+
+    `pr` carries `body`, `author` and `edited`; when `edited` is true it also carries `editor`. A missing
+    `edited` is not proof of an unedited body, so it is not an override (the conservative reading)."""
+    matches = list(OVERRIDE.finditer(visible_text(pr.get("body"))))
+    if len(matches) != 1 or not matches[0].group("reason").strip():
+        return None
+    if str(pr.get("author") or "").lower() not in roots or not isinstance(pr.get("edited"), bool):
+        return None
+    if pr["edited"] and str(pr.get("editor") or "").lower() not in roots:
+        return None
+    return matches[0].group("reason").strip()
+
+
+def linkage_of(pr: dict, lookup, *, anonymous_unreadable: bool = False) -> tuple[list[tuple[str, str]], dict | None]:
+    """R1 linkage for one PR, shared by the observer, the board-linkage check and the merge gate.
+
+    `lookup(ref)` returns the Project 3 card for an `owner/repo#N` key, or None when it is not on the board.
+    `anonymous_unreadable` says the board holds an unreadable card with no identity: then a miss could be
+    that card, so a miss is Unknown, not "off the board". Returns (failures, delivery) where failures is a
+    list of (rule, reason): [] means linked; a ("U", ...) entry means no verdict."""
+    own = ref_key(pr.get("repo"), pr.get("number"))
+    refs = sorted(pr_refs(str(pr.get("repo", "")), pr.get("body")) - {own})
+    cards = [lookup(r) for r in refs]
+    if any(c is not None and c.get("unreadable") for c in cards) or (anonymous_unreadable and None in cards):
+        return [("U", "r1-reference-unreadable")], None
+    cards = [c for c in cards if c is not None]
+    deliveries = [c for c in cards if c.get("workLevel") == "Delivery"]
+    if not deliveries:
+        return [("R1", "no-delivery")], None
+    if len(deliveries) > 1:
+        return [("R1", "multiple-deliveries")], None
+    d = deliveries[0]
+    out: list[tuple[str, str]] = []
+    if pr.get("state") == "OPEN" and d.get("state") != "OPEN":
+        out.append(("R1", "delivery-closed"))
+    elif pr.get("state") == "OPEN" and d.get("status") == "Done":
+        out.append(("R1", "delivery-done"))
+    parent = d.get("parent") or {}
+    parent_card = lookup(ref_key(parent.get("repo"), parent.get("number"))) if parent else None
+    if parent and (parent_card is None and anonymous_unreadable or parent_card is not None and parent_card.get("unreadable")):
+        out.append(("U", "r1-parent-unreadable"))
+    elif parent_card is None or parent_card.get("workLevel") != "Outcome":
+        out.append(("R1", "no-parent-outcome"))
+    return out, d
+
+
+R1_TEXT = {
+    "no-delivery": "routine PR references no Project 3 Delivery",
+    "multiple-deliveries": "routine PR references more than one Delivery, not exactly one",
+    "delivery-closed": "open routine PR references a closed Delivery",
+    "delivery-done": "open routine PR references a Delivery whose Status is Done",
+    "no-parent-outcome": "routine PR's Delivery has no parent Outcome on Project 3",
+    "overridden": "routine PR carries a recorded board-gate override and is still unlinked",
+    "r1-reference-unreadable": "a referenced card could not be read",
+    "r1-parent-unreadable": "the Delivery's parent card could not be read",
+}
+
+
 def validate_snapshot(snapshot: object) -> dict:
     if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
         raise NoVerdict(f"snapshot schema is not {SNAPSHOT_SCHEMA}")
@@ -228,6 +301,9 @@ class _Board:
             if item.get("repo") and item.get("number") is not None:
                 self.by_ref[ref_key(item["repo"], item["number"])] = item
         self.ref_states: dict[str, str] = dict(snapshot.get("refStates") or {})
+        # An unreadable card with no identity could be any issue: every lookup miss is then Unknown.
+        self.anonymous_unreadable = any(i.get("unreadable") and not (i.get("repo") and i.get("number") is not None)
+                                        and i.get("type") != "DraftIssue" for i in self.items)
         self.prs = [p for p in snapshot["pullRequests"] if isinstance(p, dict)]
         self.prs_by_ref: dict[str, list[dict]] = {}
         for pr in self.prs:
@@ -269,55 +345,41 @@ def evaluate(snapshot: dict, params: dict | None = None) -> list[dict]:
                     "reason": reason, "text": text, "public": is_public(private), **more})
 
     # ---------- per-PR: R1 ----------
+    carry_from = parse_time(p["carryFrom"])
+    carry = dt.timedelta(days=p["carryDays"])
+    seen: set[str] = set()
     for pr in sorted(board.prs, key=lambda x: (str(x.get("repo")), x.get("number") or 0)):
-        if not is_routine(pr.get("body")):
+        subject = ref_key(pr.get("repo"), pr.get("number"))
+        if subject in seen or not is_routine(pr.get("body")):
             continue
+        seen.add(subject)
         state = pr.get("state")
+        override = override_of(pr, roots)
+        carried = False
         if state == "OPEN":
             if pr.get("draft"):
                 continue
         elif state == "MERGED":
             merged_at = parse_time(pr.get("mergedAt"))
-            if merged_at is None or now - merged_at > merged_window:
+            if merged_at is None:
                 continue
+            if now - merged_at > merged_window:
+                in_carry = carry_from is not None and merged_at >= carry_from and now - merged_at <= carry
+                if not (in_carry or override is not None):
+                    continue
+                carried = True
         else:
             continue
-        subject = ref_key(pr.get("repo"), pr.get("number"))
         priv = pr.get("repoPrivate")
-        refs = pr_refs(str(pr.get("repo", "")), pr.get("body")) - {subject}
-        on_board = [board.by_ref[r] for r in sorted(refs) if r in board.by_ref]
-        if any(i.get("unreadable") for i in on_board):
-            emit("U", subject, "r1-reference-unreadable", "a referenced card could not be read", private=priv,
-                 verdict="unknown", pr=True)
+        failures, _ = linkage_of(pr, board.by_ref.get, anonymous_unreadable=board.anonymous_unreadable)
+        if not failures:
             continue
-        deliveries = [i for i in on_board if i.get("workLevel") == "Delivery"]
-        outcomes = [i for i in on_board if i.get("workLevel") == "Outcome"]
-        tense = "open" if state == "OPEN" else "merged"
-        if not deliveries:
-            why = "references only an Outcome" if outcomes else "references no Project 3 Delivery"
-            emit("R1", subject, "no-delivery", f"{tense} routine PR {why}", private=priv, pr=True, prState=state)
-            continue
-        if len(deliveries) > 1:
-            emit("R1", subject, "multiple-deliveries",
-                 f"{tense} routine PR references {len(deliveries)} Deliveries, not exactly one",
-                 private=priv, pr=True, prState=state)
-            continue
-        d = deliveries[0]
-        if state == "OPEN" and d.get("state") != "OPEN":
-            emit("R1", subject, "delivery-closed", "open routine PR references a closed Delivery", private=priv,
-                 pr=True, prState=state)
-        elif state == "OPEN" and d.get("status") == "Done":
-            emit("R1", subject, "delivery-done", "open routine PR references a Delivery whose Status is Done",
-                 private=priv, pr=True, prState=state)
-        parent = d.get("parent") or {}
-        parent_item = board.by_ref.get(ref_key(parent.get("repo"), parent.get("number"))) if parent else None
-        if parent_item is not None and parent_item.get("unreadable"):
-            emit("U", subject, "r1-parent-unreadable", "the Delivery's parent card could not be read",
-                 private=priv, verdict="unknown", pr=True)
-        elif parent_item is None or parent_item.get("workLevel") != "Outcome":
-            emit("R1", subject, "no-parent-outcome",
-                 f"{tense} routine PR's Delivery has no parent Outcome on Project 3", private=priv, pr=True,
-                 prState=state)
+        if override is not None:
+            failures = [("R1", "overridden")]
+        extra = {"carried": True} if carried else {}
+        for rule, reason in failures:
+            emit(rule, subject, reason, R1_TEXT[reason], private=priv, verdict="unknown" if rule == "U" else "fail",
+                 pr=True, prState=state, **extra)
 
     # ---------- per-item: R2..R9, U ----------
     for item in board.items:
@@ -375,6 +437,10 @@ def evaluate(snapshot: dict, params: dict | None = None) -> list[dict]:
             continue
 
         children, children_complete = board.children(item)
+        if board.anonymous_unreadable and any(ref_key(n.get("repo"), n.get("number")) not in board.by_ref
+                                              for n in children if n.get("state") == "OPEN"):
+            # An open child missing from the board could be the identity-less unreadable card.
+            children_complete = False
         open_children = [n for n in children if n.get("state") == "OPEN"]
         open_child_items = [board.by_ref.get(ref_key(n.get("repo"), n.get("number"))) for n in open_children]
 
@@ -452,7 +518,9 @@ def evaluate(snapshot: dict, params: dict | None = None) -> list[dict]:
         # R9
         parent = item.get("parent")
         parent_item = board.by_ref.get(ref_key(parent.get("repo"), parent.get("number"))) if parent else None
-        if parent_item is not None and parent_item.get("unreadable") and level in ("Delivery", "Outcome"):
+        parent_unknown = parent and (parent_item is None and board.anonymous_unreadable
+                                     or parent_item is not None and parent_item.get("unreadable"))
+        if parent_unknown and level in ("Delivery", "Outcome"):
             emit("U", subject, "r9-parent-unreadable", "the parent card could not be read", verdict="unknown", **kw)
         elif level == "Delivery":
             if not parent:

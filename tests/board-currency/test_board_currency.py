@@ -468,7 +468,7 @@ class Report(unittest.TestCase):
 
     def test_result_records_ruleset_and_params(self):
         result = self._result()
-        self.assertEqual(result["ruleset"], "fsgg:board-currency-rules/v1")
+        self.assertEqual(result["ruleset"], "fsgg:board-currency-rules/v2")
         self.assertEqual(result["params"]["activityHours"], 48)
 
 
@@ -578,6 +578,20 @@ class Fetch(unittest.TestCase):
         self.assertTrue(comments[0]["body"].endswith(marker))
         self.assertEqual(len(comments[1]["body"]), 4000)
 
+    def test_override_bearing_pr_gets_its_editor_and_author_from_graphql(self):
+        body = 'x\n<!-- fsgg:board-gate-override/v1 rule=R1 reason="r" -->\n'
+        search = json.dumps({"incomplete_results": False, "total_count": 1, "items": [{
+            "repository_url": "https://api.github.com/repos/FS-GG/.github", "number": 7, "title": "t",
+            "state": "open", "updated_at": RECENT, "body": body, "user": {"login": "searcher"}}]})
+        editors = json.dumps({"data": {"p0": {"pullRequest": {"lastEditedAt": RECENT, "editor": {"login": ROOT_LOGIN},
+                                                              "author": {"login": ROOT_LOGIN}}}}})
+        proc, out = self.run_fetch({"pullRequest(number": [0, editors], "graphql": [0, self.page([self.NODE])],
+                                    "is:open": [0, search], "search/issues": [0, self.EMPTY_SEARCH],
+                                    "repos/FS-GG/.github": [0, "false"]})
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        pr7 = [p for p in json.loads(out.read_text())["pullRequests"] if p["number"] == 7][0]
+        self.assertEqual((pr7["author"], pr7["edited"], pr7["editor"]), (ROOT_LOGIN, True, ROOT_LOGIN))
+
     def test_the_fetch_writes_no_board_field(self):
         text = FETCH_PATH.read_text()
         for forbidden in ("mutation", "item-edit", "updateProjectV2", "-X POST", "--method"):
@@ -659,6 +673,167 @@ class StaleOutput(unittest.TestCase):
                                   capture_output=True, text=True)
             self.assertEqual(proc.returncode, 2)
             self.assertFalse(out.exists())
+
+
+OVR = '\n<!-- fsgg:board-gate-override/v1 rule=R1 reason="GitHub outage, Delivery card pending" -->'
+
+
+class R1Override(unittest.TestCase):
+    """Rule-set v2: the exact override grammar and Root authorship (design §1)."""
+
+    ROOTS = {"ehotwagner"}
+
+    def pr(self, body, **kw):
+        base = {"repo": "FS-GG/.github", "number": 10, "state": "OPEN", "body": body, "author": ROOT_LOGIN, "edited": False}
+        base.update(kw)
+        return base
+
+    def test_valid_override(self):
+        self.assertEqual(R.override_of(self.pr(OVR), self.ROOTS), "GitHub outage, Delivery card pending")
+
+    def test_grammar_refusals(self):
+        bad = [
+            OVR + OVR,  # two matches
+            '\n<!-- fsgg:board-gate-override/v1 rule=R1 reason="" -->',
+            '\n<!-- fsgg:board-gate-override/v1 rule=R1 reason="   " -->',
+            '\n<!-- fsgg:board-gate-override/v1 rule=R2 reason="x" -->',
+            '\n<!-- fsgg:board-gate-override/v1 rule=R1 reason=x -->',
+            '\n  <!-- fsgg:board-gate-override/v1 rule=R1 reason="x" -->',  # not at line start
+            '\n`<!-- fsgg:board-gate-override/v1 rule=R1 reason="x" -->`',  # quoted in a code span
+            '\n```\n<!-- fsgg:board-gate-override/v1 rule=R1 reason="x" -->\n```\n',  # quoted in a fence
+            '\n<!-- fsgg:board-gate-override/v1 rule=R1 reason="' + "x" * 201 + '" -->',
+        ]
+        for body in bad:
+            self.assertIsNone(R.override_of(self.pr(body), self.ROOTS), body)
+
+    def test_authorship(self):
+        self.assertIsNone(R.override_of(self.pr(OVR, author="someone"), self.ROOTS))
+        self.assertIsNone(R.override_of(self.pr(OVR, edited=True, editor="someone"), self.ROOTS))
+        self.assertIsNone(R.override_of(self.pr(OVR, edited=True, editor=None), self.ROOTS))
+        self.assertIsNone(R.override_of({k: v for k, v in self.pr(OVR).items() if k != "edited"}, self.ROOTS))
+        self.assertIsNotNone(R.override_of(self.pr(OVR, edited=True, editor=ROOT_LOGIN), self.ROOTS))
+
+    def _snap(self, body, **kw):
+        snap = healthy()
+        p = pr(10, body + ROUTINE, **kw)
+        p.update(author=ROOT_LOGIN, edited=False)
+        snap["pullRequests"] = [p]
+        return snap
+
+    def test_unlinked_override_is_reported_as_overridden(self):
+        found = R.evaluate(self._snap("Refs #1" + OVR))
+        r1 = [f for f in found if f["rule"] == "R1"]
+        self.assertEqual([f["id"] for f in r1], ["R1:FS-GG/.github#10:overridden"])
+
+    def test_linked_pr_with_override_has_no_finding(self):
+        self.assertFalse([i for i in ids(self._snap("Refs #2" + OVR)) if i.startswith("R1")])
+
+    def test_override_wins_over_unknown_for_the_observer(self):
+        snap = self._snap("Refs #2" + OVR); snap["items"][1]["unreadable"] = True
+        found = ids(snap)
+        self.assertIn("R1:FS-GG/.github#10:overridden", found)
+        self.assertNotIn("U:FS-GG/.github#10:r1-reference-unreadable", found)
+
+
+class R1Carry(unittest.TestCase):
+    """Rule-set v2: merged routine PRs stay under R1 past the 24h window while unlinked."""
+
+    def snap(self, merged_at, body="Refs #1", **params):
+        s = healthy()
+        p = pr(10, body + ROUTINE, state="MERGED", merged_at=merged_at)
+        p.update(author=ROOT_LOGIN, edited=False)
+        s["pullRequests"] = [p]
+        return s
+
+    P = {"carryFrom": "2026-10-25T00:00:00Z"}
+
+    def test_unlinked_pr_inside_carry_window_is_carried(self):
+        found = [f for f in R.evaluate(self.snap("2026-10-27T12:00:00Z"), self.P) if f["rule"] == "R1"]
+        self.assertEqual([(f["id"], f.get("carried")) for f in found], [("R1:FS-GG/.github#10:no-delivery", True)])
+
+    def test_carry_window_bounds(self):
+        self.assertFalse([f for f in R.evaluate(self.snap("2026-10-24T11:59:59Z"), {"carryFrom": "2026-10-20T00:00:00Z"})
+                          if f["rule"] == "R1"])  # older than carryDays
+        self.assertFalse([f for f in R.evaluate(self.snap("2026-10-24T23:00:00Z"), self.P) if f["rule"] == "R1"])  # before carryFrom
+        self.assertTrue([f for f in R.evaluate(self.snap("2026-10-24T12:00:00Z"), {"carryFrom": "2026-10-20T00:00:00Z"})
+                         if f["rule"] == "R1"])  # exactly carryDays old
+
+    def test_default_carry_starts_in_the_future_so_v1_window_holds(self):
+        self.assertFalse([f for f in R.evaluate(self.snap("2026-10-27T12:00:00Z")) if f["rule"] == "R1"])
+
+    def test_overridden_pr_is_carried_at_any_age(self):
+        found = [f for f in R.evaluate(self.snap("2026-09-01T00:00:00Z", body="Refs #1" + OVR)) if f["rule"] == "R1"]
+        self.assertEqual([(f["id"], f.get("carried")) for f in found], [("R1:FS-GG/.github#10:overridden", True)])
+
+    def test_linked_carried_pr_clears(self):
+        self.assertFalse([f for f in R.evaluate(self.snap("2026-10-27T12:00:00Z", body="Refs #2"), self.P) if f["rule"] == "R1"])
+
+    def test_duplicate_pr_rows_give_one_finding(self):
+        s = self.snap(RECENT)
+        s["pullRequests"].append(copy.deepcopy(s["pullRequests"][0]))
+        self.assertEqual(len([f for f in R.evaluate(s) if f["rule"] == "R1"]), 1)
+
+
+class AnonymousUnreadable(unittest.TestCase):
+    """An unreadable card with no identity could be any issue, so a lookup miss is Unknown."""
+
+    def snap(self):
+        s = healthy()
+        s["items"].append({"itemId": "PVTI_anon", "unreadable": True})
+        s["project"]["totalCount"] = 3
+        return s
+
+    def test_reference_miss_is_unknown(self):
+        s = self.snap(); s["pullRequests"] = [pr(10, "Refs #2, #99" + ROUTINE)]
+        found = ids(s)
+        self.assertIn("U:FS-GG/.github#10:r1-reference-unreadable", found)
+        self.assertFalse([i for i in found if i.startswith("R1")])
+
+    def test_r1_parent_miss_is_unknown(self):
+        s = self.snap(); s["items"][1]["parent"] = {"repo": "FS-GG/.github", "number": 77}
+        found = ids(s)
+        self.assertIn("U:FS-GG/.github#10:r1-parent-unreadable", found)
+        self.assertNotIn("R1:FS-GG/.github#10:no-parent-outcome", found)
+
+    def test_r9_parent_miss_is_unknown(self):
+        s = self.snap(); s["pullRequests"] = []; s["items"][1]["parent"] = {"repo": "FS-GG/.github", "number": 77}
+        found = ids(s)
+        self.assertIn("U:FS-GG/.github#2:r9-parent-unreadable", found)
+        self.assertNotIn("R9:FS-GG/.github#2:parent-off-board", found)
+
+    def test_r6_child_miss_is_unknown(self):
+        s = self.snap(); s["pullRequests"] = []
+        s["items"][0]["subIssues"] = {"total": 1, "nodes": [{"repo": "FS-GG/.github", "number": 88, "state": "OPEN"}]}
+        s["items"][1]["parent"] = None; s["items"][1].update(state="CLOSED", status="Done")
+        found = ids(s)
+        self.assertIn("U:FS-GG/.github#1:r6-children-unread", found)
+        self.assertFalse([i for i in found if i.startswith("R6")])
+
+    def test_without_anonymous_card_a_miss_is_a_verdict(self):
+        s = healthy(); s["pullRequests"] = [pr(10, "Refs #99" + ROUTINE)]
+        self.assertIn("R1:FS-GG/.github#10:no-delivery", ids(s))
+
+    def test_identified_unreadable_card_does_not_poison_lookups(self):
+        s = healthy()
+        s["items"].append({"itemId": "PVTI_x", "type": "Issue", "repo": "FS-GG/.github", "number": 50, "unreadable": True})
+        s["project"]["totalCount"] = 3
+        s["pullRequests"] = [pr(10, "Refs #99" + ROUTINE)]
+        self.assertIn("R1:FS-GG/.github#10:no-delivery", ids(s))
+
+
+class LinkageFunction(unittest.TestCase):
+    """linkage_of is the one R1 implementation the check and the gate import."""
+
+    def test_linked_returns_the_delivery(self):
+        snap = healthy(); board = {f"FS-GG/.github#{i['number']}": i for i in snap["items"]}
+        failures, d = R.linkage_of(snap["pullRequests"][0], board.get)
+        self.assertEqual((failures, d["number"]), ([], 2))
+
+    def test_failure_lists_every_reason(self):
+        snap = healthy(); snap["items"][1].update(status="Done", parent=None)
+        board = {f"FS-GG/.github#{i['number']}": i for i in snap["items"]}
+        failures, _ = R.linkage_of(snap["pullRequests"][0], board.get)
+        self.assertEqual(failures, [("R1", "delivery-done"), ("R1", "no-parent-outcome")])
 
 
 class ShadowWorkflow(unittest.TestCase):
