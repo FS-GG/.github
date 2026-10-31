@@ -24,11 +24,11 @@ spec.loader.exec_module(read)
 
 
 def workflow_contract(text):
-    required = ["default: coherent-0113-absence", "- coherent-0113-absence", "- host-090-org-artifact",
+    required = ["default: coherent-0114-absence", "- coherent-0114-absence", "- host-090-org-artifact",
                 "contents: read\n  packages: read", "cancel-in-progress: false", "timeout-minutes: 5",
                 "persist-credentials: false", "python3 scripts/telemetry-host-published-org-read.py --check-selection",
                 "python3 tests/release-successor-candidate/run.py", "python3 tests/telemetry-host-published-org-read/run.py",
-                "if: inputs.observation == 'coherent-0113-absence' || inputs.observation == ''",
+                "if: inputs.observation == 'coherent-0114-absence' || inputs.observation == ''",
                 "if: inputs.observation == 'host-090-org-artifact'",
                 "if: inputs.observation == 'host-090-org-artifact' && steps.host-org.outcome == 'success'",
                 "name: telemetry-host090-org-read-${{ github.sha }}-${{ github.run_id }}",
@@ -43,7 +43,7 @@ def workflow_contract(text):
         if forbidden in text:
             raise ValueError("workflow effect or bypass")
     default, host = text.split("      - name: Observe the published Host 0.9 org archive once", 1)
-    if "upload-artifact" in default or "--version 0.113.0 --predecessor 0.112.0" not in default:
+    if "upload-artifact" in default or "--version 0.114.0 --predecessor 0.113.0" not in default:
         raise ValueError("default coherent branch changed")
     if text.index("--check-selection") > text.index("python3 tests/"):
         raise ValueError("selection ordering")
@@ -231,7 +231,7 @@ class ContextAndWorkflowTests(unittest.TestCase):
 
     def test_actual_workflow_and_causal_mutations(self):
         text=(ROOT/'.github/workflows/release-successor-feed-readiness.yml').read_text();workflow_contract(text)
-        replacements=[('packages: read','packages: write'),('default: coherent-0113-absence','default: host-090-org-artifact'),
+        replacements=[('packages: read','packages: write'),('default: coherent-0114-absence','default: host-090-org-artifact'),
                       ('--check-selection','--unchecked'),(" && steps.host-org.outcome == 'success'",''),
                       ('if-no-files-found: error','if-no-files-found: warn'),('tests/telemetry-host-published-org-read/run.py','other.py'),
                       ("if: inputs.observation == 'host-090-org-artifact'\n",'if: always()\n')]
