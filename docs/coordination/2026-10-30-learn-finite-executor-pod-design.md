@@ -213,7 +213,8 @@ re-hashes every file at launch and after the run.
 source identity is the sha256 of the canonical list of the two source subtree paths and, for each file in M1, relative
 path, size, sha256 and `mtime_ns`. The same retained source therefore cannot be claimed twice by re-sealing it.
 
-The claim is written by a root-only writer (`learn-claim.py`, `O_CREAT|O_EXCL|O_NOFOLLOW`) through the writable source
+The claim is written by the root-only seal and claim tool (`deployment/learn-finite-profile/seal/learn_seal_claim.py claim`,
+delivered in #5000; `O_CREAT|O_EXCL|O_NOFOLLOW`) through the writable source
 path `/srv/bulk/services/usr-local-libexec-fsgg-learn/claims/<source-identity>.claim`, root:root 0644, containing the op
 id, the source identity, the sealed manifest sha256 and the UTC time. The in-VM bind is read-only, so the operator and
 the pod containers can only read it.
