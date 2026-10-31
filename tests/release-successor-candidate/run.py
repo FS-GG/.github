@@ -250,7 +250,7 @@ class SuccessorRailBindingTests(unittest.TestCase):
                 self.assertNotIn(forbidden, workflow.lower())
         # Default coherent freshness remains free of artifact retention. The explicit
         # Host branch retains only its bounded already-published package observation.
-        default = workflow.split("      - name: Observe the published Host 0.8 org archive once", 1)[0]
+        default = workflow.split("      - name: Observe the published Host 0.9 org archive once", 1)[0]
         self.assertNotIn("upload-artifact", default)
         host_spec = importlib.util.spec_from_file_location(
             "host_read_workflow_contract", ROOT / "tests/telemetry-host-published-org-read/run.py")
