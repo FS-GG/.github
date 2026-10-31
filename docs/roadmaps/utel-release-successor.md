@@ -2134,3 +2134,34 @@ recovery constant are unchanged. The existing45-minute candidate, exact seven-me
 publish=false preflight and publish=true each need their own admission on the same immutable
 source and archive. Host`claude-local-transcript/1` admission needs a separately released Host
 built from at least`61526e94`; this coherent route does not change Host0.8.
+
+## Selected coordination CLI coherent114 source window — 2026-10-31
+
+Source0.114.0 was composed by [PR4905](https://github.com/FS-GG/.github/pull/4905) (merge`0123febd`)
+and now also carries [Delivery4940](https://github.com/FS-GG/.github/issues/4940) (`context-view`, PR4948)
+and [Delivery4941](https://github.com/FS-GG/.github/issues/4941) (batched `enrollment`, `route-preflight`, PR4950,
+PR4956, PR4968 and the programme row ceiling lift from100 to250, PR4980), under parent
+[Outcome4730](https://github.com/FS-GG/.github/issues/4730). This window rebinds only the release route.
+The genuine promoted predecessor is113, immutable source`79db622ff4a51498e22ae5820eeb2b470fc743c5`, content
+`sha256:14c8ba3f954347278a646bb0d227cbbea820845bf5596ad3d7e7fcaaac1ab908`
+([release421880935](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.113.0) stable-channel asset).
+Current source selects logical ref`refs/heads/fsgg/v2/journal/release/coord114-enrollment-context-20261031-01`
+and directory`state/releases/coord114-enrollment-context-20261031-01`. The closed coherent observation
+choice becomes`coherent-0114-absence`.
+
+This is reversible source composition, not namespace allocation, a candidate, a main hold, publication or
+installation. Consumed113 and every earlier journal, original attempt and recovery constant are unchanged. The
+existing45-minute candidate, exact seven-member archive,60-minute publisher, Authority-entry ceiling and quota
+floor contracts are unchanged. Candidate, publish=false preflight and publish=true each need their own admission
+on the same immutable source and archive.
+
+Operating constraints observed on the 0.113 and Host0.9 cuts and carried here. The candidate refuses unless
+`origin/main` still equals its pinned SHA, at its start and again before retaining the artifact. The publisher
+requires live`main` to equal its own pinned SHA at every intent, dispatch and settle, and the preflight pins the
+same way, so one continuous hold on`.github``main` from candidate dispatch until the journal is complete is the
+planned window. The candidate runs`FS.GG.Coord.Cli.Tests`, so`main` must be green on that suite at the pinned head.
+The publisher reads Authority`main` before journal genesis without retry; a refusal there happens before any
+effect and its recovery is a freshly admitted dispatch, never a reset. Installed adoption on fdev
+(`/opt/fdev/bin/update-fsgg-coord-cli`, which also runs at fdev startup) is a separate effect, timed with any
+running telemetry capture, and rolls back by repointing the retained`coord-0.113.0` directory. The 250-row
+population is readable only by0.114.0 and later.
