@@ -146,6 +146,8 @@ from `/srv/bulk/services` down is opened with `O_DIRECTORY|O_NOFOLLOW` through `
 is root-owned, mode-checked and not writable by the developer. An internal call that already carries a pinned path (the claim
 inside `supersede`) does not pin again, so one operation cannot straddle two directories. Results report the path the operator
 named, not the `/proc` path. `check_admission` reads through the same kind of pinned chain from its chain start. This needs
-`/proc` mounted; the tool refuses otherwise. A path that carries the pinned prefix must be exactly `/proc/self/fd/<n>` with `<n>` an
-open directory descriptor of this process (`assert_pinned_root`); a closed or non-directory descriptor, a sub-path, `..` or a
-non-numeric tail refuses, so the pass-through for internal calls cannot be reached with a path the tool did not pin. It is the same pattern as the acknowledgement writer r2 (#5009).
+`/proc` mounted; the tool refuses otherwise. A path that carries the pinned prefix passes through only if it is exactly `/proc/self/fd/<n>` (no leading
+zero, suffix or trailing newline) and `<n>` is a **live pin**: `pinned_source` keeps a registry of fd to (device, inode) for every pin it
+makes and removes the entry when the body ends, and `assert_pinned_root` checks that the descriptor is registered and that `fstat` still
+returns the registered device and inode. An unrelated open directory descriptor (even a world-writable one) and a descriptor number reused
+after the pin closed are refused (`assert_pinned_root`), so the pass-through cannot be used to bypass the chain and view checks. It is the same pattern as the acknowledgement writer r2 (#5009).

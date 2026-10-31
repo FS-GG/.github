@@ -179,27 +179,36 @@ def pinned_source(source_root, view_root, services, owner_uid=0):
         a = os.fstat(fd)
         if (a.st_dev, a.st_ino) != (v.st_dev, v.st_ino):
             refuse('the persistent source directory is not the mounted view (swapped or not mounted)')
+        _PINS[fd] = (a.st_dev, a.st_ino)             # a live pin of THIS tool, valid until the body ends
         yield f'{PINNED_PREFIX}{fd}'
     finally:
+        _PINS.pop(fd, None)
         os.close(fd)
 
 
-PINNED_ROOT = re.compile(r'^/proc/self/fd/([0-9]+)$')
+PINNED_ROOT = re.compile(r'/proc/self/fd/(0|[1-9][0-9]*)')
+_PINS = {}                                           # fd -> (st_dev, st_ino) of every live pin made by pinned_source
 
 
 def assert_pinned_root(path):
-    """A path that carries the pinned prefix must be exactly /proc/self/fd/<n> where <n> is an open directory descriptor of THIS
-    process. Anything else (a closed or non-directory descriptor, a sub-path, `..`, an empty or non-numeric tail) refuses, so a
-    caller cannot reach the pass-through branch with a path the tool did not pin."""
-    m = PINNED_ROOT.match(path)
+    """A path that carries the pinned prefix passes through only if it is exactly /proc/self/fd/<n> (no leading zero, no suffix, no
+    trailing newline) AND <n> is a LIVE PIN registered by pinned_source whose descriptor still refers to the pinned directory. Any other
+    open directory descriptor of this process (an unrelated or world-writable directory, or a descriptor number that was reused after
+    the pin closed) is refused, so the pass-through cannot be used to bypass the chain and view checks."""
+    m = PINNED_ROOT.fullmatch(path)
     if not m:
-        refuse(f'not a pinned root: {path!r} must be exactly {PINNED_PREFIX}<n>')
+        refuse(f'not a pinned root: {path!r} must be exactly {PINNED_PREFIX}<n> with no leading zero')
+    num = int(m.group(1))
+    if num not in _PINS:
+        refuse(f'not a pinned root: descriptor {m.group(1)} is not a live pin of this tool')
     try:
-        st = os.fstat(int(m.group(1)))
-    except OSError:
+        st = os.fstat(num)
+    except (OSError, OverflowError):
         refuse(f'not a pinned root: descriptor {m.group(1)} is not open in this process')
     if not stat.S_ISDIR(st.st_mode):
         refuse(f'not a pinned root: descriptor {m.group(1)} is not a directory')
+    if (st.st_dev, st.st_ino) != _PINS[num]:
+        refuse(f'not a pinned root: descriptor {m.group(1)} no longer refers to the pinned directory (closed and reused)')
 
 
 def _show(value, pinned, shown):
