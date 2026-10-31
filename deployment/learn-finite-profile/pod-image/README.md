@@ -22,12 +22,13 @@ The build context is a root-owned, read-only copy that Root assembles at install
 
 | Context path | sha256 | Source |
 |---|---|---|
-| `Containerfile`, `role`, `telemetry-host-tree.json` | pinned in the builder; checked against the repository by the tests | this directory |
+| `Containerfile`, `role`, `telemetry-host-tree.json`, `coord-cli-tree.json` | pinned in the builder; checked against the repository by the tests | this directory |
 | `learn-probe` | `66f8254e…b303` | the admitted static socket probe (772,112 B), the same bytes as in reader image r4; built from `baseline/source/learn-probe.c` |
 | `host/fsgg-coord-orchestration-host` | `b3d6a6e6…7c47` | matched pair, local build of Coordination `5d525ad2423e733a38ce75fb1f9cac6cf76f214e` (design 2) |
 | `runner/fsgg-coord-orchestration-runner` | `0e07e813…9768` | the same build |
 | `manifest.json` | `6144181f…56cf` | the bundle manifest of that build |
-| `producer/fsgg-coord-engine` | `5e517e8d…f725` | `FS.GG.Coord.Cli` `coherent-set/v0.113.0`, the CLI fdev already uses to drain telemetry |
+| `producer/FS.GG.Coord.Cli.0.113.0.nupkg` | `100f0879…9789` | the public asset of release `coherent-set/v0.113.0` of this repository: `FS.GG.Coord.Cli`, the CLI fdev already uses to drain telemetry. A framework-dependent .NET tool (`tools/net10.0/any/`, 82 files, 69 MB) run as `dotnet /opt/fsgg/producer/fsgg-coord-engine.dll`; the 78 KB apphost `5e517e8d…` that an earlier revision pinned cannot run without its `.store` tree |
+| `coord-cli-tree.json` | pinned in the builder | the 82-file list of that tree with sizes and sha256 |
 | `telemetry-host/FS.GG.Telemetry.Host.0.8.0.nupkg` | `44273495…ba89` | release `telemetry-host/v0.8.0`, the same package the live receiver runs |
 
 The large artifacts are not in this repository. The private custody copy of the matched pair is described in the design document; the builder refuses any
@@ -39,11 +40,13 @@ Run as `fsgg-learn-qual`. It
 
 1. checks the context: every directory from `/` to the context and below is a root-owned directory not writable by group or other; every file is a
    root-owned regular file not writable by group or other; there is no symlink, FIFO or other type; the file set and every sha256 equal its constants;
-2. extracts the tool tree from the pinned nupkg into a private staging directory (`~/.local/state/learn-build/pod-app-r1-*`), member by member: only
-   members under `tools/net10.0/linux-x64/`, regular files only, the member set, every size and every sha256 equal to `telemetry-host-tree.json`, whose own hash
-   and list hash are pinned; it reads the framework minimums from the tree's `runtimeconfig.json` and refuses anything but the two frameworks;
-3. builds with `--network=none --pull=never --no-cache --timestamp 0`, passing every pin as a `--build-arg` taken from **its own constants** and the staged tree as
-   `--build-context telemetry=<staging>`;
+2. extracts the two .NET tool trees (Telemetry Host `tools/net10.0/linux-x64/`, producer CLI `tools/net10.0/any/`) from their pinned nupkgs into private staging
+   directories (`~/.local/state/learn-build/pod-app-r1-*/{telemetry,cli}`), member by member: only members under the tree's root, regular files only, the member set, every
+   size and every sha256 equal to `telemetry-host-tree.json` / `coord-cli-tree.json`, whose own hashes and list hashes are pinned, each tree within its own size caps; it reads
+   the framework minimums from each tree's `runtimeconfig.json` (either the `frameworks` list or the `framework` object), refuses a tree that names any framework it was not
+   expected to, and takes the highest minimum per framework;
+3. builds with `--network=none --pull=never --no-cache --timestamp 0`, passing every pin as a `--build-arg` taken from **its own constants** and the staged trees as
+   `--build-context telemetry=<staging>` and `--build-context cli=<staging>`;
 4. checks the image: `Config.User` `1000:1000`; entrypoint `catatonit -- /opt/fsgg/pod/role`; empty `Cmd`; the base's layers are a prefix of the image's; no shim on
    `PATH`; `DOTNET_gcServer=0`. It records the image Id, which is what Root admits.
 
@@ -65,16 +68,16 @@ catatonit -- /opt/fsgg/pod/role <host|recv|feed> [--ready-tcp PORT | --ready-fil
 
 Each container has its own tmpfs at `/out/<role>/` and a writable `/work` (the pod operator provides both). `role`:
 
-1. refuses an unknown role (exit 64), a missing or symlinked `/out/<role>`, or an existing `.status` or `.done` (exit 70); pre-allocates `.status` (exactly 4096 B, fsync)
+1. refuses an unknown role, or being run as uid 0 (exit 64: this container is meant to run as 1000), a missing or symlinked `/out/<role>`, or an existing `.status` or `.done` (exit 70); pre-allocates `.status` (exactly 4096 B, fsync)
    and writes `{"schema":"learn-pod-status/1","role":…,"phase":"starting"}`; creates `/work/home` and `/work/tmp` (exit 71, status stays `starting`);
 2. starts the command with stdin from `/dev/null`; when the readiness probe passes it overwrites the status **in place** (`dd conv=notrunc`, same inode, 4096 B) with
-   `phase: ready`. `--ready-tcp` means a socket in LISTEN state on the port in `/proc/net/tcp` or `tcp6`; `--ready-file` means a regular file, not a symlink. No probe means ready
+   `phase: ready`. `--ready-tcp` means a socket in LISTEN state on the port in `/proc/net/tcp` or `tcp6` **of the network namespace this process is in; the containers of a pod share one, so a listener on the same port in another container would also pass, which is why the pod operator gives each role its own port**; `--ready-file` means a regular file, not a symlink. No probe means ready
    when the command is started (`feed` runs to completion and has no listener). A probe that has not passed after `--ready-timeout` (default 120 s) stops the command and ends
    `error` with detail `ready-timeout`;
 3. the first TERM or INT stops the command (TERM, 20 s, then KILL) and ends `signalled`;
 4. a command that exits ends `ok` (exit 0), `enospc` (non-zero while `/out` or the `--volume` path has under 1 MiB free) or `error`;
-5. the terminal status is `{"phase":"terminal","exit":N,"reason":…,"detail":…}`, then `.done` (0 B) is created, then `role` **blocks** so the finalizer can archive a live
-   container. A second TERM exits 0;
+5. the terminal status is `{"phase":"terminal","exit":N,"reason":…,"detail":…}`, then `.done` (0 B) is created **after it** (the finalizer polls `.done` and then archives, so
+   a `.done` that preceded the status would be archived as a status still reading `ready`), then `role` **blocks** so the finalizer can archive a live container. A second TERM exits 0;
 6. a bad option, a missing `--` or an empty command is a terminal `gate-refused` (exit 64) and runs nothing.
 
 `detail` is built from fixed words and integers, so the JSON is always valid. The reader profile's cooperative caps (32 processes, 10 CLR slots) are not applied: the enforced bounds are
@@ -90,6 +93,9 @@ Not implemented here; the pod operator's start is a later PR. The image assumes:
 
 These are open and stay open until a pod harness runs; none is claimed by this source.
 
+- **The producer CLI in the image.** It runs from a copy-only tree with `dotnet` (`tests/learn-pod-image/run_cli.py`: `--version` and `telemetry workspace status`, on the host's
+  own .NET runtime). That the base image's runtime (10.0.12) runs it, and that `telemetry workspace drain` works inside the pod, are shown only by the first build and the pod
+  harness.
 - **CLI 0.113.0 against Host 0.8.0.** Whether `fsgg-coord-engine telemetry workspace drain` speaks the wire contract the Telemetry Host 0.8.0 receiver accepts. The versions are
   pinned to the live pair; compatibility is a harness spike.
 - **A Generic credential in `host-config/2`** for the Host outbox. Design 2.3 chose `native-collector` for the replay principal; whether the Host's outbox accepts a Generic credential is a spike.

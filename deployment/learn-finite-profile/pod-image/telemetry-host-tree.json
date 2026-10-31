@@ -281,7 +281,7 @@
  "listSha256": "4b4006978a5ac45ffdbb328b51c3431acd80d3fa0c1efc667d05cfb4a42b3fca",
  "package": "FS.GG.Telemetry.Host",
  "root": "tools/net10.0/linux-x64/",
- "schema": "learn-pod-telemetry-tree/1",
+ "schema": "learn-pod-tool-tree/1",
  "totalBytes": 17519381,
  "version": "0.8.0"
 }

@@ -12,7 +12,10 @@
 # A readiness timeout, a bad option or an empty command is a terminal status as well (reason error or gate-refused), never a silent exit.
 # It does not apply the reader profile's cooperative process caps (slot, dotnet shim); the enforced bounds are the cgroup limits the pod operator sets.
 # The status detail is built from fixed words and integers only, so the JSON is always valid.
-# Exit codes: 64 unknown role, 70 the status contract could not be started (nothing was run), 71 /work/home or /work/tmp could not be created.
+# The readiness probe --ready-tcp looks at /proc/net/tcp and tcp6 of the network namespace this process is in. Containers of a pod share one, so a listener on the same
+# port in ANOTHER container of the pod would also pass: the pod operator gives each role its own port. --ready-file is this container's own filesystem.
+# Exit codes: 64 unknown role, or run as uid 0 (this container is meant to run as 1000), 70 the status contract could not be started (nothing was run), 71 /work/home or
+# /work/tmp could not be created.
 set -u
 GRACE=20
 READY_TIMEOUT_DEFAULT=120
@@ -22,6 +25,7 @@ case $name in
   host|recv|feed) shift ;;
   *) echo "role: unknown role" >&2; exit 64 ;;
 esac
+[ "$(id -u)" != 0 ] || { echo "role: refuses to run as uid 0" >&2; exit 64; }
 D=/out/$name
 S=$D/.status
 [ -d "$D" ] && [ ! -L "$D" ] || { echo "role: no tmpfs for the status at $D" >&2; exit 70; }

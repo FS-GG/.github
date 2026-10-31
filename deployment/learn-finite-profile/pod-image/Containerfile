@@ -1,6 +1,6 @@
 # LEARN finite executor pod image learn-pod-app:r1 (design docs/coordination/2026-10-30-learn-finite-executor-pod-design.md section 2.2 and 2.3;
 # Refs FS-GG/.github#4647). NOT built, NOT admitted. Build as fsgg-learn-qual only, through learn-build-pod-app-r1.py, from a root-owned hash-pinned context:
-#   podman build --network=none --pull=never --no-cache --timestamp 0 --build-context telemetry=<staged tree> -f Containerfile -t localhost/learn-pod-app:r1 <context>
+#   podman build --network=none --pull=never --no-cache --timestamp 0 --build-context telemetry=<staged tree> --build-context cli=<staged tree> -f Containerfile -t localhost/learn-pod-app:r1 <context>
 # Built FROM the admitted learn-qualification:v1 Id, NOT from reader image r4: r4's entrypoint is a one-shot wrapper with one /out/.status and a
 # 10-slot dotnet shim, which three long-running containers would collide on. Nothing of r4 is inherited here: no shim, no slot helper, no /usr/local/libexec/learn.
 # The builder passes every pin below as a --build-arg taken from ITS OWN constants, and the RUN step re-hashes what was actually copied into the image,
@@ -11,8 +11,8 @@ ARG SHA_PROBE
 ARG SHA_HOST
 ARG SHA_RUNNER
 ARG SHA_MANIFEST
-ARG SHA_CLI
-ARG SHA_TREE_LIST
+ARG SHA_TELEMETRY_TREE
+ARG SHA_CLI_TREE
 ARG MIN_NETCORE
 ARG MIN_ASPNET
 USER 0:0
@@ -21,21 +21,22 @@ COPY --chmod=0555 learn-probe /opt/fsgg/pod/probe
 COPY --chmod=0555 host/fsgg-coord-orchestration-host /opt/fsgg/orchestration/host/fsgg-coord-orchestration-host
 COPY --chmod=0555 runner/fsgg-coord-orchestration-runner /opt/fsgg/orchestration/runner/fsgg-coord-orchestration-runner
 COPY --chmod=0444 manifest.json /opt/fsgg/orchestration/manifest.json
-COPY --chmod=0555 producer/fsgg-coord-engine /opt/fsgg/producer/fsgg-coord-engine
 COPY --from=telemetry . /opt/fsgg/telemetry-host/
+COPY --from=cli . /opt/fsgg/producer/
 RUN set -eu; \
     test -x /usr/bin/catatonit; \
-    find /opt/fsgg/telemetry-host -type d -exec chmod 0555 '{}' +; \
-    find /opt/fsgg/telemetry-host -type f -exec chmod 0444 '{}' +; \
+    find /opt/fsgg/telemetry-host /opt/fsgg/producer -type d -exec chmod 0555 '{}' +; \
+    find /opt/fsgg/telemetry-host /opt/fsgg/producer -type f -exec chmod 0444 '{}' +; \
     printf '%s  %s\n' \
       "$SHA_ROLE" /opt/fsgg/pod/role \
       "$SHA_PROBE" /opt/fsgg/pod/probe \
       "$SHA_HOST" /opt/fsgg/orchestration/host/fsgg-coord-orchestration-host \
       "$SHA_RUNNER" /opt/fsgg/orchestration/runner/fsgg-coord-orchestration-runner \
-      "$SHA_MANIFEST" /opt/fsgg/orchestration/manifest.json \
-      "$SHA_CLI" /opt/fsgg/producer/fsgg-coord-engine | sha256sum -c -; \
-    tree=$(cd /opt/fsgg/telemetry-host && find . -type f | LC_ALL=C sort | while read -r f; do printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "${f#./}"; done | sha256sum | cut -d' ' -f1); \
-    test "$tree" = "$SHA_TREE_LIST"; \
+      "$SHA_MANIFEST" /opt/fsgg/orchestration/manifest.json | sha256sum -c -; \
+    treelist() { (cd "$1" && find . -type f | LC_ALL=C sort | while read -r f; do printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "${f#./}"; done | sha256sum | cut -d' ' -f1); }; \
+    test "$(treelist /opt/fsgg/telemetry-host)" = "$SHA_TELEMETRY_TREE"; \
+    test "$(treelist /opt/fsgg/producer)" = "$SHA_CLI_TREE"; \
+    test -f /opt/fsgg/producer/fsgg-coord-engine.dll; \
     for fw in "Microsoft.NETCore.App $MIN_NETCORE" "Microsoft.AspNetCore.App $MIN_ASPNET"; do \
       set -- $fw; \
       best=$(ls /usr/share/dotnet/shared/"$1" | LC_ALL=C sort -V | tail -n 1); \

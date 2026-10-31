@@ -7,11 +7,12 @@ THIS FILE IS SOURCE. Nothing here is installed, admitted or run: Root installs i
 Build context = the root-owned copy under /usr/local/libexec/fsgg-learn/pod-image-r1/ (layout in README.md). Before the build it
   1 checks the context: every directory up to / and inside it is a root-owned directory not writable by group or other, every file is a root-owned regular
     file not writable by group or other, there is no symlink, and the file set and every sha256 equal the constants below (no extra, no missing file);
-  2 extracts the Telemetry Host tool tree from the pinned nupkg into a private staging directory, member by member (no path with .., no absolute path, no
-    symlink, no member outside tools/net10.0/linux-x64/, a size cap), and checks the file set and every sha256 against telemetry-host-tree.json, whose own
-    sha256 and list hash are pinned here; it reads the minimum .NET runtime versions from the tree's runtimeconfig.json;
-  3 builds:  podman build --network=none --pull=never --no-cache --timestamp 0 --build-arg <pins> --build-context telemetry=<staging> -f Containerfile
-            -t localhost/learn-pod-app:r1 <context>
+  2 extracts the two .NET tool trees, the Telemetry Host 0.8.0 and the producer CLI FS.GG.Coord.Cli 0.113.0 (both run with the base's dotnet), from their pinned nupkgs
+    into private staging directories, member by member (no path with .., no absolute path, no symlink, nothing outside the tree's root, size caps), and checks each
+    file set and every sha256 against telemetry-host-tree.json and coord-cli-tree.json, whose own sha256 and list hash are pinned here; it reads the minimum .NET
+    runtime versions from each tree's runtimeconfig.json;
+  3 builds:  podman build --network=none --pull=never --no-cache --timestamp 0 --build-arg <pins> --build-context telemetry=<staging> --build-context cli=<staging>
+            -f Containerfile -t localhost/learn-pod-app:r1 <context>
     The pins go in as build arguments taken from THIS file's constants, and the Containerfile's RUN step re-hashes what was copied into the image, so a file
     swapped between step 1 and the build fails inside the build. The same RUN step fails the build unless both shared runtimes exist at or above the
     minimum, and prints their versions, which this script records;
@@ -29,24 +30,32 @@ BASE = '20a6df20169ce6721ed91fddd0d24ae7fe8de655008b422df0c3299821b7d4b8'
 TAG = 'localhost/learn-pod-app:r1'
 # context file -> sha256. The Containerfile and role pins change whenever those files change (tests/learn-pod-image checks them against the repository).
 CONTEXT = {
-    'Containerfile': '5cdda3598184c186be6af9d65e7ef69713f8b4167b225b60f945ad821ead49c9',
-    'role': 'd1fbbbb398b85748723e6e04b20053a00187ab49a7ef73eabc130f1d58f0eff2',
+    'Containerfile': '02c0c69cbde58c1bc5c8b4fa337e182d8f6616e4789119728144490584ac7fe1',
+    'role': 'f2d9a062113032a94309dd030df768663bf7e1a9895e8c986e20a5575d3801d9',
     'learn-probe': '66f8254ec7abf6469a3dd354f3846dbc557fd19762ca8189c484bc03557fb303',
     'host/fsgg-coord-orchestration-host': 'b3d6a6e664cf55ad25a110daa3bf1578a6f6210755e22857f5bddff139877c47',
     'runner/fsgg-coord-orchestration-runner': '0e07e81306aed69f443d3abe9449a54ef38e05d436146c24a811c903be9f9768',
     'manifest.json': '6144181f413c7f9dfe971c9170de92e54a9bc54c21019efd452809d2100256cf',
-    'producer/fsgg-coord-engine': '5e517e8da543c753e9f15fa23acfc268f0c70deaa52e9b683af24d61cebff725',
     'telemetry-host/FS.GG.Telemetry.Host.0.8.0.nupkg': '44273495ed12083b0c9762818ca0ef5688418e6fbc46bde9f2565b400c5aba89',
-    'telemetry-host-tree.json': 'dac7f73e851e74fc18156aa20384749cf72df70dd4bef59fd1f99f4724560ee1',
+    'telemetry-host-tree.json': 'cf91c97abee180ea08accbdf81a53205bd87595ec01c77b16014efaac955b4a6',
+    'producer/FS.GG.Coord.Cli.0.113.0.nupkg': '100f0879436d41df98aa0879aa8ea279dde3e39d3119733875744ac8e2f79789',
+    'coord-cli-tree.json': '79267cd19b4fa78f9bad20416497ac7cda2d73ba17e8102307fe29410b255acb',
 }
-TREE_LIST_SHA = '4b4006978a5ac45ffdbb328b51c3431acd80d3fa0c1efc667d05cfb4a42b3fca'
-NUPKG = 'telemetry-host/FS.GG.Telemetry.Host.0.8.0.nupkg'
-TREE_JSON = 'telemetry-host-tree.json'
-TREE_ROOT = 'tools/net10.0/linux-x64/'
-PER_FILE_CAP, TREE_CAP, TREE_MAX_FILES = 16 << 20, 64 << 20, 200
+# The two .NET tool trees. `list_arg` is the Containerfile ARG that carries the tree's list hash; `frameworks` are the shared frameworks its runtimeconfig.json
+# may name. The CLI is a framework-dependent tool (an apphost of 78 KB plus its dll and dependencies), not a self-contained executable.
+TREES = {
+    'telemetry': {'nupkg': 'telemetry-host/FS.GG.Telemetry.Host.0.8.0.nupkg', 'json': 'telemetry-host-tree.json', 'root': 'tools/net10.0/linux-x64/',
+                  'list_sha': '4b4006978a5ac45ffdbb328b51c3431acd80d3fa0c1efc667d05cfb4a42b3fca', 'list_arg': 'SHA_TELEMETRY_TREE',
+                  'runtimeconfig': 'FS.GG.Telemetry.Host.runtimeconfig.json', 'frameworks': ('Microsoft.NETCore.App', 'Microsoft.AspNetCore.App'),
+                  'per_file_cap': 16 << 20, 'total_cap': 64 << 20, 'max_files': 200},
+    'cli': {'nupkg': 'producer/FS.GG.Coord.Cli.0.113.0.nupkg', 'json': 'coord-cli-tree.json', 'root': 'tools/net10.0/any/',
+            'list_sha': '815791cd2b47fa2e79d5446bb8268447b2148391980d1300ee343ab99473a54d', 'list_arg': 'SHA_CLI_TREE',
+            'runtimeconfig': 'fsgg-coord-engine.runtimeconfig.json', 'frameworks': ('Microsoft.NETCore.App',),
+            'per_file_cap': 16 << 20, 'total_cap': 96 << 20, 'max_files': 200},
+}
 FRAMEWORKS = ('Microsoft.NETCore.App', 'Microsoft.AspNetCore.App')
 PIN_ARGS = {'SHA_ROLE': 'role', 'SHA_PROBE': 'learn-probe', 'SHA_HOST': 'host/fsgg-coord-orchestration-host',
-            'SHA_RUNNER': 'runner/fsgg-coord-orchestration-runner', 'SHA_MANIFEST': 'manifest.json', 'SHA_CLI': 'producer/fsgg-coord-engine'}
+            'SHA_RUNNER': 'runner/fsgg-coord-orchestration-runner', 'SHA_MANIFEST': 'manifest.json'}
 WANT_ENTRYPOINT = ['/usr/bin/catatonit', '--', '/opt/fsgg/pod/role']
 NAME_OK = re.compile(r'^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$')
 VERSION = re.compile(r'^\d+\.\d+\.\d+$')
@@ -55,6 +64,10 @@ RUNTIME_LINE = re.compile(r'^RUNTIME (Microsoft\.(?:NETCore|AspNetCore)\.App) (\
 
 class Refuse(Exception):
     pass
+
+
+def refuse(why):
+    raise Refuse(why)
 
 
 def sha_file(path):
@@ -116,46 +129,48 @@ def tree_list_sha(files):
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def load_tree(ctx, list_sha, nupkg_sha):
-    j = json.loads(open(os.path.join(ctx, TREE_JSON), 'rb').read())
+def load_tree(ctx, spec, nupkg_sha):
+    """The tree list of one tool tree, validated against its spec (root, caps, list hash pin) and against the archive it names."""
+    j = json.loads(open(os.path.join(ctx, spec['json']), 'rb').read())
     files = j.get('files')
-    if j.get('schema') != 'learn-pod-telemetry-tree/1' or j.get('root') != TREE_ROOT or not isinstance(files, list):
-        raise Refuse('telemetry tree list: wrong schema')
+    if j.get('schema') != 'learn-pod-tool-tree/1' or j.get('root') != spec['root'] or not isinstance(files, list):
+        refuse('tool tree list: wrong schema or root')
     if j.get('archiveSha256') != nupkg_sha:
-        raise Refuse('telemetry tree list names another archive')
-    if not 0 < len(files) <= TREE_MAX_FILES or j.get('fileCount') != len(files):
-        raise Refuse('telemetry tree list: file count')
+        refuse('tool tree list names another archive')
+    if not 0 < len(files) <= spec['max_files'] or j.get('fileCount') != len(files):
+        refuse('tool tree list: file count')
     seen = set()
     for f in files:
         p = f.get('path')
         if (not isinstance(p, str) or not NAME_OK.match(p) or '..' in p.split('/') or p in seen or not isinstance(f.get('size'), int)
-                or not 0 <= f['size'] <= PER_FILE_CAP or not re.fullmatch(r'[0-9a-f]{64}', str(f.get('sha256')))):
-            raise Refuse(f'telemetry tree list: bad entry {str(p)[:80]}')
+                or not 0 <= f['size'] <= spec['per_file_cap'] or not re.fullmatch(r'[0-9a-f]{64}', str(f.get('sha256')))):
+            refuse(f'tool tree list: bad entry {str(p)[:80]}')
         seen.add(p)
-    if sum(f['size'] for f in files) > TREE_CAP or j.get('totalBytes') != sum(f['size'] for f in files):
-        raise Refuse('telemetry tree list: total size')
-    if tree_list_sha(files) != j.get('listSha256') or j['listSha256'] != list_sha:
-        raise Refuse('telemetry tree list: list hash differs from the pin')
+    if sum(f['size'] for f in files) > spec['total_cap'] or j.get('totalBytes') != sum(f['size'] for f in files):
+        refuse('tool tree list: total size')
+    if tree_list_sha(files) != j.get('listSha256') or j['listSha256'] != spec['list_sha']:
+        refuse('tool tree list: list hash differs from the pin')
     return files
 
 
-def extract_tree(nupkg, files, dest):
-    """Extract exactly the listed members of nupkg into dest (an existing private directory). Raises Refuse on any difference from the list."""
+def extract_tree(nupkg, files, dest, spec):
+    """Extract exactly the listed members of nupkg's tool root into dest (an existing private directory). Raises Refuse on any difference from the list."""
+    root = spec['root']
     want = {f['path']: f for f in files}
     done = set()
     with zipfile.ZipFile(nupkg) as z:
-        infos = [i for i in z.infolist() if i.filename.startswith(TREE_ROOT) and not i.filename.endswith('/')]
-        names = [i.filename[len(TREE_ROOT):] for i in infos]
+        infos = [i for i in z.infolist() if i.filename.startswith(root) and not i.filename.endswith('/')]
+        names = [i.filename[len(root):] for i in infos]
         if len(set(names)) != len(names) or sorted(names) != sorted(want):
-            raise Refuse('the archive does not hold exactly the listed tool tree')
+            refuse('the archive does not hold exactly the listed tool tree')
         for i in infos:
-            rel = i.filename[len(TREE_ROOT):]
+            rel = i.filename[len(root):]
             f = want[rel]
             kind = (i.external_attr >> 16) & 0o170000
             if kind not in (0, stat.S_IFREG):
-                raise Refuse(f'archive member is not a regular file: {rel}')
-            if i.file_size != f['size'] or i.file_size > PER_FILE_CAP:
-                raise Refuse(f'archive member size differs: {rel}')
+                refuse(f'archive member is not a regular file: {rel}')
+            if i.file_size != f['size'] or i.file_size > spec['per_file_cap']:
+                refuse(f'archive member size differs: {rel}')
             target = os.path.join(dest, *rel.split('/'))
             os.makedirs(os.path.dirname(target), mode=0o700, exist_ok=True)
             h, n = hashlib.sha256(), 0
@@ -163,36 +178,53 @@ def extract_tree(nupkg, files, dest):
             with os.fdopen(fd, 'wb') as o, z.open(i) as src:
                 for c in iter(lambda: src.read(1 << 20), b''):
                     n += len(c)
-                    if n > f['size']:
-                        raise Refuse(f'archive member larger than its size: {rel}')
+                    if n > f['size']:                       # defence in depth: the zip reader already stops at the header size
+                        refuse(f'archive member larger than its size: {rel}')
                     h.update(c)
                     o.write(c)
                 o.flush()
                 os.fsync(o.fileno())
             if n != f['size'] or h.hexdigest() != f['sha256']:
-                raise Refuse(f'extracted file differs from the list: {rel}')
+                refuse(f'extracted file differs from the list: {rel}')
             done.add(rel)
     if done != set(want):
-        raise Refuse('not every listed file was extracted')
+        refuse('not every listed file was extracted')
     return sorted(done)
 
 
-def runtime_minimums(dest):
-    j = json.loads(open(os.path.join(dest, 'FS.GG.Telemetry.Host.runtimeconfig.json'), 'rb').read())
-    fw = {x.get('name'): x.get('version') for x in (j.get('runtimeOptions') or {}).get('frameworks') or []}
-    if sorted(fw) != sorted(FRAMEWORKS) or not all(isinstance(v, str) and VERSION.match(v) for v in fw.values()):
-        raise Refuse(f'the tool tree needs unexpected frameworks: {sorted(fw)}')
+def runtime_minimums(dest, spec):
+    """The shared frameworks and minimum versions the tree's runtimeconfig.json names, in either shape ('frameworks': [...] or 'framework': {...})."""
+    j = json.loads(open(os.path.join(dest, spec['runtimeconfig']), 'rb').read())
+    ro = j.get('runtimeOptions') or {}
+    items = list(ro.get('frameworks') or []) + ([ro['framework']] if isinstance(ro.get('framework'), dict) else [])
+    fw = {x.get('name'): x.get('version') for x in items}
+    if len(items) != len(fw) or sorted(fw) != sorted(spec['frameworks']) or not all(isinstance(v, str) and VERSION.match(v) for v in fw.values()):
+        refuse(f'the tool tree needs unexpected frameworks: {sorted(fw)}')
     return fw
 
 
-def build_argv(ctx, staging, mins, pins):
+def merge_minimums(per_tree):
+    """The highest minimum per framework across the trees: what the base image has to satisfy."""
+    out = {}
+    for fw in per_tree.values():
+        for name, v in fw.items():
+            if name not in out or version_tuple(v) > version_tuple(out[name]):
+                out[name] = v
+    return out
+
+
+def build_argv(ctx, stagings, mins, pins, trees):
     args = []
     for name, rel in PIN_ARGS.items():
         args += ['--build-arg', f'{name}={pins[rel]}']
-    args += ['--build-arg', f'SHA_TREE_LIST={TREE_LIST_SHA}', '--build-arg', f'MIN_NETCORE={mins["Microsoft.NETCore.App"]}',
-             '--build-arg', f'MIN_ASPNET={mins["Microsoft.AspNetCore.App"]}']
-    return (['podman', 'build', '--network=none', '--pull=never', '--no-cache', '--timestamp', '0'] + args +
-            ['--build-context', f'telemetry={staging}', '-f', ctx + '/Containerfile', '-t', TAG, ctx])
+    for key, spec in trees.items():
+        args += ['--build-arg', f"{spec['list_arg']}={spec['list_sha']}"]
+    args += ['--build-arg', f'MIN_NETCORE={mins["Microsoft.NETCore.App"]}', '--build-arg', f'MIN_ASPNET={mins["Microsoft.AspNetCore.App"]}']
+    contexts = []
+    for key in trees:
+        contexts += ['--build-context', f'{key}={stagings[key]}']
+    return (['podman', 'build', '--network=none', '--pull=never', '--no-cache', '--timestamp', '0'] + args + contexts +
+            ['-f', ctx + '/Containerfile', '-t', TAG, ctx])
 
 
 def parse_runtimes(log, mins):
@@ -224,7 +256,7 @@ def default_deps():
             return p.returncode, p.stdout, p.stderr
         except subprocess.TimeoutExpired:
             return None, '', 'timeout'
-    return {'run': run, 'euid': os.geteuid(), 'owner_uid': 0, 'ctx': CTX, 'context': CONTEXT, 'tree_list_sha': TREE_LIST_SHA,
+    return {'run': run, 'euid': os.geteuid(), 'owner_uid': 0, 'ctx': CTX, 'context': CONTEXT, 'trees': TREES,
             'home': '/mnt/storage/containers/learn-qualification/account', 'self_path': os.path.abspath(__file__), 'production': True}
 
 
@@ -236,12 +268,13 @@ def main(deps=None):
         os.environ.update(XDG_RUNTIME_DIR='/run/user/30034', DBUS_SESSION_BUS_ADDRESS='unix:path=/run/user/30034/bus', HOME=d['home'], PATH='/usr/bin', LC_ALL='C')
         os.chdir('/')
     run = d['run']
+    trees = d['trees']
     R = {'schema': SCHEMA, 'scriptSha256': sha_file(d['self_path']), 'base': BASE, 'tag': TAG, 'utc': datetime.now(timezone.utc).isoformat(),
          'account': 'fsgg-learn-qual', 'errors': []}
     staging = None
     try:
         R['context'] = verify_context(d['ctx'], d['context'], d['owner_uid'], d.get('chain_start', '/'))
-        files = load_tree(d['ctx'], d['tree_list_sha'], d['context'][NUPKG])
+        lists = {key: load_tree(d['ctx'], spec, d['context'][spec['nupkg']]) for key, spec in trees.items()}
         rc, out, _ = run(['podman', 'image', 'inspect', '--format', '{{.Id}} {{json .RootFS.Layers}}', BASE], 60)
         if rc != 0 or not out.startswith(BASE):
             raise Refuse('base image not present')
@@ -250,10 +283,16 @@ def main(deps=None):
         os.makedirs(state, mode=0o700, exist_ok=True)
         staging = tempfile.mkdtemp(prefix='pod-app-r1-', dir=state)
         os.chmod(staging, 0o700)
-        R['telemetryTree'] = {'files': len(extract_tree(os.path.join(d['ctx'], NUPKG), files, staging)), 'listSha256': d['tree_list_sha']}
-        mins = runtime_minimums(staging)
+        stagings, per_tree = {}, {}
+        R['toolTrees'] = {}
+        for key, spec in trees.items():
+            stagings[key] = os.path.join(staging, key)
+            os.mkdir(stagings[key], 0o700)
+            R['toolTrees'][key] = {'files': len(extract_tree(os.path.join(d['ctx'], spec['nupkg']), lists[key], stagings[key], spec)), 'listSha256': spec['list_sha']}
+            per_tree[key] = runtime_minimums(stagings[key], spec)
+        mins = merge_minimums(per_tree)
         R['runtimeMinimums'] = mins
-        argv = build_argv(d['ctx'], staging, mins, R['context'])
+        argv = build_argv(d['ctx'], stagings, mins, R['context'], trees)
         R['buildArgv'] = argv
         rc, out, err = run(argv, 1800)
         R['build'] = {'rc': rc, 'stdoutTail': out[-3000:], 'stderrTail': err[-2000:]}
