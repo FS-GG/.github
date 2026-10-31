@@ -75,7 +75,9 @@ changing any of them means a new rule-set version.
 | Parameter | v1 value | Why |
 |---|---|---|
 | `activityHours` | 48 | Twice a working day. The observer runs hourly, so a stall is visible within two days, not seven. |
-| `mergedWindowHours` | 24 | The window in which a merged routine PR is evaluated by R1 at all. From phase 2, unlinked and overridden merged PRs are also carried past it (R1, persistence). |
+| `mergedWindowHours` | 24 | The window in which every merged routine PR is evaluated by R1. Unlinked and overridden merged PRs are also carried past it (v2, R1 persistence). |
+| `carryDays` (v2) | 7 | How long an unlinked merged routine PR stays under R1 after the 24-hour window. About 110 routine merges a day keeps the carry search under GitHub's 1,000-result cap. |
+| `carryFrom` (v2) | 2026-11-01T00:00Z | Carrying starts here, so the pre-phase-2 backlog (addressed by the Delivery backfill) is not carried. Root may move it to the actual phase-2 start before merge. |
 | `effectiveFrom` | 2026-10-31T00:00Z | R2's acceptance-marker leg does not condemn Outcomes closed before the marker existed. |
 | `rootLogins` | `EHotwagner` | The only login trusted for markers. Every agent authenticates as this one account, so a marker proves "Root's account", not "Root's hands". |
 
@@ -92,7 +94,7 @@ changing any of them means a new rule-set version.
 | R7 | Every card | Status, Work level, Track, content type | A field is missing. Or the card is a draft, which is not a native issue, so the other rules cannot reason about it. | `missing-<fields>`, `draft` |
 | R8 | Delivery | PRs referencing it | The Delivery is open with an open non-draft PR but is Backlog, Ready or Blocked. Or it is closed and an open non-draft PR still references it. | `open-pr-pre-action`, `pr-open-on-closed` |
 | R9 | Open issue card on Project 3 with Work level Delivery; issue card on Project 3 with Work level Outcome | native parent and its P3 Work level | A Delivery has no parent, its parent is off the board, or its parent is not an Outcome. Or an Outcome is a sub-issue of a Delivery. Closed cards, and sub-issues that have no Project 3 card, are out of scope: R9 cannot see them, and a missing Delivery card shows up as R6 on its Outcome. | `orphan-delivery`, `parent-off-board`, `parent-not-outcome`, `outcome-under-delivery` |
-| U | Any of the above | n/a | An input needed for a verdict could not be read: the card content; the comments (not read, or a Root comment truncated by the fetch with no marker in its visible part); a blocker's state; a truncated sub-issue or blocked-by list; or a parent card that R1 or R9 needs and that is unreadable. Unknown is never a pass ([.github#266](https://github.com/FS-GG/.github/issues/266)). | `unreadable`, `r1-reference-unreadable`, `r1-parent-unreadable`, `r2-comments-unread`, `r3-blockers-unread`, `r4-comments-unread`, `r6-children-unread`, `r9-parent-unreadable` |
+| U | Any of the above | n/a | An input needed for a verdict could not be read: the card content; the comments (not read, or a Root comment truncated by the fetch with no marker in its visible part); a blocker's state; a truncated sub-issue or blocked-by list; or a parent card that R1 or R9 needs and that is unreadable. When the board holds an unreadable card with no identity (null content), any reference, parent or open-child lookup that misses the board is Unknown too, because the miss could be that card (v2). Unknown is never a pass ([.github#266](https://github.com/FS-GG/.github/issues/266)). | `unreadable`, `r1-reference-unreadable`, `r1-parent-unreadable`, `r2-comments-unread`, `r3-blockers-unread`, `r4-comments-unread`, `r6-children-unread`, `r9-parent-unreadable` |
 
 **R4 activity set, exactly.** A Delivery's last activity is the latest of: the issue's `updatedAt`;
 the Status field value's `updatedAt`; the `updatedAt` of every PR in the snapshot that references the
@@ -101,17 +103,23 @@ author. Nothing else counts. In particular the project item's own `updatedAt` do
 on any field edit, including an edit that only moves the card. If the comments were not read, the
 verdict is `U r4-comments-unread`, never a guess from the remaining signals.
 
-**R1 persistence (phase 2).** A merged PR leaves the 24-hour window, but an unlinked or overridden
-one must not drop off the report. The observer therefore carries forward every R1 finding on a merged
-PR from its previous finding set (the tracking issue's marker). The fetch re-reads each carried PR
-(one batched GraphQL read) and adds it to the snapshot as `carried`. R1 evaluates carried PRs
-regardless of the window, and the finding clears only when the PR body references exactly one Delivery
-with a parent Outcome. The evaluator stays a pure function: the carried set is snapshot input. Carrying
-starts with phase 2; the pre-phase-2 backlog is addressed by the Delivery backfill, not carried.
-`overridden` and carrying change verdicts, so they ship as rule-set version 2 with phase 2. The other
-U reasons above that the phase-1 code does not yet emit (`r1-parent-unreadable`, `r4-comments-unread`,
-`r9-parent-unreadable`, truncated comments) bring the code into line with v1's own U row, and land in
-the phase-1 follow-up before phase 2.
+**R1 persistence (rule-set v2).** A merged PR leaves the 24-hour window, but an unlinked or
+overridden one must not drop off the report. The carried set is derived from native state on every run,
+not from the tracking issue: the issue is public, and a private repository's PR reference cannot be
+stored there in a form the fetch could re-read. The fetch adds two searches:
+
+- routine PRs (body contains `fsgg:routine-development/v1`) merged on or after the later of `carryFrom`
+  and `fetchedAt − carryDays`;
+- every merged PR whose body contains `fsgg:board-gate-override/v1`, at any age (overrides are rare).
+
+R1 evaluates a merged PR outside the 24-hour window when it is inside the carry window, or when it
+carries a valid override, and marks the finding `carried`. The finding clears only when the PR body
+references exactly one Delivery with a parent Outcome. An unlinked PR without an override drops off
+after `carryDays`; an overridden one stays until linked. For each PR whose body matches the override
+regex, the fetch reads `author`, `lastEditedAt` and `editor` (one batched GraphQL read) so the authorship
+rule can be checked; if that read fails, the override is not honoured. The evaluator stays a pure
+function of the snapshot. `overridden`, carrying and the identity-less Unknown change verdicts, so they
+are rule-set version 2.
 
 ### Why each rule, and how it refines the brief
 
@@ -306,8 +314,8 @@ job summary. See §4 for how it converges with board-drift.
   privilege: the exact marker, non-empty reason and Root authorship defined in §1. Its effects:
   - (a) and (b) evaluate it first, before any Project 3 read (§2, evaluation order).
   - The gate records `boardGate: overridden`.
-  - The observer reports `R1:<pr>:overridden` and carries it past the merged window until the PR body
-    references exactly one Delivery with a parent Outcome (§1, R1 persistence).
+  - The observer reports `R1:<pr>:overridden`, at any age, until the PR body references exactly one
+    Delivery with a parent Outcome (§1, R1 persistence).
 
   An override is therefore never silent and never expires on its own.
 
@@ -362,7 +370,7 @@ From [issuecomment-6540490608](https://github.com/FS-GG/.github/issues/4730#issu
 2026-10-31:
 
 1. Rule set `fsgg:board-currency-rules/v1` is approved as the phase-1 basis; phase 1 goes to
-   independent review before merge. The phase-2 R1 additions (`overridden`, carrying) are version 2
+   independent review before merge. The phase-2 R1 additions (`overridden`, carrying, identity-less Unknown) are version 2
    and need their own approval with phase 2.
 2. The built-in "Item closed → Done" project workflow will be turned on. It is an owner UI action and
    has been requested. It is the only writer of Done (§2b).

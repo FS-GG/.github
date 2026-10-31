@@ -75,7 +75,7 @@ query($owner:String!,$number:Int!,$cursor:String){
 }
 """
 
-LABELS = ("graphql", "search", "comments", "refstates")
+LABELS = ("graphql", "search", "comments", "refstates", "editors")
 
 
 class FetchError(Exception):
@@ -225,6 +225,7 @@ def search_prs(query: str, merged: bool) -> list[dict]:
             if merged and not merged_at:
                 raise FetchError("merged PR search item lacks merged_at")
             prs.append({"repo": repo, "number": raw["number"], "draft": bool(raw.get("draft")),
+                        "author": (raw.get("user") or {}).get("login"),
                         "title": raw.get("title") or "", "state": "MERGED" if merged else "OPEN",
                         "updatedAt": raw.get("updated_at"), "mergedAt": merged_at, "body": raw.get("body") or ""})
         if len(prs) >= total or not doc["items"]:
@@ -277,6 +278,29 @@ def needs_comments(item: dict, effective: dt.datetime, rules) -> bool:
     return open_ and level == "Delivery" and status in ("In progress", "In review")
 
 
+def fetch_editors(prs: list[dict], rules) -> None:
+    """Add `edited`/`editor` to every PR whose body carries an override marker, so the rules can check
+    the authorship rule. A failed read leaves them absent, and the rules then do not honour the override."""
+    wanted = [pr for pr in prs if rules.OVERRIDE.search(rules.visible_text(pr.get("body")))]
+    for start in range(0, len(wanted), 50):
+        chunk = wanted[start:start + 50]
+        parts = []
+        for n, pr in enumerate(chunk):
+            owner, name = pr["repo"].split("/", 1)
+            parts.append(f'p{n}: repository(owner:{json.dumps(owner)},name:{json.dumps(name)})'
+                         f'{{ pullRequest(number:{int(pr["number"])}){{ lastEditedAt editor{{login}} author{{login}} }} }}')
+        try:
+            data = graphql("editors", ["-f", "query={" + " ".join(parts) + "}"])
+        except FetchError:
+            continue
+        for n, pr in enumerate(chunk):
+            node = (data.get(f"p{n}") or {}).get("pullRequest")
+            if isinstance(node, dict):
+                pr["author"] = (node.get("author") or {}).get("login")
+                pr["edited"] = node.get("lastEditedAt") is not None
+                pr["editor"] = (node.get("editor") or {}).get("login")
+
+
 def fetch_ref_states(refs: list[str]) -> dict[str, str]:
     """Batched state of marker-named blockers not on the board. A miss stays absent (rules: Unknown)."""
     states: dict[str, str] = {}
@@ -315,6 +339,19 @@ def main(argv: list[str] | None = None) -> int:
         since = (started - dt.timedelta(hours=rules.PARAMS["mergedWindowHours"])).strftime("%Y-%m-%dT%H:%M:%SZ")
         prs = search_prs(f"org:{args.owner}+is:pr+is:open", merged=False)
         prs += search_prs(f"org:{args.owner}+is:pr+is:merged+merged:%3E%3D{since}", merged=True)
+        # v2 carry: routine PRs merged inside the carry window, and every merged PR carrying an override.
+        marker = "%22fsgg:routine-development/v1%22+in:body"
+        carry_from = max(rules.parse_time(rules.PARAMS["carryFrom"]),
+                         started - dt.timedelta(days=rules.PARAMS["carryDays"]))
+        if carry_from < started - dt.timedelta(hours=rules.PARAMS["mergedWindowHours"]):
+            prs += search_prs(f"org:{args.owner}+is:pr+is:merged+{marker}+merged:%3E%3D"
+                              f"{carry_from.strftime('%Y-%m-%dT%H:%M:%SZ')}", merged=True)
+        prs += search_prs(f"org:{args.owner}+is:pr+is:merged+%22fsgg:board-gate-override/v1%22+in:body", merged=True)
+        unique: dict[tuple[str, int], dict] = {}
+        for pr in prs:
+            unique.setdefault((pr["repo"], pr["number"]), pr)
+        prs = list(unique.values())
+        fetch_editors(prs, rules)
         for pr in prs:
             pr["repoPrivate"] = repo_visibility(pr["repo"], known)
         effective = rules.parse_time(rules.PARAMS["effectiveFrom"])
