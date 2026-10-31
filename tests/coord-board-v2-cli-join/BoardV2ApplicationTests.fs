@@ -91,12 +91,14 @@ let ``successor actual CLI reconciles twenty two items before its unchanged requ
                            content = {| __typename = "Issue"; id = "I_unselected_" + string index
                                         number = 8000 + index; repository = {| nameWithOwner = "FS-GG/.github" |} |} |})
                 connection.["totalCount"] <- Text.Json.Nodes.JsonValue.Create 25
-            elif request.Subject = "selected work classification" then
-                let item = match request.Body with Query(_, variables) -> variables |> List.pick (function "itemId", VId value -> Some value | _ -> None) | _ -> failwith "expected query"
-                let index = rows |> List.findIndex (fun (id, _, _) -> item = "synthetic-member-" + id)
+            elif request.Subject = "bound V2 successor planning memberships" then
+                // The Work level classification rides on the planning membership read (#5119).
+                let number = match request.Body with Query(_, variables) -> variables |> List.pick (function "number", VNumber value -> Some(int value) | _ -> None) | _ -> failwith "expected query"
+                let index = rows |> List.findIndex (fun (_, issue, _) -> issue.Number = number)
                 let level, option = if index < 17 then "Outcome", "outcome-option" else "Delivery", "delivery-option"
-                root.["data"].["node"].["workLevel"].["name"] <- Text.Json.Nodes.JsonValue.Create level
-                root.["data"].["node"].["workLevel"].["optionId"] <- Text.Json.Nodes.JsonValue.Create option
+                let workLevel = root.["data"].["repository"].["issue"].["projectItems"].["nodes"].[0].["workLevel"]
+                workLevel.["name"] <- Text.Json.Nodes.JsonValue.Create level
+                workLevel.["optionId"] <- Text.Json.Nodes.JsonValue.Create option
             { response with Body = root.ToJsonString() })
     let reads = ProgrammeFixture.successorTransportFor selected rows (Some "Delivery") change
     let directory = Path.Combine(Path.GetTempPath(), "board-v2-cohort-budget-" + Guid.NewGuid().ToString("N"))
@@ -135,7 +137,7 @@ let private cohortOf (count: int) =
 [<Fact>]
 let ``actual CLI inspects a full 500-row cohort inside its scaled request ceiling`` () =
     // #5119: the flat 500-send ceiling was exhausted by the 207-row cohort-90 inspection. The ceiling now scales with the
-    // selected population, so the full 500-row cap is readable; the same run needs more than the old flat 500 sends.
+    // selected population, and the reads per row are cut, so the full 500-row cap is readable well inside it.
     let rows, selected = cohortOf V2Projection.maximumProgrammeRows
     let reads = ProgrammeFixture.successorTransportFor selected rows (Some "Delivery") ProgrammeFixture.unchanged
     let directory = Path.Combine(Path.GetTempPath(), "board-v2-cap500-" + Guid.NewGuid().ToString("N"))
@@ -151,7 +153,8 @@ let ``actual CLI inspects a full 500-row cohort inside its scaled request ceilin
         Assert.True((code = 0), $"exit={code}; sends={sends}; populationGap={populationGap}; membershipGap={membershipGap}")
         Assert.Equal(500, root.GetProperty("selected").GetInt32())
         Assert.Equal(500, root.GetProperty("memberships").GetArrayLength())
-        Assert.InRange(sends, 501, V2Projection.refreshRequestCeiling 500)
+        Assert.InRange(sends, 1, V2Projection.refreshRequestCeiling 500)
+        Assert.InRange(sends, 1, 500)
         Assert.Empty reads.Mutations
     finally Directory.Delete(directory, true)
 
@@ -171,14 +174,45 @@ let ``actual CLI refuses a 501-row binding before any send`` () =
     finally Directory.Delete(directory, true)
 
 [<Fact>]
-let ``the refresh request ceiling keeps the historical floor and scales to the row cap`` () =
+let ``the refresh request ceiling and deadline keep their historical floors and scale to the row cap`` () =
     Assert.Equal(500, V2Projection.refreshRequestCeiling 0)
     Assert.Equal(500, V2Projection.refreshRequestCeiling 22)
-    Assert.Equal(500, V2Projection.refreshRequestCeiling 109)
-    Assert.Equal(892, V2Projection.refreshRequestCeiling 207)
-    Assert.Equal(2064, V2Projection.refreshRequestCeiling 500)
-    Assert.Equal(2064, V2Projection.refreshRequestCeiling 501)
+    Assert.Equal(500, V2Projection.refreshRequestCeiling 218)
+    Assert.Equal(502, V2Projection.refreshRequestCeiling 219)
+    Assert.Equal(1064, V2Projection.refreshRequestCeiling 500)
+    Assert.Equal(1064, V2Projection.refreshRequestCeiling 501)
     Assert.Equal(500, V2Projection.refreshRequestCeiling -1)
+    Assert.Equal(270.0, V2Projection.refreshDeadlineSeconds 0)
+    Assert.Equal(270.0, V2Projection.refreshDeadlineSeconds 207)
+    Assert.Equal(270.0, V2Projection.refreshDeadlineSeconds 300)
+    Assert.Equal(410.0, V2Projection.refreshDeadlineSeconds 500, 6)
+    Assert.Equal(410.0, V2Projection.refreshDeadlineSeconds 501, 6)
+
+[<Fact>]
+let ``the actual bounded transport stops at the binding's scaled ceiling and deadline`` () =
+    let probe : Transport.Request = { Method = "GET"; Path = "rate_limit"; Query = []; Body = Transport.NoBody; Budget = Transport.Rest; IfNoneMatch = None; Subject = "probe" }
+    let counting () =
+        let mutable sent = 0
+        (fun () -> sent),
+        { new IGitHubTransport with
+            member _.Send _ = sent <- sent + 1; Ok { Status = 200; Body = "{}"; Headers = Map.empty; ETag = None; NextLink = None }
+            member _.SendMutation _ = Error(Errors.Unauthorized "read-only probe")
+            member _.RetryMutation effect = Error(Errors.Unauthorized effect) }
+    let refusedAfter (binding: Binding) (elapsed: unit -> TimeSpan) attempts =
+        let sent, inner = counting ()
+        let bounded = BoardV2Application.boundedWith elapsed binding inner
+        let results = [ for _ in 1 .. attempts -> bounded.Send probe ]
+        sent (), results |> List.filter Result.isError |> List.length
+    let small = snd (cohortOf 22)
+    let full = snd (cohortOf 500)
+    let now = fun () -> TimeSpan.Zero
+    // Request ceiling: 500 for a small binding, 1,064 at the 500-row cap; the next send is refused before dispatch.
+    Assert.Equal((500, 1), refusedAfter small now 501)
+    Assert.Equal((1064, 1), refusedAfter full now 1065)
+    // Deadline: 270 seconds for a small binding, 410 at the cap.
+    Assert.Equal((0, 1), refusedAfter small (fun () -> TimeSpan.FromSeconds 280.0) 1)
+    Assert.Equal((1, 0), refusedAfter full (fun () -> TimeSpan.FromSeconds 280.0) 1)
+    Assert.Equal((0, 1), refusedAfter full (fun () -> TimeSpan.FromSeconds 411.0) 1)
 
 [<Fact>]
 let ``report history roundtrip strips current authority while retaining last verification`` () =
@@ -847,7 +881,10 @@ let ``actual caller recovers Current deliverable only PR and retains mixed deliv
         Assert.Equal("https://github.com/FS-GG/.github/pull/42", selected.GetProperty("pullRequest").GetString())
         Assert.True(transport.Logged "https://github.com/FS-GG/.github/pull/42 Current deliverable native join", variant)
         Assert.True(transport.Count "get FS-GG/.github collaborators/author/permission" = 2, variant + ": initial and final permission reads must use the canonical native GET path")
-        Assert.True(transport.RestCalls >= 4, variant + ": both dependency and permission snapshots must be read twice")
+        // #5119: the dependency snapshot is folded into the native observation GraphQL read (read in both phases), so the
+        // only REST reads left are the two permission snapshots; no REST blocked_by read is sent.
+        Assert.True(transport.RestCalls = 2, variant + ": only the initial and final permission snapshots are REST reads")
+        Assert.Equal(0, transport.Count "dependencies/blocked_by")
         let item = (report.Value.GetProperty("items")).[0]
         Assert.StartsWith("Unknown", item.GetProperty("nativeAcceptance").GetString())
         Assert.Equal("native-observed", item.GetProperty("nativeIntake").GetProperty("provenance").GetString())
@@ -1201,10 +1238,7 @@ let ``actual caller localizes unusable PR evidence to current action and uncerta
 let ``actual caller keeps source editing independent of activation acceptance and isolates stale slice joins`` () =
     let closedDependency (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
         let response = ProgrammeFixture.newAssignment request response
-        if request.Path.EndsWith("/dependencies/blocked_by", StringComparison.Ordinal) then
-            response |> Result.map (fun value ->
-                { value with Body = """[{"html_url":"https://github.com/FS-GG/.github/issues/1","number":1,"node_id":"I_dependency","updated_at":"2026-10-17T12:00:00Z","state":"closed"}]""" })
-        else response
+        ProgrammeFixture.withBlockers [ ProgrammeFixture.blocker 1 "I_dependency" "2026-10-17T12:00:00Z" "CLOSED" ] request response
     let context = observedContext closedDependency
     let publication: Prerequisite =
         { Action = Activation; Reference = "publication/owner-current-evidence"; Satisfied = Some false; SupplyingOwner = "publication-owner" }

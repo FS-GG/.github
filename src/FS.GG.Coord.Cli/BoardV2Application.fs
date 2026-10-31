@@ -788,13 +788,14 @@ module BoardV2Application =
 
     // Leave enough time for the existing 30 second transport timeout. Stop before dispatch,
     // without cancelling an in-flight writer; serialization is owned by the fixed job.
-    // The request ceiling scales with the selected population (#5119); the deadline is unchanged.
-    let private bounded (binding: Binding) (transport: IGitHubTransport) =
-        let elapsed = Diagnostics.Stopwatch.StartNew()
-        let ceiling = V2Projection.refreshRequestCeiling binding.SelectedIssues.Count
+    // The request ceiling and the deadline scale with the selected population (#5119).
+    let boundedWith (elapsed: unit -> TimeSpan) (binding: Binding) (transport: IGitHubTransport) =
+        let rows = binding.SelectedIssues.Count
+        let ceiling = V2Projection.refreshRequestCeiling rows
+        let deadline = TimeSpan.FromSeconds(V2Projection.refreshDeadlineSeconds rows)
         let mutable calls = 0
         let dispatch subject action =
-            if elapsed.Elapsed >= TimeSpan.FromSeconds 270.0 || calls >= ceiling then Error(Errors.Malformed(subject, "bounded refresh deadline/request ceiling reached; coverage Unknown"))
+            if elapsed () >= deadline || calls >= ceiling then Error(Errors.Malformed(subject, "bounded refresh deadline/request ceiling reached; coverage Unknown"))
             else
                 calls <- calls + 1
                 action ()
@@ -802,6 +803,10 @@ module BoardV2Application =
             member _.Send request = dispatch request.Subject (fun () -> transport.Send request)
             member _.SendMutation mutation = dispatch mutation.Request.Subject (fun () -> transport.SendMutation mutation)
             member _.RetryMutation effectId = Error(Errors.Malformed(effectId, "fixed refresh cannot replay durable mutation recipes")) }
+
+    let private bounded (binding: Binding) (transport: IGitHubTransport) =
+        let clock = Diagnostics.Stopwatch.StartNew()
+        boundedWith (fun () -> clock.Elapsed) binding transport
 
     let private refuse message =
         eprintfn "fsgg-coord-engine: board-v2 refresh refused: %s" message

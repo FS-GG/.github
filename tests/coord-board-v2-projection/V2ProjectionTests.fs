@@ -984,14 +984,64 @@ let ``programme production composition reads current source and complete native 
     Assert.Equal(Some pull.Url, unavailable.Head.PullRequest)
 
 [<Fact>]
+let ``folded programme blockers keep every REST blocked_by refusal`` () =
+    // #5119: blockers ride on the native observation GraphQL read; the REST reader's checks still refuse.
+    let foreign = box {| id = "I_foreign"; number = 7; updatedAt = "2026-10-17T12:00:00Z"; state = "OPEN"; url = "https://github.com/Other/repo/issues/7"; repository = {| nameWithOwner = "Other/repo" |} |}
+    let wrongUrl = box {| id = "I_dependency"; number = 1; updatedAt = "2026-10-17T12:00:00Z"; state = "OPEN"; url = "https://github.com/FS-GG/.github/pull/1"; repository = {| nameWithOwner = "FS-GG/.github" |} |}
+    let noNode = ProgrammeFixture.blocker 1 "" "2026-10-17T12:00:00Z" "OPEN"
+    let lowerState = ProgrammeFixture.blocker 1 "I_dependency" "2026-10-17T12:00:00Z" "open"
+    let many = [ for number in 1 .. 50 -> ProgrammeFixture.blocker number $"I_{number}" "2026-10-17T12:00:00Z" "OPEN" ]
+    let truncated (request: Transport.Request) (response: IoResult<Transport.Response>) =
+        ProgrammeFixture.withBlockers [ ProgrammeFixture.blocker 1 "I_dependency" "2026-10-17T12:00:00Z" "OPEN" ] request response
+        |> Result.map (fun value -> if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then { value with Body = value.Body.Replace("\"totalCount\":1", "\"totalCount\":2") } else value)
+    let cases =
+        [ "not an FS-GG issue", ProgrammeFixture.withBlockers [ foreign ]
+          "not an FS-GG issue", ProgrammeFixture.withBlockers [ wrongUrl ]
+          "node identity missing/mismatched", ProgrammeFixture.withBlockers [ noNode ]
+          "node identity missing/mismatched", ProgrammeFixture.withBlockers [ lowerState ]
+          "bound reached; completeness unknown", ProgrammeFixture.withBlockers many
+          "incomplete or denied", truncated ]
+    // The final barrier replaces the item gap with its own, so each case is identified by its outcome: a refused
+    // blocker snapshot is never a complete dependency read and never Current. Each case alone keeps its own check.
+    for expected, change in cases do
+        let report = programmeSnapshot change
+        let item = report.Items.Head
+        Assert.True(("Unknown" = item.SourceCurrentness), expected)
+        Assert.False(item.Evidence.DependencyReadComplete, expected)
+        Assert.Empty(item.Evidence.DependencyObservations)
+    // The accepted shape, and no REST dependency read at all.
+    let transport = ProgrammeFixture.transport (ProgrammeFixture.withBlockers [ ProgrammeFixture.blocker 1 "I_dependency" "2026-10-17T12:00:00Z" "CLOSED" ])
+    let report = V2ProjectionSource.inspectFixed transport (ProgrammeFixture.binding ()) None
+    Assert.Equal("Current", report.Items.Head.SourceCurrentness)
+    Assert.Equal<string list>([ "I_dependency@2026-10-17T12:00:00Z:CLOSED" ], report.Items.Head.Evidence.DependencyObservations |> List.map (fun value -> $"{value.NodeId}@{value.UpdatedAt}:{value.State}"))
+    Assert.Equal(0, transport.Count "dependencies/blocked_by")
+
+[<Fact>]
+let ``a Work level outside the bound schema on the planning membership read is a planning gap`` () =
+    // #5119: Work level rides on the successor planning membership read with the former classification read's checks.
+    let mutable classifications = 0
+    let wrongOption (request: Transport.Request) (response: IoResult<Transport.Response>) =
+        if request.Subject = "selected work classification" then classifications <- classifications + 1
+        if request.Subject <> "bound V2 successor planning memberships" then response
+        else response |> Result.map (fun value -> { value with Body = value.Body.Replace("\"delivery-option\"", "\"foreign-option\"") })
+    let reads = ProgrammeFixture.successorTransport (ProgrammeFixture.successorBinding ()) (Some "Delivery") wrongOption
+    let report = V2ProjectionSource.inspectFixed reads (ProgrammeFixture.successorBinding ()) None
+    let gap = report.Items.Head.PlanningGap |> Option.map Errors.explain |> Option.defaultValue ""
+    Assert.Contains("Work level field/value differs from bound schema", gap)
+    Assert.Equal(0, classifications)
+    let unset = ProgrammeFixture.successorTransport (ProgrammeFixture.successorBinding ()) None ProgrammeFixture.unchanged
+    let unsetReport = V2ProjectionSource.inspectFixed unset (ProgrammeFixture.successorBinding ()) None
+    Assert.Equal(Some("Unknown", None), unsetReport.Items.Head.Planning |> Option.bind _.WorkLevel)
+
+[<Fact>]
 let ``ordinary closure dependency and plan revisions are fresh programme observations`` () =
     let change (request: Transport.Request) (response: IoResult<Transport.Response>) =
-        response |> Result.map (fun result ->
-            if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then { result with Body = result.Body.Replace("\"state\":\"OPEN\"", "\"state\":\"CLOSED\"").Replace(ProgrammeFixture.revision, "2026-10-17T13:00:00Z") }
-            elif request.Subject.EndsWith("programme.md", StringComparison.Ordinal) then { result with Body = result.Body.Replace(ProgrammeFixture.head, String.replicate 40 "f") }
-            elif request.Path.EndsWith("/dependencies/blocked_by", StringComparison.Ordinal) then
-                { result with Body = """[{"html_url":"https://github.com/FS-GG/.github/issues/1","number":1,"node_id":"I_dependency","updated_at":"2026-10-17T13:00:00Z","state":"closed"}]""" }
-            else result)
+        let response =
+            response |> Result.map (fun result ->
+                if request.Subject.EndsWith("native observation", StringComparison.Ordinal) then { result with Body = result.Body.Replace("\"state\":\"OPEN\"", "\"state\":\"CLOSED\"").Replace(ProgrammeFixture.revision, "2026-10-17T13:00:00Z") }
+                elif request.Subject.EndsWith("programme.md", StringComparison.Ordinal) then { result with Body = result.Body.Replace(ProgrammeFixture.head, String.replicate 40 "f") }
+                else result)
+        ProgrammeFixture.withBlockers [ ProgrammeFixture.blocker 1 "I_dependency" "2026-10-17T13:00:00Z" "CLOSED" ] request response
     let report = programmeSnapshot change
     Assert.Equal("Current", report.Items.Head.SourceCurrentness)
     Assert.Equal("CLOSED", report.Items.Head.Evidence.Native.Value.State)
@@ -1152,10 +1202,7 @@ let private asNewAssignment (change: Transport.Request -> IoResult<Transport.Res
 
 [<Fact>]
 let ``actual open native dependency is classified per action without suppressing missing coverage`` () =
-    let report = asNewAssignment (fun request response ->
-        if request.Path.EndsWith("/dependencies/blocked_by", StringComparison.Ordinal) then
-            response |> Result.map (fun value -> { value with Body = """[{"html_url":"https://github.com/FS-GG/.github/issues/1","number":1,"node_id":"I_dependency","updated_at":"2026-10-17T12:00:00Z","state":"open"}]""" })
-        else response)
+    let report = asNewAssignment (ProgrammeFixture.withBlockers [ ProgrammeFixture.blocker 1 "I_dependency" "2026-10-17T12:00:00Z" "OPEN" ])
     Assert.Single report.Items.Head.Evidence.DependencyObservations |> ignore
     let context = selectionContext report
     let choose (context: V2ProjectionSource.SelectionContext) = (V2ProjectionSource.selectActions report (Some context) report.NativeIntegrator.ObservedAt).Head
@@ -1529,7 +1576,8 @@ let ``hierarchy changed partial or cyclic reads cannot qualify delivery`` () =
                         elif mode = "moved" && hierarchyReads > 1 then value.Body.Replace("I_unselected-child", "I_changed-child")
                         else value.Body
                     {value with Body = body})
-            elif request.Subject = "selected work classification" then
+            elif request.Subject = "bound V2 successor planning memberships" then
+                // The Work level classification rides on the planning membership read (#5119).
                 classificationReads <- classificationReads + 1
                 response |> Result.map (fun (value: Transport.Response) ->
                     if mode = "classification" && classificationReads > 1 then

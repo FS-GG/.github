@@ -539,10 +539,23 @@ Coordination board and its readers to 500 items, so `maximumProgrammeRows` is no
 250-row table can never admit them. More than 500 rows are unsupported. The byte bounds are unchanged. The cohort-90 binding measured
 37,938 payload bytes and 62,651 binding bytes at 207 rows, which projects to about 92 KiB and 150 KiB at 500.
 
-The bounded refresh and inspection request ceiling was a flat 500 sends. The 207-row cohort-90 inspection exhausted it, with
-2,502 reads and all 207 rows `Unknown`. It is now `V2Projection.refreshRequestCeiling`: 64 sends plus 4 per selected row, never
-below 500. That is 892 sends at 207 rows and 2,064 at 500. The measured fixture cost of the batched inspection is 635 sends at 207
-rows and 1,517 at 500. The 270-second deadline is unchanged, so reducing the reads per row is the next change. The
+The CLI's bounded transport, shared by `inspect` and `refresh`, had a flat 500-send ceiling and a 270-second deadline. The
+207-row cohort-90 inspection exhausted it, with 2,502 reads and all 207 rows `Unknown`. Three changes cut the inspection reads
+per row:
+- A programme binding reads each issue's blockers in the native observation GraphQL query (`blockedBy`, with the REST reader's checks), not a separate REST `dependencies/blocked_by` read. That read was two unbatched sends per row.
+- A binding-5 successor reads Work level in its planning membership query, not a separate `selected work classification` read.
+- Inspection batches alias 25 reads per send instead of 10.
+
+The fixture inspection now takes 81 sends at 207 rows and 175 at 500, down from 635 and 1,517. The live read-only run of the
+207-row binding was retained on 2026-10-31 at 18:31Z. It completed in 120.1 seconds for 87 GraphQL points and 19 REST reads, with
+205 of 207 sources Current, no membership or population gap, and zero mutation attempts. The private run directory and its
+counts-only summary are kept by the #5119 owner. The ceiling is now `V2Projection.refreshRequestCeiling`: 64 sends plus 2 per
+selected row, never below 500 (1,064 at 500 rows). The deadline is `V2Projection.refreshDeadlineSeconds`: 60 seconds plus 0.7 per
+selected row, never below 270 (410 at 500 rows).
+
+Both values are derived from inspect measurements only. `refresh` is not batched: it takes about 6 sends per row in the fixture
+(1,243 at 207 rows), so it stops after about 80 rows inside this budget. Batching it, or refusing larger bindings before any send,
+is [#5131](https://github.com/FS-GG/.github/issues/5131). The
 complete-membership read refuses a board whose `totalCount` exceeds `maximumBoardItems` (500) on its first page, rather than paging
 up to the limit.
 
