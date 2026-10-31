@@ -39,7 +39,7 @@ module V2PreflightTests =
     /// Healthy inputs over a real predecessor pair. Every control below changes one thing.
     let private healthy (count: int) : EnrollmentInputs =
         let privateJson, publicJson, _ = predecessor count ""
-        let successorPrivate, successorPublic = if count <= 247 then successorPair privateJson publicJson else privateJson, publicJson
+        let successorPrivate, successorPublic = if count <= 497 then successorPair privateJson publicJson else privateJson, publicJson
         { Request = request
           Facts = Known(facts, Live)
           ConstructorRevision = Known main
@@ -54,6 +54,7 @@ module V2PreflightTests =
           InstalledReaderSha256 = Known reader
           KnownInstalledReaders = Set.ofList [ reader ]
           KnownLiftedCapReaders = Set.ofList [ reader ]
+          KnownCap500Readers = Set.ofList [ reader ]
           LockedFSharpCoreHash = Known hash
           CachedFSharpCoreHash = Known hash
           MemoryHeadroomBytes = Known(Some 4294967296L)
@@ -287,20 +288,31 @@ module V2PreflightTests =
     [<Fact>]
     let ``row cap: the legacy ceiling needs no reader, the lifted range needs a known reader, the new ceiling is a refusal`` () =
         // At the legacy ceiling every reader reads the successor.
-        let legacy = runPlan { healthy 98 with InstalledReaderSha256 = NotObserved NotSupplied; KnownLiftedCapReaders = Set.empty }
+        let legacy = runPlan { healthy 98 with InstalledReaderSha256 = NotObserved NotSupplied; KnownLiftedCapReaders = Set.empty; KnownCap500Readers = Set.empty }
         Assert.True(isSupported (verdictOf legacy RowCap))
         Assert.StartsWith("98+2<=100", (match verdictOf legacy RowCap with SupportedForNextStage e -> e | _ -> ""))
         // 99+2 = 101 is above it: supported only by a reader named in the lifted-cap table.
         let beyond = healthy 99
+        let other = Set.ofList [ String.replicate 64 "c" ]
         Assert.StartsWith("99+2<=250", (match verdictOf (runPlan beyond) RowCap with SupportedForNextStage e -> e | other -> failwithf "%A" other))
-        expectUnknown RowCap KnownReaderTable NotSupplied (runPlan { beyond with KnownLiftedCapReaders = Set.empty })
-        expectUnknown RowCap InstalledReader NotInKnownTable (runPlan { beyond with KnownLiftedCapReaders = Set.ofList [ String.replicate 64 "c" ] })
+        // Up to 250 a reader in either table carries the ceiling.
+        Assert.True(isSupported (verdictOf (runPlan { beyond with KnownCap500Readers = Set.empty }) RowCap))
+        Assert.True(isSupported (verdictOf (runPlan { beyond with KnownLiftedCapReaders = Set.empty }) RowCap))
+        expectUnknown RowCap KnownReaderTable NotSupplied (runPlan { beyond with KnownLiftedCapReaders = Set.empty; KnownCap500Readers = Set.empty })
+        expectUnknown RowCap InstalledReader NotInKnownTable (runPlan { beyond with KnownLiftedCapReaders = other; KnownCap500Readers = other })
         expectUnknown RowCap InstalledReader NotSupplied (runPlan { beyond with InstalledReaderSha256 = NotObserved NotSupplied })
-        // The new ceiling: 248+2 = 250 passes, 249+2 = 251 is unsupported with the counts named.
-        Assert.StartsWith("248+2<=250", (match verdictOf (runPlan (healthy 248)) RowCap with SupportedForNextStage e -> e | other -> failwithf "%A" other))
-        let over = runPlan (healthy 249)
+        // 248+2 = 250 is the 0.114.0 ceiling; 249+2 = 251 is above it and needs a reader in the 500-row table (#5119):
+        // a stale 250-row table alone never admits it.
+        Assert.StartsWith("248+2<=250", (match verdictOf (runPlan { healthy 248 with KnownCap500Readers = Set.empty }) RowCap with SupportedForNextStage e -> e | other -> failwithf "%A" other))
+        let above250 = healthy 249
+        Assert.StartsWith("249+2<=500", (match verdictOf (runPlan above250) RowCap with SupportedForNextStage e -> e | other -> failwithf "%A" other))
+        expectUnknown RowCap KnownReaderTable NotSupplied (runPlan { above250 with KnownCap500Readers = Set.empty })
+        expectUnknown RowCap InstalledReader NotInKnownTable (runPlan { above250 with KnownCap500Readers = other })
+        // The new ceiling: 498+2 = 500 passes, 499+2 = 501 is unsupported with the counts named.
+        Assert.StartsWith("498+2<=500", (match verdictOf (runPlan (healthy 498)) RowCap with SupportedForNextStage e -> e | other -> failwithf "%A" other))
+        let over = runPlan (healthy 499)
         expectUnsupported RowCap RowCapExceeded ProtocolRelease over
-        Assert.Equal<string list>([ "249+2>250" ], (finding over RowCap).Subjects)
+        Assert.Equal<string list>([ "499+2>500" ], (finding over RowCap).Subjects)
         expectUnknown RowCap PredecessorPrivate Unreadable (runPlan { healthy 98 with PredecessorPrivate = NotObserved Unreadable })
 
     [<Fact>]

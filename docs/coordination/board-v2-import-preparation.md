@@ -502,7 +502,7 @@ from the successor's own appended rows (a sha-pinned reference is immutable and 
 | `FactsComplete`, `IssueKind`, `IssueIdentity`, `ProjectMembership`, `RepositoryInBinding`, `NotAlreadyEnrolled`, `RoadmapConflict` | the planner's own per-row findings, all of them rather than the first | a row fails the check (the row is named) | facts partial or unobserved |
 | `PlanGrammar` | the installed plan grammar; the installed artifact sha against a known table | a plan reference is not admitted | the installed artifact is not in the known table |
 | `PlanBlob` | plan documents on `main` now | a document is absent in a readable repository | facts were supplied rather than read now, or the repository may be invisible (`PlanBlob/NotVisible`) |
-| `RowCap` | predecessor rows plus request rows against 100 (readable by every reader) and 250 (readable only by a reader named in `--known-lifted-cap-readers`) | the total exceeds 250 | above 100: the installed reader is unnamed, not in the table, or the table is not supplied; or the predecessor is unreadable |
+| `RowCap` | predecessor rows plus request rows against 100 (readable by every reader), 250 (readable only by a reader named in `--known-lifted-cap-readers` or `--known-cap-500-readers`) and 500 (readable only by a reader named in `--known-cap-500-readers`) | the total exceeds 500 | above 100: the installed reader is unnamed, not in the applicable table, or that table is not supplied; or the predecessor is unreadable |
 | `PayloadBound`, `TemplateBound` | computed payload and private binding sizes against the installed reader bounds | either is exceeded | inputs unreadable |
 | `ToolchainLock` | locked FSharp.Core `contentHash` against the cache's `.nupkg.metadata` | they differ (the NU1403 risk) | either unreadable |
 | `MemoryHeadroom` | smallest remaining bytes over the process cgroup chain, and host `MemAvailable` (the smaller of the two; alone when no cgroup limit applies) | below the minimum | cgroup unreadable, or `MemAvailable` unreadable (a known cgroup limit does not bound the host) |
@@ -531,6 +531,20 @@ rows and the binding's selected issues, and used by the planner and the prefligh
 A reader older than this release refuses more than 100 rows, so the preflight treats 101 to 250 as readable only by a reader named
 in the supplied `--known-lifted-cap-readers` table (empty by default: `Unknown`), and treats more than 250 as unsupported. The
 choice of 250 is a bound chosen for headroom, not derived from the design; it is a single constant if Root wants another.
+
+**500 rows and the scaled request ceiling ([#5119](https://github.com/FS-GG/.github/issues/5119)).** The user limited the
+Coordination board and its readers to 500 items, so `maximumProgrammeRows` is now 500. Coherent 0.114.0 readers refuse more than
+250 (`previousProgrammeRowCap`), so the preflight keeps two tables. 101 to 250 rows need a reader in either
+`--known-lifted-cap-readers` or `--known-cap-500-readers`. 251 to 500 rows need a reader in `--known-cap-500-readers`, so a stale
+250-row table can never admit them. More than 500 rows are unsupported. The byte bounds are unchanged. The cohort-90 binding measured
+37,938 payload bytes and 62,651 binding bytes at 207 rows, which projects to about 92 KiB and 150 KiB at 500.
+
+The bounded refresh and inspection request ceiling was a flat 500 sends. The 207-row cohort-90 inspection exhausted it, with
+2,502 reads and all 207 rows `Unknown`. It is now `V2Projection.refreshRequestCeiling`: 64 sends plus 4 per selected row, never
+below 500. That is 892 sends at 207 rows and 2,064 at 500. The measured fixture cost of the batched inspection is 635 sends at 207
+rows and 1,517 at 500. The 270-second deadline is unchanged, so reducing the reads per row is the next change. The
+complete-membership read refuses a board whose `totalCount` exceeds `maximumBoardItems` (500) on its first page, rather than paging
+up to the limit.
 
 **Gate trust.** The routine gates (`check-claim-generation.py` with `lib/gate.py`, and `check-closing-keywords.py`) run from the
 exact base commit's blobs (`git show <base>:<path>`), the way `routine-eligibility.yml` does, never from the checkout, so a pull

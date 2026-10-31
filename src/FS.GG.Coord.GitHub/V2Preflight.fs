@@ -432,6 +432,7 @@ module V2Preflight =
           InstalledReaderSha256: Observed<string>
           KnownInstalledReaders: Set<string>
           KnownLiftedCapReaders: Set<string>
+          KnownCap500Readers: Set<string>
           LockedFSharpCoreHash: Observed<string>
           CachedFSharpCoreHash: Observed<string>
           MemoryHeadroomBytes: Observed<int64 option>
@@ -737,13 +738,17 @@ module V2Preflight =
             elif total <= V2Enrollment.legacyRowCap then
                 supported RowCap (counts + "<=" + string V2Enrollment.legacyRowCap + ", readable by every reader of the line")
             else
-                // Above the legacy ceiling the successor is readable only by a reader that carries the lifted one.
+                // Above the legacy ceiling the successor is readable only by a reader that carries a lifted one: up to 250
+                // by a reader in either table, and from 251 to 500 only by a reader in the 500-row table (#5119).
+                let within250 = total <= V2Enrollment.previousRowCap
+                let table = if within250 then Set.union ctx.Inputs.KnownLiftedCapReaders ctx.Inputs.KnownCap500Readers else ctx.Inputs.KnownCap500Readers
+                let ceiling = if within250 then V2Enrollment.previousRowCap else V2Enrollment.rowCap
                 match ctx.Inputs.InstalledReaderSha256 with
                 | NotObserved kind -> unknown RowCap InstalledReader kind []
                 | Known sha ->
-                    if ctx.Inputs.KnownLiftedCapReaders.IsEmpty then unknown RowCap KnownReaderTable NotSupplied []
-                    elif ctx.Inputs.KnownLiftedCapReaders.Contains sha then
-                        supported RowCap (counts + "<=" + string V2Enrollment.rowCap + " and the installed reader is known to carry the lifted ceiling")
+                    if table.IsEmpty then unknown RowCap KnownReaderTable NotSupplied []
+                    elif table.Contains sha then
+                        supported RowCap (counts + "<=" + string ceiling + " and the installed reader is known to carry that ceiling")
                     else unknown RowCap InstalledReader NotInKnownTable []
         | None, _ -> unknown RowCap PredecessorPrivate NotEvaluated []
 

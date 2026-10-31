@@ -111,11 +111,11 @@ module V2EnrollmentDifferentialTests =
               if i < j then yield "enrolled-row+" + n1 + "+" + n2, enrolledRequest, (enrolledFact >> f1 >> f2)
           for n1, r1 in requestMutations do yield "enrolled-row+" + n1, (enrolledRequest >> r1), enrolledFact ]
 
-    /// The ordinary shape, both sides of the old ceiling (98+2, 99+2) and of the lifted one (248+2, 249+2), a non-spliceable payload,
+    /// The ordinary shape, both sides of the old ceiling (98+2, 99+2) and of the lifted one (498+2, 499+2), a non-spliceable payload,
     /// and the lifted cap exceeded together with a non-spliceable payload.
     let private shapes =
-        [ "five", 5, ""; "old-cap-edge", 98, ""; "beyond-old-cap", 99, ""; "new-cap-edge", 248, ""; "new-cap-over", 249, ""
-          "newline", 5, "\n"; "new-cap-over-newline", 249, "\n" ]
+        [ "five", 5, ""; "old-cap-edge", 98, ""; "beyond-old-cap", 99, ""; "new-cap-edge", 498, ""; "new-cap-over", 499, ""
+          "newline", 5, "\n"; "new-cap-over-newline", 499, "\n" ]
 
     [<Fact>]
     let ``the scenario set has the stated size`` () =

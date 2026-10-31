@@ -102,11 +102,21 @@ module V2Projection =
         }
 
     /// The programme enrollment row ceiling the reader enforces, for both the private payload rows and the binding's
-    /// selected issues. Lifted from 100 in the coordinated #4941 release; readers older than that refuse more than 100.
+    /// selected issues: 500 (#5119). Readers before #4941 refuse more than 100; coherent 0.114.0 readers refuse more than 250.
     val maximumProgrammeRows: int
 
-    /// The ceiling before the lift. Any population at or below it is readable by every reader of the line.
+    /// The Coordination board item limit (500, #5119). The complete project-membership read refuses a board that reports more.
+    val maximumBoardItems: int
+
+    /// The ceiling before the first lift. Any population at or below it is readable by every reader of the line.
     val legacyProgrammeRowCap: int
+
+    /// The ceiling of the coherent 0.114.0 readers (250). A population above it is readable only by a 500-row reader.
+    val previousProgrammeRowCap: int
+
+    /// The bounded refresh/inspect request ceiling for a binding that selects this many rows: never below the
+    /// historical 500, and scaled by the selected population up to `maximumProgrammeRows`.
+    val refreshRequestCeiling: selectedRows: int -> int
 
     /// Validate the reviewed binding without performing IO.
     val validateBinding: binding: Binding -> IoResult<unit>

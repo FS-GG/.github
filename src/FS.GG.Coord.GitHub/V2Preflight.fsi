@@ -279,9 +279,13 @@ module V2Preflight =
           InstalledReaderSha256: Observed<string>
           /// Artifact shas of installed readers whose plan grammar is known to equal the source grammar.
           KnownInstalledReaders: Set<string>
-          /// Artifact shas of installed readers known to accept more than the legacy 100 rows. A population above 100
-          /// is readable only by such a reader; the table is supplied and empty by default.
+          /// Artifact shas of installed readers known to accept more than the legacy 100 rows (the 250-row coherent
+          /// 0.114.0 line or later). A population of 101 to 250 is readable only by such a reader, or by one named in
+          /// `KnownCap500Readers`; the table is supplied and empty by default.
           KnownLiftedCapReaders: Set<string>
+          /// Artifact shas of installed readers known to accept the 500-row ceiling (#5119). A population of 251 to 500 is
+          /// readable only by such a reader. A separate table, so a stale 250-row table can never admit 251 to 500 rows.
+          KnownCap500Readers: Set<string>
           /// FSharp.Core `contentHash` locked in the constructor's lock file.
           LockedFSharpCoreHash: Observed<string>
           /// FSharp.Core `contentHash` recorded in the package cache's `.nupkg.metadata`.

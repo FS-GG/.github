@@ -20,6 +20,9 @@ module V2Enrollment =
     /// The ceiling before the lift (100): any population within it is readable by every reader of the line.
     val legacyRowCap: int
 
+    /// The coherent 0.114.0 readers' ceiling (250): a population above it is readable only by a 500-row reader.
+    val previousRowCap: int
+
     /// Closed refusal set. `MalformedInput` covers undecodable or non-closed request/facts/pair
     /// input, which carries no further detail by design.
     type Refusal =

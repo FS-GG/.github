@@ -568,6 +568,7 @@ module V2EnrollmentCommands =
                  | _ -> V2Preflight.NotObserved V2Preflight.NotSupplied)
               KnownInstalledReaders = loadHashes "--known-readers"
               KnownLiftedCapReaders = loadHashes "--known-lifted-cap-readers"
+              KnownCap500Readers = loadHashes "--known-cap-500-readers"
               LockedFSharpCoreHash = locked
               CachedFSharpCoreHash = cached
               MemoryHeadroomBytes = cgroupHeadroom ()
@@ -794,7 +795,7 @@ module V2EnrollmentCommands =
             namedOptional args
                 [ "--route"; "--stage"; "--repository" ]
                 [ "--request"; "--native-facts"; "--runtime-binding"; "--installed-reader"; "--known-readers"; "--lockfile"; "--nuget-cache"
-                  "--main-revision"; "--known-lifted-cap-readers"; "--min-headroom-bytes"; "--churn-window-minutes"; "--successor-private"; "--successor-merge-sha"
+                  "--main-revision"; "--known-lifted-cap-readers"; "--known-cap-500-readers"; "--min-headroom-bytes"; "--churn-window-minutes"; "--successor-private"; "--successor-merge-sha"
                   "--pr"; "--title"; "--body-file"; "--workflow"; "--slug" ]
                 [ "--online" ]
         let online = flags.Contains "--online"

@@ -788,11 +788,13 @@ module BoardV2Application =
 
     // Leave enough time for the existing 30 second transport timeout. Stop before dispatch,
     // without cancelling an in-flight writer; serialization is owned by the fixed job.
-    let private bounded (transport: IGitHubTransport) =
+    // The request ceiling scales with the selected population (#5119); the deadline is unchanged.
+    let private bounded (binding: Binding) (transport: IGitHubTransport) =
         let elapsed = Diagnostics.Stopwatch.StartNew()
+        let ceiling = V2Projection.refreshRequestCeiling binding.SelectedIssues.Count
         let mutable calls = 0
         let dispatch subject action =
-            if elapsed.Elapsed >= TimeSpan.FromSeconds 270.0 || calls >= 500 then Error(Errors.Malformed(subject, "bounded refresh deadline/request ceiling reached; coverage Unknown"))
+            if elapsed.Elapsed >= TimeSpan.FromSeconds 270.0 || calls >= ceiling then Error(Errors.Malformed(subject, "bounded refresh deadline/request ceiling reached; coverage Unknown"))
             else
                 calls <- calls + 1
                 action ()
@@ -809,7 +811,7 @@ module BoardV2Application =
             let report =
                 let lockPath = Path.Combine(Path.GetTempPath(), "fsgg-v2-observation-" + binding.ProjectId + ".lock")
                 use lease = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
-                V2ProjectionSource.runFixed (bounded transport) binding previous
+                V2ProjectionSource.runFixed (bounded binding transport) binding previous
             let evidence = match box transport with :? V2ObservationTransport.IDispatchEvidence as evidence -> evidence.DispatchReceipts | _ -> []
             let report = { report with NativeDispatch = evidence; Cleanup = "Root-local project exclusive OS handle released; no distributed lease or background work" }
             let json = encodeReport report + Environment.NewLine
@@ -819,7 +821,7 @@ module BoardV2Application =
         with error -> refuse (if isProgrammeBinding binding then "private refresh/report failed" else "refresh/report failed: " + error.Message)
     let private executeInspection transport (binding, previous, reportPath, context) =
         try
-            let report = V2ProjectionSource.inspectFixed (bounded transport) binding previous
+            let report = V2ProjectionSource.inspectFixed (bounded binding transport) binding previous
             let json = encodeInspectionWithContext report context DateTimeOffset.UtcNow + Environment.NewLine
             if isProgrammeBinding binding then privateJson syncMigrationDirectory reportPath json
             else File.WriteAllText(reportPath, json)

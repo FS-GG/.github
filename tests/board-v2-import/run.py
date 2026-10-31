@@ -981,15 +981,15 @@ class SuccessorEnrollmentTests(unittest.TestCase):
         self.assert_refusal('PartialVisibility', request, self.facts_issue(0, visibility='partial'))
         missing = self.facts(); missing['issues'].pop()
         self.assert_refusal('PartialVisibility', request, missing)
-        # RowCapExceeded: the ceiling was lifted from 100 to 250. 98+2 (the old ceiling) and 99+2 (beyond it) are accepted;
-        # 248+2 (the new ceiling) is accepted and 249+2 is refused.
-        for count, total in [(98, 100), (99, 101), (248, 250)]:
+        # RowCapExceeded: the ceiling was lifted from 100 to 250 and then 500 (#5119). 98+2 (the old ceiling), 99+2 (beyond it)
+        # and 249+2 (beyond the 0.114.0 ceiling) are accepted; 498+2 (the new ceiling) is accepted and 499+2 is refused.
+        for count, total in [(98, 100), (99, 101), (249, 251), (498, 500)]:
             full = self.make_predecessor(f'full{count}', count)
             accepted, _ = self.plan(self.request(full), fixture=full, name=f'cap-ok-{count}')
             self.assertEqual(0, accepted.returncode, accepted.stderr)
             self.assertEqual(f'successor planned; rows={total} appended=2; offline only\n', accepted.stdout)
-        full249 = self.make_predecessor('full249', 249)
-        self.assert_refusal('RowCapExceeded', self.request(full249), fixture=full249)
+        full499 = self.make_predecessor('full499', 499)
+        self.assert_refusal('RowCapExceeded', self.request(full499), fixture=full499)
         # MalformedInput: unknown, duplicate and missing members
         raw = self.wire(self.request())
         self.assert_refusal('MalformedInput', raw_request=raw[:-1] + b',"extra":1}')
@@ -1360,8 +1360,8 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
 
     def test_preflight_names_each_unsupported_route_check_and_refuses_bad_arguments(self):
         env, _ = self.fake_gh()
-        # The cap was lifted from 100 to 250. Up to the old ceiling every reader reads the successor; above it only a reader that
-        # carries the lifted ceiling does, and the table that names such readers is supplied. The new ceiling is a refusal.
+        # The cap was lifted from 100 to 250 and then 500 (#5119). Up to the old ceiling every reader reads the successor; up to
+        # 250 only a reader named in either table does; from 251 only a reader in the 500-row table. Beyond 500 is a refusal.
         known = self.dir / 'lifted-readers.txt'
         known.write_text(hashlib.sha256(DLL.read_bytes()).hexdigest() + '\n')
         full98 = self.make_predecessor('preflight98', 98)
@@ -1379,9 +1379,14 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         listed = self.preflight(env, online=False, fixture=full99, extra=['--installed-reader', DLL, '--known-lifted-cap-readers', known])[0]
         self.assertEqual('SupportedForNextStage', self.verdicts(listed)[1]['RowCap']['verdict'])
         full249 = self.make_predecessor('preflight249', 249)
-        result, _ = self.preflight(env, online=False, fixture=full249, extra=['--installed-reader', DLL, '--known-lifted-cap-readers', known])
+        stale = self.preflight(env, online=False, fixture=full249, extra=['--installed-reader', DLL, '--known-lifted-cap-readers', known])[0]
+        self.assertEqual('KnownReaderTable/NotSupplied', self.verdicts(stale)[1]['RowCap']['gap'])
+        cap500 = self.preflight(env, online=False, fixture=full249, extra=['--installed-reader', DLL, '--known-cap-500-readers', known])[0]
+        self.assertEqual(('SupportedForNextStage', '249+2<=500'), (self.verdicts(cap500)[1]['RowCap']['verdict'], self.verdicts(cap500)[1]['RowCap']['evidence'][:10]))
+        full499 = self.make_predecessor('preflight499', 499)
+        result, _ = self.preflight(env, online=False, fixture=full499, extra=['--installed-reader', DLL, '--known-cap-500-readers', known])
         report, rows = self.verdicts(result)
-        self.assertEqual(('Unsupported', 'RowCapExceeded', 'ProtocolRelease', ['249+2>250']), tuple(rows['RowCap'][k] for k in ['verdict', 'reason', 'supplier', 'subjects']))
+        self.assertEqual(('Unsupported', 'RowCapExceeded', 'ProtocolRelease', ['499+2>500']), tuple(rows['RowCap'][k] for k in ['verdict', 'reason', 'supplier', 'subjects']))
         self.assertEqual(10, result.returncode)
         # A constructor that is not the intended protected main is unsupported, supplied by a rebuild.
         wrong, _ = self.preflight(env, online=False, main='0' * 40)
@@ -1732,8 +1737,8 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         return out
 
     def test_render_carrier_accepts_exactly_the_populations_the_reader_accepts(self):
-        """The carrier's own row bound is the reader's (250), not the old 100: plan and prepare receipts must render."""
-        for predecessor, appended, expected in [(98, 2, None), (99, 2, None), (98, 3, None), (248, 2, None), (249, 2, 'MalformedInput'), (1, 250, 'MalformedInput')]:
+        """The carrier's own row bound is the reader's (500), not the old 100 or 250: plan and prepare receipts must render."""
+        for predecessor, appended, expected in [(98, 2, None), (99, 2, None), (98, 3, None), (249, 2, None), (498, 2, None), (499, 2, 'MalformedInput'), (1, 500, 'MalformedInput')]:
             with self.subTest(total=predecessor + appended):
                 out = self.carrier_receipt(predecessor, appended)
                 done = self.run_cli('render-carrier', '--receipt', out/'receipt.json', '--output', out/'carrier.md')
@@ -1745,8 +1750,8 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
                     self.assertFalse((out / 'carrier.md').exists())
 
     def test_plan_prepare_and_render_carrier_agree_beyond_the_old_ceiling(self):
-        """End to end at 101 and 250 rows: every stage's output is accepted by the next."""
-        for count in (99, 248):
+        """End to end at 101, 251 and 500 rows: every stage's output is accepted by the next."""
+        for count in (99, 249, 498):
             with self.subTest(predecessor=count):
                 full = self.make_predecessor(f'agree{count}', count)
                 result, out = self.plan(self.request(full), fixture=full, name=f'agree-{count}')

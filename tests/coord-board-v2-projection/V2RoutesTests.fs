@@ -191,7 +191,7 @@ module V2RoutesTests =
         { Request = request; Facts = Known(facts, Live); ConstructorRevision = Known(String.replicate 40 "1"); ProtectedMain = Known(String.replicate 40 "1")
           ProtectedMainFreshness = LiveMain; PredecessorPrivate = Known privateJson; PredecessorPublic = Known publicJson; RuntimeBinding = NotObserved NotSupplied
           SuccessorPrivate = Known successorPrivate; SuccessorMergeSha = Known(String.replicate 40 "5"); SuccessorPublic = Known successorPublic
-          InstalledReaderSha256 = Known(String.replicate 64 "a"); KnownInstalledReaders = Set.ofList [ String.replicate 64 "a" ]; KnownLiftedCapReaders = Set.empty
+          InstalledReaderSha256 = Known(String.replicate 64 "a"); KnownInstalledReaders = Set.ofList [ String.replicate 64 "a" ]; KnownLiftedCapReaders = Set.empty; KnownCap500Readers = Set.empty
           LockedFSharpCoreHash = Known "h"; CachedFSharpCoreHash = Known "h"; MemoryHeadroomBytes = Known(Some 4294967296L); HostMemAvailableBytes = Known 8589934592L
           MinimumHeadroomBytes = 1073741824L; PayloadLimitBytes = payloadLimitBytes; BindingLimitBytes = bindingLimitBytes
           ProjectItems = Known [ for i in 0 .. 4 -> { ItemId = $"PVTI_{i}"; Content = IssueContent($"FS-GG/.github#{70001 + i}", $"I_synthetic_{sentinel}_{i}"); HasStatus = true; HasTrack = true; HasWorkLevel = true; RoadmapRaw = None; UpdatedAt = DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero) } ]
