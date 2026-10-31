@@ -194,6 +194,11 @@ class PublisherAPI:
 
 class PreparedJournal:
     ref = REF
+    main_directory = True
+    _observed = type("Observed", (), {"head": "1" * 40})()
+
+    def _main_head(self, physical):
+        return "1" * 40  # The logical journal head bound at every physical head of this fixture.
 
     def __init__(self, intent, generation=33, ref=REF):
         self.ref = ref
@@ -236,6 +241,32 @@ class QualifiedProvider:
     def dispatch(self, effect):
         self.calls.append(effect.identity)
         return Dispatch("applied")
+
+
+class BurstAuthorityAPI(AuthorityAPI):
+    """Authority main follows a scripted head sequence (last head repeats).
+
+    Settlement-bot commits never touch state/releases, so every head shares the release tree,
+    except heads in `present_heads`, where another writer created the selected destination.
+    """
+
+    def __init__(self, heads, present_heads=(), **kwargs):
+        super().__init__(**kwargs)
+        self.heads = list(heads)
+        self.present_heads = set(present_heads)
+        self.initially_present = self.present
+
+    def get(self, path):
+        if path == f"repos/{AUTHORITY}/git/ref/heads/main":
+            self.reads.append(path)
+            self.main_reads += 1
+            return {"object": {"sha": self.heads[min(self.main_reads, len(self.heads)) - 1], "type": "commit"}}
+        if path.startswith(f"repos/{AUTHORITY}/git/commits/"):
+            self.reads.append(path)
+            sha = path.rsplit("/", 1)[1]
+            self.present = self.initially_present or sha in self.present_heads
+            return {"sha": sha, "parents": [], "tree": {"sha": self.root}}
+        return super().get(path)
 
 
 class PublisherJournalTests(unittest.TestCase):
@@ -354,16 +385,21 @@ class PublisherJournalTests(unittest.TestCase):
             self.prepare()
         self.assertEqual(self.journal.initializations, 0)
 
-    def test_head_drift_during_classification_or_uniqueness_refuses(self):
-        self.ledger.change_main_at = 2
-        with self.assertRaisesRegex(publisher.Refused, "moved during destination"):
+    def test_head_drift_that_never_settles_during_classification_or_uniqueness_refuses(self):
+        # #5108 keeps refusing a persistent change: a main that moves on every read never settles.
+        sleeps = []
+        moving = [f"{index:040x}" for index in range(1, 200)]
+        self.ledger = BurstAuthorityAPI(moving)
+        with patch.object(publisher.time, "sleep", sleeps.append), \
+             self.assertRaisesRegex(publisher.Refused, "did not settle"):
             self.prepare()
-        self.ledger.change_main_at = None
-        def move_during_uniqueness():
-            self.ledger.change_main_at = self.ledger.main_reads + 1
-        with patch.object(self, "uniqueness", move_during_uniqueness):
-            with self.assertRaisesRegex(publisher.Refused, "moved before journal"):
-                self.prepare()
+        self.assertEqual(sleeps, [publisher.AUTHORITY_SETTLE_SECONDS] * publisher.AUTHORITY_SETTLE_ATTEMPTS)
+        sleeps.clear()
+        self.ledger = BurstAuthorityAPI(["a" * 40] * 2 + moving)
+        with patch.object(publisher.time, "sleep", sleeps.append), \
+             self.assertRaisesRegex(publisher.Refused, "did not settle"):
+            self.prepare()
+        self.assertEqual(len(sleeps), publisher.AUTHORITY_SETTLE_ATTEMPTS)
         self.assertEqual(self.journal.initializations, 0)
 
     def test_existing_corruption_and_intent_disagreement_never_reset(self):
@@ -445,6 +481,153 @@ class PublisherJournalTests(unittest.TestCase):
             self.prepare()
         self.assertEqual(self.journal.initializations, 0)
 
+
+
+class AuthoritySettlementBurstTests(unittest.TestCase):
+    """#5108: a settlement burst inside a publisher check window is re-read, not refused."""
+
+    setUp = PublisherJournalTests.setUp
+    uniqueness = PublisherJournalTests.uniqueness
+    prepare = PublisherJournalTests.prepare
+
+    A, B, C, D = "a" * 40, "b" * 40, "c" * 40, "d" * 40
+
+    def run_prepare(self, heads, *, present_heads=(), present=False, preflight=False):
+        self.ledger = BurstAuthorityAPI(heads, present_heads, present=present)
+        self.admission = publisher.ProtectedPublisherAdmission(
+            SingleOperatorAdmission(self.source, self.manifest, "b" * 40, 1, "EHotwagner", "refs/heads/main"), self.ledger, REF)
+        sleeps = []
+        with patch.object(publisher.time, "sleep", sleeps.append):
+            result = self.prepare(preflight=preflight)
+        return result, sleeps
+
+    def test_unmoved_main_never_waits(self):
+        result, sleeps = self.run_prepare([self.A])
+        self.assertFalse(result)
+        self.assertEqual((sleeps, self.journal.initializations), ([], 1))
+
+    def test_burst_inside_classification_is_accepted_after_it_settles(self):
+        result, sleeps = self.run_prepare([self.A, self.B, self.C, self.C], preflight=True)
+        self.assertTrue(result)
+        self.assertEqual(sleeps, [publisher.AUTHORITY_SETTLE_SECONDS])
+        self.assertEqual(self.journal.initializations, 0)
+
+    def test_burst_before_genesis_is_accepted_after_it_settles(self):
+        result, sleeps = self.run_prepare([self.A, self.A, self.B, self.C, self.D, self.D])
+        self.assertFalse(result)
+        self.assertEqual(sleeps, [publisher.AUTHORITY_SETTLE_SECONDS] * 2)
+        self.assertEqual(self.journal.initializations, 1)
+
+    def test_destination_created_while_main_settled_is_real_divergence(self):
+        with self.assertRaisesRegex(publisher.Refused, "destination changed"):
+            self.run_prepare([self.A, self.A, self.B], present_heads={self.B})
+        self.assertEqual(self.journal.initializations, 0)
+
+    def test_recovery_burst_rereads_the_same_journal_state(self):
+        result, sleeps = self.run_prepare([self.A, self.A, self.A, self.B, self.C, self.C], present=True)
+        self.assertFalse(result)
+        self.assertEqual(sleeps, [publisher.AUTHORITY_SETTLE_SECONDS])
+        self.assertEqual(self.journal.read_count, 2)
+
+    def test_recovery_journal_change_while_main_settled_is_real_divergence(self):
+        states = iter([self.journal.state, JournalState(34, self.intent["contentId"], {"journal": "intent"})])
+        with patch.object(self.journal, "read", lambda: next(states)), \
+             self.assertRaisesRegex(publisher.Refused, "Authority journal changed during journal recovery"):
+            self.run_prepare([self.A, self.A, self.A, self.B, self.C, self.C], present=True)
+
+    def test_total_settle_wait_is_bounded_per_publisher_run(self):
+        # Two separate drifts in one run share one budget: 5 waits settle the first, the second
+        # exhausts the remaining 5 and refuses instead of waiting another 8 x 15 s.
+        moving = [f"{index:040x}" for index in range(1, 200)]
+        heads = [self.A, self.B] + moving[:4] + [self.C, self.C, self.C, self.C] + moving[4:]
+        with self.assertRaisesRegex(publisher.Refused, "bounded re-read budget"):
+            self.run_prepare(heads)
+        self.assertEqual(self.journal.initializations, 0)
+        budget = publisher.AuthorityRereadBudget()
+        self.assertEqual(budget.remaining // publisher.AUTHORITY_SETTLE_SECONDS, 10)
+
+    def test_recovery_main_that_never_settles_refuses(self):
+        moving = [f"{index:040x}" for index in range(1, 200)]
+        with self.assertRaisesRegex(publisher.Refused, "did not settle"):
+            self.run_prepare([self.A, self.A] + moving, present=True)
+
+
+def _real_git():
+    import ast, base64, os, subprocess
+    source = ast.parse((pathlib.Path(__file__).resolve().parents[1] / "release-successor-journal/run.py").read_text())
+    cls = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == "RealGit")
+    namespace = {"os": os, "subprocess": subprocess, "base64": base64, "tempfile": tempfile, "pathlib": pathlib,
+                 "REPOSITORY": AUTHORITY}
+    exec(compile(ast.Module(body=[cls], type_ignores=[]), "existing-RealGit", "exec"), namespace)
+    return namespace["RealGit"]
+
+
+class RealGitRecoveryBurstTests(unittest.TestCase):
+    """#5108 against the actual journal reader on real Git objects: a burst can land inside
+    journal.read() itself, which refuses with its typed JournalMainMoved."""
+
+    INTENT = {"contentId": "sha256:" + "a" * 64, "sourceSha": "b" * 40, "version": "0.91.3",
+              "candidateArchiveSha256": "c" * 64, "operator": "EHotwagner"}
+    MAIN = f"repos/{AUTHORITY}/git/ref/heads/main"
+
+    def recover(self, event_at, event):
+        from release_successor_journal import ProtectedReleaseJournal
+        RealGit = _real_git()
+        with tempfile.TemporaryDirectory() as scratch:
+            real = RealGit(pathlib.Path(scratch) / "authority.git")
+            ProtectedReleaseJournal(real, main_directory=True).initialize(self.INTENT)
+            physical = real.get(self.MAIN)["object"]["sha"]
+
+            class Burst:
+                def __init__(inner):
+                    inner.main_reads = 0
+                def get(inner, path):
+                    if path == self.MAIN:
+                        inner.main_reads += 1
+                        if inner.main_reads in event_at:
+                            event(real)
+                    value = real.get(path)
+                    if path == self.MAIN:
+                        value["object"]["type"] = "commit"
+                    return value
+                def __getattr__(inner, name):
+                    return getattr(real, name)
+            api = Burst()
+            journal = ProtectedReleaseJournal(api, main_directory=True)
+            sleeps = []
+            budget = publisher.AuthorityRereadBudget(sleep=sleeps.append)
+            head = publisher.read_journal_at_stable_main(journal, api, physical, "Host recovery", budget)
+            return head, physical, journal, sleeps
+
+    @staticmethod
+    def sibling(real):
+        real.sibling("settlement-burst.txt")
+
+    @staticmethod
+    def competing_intent(real):
+        from release_successor_journal import ProtectedReleaseJournal
+        other = ProtectedReleaseJournal(real, main_directory=True)
+        assert other.compare_and_swap(other.read(), "nuget:FS.GG.Kit", "intent")
+
+    def test_burst_inside_journal_read_is_reread_after_it_settles(self):
+        # Main reads: 1 outer opening, 2/3 read()'s own sandwich. The commit lands before read 3.
+        head, physical, journal, sleeps = self.recover({3}, self.sibling)
+        self.assertNotEqual(head, physical)
+        self.assertEqual(len(sleeps), 1)
+        self.assertEqual(journal._observed.state["effects"], {})
+
+    def test_burst_before_the_outer_closing_read_is_reread(self):
+        head, physical, _, sleeps = self.recover({4}, self.sibling)
+        self.assertNotEqual(head, physical)
+        self.assertEqual(len(sleeps), 1)
+
+    def test_competing_journal_write_inside_read_is_divergence_even_without_a_prior_read(self):
+        with self.assertRaisesRegex(publisher.Refused, "Authority journal changed during Host recovery"):
+            self.recover({3}, self.competing_intent)
+
+    def test_competing_journal_write_before_recovery_is_divergence(self):
+        with self.assertRaisesRegex(publisher.Refused, "Authority journal changed during Host recovery"):
+            self.recover({1}, self.competing_intent)
 
 
 class TerminalAcquisitionControls(unittest.TestCase):

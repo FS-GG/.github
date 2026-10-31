@@ -15,6 +15,7 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+import time
 from types import SimpleNamespace
 import unittest
 import zipfile
@@ -705,6 +706,43 @@ class CurrentHostPublisherTests(unittest.TestCase):
                 if case == "old-flag":
                     self.assertEqual(api.reads, [])
                     self.assertFalse((root / "candidate").exists())
+
+    def test_authority_settlement_burst_before_genesis_is_reread_not_refused(self):
+        # #5108: the pre-genesis Authority main check (formerly a single no-retry read) accepts a
+        # burst that settles inside the bound and still refuses a main that never settles.
+        Base = self.authority_fixture()
+        class Burst(Base):
+            def __init__(self, heads):
+                super().__init__()
+                self.heads = heads
+            def get(self, path):
+                if path.endswith("FS.GG.Coordination.Authority/git/ref/heads/main"):
+                    self.reads.append(path); self.main_reads += 1
+                    return {"object": {"sha": self.heads[min(self.main_reads, len(self.heads)) - 1], "type": "commit"}}
+                if "FS.GG.Coordination.Authority/git/commits/" in path:
+                    self.reads.append(path)
+                    return {"sha": path.rsplit("/", 1)[1], "parents": [], "tree": {"sha": self.root}}
+                return super().get(path)
+        moving = [f"{index:040x}" for index in range(1, 200)]
+        cases = {"settles": (["a" * 40, "a" * 40, "b" * 40, "c" * 40, "c" * 40], 0, 1),
+                 "never settles": (["a" * 40, "a" * 40] + moving, 1, 8)}
+        for case, (heads, expected, waits) in cases.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                api = CurrentAPI(); authority = Burst(heads); publisher = self.publisher()
+                class Provider:
+                    def __init__(self, *args): pass
+                    def observe(self, effect): return Observation("absent")
+                class Journal:
+                    def __init__(self, *args, **kwargs): pass
+                    def initialize(self, intent): raise AssertionError("preflight must not initialize")
+                sleeps, stderr = [], io.StringIO()
+                with patch.object(time, "sleep", sleeps.append), contextlib.redirect_stderr(stderr), \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    result = self.invoke(publisher, api, authority, pathlib.Path(temporary), Provider, journal=Journal)
+                self.assertEqual(result, expected, stderr.getvalue())
+                self.assertEqual(len(sleeps), waits)
+                if expected:
+                    self.assertIn("did not settle", stderr.getvalue())
 
     def test_late_old_tag_cannot_satisfy_the_new_profile(self):
         class API:

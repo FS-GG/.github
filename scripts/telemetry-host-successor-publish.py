@@ -111,22 +111,24 @@ def main() -> int:
         route = ordinary_route()
         admission = route.ProtectedPublisherAdmission(admission, ledger_api, REF)
         journal = ProtectedReleaseJournal(ledger_api, REF, main_directory=True)
-        fresh, physical = route.classify_journal_destination(ledger_api, REF)
+        # A settlement burst inside a check window is re-read once main settles (#5108); a changed
+        # destination or journal state, or a main that never settles, still refuses.
+        budget = route.AuthorityRereadBudget()  # One bounded settle budget for this publisher run.
+        fresh, physical = route.stable_journal_destination(ledger_api, REF, budget)
         if fresh:
             require(admission.authorize(content_id, "journal", "intent", content_id), "Host journal admission denied")
             for effect in ordered:
                 observation = provider.observe(effect)
                 require(observation.state == "absent", f"{effect.identity}: preexisting or unreadable effect")
-            require(route.authority_main(ledger_api) == physical, "Authority main moved before Host genesis")
+            physical = route.require_stable_destination(ledger_api, REF, fresh, physical,
+                                                        "Authority main moved before Host genesis", budget)
             if args.preflight_only:
                 print("Host successor preflight passed; no journal, tag, feed or release changed.")
                 return 0
             require(admission.authorize(content_id, "journal", "intent", content_id), "Host genesis protection changed")
             journal.initialize(intent)
         else:
-            require(route.authority_main(ledger_api) == physical, "Authority main moved before Host recovery")
-            journal.read()
-            require(route.authority_main(ledger_api) == physical, "Authority main moved during Host recovery")
+            route.read_journal_at_stable_main(journal, ledger_api, physical, "Host recovery", budget)
             require(not args.preflight_only, "preflight requires unused Host journal and version")
         journal.validate_intent(intent)
         deadline = time.monotonic() + 45 * 60
