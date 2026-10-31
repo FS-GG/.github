@@ -4,7 +4,7 @@
 diff. Refs FS-GG/.github#4647; design: `docs/coordination/2026-10-30-learn-finite-executor-pod-design.md` section 10 and
 section 14.1. Source only: it installs and runs nothing. Root installs it from a root-owned copy and admits every run.
 
-Against r5 the diff is 11 hunks, 20 lines removed and 89 added (pinned by the test). Everything else is r5 byte for byte,
+Against r5 the diff is 12 hunks, 20 lines removed and 107 added (pinned by the test). Everything else is r5 byte for byte,
 including `IMAGE_ID` (reader image r4), `FIN` and `FIN_SHA` (finalizer r4), the seccomp pin, the limits, the units, the headroom
 gates, the precheck and the custody paths.
 
@@ -26,6 +26,12 @@ gates, the precheck and the custody paths.
    an integer `exitCode` were already in the RESULT; the tests pin them. `operatorRevision` is `r6`.
 4. **An existing custody or evidence directory refuses the run** (`op id already used`), as in r5; the check is now the function
    `used_ids` and has its own tests for `<id>` and `<id>-pre` in both roots.
+
+5. **The census is taken again immediately before the start.** The operator lock serialises our own operators only, so between the first
+   census and the start a pod op or another reader op could have become active. `recheck_sweep` runs `list-units` once more after the
+   precheck-only exit and before the nonce is drawn and `start_real` is called, and refuses (`exclusion refused at the start`, `sweep
+   refused at the start`, `concurrency refused at the start`, or `unit census failed at the start`). This op's own precheck units are not
+   counted against it. The result is recorded as `gates.startCensus`.
 
 ## What r6 does not contain, on purpose
 

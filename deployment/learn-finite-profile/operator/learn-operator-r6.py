@@ -306,6 +306,20 @@ def classify_units(rows):
     return busy, active_ops, active_pods
 
 
+def recheck_sweep(out, opid, max_ops):
+    """r6 hardening: the unit census taken AGAIN immediately before the real op starts. The operator lock serialises our own operators only; between
+    the first census and the start a pod op or another reader op could have started. Returns a refusal reason, or None. This op's own precheck
+    units are not counted against it."""
+    busy, active_ops, active_pods = classify_units(parse_unit_rows(out))
+    own = (f'learn-op-{opid}-pre.service', f'learn-fin-{opid}-pre.service')
+    stray = [u for u in busy if u not in own]
+    real = sorted(u for u in active_ops if not u.endswith('-pre'))
+    if active_pods: return 'exclusion refused at the start: a pod op became active: ' + ','.join(active_pods)
+    if stray: return 'sweep refused at the start: failed or transitioning units: ' + ','.join(stray)
+    if len(real) >= max_ops: return f'concurrency refused at the start: {len(real)} ops already active (max {max_ops})'
+    return None
+
+
 def used_ids(opid, custody_root, evid_root):
     """r6: existing custody or evidence directories for the op id or its precheck id; any of them refuses the run"""
     return [p for p in (f'{custody_root}/{opid}', f'{custody_root}/{opid}-pre', f'{evid_root}/{opid}', f'{evid_root}/{opid}-pre') if os.path.lexists(p)]
@@ -441,6 +455,10 @@ try:
     if not all(pc_.values()): refuse('precheck failed: ' + ','.join(k for k, v in pc_.items() if not v) + ' - the real op is NOT started')
     if mode == '--precheck-only': finish(0)
     # (5) the real op
+    rc, out, _ = run(['systemctl', '--user', 'list-units', '--all', '--no-legend', '--plain', 'learn-op-*', 'learn-fin-*', 'learn-pod-*'], 30)
+    why = recheck_sweep(out, opid, MAX_ACTIVE_OPS) if rc == 0 else 'unit census failed at the start'
+    R['gates']['startCensus'] = {'rc': rc, 'refused': why}
+    if why: refuse(why)
     nonce = secrets.token_hex(16)
     start_real(opid, argv, nonce)
     finish()
