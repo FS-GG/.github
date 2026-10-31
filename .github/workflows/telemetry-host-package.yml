@@ -55,6 +55,8 @@ on:
       - "scripts/telemetry_host_successor_*.py"
       - "scripts/release_successor_execution.py"
       - "scripts/release_successor_journal.py"
+      - "scripts/release_source_closure.py"
+      - "tests/release-source-closure/**"
       - "tests/telemetry-host-successor/**"
       - "deployment/telemetry-collector/host-binding/**"
       - "deployment/telemetry-collector/host-attempt/**"
@@ -101,6 +103,8 @@ on:
       - "scripts/telemetry_host_successor_*.py"
       - "scripts/release_successor_execution.py"
       - "scripts/release_successor_journal.py"
+      - "scripts/release_source_closure.py"
+      - "tests/release-source-closure/**"
       - "tests/telemetry-host-successor/**"
       - "deployment/telemetry-collector/host-binding/**"
       - "deployment/telemetry-collector/host-attempt/**"
@@ -173,6 +177,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 tests/telemetry-host-successor/run.py
+          python3 tests/release-source-closure/run.py
           python3 tests/telemetry-host-published-org-read/run.py
           bash tests/telemetry-host-release/run.sh
       - name: Test passive Host HTTP authority before expensive qualification

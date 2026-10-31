@@ -1041,7 +1041,8 @@ class CandidateReadFirstTests(unittest.TestCase):
                 if "if:" in step:
                     assert "name: Retain passive Host HTTP diagnostics" in step
                     assert "always() && steps.read-first.outcome == 'success'" in step
-            assert "dotnet msbuild" in text and "Refuse changed main before retaining candidate" in text
+            assert "dotnet msbuild" in text and "Refuse a changed Host release closure before retaining candidate" in text
+            assert text.count("python3 scripts/release_source_closure.py check --route telemetry-host --source \"$SOURCE_SHA\"") == 2
             assert "--version 0.9.0 --tag telemetry-host/v0.9.0" in text
 
         check(source)

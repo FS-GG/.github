@@ -14,7 +14,8 @@ import time
 from release_successor_execution import Refused, advance_effects
 from release_successor_journal import ProtectedReleaseJournal, REPOSITORY as JOURNAL_REPOSITORY
 from release_successor_provider import GitHubAPI, NotFound, sanitized_dispatch_diagnostic
-from telemetry_host_successor_admission import HostAdmission, ordinary_route
+import release_source_closure
+from telemetry_host_successor_admission import CANDIDATE_CLOSURE, HostAdmission, ordinary_route
 from telemetry_host_successor_execution import effects
 from telemetry_host_successor_provider import HostProvider
 
@@ -77,7 +78,14 @@ def main() -> int:
         require(artifact.get("id") == args.candidate_artifact_id, "candidate artifact API identity differs")
         candidate_source = run.get("head_sha")
         require(isinstance(candidate_source, str) and len(candidate_source) == 40, "candidate source malformed")
-        require(candidate_source == publisher_sha, "current Host 0.9 publication requires exact current main candidate")
+        if candidate_source != publisher_sha:
+            # The journal intent below still binds the exact candidate source. A later publisher
+            # source is admitted only as its descendant with an unchanged Host closure (#5107).
+            try:
+                release_source_closure.verify_local(CANDIDATE_CLOSURE, candidate_source, publisher_sha)
+            except release_source_closure.ClosureRefused as error:
+                raise Refused(f"current Host 0.9 publication requires exact current main candidate "
+                              f"or an ancestor with an unchanged Host closure: {error}") from None
         require(artifact.get("digest") == "sha256:" + args.candidate_archive_sha256, "artifact digest differs")
         artifact_json = args.workdir / "artifact.json"
         run_json = args.workdir / "run.json"

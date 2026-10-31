@@ -305,10 +305,12 @@ class SuccessorRailBindingTests(unittest.TestCase):
         for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
             self.assertEqual(workflow.count(f"dotnet pack src/{project}/"), 1)
         initial=workflow.split('      - name: Verify the stable predecessor and unused package version',1)[1].split('      - name: Test the telemetry producer',1)[0]
-        retention=workflow.split('      - name: Refuse a changed main or newly occupied version before retention',1)[1].split('      - uses: actions/upload-artifact',1)[0]
+        retention=workflow.split('      - name: Refuse a changed release closure or newly occupied version before retention',1)[1].split('      - uses: actions/upload-artifact',1)[0]
         self.assertIn('releases/tags/coherent-set/v0.114.0',initial)
         self.assertIn('git ls-remote',initial)
-        self.assertIn('refs/heads/main',retention)
+        self.assertIn('python3 scripts/release_source_closure.py check --route coherent-set --source "$SOURCE_SHA"',retention)
+        self.assertEqual(workflow.count('release_source_closure.py check --route coherent-set'),2)
+        self.assertNotIn('git ls-remote origin refs/heads/main',workflow)
         self.assertIn('--predecessor 0.113.0',retention)
         self.assertNotIn('releases/tags/',retention)
         self.assertNotIn('refs/tags/',retention)

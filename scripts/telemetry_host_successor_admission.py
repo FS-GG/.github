@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import pathlib
 
+import release_source_closure
 from release_successor_execution import Refused
 from release_successor_provider import GitHubAPI
 from telemetry_host_successor_execution import effects
@@ -13,6 +14,8 @@ REPOSITORY = "FS-GG/.github"
 REPOSITORY_ID = 1269292704
 WORKFLOW = ".github/workflows/release-telemetry-host-successor-publish.yml"
 OPERATOR = "EHotwagner"
+PUBLISHER_CLOSURE = "telemetry-host-publisher"
+CANDIDATE_CLOSURE = "telemetry-host"
 
 
 class HostAdmission:
@@ -49,7 +52,13 @@ class HostAdmission:
         ):
             return False
         head = self.api.get(f"repos/{REPOSITORY}/git/ref/heads/main")
-        return head.get("object", {}).get("sha") == self.publisher_sha
+        live = head.get("object", {}).get("sha")
+        if live == self.publisher_sha:
+            return True
+        # A later main is admitted only as a descendant with an unchanged Host release and
+        # publisher closure (#5107); any closure change or non-ancestry still revokes.
+        return isinstance(live, str) and release_source_closure.admits(
+            self.api, REPOSITORY, PUBLISHER_CLOSURE, self.publisher_sha, live)
 
 
 def ordinary_route():
