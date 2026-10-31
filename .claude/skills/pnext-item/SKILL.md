@@ -57,7 +57,7 @@ For an admitted routine item, the board is an asynchronous view rather than merg
    concerns (for example source plus release route plus docs/registry, or two unrelated fixes), the owner
    splits it into separately reviewable PRs, sequenced under the one-open-PR-per-chain and two-managed-PR lane
    limits (later ones opened as earlier ones merge), before requesting review; #4941's four-PR sequence is the model. Before requesting review, run the same gate commands CI will run for the touched paths,
-   locally or on the PR, and state the results; do not request review on a head with known-red required
+   locally or on the PR, and state the results, confirming fixtures derive dates and versions from observed state ([rule](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#qualify-the-actual-path-and-deliver-exact-source)); do not request review on a head with known-red required
    gates, except failures inherited from main, which must be named. Put exactly one
    `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` marker in
    the PR body. A PR `Refs` its Delivery with no closing keyword; Root's acceptance closes the Delivery. For any other

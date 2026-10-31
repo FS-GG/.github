@@ -312,6 +312,12 @@ for confirmation alone. Required CI and ADR-0084 coherent validation still run. 
 reported separately; required pending/failed checks block their dependent delivery or effect.
 Read [delivery reliability](delivery-reliability.md) for recurring qualification failures.
 
+Fixtures and release controls derive time and versions from observed state: they must not hard-code a
+wall-clock date, a published version or tag, or ambient environment such as `XDG_*` config or an
+interpreter constant (#4993, #5007, Coordination#1092, #5018, #5032). Each uses an injected clock, a value
+derived from observed state (for example, select a version above the existing tags), an isolated fixture
+or sandbox, or a value normalised per interpreter. The author confirms this; the reviewer checks it.
+
 Use `tools/pr-lane-admission.py` for stable campaign/chain, exact pushed head and normal metadata.
 Keep one open PR per coherent chain and at most two managed PRs per repository across campaigns.
 Preserve metadata through canonical body/head updates. Assemble compatible source/version/Atlas edits
