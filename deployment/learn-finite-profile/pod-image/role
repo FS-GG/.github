@@ -1,0 +1,131 @@
+#!/bin/sh
+# LEARN pod role entrypoint (design docs/coordination/2026-10-30-learn-finite-executor-pod-design.md section 2.2; Refs FS-GG/.github#4647).
+#   catatonit -- /opt/fsgg/pod/role <name> [--ready-tcp PORT | --ready-file PATH] [--ready-timeout SECONDS] [--volume PATH] -- <command> [args...]
+# <name> is one of host, recv, feed. The container has its own tmpfs at /out/<name>/ and a writable /work. The status contract is learn-pod-status/1:
+#   1. before any work, pre-allocate /out/<name>/.status (exactly 4096 B, fsync); refuse to start if that fails (exit 70); write phase "starting";
+#   2. start the command; once the readiness probe passes (a listener on a TCP port, or a file present), overwrite the status IN PLACE with phase "ready"
+#      (dd conv=notrunc at offset 0, same 4096 B, fsync), so a full /out cannot stop the update. No probe means ready as soon as the command is started;
+#   3. the first SIGTERM stops the command: TERM to it, GRACE seconds, then KILL. The status gets phase "terminal" with exit and reason (ok | error |
+#      gate-refused | enospc | signalled), then /out/<name>/.done is created (0 B);
+#   4. role then blocks, so the finalizer can archive a LIVE container's tmpfs; a second SIGTERM (podman stop -t 3) exits;
+#   5. a command that exits on its own goes straight to step 3.
+# A readiness timeout, a bad option or an empty command is a terminal status as well (reason error or gate-refused), never a silent exit.
+# It does not apply the reader profile's cooperative process caps (slot, dotnet shim); the enforced bounds are the cgroup limits the pod operator sets.
+# The status detail is built from fixed words and integers only, so the JSON is always valid.
+# The readiness probe --ready-tcp looks at /proc/net/tcp and tcp6 of the network namespace this process is in. Containers of a pod share one, so a listener on the same
+# port in ANOTHER container of the pod would also pass: the pod operator gives each role its own port. --ready-file is this container's own filesystem.
+# Exit codes: 64 unknown role, or run as uid 0 (this container is meant to run as 1000), 70 the status contract could not be started (nothing was run), 71 /work/home or
+# /work/tmp could not be created.
+set -u
+GRACE=20
+READY_TIMEOUT_DEFAULT=120
+MIN_FREE=1048576
+name=${1:-}
+case $name in
+  host|recv|feed) shift ;;
+  *) echo "role: unknown role" >&2; exit 64 ;;
+esac
+[ "$(id -u)" != 0 ] || { echo "role: refuses to run as uid 0" >&2; exit 64; }
+D=/out/$name
+S=$D/.status
+[ -d "$D" ] && [ ! -L "$D" ] || { echo "role: no tmpfs for the status at $D" >&2; exit 70; }
+[ ! -e "$S" ] && [ ! -e "$D/.done" ] || { echo "role: status already present" >&2; exit 70; }
+printf '%-4096.4096s' "{\"schema\":\"learn-pod-status/1\",\"role\":\"$name\",\"phase\":\"starting\"}" | dd of="$S" bs=4096 count=1 iflag=fullblock conv=fsync status=none || exit 70
+[ "$(wc -c < "$S")" -eq 4096 ] || exit 70
+status() { printf '%-4096.4096s' "$1" | dd of="$S" bs=4096 count=1 iflag=fullblock conv=notrunc,fsync status=none; }
+block() { trap 'exit 0' TERM INT; while :; do sleep 3600 & wait $!; done; }
+terminal() {
+  status "{\"schema\":\"learn-pod-status/1\",\"role\":\"$name\",\"phase\":\"terminal\",\"exit\":$1,\"reason\":\"$2\",\"detail\":\"$3\"}" || true
+  : > "$D/.done"
+  block
+}
+mkdir -p /work/home /work/tmp || exit 71
+term=0
+on_term() { term=1; }
+trap on_term TERM INT                           # before anything can take long: a TERM from here on is remembered, not fatal
+
+ready_kind=; ready_arg=; ready_timeout=$READY_TIMEOUT_DEFAULT; volume=; bad=
+while [ "$#" -gt 0 ]; do
+  case $1 in
+    --) shift; break ;;
+    --ready-tcp)
+      [ "$#" -ge 2 ] || { bad="option needs a value"; break; }
+      case $2 in ''|*[!0-9]*) bad="bad port"; break ;; esac
+      [ "$2" -ge 1 ] && [ "$2" -le 65535 ] || { bad="bad port"; break; }
+      [ -z "$ready_kind" ] || { bad="two readiness probes"; break; }
+      ready_kind=tcp; ready_arg=$2; shift 2 ;;
+    --ready-file)
+      [ "$#" -ge 2 ] || { bad="option needs a value"; break; }
+      case $2 in /*) ;; *) bad="bad path"; break ;; esac
+      case $2 in *[!A-Za-z0-9_./-]*|*/../*|*/..) bad="bad path"; break ;; esac
+      [ -z "$ready_kind" ] || { bad="two readiness probes"; break; }
+      ready_kind='file'; ready_arg=$2; shift 2 ;;
+    --ready-timeout)
+      [ "$#" -ge 2 ] || { bad="option needs a value"; break; }
+      case $2 in ''|*[!0-9]*) bad="bad timeout"; break ;; esac
+      [ "$2" -ge 1 ] && [ "$2" -le 600 ] || { bad="bad timeout"; break; }
+      ready_timeout=$2; shift 2 ;;
+    --volume)
+      [ "$#" -ge 2 ] || { bad="option needs a value"; break; }
+      case $2 in /*) ;; *) bad="bad path"; break ;; esac
+      case $2 in *[!A-Za-z0-9_./-]*|*/../*|*/..) bad="bad path"; break ;; esac
+      volume=$2; shift 2 ;;
+    *) bad="unknown option"; break ;;
+  esac
+done
+[ -z "$bad" ] || terminal 64 gate-refused "$bad"
+[ "$#" -gt 0 ] || terminal 64 gate-refused "empty command"
+hexport=
+[ "$ready_kind" != tcp ] || hexport=$(printf '%04X' "$ready_arg")
+
+"$@" < /dev/null &
+child=$!
+
+alive() { [ -r "/proc/$child/status" ] && ! grep -q '^State:[[:space:]]*Z' "/proc/$child/status" 2> /dev/null; }
+is_ready() {
+  case $ready_kind in
+    tcp) grep -Eq ":$hexport [0-9A-F]+:0000 0A " /proc/net/tcp /proc/net/tcp6 2> /dev/null ;;
+    file) [ -f "$ready_arg" ] && [ ! -L "$ready_arg" ] ;;
+    *) return 0 ;;
+  esac
+}
+free_bytes() { stat -f -c '%a %S' "$1" 2> /dev/null | awk 'NF == 2 { print $1 * $2 }'; }
+
+ready=0
+why=
+t0=$(date +%s)
+while alive && [ "$term" -eq 0 ]; do
+  if [ "$ready" -eq 0 ]; then
+    if is_ready; then
+      ready=1
+      status "{\"schema\":\"learn-pod-status/1\",\"role\":\"$name\",\"phase\":\"ready\"}" || { why="status update failed"; break; }
+    elif [ $(( $(date +%s) - t0 )) -ge "$ready_timeout" ]; then
+      why="ready-timeout"; break
+    fi
+  fi
+  sleep 0.2 & wait $!
+done
+
+stopped_by_us=0
+if alive; then                                  # a TERM arrived, the probe timed out, or the status could not be updated: stop the command
+  stopped_by_us=1
+  kill -TERM "$child" 2> /dev/null
+  i=0
+  while alive && [ "$i" -lt $(( GRACE * 5 )) ]; do sleep 0.2; i=$(( i + 1 )); done
+  alive && kill -KILL "$child" 2> /dev/null
+  while alive; do sleep 0.05; done
+fi
+wait "$child"
+rc=$?
+avail_out=$(free_bytes "$D")
+avail_vol=
+[ -z "$volume" ] || avail_vol=$(free_bytes "$volume")
+low=0
+[ -z "$avail_out" ] || [ "$avail_out" -ge "$MIN_FREE" ] || low=1
+[ -z "$avail_vol" ] || [ "$avail_vol" -ge "$MIN_FREE" ] || low=1
+if [ -n "$why" ]; then reason=error; detail=$why
+elif [ "$stopped_by_us" -eq 1 ]; then reason=signalled; detail="rc=$rc"
+elif [ "$rc" -eq 0 ]; then reason=ok; detail="rc=0"
+elif [ "$low" -eq 1 ]; then reason=enospc; detail="rc=$rc"
+else reason=error; detail="rc=$rc"; fi
+terminal "$rc" "$reason" "$detail"

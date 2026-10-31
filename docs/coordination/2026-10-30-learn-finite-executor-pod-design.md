@@ -111,9 +111,15 @@ The builder still asserts, as a build step that fails the build, that
 `runtimeconfig.json` minimum, and records the versions it found. The self-contained Host and Runner bundle runtime
 10.0.11; that is independent of the shared runtimes.
 
-**Producer CLI.** The producer is `fsgg-coord-engine` from NuGet `FS.GG.Coord.Cli`, promoted as `coherent-set/v0.113.0`: a
-self-contained single-file ELF of about 130 MB, sha256 `5e517e8d…ff725`, which needs no runtime. The build context pins the
-package version, the release tag and the binary sha256. It is the CLI fdev already uses to drain telemetry.
+**Producer CLI.** The producer is `fsgg-coord-engine` from NuGet `FS.GG.Coord.Cli`, promoted as `coherent-set/v0.113.0`. It is a
+framework-dependent .NET tool, not a self-contained executable. The public asset `FS.GG.Coord.Cli.0.113.0.nupkg` (sha256
+`100f0879…9789`) holds the tool tree `tools/net10.0/any/`: 82 files, about 69 MB, `fsgg-coord-engine.dll` with its dependencies, and a
+`runtimeconfig.json` that needs `Microsoft.NETCore.App` 10.0.0 with `rollForward: Major`. An earlier revision of this section pinned
+the 78 KB apphost `5e517e8d…ff725` that the tool installer generates under `~/.local/bin`; it needs `.store/…/fsgg-coord-engine.dll`
+beside it and cannot run alone. The build context pins the archive and a tree list (the same way as the Host), the builder extracts the
+tree member by member, and the image runs it as `dotnet /opt/fsgg/producer/fsgg-coord-engine.dll …` with the base's shared runtime, the
+same 10.0.12 that satisfies the Host. `tests/learn-pod-image/run_cli.py` runs the pinned tree from a copy-only layout. That the base
+image's own runtime runs it is not yet shown: the first build and the pod harness are the check.
 
 **Receiver version.** The live fsgg-store runs the same Telemetry Host 0.8.0 payload: its `installed-payload.json` records
 the nupkg sha256 `44273495…ba89` and source `74cbd6f0…`, equal to the release asset and manifest. The pod receiver and the

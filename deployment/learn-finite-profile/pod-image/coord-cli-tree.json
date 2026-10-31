@@ -1,0 +1,422 @@
+{
+ "archiveSha256": "100f0879436d41df98aa0879aa8ea279dde3e39d3119733875744ac8e2f79789",
+ "fileCount": 82,
+ "files": [
+  {
+   "path": "DotnetToolSettings.xml",
+   "sha256": "8d0cd5fdae7975e6014ffb01411ea24897eb739b935a8281a5fb7e1cadcebc7e",
+   "size": 205
+  },
+  {
+   "path": "FS.GG.Coord.Cli.BoardOps.dll",
+   "sha256": "d9dd28ba8c93d1fb1d93f751e3285e0773e4c4fc2d13fd0169a5344b39663bfa",
+   "size": 281088
+  },
+  {
+   "path": "FS.GG.Coord.Cli.BoardOps.pdb",
+   "sha256": "d710ccc98a89d9a76c4145479eabdde990ca752db72bd37e46c14d1a9598711d",
+   "size": 74976
+  },
+  {
+   "path": "FS.GG.Coord.Cli.BoardOps.xml",
+   "sha256": "e84b0c28377b28e27e1d511e107d9589ca5af6c633cea5ec895555442211a9ce",
+   "size": 20525
+  },
+  {
+   "path": "FS.GG.Coord.Cli.Kernel.dll",
+   "sha256": "9e6079060ae9ab3c900acc0cbe062d25f65caa1dd5a8079796df99e13dace276",
+   "size": 327680
+  },
+  {
+   "path": "FS.GG.Coord.Cli.Kernel.pdb",
+   "sha256": "d754b244a86a8331bcf3a93abbdebbe1cbcdeb5c3ad9b4c1f16ca56cf262bda9",
+   "size": 52504
+  },
+  {
+   "path": "FS.GG.Coord.Cli.Kernel.xml",
+   "sha256": "4fe566b90ecc174be73e6df1294a3121bda5b9be1fea476353bf9d56a976d2d1",
+   "size": 84183
+  },
+  {
+   "path": "FS.GG.Coord.Cli.Lifecycle.dll",
+   "sha256": "4983c03adcd36d774a89e364b371024ddb609db5355836ee3990788df5b6969f",
+   "size": 399360
+  },
+  {
+   "path": "FS.GG.Coord.Cli.Lifecycle.pdb",
+   "sha256": "54afb56e1849243e545dc121533cba5d6bf5e83c48d5edb9e454370d7b5df650",
+   "size": 104528
+  },
+  {
+   "path": "FS.GG.Coord.Cli.Lifecycle.xml",
+   "sha256": "358b1c3a14eae371470d44274744064a54b9dd3cfb683ae163e68c8fe0e4736b",
+   "size": 48964
+  },
+  {
+   "path": "FS.GG.Coord.Core.dll",
+   "sha256": "ba281c5c391862122746fced6eed3082a9a47440030a8d70737b981b7d3d09b1",
+   "size": 3001344
+  },
+  {
+   "path": "FS.GG.Coord.Core.pdb",
+   "sha256": "35877e8ce8e898ee06a06c180f7bb28845ec9e47ba2f111061c7b7472977fd12",
+   "size": 639192
+  },
+  {
+   "path": "FS.GG.Coord.Core.xml",
+   "sha256": "464654357086c7af67f9b0338355d51310bf726dbbecef45f4bfdbf062731eac",
+   "size": 319558
+  },
+  {
+   "path": "FS.GG.Coord.GitHub.dll",
+   "sha256": "480106b6d16da5382705eb1c4e86b1bf0225201292b00d25167e74f3a9cac2fd",
+   "size": 2235392
+  },
+  {
+   "path": "FS.GG.Coord.GitHub.pdb",
+   "sha256": "c5b4e885dd7719a096dc7511dc1f9cba8f07393024d6c6884f7ff5da22c6fc15",
+   "size": 553028
+  },
+  {
+   "path": "FS.GG.Coord.GitHub.xml",
+   "sha256": "9b55fffb38e8c373bf45a252a4a0056482d1e39ba6c6ecc0ecaa48eeb86af9f9",
+   "size": 264130
+  },
+  {
+   "path": "FS.GG.Telemetry.Client.dll",
+   "sha256": "41475cec81c6242d7696eb4ef604f84c66d85133a157bf670a8dd5cbec0dc537",
+   "size": 86528
+  },
+  {
+   "path": "FS.GG.Telemetry.Client.pdb",
+   "sha256": "e14dac61b7d019c61dc7f10b997b0bdbcf0030ff70c4694d921cbcfcfe3516da",
+   "size": 20164
+  },
+  {
+   "path": "FS.GG.Telemetry.Client.xml",
+   "sha256": "d40489b9a9ade81a807e191b048547f4793dc0ec419c12349b8d66552f4f1770",
+   "size": 2056
+  },
+  {
+   "path": "FS.GG.Telemetry.Contracts.dll",
+   "sha256": "363a2bad689d4a1823d8268b4adb8d1192986643cf00bf61d98c7bd8d20baa4e",
+   "size": 25600
+  },
+  {
+   "path": "FS.GG.Telemetry.Contracts.pdb",
+   "sha256": "f5f6b18a22c8965776b9a75fbf709dbedafdc718e4dc2ce00cfca5044c5bc66f",
+   "size": 5848
+  },
+  {
+   "path": "FS.GG.Telemetry.Contracts.xml",
+   "sha256": "9102eaae04a6e2479413c3c6f363a1d2c8e3ba6d4e29e7a83a6d2eec7a94d4e5",
+   "size": 336
+  },
+  {
+   "path": "FS.GG.Telemetry.Dashboard.dll",
+   "sha256": "f860e51cbd77fa62f59ea1060c206fa0d4a008649f595f9c055d41a2d5d461e0",
+   "size": 95232
+  },
+  {
+   "path": "FS.GG.Telemetry.Dashboard.pdb",
+   "sha256": "a8a48f18a38e2abade54b448408e7a0cf78a31a59aa83723ff1b49e14495db91",
+   "size": 16192
+  },
+  {
+   "path": "FS.GG.Telemetry.Dashboard.xml",
+   "sha256": "7c2002ea25217b58b4eb73522d8c9878ac53fbcea803bd5eddebfc5a0a69786b",
+   "size": 133
+  },
+  {
+   "path": "FS.GG.Telemetry.Store.dll",
+   "sha256": "2e98d6f75f70e016bf9e41322af5eb0eaa290b6bc7df8c27834c1fd0150ffb7d",
+   "size": 836608
+  },
+  {
+   "path": "FS.GG.Telemetry.Store.pdb",
+   "sha256": "83cbbeb731cc7067c31443500565456b882540c388354bee904c685b499dd0dd",
+   "size": 178364
+  },
+  {
+   "path": "FS.GG.Telemetry.Store.xml",
+   "sha256": "417a0559c35fa58de6d8bbbffde81accdc2a7b778f1be18eb3335e7cf5f070dd",
+   "size": 5476
+  },
+  {
+   "path": "FSharp.Core.dll",
+   "sha256": "39b0b7f06c11bedd93f94b6f101fffd645f1c4437a5a6d3ee79259f855aeb11a",
+   "size": 2405672
+  },
+  {
+   "path": "Microsoft.Data.Sqlite.dll",
+   "sha256": "b98d957462be432895b00dccca012d3c127e118d3d4262418014b92c7bbd66cf",
+   "size": 177464
+  },
+  {
+   "path": "SQLitePCLRaw.batteries_v2.dll",
+   "sha256": "1ee3c6ff4d39171690d6ff6f84b4d876ed038ca28e39bb6e74995f52d2aacf8b",
+   "size": 5632
+  },
+  {
+   "path": "SQLitePCLRaw.core.dll",
+   "sha256": "b72c9dfe1479a568d6b84e249eaf949e76c757888f8056fb6ddb9c0480e0dd25",
+   "size": 51712
+  },
+  {
+   "path": "SQLitePCLRaw.provider.e_sqlite3.dll",
+   "sha256": "1d4cb69b3aaf6a9cf40dfe179cc16dd678f12bc024b212d4297654e0a29e220d",
+   "size": 36864
+  },
+  {
+   "path": "YamlDotNet.dll",
+   "sha256": "d618138109a40e4a7250e49e2abad8c450e3636bee18d7499ab231e37fa9150a",
+   "size": 300032
+  },
+  {
+   "path": "cs/FSharp.Core.resources.dll",
+   "sha256": "39abc8ba8136994f2486fbfb9bbb15dfc2e29573ee6b4ddb7c943aa641101836",
+   "size": 34088
+  },
+  {
+   "path": "de/FSharp.Core.resources.dll",
+   "sha256": "9f1195204de5486e502b08530499a3b47ae74d0802e97f9f5769a91a2f24340f",
+   "size": 35112
+  },
+  {
+   "path": "es/FSharp.Core.resources.dll",
+   "sha256": "cb1b86d6ece9335ac72891d764052385dcf84c17a784a763a4041e6c6a2538a5",
+   "size": 34088
+  },
+  {
+   "path": "fr/FSharp.Core.resources.dll",
+   "sha256": "6b1b09397595fea3dc159a78e5a4f28316d4a7b45d0017ededa43d9c8ea8e3af",
+   "size": 34640
+  },
+  {
+   "path": "fsgg-coord-engine.deps.json",
+   "sha256": "2d71c25cd78ed56029fa48d062123a2358909aa1d3a93a4ebd7c3aca719e897e",
+   "size": 16887
+  },
+  {
+   "path": "fsgg-coord-engine.dll",
+   "sha256": "46d8b416ce7527eb0f51c057ea09ddabb0780c3d38943daf6c4cc6aa416c84e1",
+   "size": 1874432
+  },
+  {
+   "path": "fsgg-coord-engine.pdb",
+   "sha256": "8522984ff91d46b733c2fdda69f63ac119b7eaf3f6201830e045c08b2025360b",
+   "size": 442136
+  },
+  {
+   "path": "fsgg-coord-engine.runtimeconfig.json",
+   "sha256": "e4b3a5d18f436095616519e1c99f954e4b0a8952d2dc6681915a69bbae0c5f30",
+   "size": 463
+  },
+  {
+   "path": "fsgg-coord-engine.xml",
+   "sha256": "e81258337b606a0d7bd33d968ac73dcb9961a1d6553d9c57514be7d56c0d2bb9",
+   "size": 127597
+  },
+  {
+   "path": "it/FSharp.Core.resources.dll",
+   "sha256": "d666d34802d2e6518b70f259ae25578f97d4b54e1c4bc514e4283d6271624af5",
+   "size": 34088
+  },
+  {
+   "path": "ja/FSharp.Core.resources.dll",
+   "sha256": "a23e0b7b795fad83fbf7c7602229789ba78afa364e9a59c9cd2af94651e13195",
+   "size": 36648
+  },
+  {
+   "path": "ko/FSharp.Core.resources.dll",
+   "sha256": "42a346e25767af235c02287a4632d32e74f17fbe8fb2607f52493398c49044c2",
+   "size": 35664
+  },
+  {
+   "path": "pl/FSharp.Core.resources.dll",
+   "sha256": "8aa4aa395b024fe48eb8e984eb10d8d212986255cdaeb999dc1a69ecc4c2fad6",
+   "size": 35152
+  },
+  {
+   "path": "pt-BR/FSharp.Core.resources.dll",
+   "sha256": "288d77fa358be771fd8191353a44f00422f84fc0ae601fcdcc407e37928d8b67",
+   "size": 33576
+  },
+  {
+   "path": "ru/FSharp.Core.resources.dll",
+   "sha256": "ac840e6612e162f3594437e1f333fb9bd00095760d332c1611075dbebb6cb861",
+   "size": 41256
+  },
+  {
+   "path": "runtimes/android-arm/native/libe_sqlite3.so",
+   "sha256": "6846178c7337b5b9a3c9d7090808a6621dd09db6879efdf16075ce2afc260212",
+   "size": 1246788
+  },
+  {
+   "path": "runtimes/android-arm64/native/libe_sqlite3.so",
+   "sha256": "52d49cc84918c112d5713a6de83269d33f03c4c7c3ed721fbd2c8c00adf4ca80",
+   "size": 1772160
+  },
+  {
+   "path": "runtimes/android-x64/native/libe_sqlite3.so",
+   "sha256": "8088b315ee0b7db13c053051dae063c8bdf9318c25d3f8b9024b9786bd27cab1",
+   "size": 1801864
+  },
+  {
+   "path": "runtimes/android-x86/native/libe_sqlite3.so",
+   "sha256": "43731d621cc2b1fbde62bae8ff465cfe0fd1ea9c2f25d566d3e61e495d226d9f",
+   "size": 1820380
+  },
+  {
+   "path": "runtimes/browser-wasm/nativeassets/net9.0/e_sqlite3.a",
+   "sha256": "73675fcf71a65531ea10763f2029300bb4dc1528c24fc9bebc6bb2cbccf7656f",
+   "size": 1309264
+  },
+  {
+   "path": "runtimes/ios-arm/native/e_sqlite3.a",
+   "sha256": "0c2cf95c369c37330ecfbc0870c1d214ed727b17bf7b86bce0bac94db4a9acd9",
+   "size": 2219032
+  },
+  {
+   "path": "runtimes/ios-arm64/native/e_sqlite3.a",
+   "sha256": "0c2cf95c369c37330ecfbc0870c1d214ed727b17bf7b86bce0bac94db4a9acd9",
+   "size": 2219032
+  },
+  {
+   "path": "runtimes/iossimulator-arm64/native/e_sqlite3.a",
+   "sha256": "87076969e5e0ffc22877e6a5603131f34f2e33bdfc61d11b77dba7c0fcc8f8e1",
+   "size": 4275720
+  },
+  {
+   "path": "runtimes/iossimulator-x64/native/e_sqlite3.a",
+   "sha256": "87076969e5e0ffc22877e6a5603131f34f2e33bdfc61d11b77dba7c0fcc8f8e1",
+   "size": 4275720
+  },
+  {
+   "path": "runtimes/linux-arm/native/libe_sqlite3.so",
+   "sha256": "9a697f00c70420314a3604cea281c8859cb925680f935c23f6261e9a6f769368",
+   "size": 982192
+  },
+  {
+   "path": "runtimes/linux-arm64/native/libe_sqlite3.so",
+   "sha256": "66436d4bd02b1b1c25b964a744b5230122bca6a5d006aa80add129ef892c273a",
+   "size": 1534416
+  },
+  {
+   "path": "runtimes/linux-armel/native/libe_sqlite3.so",
+   "sha256": "f6cd622eee5d5df12419c7a11eaf4a17ed1948c28f41db8395959682978c870a",
+   "size": 1375344
+  },
+  {
+   "path": "runtimes/linux-mips64/native/libe_sqlite3.so",
+   "sha256": "f66410709bd4b5ec6b9fb9b4f89f1e49c842e9f9fa21c95766f1ea20c66074ba",
+   "size": 1756616
+  },
+  {
+   "path": "runtimes/linux-musl-arm/native/libe_sqlite3.so",
+   "sha256": "98e03c2b80ae3924d1ed6da32d036f933db48b28ee2ef55c417f48ef0a382c62",
+   "size": 1322584
+  },
+  {
+   "path": "runtimes/linux-musl-arm64/native/libe_sqlite3.so",
+   "sha256": "91e5ff240be8cdc24068c149754d3506dd3f7098cb0fd3d6606c4f0ce3b5fd42",
+   "size": 1450744
+  },
+  {
+   "path": "runtimes/linux-musl-riscv64/native/libe_sqlite3.so",
+   "sha256": "033f84cbe93cb46eb0b5a96d5acbf1089f1716e9e0e9ee117d9d039c3c58060f",
+   "size": 1015928
+  },
+  {
+   "path": "runtimes/linux-musl-s390x/native/libe_sqlite3.so",
+   "sha256": "31d53eafaefec15651dac766665171e7d8f2dd4f1c021c7a21e754aba2091b17",
+   "size": 1685800
+  },
+  {
+   "path": "runtimes/linux-musl-x64/native/libe_sqlite3.so",
+   "sha256": "7d275542af8aac5a19f5a873da7cdadcc20c453fb52b7df57bd747e2f02ab92b",
+   "size": 1445376
+  },
+  {
+   "path": "runtimes/linux-ppc64le/native/libe_sqlite3.so",
+   "sha256": "9d5e453ad17fb857b123da69adfa067e55bb716816979e4131fe76e513866f53",
+   "size": 1937448
+  },
+  {
+   "path": "runtimes/linux-riscv64/native/libe_sqlite3.so",
+   "sha256": "a7ac179be5d4a25cea62781fab3a0266903745f5929e0c880dd20fd0e84f2593",
+   "size": 1291936
+  },
+  {
+   "path": "runtimes/linux-s390x/native/libe_sqlite3.so",
+   "sha256": "55296ed2a74253a8e998d2ca8d4d5471e03c573bdd109ee83f089499ef9aedf7",
+   "size": 1655816
+  },
+  {
+   "path": "runtimes/linux-x64/native/libe_sqlite3.so",
+   "sha256": "eddcd4aa561d5b8f252db77e8272e7d1aed96bcab9fda3f177ca542f916290bf",
+   "size": 1470824
+  },
+  {
+   "path": "runtimes/linux-x86/native/libe_sqlite3.so",
+   "sha256": "0269d385a7a8cbbc385c4688bf57c030351036aaae8c6e06f02ecf2d5ada96de",
+   "size": 1548016
+  },
+  {
+   "path": "runtimes/maccatalyst-arm64/native/libe_sqlite3.dylib",
+   "sha256": "144793f8f993837a66249c0bb8898dd3171904cc796048acd1bede20ce1dab69",
+   "size": 1695264
+  },
+  {
+   "path": "runtimes/maccatalyst-x64/native/libe_sqlite3.dylib",
+   "sha256": "ac224e3e18f8227dc964b3cf29a0f6244e475af37eed5744708e222fe9691c19",
+   "size": 1724352
+  },
+  {
+   "path": "runtimes/osx-arm64/native/libe_sqlite3.dylib",
+   "sha256": "2b27f45233818ae11d97016ca2a16dffcf63a53c46f60bcd52b342fc187b0c83",
+   "size": 1696624
+  },
+  {
+   "path": "runtimes/osx-x64/native/libe_sqlite3.dylib",
+   "sha256": "20143ee08a1af0a510368e14109f512d7c7870481ba16937ae5733a415d0a201",
+   "size": 1724472
+  },
+  {
+   "path": "runtimes/win-arm64/native/e_sqlite3.dll",
+   "sha256": "a59c169757d12a8bfc30c1760b8dd1f04cf9519f3774bdee6a9b595469f22be6",
+   "size": 1816064
+  },
+  {
+   "path": "runtimes/win-x64/native/e_sqlite3.dll",
+   "sha256": "6ad8e149f8ce3ed3716402b4b3a2268ebbdc7b64391b5fafed747e03bb1b9418",
+   "size": 1972224
+  },
+  {
+   "path": "runtimes/win-x86/native/e_sqlite3.dll",
+   "sha256": "8d76b5d0faa6f3a3c6204605d1a3d31dad57a0104b92fce3df19b12bdd983ae7",
+   "size": 1529344
+  },
+  {
+   "path": "tr/FSharp.Core.resources.dll",
+   "sha256": "a46090442f1e2c4c45443879d76981af4ba53b4b89775e88af3d19f58197826a",
+   "size": 33576
+  },
+  {
+   "path": "zh-Hans/FSharp.Core.resources.dll",
+   "sha256": "eaeb7b4703d337f53f155470502cbf3209705cd44ae71ffa7b90d765c16a61db",
+   "size": 32080
+  },
+  {
+   "path": "zh-Hant/FSharp.Core.resources.dll",
+   "sha256": "9619f737a5446b72be21313f18adab4359702b21e86ff3ca189a661c11f1f016",
+   "size": 31528
+  }
+ ],
+ "listSha256": "815791cd2b47fa2e79d5446bb8268447b2148391980d1300ee343ab99473a54d",
+ "package": "FS.GG.Coord.Cli",
+ "root": "tools/net10.0/any/",
+ "schema": "learn-pod-tool-tree/1",
+ "totalBytes": 69140925,
+ "version": "0.113.0"
+}
