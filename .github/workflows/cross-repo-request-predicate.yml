@@ -25,12 +25,14 @@ permissions:
   issues: write
 
 # PR-keyed concurrency (#4730 CI-load): a newer run for the same pull request cancels the superseded
-# one, so a push or body edit no longer leaves the old head's run to finish and hold a runner. Any
-# other event keys on `github.run_id`, which is unique to the run: GitHub discards an older PENDING run
-# in a shared group even without cancel-in-progress, so a key that two events can share (the branch ref
-# for pushes, or the commit sha for dispatches and issue events at one commit) would drop a run.
+# one. `issues` runs key on the ISSUE number instead of the run id (the gate's ISSUE_KEYED variant): the
+# `predicate` job's auto-comment step is check-then-act (look for the marker comment, post if absent), so
+# the `opened` and `edited` events of one issue, which can land seconds apart, must not run at once or
+# both can post. They now queue one behind the other. `cancel-in-progress` stays false for them, so a
+# running poster is never cancelled; a replaced PENDING run is fine because the newer event carries the
+# newer issue body. Any other event keys on `github.run_id`, unique to the run, so nothing shares a group.
 concurrency:
-  group: cross-repo-request-predicate-${{ github.event.pull_request.number || github.run_id }}
+  group: cross-repo-request-predicate-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
