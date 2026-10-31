@@ -39,13 +39,14 @@ def load(names, **extra):
 
 
 # ============================================================ drift guard against the imported r5
+HUNKS, REMOVED, ADDED = 12, 20, 107                                      # pinned; see the README
 a = open(R5).read().splitlines()
 b = SRC.splitlines()
 ops = [o for o in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes() if o[0] != 'equal']
 removed, added = sum(o[2] - o[1] for o in ops), sum(o[4] - o[3] for o in ops)
 check(hashlib.sha256(open(R5, 'rb').read()).hexdigest().startswith('318edb4e'), 'the imported baseline is the admitted r5 (318edb4e)')
 if not os.environ.get('LEARN_R6_SKIP_DRIFT_GUARD'):                  # set only by the mutation analysis, so line-count changes are not what kills a mutant
-  check((len(ops), removed, added) == (11, 20, 89), f'r6 differs from r5 in exactly 11 hunks, 20 lines removed, 89 added (got {len(ops)}, {removed}, {added})')
+  check((len(ops), removed, added) == (HUNKS, REMOVED, ADDED), f'r6 differs from r5 in exactly 11 hunks, 20 lines removed, 89 added (got {len(ops)}, {removed}, {added})')
 for kept in ('IMAGE_ID = ', 'FIN = ', 'SECCOMP = ', 'PY_SHA = ', 'MAX_ACTIVE_OPS = 2', 'EVID_MAX_BYTES, EVID_MAX_ENTRIES', 'SLICE_MEMORY_MAX, SLICE_PIDS_MAX', 'HOST_UID_1000'):
     l5 = [x for x in a if x.startswith(kept)]
     check(l5 and l5 == [x for x in b if x.startswith(kept)], f'r6 keeps the r5 line {kept!r} byte for byte')
@@ -269,6 +270,25 @@ try:
 except RuntimeError:
     pass
 check(ns3['R']['runNonceSha256'] == hashlib.sha256(('ee' * 16).encode()).hexdigest(), 'the nonce hash is recorded even when start_pair raises')
+
+# ============================================================ recheck_sweep: the census taken again immediately before the start
+RS = load(['parse_unit_rows', 'classify_units', 'recheck_sweep'])['recheck_sweep']
+U = lambda *rows: '\n'.join(rows) + '\n'
+check(RS('', 'op-r', 2) is None and RS(U('learn-op-a.service loaded active running A'), 'op-r', 2) is None, 'an empty census and one active reader op pass the recheck')
+check('a pod op became active' in (RS(U('learn-pod-p1.service loaded active running P'), 'op-r', 2) or ''), 'an active pod unit that appeared since the first census refuses at the start')
+check('failed or transitioning' in (RS(U('learn-fin-x.service loaded failed failed X'), 'op-r', 2) or ''), 'a failed unit that appeared refuses at the start')
+check('failed or transitioning' in (RS(U('learn-op-a.service loaded activating start A'), 'op-r', 2) or ''), 'a transitioning reader op that appeared refuses at the start')
+check('concurrency refused at the start: 2 ops' in (RS(U('learn-op-a.service loaded active running A', 'learn-op-b.service loaded active running B'), 'op-r', 2) or ''), 'a second reader op that appeared makes the cap refuse at the start')
+check(RS(U('learn-op-op-r-pre.service loaded active running P', 'learn-op-a.service loaded active running A'), 'op-r', 2) is None, 'this op\'s own active precheck unit is not counted against the cap')
+check(RS(U('learn-fin-op-r-pre.service loaded deactivating stop F'), 'op-r', 2) is None, '... even while its own precheck finalizer is deactivating')
+check('failed or transitioning' in (RS(U('learn-fin-other-pre.service loaded deactivating stop F'), 'op-r', 2) or ''), 'another op\'s precheck finalizer that is deactivating is not excused')
+check(RS(U('learn-pod-p1.service loaded inactive dead P'), 'op-r', 2) is None, 'an inactive pod unit does not refuse')
+body = SRC.split('# ---------------- main ----------------', 1)[1]
+i_pre, i_re, i_start = body.index("if mode == '--precheck-only': finish(0)"), body.index('recheck_sweep(out, opid, MAX_ACTIVE_OPS)'), body.index('start_real(opid, argv, nonce)')
+check(i_pre < i_re < i_start, 'the recheck runs after the precheck-only exit and immediately before start_real')
+check("'learn-pod-*'" in body[i_re - 300:i_re], 'the census taken at the start lists pod units too')
+check(body[i_re:i_start].count("refuse(") == 1 and "if why: refuse(why)" in body[i_re:i_start] and 'secrets.token_hex' in body[i_re:i_start], 'a recheck refusal stops the run before the nonce is drawn and before any unit starts')
+check("'unit census failed at the start'" in body, 'a failed census at the start refuses')
 
 # ============================================================ end to end through the refusal gates
 SUBS = []
