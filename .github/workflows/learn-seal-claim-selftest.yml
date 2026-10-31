@@ -42,3 +42,9 @@ jobs:
 
       - name: Run the seal and claim gates
         run: python3 tests/learn-seal-claim/run.py
+
+      # The same suite again with an artificial 12 s delay after the vectors' frozen `now` is taken: a vector that reads the wall clock fails here.
+      - name: Run the seal and claim gates under an artificial delay
+        env:
+          LEARN_SEAL_TEST_DELAY_S: "12"
+        run: python3 tests/learn-seal-claim/run.py
