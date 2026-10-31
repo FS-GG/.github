@@ -314,7 +314,10 @@ both records through distinct phase identities; absence of another agent is not 
 
 ## 6. Merge and obligations
 
-Ensure the PR closes the item — with a bare `Closes #<n>` (same repo) or `owner/repo#<n>` (cross repo),
+On the routine path a PR `Refs` its Delivery issue (see the work-board dispatch rules) and never closes it;
+Root's acceptance closes the Delivery. This strict route keeps the engine's canonical closing linkage
+(`landingLinkageAuthorized` in `src/FS.GG.Coord.Core/Delivery.fs`, which refuses a landing without it) until the
+engine learns about Delivery issues. So on this route ensure the PR closes the item — with a bare `Closes #<n>` (same repo) or `owner/repo#<n>` (cross repo),
 **never** the board's own `<repo>#<n>` shorthand, which GitHub's closing-keyword grammar does not parse
 and which then never closes the issue and cannot be repaired once merged (.github#2107). `verify-paths`,
 run right after opening the PR (§5), now catches this while it is still free to fix — do not wait for it
