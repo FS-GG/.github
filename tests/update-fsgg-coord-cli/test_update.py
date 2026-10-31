@@ -543,6 +543,22 @@ class BoardNativeResultsTests(unittest.TestCase):
         expected = {key: report[key] for key in ("bindingVersion", "schemaVersion", "projectId", "selectedIssues")}
         return report, expected
 
+    def test_archived_enrolled_membership_is_explicit_and_closed(self):
+        # #5119: an archived enrolled card is reported as an explicit archived membership.
+        report, expected = self.inspection(5)
+        self.decoder["decode_inspection"](report, expected)  # older producers omit `archived`
+        member = report["memberships"][0]
+        member.update(archived=False)
+        self.decoder["decode_inspection"](report, expected)
+        member.update(archived=True, discrepancy=self.decoder["ARCHIVED_CARD"])
+        self.decoder["decode_inspection"](report, expected)
+        for change in (dict(enrolled=False), dict(discrepancy=None), dict(archived="yes"), dict(extra=1)):
+            report, expected = self.inspection(5)
+            report["memberships"][0].update(archived=True, discrepancy=self.decoder["ARCHIVED_CARD"])
+            report["memberships"][0].update(change)
+            with self.assertRaises(self.decoder["Unknown"]):
+                self.decoder["decode_inspection"](report, expected)
+
     def test_state_only_dependency_observation_accepts_actual_producer_shape(self):
         report, expected = self.inspection(5)
         dependency = {"issue": {"owner": "Synthetic", "repository": "Dependency", "number": 2},

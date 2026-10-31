@@ -208,8 +208,11 @@ module BoardV2Application =
                    membershipGap = report.MembershipGap |> Option.map Errors.explain
                    memberships = report.Memberships |> List.map (fun memberItem ->
                        {| itemId = memberItem.ItemId; contentId = memberItem.ContentId; kind = memberItem.Kind
-                          issue = memberItem.Issue |> Option.map issueWire; enrolled = memberItem.Enrolled
-                          discrepancy = if memberItem.Enrolled then None else Some "Unexpected/unselected membership; no automatic enrollment" |})
+                          issue = memberItem.Issue |> Option.map issueWire; enrolled = memberItem.Enrolled; archived = memberItem.Archived
+                          discrepancy =
+                            if memberItem.Archived then Some V2ProjectionSource.archivedCardDiscrepancy
+                            elif memberItem.Enrolled then None
+                            else Some "Unexpected/unselected membership; no automatic enrollment" |})
                    nativeIntegrator = {| observedAt = (if report.NativeIntegrator.ObservedAt = DateTimeOffset.MinValue then None else Some report.NativeIntegrator.ObservedAt); repositoryGaps = report.NativeIntegrator.RepositoryGaps
                                          pullRequests = report.NativeIntegrator.PullRequests
                                          resourceGap = if context.IsNone then Some "Missing runtime/integrator observations; no capacity inferred from collaboration slots" else None |}

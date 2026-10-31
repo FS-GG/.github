@@ -1057,6 +1057,40 @@ module V2ProjectionSource =
                             WorkItem = item.WorkItem |> Option.map (fun facts -> {facts with Complete = false; Sha256 = None; Gap = Some gap})
                             Evidence = {item.Evidence with Health = "Unknown"; Gap = Some(Malformed("native hierarchy consistency", gap))} })
 
+    /// The discrepancy an inspection reports for an enrolled row whose board card is archived (#5119).
+    let archivedCardDiscrepancy = "Board card is archived (Done retention); the enrolled row is retained, with no automatic retirement"
+
+    // Cross-check every selected row's planning membership against the complete project membership (#5119). An issue's
+    // `projectItems` include an archived card while the project `items` connection excludes it, so before this an
+    // archived enrolled card read as a normal planning row and silently vanished from `memberships`. Now:
+    // - an archived planning card absent from `memberships` becomes an explicit `Archived = true` membership and its
+    //   item carries `archivedCardDiscrepancy`;
+    // - an unarchived planning card absent from `memberships`, or an archived one present in it, is an inconsistency
+    //   reported as a membership gap, never a silent missing row.
+    let private reconcileArchivedMemberships (binding: Binding) (selected: Selected list) (items: InspectionItem list) (members: Membership list) (membershipGap: IoError option) =
+        if not (isProgrammeBinding binding) || membershipGap.IsSome then items, members, None
+        else
+            let listed = members |> List.map _.ContentId |> Set.ofList
+            let rows = List.zip selected items
+            let archived =
+                rows |> List.choose (fun (row, item) ->
+                    match item.Planning with
+                    | Some planning when planning.Archived && not (listed.Contains row.NodeId) ->
+                        Some { ItemId = planning.ItemId; ContentId = row.NodeId; Kind = "Issue"; Issue = Some row.Issue; Enrolled = true; Archived = true }
+                    | _ -> None)
+            let inconsistent =
+                rows |> List.filter (fun (row, item) ->
+                    match item.Planning with
+                    | Some planning -> planning.Archived = listed.Contains row.NodeId
+                    | None -> false)
+            let archivedIds = archived |> List.map _.ContentId |> Set.ofList
+            let items = items |> List.map (fun item ->
+                if archivedIds.Contains item.ExpectedNodeId then { item with Discrepancies = item.Discrepancies @ [ archivedCardDiscrepancy ] } else item)
+            let gap =
+                if inconsistent.IsEmpty then None
+                else Some(Malformed("membership cross-check", $"%d{inconsistent.Length} enrolled row(s) disagree between the issue membership and the complete project membership; reconcile before selection"))
+            items, members @ archived, gap
+
     let private inspectWithAcquisition batched (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
         let reads = inspectionReads transport binding
         let intakeObservedAt = DateTimeOffset.UtcNow
@@ -1160,7 +1194,9 @@ module V2ProjectionSource =
                         | Ok(text, _, finalBlob) when finalBlob = blob && Result.isOk (programmePopulation binding text) -> membershipGap
                         | _ -> Some(Malformed("programme enrollment", "final-enrollment-currentness-unavailable-or-changed"))
                 let items = if binding.BindingVersion = 5 then reconcileHierarchy items else items
-                { Binding = binding; Memberships = members; MembershipGap = membershipGap; NativeIntegrator = integration
+                let items, members, crossCheckGap = reconcileArchivedMemberships binding selected items members membershipGap
+                let enrollmentGap = match enrollmentGap with Some _ -> enrollmentGap | None -> crossCheckGap
+                { Binding = binding; Memberships = members; MembershipGap = (match membershipGap with Some _ -> membershipGap | None -> crossCheckGap); NativeIntegrator = integration
                   Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) (protectedEnrollmentInputs binding current blob) enrollmentGap; Items = items }
 
     let inspectFixed transport binding previous = inspectWithAcquisition true transport binding previous

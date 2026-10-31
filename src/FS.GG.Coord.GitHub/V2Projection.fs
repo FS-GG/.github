@@ -441,7 +441,7 @@ module V2Projection =
     let private exactMembership (transport: IGitHubTransport) (binding: Binding) (issue: IssueRef) expectedNativeId =
         let subject = $"{issue.Owner}/{issue.Repository}#{issue.Number} exact membership"
         let document =
-            "query($owner: String!, $repo: String!, $number: Int!, $after: String) { repository(owner: $owner, name: $repo) { nameWithOwner issue(number: $number) { id number projectItems(first: 50, after: $after) { totalCount pageInfo { hasNextPage endCursor } nodes { id project { id } content { ... on Issue { id number repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }"
+            "query($owner: String!, $repo: String!, $number: Int!, $after: String) { repository(owner: $owner, name: $repo) { nameWithOwner issue(number: $number) { id number projectItems(first: 50, after: $after) { totalCount pageInfo { hasNextPage endCursor } nodes { id isArchived project { id } content { ... on Issue { id number repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }"
         let mutable pages = 0
         let fetch after =
             let variables =
@@ -462,7 +462,7 @@ module V2Projection =
                             let content = node.GetProperty "content"
                             if not (nonBlank itemId) || not (nonBlank projectId) || content.GetProperty("id").GetString() <> nativeId || content.GetProperty("number").GetInt32() <> issue.Number || content.GetProperty("repository").GetProperty("nameWithOwner").GetString() <> repo then
                                 Error(Malformed(subject, "membership content identity differs"))
-                            else Ok(itemId, projectId, nativeId)
+                            else Ok(itemId, projectId, (nativeId, node.GetProperty("isArchived").GetBoolean()))
                         let connection = native.GetProperty "projectItems"
                         if connection.GetProperty("totalCount").GetInt32() < 0 || connection.GetProperty("nodes").GetArrayLength() > 50 then
                             Error(Malformed(subject, "membership count/window is invalid"))
@@ -478,7 +478,7 @@ module V2Projection =
         | Error error -> Error error
         | Ok memberships ->
             match memberships |> List.filter (fun (_, projectId, _) -> projectId = binding.ProjectId) with
-            | [ (itemId, _, nativeId) ] -> Ok(itemId, nativeId, pages)
+            | [ (itemId, _, (nativeId, archived)) ] -> Ok(itemId, nativeId, pages, archived)
             | [] -> Error(NotFound subject)
             | _ -> Error(Malformed(subject, "duplicate exact-project membership"))
 
@@ -523,7 +523,7 @@ module V2Projection =
 
     // Complete project population, including unselected issues, PRs and drafts. No enrollment occurs.
     type Membership =
-        { ItemId: string; ContentId: string; Kind: string; Issue: IssueRef option; Enrolled: bool }
+        { ItemId: string; ContentId: string; Kind: string; Issue: IssueRef option; Enrolled: bool; Archived: bool }
 
     let readMemberships (transport: IGitHubTransport) (binding: Binding) =
         validateBinding binding |> Result.bind (fun () -> verifyOrganization transport binding) |> Result.bind (fun () ->
@@ -555,7 +555,7 @@ module V2Projection =
                                     else
                                         let enrolled = issue |> Option.exists (fun value -> Map.tryFind id binding.SelectedIssues = Some $"{value.Owner}/{value.Repository}#{value.Number}")
                                         if binding.SelectedIssues.ContainsKey id && not enrolled then Error(Malformed(subject, "enrolled node has mismatched native identity"))
-                                        else Ok { ItemId = item; ContentId = id; Kind = kind; Issue = issue; Enrolled = enrolled }
+                                        else Ok { ItemId = item; ContentId = id; Kind = kind; Issue = issue; Enrolled = enrolled; Archived = false }
                             GraphQl.page subject "project memberships" (fun (value: Membership) -> value.ItemId) decode (project.GetProperty "items"))
                 GraphQl.drain subject "project memberships" { MaxPages = 10; MaxItems = maximumBoardItems } fetch |> Result.bind (fun members ->
                     if (members |> List.map _.ContentId |> Set.ofList |> Set.count) <> members.Length then Error(Malformed(subject, "duplicate content memberships"))
@@ -563,7 +563,7 @@ module V2Projection =
 
     type PlanningObservation =
         { ItemId: string; Status: string option; Roadmap: string option; Track: string option
-          Observation: string option; MembershipPages: int; WorkLevel: (string * string option) option }
+          Observation: string option; MembershipPages: int; WorkLevel: (string * string option) option; Archived: bool }
 
     let private readPlanningLegacy (transport: IGitHubTransport) (binding: Binding) (request: Request) =
         let admitted = validateBinding binding |> Result.bind (fun () ->
@@ -575,7 +575,7 @@ module V2Projection =
                 let expected: ExactProject = { Owner = binding.Owner; Number = binding.ProjectNumber; Title = binding.ProjectTitle; Id = binding.ProjectId }
                 bootstrapExactProject transport expected |> Result.bind (fun board ->
                     verifyFieldSchema binding board |> Result.bind (fun () ->
-                        exactMembership transport binding request.Issue request.ExpectedNodeId |> Result.bind (fun (itemId, nativeId, pages) ->
+                        exactMembership transport binding request.Issue request.ExpectedNodeId |> Result.bind (fun (itemId, nativeId, pages, archived) ->
                             let document = "query($itemId: ID!) { node(id: $itemId) { ... on ProjectV2Item { id project { id } content { ... on Issue { id number repository { nameWithOwner } } } status: fieldValueByName(name: \"Status\") { __typename ... on ProjectV2ItemFieldSingleSelectValue { name optionId field { ... on ProjectV2SingleSelectField { id } } } } roadmap: fieldValueByName(name: \"Roadmap\") { __typename ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2Field { id } } } } track: fieldValueByName(name: \"Track\") { __typename ... on ProjectV2ItemFieldSingleSelectValue { name optionId field { ... on ProjectV2SingleSelectField { id } } } } observation: fieldValueByName(name: \"Observation\") { __typename ... on ProjectV2ItemFieldSingleSelectValue { name optionId field { ... on ProjectV2SingleSelectField { id } } } } } } rateLimit { cost remaining } }"
                             GraphQl.read transport (graphRequest document [ "itemId", VId itemId ] "bound V2 planning fields") (fun data ->
                                 let node = data.GetProperty "node"
@@ -603,7 +603,7 @@ module V2Projection =
                                         else Ok(Some(value.GetProperty("text").GetString()))
                                     select "status" binding.Status |> Result.bind (fun status -> roadmap |> Result.bind (fun roadmap ->
                                         select "track" binding.Track |> Result.bind (fun track -> select "observation" binding.Observation |> Result.map (fun observation ->
-                                            { ItemId = itemId; Status = status; Roadmap = roadmap; Track = track; Observation = observation; MembershipPages = pages; WorkLevel = None }))))))))))
+                                            { ItemId = itemId; Status = status; Roadmap = roadmap; Track = track; Observation = observation; MembershipPages = pages; WorkLevel = None; Archived = archived }))))))))))
 
     // Read the successor's membership and planning values together. Each invocation still
     // reads the exact schema, and every membership page independently joins the owner and
@@ -619,7 +619,7 @@ module V2Projection =
                 let expected: ExactProject = { Owner = binding.Owner; Number = binding.ProjectNumber; Title = binding.ProjectTitle; Id = binding.ProjectId }
                 bootstrapExactProject transport expected |> Result.bind (fun board ->
                     verifyFieldSchema binding board |> Result.bind (fun () ->
-                        let document = "query($projectOwner:String!,$owner:String!,$repo:String!,$number:Int!,$after:String){organization(login:$projectOwner){id login} repository(owner:$owner,name:$repo){nameWithOwner issue(number:$number){id number projectItems(first:50,after:$after){totalCount pageInfo{hasNextPage endCursor} nodes{id project{id} content{... on Issue{id number repository{nameWithOwner}}} status:fieldValueByName(name:\"Status\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}} roadmap:fieldValueByName(name:\"Roadmap\"){__typename ... on ProjectV2ItemFieldTextValue{text field{... on ProjectV2Field{id}}}} track:fieldValueByName(name:\"Track\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}} observation:fieldValueByName(name:\"Observation\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}}" + (if binding.WorkLevel.IsSome then " workLevel:fieldValueByName(name:\"Work level\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}}" else "") + "}}}} rateLimit{cost remaining}}"
+                        let document = "query($projectOwner:String!,$owner:String!,$repo:String!,$number:Int!,$after:String){organization(login:$projectOwner){id login} repository(owner:$owner,name:$repo){nameWithOwner issue(number:$number){id number projectItems(first:50,after:$after){totalCount pageInfo{hasNextPage endCursor} nodes{id isArchived project{id} content{... on Issue{id number repository{nameWithOwner}}} status:fieldValueByName(name:\"Status\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}} roadmap:fieldValueByName(name:\"Roadmap\"){__typename ... on ProjectV2ItemFieldTextValue{text field{... on ProjectV2Field{id}}}} track:fieldValueByName(name:\"Track\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}} observation:fieldValueByName(name:\"Observation\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}}" + (if binding.WorkLevel.IsSome then " workLevel:fieldValueByName(name:\"Work level\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}}" else "") + "}}}} rateLimit{cost remaining}}"
                         let mutable pages = 0
                         let fetch after =
                             let variables =
@@ -699,7 +699,7 @@ module V2Projection =
                                     select "status" binding.Status |> Result.bind (fun status -> roadmap |> Result.bind (fun roadmap ->
                                         select "track" binding.Track |> Result.bind (fun track -> select "observation" binding.Observation |> Result.bind (fun observation ->
                                             workLevel |> Result.map (fun workLevel ->
-                                            { ItemId = itemId; Status = status; Roadmap = roadmap; Track = track; Observation = observation; MembershipPages = pages; WorkLevel = workLevel })))))
+                                            { ItemId = itemId; Status = status; Roadmap = roadmap; Track = track; Observation = observation; MembershipPages = pages; WorkLevel = workLevel; Archived = node.GetProperty("isArchived").GetBoolean() })))))
                                 with
                                 | :? Collections.Generic.KeyNotFoundException
                                 | :? InvalidOperationException -> invalid "unreadable bound planning fields"
@@ -751,7 +751,9 @@ module V2Projection =
                     | Ok() ->
                         match exactMembership transport binding request.Issue request.ExpectedNodeId with
                         | Error error -> Error error
-                        | Ok(itemId, nativeId, pages) ->
+                        // An archived card (Done retention, #5119) is reported, never written: the row stays enrolled.
+                        | Ok(_, _, _, true) -> Error(Http(409, "the board card is archived (Done retention); no Observation write"))
+                        | Ok(itemId, nativeId, pages, false) ->
                             match fieldValueByItemId transport binding request.Issue nativeId itemId with
                             | Error error -> Error error
                             | Ok(Some "Verified") ->

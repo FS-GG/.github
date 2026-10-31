@@ -559,6 +559,19 @@ is [#5131](https://github.com/FS-GG/.github/issues/5131). The
 complete-membership read refuses a board whose `totalCount` exceeds `maximumBoardItems` (500) on its first page, rather than paging
 up to the limit.
 
+**Archived enrolled cards ([#5119](https://github.com/FS-GG/.github/issues/5119)).** Done retention archives older Done
+cards. An issue's `projectItems` include an archived card, but the project `items` connection excludes it. Before this change,
+an archived enrolled card read as a normal planning row and silently vanished from `memberships`. The planning membership read
+now carries `isArchived`, and inspection cross-checks every selected row against the complete membership:
+- An archived card absent from `memberships` becomes an explicit `archived: true` membership, and its item carries the
+  discrepancy "Board card is archived (Done retention); the enrolled row is retained, with no automatic retirement". No
+  manifest retirement is needed.
+- Any other disagreement is a `membership cross-check` gap: an unarchived card missing from `memberships`, or an archived card
+  still listed in it.
+- The one-shot Observation writer refuses an archived card with an explicit 409 before any write.
+- `scripts/board_v2_native_results.py` accepts the optional `archived` key, and requires an archived membership to be enrolled
+  and to carry that discrepancy.
+
 **Gate trust.** The routine gates (`check-claim-generation.py` with `lib/gate.py`, and `check-closing-keywords.py`) run from the
 exact base commit's blobs (`git show <base>:<path>`), the way `routine-eligibility.yml` does, never from the checkout, so a pull
 request that edits a gate cannot predict its own pass; if the base does not hold them the result is `Unknown`. The publication

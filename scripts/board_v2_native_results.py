@@ -173,6 +173,7 @@ def decode_snapshot(tokens):
 
 INSPECTION_COMMON = set("schema bindingVersion organizationId owner projectNumber projectId projectTitle schemaVersion ownerKind repositories status roadmapFieldId track observation selectedIssues recipeRevision artifactSha256 populationRevision importRecipeRevision importArtifactSha256 protectedInputs selected attempted verified mutationAttempts populationGap cleanup items candidates".split())
 INSPECTION_PROGRAMME = set("enrollmentCommitmentSha256 membershipGap memberships nativeIntegrator integratorObservation selectionCoverage selection".split())
+ARCHIVED_CARD = "Board card is archived (Done retention); the enrolled row is retained, with no automatic retirement"
 INSPECTION_ITEM = set("issue expectedNodeId native dependencyObservations dependencyReadComplete planObservation sourceCurrentness planning planningGap discrepancies health delivery publication nativeAcceptance reads mutationAttempts gap lastVerified".split())
 
 
@@ -242,7 +243,14 @@ def decode_inspection(report, expected_binding):
         require(report["membershipGap"] is None and isinstance(report["memberships"], list), "inspection-membership-unavailable")
         memberships = report["memberships"]
         for member in memberships:
-            closed(member, {"itemId", "contentId", "kind", "issue", "enrolled", "discrepancy"})
+            # 0.114.1+ adds `archived` (#5119): an enrolled row whose card is archived (Done retention) is an explicit
+            # archived membership, never a missing one. Older producers omit the key; any other shape refuses.
+            keys = {"itemId", "contentId", "kind", "issue", "enrolled", "discrepancy"}
+            closed(member, keys | {"archived"} if "archived" in member else keys)
+            if member.get("archived") is not None:
+                require(isinstance(member["archived"], bool), "unsupported-result-shape")
+                require(not member["archived"] or (member["enrolled"] is True and member["discrepancy"] == ARCHIVED_CARD),
+                        "inspection-archived-membership-differs")
         require(len({member["itemId"] for member in memberships}) == len(memberships)
                 and len({member["contentId"] for member in memberships}) == len(memberships)
                 and all(any(member["contentId"] == node and member["enrolled"] is True for member in memberships) for node in seen), "inspection-membership-identity-differs")

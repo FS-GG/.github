@@ -159,6 +159,46 @@ let ``actual CLI inspects a full 500-row cohort inside its scaled request ceilin
     finally Directory.Delete(directory, true)
 
 [<Fact>]
+let ``actual CLI reports an archived enrolled card as an explicit archived membership`` () =
+    // #5119: Done retention archives cards; the inspection wire keeps the row, marked archived, with its discrepancy.
+    let rows, selected = cohortOf 3
+    let archivedId, _, _ = rows.[1]
+    let change (request: Transport.Request) (result: Errors.IoResult<Transport.Response>) =
+        result |> Result.map (fun (response: Transport.Response) ->
+            let root = Text.Json.Nodes.JsonNode.Parse response.Body
+            if request.Subject = "bound V2 successor planning memberships" then
+                let node = root.["data"].["repository"].["issue"].["projectItems"].["nodes"].[0]
+                if node.["content"].["id"].GetValue<string>() = archivedId then node.["isArchived"] <- Text.Json.Nodes.JsonValue.Create true
+            elif request.Subject = "complete V2 project memberships" then
+                let items = root.["data"].["node"].["items"]
+                let nodes = items.["nodes"].AsArray()
+                for index in nodes.Count - 1 .. -1 .. 0 do
+                    if nodes.[index].["content"].["id"].GetValue<string>() = archivedId then nodes.RemoveAt index
+                items.["totalCount"] <- Text.Json.Nodes.JsonValue.Create nodes.Count
+            { response with Body = root.ToJsonString() })
+    let reads = ProgrammeFixture.successorTransportFor selected rows (Some "Delivery") change
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-archived-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+    try
+        let input, output = Path.Combine(directory, "binding.json"), Path.Combine(directory, "report.json")
+        File.WriteAllText(input, ProgrammeFixture.bindingJsonFor selected)
+        let code = BoardV2Application.runWithTransport reads ["inspect"; "--binding-file"; input; "--report-file"; output]
+        use report = JsonDocument.Parse(File.ReadAllText output)
+        let root = report.RootElement
+        let membershipGap = root.GetProperty("membershipGap").ToString()
+        Assert.True((code = 0), $"exit={code}; membershipGap={membershipGap}")
+        let memberships = root.GetProperty("memberships").EnumerateArray() |> Seq.toList
+        Assert.Equal(3, memberships.Length)
+        let archived = memberships |> List.filter (fun entry -> entry.GetProperty("archived").GetBoolean())
+        Assert.Equal(1, archived.Length)
+        Assert.Equal(archivedId, archived.Head.GetProperty("contentId").GetString())
+        Assert.True(archived.Head.GetProperty("enrolled").GetBoolean())
+        Assert.Equal(V2ProjectionSource.archivedCardDiscrepancy, archived.Head.GetProperty("discrepancy").GetString())
+        let item = root.GetProperty("items").EnumerateArray() |> Seq.find (fun item -> item.GetProperty("expectedNodeId").GetString() = archivedId)
+        Assert.Contains(V2ProjectionSource.archivedCardDiscrepancy, item.GetProperty("discrepancies").EnumerateArray() |> Seq.map _.GetString())
+    finally Directory.Delete(directory, true)
+
+[<Fact>]
 let ``actual CLI refuses a 501-row binding before any send`` () =
     let rows, selected = cohortOf (V2Projection.maximumProgrammeRows + 1)
     let reads = ProgrammeFixture.successorTransportFor selected rows (Some "Delivery") ProgrammeFixture.unchanged
