@@ -167,7 +167,7 @@ production writer qualification remains .3.
 | `.agents` and `.claude` driving/board/init skills | .4 prepares gated work-unified-roadmap, drive-board/normal/best and check-board organization inspection. work-roadmap/pnext-item retain routine/native delivery; work-board/init/generated product bindings remain .5–.6. Both tracked skill roots and manifest projections are kept coherent; no current adoption claimed. |
 | `NewSddWorkspace` / configuration / generated guidance | Product-specific owner/project/repository scope and portable commands belong to .5/.6 publication and installed adoption; generated defaults unchanged here. |
 | `coord-board-reconcile.yml` | Manual credential-free legacy diagnostic, no board writes. |
-| `coord-board-archive.yml` / `coord-board-archive.py` | Separate still-scheduled legacy Project 1 archive using its App. Retain exact scope. |
+| `coord-board-archive.yml` / `coord-board-archive.py` | Replaced by the Project 3 Done-retention archiver ([#5119](https://github.com/FS-GG/.github/issues/5119)): keep the newest 200 Done by close time, archive older ones. The workflow is a counts-only dry run until Root accepts the first real run. The Project 1 sweeper (30 days, 100 visible) was disabled and retired on 2026-10-31. |
 | `scripts/fsgg-coord` / shared metered transport | Default shared Projects route. The explicit user-authorized native one-shot exception below applies only to this .2 pilot; .3 retains production composition and qualification. |
 
 Only the selected .2 pilot is closed. The .3 adapter still needs actual automatic-writer composition,

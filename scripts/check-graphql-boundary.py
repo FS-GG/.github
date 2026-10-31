@@ -31,6 +31,12 @@ EXEMPTIONS = {
         "owner": "Programme/root",
         "tracking": "Refs #5094 (follow-up: move the read to a typed OperationalGraphQl verb)",
     },
+    "scripts/coord-board-archive.py": {
+        "reason": "Project 3 Done-retention archiver; it needs the server-side `status:Done` items filter and "
+                  "`archiveProjectV2Item`, and the typed archive route is refused by the engine's v1 admission",
+        "owner": "Programme/root",
+        "tracking": "Refs #5119 (follow-up: a typed Done-retention verb once a v2 write admission exists)",
+    },
     "scripts/board-currency-fetch.py": {
         "reason": "App-token shadow observer; its Work level, native parent/sub-issue/blocked-by links and "
                   "issue state reasons are not exposed by the typed archive-scan",
@@ -69,7 +75,6 @@ def main() -> int:
     production = [
         args.root / "scripts" / "projects-audit.sh",
         args.root / "scripts" / "repos-audit.sh",
-        args.root / "scripts" / "coord-board-archive.py",
         args.root / "scripts" / "check-roster-closure.py",
         args.root / ".github" / "workflows" / "coord-board-archive.yml",
     ]
