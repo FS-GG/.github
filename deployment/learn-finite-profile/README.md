@@ -65,8 +65,13 @@ paths, SSH keys, `@` mentions, and a person-context detector (a role word such a
 a name token), plus a list of person names in `BASELINE.json`.
 
 **The scan detects classes. It cannot prove a file is clean:** a name, a private path or a codename has no reliable pattern.
-Every imported file therefore also needs a manual read recorded in `scan.manualRead`, keyed by the file's bytes, and the
-gate refuses an imported file without one. The ten journal files were read in the independent review of #4997; the two probe
+Every imported file therefore also needs a manual read recorded in `scan.manualRead`, keyed by the file's path and bytes
+(each record needs a non-empty `file` that names an imported file at those exact bytes, and a non-empty `reader`), and the
+gate refuses an imported file without one. **Readers are self-asserted:** a record is a claim by whoever recorded it, not an
+authenticated identity or an independent attestation.
+
+`scan.personNames` is published with the manifest, so it may only hold names that are already public. Never add a name to
+catch it: the list itself would disclose it. The ten journal files were read in the independent review of #4997; the two probe
 sources were read in full by the worker who imported them.
 
 Result (2026-10-30): **0 unexplained findings, 0 redactions.** Six matches are allowlisted in `BASELINE.json`, each with its

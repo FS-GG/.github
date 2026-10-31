@@ -133,6 +133,39 @@ with tempfile.TemporaryDirectory() as tmp:
     bad['scan']['manualRead'] = [r for r in bad['scan']['manualRead'] if r['file'] != 'source/learn-probe.c']
     write_manifest(root, bad)
     check(has(vb.verify_repo(root)[0], 'source/learn-probe.c: no recorded manual read'), 'an imported file without a recorded manual read is refused')
+    mr = 'manualRead'
+    for what, edit, needle in (
+        ('an empty file', lambda r: r[0].update(file=''), 'file is empty'),
+        ('a missing file field', lambda r: r[0].pop('file'), 'file is empty'),
+        ('an empty reader', lambda r: r[0].update(reader=''), 'reader is empty'),
+        ('a blank reader', lambda r: r[0].update(reader='   '), 'reader is empty'),
+        ('a missing reader field', lambda r: r[0].pop('reader'), 'reader is empty'),
+        ('a malformed sha256', lambda r: r[0].update(sha256='zz'), 'sha256 is not 64 lowercase hex'),
+        ('a path that is not an imported file', lambda r: r[0].update(file='libexec/nope.py'), 'is not an imported file'),
+        ('bytes that are not the current file', lambda r: r[0].update(sha256='0' * 64), 'other bytes than the current file'),
+    ):
+        bad = copy.deepcopy(m3)
+        edit(bad['scan'][mr])
+        write_manifest(root, bad)
+        errs = vb.verify_repo(root)[0]
+        check(has(errs, needle), f'a manual read with {what} is refused')
+    bad = copy.deepcopy(m3)
+    r0 = bad['scan'][mr][0]
+    other = next(r for r in bad['scan'][mr] if r['file'] != r0['file'])
+    r0['file'] = other['file']                    # right bytes, wrong path: the record names a file whose bytes differ
+    write_manifest(root, bad)
+    check(has(vb.verify_repo(root)[0], 'other bytes than the current file'), 'a manual read whose sha256 belongs to another path is refused')
+    bad = copy.deepcopy(m3)
+    del bad['scan']['manualReadNote']
+    write_manifest(root, bad)
+    check(has(vb.verify_repo(root)[0], 'readers are self-asserted'), 'the self-asserted-readers note is required')
+    bad = copy.deepcopy(m3)
+    del bad['scan']['personNamesPolicy']
+    write_manifest(root, bad)
+    check(has(vb.verify_repo(root)[0], 'only names that are already public'), 'a person-name list needs its already-public policy')
+    check('already public' in m3['scan']['personNamesPolicy'] and 'self-asserted' in m3['scan']['manualReadNote'], 'the shipped manifest states both policies')
+    write_manifest(root, m3)
+    check(vb.verify_repo(root)[0] == [], 'the shipped manifest still verifies after the mutations are undone')
     bad = copy.deepcopy(m3)
     bad['scan']['personNames'].append('probe')
     write_manifest(root, bad)

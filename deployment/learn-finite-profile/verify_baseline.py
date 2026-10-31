@@ -29,6 +29,9 @@ HEX = re.compile(r'^[0-9a-f]{64}$')
 # Secrets and identifier scan. Each pattern is a class; an allowlist entry is (file basename, exact match text).
 # The scan DETECTS classes. It cannot prove a file is clean: a person's name, a private path or a project codename has no
 # reliable pattern, so the manifest also requires a recorded manual read of every imported file (`scan.manualRead`).
+# `scan.personNames` is published with the manifest, so it may only hold names that are ALREADY public (for example an
+# account name that appears in a public issue). Never add a name here to catch it: the list itself would then disclose it.
+# Manual-read records are self-asserted: `reader` is a claim by whoever recorded it, not an authenticated identity.
 HEXG = r'[0-9a-fA-F]{1,4}'
 SCAN = {
     'token': r'(ghp_|gho_|github_pat_|xox[bap]-|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{20,})',
@@ -124,6 +127,11 @@ def check_manifest_shape(m, errors):
     for k in ('journalSchema', 'installScriptSha256', 'files', 'scan', 'sources', 'custody'):
         if k not in m:
             errors.append(f'manifest lacks {k}')
+    sc = m.get('scan', {})
+    if sc.get('personNames') and not sc.get('personNamesPolicy'):
+        errors.append('scan.personNames needs personNamesPolicy (only names that are already public)')
+    if not sc.get('manualReadNote'):
+        errors.append('scan.manualReadNote must state that readers are self-asserted')
     files = m.get('files', {})
     for ip, e in files.items():
         _check_entry(ip, e, errors)
@@ -163,8 +171,23 @@ def verify_repo(root):
     allow = {(a['file'], a['match']) for a in scan.get('allowlist', [])}
     persons = scan.get('personNames', [])
     url_prefixes = scan.get('urlAllowPrefixes', [])
-    read = {r.get('sha256') for r in scan.get('manualRead', [])}
     imported = _imported(m)
+    read = set()
+    for i, r in enumerate(scan.get('manualRead', [])):
+        f, who, h = r.get('file'), r.get('reader'), r.get('sha256')
+        if not isinstance(f, str) or not f.strip():
+            errors.append(f'manualRead[{i}]: file is empty')
+        if not isinstance(who, str) or not who.strip():
+            errors.append(f'manualRead[{i}]: reader is empty')
+        if not isinstance(h, str) or not HEX.match(h):
+            errors.append(f'manualRead[{i}]: sha256 is not 64 lowercase hex')
+        if isinstance(f, str) and f.strip():
+            if f not in imported:
+                errors.append(f'manualRead[{i}]: {f} is not an imported file')
+            elif imported[f][1].get('repoSha256') != h:
+                errors.append(f'manualRead[{i}]: {f} was read at other bytes than the current file')
+            else:
+                read.add((f, h))
     n_ok = n_scan = n_read = 0
     for rp, (label, e) in sorted(imported.items()):
         p = os.path.join(root, 'baseline', rp)
@@ -183,7 +206,7 @@ def verify_repo(root):
         for cls, line, match in scan_text(p, text, allow, persons, url_prefixes):
             errors.append(f'{rp}:{line}: scan finding {cls}: {match}')
         n_scan += 1
-        if e['repoSha256'] in read:
+        if (rp, e['repoSha256']) in read:
             n_read += 1
         else:
             errors.append(f'{rp}: no recorded manual read for these bytes')
