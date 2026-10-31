@@ -1,4 +1,6 @@
 /// The shared board writer lock (board-reconciler design §8, FS-GG/.github#5136 PR 1, #5126).
+// Shares a collection with BoardV2ApplicationTests: both mutate XDG_RUNTIME_DIR, so they never run in parallel.
+[<Xunit.Collection("xdg-runtime-dir")>]
 module FS.GG.Coord.GitHub.Tests.V2WriterLockTests
 
 open System

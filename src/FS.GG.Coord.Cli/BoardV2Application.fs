@@ -536,6 +536,9 @@ module BoardV2Application =
                             migrationIdentity scope |> Result.bind (fun () ->
                                 let directory = preparedPath + ".invocation"
                                 privatePath directory
+                                // The shared writer lock is taken before the invocation marker, so a held lock
+                                // refuses with no marker, no custody file and no send (#5136, #5126).
+                                use lease = V2WriterLock.acquire (writerLock "PVT_kwDOEYAWY84Bldpa" V2WriterLock.migrationLegacyName)
                                 // Exclusive marker, never removed. Reopening this identity is readback-only.
                                 let reservationMetadata =
                                     {| preparedSha256 = expectedHash;
@@ -565,7 +568,6 @@ module BoardV2Application =
                                     elif not fresh.Snapshot.CanUpdate then Error "native-project-update-capability-absent"
                                     else
                                         let admission: MigrationAdmission = { Prepared = { fresh with PreparedPath = Some boundPath }; Directory = directory; WindowUntil = windowUntil }
-                                        use lease = V2WriterLock.acquire (writerLock "PVT_kwDOEYAWY84Bldpa" V2WriterLock.migrationLegacyName)
                                         let rec effects (sequence: int) (expected: V2Migration.Prepared) =
                                             if clock.GetUtcNow() >= admission.WindowUntil then Error "planning-window-expired"
                                             else

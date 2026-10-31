@@ -1818,6 +1818,7 @@ BOARD_CUSTODY_STATES = ("possible-send", "verified", "deferred", "superseded", "
 # F# writers use the same paths (src/FS.GG.Coord.GitHub/V2WriterLock.fs); a test pins that they agree.
 BOARD_WRITER_LOCK_NAME = "board-writer-PVT_kwDOEYAWY84Bldpa.lock"
 BOARD_LEGACY_LOCK_NAME = "fsgg-v2-migration-PVT_kwDOEYAWY84Bldpa.lock"
+BOARD_LEGACY_OBSERVATION_LOCK_NAME = "fsgg-v2-observation-PVT_kwDOEYAWY84Bldpa.lock"
 BOARD_LOCK_WAIT_SECONDS = 60.0
 
 
@@ -1918,8 +1919,10 @@ class BoardWriterLock:
     """The shared Project 3 writer lock: flock(2) LOCK_EX on every path in `paths`, all or none.
 
     `acquire` polls with LOCK_NB until `wait` seconds pass (the gate's bounded wait, design §6) and returns False
-    if it could not take every path; it never blocks past the bound. The directory is injectable so tests never
-    open the production path (#5126)."""
+    if another holder kept a path busy; it never blocks past the bound. A configuration error (an unwritable or
+    missing directory, a symlinked lock file, which O_NOFOLLOW refuses) raises instead, so the caller reports
+    `refused-lock` rather than a busy lock. The directory is injectable so tests never open the production path
+    (#5126)."""
 
     def __init__(self, paths: list[pathlib.Path], *, wait: float = BOARD_LOCK_WAIT_SECONDS,
                  clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep,
@@ -1934,13 +1937,17 @@ class BoardWriterLock:
         try:
             for path in self.paths:
                 path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-                fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+                fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
                 taken.append(fd)
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except (BlockingIOError, PermissionError, OSError):
+        except BlockingIOError:
             for fd in taken:
                 os.close(fd)
             return False
+        except BaseException:
+            for fd in taken:
+                os.close(fd)
+            raise
         self.held = taken
         return True
 
@@ -1968,11 +1975,12 @@ def board_writer_lock_paths(directory: pathlib.Path | None = None,
     """Production paths unless both directories are injected. Production refuses without $XDG_RUNTIME_DIR."""
     if directory is None:
         runtime = os.environ.get("XDG_RUNTIME_DIR")
-        if not runtime:
-            raise RuntimeError("board writer lock needs XDG_RUNTIME_DIR; refusing to write without the shared lock")
+        if not runtime or not os.path.isabs(runtime):
+            raise RuntimeError("board writer lock needs an absolute XDG_RUNTIME_DIR; refusing to write without the shared lock")
         directory = pathlib.Path(runtime) / "fsgg"
     legacy = legacy_directory if legacy_directory is not None else pathlib.Path("/tmp")
-    return [directory / BOARD_WRITER_LOCK_NAME, legacy / BOARD_LEGACY_LOCK_NAME]
+    # The installed engine's legacy migration-apply and refresh locks, so the gate excludes both writers.
+    return [directory / BOARD_WRITER_LOCK_NAME, legacy / BOARD_LEGACY_LOCK_NAME, legacy / BOARD_LEGACY_OBSERVATION_LOCK_NAME]
 
 
 def default_board_custody_root() -> pathlib.Path:
@@ -2403,7 +2411,8 @@ def board_replay(api: Any, custody: BoardCustody, lock: BoardWriterLock,
     try:
         locked = lock.acquire()
     except Exception:
-        locked = False
+        counts["lock-error"] += 1
+        return counts
     if not locked:
         counts["lock-busy"] += 1
         return counts

@@ -4049,15 +4049,20 @@ class BoardWriterLockReplayTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(RuntimeError):
                 MODULE.board_writer_lock_paths()
+        with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": "relative/run"}, clear=True):
+            with self.assertRaises(RuntimeError):
+                MODULE.board_writer_lock_paths()
         with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": "/run/user/1000"}, clear=True):
             self.assertEqual(MODULE.board_writer_lock_paths(), [
                 pathlib.Path("/run/user/1000/fsgg/board-writer-PVT_kwDOEYAWY84Bldpa.lock"),
-                pathlib.Path("/tmp/fsgg-v2-migration-PVT_kwDOEYAWY84Bldpa.lock")])
+                pathlib.Path("/tmp/fsgg-v2-migration-PVT_kwDOEYAWY84Bldpa.lock"),
+                pathlib.Path("/tmp/fsgg-v2-observation-PVT_kwDOEYAWY84Bldpa.lock")])
 
     def test_paths_agree_with_the_engine_writers(self):
         source = (ROOT / "src/FS.GG.Coord.GitHub/V2WriterLock.fs").read_text(encoding="utf-8")
         for name in (MODULE.BOARD_WRITER_LOCK_NAME.replace("PVT_kwDOEYAWY84Bldpa", ""),
-                     MODULE.BOARD_LEGACY_LOCK_NAME.replace("PVT_kwDOEYAWY84Bldpa", "")):
+                     MODULE.BOARD_LEGACY_LOCK_NAME.replace("PVT_kwDOEYAWY84Bldpa", ""),
+                     MODULE.BOARD_LEGACY_OBSERVATION_LOCK_NAME.replace("PVT_kwDOEYAWY84Bldpa", "")):
             self.assertIn(name.removesuffix(".lock"), source)
         self.assertIn('"/tmp"', source)
         self.assertIn('"XDG_RUNTIME_DIR"', source)
@@ -4067,13 +4072,35 @@ class BoardWriterLockReplayTests(unittest.TestCase):
         self.assertTrue(first.acquire())
         self.assertFalse(self.lock(wait=0).acquire())
         first.release()
-        legacy_only = MODULE.BoardWriterLock([self.dir / "legacy" / MODULE.BOARD_LEGACY_LOCK_NAME], wait=0)
-        self.assertTrue(legacy_only.acquire())
-        self.assertFalse(self.lock(wait=0).acquire(), "the legacy engine lock must also exclude the gate")
-        legacy_only.release()
+        for name in (MODULE.BOARD_LEGACY_LOCK_NAME, MODULE.BOARD_LEGACY_OBSERVATION_LOCK_NAME):
+            legacy_only = MODULE.BoardWriterLock([self.dir / "legacy" / name], wait=0)
+            self.assertTrue(legacy_only.acquire())
+            self.assertFalse(self.lock(wait=0).acquire(), f"the legacy engine lock {name} must also exclude the gate")
+            legacy_only.release()
         again = self.lock(wait=0)
         self.assertTrue(again.acquire())
         again.release()
+
+    def test_configuration_errors_raise_and_refuse_the_write_rather_than_look_busy(self):
+        blocker = self.dir / "file"
+        blocker.write_text("not a directory")
+        broken = MODULE.BoardWriterLock([blocker / "sub" / MODULE.BOARD_WRITER_LOCK_NAME], wait=0)
+        with self.assertRaises(OSError):
+            broken.acquire()
+        # A symlinked lock file is refused (O_NOFOLLOW), not followed.
+        (self.dir / "lock").mkdir()
+        (self.dir / "lock" / MODULE.BOARD_WRITER_LOCK_NAME).symlink_to(self.dir / "elsewhere")
+        with self.assertRaises(OSError):
+            self.lock(wait=0).acquire()
+        self.assertFalse((self.dir / "elsewhere").exists())
+        api = BoardApi([], body="", items=[board_item("In progress")])
+        result = MODULE.board_transition(api, BOARD_RULES, "FS-GG/.github", board_body("Refs #900"), BOARD_DELIVERY,
+                                         "enforce", 1, self.custody, broken)
+        self.assertEqual((result, api.sends), ("refused-lock", []))
+        self.assertIsNone(self.custody.existing("FS-GG/.github", 1))  # no deferred record for a broken lock
+        self.record(2, "deferred")
+        counts = MODULE.board_replay(BoardApi([], body="", items=[]), self.custody, broken)
+        self.assertEqual((counts["lock-error"], counts["lock-busy"], self.state(2)), (1, 0, "deferred"))
 
     def test_bounded_wait_polls_until_60_seconds_then_gives_up(self):
         holder = self.lock(wait=0)

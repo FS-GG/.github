@@ -87,9 +87,38 @@ mutations:
     find: |-
       let private injectedWriterLock (directory: string) : WriterLock = V2WriterLock.inDirectory directory
     replace: |-
-      let private injectedWriterLock (directory: string) : WriterLock = productionWriterLock
+      let private injectedWriterLock (directory: string) : WriterLock = V2WriterLock.inDirectory (Path.Combine(Path.GetTempPath(), "wl6-sentinel"))
     breaks: >-
-      every test seam resolves the production lock, so a test run contends with a live apply on fdev (#5126)
+      every test seam ignores the directory it was given and locks elsewhere (here a sentinel under the leg's private
+      TMPDIR, never the production lock or the /tmp legacy path), so tests no longer control which lock they hold (#5126)
+    anchor:
+      pattern: 'board-writer-lock leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-writer-lock-mutation/leg.sh
+
+  - id: WL7/migration-apply-lock-removed
+    gate: "migration-apply takes the writer lock before its invocation marker and any send"
+    command: ["bash", "tests/coord-board-writer-lock-mutation/leg.sh"]
+    target: src/FS.GG.Coord.Cli/BoardV2Application.fs
+    find: |-
+      use lease = V2WriterLock.acquire (writerLock "PVT_kwDOEYAWY84Bldpa" V2WriterLock.migrationLegacyName)
+    replace: |-
+      use lease = { new System.IDisposable with member _.Dispose() = () }
+    breaks: >-
+      migration-apply sends Project 3 mutations while another writer holds the lock
+    anchor:
+      pattern: 'board-writer-lock leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-writer-lock-mutation/leg.sh
+
+  - id: WL8/refresh-lock-removed
+    gate: "refresh takes the writer lock before any send"
+    command: ["bash", "tests/coord-board-writer-lock-mutation/leg.sh"]
+    target: src/FS.GG.Coord.Cli/BoardV2Application.fs
+    find: |-
+      use lease = V2WriterLock.acquire (writerLock binding.ProjectId (V2WriterLock.observationLegacyName binding.ProjectId))
+    replace: |-
+      use lease = { new System.IDisposable with member _.Dispose() = () }
+    breaks: >-
+      refresh sends its Observation update while another writer holds the lock
     anchor:
       pattern: 'board-writer-lock leg: \d+ passed, \d+ failed'
       produced_by: tests/coord-board-writer-lock-mutation/leg.sh

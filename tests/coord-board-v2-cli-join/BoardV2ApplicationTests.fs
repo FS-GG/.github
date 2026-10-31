@@ -1,3 +1,5 @@
+// Shares a collection with V2WriterLockTests: both mutate XDG_RUNTIME_DIR, so they never run in parallel.
+[<Xunit.Collection("xdg-runtime-dir")>]
 module FS.GG.Coord.GitHub.Tests.BoardV2ApplicationTests
 
 open System
@@ -1287,6 +1289,38 @@ let ``actual programme refresh caller updates only Observation then independentl
         Assert.Equal(3, BoardV2Application.runWithTransport (TestLock.fresh ()) oldGuard [ "refresh"; "--binding-file"; bindingPath; "--report-file"; oldOutput ])
         Assert.Equal(1, writes)
 
+    finally Directory.Delete(directory, true)
+
+[<Fact>]
+let ``refresh refuses while the writer lock is held and sends no mutation`` () =
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-refresh-locked-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+    try
+        let bindingPath = Path.Combine(directory, "binding.json")
+        File.WriteAllText(bindingPath, ProgrammeFixture.bindingJson ())
+        let binding = ProgrammeFixture.binding ()
+        let mutable observation = "Unknown"
+        let reads = ProgrammeFixture.transport (fun request response -> ProgrammeFixture.observation observation request response)
+        let mutable writes = 0
+        let guarded =
+            V2ObservationTransport.compose binding reads (fun _ ->
+                writes <- writes + 1
+                observation <- "Verified"
+                Ok { Status = 200; ETag = None; NextLink = None; Headers = Map.empty; Body = """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" })
+            |> Result.defaultWith (Errors.explain >> failwith)
+        let lockDirectory = TestLock.fresh ()
+        let location = V2WriterLock.inDirectory lockDirectory binding.ProjectId (V2WriterLock.observationLegacyName binding.ProjectId)
+        let lockedOutput = Path.Combine(directory, "locked.json")
+        (
+            use _held = match V2WriterLock.tryAcquire location with Ok lease -> lease | Error reason -> failwith reason
+            use input = unreadableInput ()
+            Assert.Equal(1, BoardV2Application.runWithTransportAndInput lockDirectory guarded input [ "refresh"; "--binding-file"; bindingPath; "--report-file"; lockedOutput ])
+            Assert.Equal(0, writes)
+            Assert.False(File.Exists lockedOutput))
+        // Non-vacuous: once the lock is free the same refresh sends its one Observation update.
+        use input = unreadableInput ()
+        Assert.Equal(0, BoardV2Application.runWithTransportAndInput lockDirectory guarded input [ "refresh"; "--binding-file"; bindingPath; "--report-file"; Path.Combine(directory, "free.json") ])
+        Assert.Equal(1, writes)
     finally Directory.Delete(directory, true)
 
 [<Fact>]

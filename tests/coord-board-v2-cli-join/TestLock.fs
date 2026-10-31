@@ -4,10 +4,19 @@
 module TestLock
 
 open System
+open System.Collections.Concurrent
 open System.IO
+
+let private created = ConcurrentBag<string>()
+
+// Every directory handed out is removed when the test process exits.
+do AppDomain.CurrentDomain.ProcessExit.Add(fun _ ->
+    for directory in created do
+        try Directory.Delete(directory, true) with _ -> ())
 
 /// A fresh private directory under the test process's temporary directory, so parallel tests never contend.
 let fresh () =
     let directory = Path.Combine(Path.GetTempPath(), "fsgg-test-writer-lock-" + Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+    created.Add directory
     directory
