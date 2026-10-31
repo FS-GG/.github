@@ -55,6 +55,10 @@ claim/status automation or add Status writes to inspection.
    and reconcile readback only. Withhold the affected dependent dispatch until Status is resolved;
    independently authorized work with reconciled Status can continue.
 
+Closing a Done Delivery with a comment citing its merge commits and verdicts is the Done transition
+when the project workflow "Item closed" to Done is on
+([rule 3](lifecycle-contract.md#file-the-delivery-issue-at-dispatch)); do not also write Status.
+
 Status reconciliation does not dispatch work, release reservations, retry uncertain effects, weaken
 acceptance or close issues. Native issue closure remains a separately authorized effect. A discrepancy
 between closure, Done and full acceptance requires reconciliation, not automatic closure or parent rollup.

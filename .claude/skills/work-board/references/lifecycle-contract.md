@@ -48,7 +48,8 @@ including undecomposed installed, participant, recovery or publication requireme
 independently meaningful scoped result with the same six-field owning issue contract. Native parent/
 sub-issue links represent decomposition, not action authority. Do not turn every acceptance clause or
 old completed submilestone into a card, mechanically decompose the current membership, or invent a
-retrospective Done backlog. Materialize only the next useful bounded delivery when needed, keeping the
+retrospective Done backlog. Materialize each bounded delivery when it is dispatched or when its Outcome is
+shaped ([filing rules](#file-the-delivery-issue-at-dispatch)), keeping the
 original issue IDs, owner, PR/head, attempt and operation history. Shared prerequisites have one owner.
 
 For the selected organization successor, Work level is one explicit SINGLE_SELECT field with exactly
@@ -89,6 +90,29 @@ conflicting existing values and retains originals after uncertainty. New enrollm
 normal authenticated private binding/protected commitment pair, not a child link or view filter. Publication,
 actual installed instruction discovery, selected caller qualification, field/enrollment/view migration and
 native consumer acceptance remain separate required joins before activating this successor.
+
+## File the Delivery issue at dispatch
+
+The board falls behind when work runs under an Outcome with no Delivery of its own. These rules keep
+it current; they add no ledger, packet or actor, and they do not enroll, schedule or grant Ready.
+
+1. **No dispatch without a Delivery issue.** Admit a dispatch only once its native Delivery issue
+   exists. That issue is linked as a native sub-issue under its Outcome. Its body gives only the
+   owner, Done when, the intended Work level (Delivery), Track and Status, and `Refs` links with no
+   closing keyword. The PR's `Refs` points to that Delivery, never to the Outcome. File it first, through the admitted
+   native intake route, rather than dispatching and back-filling later.
+2. **Shaping an Outcome files its remaining work.** When an Outcome is shaped or re-shaped, its
+   remaining acceptance is filed as open Deliveries, each under rule 1. "All sub-issues closed" never
+   stands in for "Outcome done": Outcome Done requires Root acceptance, which is closing the Outcome.
+3. **Closing a Delivery.** Close a Done Delivery with a comment citing its merge commits and recorded
+   verdicts, or "Unknown: no recorded independent verdict" where none exists. With the project
+   workflow "Item closed" to Done on, closing is the Done transition; do not also write Status.
+4. **Enrollment.** Each clearing pass enrolls its new Delivery issues in one batch through the #4941
+   planner once the 250-row cap is installed. Until then they remain native sub-issues, visible and
+   unschedulable, and their bodies already carry the Work level, Track and Status the batch will use.
+5. **Auto-add stays off.** Keep the project workflow "Auto-add sub-issues to project" disabled and read
+   it back before and after any bulk sub-issue linking. Unattended cards break `migration-prepare`
+   and `inspect`, and enrollment is not a child link.
 
 ## Recover ownership and unavailable history
 

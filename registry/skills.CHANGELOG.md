@@ -31,6 +31,8 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-10-31** — DELIVERY-AT-DISPATCH RULES (.github; #4730): re-digest the `.github`-authored `work-board` driver and `work-board-coord` operator skills after their `SKILL.md` files gained the file-the-Delivery-at-dispatch rule (native Delivery issue before dispatch, shaping files remaining acceptance, close-with-citation, batched enrollment, auto-add off); the rows carry the `driver-skill-manifest.json` digests. No scope, owner or predicate change.
+
 - **2026-10-30** — WORK-BOARD CLOSURE-COUNT POINTER (.github; #4730): re-digest the `.github`-authored driver `work-board` after its `SKILL.md` gained one sentence (Root's closing comment quotes the generator's own printed counts); the row carries the `driver-skill-manifest.json` digest. No scope, owner or predicate change.
 
 - **2026-10-30** — CREATOR0231 SOURCE INVENTORY (.github; #4964): regenerate the publishing-and-deployment release inventory and its driver-manifest/skills-registry digest for NewSddWorkspace source 0.23.1, and move the initialize-sdd-workspace coordination-kit skill (both roots, repos.lock and the coordination-kit manifest digest) to read the Wizard-owned `.fsgg/security-obligations.json`; published 0.23.0 and all release authority boundaries are unchanged.
