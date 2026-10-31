@@ -15,6 +15,7 @@
 #   M6 group keyed on another workflow's name     -> "concurrency.group is"
 #   M7 an extra concurrency key                   -> "unexpected concurrency key"
 #   M8 `<name>-${{ github.ref }}` + cancel true   -> MODEL: a main push IS cancelled (the shape adr-coherence uses)
+#   M9 a job-level concurrency block, the workflow-level one left clean -> "job-level concurrency"
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -38,7 +39,7 @@ mapfile -t NAMES < <(python3 "$TOOL" --list)
 
 mutants=0
 for name in "${NAMES[@]}"; do
-  for m in M1 M2 M3 M4 M5 M6 M7 M8; do
+  for m in M1 M2 M3 M4 M5 M6 M7 M8 M9; do
     d="$WORK/$name-$m"; mkdir -p "$d/.github/workflows"
     # every governed file must exist in the mutant root, so copy them all and mutate only one
     for other in "${NAMES[@]}"; do cp "$ROOT/.github/workflows/$other.yml" "$d/.github/workflows/"; done
@@ -49,6 +50,12 @@ t = open(path, encoding="utf-8").read()
 block = re.search(r"^concurrency:\n(?:  .*\n)+", t, re.M)
 assert block, f"{path}: the clean tree has no concurrency block to mutate"
 b = block.group(0)
+if m == "M9":
+    # leave the workflow-level block alone; give the FIRST job its own, cancelling, concurrency
+    first = re.search(r"^jobs:\n(?:[ \t]*(?:#.*)?\n)*  [A-Za-z0-9_-]+:\n", t, re.M)
+    assert first, f"{path}: cannot find the first job"
+    open(path, "w", encoding="utf-8").write(t.replace(first.group(0), first.group(0) + "    concurrency:\n      group: job-level-x\n      cancel-in-progress: true\n", 1))
+    sys.exit(0)
 new = {
   "M1": "",
   "M2": b.replace("${{ github.event_name == 'pull_request' }}", "true"),
@@ -72,6 +79,7 @@ PY
       M6) want="concurrency.group is" ;;
       M7) want="unexpected concurrency key" ;;
       M8) want="model says it IS true that a main push does not cancel the previous main push run" ;;
+      M9) want="job-level concurrency" ;;
     esac
     rc=0; out="$(python3 "$TOOL" --root "$d" 2>&1)" || rc=$?
     mutants=$((mutants+1))

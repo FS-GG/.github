@@ -20,6 +20,22 @@ merges to main would then share the `refs/heads/main` group and the first merge'
 dropped — a main push run that never reports. The commit sha gives every push, merge_group entry and
 dispatch its own group, so there is nothing to be pending-replaced and nothing to cancel.
 
+A JOB-LEVEL `concurrency:` IS REFUSED TOO. GitHub accepts one on any job, with its own group and its own
+cancel flag, and it does not have to agree with the workflow-level block: a job-level
+`cancel-in-progress: true` on a stable group would cancel main-push or merge_group runs of that job
+while the workflow-level block (and every scenario modelled below) still reads clean. None of the 132
+pull_request-triggered workflows has one today, so refusing it costs nothing and closes the bypass.
+
+WHY THESE 17 (the basis, recorded rather than implied). The list is Root's decision on #4730, taken from
+the capacity analysis (stale-head runs that ran to completion for lack of `concurrency`), not an
+independent survey. What I verified when adding the blocks, against origin/main at the time: each of the
+17 triggers on `pull_request` and had no workflow-level `concurrency`. The list is NOT exhaustive: on the
+same tree 132 workflows trigger on pull_request or pull_request_target; 17 are governed here, 73 already
+declared a workflow-level block of their own (shapes vary: many are `<name>-${{ github.ref }}` with
+cancel true, which also cancels main pushes), `wizard-graph-seal` is one of those 73, and 42 still have
+none, including `routine-eligibility` (held for #4994) and the autofix / redrive workflows, whose
+cancellation semantics nobody has reviewed. Extending the list means reading each one first.
+
 THE MODEL BELOW is this file's causal control. It evaluates the two declared expressions for a set of
 events and applies GitHub's documented group semantics, so "a superseded PR head is cancellable and a
 main push is not" is derived from the workflow text, not asserted next to it. tests/pr-concurrency/run.sh
@@ -188,6 +204,10 @@ def audit(root: Path) -> tuple[int, list[str], int]:
             findings.append(f"{name}.yml: cancel-in-progress is {block.get('cancel-in-progress')!r}, want {CANCEL_EXPR!r}")
         if set(block) - {"group", "cancel-in-progress"}:
             findings.append(f"{name}.yml: unexpected concurrency key(s) {sorted(set(block) - {'group', 'cancel-in-progress'})}")
+        for jid, job in (doc.get("jobs") or {}).items():
+            if isinstance(job, dict) and "concurrency" in job:
+                findings.append(f"{name}.yml: job `{jid}` declares its own job-level concurrency, which can cancel "
+                                "runs the workflow-level block leaves alone")
         try:
             for text, observed, wanted in scenarios(name, block):
                 checked += 1
