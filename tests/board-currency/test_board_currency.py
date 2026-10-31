@@ -603,6 +603,27 @@ class Fetch(unittest.TestCase):
             self.assertNotEqual(proc.returncode, 0, editors)
             self.assertFalse(out.exists())
 
+    def test_crlf_override_pr_gets_its_editor_read(self):
+        # The fetch must select override PRs with the same normalisation as override_of(), or a CRLF
+        # override is never given its editor and is silently not honoured.
+        body = 'x\r\n<!-- fsgg:board-gate-override/v1 rule=R1 reason="why" -->\r\n'
+        search = json.dumps({"incomplete_results": False, "total_count": 1, "items": [{
+            "repository_url": "https://api.github.com/repos/FS-GG/.github", "number": 7, "title": "t",
+            "state": "open", "updated_at": RECENT, "body": body, "user": {"login": ROOT_LOGIN}}]})
+        editors = json.dumps({"data": {"p0": {"pullRequest": {"lastEditedAt": None, "editor": None,
+                                                              "author": {"login": ROOT_LOGIN}}}}})
+        proc, out = self.run_fetch({"pullRequest(number": [0, editors], "graphql": [0, self.page([self.NODE])],
+                                    "is:open": [0, search], "search/issues": [0, self.EMPTY_SEARCH]})
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        pr7 = [p for p in json.loads(out.read_text())["pullRequests"] if p["number"] == 7][0]
+        self.assertIs(pr7["edited"], False)
+        self.assertIsNotNone(R.override_of(pr7, {"ehotwagner"}))
+
+    def test_fetch_selection_and_override_of_share_one_helper(self):
+        text = FETCH_PATH.read_text()
+        self.assertIn("rules.override_text(", text)
+        self.assertNotIn("rules.visible_text(", text)
+
     def test_carry_search_is_chunked_by_day(self):
         F = load(FETCH_PATH, "board_currency_fetch_unit")
         calls = []

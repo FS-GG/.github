@@ -296,7 +296,7 @@ def fetch_editors(prs: list[dict], rules) -> None:
     """Add `edited`/`editor` to every PR whose body carries an override marker, so the rules can check
     the authorship rule. A failed or incomplete read fails the whole fetch (no snapshot): an override must
     never be silently dropped and reported as an ordinary R1 failure."""
-    wanted = [pr for pr in prs if rules.OVERRIDE.search(rules.visible_text(pr.get("body")))]
+    wanted = [pr for pr in prs if rules.OVERRIDE.search(rules.override_text(pr.get("body")))]
     for start in range(0, len(wanted), 50):
         chunk = wanted[start:start + 50]
         parts = []
