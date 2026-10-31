@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -336,7 +337,27 @@ def synthetic(work: Path) -> None:
     rc, doc, out = gate(repo, main, head)
     check(rc == 0 and doc and doc["undeclaredLines"] == 0, "F4 control: re-creating the deleted path with new content -> passes", out)
 
+    # ---- cross-hunk credit, scoped marker round trip ---------------------------------------------------
+    branch(repo, "crosshunk", c["c2"])
+    rows = lines("new", 50).splitlines(True)
+    put(repo, "r.txt", lines("hdr", 5) + "".join(rows[:20]))
+    head = commit(repo, "add five new lines at the top, drop thirty landed lines at the bottom")
+    rc, doc, out = gate(repo, main, head)
+    check(rc == 0 and doc and doc["undeclaredLines"] == 25,
+          "cross-hunk: 5 new lines in one hunk offset 5 of the 30 dropped in another hunk of the same file -> 25, passes", out)
+
+    marker_re = re.compile(r"<!-- fsgg:declared-revert/v1 reverts=(\S+) -->")
+    rc, doc, out = gate(repo, main, scoped)
+    printed = marker_re.search(out)
+    check(rc == 1 and printed is not None and ":f.txt" in printed.group(1) and ":h.txt" in printed.group(1),
+          "the refusal prints the SCOPED marker, one <sha>:<path> token per file", out)
+    if printed:
+        rc, doc, out = gate(repo, main, scoped, "--body-file", str(_body(work, printed.group(0))))
+        check(rc == 0 and doc and doc["undeclaredLines"] == 0, "the printed marker, pasted into the PR body, clears the refusal", out)
+
     windowed(work)
+    mirrors(work)
+    pinned(work)
 
     # ---- fail closed ---------------------------------------------------------------------------------
     rc, _, out = gate(repo, main, "0" * 40)
@@ -393,6 +414,80 @@ def windowed(work: Path) -> None:
           "F4 content landed 121 commits before the branch point but inside the day window -> REFUSED", out)
     rc, doc, out = gate(repo, tip, head, "--lookback-days", "0")
     check(rc == 0, "F4 ... and the same PR is not seen by the commit-count window alone", out)
+
+
+def mirrors(work: Path) -> None:
+    """The skill roots hold byte-identical copies: one edit drops the same lines in each, counted once."""
+    roots = (".claude/skills/a/SKILL.md", ".agents/skills/a/SKILL.md", ".codex/skills/a/SKILL.md")
+    for label, distinct in (("identical", False), ("different", True)):
+        repo = work / f"mirrors-{label}"
+        repo.mkdir()
+        git(repo, "init", "-q", "-b", "main")
+        for r in roots:
+            put(repo, r, lines("intro", 5))
+        commit(repo, "initial")
+        for i, r in enumerate(roots):
+            put(repo, r, lines("intro", 5) + lines(f"rule{i}" if distinct else "rule", 25))
+        landed = commit(repo, "land a skill (#7)")
+        put(repo, "x.txt", "x\n")
+        main = commit(repo, "later (#8)")
+        branch(repo, "drop", main)
+        for r in roots:
+            put(repo, r, lines("intro", 5))
+        head = commit(repo, "remove the skill text from every root")
+        rc, doc, out = gate(repo, main, head)
+        if not distinct:
+            check(rc == 0 and doc and doc["undeclaredLines"] == 25 and len(doc["mirrors"]) == 1 and len(doc["mirrors"][0]) == 3,
+                  "mirrors: the same 25 lines dropped from three identical skill roots count once (25, not 75) and are named", out)
+        else:
+            check(rc == 1 and doc and doc["undeclaredLines"] == 75 and doc["mirrors"] == [],
+                  "mirrors: three copies with DIFFERENT content are counted separately (75) -> REFUSED", out)
+
+
+def workflow_step() -> str:
+    text = (ROOT / ".github" / "workflows" / "landed-revert-guard.yml").read_text()
+    m = re.search(r"^        run: \|\n((?:          .*\n|\n)+)", text, re.M)
+    if not m:
+        return ""
+    return "".join(line[10:] if line.strip() else line for line in m.group(1).splitlines(True))
+
+
+def pinned(work: Path) -> None:
+    """Run the workflow's own step against a head whose copy of the script always passes."""
+    wf = (ROOT / ".github" / "workflows" / "landed-revert-guard.yml").read_text()
+    types = re.search(r"pull_request:\s*\n\s*types: \[([^\]]*)\]", wf)
+    check(types is not None and "edited" in types.group(1),
+          "the trigger includes `edited`, so a body declaration re-runs the job")
+    check("github.event.pull_request.body" in wf and '--body-file "$work/body.md"' in wf,
+          "the workflow passes the live event body to the script as --body-file")
+    step = workflow_step()
+    check(bool(step), "the workflow's run step can be extracted")
+    if not step:
+        return
+    sub = work / "pin"
+    sub.mkdir()
+    repo, c = build(sub)
+    (repo / "scripts" / "lib").mkdir(parents=True)
+    put(repo, "scripts/check-landed-reverts.py", GATE.read_text())
+    put(repo, "scripts/lib/gate.py", (ROOT / "scripts" / "lib" / "gate.py").read_text())
+    c3 = commit(repo, "the check (#15)", "2026-03-03T00:00:00+0000")
+    git(repo, "update-ref", "refs/remotes/origin/main", c3)
+    stale(repo, "pin-head", c3, c["c0"], files=("f.txt", "h.txt"))
+    put(repo, "scripts/check-landed-reverts.py", "import sys\nsys.exit(0)\n")
+    head = commit(repo, "and a script that always passes")
+
+    def run_step(body: str) -> tuple[int, str]:
+        summary = sub / "summary.md"
+        summary.write_text("")
+        env = dict(ENV, BASE_REF="main", HEAD_SHA=head, PR_BODY=body, GITHUB_STEP_SUMMARY=str(summary))
+        done = subprocess.run(["bash", "-c", step], cwd=repo, capture_output=True, text=True, env=env)
+        return done.returncode, done.stdout + done.stderr + summary.read_text()
+
+    rc, out = run_step("")
+    check(rc == 1 and "no-silent-revert (exit 1)" in out,
+          "BASE-READ PIN: a head whose script always passes is still judged by the base's script -> REFUSED", out)
+    rc, out = run_step("<!-- fsgg:declared-revert/v1 reverts=#12,#14,#15 -->")
+    check(rc == 0, "the body the workflow was given is read: a declaration in it clears the refusal", out)
 
 
 def real_incident() -> None:

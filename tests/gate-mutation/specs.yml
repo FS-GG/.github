@@ -620,25 +620,25 @@ mutations:
     command: ["bash", "tests/landed-reverts/run.sh"]
     target: scripts/check-landed-reverts.py
     find: |-
-      reverted.extend(dropped[min(fresh, len(dropped)):])
+      reverted = dropped[min(fresh, len(dropped)):]
     replace: |-
-      reverted.extend(dropped)
+      reverted = dropped
     breaks: >-
       the EDIT/REVERT distinction collapses: new text no longer offsets any dropped landed line, so every honest rewrite of a recently landed file is refused and the guard is switched off in practice
     anchor:
       pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
       produced_by: tests/landed-reverts/run.py
 
-  - id: landed-reverts/credit-per-hunk-again
+  - id: landed-reverts/credit-all-or-nothing-again
     gate: landed-reverts-selftest.yml
     command: ["bash", "tests/landed-reverts/run.sh"]
     target: scripts/check-landed-reverts.py
     find: |-
-      reverted.extend(dropped[min(fresh, len(dropped)):])
+      reverted = dropped[min(fresh, len(dropped)):]
     replace: |-
-      reverted.extend(dropped[(len(dropped) if fresh else 0):])
+      reverted = dropped[(len(dropped) if fresh else 0):]
     breaks: >-
-      one new line anywhere in a hunk exonerates every dropped line in it again (the all-or-nothing rule), so a stale restore with one co-edit, or a deletion with a `# removed` comment, hides a hundred dropped lines
+      one new line anywhere in the file exonerates every dropped line in it again (the all-or-nothing rule), so a stale restore with one co-edit, or a deletion with a `# removed` comment, hides a hundred dropped lines
     anchor:
       pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
       produced_by: tests/landed-reverts/run.py
@@ -849,6 +849,90 @@ mutations:
       REFUSE_LINES = 10**9 
     breaks: >-
       no number of undeclared dropped lines reaches the refusal bound, so the check only ever warns and the 2,500-line incident merges
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/cross-hunk-credit-lost
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      plus_all.extend(h.plus)
+    replace: |-
+      plus_all.extend(h.plus if h.old_count else [])
+    breaks: >-
+      new lines added in a hunk of their own no longer offset lines dropped elsewhere in the same file, so an honest refactor that moves a section's replacement to another place in the file is refused again
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/mirrors-counted-separately
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      key = (f.blob, f.kind, tuple(f.lines), f.weight) if f.blob else (f.path,)
+    replace: |-
+      key = (f.path,)
+    breaks: >-
+      the same dropped lines in byte-identical skill roots are counted once per root, so one honest skill edit is triple-counted toward the bound
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/scoped-marker-unscoped
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      tokens += [f"{commit[:12]}:{safe(p)}" for p in files]
+    replace: |-
+      tokens += [commit[:12]]
+    breaks: >-
+      the refusal prints the broad commit-only marker instead of the scoped one, steering authors toward a declaration that covers every file the commit touched
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/workflow-runs-head-script
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: .github/workflows/landed-revert-guard.yml
+    find: |-
+      python3 "$work/tool/check-landed-reverts.py"
+    replace: |-
+      python3 scripts/check-landed-reverts.py
+    breaks: >-
+      the job runs the PR head's copy of the script instead of the base's, so a PR that edits the script is judged by its own edit
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/workflow-edited-trigger-dropped
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: .github/workflows/landed-revert-guard.yml
+    find: |-
+      types: [opened, synchronize, reopened, edited]
+    replace: |-
+      types: [opened, synchronize, reopened]
+    breaks: >-
+      a declaration added to the PR body no longer re-runs the job, so a refusal cannot be cleared by editing the body
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/workflow-body-not-passed
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: .github/workflows/landed-revert-guard.yml
+    find: |-
+      --body-file "$work/body.md" 
+    replace: |-
+      
+    breaks: >-
+      the PR body is no longer handed to the script, so a body declaration is ignored and every declared revert is refused
     anchor:
       pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
       produced_by: tests/landed-reverts/run.py

@@ -10,9 +10,12 @@
 # ONE LIGHT JOB, AND WHY EACH COST CHOICE (#4730 CI load):
 #   * No `paths:` filter. The subject is the merge result, and a revert can touch any file, so a filter
 #     would exempt exactly the PR that needs it. This is the only reason the job is unfiltered.
-#   * `opened, synchronize, reopened` only -- NOT `edited`. Body edits re-queued ~870 jobs a day. The
-#     body is read from the event payload; to declare after the fact, put the marker in a commit message
-#     (it also survives into the squash message, so the declaration is in history).
+#   * `opened, synchronize, reopened, edited`. `edited` is here, and only here, so that a declaration added
+#     to the PR body re-runs this ~10 s job and clears it; the CI-load cut that dropped `edited` from the
+#     heavier workflows (#4730) does not apply to one light job. The body is read live from the event
+#     payload of the run that `edited` starts (`github.event.pull_request.body`, passed through the
+#     environment to --body-file); a manual "re-run" replays the old payload, so edit the body instead.
+#     A marker in a commit message works too, and also survives into the squash message.
 #   * PR-keyed concurrency with cancel-in-progress, so a superseded push does not run to completion.
 #   * The fixture is a separate path-filtered workflow (landed-reverts-selftest.yml): ordinary PRs pay
 #     for the gate, not for proving the gate.
@@ -29,7 +32,7 @@ name: landed-revert-guard
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
