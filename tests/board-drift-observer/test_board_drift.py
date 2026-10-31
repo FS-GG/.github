@@ -459,8 +459,9 @@ class FetchFailClosed(FetchHelper, unittest.TestCase):
         reads = [c for c in stub.calls if "/comments?since=" in c[1]]
         self.assertEqual(len(reads), 1)
         self.assertTrue(stub.writes() == [])
-        # and the analysis accepts it end to end
-        self.assertEqual([f["rule"] for f in analyze(snap, dt.datetime.now(dt.timezone.utc))], ["a"])
+        # and the analysis accepts it end to end, at the fixtures' own frozen clock: the PR above changed
+        # hours_ago(...) before NOW, so the wall clock would push it out of the 24h window a day later.
+        self.assertEqual([f["rule"] for f in analyze(snap, NOW)], ["a"])
 
     def test_a_failed_graphql_call_writes_no_snapshot(self):
         GhStub(self, graphql_pages=[], fail={"graphql": "HTTP 502"})
