@@ -158,37 +158,53 @@ so one snapshot always gives the same plan (board-currency lesson 7). An effect 
 `<rule>:<item>:<field>:<target>` with no age or count, so an unchanged situation keeps its ID.
 Parameters are part of the rule-set version `fsgg:board-tend-rules/v1`.
 
-**Derivation runs to a fixpoint**
-([Root's ruling B](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548815933)). Some rules read
-values other rules fill in the same run: T1 and W1 read the parent's Track and Work level, W1 can read the children's Work level,
-and O1 reads the children's Statuses after S3, S3b or S4 moved them.
+**Derivation runs to a fixpoint** ([Root's ruling
+B](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548815933), refined by [the round-3
+rulings](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548872887)). Work level is structural
+and needs no other field (below). Some other rules read values filled in the same run: T1i reads the
+parent's Track, and O1 reads the children's Statuses after S3, S3b or S4 moved them.
 
 1. **Visibility within a round.** `derive` evaluates cards in topological order of the native
    hierarchy: parents before children for fills, children before parents for the roll-up. An effect
    computed for one card is applied to an in-memory copy of the snapshot at once, so every card
    evaluated after it in the same round sees it. Rounds repeat until one adds nothing.
-2. **Fallbacks wait for settled inputs.** T1f (the `Follow-up` default), S9 (Backlog), O1's fill of an
-   empty Outcome with Backlog, and W1h's Outcome-from-children branch are fallbacks. A fallback applies
-   only when every input it could inherit from has **settled**: already populated on the board, or
-   produced by a non-fallback rule in an earlier round. An input that is still pending, or that only a
-   fallback would fill, defers the fallback to a later run, by which time that input is on the board. So
-   a child never takes `Follow-up` while its parent's Track is about to be filled from a declaration.
-3. **Termination.** Fills only move a field from empty to a value, and O1 reads only children, so the
-   iteration is monotone. It is capped at hierarchy depth plus 2 rounds; reaching the cap is a refusal
-   (`fixpoint-not-reached`), not a partial plan.
-4. **Send order.** Each effect records the effects it depends on, whichever way the dependency runs: a
+2. **Only Track and Status have fallbacks, and they wait for settled inputs.** The fallbacks are T1f
+   (the `Follow-up` default), S9 (Backlog) and O1's fill of an empty Outcome with Backlog. A fallback
+   applies only when every input it could inherit from has **settled**: already populated on the board,
+   or produced by a non-fallback rule in an earlier round. An input that is still pending, or that only a
+   fallback would fill, defers the fallback, by which time that input is usually on the board. So a child
+   never takes `Follow-up` while its parent's Track is about to be filled from a declaration.
+3. **Cycles collapse.** If the remaining dependencies still form a cycle, its cards are collapsed into one
+   unit (a strongly connected component). Within the unit, declarations decide; a field no declaration
+   decides becomes a `track-undetermined` or `status-undetermined` proposal. Nothing inside a cycle waits.
+4. **No indefinite deferral.** A `deferred: input-pending` effect becomes a proposal after 3 runs or
+   24 hours, whichever comes first. The reconciler counts runs and first-deferral time in its local state
+   directory; that record is an input to `derive`, so derivation stays a pure function of its inputs.
+5. **Termination.** Fills only move a field from empty to a value, and never again. S3, S3b and S4 exclude
+   each other on the PR facts (an open non-draft linked PR, only a draft one, none at all), so no move
+   on a Delivery can be undone by another move in the same derivation. O1 reads only its children's
+   Statuses, and no rule reads a parent's Status, so Status changes propagate only upward, one hierarchy
+   level per round. Each field therefore changes at most once in a derivation, and the iteration stops.
+   It is capped at hierarchy depth plus 2 rounds; reaching the cap is a refusal (`fixpoint-not-reached`),
+   not a partial plan.
+6. **Send order.** Each effect records the effects it depends on, whichever way the dependency runs: a
    child's inherited Track depends on the parent's fill, and an Outcome's roll-up depends on its
    children's moves. The writer sends strictly in dependency order.
-5. **Refusals propagate.** Every dependant of a refused, deferred or uncertain effect is deferred to the
+7. **Refusals propagate.** Every dependant of a refused, deferred or uncertain effect is deferred to the
    next run, transitively.
-6. **Collapse.** Successive moves on one field collapse into one effect from the original preimage to the
+8. **One effect per field.** Successive moves on one field collapse into one effect from the original preimage to the
    final target, carrying every rule in the chain (for example S9 then S3); every rule in the chain must
    be enabled.
 
-With this, the idempotence property in §10 holds in its exact form. A fallback held back for an
-unsettled input is listed in the plan as `deferred: input-pending`. After a plan is applied, deriving
-again yields Apply effects only from that deferred list, never a change to a field the first plan wrote
-or a new move. Applying that second plan reaches a snapshot from which `derive` yields no Apply effect.
+Two properties follow, both over the **enabled** rule set and both tested (§10):
+
+- **Idempotence.** Let k be the length of the longest fallback chain among the enabled rules (a fallback
+  whose input is itself filled by a fallback adds one link). Applying plans repeatedly settles within k
+  applications: the k+1st derivation, with no new native change, yields no Apply effect. A fallback held
+  back for an unsettled input is listed as `deferred: input-pending`, and only those entries produce
+  effects in later applications.
+- **Liveness.** After k runs with no new native change, every field of every card is filled, refused or
+  proposed. No field stays deferred, because of the 3-run or 24-hour expiry above.
 
 | Parameter | v1 value | Why |
 |---|---|---|
@@ -207,17 +223,17 @@ reads it is enabled. Any other form is "not declared", never a guess.
 
 ### Work level
 
-Never overwrite a populated value. For an empty value:
+Work level is **structural** ([round-3 ruling 1](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548872887)). It is decided in one pass over the native
+sub-issue hierarchy and reads no other board field, so it never waits and takes part in no cycle. Never
+overwrite a populated value. For an empty value:
 
-1. **Hierarchy (W1h).** A native parent that is a Project 3 Outcome gives Delivery. One or more
-   sub-issues that are Project 3 Deliveries, with no Delivery parent, gives Outcome; this
-   from-children branch is a fallback and waits for the children's Work level to settle.
-2. **Declaration (W1d).** The body's `Work level:` value on the intended-fields line.
-3. Both present and equal, or only one present: that value (auto-apply).
-4. Both present and different: refuse, `work-level-conflict`. A conflict is never hidden: while the
-   hierarchy is unsettled, W1 waits instead of applying the declaration alone, so a later hierarchy
-   value cannot contradict a declaration already written.
-5. Neither present: propose, `work-level-undetermined`.
+1. **Structure (W1h).** A card with at least one native sub-issue is an Outcome. A card with no
+   sub-issues whose native parent is, or by this rule will be, an Outcome is a Delivery; since that
+   parent has at least one sub-issue, any leaf with a parent qualifies.
+2. **Declaration (W1d).** The body's `Work level:` value on the intended-fields line either confirms the
+   structural value or conflicts with it. A conflict is refused (`work-level-conflict`), never hidden.
+3. A leaf with no parent has no structural value. Its declaration decides (W1d); with no declaration it
+   is a proposal, `work-level-undetermined`.
 
 ### Track
 
@@ -536,14 +552,23 @@ migration invocations over about 3 hours.
   - **Who replays.** From PR 1 the gate itself applies pending deferred records, under the lock, at the
     start of its next invocation, through its existing guarded path. Once enabled, the reconciler replays
     them too, under its own rule id `GR` in the enable file.
+  - **Order** ([round-3 ruling 2](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548872887)). Records replay in merge order (the PR's `mergedAt`). For one
+    Delivery, the newest record supersedes the older ones: they are rewritten to `superseded` and never
+    sent.
+  - **Closed issues.** A record whose Delivery is now closed is not applicable: it is rewritten to
+    `not-applicable` and sends nothing, as the gate already does for a closed Delivery; Done stays with
+    the built-in workflow and S1.
   - **Exact preimage.** Replay sends only when the item's current Status exactly equals the recorded
     preimage, then follows the usual guards (immediate re-read, one send, readback). Anything else turns
     the record into a proposal and sends nothing.
-  - **State machine.** `deferred → possible-send → verified`. `deferred` is added to the gate's custody
-    validator, and the gate never sends for a PR whose record is `deferred` except through replay. Replay
-    durably rewrites the record to `possible-send` before its one send and to `verified` after a readback
-    proves the target; an uncertain send leaves `possible-send`, which the existing crash-recovery path
-    reads back without resending.
+  - **State machine.** `deferred → possible-send → verified`, with `deferred → superseded` and
+    `deferred → not-applicable` as terminal exits. `deferred`, `superseded` and `not-applicable` are added
+    to the gate's custody validator, and the gate never sends for a PR whose record is `deferred` except
+    through replay. Replay durably rewrites the record to `possible-send` before its one send and to
+    `verified` after a readback proves the target.
+  - **Readback sweep.** Each gate invocation starts with a read-only sweep of every `possible-send`
+    record, before replay and before its own work: each is read back and rewritten to `verified` when the
+    target is proven, and otherwise left as it is. The sweep never sends.
   - **Under the lock.** Both writers create and rewrite these record files only while holding the
     writer lock, so the gate and the reconciler never replay the same record twice.
 - S1 waits `doneSettleMinutes` after `closedAt`, so in the normal case the built-in workflow has already
@@ -688,16 +713,21 @@ e and s stay.
   tests.
 - **Properties.**
   - Determinism: permuting items, PRs and children gives the same plan.
-  - Idempotence: after applying a plan's Apply class to the snapshot, deriving again yields Apply effects
-    only from the first plan's `deferred: input-pending` list, and applying that second plan yields a
-    snapshot with an empty Apply class (§3). A fixture with a new Outcome, an unfilled child and an open
-    linked PR pins both steps.
+  - Idempotence: over the enabled rules, repeated application settles within k applications, k being the
+    longest fallback chain; the k+1st derivation yields no Apply effect, and only `deferred:
+    input-pending` entries produce effects after the first (§3). Generated hierarchies with every enabled
+    rule subset check the bound.
+  - Liveness: after k runs with no new native change, every field of every card is filled, refused or
+    proposed; a `deferred: input-pending` entry becomes a proposal on its third run or after 24 hours of
+    injected clock time, whichever is first.
   - Dependencies: effects are sent strictly in dependency order in both directions (parent fill before
     child inheritance, child move before roll-up), and every dependant of a refused effect is deferred,
     transitively.
   - Visibility and fallbacks: an effect is visible to later cards in the same round; a fallback (T1f, S9,
-    O1's empty fill, W1h from children) never applies while an input it could inherit from is pending;
-    a W1 conflict is refused even when the hierarchy settles in a later round.
+    O1's empty fill) never applies while an input it could inherit from is pending; a cycle collapses
+    into one unit decided by declarations or proposed.
+  - Structure: W1h decides Work level in one pass without reading any other field, and a declaration that
+    disagrees with it is refused.
   - Safety: Apply never overwrites a populated Work level, Track or Roadmap, never writes Blocked, never
     moves off Blocked or Done, never sets Done on an open issue, and never writes In review or Done to an
     Outcome.
@@ -711,8 +741,11 @@ e and s stay.
 - **Lock and replay.** The cross-process `flock` test (F# against Python, both directions); the merge
   gate's 60-second wait ending in a `deferred` record; the gate's next invocation replaying it; replay
   refusing (and proposing) when the Status differs from the recorded preimage; the validator accepting
-  `deferred`; the gate never sending for a `deferred` PR outside replay; `possible-send` written before
-  the replay send; and a reconciler replay under `GR`.
+  `deferred`, `superseded` and `not-applicable`; the gate never sending for a `deferred` PR outside
+  replay; replay in merge order, with older records for the same Delivery superseded and never sent; a
+  closed Delivery's record becoming `not-applicable`; `possible-send` written before the replay send; the
+  read-only `possible-send` sweep at the start of each gate invocation sending nothing; and a reconciler
+  replay under `GR`.
 - **E1.** An archived member refuses the add; `RemoveCreatedItem` refuses an item without a matching
   E1 custody record keyed by the issue node id.
 - **Proposals.** A private subject's `Suggested` and `Evidence` carry no title, body text, PR reference or
@@ -727,12 +760,13 @@ e and s stay.
 - **Mutation.** A spec file `tests/coord-board-tend-mutation/specs.yml` for the existing
   `scripts/gate-mutate.py` harness, with one leg per guard: each Apply condition, strict linkage, the
   PR-fact re-read, the Blocked and Done protections, the settle windows, absent-only filling, S9's
-  Backlog and Root-authorship limits, the fixpoint, settled-input fallbacks, within-round visibility,
-  send order and transitive deferral, the W1 conflict refusal, the gate replay's exact preimage, the roll-up's completeness
-  check, the archived-member refusal, the custody write before send, no resend, the lock, the enable
-  file and its contract gate, and the transport allowlist. Every leg must
-  be killed, and its anchor check runs on each PR that touches the reconciler, as
-  `tests/coord-engine-mutation/run.sh` does.
+  Backlog and Root-authorship limits, the fixpoint, structural Work level, settled-input fallbacks,
+  cycle collapse, the input-pending expiry, within-round visibility, send order and transitive deferral,
+  the W1 conflict refusal, the gate replay's exact preimage, merge order and supersession, the roll-up's
+  completeness check, the archived-member refusal, the custody write before send, no resend, the lock,
+  the enable file and its contract gate, and the transport allowlist. Every leg must be killed, and its
+  anchor check runs on each PR that touches the reconciler, as `tests/coord-engine-mutation/run.sh`
+  does.
 - **Temporary paths.** Tests set a private `TMPDIR` and an injected lock directory. They never touch the
   production lock.
 
@@ -765,15 +799,18 @@ e and s stay.
 | 18 | Search lag | An open PR missing from the search but present in the timeline: no move this run, a move next run once indexed; a PR in the search but closed in the timeline: no move |
 | 19 | Deferred record replay | The gate's next invocation replays its `deferred` record when Status equals the preimage, and proposes when it does not |
 | 20 | Fallback wait | A new Outcome whose Track comes from a declaration and a child with none: the child inherits it (T1i) and never takes `Follow-up` first |
-| 21 | Hidden W1 conflict | A declaration of Outcome on an issue whose parent's Work level is filled to Outcome in the same run: refused as `work-level-conflict`, not written |
+| 21 | W1 conflict | A declaration of Outcome on a leaf whose parent has sub-issues: structurally a Delivery, so refused as `work-level-conflict`, not written |
+| 22 | Replay order | Two deferred records for one Delivery from two merges: only the newer is replayed; the older becomes `superseded` and is never sent; records for different Deliveries replay in merge order |
+| 23 | Expired deferral | A fallback whose input stays pending becomes a proposal on its third run, or after 24 hours, whichever comes first |
 
 ## 12. Phase 2 PR sequence
 
 One open PR per chain, each `Refs #5136`, each reviewed independently:
 
 1. The fixed writer lock path with `flock` semantics for every Project 3 writer, including the merge
-   gate's bounded wait, its `deferred` records, the `deferred → possible-send → verified` state machine in
-   its validator, and its own replay of deferred records at the start of its next invocation; an
+   gate's bounded wait, its `deferred` records, the state machine in its validator, the read-only
+   `possible-send` sweep and its own replay of deferred records (in merge order, newest per Delivery) at
+   the start of its next invocation; an
    injectable lock directory and the test that no test opens the production path (§8). This PR owns the
    gate's lock and delivers #5126.
 2. Pure derivation to a fixpoint, plan types, fixtures (§11), properties and the mutation spec. No IO.
@@ -840,6 +877,15 @@ nonmaterial list:
 | Finding | Ruling | Where |
 |---|---|---|
 | A. Deferred-transition records | The gate replays its own deferred records at the start of its next invocation from PR 1; the reconciler replays too under `GR`; replay needs an exact preimage match, else a proposal; states `deferred → possible-send → verified`, `deferred` in the gate's validator; both writers touch the records only under the lock | §6, §10, §12 |
-| B. Fixpoint and fallbacks | Fallbacks (T1f, S9, O1's empty fill, W1h from children) apply only once their inputs have settled; effects are visible within a round in topological order; sends go in dependency order; every dependant of a refused effect is deferred; W1 conflicts are refused, never hidden | §3, §10, §11 |
+| B. Fixpoint and fallbacks | Fallbacks (T1f, S9, O1's empty fill; W1h from children until round 3 made Work level structural) apply only once their inputs have settled; effects are visible within a round in topological order; sends go in dependency order; every dependant of a refused effect is deferred; W1 conflicts are refused, never hidden | §3, §10, §11 |
 | C. Gating W1 and T1 | Only the declaration branches W1d and T1d are contract-gated; the example enable file uses ungated rules | §3, §8 |
 | Residue | S4 heals on the next run; E2's PR creation is the third allowlisted route; enrolled membership uses the #5132 cross-check; the PR 7 release includes PR 6; Unknown withholds the roll-up over the empty-Outcome fill; S9r means authored by an FS-GG agent account | §3, §5, §7, §12 |
+
+[Root's rulings](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548872887) on the round-3 re-review of #5139 (third REQUEST_CHANGES at `a2593781`),
+2026-10-31:
+
+| Finding | Ruling | Where |
+|---|---|---|
+| 1. Settled-input deadlock | Work level is structural (W1h in one pass; W1d confirms or is refused); only Track and Status have fallbacks; remaining cycles collapse into one unit decided by declarations or proposed; `deferred: input-pending` becomes a proposal after 3 runs or 24 hours; idempotence restated as settling within k applications over the enabled rules, plus a liveness property, both tested | §3, §10, §11 |
+| 2. Replay order | Deferred records replay in merge order; for one Delivery the newest supersedes older ones, which are never sent; a fixture | §6, §10, §11 |
+| Nonmaterial | `GR` treats a closed Delivery as not-applicable; a read-only `possible-send` sweep starts each gate invocation; the monotonicity reasoning rests on S3, S3b and S4 excluding each other and on no rule reading a parent's Status | §3, §6 |
