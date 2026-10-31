@@ -1,20 +1,17 @@
-# Prove the board-archive guards can say NO (.github#2420).
+# Prove the Done-retention archiver's guards can say NO (#5119; it replaced the Project 1 sweeper of .github#2420).
 #
-# `scripts/coord-board-archive.py` ARCHIVES ROWS OFF THE SHARED BOARD, so the property under test is
-# not "does it archive" — it is "does it refuse everything it must refuse". `tests/coord-board-archive/run.sh`
-# drives the planner's PURE `plan()` directly (no board, no token, no network) and every guard carries a
-# negative case, so deleting a guard turns a named leg red rather than leaving the suite quietly green:
+# `scripts/coord-board-archive.py` ARCHIVES CARDS OFF THE COORDINATION BOARD, so the property under test is not
+# "does it archive" but "does it refuse everything it must refuse". `tests/coord-board-archive/run.sh` drives the
+# pure planner directly and the IO through a recording `gh` stub (no board, no token, no network), and every guard
+# has a negative case:
 #
-#   * a non-`Done` row, and a `Done` row over an OPEN issue (the drift `lint` reports — archiving it
-#     would hide the finding rather than fix it);
-#   * a row inside the retention window, AND that `--retention-days` genuinely moves that boundary
-#     rather than being decorative;
-#   * a row named as a blocker by a LIVE row, both `owner/repo#123` and bare `#123` — off-board that
-#     edge renders `BlockerUnknown` (`Protocol.fs:406`), turning "closed, so clear" into "cannot tell";
-#   * the converse, that a DONE row's blocker edge is NOT protective, or the whole historical graph
-#     would pin itself on-board forever;
-#   * any row whose status/state/number/repo/closedAt could not be read — "I could not look" is not
-#     "I looked and it is terminal" (`.github#266`).
+#   * only Done cards over a terminal issue or PR with a readable close time rank; drift, drafts, unreadable or
+#     already-archived cards stay visible with a reason;
+#   * the newest 200 by close time stay, ties broken independently of connection order;
+#   * a partial, over-limit (500 items) or erroring read refuses without archiving anything;
+#   * dry run by default; --execute needs the exact project id, a bound and the enrollment binding;
+#   * each card gets a preimage re-read, one send and a readback; an uncertain send is recorded, never resent, and
+#     stops the run; custody is private (0600) and records enrolled rows.
 #
 # No schedule: the subject is entirely git-tracked files in this repo, so nothing external can stale it
 # between pushes — the same reasoning coherent-set-version.yml gives for the same shape.

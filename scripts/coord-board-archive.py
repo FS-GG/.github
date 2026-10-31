@@ -1,368 +1,405 @@
 #!/usr/bin/env python3
-"""Archive terminal rows off the Coordination board, so the scan stops paying for the dead.
+"""Done retention for the Coordination board (Project 3): archive the Done cards beyond the newest 200 (#5119).
 
-WHY THIS EXISTS
-===============
+THE POLICY (user requirement, 2026-10-31, FS-GG/.github#5119)
+=============================================================
 
-On 2026-08-12 the board held **2,206 rows, of which 2,172 were `Done` and closed — 98.8%**. Every
-truth read (`reconcile`, `lint`, `ready`, `who`, `batch`, `driver --events`, and `check-board`'s whole
-pass) scans the entire `items` connection to find ~30 live rows. That is 23 pages to answer a question
-about 26 of them, and it grows forever.
+Coordination Project 3 and its readers are limited to 500 items. When Done holds more than 200 cards, every Done
+card older than the newest 200 is ARCHIVED, never deleted. "Older" is the card's issue or pull request close time
+(`closedAt`), newest first. Archiving is reversible with `unarchiveProjectV2Item`, and the custody file records
+every item id this tool touched.
 
-This is not a performance nicety. It is the measured cause of a recurring class of incident, and the
-repo has repaired the SYMPTOM four times without touching it:
+WHY THIS REPLACES THE PREVIOUS ARCHIVER
+=======================================
 
-  * `.github#2313` — "a reconciling scan pays **1658 sequential REST body reads**" (that number IS the
-    dead population), exhausting REST entirely: `0/5000 remaining`.
-  * `.github#2314` — "Fix reconcile scan amplification".
-  * `.github#2352` — reconcile "fires a full board scan on every comment, exhausts the fleet's REST
-    budget, and blocks merges".
-  * `.github#2356` — still open: the pre-flight reserve "is too small for **this board's actual scan
-    cost**".
-
-Each made the scan cheaper. None made the board smaller, so the cause survived every repair and the
-budget kept dying. The one-off sweep on 2026-08-12 took the board 2,206 -> 36 and a full scan 23 pages
--> 1; this script is what stops it regrowing.
-
-REVERSIBLE, AND MEASURED RATHER THAN ASSUMED
-============================================
-
-Archiving REMOVES a row from `items(first:)` — measured directly before relying on it: `totalCount`
-2206 -> 2205 with one row archived, and back to 2206 once unarchived. So this is fully reversible,
-`unarchiveProjectV2Item` puts a row back, and `--manifest` records every id it touched for exactly
-that purpose.
-
-Nothing of record is lost. The board is a PROJECTION; the issue is truth (`/check-board`'s own first
-line), and `Class` authority is the item's own `Class:` body line, never the column. An archived row's
-board fields are derived data, recomputable, and the row itself is one mutation from returning.
+This path used to hold the Project 1 sweeper from .github#2420 and #3052: 30-day retention and at most 100 visible
+rows, scheduled daily with `--execute`. Root disabled that workflow on 2026-10-31 and retired its policy for three
+reasons:
+- It targeted Project 1, not the Coordination V2 board (Project 3).
+- Its policy (30 days, 100 visible, any terminal row) contradicts the user's rule (keep the newest 200 Done).
+- It failed every day. Its typed `archive-items` route is refused by the engine's v1 admission ("production v1
+  admission is not installed"), and that refusal was the only thing stopping it from archiving 211 rows a day.
+The read and write guards below replace it. The scheduled workflow runs a dry run only, until Root accepts the
+first real run.
 
 THE GUARDS, ALL FAIL-CLOSED
 ===========================
 
-  1. **Terminal on BOTH axes.** Board `Status` must be `Done` AND the content must be terminal —
-     `CLOSED` for an issue, or `MERGED` for a pull request (GraphQL reports `MERGED` where REST says
-     `closed`). Either axis alone is insufficient: a `Done` column over an OPEN issue is exactly the
-     drift `lint` reports, and archiving it would hide the finding instead of surfacing it.
-  2. **Aged past the retention window, unless the visible board exceeds its explicit bound.** Closed
-     rows normally stay visible for `--retention-days` (default 30). Above `--max-visible` (default
-     100), the oldest otherwise-safe terminal rows are selected until the board reaches that bound.
-     The terminal, blocker, and readability guards remain absolute, so safety may leave it above the
-     target rather than authorising a dangerous archive.
-  3. **Never a live row's blocker.** A row named in any non-`Done` row's `Blocked by` is protected. An
-     off-board blocker ref renders `BlockerUnknown` (`Protocol.fs:406`), which would silently turn
-     "closed, so this is clear" into "cannot tell" for a live item.
-  4. **Unreadable is never archived.** A row whose status, state, number or repo could not be read is
-     SKIPPED. "I could not look" is not "I looked and it is terminal" (`.github#266`).
+1. Done only. A card is a candidate only when its Status is Done, its content is an issue or pull request whose
+   state is terminal (CLOSED, or MERGED for a PR), and its `closedAt` parses. Anything else stays visible, with
+   its reason reported. A Done card over an open issue is drift that must stay visible.
+2. Newest 200 kept. Candidates are ranked by `closedAt` descending, with ties broken by repository, number and
+   item id, so the selection never depends on connection order. The first `--keep` stay; only the rest are
+   planned.
+3. Complete read or nothing. The scan reads `items(query: "status:Done")` in pages of 100, at most 5 pages, the
+   500-item board limit. A partial page set, a count mismatch, a GraphQL error or an over-limit board refuses
+   without archiving anything.
+4. Dry run by default. Without `--execute` nothing is sent. `--execute` also requires the exact project id
+   (`--expect-project-id`), a per-run bound (`--max-archive`) and the private enrollment binding
+   (`--enrollment-binding`), so every real run records which archived cards were enrolled V2 rows.
+5. Preimage, one send, readback, custody. Each card is processed in four steps:
+   - Its preimage is re-read by item id: same project, not archived, Status Done, and the same content id, state
+     and `closedAt` as planned. Any difference skips the card, which is recorded.
+   - An intent record is written and flushed.
+   - Exactly one `archiveProjectV2Item` is sent.
+   - The card is read back. A failed or unreadable send, or a readback that is not archived, is recorded as
+     `uncertain` and stops the run. Nothing is ever resent; the next run's preimage read resolves it.
 
-WHY NOT GITHUB'S BUILT-IN AUTO-ARCHIVE WORKFLOW
-===============================================
+ENROLLED V2 ROWS
+================
 
-Projects v2 ships one, but its configuration is UI-only and not manageable through the API, so it
-cannot be reviewed, tested, guarded, or explained in the repository that depends on it. Guards 3 and 4
-in particular have no expression in it at all. A rule this load-bearing belongs in the repo.
+Archiving an enrolled row is safe. The coherent 0.114.1 reader reports an archived enrolled card as an explicit
+archived membership with a "Board card is archived (Done retention)" discrepancy (#5119), not as a missing row.
+The custody record marks every archived card `enrolled: true/false` from the private runtime binding's
+`selectedIssues`. Do not archive an enrolled card while a reader older than 0.114.1 is the installed reader.
+
+Environment: GH_TOKEN with organization Projects read, plus write for `--execute`. COORD_ARCHIVE_GH overrides the
+`gh` binary (tests).
 """
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
+import datetime as dt
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-COORD = os.environ.get("FSGG_COORD_BIN") or str(Path(__file__).resolve().parent / "fsgg-coord")
+KEEP = 200
+PAGE = 100
+MAX_PAGES = 5
+BOARD_LIMIT = PAGE * MAX_PAGES
+TERMINAL = ("CLOSED", "MERGED")
+CUSTODY_SCHEMA = "fsgg.board-done-retention-custody/1"
+
+SCAN = """
+query($owner:String!,$number:Int!,$cursor:String){
+  organization(login:$owner){ projectV2(number:$number){
+    id title
+    all: items(first:1){ totalCount }
+    items(first:100, after:$cursor, query:"status:Done"){
+      totalCount
+      pageInfo{ hasNextPage endCursor }
+      nodes{
+        id isArchived
+        status: fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue{ name } }
+        content{
+          __typename
+          ... on Issue{ id number state closedAt repository{ nameWithOwner } }
+          ... on PullRequest{ id number state closedAt repository{ nameWithOwner } }
+          ... on DraftIssue{ id }
+        }
+      }
+    }
+  }}
+}
+"""
+
+ITEM = """
+query($id:ID!){
+  node(id:$id){ ... on ProjectV2Item{
+    id isArchived project{ id }
+    status: fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue{ name } }
+    content{ __typename ... on Issue{ id state closedAt } ... on PullRequest{ id state closedAt } }
+  } }
+}
+"""
+
+ARCHIVE = """
+mutation($project:ID!,$item:ID!){
+  archiveProjectV2Item(input:{projectId:$project, itemId:$item}){ item{ id isArchived } }
+}
+"""
 
 
-def coord_graphql(*args: str) -> object:
-    proc = subprocess.run([COORD, "graphql", *args], capture_output=True, text=True, timeout=120, check=False)
+class Refused(Exception):
+    """A failed or incomplete read: nothing is archived. The message is fixed text, never response data."""
+
+
+class Uncertain(Exception):
+    """A send whose effect is unknown: recorded, never resent, and the run stops."""
+
+
+def gh(args: list[str]) -> str:
+    cmd = [os.environ.get("COORD_ARCHIVE_GH", "gh"), *args]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        raise Refused(f"gh call failed ({type(exc).__name__})") from None
     if proc.returncode:
-        raise RuntimeError(proc.stderr.strip() or f"typed GraphQL command failed ({proc.returncode})")
+        raise Refused(f"gh call failed (exit {proc.returncode})")
+    return proc.stdout
+
+
+def graphql(query: str, variables: dict[str, object]) -> dict:
+    args = ["api", "graphql", "-f", f"query={query}"]
+    for name, value in variables.items():
+        if value is not None:
+            args += ["-F" if isinstance(value, int) else "-f", f"{name}={value}"]
     try:
-        return json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"typed GraphQL command returned invalid JSON: {exc}") from exc
-
-PROJECT_ENV = "FSGG_COORD_PROJECT_ID"
-BATCH = 50
-
-# THE FOUR CANONICAL FORMS, mirroring `Blockers.canonToken` (src/FS.GG.Coord.Core/Blockers.fs:126-149)
-# rather than inventing a second grammar beside it. Round-1 review finding on PR #2421: the first
-# version understood two of the four, and — worse — resolved a bare `#n` against ONE GLOBAL default
-# repo. The engine resolves it against the REFERRING ROW'S OWN repo, and this board is genuinely
-# multi-repo, so on `FS-GG/FS.GG.SDD#9 blocked by #8` the global default resolved to
-# `FS-GG/.github#8` and left the real `FS-GG/FS.GG.SDD#8` unprotected and archivable.
-_URL = re.compile(r"https?://github\.com/([\w.-]+)/([\w.-]+)/issues/(\d+)")
-_FULL = re.compile(r"(?<![\w./-])([\w.-]+)/([\w.-]+)#(\d+)")
-_REPO_N = re.compile(r"(?<![\w./-])([\w.-]+)#(\d+)")
-_BARE = re.compile(r"(?<![\w./-])#(\d+)")
+        response = json.loads(gh(args))
+    except json.JSONDecodeError:
+        raise Refused("GraphQL response is not JSON") from None
+    if not isinstance(response, dict) or response.get("errors") or not isinstance(response.get("data"), dict):
+        raise Refused("GraphQL response carries errors or no data")
+    return response["data"]
 
 
-def protected_refs(rows: list[dict]) -> tuple[set[tuple[str, int]], set[int]]:
-    """Every ref a LIVE row declares as a blocker, in every form the engine accepts.
+def parse_time(value: object) -> dt.datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else None
 
-    Returns `(qualified, unresolvable_numbers)`. The second set is the FAIL-CLOSED half: when a live
-    row declares a bare `#n` but its own repo could not be read, the ref cannot be resolved to one
-    repository — so the number is protected in EVERY repository rather than guessed into one. Guessing
-    is exactly the defect this replaces.
 
-    Computed from non-`Done` rows only: a blocker edge on an already-finished row cannot strand
-    anything, and treating it as protective would pin the whole historical graph on-board forever.
+def normalize(node: dict) -> dict:
+    content = node.get("content") if isinstance(node.get("content"), dict) else {}
+    return {
+        "itemId": node.get("id"),
+        "archived": node.get("isArchived"),
+        "status": (node.get("status") or {}).get("name"),
+        "kind": content.get("__typename"),
+        "contentId": content.get("id"),
+        "repo": (content.get("repository") or {}).get("nameWithOwner"),
+        "number": content.get("number"),
+        "state": content.get("state"),
+        "closedAt": content.get("closedAt"),
+    }
+
+
+def scan(owner: str, number: int) -> tuple[dict, list[dict]]:
+    """Every Done card on the board, read completely, or Refused."""
+    rows: list[dict] = []
+    cursor: str | None = None
+    project: dict = {}
+    total: int | None = None
+    for _ in range(MAX_PAGES):
+        data = graphql(SCAN, {"owner": owner, "number": number, "cursor": cursor})
+        node = (data.get("organization") or {}).get("projectV2")
+        if not isinstance(node, dict) or not isinstance(node.get("items"), dict):
+            raise Refused("no organization.projectV2.items (token scope or project number?)")
+        board_total = (node.get("all") or {}).get("totalCount")
+        if not isinstance(board_total, int):
+            raise Refused("the board item count is unreadable")
+        if board_total > BOARD_LIMIT:
+            raise Refused(f"the board holds {board_total} items, above the {BOARD_LIMIT}-item limit: refusing")
+        project = {"id": node.get("id"), "title": node.get("title"), "totalCount": board_total}
+        page = node["items"]
+        nodes, info, count = page.get("nodes"), page.get("pageInfo") or {}, page.get("totalCount")
+        if not isinstance(nodes, list) or not isinstance(count, int) or "hasNextPage" not in info:
+            raise Refused("a Done page is missing nodes, totalCount or pageInfo")
+        if total is not None and count != total:
+            raise Refused("the Done count changed while it was read")
+        total = count
+        rows.extend(normalize(n) for n in nodes if isinstance(n, dict))
+        if not info["hasNextPage"]:
+            break
+        cursor = info.get("endCursor")
+        if not cursor:
+            raise Refused("a Done page says hasNextPage without an endCursor")
+    else:
+        raise Refused(f"Done still has more pages after {MAX_PAGES}: refusing a partial read")
+    if total is None or len(rows) != total:
+        raise Refused("the Done rows read differ from the Done count")
+    if len({r["itemId"] for r in rows}) != len(rows):
+        raise Refused("a Done card appeared twice: the board changed while it was read")
+    return project, rows
+
+
+def plan(rows: list[dict], keep: int = KEEP) -> tuple[list[dict], list[dict], list[tuple[dict, str]]]:
+    """Split Done rows into (archive, kept, not-rankable-with-reason). Pure, so every guard is testable.
+
+    Ranked: Done, issue or PR, terminal state, parseable `closedAt`, not already archived. Newest first by
+    `closedAt`, ties broken by (repo, number, itemId) so connection order never decides. The first `keep` stay.
     """
-    qualified: set[tuple[str, int]] = set()
-    unresolvable: set[int] = set()
-
+    if keep < 0:
+        raise ValueError("keep must not be negative")
+    ranked: list[tuple[dt.datetime, str, int, str, dict]] = []
+    unranked: list[tuple[dict, str]] = []
     for row in rows:
-        if row.get("status") == "Done":
-            continue
-        text = row.get("blockedBy") or ""
-        if not text:
-            continue
-
-        # The referring row's OWN owner/repo is the default, exactly as `canonToken` uses the blocked
-        # item's. `None` when unreadable, which routes to `unresolvable` below rather than to a guess.
-        own = row.get("repo")
-        own_owner = own.split("/")[0] if own and "/" in own else None
-
-        consumed: list[tuple[int, int]] = []
-
-        def take(match: re.Match) -> bool:
-            """Longer forms win: `owner/repo#n` must not be re-read as `repo#n` or `#n`."""
-            for start, end in consumed:
-                if match.start() >= start and match.end() <= end:
-                    return False
-            consumed.append((match.start(), match.end()))
-            return True
-
-        for m in _URL.finditer(text):
-            if take(m):
-                qualified.add((f"{m.group(1)}/{m.group(2)}", int(m.group(3))))
-        for m in _FULL.finditer(text):
-            if take(m):
-                qualified.add((f"{m.group(1)}/{m.group(2)}", int(m.group(3))))
-        for m in _REPO_N.finditer(text):
-            if take(m):
-                # `repo#n` — the OWNER defaults to the referring row's owner.
-                if own_owner:
-                    qualified.add((f"{own_owner}/{m.group(1)}", int(m.group(2))))
-                else:
-                    unresolvable.add(int(m.group(2)))
-        for m in _BARE.finditer(text):
-            if take(m):
-                # `#n` — adopts the referring row's OWN owner/repo.
-                if own:
-                    qualified.add((own, int(m.group(1))))
-                else:
-                    unresolvable.add(int(m.group(1)))
-
-    return qualified, unresolvable
+        closed = parse_time(row.get("closedAt"))
+        if not row.get("itemId") or not row.get("contentId"):
+            unranked.append((row, "unreadable card or content identity: never archived"))
+        elif row.get("archived") is not False:
+            unranked.append((row, "already archived or archive state unreadable"))
+        elif row.get("status") != "Done":
+            unranked.append((row, f"Status is {row.get('status')!r}, not Done"))
+        elif row.get("kind") not in ("Issue", "PullRequest"):
+            unranked.append((row, f"content is {row.get('kind')!r}, not an issue or pull request"))
+        elif row.get("state") not in TERMINAL or (row.get("state") == "MERGED" and row.get("kind") != "PullRequest"):
+            unranked.append((row, f"Done over a {row.get('state')!r} item: drift stays visible"))
+        elif closed is None:
+            unranked.append((row, "closedAt is unreadable: never archived"))
+        elif not isinstance(row.get("number"), int) or not row.get("repo"):
+            unranked.append((row, "unreadable repository or number: never archived"))
+        else:
+            ranked.append((closed, str(row["repo"]), int(row["number"]), str(row["itemId"]), row))
+    ranked.sort(key=lambda entry: (-entry[0].timestamp(), entry[1], entry[2], entry[3]))
+    kept = [entry[4] for entry in ranked[:keep]]
+    archive = [entry[4] for entry in ranked[keep:]]
+    return archive, kept, unranked
 
 
-def plan(rows: list[dict], now: _dt.datetime, retention_days: int, max_visible: int = 100
-         ) -> tuple[list[dict], list[tuple[dict, str]]]:
-    """Split the board into (archive, skipped-with-reason). PURE — no IO, so the guards are testable.
-
-    The reason string is part of the contract: a row that is not archived must say why, or a silent
-    skip becomes indistinguishable from a silent archive.
-    """
-    if max_visible < 1:
-        raise ValueError("max_visible must be positive")
-
-    protected, unresolvable = protected_refs(rows)
-    cutoff = now - _dt.timedelta(days=retention_days)
-
-    # `(closed, repo, number, item id, input index, row)`: the stable prefix is the selection order.
-    # GitHub does not promise a stable item-connection order, so pressure selection must not inherit it.
-    safe: list[tuple[_dt.datetime, str, int, str, int, dict]] = []
-    skipped: list[tuple[dict, str]] = []
-
-    for index, row in enumerate(rows):
-        status, state = row.get("status"), row.get("state")
-        number, repo = row.get("number"), row.get("repo")
-
-        if number is None or repo is None or status is None or state is None:
-            skipped.append((row, "unreadable row — never archived (#266)"))
-            continue
-        if status != "Done":
-            skipped.append((row, f"status is {status}, not Done"))
-            continue
-        # `MERGED` is a PULL REQUEST's terminal state, and GraphQL reports it instead of `CLOSED`
-        # (REST says `closed` for the same object — the two APIs disagree, which is how this was
-        # missed). Round-2 review observation on PR #2421: 8 of the board's 36 post-sweep rows are
-        # merged PRs, 22%, and a category that can NEVER be archived is a permanent floor that grows
-        # monotonically — precisely the regrowth this workflow exists to prevent.
-        #
-        # Accepting it is SAFER than what the guard already allows, not a loosening: a merged PR
-        # cannot be reopened, whereas a closed issue and a closed-unmerged PR both can. Merged PRs
-        # carry `closedAt` (equal to `mergedAt`), so the retention window applies to them unchanged.
-        if state not in ("CLOSED", "MERGED"):
-            skipped.append((row, f"Done but the state is {state}, which is not terminal"))
-            continue
-
-        closed_at = row.get("closedAt")
-        if not closed_at:
-            skipped.append((row, "closed-at is unreadable — never archived (#266)"))
-            continue
-        try:
-            closed = _dt.datetime.fromisoformat(closed_at.replace("Z", "+00:00"))
-        except ValueError:
-            skipped.append((row, f"closed-at {closed_at!r} did not parse — never archived"))
-            continue
-        if (repo, number) in protected:
-            skipped.append((row, "named by a live row's `Blocked by`"))
-            continue
-        if number in unresolvable:
-            # A live row named `#n` but its own repo was unreadable, so the ref cannot be pinned to one
-            # repository. Protect the number everywhere rather than guess a repo — guessing is the
-            # round-1 defect, and over-protecting only leaves a row on the board one more day.
-            skipped.append((row, "a live row names `#%d` but its own repo is unreadable — protected "
-                                 "in every repo rather than guessed" % number))
-            continue
-
-        safe.append((closed, repo, number, str(row.get("itemId") or ""), index, row))
-
-    safe.sort(key=lambda entry: entry[:5])
-    aged = [entry for entry in safe if entry[0] <= cutoff]
-    recent = [entry for entry in safe if entry[0] > cutoff]
-
-    # Age-based candidates leave first, exactly as before. If that still leaves the board above its
-    # explicit scan bound, fill the deficit from the OLDEST recent safe rows. Absolute guards never
-    # enter `safe`, so pressure cannot weaken them.
-    pressure_needed = max(0, len(rows) - len(aged) - max_visible)
-    pressure = recent[:pressure_needed]
-    retained_recent = recent[pressure_needed:]
-    archive = [entry[5] for entry in aged + pressure]
-
-    for closed, _, _, _, index, row in retained_recent:
-        skipped.append((row, f"closed {closed:%Y-%m-%d}, inside the {retention_days}-day window"))
-
-    # Skip reporting follows the input scan for readability; archive selection is independently stable.
-    input_index = {id(row): index for index, row in enumerate(rows)}
-    skipped.sort(key=lambda entry: input_index[id(entry[0])])
-
-    return archive, skipped
-
-
-# --------------------------------------------------------------------------------------------------
-# IO below this line.
-# --------------------------------------------------------------------------------------------------
-
-def scan(project: str) -> tuple[list[dict], int, int]:
-    result = coord_graphql("archive-scan", project)
-    if not isinstance(result, dict) or not isinstance(result.get("items"), list):
-        raise RuntimeError("typed archive scan omitted its items array")
-    return result["items"], int(result.get("pages", 0)), int(result.get("spent", 0))
-
-
-def archive_batch(project: str, chunk: list[dict]) -> None:
-    """One aliased document per chunk.
-
-    A ProjectV2 mutation returns ~1 node, so GitHub bills it the ONE-POINT FLOOR whatever else is in
-    the document — which makes cost track REQUEST COUNT, not row count. Aliased, the 2026-08-12 sweep
-    archived 2,170 rows in 44 requests instead of 2,170. This is `.github#448`'s lever, applied here.
-    """
-    coord_graphql("archive-items", project, *[str(row["itemId"]) for row in chunk])
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--project", default=None, help=f"ProjectV2 node id (or ${PROJECT_ENV})")
-    ap.add_argument("--retention-days", type=int, default=30)
-    ap.add_argument("--max-visible", type=int, default=100,
-                    help="maximum visible rows after archiving safe terminal candidates (default 100)")
-    ap.add_argument("--execute", action="store_true", help="archive; without it this is a dry run")
-    ap.add_argument("--manifest", default=None, help="append every archived id here, for reversal")
-    ap.add_argument("--min-graphql", type=int, default=500,
-                    help="defer entirely below this many GraphQL points")
-    args = ap.parse_args()
-    if args.max_visible < 1:
-        ap.error("--max-visible must be positive")
-
-    import os
-    project = args.project or os.environ.get(PROJECT_ENV)
-    if not project:
-        print(f"coord-board-archive: no project id (--project or ${PROJECT_ENV})", file=sys.stderr)
-        return 2
-
-    # Pre-flight. A sweep that dies half way is not harmful — archiving is idempotent and the manifest
-    # records what landed — but starting one on a budget that cannot finish it spends points to
-    # accomplish nothing, and this job is never the urgent work on the board.
+def enrolled_nodes(path: str | None) -> set[str] | None:
+    """The private runtime binding's selected issue node ids, or None when no binding is supplied."""
+    if not path:
+        return None
     try:
-        meter = coord_graphql("meter")
-        if not isinstance(meter, dict):
-            raise RuntimeError("typed meter result was not an object")
-        remaining = int(meter["remaining"])
-    except (RuntimeError, KeyError, ValueError) as exc:
-        print(f"coord-board-archive: could not read the GraphQL meter ({exc}); deferring rather than "
-              f"scanning blind", file=sys.stderr)
-        return 0
-    if remaining < args.min_graphql:
-        print(f"coord-board-archive: deferring — {remaining} GraphQL points remain, below the "
-              f"{args.min_graphql} reserve. The board is not harmed by waiting.")
-        return 0
+        binding = json.loads(Path(path).read_text(encoding="utf-8"))
+        selected = binding["selectedIssues"]
+        if not isinstance(selected, dict) or not selected:
+            raise ValueError
+        return set(selected)
+    except (OSError, ValueError, KeyError, TypeError):
+        raise Refused("the enrollment binding is unreadable") from None
 
-    rows, pages, spent = scan(project)
-    now = _dt.datetime.now(_dt.timezone.utc)
-    archive, skipped = plan(rows, now, args.retention_days, args.max_visible)
-    projected = len(rows) - len(archive)
-    projected_pages = max(1, -(-projected // 100))
 
-    print(f"scanned {len(rows)} row(s) over {pages} page(s) for {spent} GraphQL point(s)")
-    print(f"plan: archive {len(archive)}, keep {projected} "
-          f"(retention {args.retention_days}d, max visible {args.max_visible})")
-    print(f"pages: {pages} -> {projected_pages} projected")
-    if projected > args.max_visible:
-        print(f"  BOUND NOT REACHED — {projected - args.max_visible} row(s) remain above the target "
-              "because no more candidates satisfy every safety guard")
+class Custody:
+    """Append-only private custody: one JSON line per step, flushed and fsynced before the next step."""
 
-    # Every non-routine skip is named. A silent skip and a silent archive must not look alike.
-    for row, why in skipped:
-        if not why.startswith("status is"):
-            print(f"  KEEP {row.get('repo')}#{row.get('number')} — {why}")
+    def __init__(self, directory: Path):
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.path = directory / "custody.jsonl"
+        fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        self.handle = os.fdopen(fd, "a", encoding="utf-8")
 
+    def record(self, **fields: object) -> None:
+        line = {"schema": CUSTODY_SCHEMA, "at": dt.datetime.now(dt.timezone.utc).isoformat(), **fields}
+        self.handle.write(json.dumps(line, sort_keys=True) + "\n")
+        self.handle.flush()
+        os.fsync(self.handle.fileno())
+
+    def close(self) -> None:
+        self.handle.close()
+
+
+def read_item(item_id: str) -> dict:
+    node = graphql(ITEM, {"id": item_id}).get("node")
+    if not isinstance(node, dict):
+        raise Refused("the card is unreadable by id")
+    content = node.get("content") if isinstance(node.get("content"), dict) else {}
+    return {"itemId": node.get("id"), "archived": node.get("isArchived"), "projectId": (node.get("project") or {}).get("id"),
+            "status": (node.get("status") or {}).get("name"), "contentId": content.get("id"),
+            "state": content.get("state"), "closedAt": content.get("closedAt")}
+
+
+def preimage_matches(observed: dict, planned: dict, project_id: str) -> str | None:
+    """None when the live card is exactly the planned Done card; otherwise the fixed reason it is not."""
+    if observed.get("itemId") != planned["itemId"] or observed.get("projectId") != project_id:
+        return "card or project identity differs"
+    if observed.get("archived") is not False:
+        return "already archived or archive state unreadable"
+    if observed.get("status") != "Done":
+        return "Status is no longer Done"
+    if (observed.get("contentId"), observed.get("state"), observed.get("closedAt")) != (planned["contentId"], planned["state"], planned["closedAt"]):
+        return "content identity, state or closedAt changed"
+    return None
+
+
+def archive_one(row: dict, project_id: str, custody: Custody, enrolled: set[str]) -> str:
+    """Preimage re-read, one send, readback. Returns 'archived' or 'skipped'; raises Uncertain to stop the run."""
+    ref = {"itemId": row["itemId"], "contentId": row["contentId"], "repo": row["repo"], "number": row["number"],
+           "closedAt": row["closedAt"], "enrolled": row["contentId"] in enrolled}
+    try:
+        reason = preimage_matches(read_item(row["itemId"]), row, project_id)
+    except Refused as exc:
+        reason = f"preimage unreadable ({exc})"
+    if reason:
+        custody.record(step="skipped", reason=reason, **ref)
+        return "skipped"
+    custody.record(step="intent", **ref)
+    try:
+        payload = graphql(ARCHIVE, {"project": project_id, "item": row["itemId"]})
+        sent = ((payload.get("archiveProjectV2Item") or {}).get("item") or {})
+    except Refused as exc:
+        custody.record(step="uncertain", reason=f"send failed or unreadable ({exc}); not resent", **ref)
+        raise Uncertain(row["itemId"]) from None
+    try:
+        after = read_item(row["itemId"])
+    except Refused as exc:
+        custody.record(step="uncertain", reason=f"readback unreadable ({exc}); not resent", sentArchived=sent.get("isArchived"), **ref)
+        raise Uncertain(row["itemId"]) from None
+    if after.get("archived") is not True or after.get("itemId") != row["itemId"]:
+        custody.record(step="uncertain", reason="readback is not archived; not resent", sentArchived=sent.get("isArchived"), **ref)
+        raise Uncertain(row["itemId"])
+    custody.record(step="archived", **ref)
+    return "archived"
+
+
+def ref_of(row: dict) -> str:
+    return f"{row.get('repo')}#{row.get('number')}"
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--owner", default="FS-GG")
+    ap.add_argument("--project", type=int, default=3, help="organization project number (default 3, Coordination V2)")
+    ap.add_argument("--keep", type=int, default=KEEP, help=f"newest Done cards kept visible (default {KEEP})")
+    ap.add_argument("--execute", action="store_true", help="archive; without it this is a dry run")
+    ap.add_argument("--expect-project-id", default=None, help="required with --execute: the exact ProjectV2 node id")
+    ap.add_argument("--max-archive", type=int, default=0, help="required with --execute: at most this many sends")
+    ap.add_argument("--enrollment-binding", default=None, help="private runtime binding; required with --execute")
+    ap.add_argument("--custody-dir", default=None, help="private custody directory (default under ~/.local/share/fs-gg-private)")
+    ap.add_argument("--counts-only", action="store_true",
+                    help="print counts only, never a repository or number (for public logs; refused with --execute)")
+    args = ap.parse_args(argv)
+    if args.keep < 0:
+        ap.error("--keep must not be negative")
+    if args.execute and (not args.expect_project_id or args.max_archive < 1 or not args.enrollment_binding):
+        ap.error("--execute requires --expect-project-id, a positive --max-archive and --enrollment-binding")
+    if args.execute and args.counts_only:
+        ap.error("--counts-only is a public dry-run report and cannot be combined with --execute")
+
+    try:
+        enrolled = enrolled_nodes(args.enrollment_binding)
+        project, rows = scan(args.owner, args.project)
+    except Refused as exc:
+        print(f"coord-board-archive: REFUSED, nothing archived: {exc}", file=sys.stderr)
+        return 1
+    if args.expect_project_id and project.get("id") != args.expect_project_id:
+        print("coord-board-archive: REFUSED, nothing archived: the project id differs from --expect-project-id", file=sys.stderr)
+        return 1
+
+    archive, kept, unranked = plan(rows, args.keep)
+    print(f"board: {project.get('totalCount')} item(s) (limit {BOARD_LIMIT}); Done: {len(rows)}; "
+          f"ranked {len(archive) + len(kept)}, keep newest {len(kept)}, plan to archive {len(archive)}")
+    for row, why in unranked:
+        print(f"  KEEP {'<card>' if args.counts_only else ref_of(row)}: {why}")
+    if enrolled is None:
+        print("  enrolled V2 rows: Unknown (no --enrollment-binding supplied)")
+    else:
+        print(f"  enrolled V2 rows among the planned: {sum(1 for row in archive if row['contentId'] in enrolled)}")
+    if not args.counts_only:
+        for row in archive:
+            print(f"  ARCHIVE {ref_of(row)} closed {row['closedAt']}")
     if not archive:
         print("nothing to archive.")
         return 0
-
     if not args.execute:
-        print("\nDRY RUN — nothing archived.")
+        print("DRY RUN: nothing archived.")
         return 0
 
-    # The manifest is written AFTER each batch lands, never before the loop. Round-1 review finding on
-    # PR #2421: writing it up-front recorded rows as archived that a mid-sweep failure then never
-    # touched, so the file claimed more than had happened. Board recovery was always fine — archiving is
-    # idempotent — but a REVERSAL manifest that overstates is worse than none, because it is consulted
-    # precisely when something has already gone wrong.
-    archived, requests = 0, 0
-    manifest_fh = open(args.manifest, "a", encoding="utf-8") if args.manifest else None
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    directory = Path(args.custody_dir) if args.custody_dir else Path.home() / ".local/share/fs-gg-private/board-done-retention" / stamp
+    custody = Custody(directory)
+    custody.record(step="run", project=project.get("id"), board=project.get("totalCount"), done=len(rows),
+                   keep=args.keep, planned=len(archive), maxArchive=args.max_archive)
+    counts = {"archived": 0, "skipped": 0}
     try:
-        for i in range(0, len(archive), BATCH):
-            chunk = archive[i:i + BATCH]
-            try:
-                archive_batch(project, chunk)
-            except RuntimeError as exc:
-                print(f"coord-board-archive: batch at {i} failed: {exc}", file=sys.stderr)
-                print(f"coord-board-archive: stopped after {archived}; archiving is idempotent, so the "
-                      f"next run resumes, and the manifest names exactly what landed.", file=sys.stderr)
-                return 1
-
-            archived += len(chunk)
-            requests += 1
-            if manifest_fh:
-                stamp = _dt.datetime.now(_dt.timezone.utc).isoformat()
-                for row in chunk:
-                    manifest_fh.write(json.dumps({**row, "archivedAt": stamp}) + "\n")
-                manifest_fh.flush()
-    finally:
-        if manifest_fh:
-            manifest_fh.close()
-
-    if args.manifest:
-        print(f"manifest: {args.manifest} ({archived} id(s), reversible with unarchiveProjectV2Item)")
-    print(f"archived {archived} row(s) in {requests} aliased request(s) "
-          f"(vs {archived} unaliased — .github#448's lever)")
+        for row in archive[: args.max_archive]:
+            counts[archive_one(row, str(project["id"]), custody, enrolled or set())] += 1
+    except Uncertain as exc:
+        custody.record(step="stopped", reason="uncertain send; no resend", itemId=str(exc), **counts)
+        print(f"coord-board-archive: STOPPED on an uncertain send ({exc}); custody {custody.path}", file=sys.stderr)
+        custody.close()
+        return 3
+    custody.record(step="finished", **counts)
+    custody.close()
+    print(f"archived {counts['archived']}, skipped {counts['skipped']}; custody {custody.path}")
     return 0
 
 
