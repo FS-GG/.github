@@ -772,6 +772,24 @@ cmd_validate() {
     echo "$json" | jq -e --arg r "$dt" '[.repos[].full] | index($r)' >/dev/null \
       || err "dispatch target '$dt' is not rostered."
   done < <(echo "$json" | jq -r '(.dispatches // [])[] | [.producer, .target, ."event-type"] | @tsv')
+  # A listener whose sender is not wired yet is a reviewed claim (repos-audit keeps it true both ways).
+  echo "$json" | jq -e '(.["listeners-without-sender"] // []) | type=="array"' >/dev/null \
+    || err "'listeners-without-sender' must be a list (omit it, or use [])."
+  local lws_bad
+  lws_bad="$(echo "$json" | jq -r '
+    (.["listeners-without-sender"] // [])[]
+    | select(type != "object"
+        or (.target | type != "string") or (.target | length == 0)
+        or (."event-type" | type != "string") or (."event-type" | length == 0)
+        or (.reason | type != "string") or (.reason | length == 0))
+    | @json')"
+  [ -z "$lws_bad" ] || err "each listeners-without-sender row must be an object with non-empty string target, event-type and reason."
+  local lws_t
+  while IFS= read -r lws_t; do
+    [ -n "$lws_t" ] || continue
+    echo "$json" | jq -e --arg r "$lws_t" '[.repos[].full] | index($r)' >/dev/null \
+      || err "listeners-without-sender target '$lws_t' is not rostered."
+  done < <(echo "$json" | jq -r '(.["listeners-without-sender"] // [])[] | .target')
   local dispatch_dups; dispatch_dups="$(echo "$json" | jq -r '(.dispatches // []) | map([.producer,.target,."event-type"] | join("\u001f")) | group_by(.)[] | select(length>1)[0]')"
   [ -z "$dispatch_dups" ] || err "duplicate dispatch edge(s): $dispatch_dups"
 

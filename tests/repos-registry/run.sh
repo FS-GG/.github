@@ -1402,6 +1402,20 @@ if ! grep -qx game <<<"$nogame_ids"; then
   ok "mutant: Game without the word is absent from the sweep list (the pin above would catch it)"
 else bad "mutant roster still lists Game"; fi
 
+# --- listeners-without-sender: a reviewed claim, validated like a dispatch edge (Refs #4730) -----------
+lws_ok="$WORK/lws-ok.yml"; { cat "$BASE"; printf 'listeners-without-sender:\n  - target: FS-GG/FS.GG.SDD\n    event-type: some-event\n    reason: sender not wired yet\n'; } > "$lws_ok"; relock "$lws_ok"
+expect_pass "a well-formed listeners-without-sender claim validates" "$lws_ok"
+lws_noreason="$WORK/lws-noreason.yml"; { cat "$BASE"; printf 'listeners-without-sender:\n  - target: FS-GG/FS.GG.SDD\n    event-type: some-event\n'; } > "$lws_noreason"; relock "$lws_noreason"
+expect_fail "a claim with no reason is refused" 1 "listeners-without-sender row must be an object with non-empty string target, event-type and reason" "$lws_noreason"
+lws_unrostered="$WORK/lws-unrostered.yml"; { cat "$BASE"; printf 'listeners-without-sender:\n  - target: FS-GG/Nobody\n    event-type: some-event\n    reason: x\n'; } > "$lws_unrostered"; relock "$lws_unrostered"
+expect_fail "a claim whose target is not rostered is refused" 1 "listeners-without-sender target 'FS-GG/Nobody' is not rostered" "$lws_unrostered"
+# The real roster carries the Templates -> SDD decision as a claim, and no longer as an edge.
+if bash "$REPOS_SH" validate >/dev/null 2>&1 \
+   && grep -q 'event-type: composition-registry-updated' "$REPO_ROOT/registry/repos.yml" \
+   && ! grep -qE '^  - \{ producer: FS-GG/FS\.GG\.Templates, target: FS-GG/FS\.GG\.SDD' "$REPO_ROOT/registry/repos.yml"; then
+  ok "the real roster records composition-registry-updated as a senderless listener, not as a declared Templates -> SDD edge"
+else bad "the Templates -> SDD edge decision is not reflected in the real roster"; fi
+
 echo "repos-registry fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-registry fixture FAILED"; exit 1; }
 echo "repos-registry fixture — OK"
