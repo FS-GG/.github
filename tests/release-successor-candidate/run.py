@@ -263,10 +263,10 @@ class SuccessorRailBindingTests(unittest.TestCase):
         from release_successor_journal import CURRENT_RELEASE
         saga = runpy.run_path(str(ROOT / "scripts/release-saga.py"))
         workflow = (ROOT / ".github/workflows/release-successor-candidate.yml").read_text()
-        # Genuine promoted110 channel identity; fixture loading makes no native observation.
+        # Genuine promoted113 channel identity; fixture loading makes no native observation.
         receipt = {"version":"0.113.0", "sourceSha":"79db622ff4a51498e22ae5820eeb2b470fc743c5",
                    "contentId":"sha256:14c8ba3f954347278a646bb0d227cbbea820845bf5596ad3d7e7fcaaac1ab908",
-                   "promotedAt":"2026-10-21T17:12:52.465057Z"}
+                   "promotedAt":"2026-10-23T14:15:51.268419Z"}
         expected = {"version":CURRENT_RELEASE["predecessor"], "sourceSha":CURRENT_RELEASE["predecessorSource"],
                     "contentId":CURRENT_RELEASE["predecessorContentId"]}
         def consume(declared, channel):

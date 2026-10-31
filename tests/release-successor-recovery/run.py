@@ -1627,18 +1627,18 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
 
 
 class SelectedReleaseBindingTests(unittest.TestCase):
-    def test_current_default_has_113_112_and_selected_claude_usage_identity(self):
+    def test_current_default_has_114_113_and_selected_enrollment_context_identity(self):
         args = types.SimpleNamespace(recovery_checkpoint=False, repeat_original_nuget_kit_intent=False,
                                      recover_original_runtime_intent=False)
         self.assertEqual(publisher.selected_release_binding(args),
                          ("0.114.0", "0.113.0", "refs/heads/fsgg/v2/journal/release/coord114-enrollment-context-20261031-01"))
 
-    def test_current_profile_binds_promoted112_and_cannot_claim_old_journals(self):
+    def test_current_profile_binds_promoted113_and_cannot_claim_old_journals(self):
         self.assertEqual(set(publisher.CURRENT_RELEASE), {'version','predecessor','logicalRef','directory','predecessorSource','predecessorContentId'})
         self.assertEqual(publisher.CURRENT_RELEASE['predecessorSource'],'79db622ff4a51498e22ae5820eeb2b470fc743c5')
         self.assertEqual(publisher.CURRENT_RELEASE['predecessorContentId'],'sha256:14c8ba3f954347278a646bb0d227cbbea820845bf5596ad3d7e7fcaaac1ab908')
         self.assertEqual(publisher.CURRENT_RELEASE['directory'],'state/releases/coord114-enrollment-context-20261031-01')
-        for suffix in ('utel-rel-23','utel-rel-24','utel-rel-25','utel-rel-26','utel-rel-27','coord110-observer-20261020-01','coord111-resource-aware-20261021-01','coord112-skill-routing-20261021-01'):
+        for suffix in ('utel-rel-23','utel-rel-24','utel-rel-25','utel-rel-26','utel-rel-27','coord110-observer-20261020-01','coord111-resource-aware-20261021-01','coord112-skill-routing-20261021-01','coord113-claude-usage-20261023-01'):
             authority=MemoryAuthority()
             with self.subTest(prior=suffix),self.assertRaisesRegex(JournalRefused,'different owner or profile'):
                 ProtectedReleaseJournal(authority,'refs/heads/fsgg/v2/journal/release/'+suffix,
@@ -1678,6 +1678,16 @@ class SelectedReleaseBindingTests(unittest.TestCase):
     def test_current113_cannot_initialize_consumed112_journal(self):
         authority=MemoryAuthority()
         journal=ProtectedReleaseJournal(authority,'refs/heads/fsgg/v2/journal/release/coord112-skill-routing-20261021-01',main_directory=True)
+        authority.calls.clear()
+        intent={'version':'0.114.0','sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
+                'candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
+        with self.assertRaisesRegex(JournalRefused,'different journal identity'):
+            journal.initialize(intent)
+        self.assertFalse(any(method in {'post','patch'} for method,_ in authority.calls))
+
+    def test_current114_cannot_initialize_consumed113_journal(self):
+        authority=MemoryAuthority()
+        journal=ProtectedReleaseJournal(authority,'refs/heads/fsgg/v2/journal/release/coord113-claude-usage-20261023-01',main_directory=True)
         authority.calls.clear()
         intent={'version':'0.114.0','sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
                 'candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
