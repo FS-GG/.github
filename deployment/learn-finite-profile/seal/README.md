@@ -94,7 +94,12 @@ The finalizer r5 PR must record in its `learn-op-*/1` record: `opId`, `inputRead
 
 `check_admission` enforces the lifetime cap (600 s), `issuedUtc <= now`, `expiresUtc > issuedUtc`, time zones and the pins. The
 `check-admission` subcommand reads only, so the pod operator's account can run it. The pod operator is a separate single-file
-script run with `-I` and cannot import this module, so it must carry this logic verbatim. The conformance set for that copy is
+script run with `-I` and cannot import this module, so it must carry this logic verbatim. **The copy includes the pinned reader,
+not only the field checks:** `open_dir_chain` (a chain of `O_DIRECTORY|O_NOFOLLOW` `openat` calls from the chain start, each directory
+`fstat`-checked on its descriptor for owner, directory type and group/other write), the `O_NOFOLLOW` open of the admission file
+through the parent descriptor, its owner, regular-file, mode and size (at most 65536 bytes) check on the file descriptor, and the
+refusal reasons below. A path-based `lstat` walk followed by a path-based open is not equivalent: it can be raced by a rename under
+a developer-owned directory, and it follows a symlinked file. The conformance set for that copy is
 this list, implemented in `tests/learn-seal-claim/run.py` (the test checks that every id is listed here):
 
 | Id | Vector | Expected |
@@ -141,4 +146,6 @@ from `/srv/bulk/services` down is opened with `O_DIRECTORY|O_NOFOLLOW` through `
 is root-owned, mode-checked and not writable by the developer. An internal call that already carries a pinned path (the claim
 inside `supersede`) does not pin again, so one operation cannot straddle two directories. Results report the path the operator
 named, not the `/proc` path. `check_admission` reads through the same kind of pinned chain from its chain start. This needs
-`/proc` mounted; the tool refuses otherwise. It is the same pattern as the acknowledgement writer r2 (#5009).
+`/proc` mounted; the tool refuses otherwise. A path that carries the pinned prefix must be exactly `/proc/self/fd/<n>` with `<n>` an
+open directory descriptor of this process (`assert_pinned_root`); a closed or non-directory descriptor, a sub-path, `..` or a
+non-numeric tail refuses, so the pass-through for internal calls cannot be reached with a path the tool did not pin. It is the same pattern as the acknowledgement writer r2 (#5009).

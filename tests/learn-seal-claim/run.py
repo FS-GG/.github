@@ -778,6 +778,42 @@ with tempfile.TemporaryDirectory() as tmp:
         L.admit('op-nest', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, source_root=sr, view_root=e.root, services=e.services, owner_uid=UID)
         check(len(os.listdir('/proc/self/fd')) == before, 'a call with a pinned path does not open another pin')
 
+# the /proc refusal and the pinned-root assertion (non-blocking items of the review of #5010)
+with tempfile.TemporaryDirectory() as tmp:
+    e = Env(tmp)
+    real_isdir = os.path.isdir
+    try:
+        os.path.isdir = lambda p: False if p == '/proc/self/fd' else real_isdir(p)
+        refused(lambda: L.admit('op-noproc', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, **e.kw()), '/proc is not available', 'a write function refuses when /proc is not available')
+        refused(lambda: L.pinned_source(e.root, e.root, e.services, UID).__enter__(), '/proc is not available', 'pinned_source refuses when /proc is not available')
+    finally:
+        os.path.isdir = real_isdir
+    check(not os.path.lexists(os.path.join(e.root, 'admissions')), 'the /proc refusal created nothing')
+    with L.pinned_source(e.root, e.root, e.services, UID) as sr:
+        L.assert_pinned_root(sr)
+        check(True, 'a root made by pinned_source is an open directory descriptor of this process')
+    dfd = os.open(e.root, os.O_RDONLY | os.O_DIRECTORY)
+    ffd = os.open(os.path.join(tmp, 'plain-file'), os.O_RDWR | os.O_CREAT, 0o600)
+    kwp = dict(view_root=e.root, services=e.services, owner_uid=UID)
+    try:
+        good = f'{L.PINNED_PREFIX}{dfd}'
+        L.assert_pinned_root(good)
+        check(L.admit('op-open', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, source_root=good, **kwp)['admission'] == good + '/admissions/op-open.admit',
+              'a pinned root that is an open directory descriptor passes through')
+        for bad, what in ((f'{L.PINNED_PREFIX}999999', 'a descriptor that is not open'), (f'{L.PINNED_PREFIX}{ffd}', 'a descriptor that is not a directory'),
+                          (f'{L.PINNED_PREFIX}{dfd}/claims', 'a sub-path of a descriptor'), (f'{L.PINNED_PREFIX}{dfd}/..', 'a .. tail'),
+                          (f'{L.PINNED_PREFIX}{dfd}/', 'a trailing slash'), (L.PINNED_PREFIX, 'an empty tail'), (f'{L.PINNED_PREFIX}abc', 'a non-numeric tail'),
+                          (f'{L.PINNED_PREFIX}-1', 'a negative descriptor'), (f'{L.PINNED_PREFIX}{dfd}x', 'a tail with a suffix')):
+            refused(lambda b=bad: L.admit('op-bad', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, source_root=b, **kwp), 'not a pinned root', f'{what} is refused before anything is written')
+        check(not os.path.lexists(os.path.join(e.root, 'admissions', 'op-bad.admit')), 'no refused pinned root wrote anything')
+    finally:
+        os.close(dfd)
+        os.close(ffd)
+    refused(lambda: L.admit('op-closed', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, source_root=good, **kwp), 'not a pinned root', 'a pinned root whose descriptor has been closed is refused')
+    readme = open(os.path.join(os.path.dirname(TOOL), 'README.md')).read()
+    check('open_dir_chain' in readme.split('## Admission reader')[1].split('| Id |')[0] and 'pinned reader' in readme and 'assert_pinned_root' in readme,
+          'the README operator-copy note covers the pinned reader, open_dir_chain and the pinned-root assertion')
+
 # check_admission reads through a pinned chain too
 with tempfile.TemporaryDirectory() as tmp:
     e = Env(tmp)

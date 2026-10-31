@@ -184,6 +184,24 @@ def pinned_source(source_root, view_root, services, owner_uid=0):
         os.close(fd)
 
 
+PINNED_ROOT = re.compile(r'^/proc/self/fd/([0-9]+)$')
+
+
+def assert_pinned_root(path):
+    """A path that carries the pinned prefix must be exactly /proc/self/fd/<n> where <n> is an open directory descriptor of THIS
+    process. Anything else (a closed or non-directory descriptor, a sub-path, `..`, an empty or non-numeric tail) refuses, so a
+    caller cannot reach the pass-through branch with a path the tool did not pin."""
+    m = PINNED_ROOT.match(path)
+    if not m:
+        refuse(f'not a pinned root: {path!r} must be exactly {PINNED_PREFIX}<n>')
+    try:
+        st = os.fstat(int(m.group(1)))
+    except OSError:
+        refuse(f'not a pinned root: descriptor {m.group(1)} is not open in this process')
+    if not stat.S_ISDIR(st.st_mode):
+        refuse(f'not a pinned root: descriptor {m.group(1)} is not a directory')
+
+
 def _show(value, pinned, shown):
     if isinstance(value, str) and value.startswith(pinned):
         return shown + value[len(pinned):]
@@ -205,6 +223,7 @@ def pinned(fn):
         bound.apply_defaults()
         sr = bound.arguments['source_root']
         if sr.startswith(PINNED_PREFIX):
+            assert_pinned_root(sr)
             return fn(*bound.args, **bound.kwargs)
         with pinned_source(sr, bound.arguments['view_root'], bound.arguments['services'], bound.arguments.get('owner_uid', 0)) as p:
             bound.arguments['source_root'] = p
