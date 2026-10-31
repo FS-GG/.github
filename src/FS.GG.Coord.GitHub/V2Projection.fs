@@ -170,6 +170,12 @@ module V2Projection =
             Ok(Convert.ToHexStringLower(SHA256.HashData bytes))
         with _ -> enrollmentFailure()
 
+    // The programme population ceiling. It was 100 (#4941); lifted to 250 in the coordinated reader and engine release.
+    // Both the private payload row count and the binding's selected-issue count are bounded by this one value. The byte
+    // bounds (128KiB payload, 256KiB binding) are unchanged and still refuse fat rows long before this many.
+    let legacyProgrammeRowCap = 100
+    let maximumProgrammeRows = 250
+
     let private payloadRows (binding: Binding) (bytes: byte array) : IoResult<(string * string * string) list> =
         try
             use document = strictDocument 131072 bytes
@@ -196,7 +202,7 @@ module V2Projection =
                     if String.IsNullOrWhiteSpace node || String.IsNullOrWhiteSpace roadmap || roadmap.Length > 4096
                        || Map.tryFind node binding.SelectedIssues <> Some issue then invalidArg "enrollment" "row"
                     issue, node, roadmap) |> Seq.toList
-            if rows.Length <> binding.SelectedIssues.Count || rows.IsEmpty || rows.Length > 100
+            if rows.Length <> binding.SelectedIssues.Count || rows.IsEmpty || rows.Length > maximumProgrammeRows
                || (rows |> List.map (fun (_, node, _) -> node) |> Set.ofList |> Set.count) <> rows.Length
                || (rows |> List.map (fun (issue, _, _) -> issue) |> Set.ofList |> Set.count) <> rows.Length then invalidArg "enrollment" "cohort"
             Ok rows
@@ -237,7 +243,7 @@ module V2Projection =
         elif String.IsNullOrWhiteSpace binding.ImportRecipeRevision || binding.ImportRecipeRevision.Length <> 40 || binding.ImportRecipeRevision |> Seq.exists (Uri.IsHexDigit >> not)
              || String.IsNullOrWhiteSpace binding.ImportArtifactSha256 || binding.ImportArtifactSha256.Length <> 64 || binding.ImportArtifactSha256 |> Seq.exists (Uri.IsHexDigit >> not) then
             invalid subject "distinct reviewed import constructor provenance is incomplete"
-        elif binding.SelectedIssues.Count < (if binding.BindingVersion = 2 then 3 else 1) || binding.SelectedIssues.Count > (if isProgrammeBinding binding then 100 else 5) || binding.SelectedIssues |> Map.exists (fun node issue -> String.IsNullOrWhiteSpace node || String.IsNullOrWhiteSpace issue) then
+        elif binding.SelectedIssues.Count < (if binding.BindingVersion = 2 then 3 else 1) || binding.SelectedIssues.Count > (if isProgrammeBinding binding then maximumProgrammeRows else 5) || binding.SelectedIssues |> Map.exists (fun node issue -> String.IsNullOrWhiteSpace node || String.IsNullOrWhiteSpace issue) then
             invalid subject "explicit selected native cohort is incomplete"
         elif binding.SchemaVersion <> (if binding.BindingVersion = 5 then 3 elif binding.BindingVersion = 4 then 2 else 1) then
             invalid subject "binding and schema versions disagree"

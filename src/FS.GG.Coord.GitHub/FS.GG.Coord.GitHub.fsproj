@@ -103,6 +103,8 @@
     <Compile Include="V2NativeResolve.fs" />
     <Compile Include="V2Preflight.fsi" />
     <Compile Include="V2Preflight.fs" />
+    <Compile Include="V2EnrollmentCommands.fsi" />
+    <Compile Include="V2EnrollmentCommands.fs" />
     <Compile Include="V2Migration.fsi" />
     <Compile Include="V2Migration.fs" />
     <Compile Include="V2MigrationTransport.fsi" />

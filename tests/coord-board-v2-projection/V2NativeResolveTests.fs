@@ -36,13 +36,15 @@ module V2NativeResolveTests =
     let private fake (items: string list) (overrides: (string * GetResult) list) : Fake =
         let calls = ResizeArray<string * bool>()
         let canned (path: string) (paginated: bool) =
-            match overrides |> List.tryFind (fun (prefix, _) -> path.StartsWith prefix) with
+            // A prefix matches by StartsWith; one written "=path" matches that path exactly.
+            match overrides |> List.tryFind (fun (prefix, _) -> if prefix.StartsWith "=" then path = prefix.Substring 1 else path.StartsWith prefix) with
             | Some(_, result) -> result
             | None ->
                 if path = "/orgs/FS-GG/projectsV2/3" then Body $"{{\"number\":3,\"node_id\":\"{projectId}\"}}"
                 elif path.StartsWith "/orgs/FS-GG/projectsV2/3/fields" then
                     Body "[[{\"id\":10,\"name\":\"Status\"},{\"id\":11,\"name\":\"Roadmap\"},{\"id\":12,\"name\":\"Track\"},{\"id\":13,\"name\":\"Work level\"},{\"id\":14,\"name\":\"Title\"}]]"
                 elif path.StartsWith "/orgs/FS-GG/projectsV2/3/items" then Body("[[" + String.concat "," items + "]]")
+                elif path = "/repos/FS-GG/.github" then Body "{\"private\":false}"
                 elif path = "/repos/FS-GG/.github/issues/80001" then Body "{\"node_id\":\"I_synthetic_new1\",\"repository_url\":\"https://api.github.com/repos/FS-GG/.github\"}"
                 elif path = "/repos/FS-GG/FS.GG.Templates/issues/80002" then Body "{\"node_id\":\"I_synthetic_new2\",\"repository_url\":\"https://api.github.com/repos/FS-GG/FS.GG.Templates\"}"
                 elif path.StartsWith("/repos/FS-GG/.github/contents/" + planPath) then Body "{\"type\":\"file\",\"name\":\"synthetic-plan.md\"}"
@@ -139,3 +141,117 @@ module V2NativeResolveTests =
         Assert.False(byId.["PVTI_null"].HasStatus)
         Assert.Equal((true, true, true), (byId.["PVTI_I_synthetic_new1"].HasStatus, byId.["PVTI_I_synthetic_new1"].HasTrack, byId.["PVTI_I_synthetic_new1"].HasWorkLevel))
         Assert.Equal(OtherContent "DraftIssue", byId.["PVTI_draft"].Content)
+
+    // ---- PR 3: per-endpoint allowlist ----
+
+    let private allowedEndpoints =
+        [ "/orgs/FS-GG/projectsV2/3", false
+          "/orgs/FS-GG/projectsV2/3/fields?per_page=100", true
+          "/orgs/FS-GG/projectsV2/3/items?per_page=100&fields=10,11,12,13", true
+          "/repos/FS-GG/.github", false
+          "/repos/FS-GG/.github/issues/80001", false
+          "/repos/FS-GG/.github/pulls/4956", false
+          "/repos/FS-GG/.github/pulls/4956/commits?per_page=100", true
+          "/repos/FS-GG/.github/pulls?state=open&per_page=100", true
+          "/repos/FS-GG/.github/git/ref/heads/main", false
+          "/repos/FS-GG/.github/contents/docs/roadmaps/plan.md?ref=main", false ]
+
+    [<Fact>]
+    let ``the allowlist admits exactly the ten endpoints the resolvers use`` () =
+        Assert.Equal(10, allowedEndpoints.Length)
+        for path, paginated in allowedEndpoints do
+            Assert.True((getArguments path paginated).IsSome, path)
+            // Pagination must match what the endpoint needs, in both directions.
+            Assert.True((getArguments path (not paginated)).IsNone, path + " with the other pagination")
+
+    [<Fact>]
+    let ``anything off the allowlist has no argument vector, including every near miss`` () =
+        let refused =
+            [ // not an allowlisted endpoint, although inside /repos or /orgs
+              "/repos/FS-GG/.github/issues/80001/comments"; "/repos/FS-GG/.github/issues"; "/repos/FS-GG/.github/pulls/4956/files"; "/repos/FS-GG/.github/pulls/4956/commits"; "/repos/FS-GG/.github/pulls/4956/commits?per_page=1"
+              "/repos/FS-GG/.github/git/ref/heads/other"; "/repos/FS-GG/.github/git/ref/tags/v1"; "/repos/FS-GG/.github/actions/runs"
+              "/orgs/FS-GG/members"; "/orgs/FS-GG/projectsV2"; "/orgs/FS-GG/projectsV2/3/items"; "/orgs/FS-GG/projectsV2/3/views"
+              // query near misses
+              "/repos/FS-GG/.github/contents/docs/x.md"; "/repos/FS-GG/.github/contents/docs/x.md?ref=other"; "/repos/FS-GG/.github/contents/docs/x.md?ref=main&x=1"
+              "/orgs/FS-GG/projectsV2/3/fields?per_page=1"; "/orgs/FS-GG/projectsV2/3/items?per_page=100&fields=ab"; "/orgs/FS-GG/projectsV2/3/items?fields=10&per_page=100"
+              "/repos/FS-GG/.github/pulls?state=all&per_page=100"; "/repos/FS-GG/.github/pulls?state=open"
+              // percent-encoding is gone from segments
+              "/repos/FS-GG/.github/contents/docs%2Fx.md?ref=main"; "/repos/FS-GG/.github/contents/docs/x%2e%2e/y.md?ref=main"; "/repos/FS-GG%2F.github"
+              // traversal segments
+              "/repos/FS-GG/.github/contents/../x.md?ref=main"; "/repos/FS-GG/.github/contents/./x.md?ref=main"; "/repos/FS-GG/../issues/1"; "/repos/../.github/issues/1"
+              // empty segments, bad numbers, nonsense
+              "/repos/FS-GG//issues/1"; "/repos/FS-GG/.github/issues/0"; "/repos/FS-GG/.github/issues/01"; "/repos/FS-GG/.github/issues/-1"; "/repos/FS-GG/.github/issues/1/"
+              "/graphql"; "graphql"; "/user"; "https://api.github.com/repos/a/b"; ""; "/repos/FS-GG/.github/contents/a/b/c/d/e/f/g/h/i/j/k/l/m.md?ref=main" ]
+        for path in refused do
+            Assert.True((getArguments path false).IsNone && (getArguments path true).IsNone, path)
+
+    [<Fact>]
+    let ``a name containing two dots is a name; only a whole traversal segment is refused`` () =
+        // The PR 2 grammar rejected any ".." substring, so a legitimate document name was unreachable.
+        Assert.True((getArguments "/repos/FS-GG/.github/contents/docs/a..b.md?ref=main" false).IsSome)
+        Assert.True((getArguments "/repos/FS-GG/.github/contents/docs/v1..2/notes..md?ref=main" false).IsSome)
+        Assert.True((getArguments "/repos/FS-GG/.github/contents/docs/..hidden?ref=main" false).IsSome)
+        // Causal pair: the same position as a whole segment is a traversal and is refused.
+        Assert.True((getArguments "/repos/FS-GG/.github/contents/docs/../hidden?ref=main" false).IsNone)
+        Assert.True((getArguments "/repos/FS-GG/.github/contents/docs/./hidden?ref=main" false).IsNone)
+
+    // ---- PR 3: a 404 may be invisibility ----
+
+    [<Fact>]
+    let ``a plan document 404 in a readable repository is absence, and in an unreadable one it is reported as hidden`` () =
+        let _, _, binding = binding ()
+        let missing = "/repos/FS-GG/.github/contents/"
+        // Readable repository: the repository GET succeeds, so the 404 is an absence.
+        let absent = resolve (fake seeded [ missing, NotFound; "=/repos/FS-GG/.github", Body "{\"private\":false}" ]).Get binding request |> get
+        Assert.False(absent.Facts.PlanBlobs.[0].OnMain)
+        Assert.Empty(absent.HiddenRepositories)
+        // Unreadable repository: the very same 404 on the document, but the repository itself is 404 too.
+        let transport = fake seeded [ missing, NotFound; "=/repos/FS-GG/.github", NotFound ]
+        let hidden = resolve transport.Get binding request |> get
+        Assert.False(hidden.Facts.PlanBlobs.[0].OnMain)
+        Assert.Equal<string list>([ "FS-GG/.github" ], hidden.HiddenRepositories)
+        // The facts document keeps its fixed schema: visibility is not smuggled into it.
+        Assert.DoesNotContain("hidden", encodeNativeFacts hidden.Facts, StringComparison.OrdinalIgnoreCase)
+        Assert.Contains(("/repos/FS-GG/.github", false), transport.Calls)
+        // A failed repository read is a failed read, not an absence.
+        Assert.Equal(Error NativeReadFailed, resolve (fake seeded [ missing, NotFound; "=/repos/FS-GG/.github", Failed ]).Get binding request |> Result.map ignore)
+
+    // ---- PR 3: main head, pull requests ----
+
+    [<Fact>]
+    let ``main head and pull requests are read through the allowlisted GETs only`` () =
+        let sha = String.replicate 40 "e"
+        let calls = ResizeArray<string * bool>()
+        let pull (number: int) (headRef: string) =
+            $"{{\"number\":{number},\"state\":\"open\",\"title\":\"t\",\"body\":null,\"base\":{{\"ref\":\"main\",\"sha\":\"{sha}\"}},\"head\":{{\"ref\":\"{headRef}\",\"sha\":\"{sha}\"}}}}"
+        let transport : Get =
+            fun path paginated ->
+                calls.Add((path, paginated))
+                if path = "/repos/FS-GG/.github/git/ref/heads/main" then Body $"{{\"object\":{{\"sha\":\"{sha}\"}}}}"
+                elif path = "/repos/FS-GG/.github/pulls/7" then Body(pull 7 "routine/a")
+                elif path = "/repos/FS-GG/.github/pulls?state=open&per_page=100" then Body("[[" + pull 7 "routine/a" + "," + pull 8 "routine/b" + "],[" + pull 9 "routine/a" + "]]")
+                else NotFound
+        Assert.Equal(Ok sha, readMainHead transport "FS-GG/.github")
+        let one = readPullRequest transport "FS-GG/.github" 7 |> get
+        Assert.Equal(("main", sha, "routine/a", ""), (one.BaseRef, one.BaseSha, one.HeadRef, one.Body))
+        Assert.Equal<int list>([ 7; 9 ], openPullRequestsFor transport "FS-GG/.github" "routine/a" |> get |> List.map _.Number)
+        for path, paginated in calls do Assert.True((getArguments path paginated).IsSome, path)
+        // A sha that is not 40 hex, a missing pull request and a bad slug are all NativeReadFailed.
+        Assert.Equal(Error NativeReadFailed, readMainHead (fun _ _ -> Body "{\"object\":{\"sha\":\"abc\"}}") "FS-GG/.github")
+        Assert.Equal(Error NativeReadFailed, readPullRequest transport "FS-GG/.github" 99 |> Result.map ignore)
+        Assert.Equal(Error NativeReadFailed, readMainHead transport "not a slug")
+
+    [<Fact>]
+    let ``pull request commit messages are read through the allowlisted paginated GET`` () =
+        let calls = ResizeArray<string * bool>()
+        let transport : Get =
+            fun path paginated ->
+                calls.Add((path, paginated))
+                if path = "/repos/FS-GG/.github/pulls/7/commits?per_page=100" then Body "[[{\"commit\":{\"message\":\"feat: a\\n\\nRefs #1\"}}],[{\"commit\":{\"message\":\"fix: b\"}}]]"
+                elif path = "/repos/FS-GG/.github/pulls/8/commits?per_page=100" then Body "[[]]"
+                else NotFound
+        Assert.Equal(Ok "feat: a\n\nRefs #1\n\nfix: b", readPullRequestCommits transport "FS-GG/.github" 7)
+        for path, paginated in calls do Assert.True((getArguments path paginated).IsSome, path)
+        // No commits is a failed read (the closing gate treats empty commit messages as no verdict), as is a missing pull request.
+        Assert.Equal(Error NativeReadFailed, readPullRequestCommits transport "FS-GG/.github" 8)
+        Assert.Equal(Error NativeReadFailed, readPullRequestCommits transport "FS-GG/.github" 9)

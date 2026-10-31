@@ -13,9 +13,12 @@ namespace FS.GG.Coord.GitHub
 /// and no value in this module, carries payload, nonce, native-identity or input text.
 module V2Enrollment =
 
-    /// The installed reader's payload row ceiling (`payloadRows` refuses more than 100 rows).
-    /// This planner mirrors it; it does not lift it.
+    /// The reader's programme row ceiling (`V2Projection.maximumProgrammeRows`). The planner uses that one value;
+    /// it is the ceiling for the successor's total rows (predecessor plus appended).
     val rowCap: int
+
+    /// The ceiling before the lift (100): any population within it is readable by every reader of the line.
+    val legacyRowCap: int
 
     /// Closed refusal set. `MalformedInput` covers undecodable or non-closed request/facts/pair
     /// input, which carries no further detail by design.
