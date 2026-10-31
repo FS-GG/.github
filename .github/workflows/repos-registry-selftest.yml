@@ -12,6 +12,9 @@ on:
   pull_request:
     paths:
       - "scripts/repos.sh"
+      # The org Renovate preset the audit reads for a recorded pause (#4334): flipping its `enabled` changes the
+      # audit's verdict, and the real-roster leg asserts the preset and the pause record agree.
+      - "default.json"
       - "registry/repos.yml"
       # the GENERATED half (#527). A stale lock must re-run this gate, or the digests it exists to
       # guard rot with nothing to say so — the #334 shape: the check is fine, its TRIGGER fails open.
@@ -56,6 +59,9 @@ on:
     branches: [main]
     paths:
       - "scripts/repos.sh"
+      # The org Renovate preset the audit reads for a recorded pause (#4334): flipping its `enabled` changes the
+      # audit's verdict, and the real-roster leg asserts the preset and the pause record agree.
+      - "default.json"
       - "registry/repos.yml"
       # the GENERATED half (#527). A stale lock must re-run this gate, or the digests it exists to
       # guard rot with nothing to say so — the #334 shape: the check is fine, its TRIGGER fails open.
