@@ -317,7 +317,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/main-health-observer.py collect --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
-            --dispatcher-login EHotwagner --out "$SCRATCH/findings.json" | tee "$SCRATCH/collect.log"
+            --dispatcher-login EHotwagner \
+            --dispatcher-workflow board-drift-observer.yml --out "$SCRATCH/findings.json" | tee "$SCRATCH/collect.log"
           {
             echo '### Main health observation'
             echo

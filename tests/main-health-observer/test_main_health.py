@@ -720,8 +720,8 @@ class FreshnessDispatcherAndCurrentRun(Collect):
         ]
 
     @staticmethod
-    def drow(rid, hours, actor="EHotwagner", triggering=None, event="workflow_dispatch"):
-        return {"id": rid, "event": event, "created_at": ago(hours), "html_url": f"https://github.com/x/{rid}",
+    def drow(rid, hours, actor="EHotwagner", triggering=None, event="workflow_dispatch", branch="main"):
+        return {"id": rid, "event": event, "created_at": ago(hours), "head_branch": branch, "html_url": f"https://github.com/x/{rid}",
                 "actor": {"login": actor}, "triggering_actor": {"login": triggering or actor}}
 
     def collect_with(self, wfname, schedule_ago, dispatches, login=LOGIN):
@@ -733,7 +733,7 @@ class FreshnessDispatcherAndCurrentRun(Collect):
                             "stdout": json.dumps({"workflow_runs": []})}]
         routes += self.sched_routes(wfname, schedule_ago, dispatches)
         self.gh.set(routes)
-        return MH.collect(self.plan, self.needs(), "FS-GG/.github", "999", NOW, login)
+        return MH.collect(self.plan, self.needs(), "FS-GG/.github", "999", NOW, login, (wfname,))
 
     def test_a_dispatch_by_the_dispatcher_keeps_a_dropped_cron_fresh_and_nothing_else_does(self):
         keys = lambda d: [f["key"] for f in d["findings"]]
@@ -744,6 +744,31 @@ class FreshnessDispatcherAndCurrentRun(Collect):
         self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(7, 1, event="push")])), ["stale:canary.yml"])
         self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(999, 0.1)])), ["stale:canary.yml"])
         self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(7, 80)])), ["stale:canary.yml"])
+        self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(7, 1, branch="feature/dry-run")])), ["stale:canary.yml"])
+
+    def test_the_newest_dispatcher_run_is_judged_not_the_oldest_in_either_list_order(self):
+        keys = lambda d: [f["key"] for f in d["findings"]]
+        self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(7, 70), self.drow(8, 1)])), [])
+        self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(8, 1), self.drow(7, 70)])), [])
+        self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(7, 80), self.drow(8, 60)])), ["stale:canary.yml"])
+
+    def test_the_fallback_applies_only_to_the_named_workflows(self):
+        # A manual dry run (same login) of another canary must not mask that canary's dead schedule.
+        routes = self.without_schedule_routes(self.green_routes(), "canary.yml")
+        routes += [{"match": "workflows/canary.yml/runs?branch=main&event=workflow_dispatch&per_page=10",
+                    "stdout": json.dumps({"workflow_runs": [self.drow(7, 0.2)]})}]
+        for other in self.plan["latestSchedule"]:
+            if other != "canary.yml":
+                routes += self.fresh_schedule_routes(other, created="2026-10-31T06:00:00Z")
+                routes += [{"match": f"workflows/{other}/runs?branch=main&event=workflow_dispatch&per_page=10",
+                            "stdout": json.dumps({"workflow_runs": []})}]
+        routes += self.sched_routes("canary.yml", 60, [self.drow(7, 0.2)])
+        self.gh.set(routes)
+        doc = MH.collect(self.plan, self.needs(), "FS-GG/.github", "999", NOW, self.LOGIN, ("always.yml",))
+        self.assertEqual([f["key"] for f in doc["findings"]], ["stale:canary.yml"])
+        self.assertFalse([c for c in self.gh.calls() if "canary.yml/runs?branch=main&event=workflow_dispatch" in " ".join(c["argv"])])
+        doc = MH.collect(self.plan, self.needs(), "FS-GG/.github", "999", NOW, self.LOGIN, ("canary.yml",))
+        self.assertEqual(doc["findings"], [])
 
     def test_without_a_dispatcher_login_the_dispatch_list_is_not_read(self):
         routes = self.without_schedule_routes(self.green_routes(), "canary.yml") + self.sched_routes("canary.yml", 60, [self.drow(7, 1)])
@@ -762,7 +787,7 @@ class FreshnessDispatcherAndCurrentRun(Collect):
                     others += [{"match": f"workflows/{other}/runs?branch=main&event=workflow_dispatch&per_page=10",
                                 "stdout": json.dumps({"workflow_runs": []})}]
             self.gh.set(routes + others)
-            doc = MH.collect(self.plan, self.needs(), "FS-GG/.github", "999", NOW, self.LOGIN)
+            doc = MH.collect(self.plan, self.needs(), "FS-GG/.github", "999", NOW, self.LOGIN, ("canary.yml",))
             self.assertIn(("canary.yml", "freshness"), [(u["workflow"], u["source"]) for u in doc["unknown"]], bad)
             self.assertEqual(doc["findings"], [])
 
@@ -792,15 +817,24 @@ class FreshnessDispatcherAndCurrentRun(Collect):
             if other != "canary.yml":
                 routes += self.fresh_schedule_routes(other, created="2026-10-31T06:00:00Z")
         self.gh.set(routes)
-        proc, out = self.cli(json.dumps(self.needs()), ["--dispatcher-login", self.LOGIN])
+        proc, out = self.cli(json.dumps(self.needs()), ["--dispatcher-login", self.LOGIN, "--dispatcher-workflow", "canary.yml"])
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(json.loads(out.read_text())["findings"], [])
         proc, out = self.cli(json.dumps(self.needs()))
         self.assertEqual([f["key"] for f in json.loads(out.read_text())["findings"]], ["stale:canary.yml"])
 
+    def test_the_cli_refuses_a_login_without_workflows_and_a_workflow_without_a_cron(self):
+        self.gh.set(self.green_routes())
+        for extra in (["--dispatcher-login", self.LOGIN], ["--dispatcher-workflow", "canary.yml"],
+                      ["--dispatcher-login", self.LOGIN, "--dispatcher-workflow", "fresh-a.yml"]):
+            proc, out = self.cli(json.dumps(self.needs()), extra)
+            self.assertEqual(proc.returncode, MH.NO_VERDICT, extra)
+            self.assertFalse(out.exists())
+
     def test_the_workflow_passes_the_dispatcher_login_to_collect(self):
         text = (ROOT / ".github/workflows/main-health-observer.yml").read_text()
         self.assertIn("--dispatcher-login EHotwagner", text)
+        self.assertEqual(re.findall(r"--dispatcher-workflow (\S+)", text), ["board-drift-observer.yml"])
 
 
 # --------------------------------------------------------------------------------------------------

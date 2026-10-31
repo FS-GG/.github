@@ -66,8 +66,8 @@ FRESHNESS DETAILS
 The cadence is read from the workflow's own `cron:` lines (union of all of them): the longest gap between
 consecutive firings over the next 62 days, so a weekday-only cron has a 3-day gap and a monthly one 31. Overdue
 means the newest fulfilling run is older than max(2 x cadence, 2 hours); a fulfilling run is one created by a
-`schedule` event on main, or a `workflow_dispatch` run whose actor and triggering actor are the hourly fdev
-dispatcher's token owner (`collect --dispatcher-login`; Root decision on #4990: the dispatcher is the designed
+`schedule` event on main, or a `workflow_dispatch` run on main whose actor and triggering actor are the hourly fdev
+dispatcher's token owner, for the workflows named by `collect --dispatcher-workflow` only (`--dispatcher-login`; Root decision on #4990: the dispatcher is the designed
 fallback for a dropped cron). The observer's own current run is never counted. The floor
 keeps a 5-minute cron from paging on GitHub's ordinary queueing delay. A scheduled workflow with no scheduled
 run is a finding once it has been registered for longer than that threshold, and is listed as pending before
@@ -678,7 +678,7 @@ def read_all(items: list, fn) -> list:
 
 
 def collect(plan: dict, needs: object, repo: str, run_id: str | None, now: dt.datetime,
-            dispatcher_login: str | None = None) -> dict:
+            dispatcher_login: str | None = None, dispatcher_workflows: tuple[str, ...] = ()) -> dict:
     fresh, unknown = fresh_results(plan, needs)
     evidence: dict[str, list[dict]] = {}
     superseded: dict[str, list[dict]] = {}
@@ -719,13 +719,15 @@ def collect(plan: dict, needs: object, repo: str, run_id: str | None, now: dt.da
             raise RuntimeError("unexpected workflow or run-list shape")
         listed = [r for r in listed if isinstance(r, dict) and str(r.get("id")) != str(run_id)]
         dispatched = None
-        if dispatcher_login:
+        # Only the workflows the hourly dispatcher is known to fire: a manual dry run of any other canary must
+        # not mask its dead schedule.
+        if dispatcher_login and name in dispatcher_workflows:
             runs = gh_json(f"repos/{repo}/actions/workflows/{name}/runs?branch=main&event=workflow_dispatch&per_page={DISPATCH_READ}")
             rows = runs.get("workflow_runs") if isinstance(runs, dict) else None
             if not isinstance(rows, list):
                 raise RuntimeError("unexpected dispatch run-list shape")
             mine = [r for r in rows if isinstance(r, dict) and str(r.get("id")) != str(run_id)
-                    and r.get("event") == "workflow_dispatch" and r.get("created_at")
+                    and r.get("event") == "workflow_dispatch" and r.get("head_branch") == "main" and r.get("created_at")
                     and ((r.get("actor") or {}).get("login") == dispatcher_login)
                     and ((r.get("triggering_actor") or {}).get("login") == dispatcher_login)]
             dispatched = max(mine, key=lambda r: r["created_at"]) if mine else None
@@ -806,7 +808,12 @@ def cmd_collect(args: argparse.Namespace) -> int:
         now = parse_time(args.now) if args.now else dt.datetime.now(dt.timezone.utc)
         if now is None:
             raise NoVerdict(f"--now {args.now!r} is not an ISO timestamp")
-        doc = collect(plan, needs, args.repo, args.run_id, now, args.dispatcher_login)
+        if bool(args.dispatcher_login) != bool(args.dispatcher_workflow):
+            raise NoVerdict("--dispatcher-login and --dispatcher-workflow must be given together")
+        unknown = [w for w in args.dispatcher_workflow if w not in plan["latestSchedule"]]
+        if unknown:
+            raise NoVerdict(f"--dispatcher-workflow names a workflow with no cron: {', '.join(unknown)}")
+        doc = collect(plan, needs, args.repo, args.run_id, now, args.dispatcher_login, tuple(args.dispatcher_workflow))
     except (NoVerdict, OSError, json.JSONDecodeError) as exc:
         print(f"main-health-observer: NO VERDICT: {exc.__class__.__name__}: {exc}", file=sys.stderr)
         return NO_VERDICT
@@ -1040,6 +1047,8 @@ def main(argv: list[str] | None = None) -> int:
     col.add_argument("--now", default=None, help="ISO timestamp override, for tests")
     col.add_argument("--dispatcher-login", default=None,
                      help="login of the hourly dispatcher's token owner; its workflow_dispatch runs fulfil a schedule")
+    col.add_argument("--dispatcher-workflow", action="append", default=[],
+                     help="workflow file the dispatcher fires (repeatable); the fallback applies to these only")
     col.set_defaults(func=cmd_collect)
 
     rep = sub.add_parser("report", help="open, update or close the single report issue")
