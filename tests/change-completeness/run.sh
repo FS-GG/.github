@@ -187,6 +187,26 @@ for mutation in (
     else: raise AssertionError("workflow drift/bypass mutation survived")
 print("PASS  static compiler inventory and workflow drift/bypass mutations")
 
+# The attribution file is an operand of UTEL-CI-01 (FS.GG.Coord.Cli.Tests): every workflow it names must start
+# the engine gate (push paths) and count as an engine change (classifier). Derived from the file, never restated,
+# so a newly attributed workflow cannot be added without wiring it (#4994 renamed a step and ran no engine job).
+attribution = json.loads((root / ".fsgg/telemetry-ci-attribution.json").read_text())
+named = sorted({rule["workflow"] for rule in attribution["rules"]} | {".fsgg/telemetry-ci-attribution.json"})
+classifier = (root / "scripts/change-completeness").read_text()
+pattern = re.search(r"grep -Eq '(\^\(src/FS.*?)' \"\$PATHS\"", classifier).group(1)
+def unwired(classifier_pattern, workflow_text):
+    push = workflow_text.split("  push:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
+    return [path for path in named if not re.search(classifier_pattern, path) or f'- "{path}"' not in push]
+assert not unwired(pattern, workflows[0]), unwired(pattern, workflows[0])
+for path in named:
+    stem = path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    assert stem in pattern, f"classifier does not name {path}"
+    assert unwired(pattern.replace(stem, "unrelated-literal"), workflows[0]), f"classifier mutation survived: {path}"
+    listing = f'      - "{path}"\n'
+    if listing in workflows[0]:
+        assert unwired(pattern, workflows[0].replace(listing, "")), f"push-path mutation survived: {path}"
+print("PASS  attribution operands start the engine gate and count as engine changes")
+
 count = 0
 def invoke(paths, mode="good", expected=0, engine=False, extra_env=None, revisions=None):
     global count
@@ -244,6 +264,11 @@ for path, engine in (
     calls, _ = invoke([path], engine=engine)
     compiled(calls)
     assert len(tests(calls)) == (5 if engine else 2), path
+# UTEL-CI-01 reads the attribution file and the workflows it names (#4994 drift): an engine decision
+# boundary with no V2 subject, so the engine selector runs its three focused suites and not the V2 ones.
+for path in (".fsgg/telemetry-ci-attribution.json", ".github/workflows/routine-eligibility.yml"):
+    calls, _ = invoke([path], engine=True)
+    assert calls and calls[0] == ["--version"] and len(tests(calls)) == 3 and not v2_tests(calls), path
 calls, _ = invoke(["scripts/ci-gate-impact.py", "src/FS.GG.Coord.Core/Review.fs"], engine=True)
 compiled(calls)
 for mode in ("restore-error", "build-error", "missing-target", "timeout", "signal", "missing-tool", "empty-sdk", "malformed-sdk"):
@@ -378,6 +403,8 @@ selector="$(grep -F 'if grep -Eq ' "$ROOT/scripts/change-completeness")"
 for required_pattern in \
   'src/FS\.GG\.(Coord|Telemetry)\.' \
   '\.github/workflows/coord-engine\.yml' \
+  '\.github/workflows/routine-eligibility\.yml' \
+  '\.fsgg/telemetry-ci-attribution\.json' \
   'Directory\.(Build|Packages)' \
   'dist/dotnet/Directory\.Build\.props' \
   'global\.json'; do

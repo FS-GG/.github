@@ -86,6 +86,11 @@ on:
       - "Directory.Packages.props"
       - "global.json"
       - ".github/workflows/coord-engine.yml"
+      # `UTEL-CI-01` (FS.GG.Coord.Cli.Tests) reads this file and every workflow it names, and refuses a
+      # step name that no longer exists. Renaming `routine-eligibility.yml`'s step in #4994 started no
+      # engine run (neither list named it), so the stale name first failed on `main` after the merge.
+      - ".fsgg/telemetry-ci-attribution.json"
+      - ".github/workflows/routine-eligibility.yml"
   workflow_dispatch:
 
 permissions:
