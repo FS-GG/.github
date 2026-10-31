@@ -249,7 +249,11 @@ expect "a workflow with no jobs: at HEAD is exit 3 — it cannot run" \
 # 8. The gate's own shipped surface.
 # =============================================================================================
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
-if python3 - "$REPO_ROOT/.github/workflows/job-uniqueness-coherence.yml" <<'PY'
+# The original section-8 assertions, as a function of the workflow path so the same text can be run
+# against the shipped file AND against mutants of it (.github#4730 review: a block spliced between
+# an `if python3 <<PY` and its `then` had silently stopped these from being able to fail).
+shipped_shape() {
+  python3 - "$1" <<'PY'
 import sys, yaml
 d = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
 perms = d.get("permissions")
@@ -271,8 +275,86 @@ assert "--required-context contract-coherence" not in body, (
 for jid, j in d["jobs"].items():
     assert isinstance(j.get("timeout-minutes"), int), f"job {jid} does not bound itself (#541)"
 PY
+}
+if shipped_shape "$REPO_ROOT/.github/workflows/job-uniqueness-coherence.yml"
 then ok "the shipped job-uniqueness-coherence.yml declares no invalid scope, bounds its jobs, diffs the merge-base, wires --required-context, and runs both the gate and this fixture"
 else bad "the shipped job-uniqueness-coherence.yml is not the shape this fixture asserts"
+fi
+
+# Causal control for the assertions above: each mutation breaks exactly one of them and the shape check
+# must refuse it. Without this, a refactor that detaches the assertions from their `then` still reports
+# green (the defect the review of #5002 found: `merge-base` -> `merge-bas3` passed).
+WF="$REPO_ROOT/.github/workflows/job-uniqueness-coherence.yml"
+sm=0; smbad=0
+while IFS="|" read -r label from to; do
+  [ -n "$label" ] || continue
+  m="$WORK/shape-mutant-$sm.yml"; sm=$((sm+1))
+  python3 - "$WF" "$m" "$from" "$to" <<'PY'
+import sys
+src, dst, a, b = sys.argv[1:5]
+t = open(src, encoding="utf-8").read()
+assert a in t, f"mutation anchor {a!r} is not in the shipped workflow"
+open(dst, "w", encoding="utf-8").write(t.replace(a, b))
+PY
+  if shipped_shape "$m" >/dev/null 2>&1; then
+    bad "shape mutant '$label' was NOT refused: the section-8 assertions cannot fail"; smbad=$((smbad+1))
+  fi
+done <<'MUTANTS'
+merge-base compared against a misspelling|merge-base|merge-bas3
+gate script no longer run|check-job-uniqueness.py|check-job-uniqueness.px
+fixture no longer run|bash tests/job-uniqueness/run.sh|bash tests/job-uniqueness/run.sx
+required context reconcile unwired|reconcile|reconcil3
+top-level permissions widened|contents: read|contents: write
+first job unbounded|timeout-minutes: 10|timeout-minutes: ten
+MUTANTS
+[ "$smbad" = 0 ] && [ "$sm" -gt 0 ] && ok "the section-8 shape assertions refuse each of $sm mutants (merge-base, gate, fixture, required context, permissions, timeout)"
+
+
+# .github#4730: the trigger list is derived from what the gate READS. It reads base.sha and head.sha and
+# nothing else from the event, so it must not subscribe to body/label edits (`edited`, `labeled`,
+# `unlabeled`), each of which would re-run it for no new information.
+if python3 - "$REPO_ROOT/.github/workflows/job-uniqueness-coherence.yml" <<'PY'
+import re, sys, yaml
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+ALLOWED_FIELDS = {"github.event.pull_request.base.sha", "github.event.pull_request.head.sha"}
+WANTED_TYPES = ["opened", "reopened", "synchronize"]
+
+def verdict(t):
+    """Return the list of reasons this workflow text is not the shape #4730 pinned (empty = clean)."""
+    out = []
+    d = yaml.safe_load(t)
+    on = d.get("on", d.get(True))
+    types = sorted((on.get("pull_request") or {}).get("types") or [])
+    if types != WANTED_TYPES:
+        out.append(f"pull_request.types is {types}, want {WANTED_TYPES}")
+    code = "\n".join(l for l in t.splitlines() if not l.lstrip().startswith("#"))
+    for field in sorted(set(re.findall(r"github\.event\.[A-Za-z0-9_.]+", code)) - ALLOWED_FIELDS):
+        out.append(f"reads {field}, which is outside {sorted(ALLOWED_FIELDS)}")
+    return out
+
+assert verdict(text) == [], f"the shipped workflow is not the pinned shape: {verdict(text)}"
+
+# Causal control: the pin must be able to say NO. Each mutant re-adds one trigger type, or one event
+# field read, and must be refused for that reason.
+mutants = 0
+for extra in ("edited", "labeled", "unlabeled"):
+    m = text.replace("types: [opened, synchronize, reopened]", f"types: [opened, synchronize, reopened, {extra}]", 1)
+    assert m != text
+    v = verdict(m)
+    assert any(f"pull_request.types is" in r and extra in r for r in v), f"adding {extra!r} was not refused: {v}"
+    mutants += 1
+for field in ("body", "title", "labels", "user.login"):
+    m = text.replace("BASE_SHA: ${{ github.event.pull_request.base.sha }}",
+                     "BASE_SHA: ${{ github.event.pull_request.base.sha }}\n          X: ${{ github.event.pull_request.%s }}" % field, 1)
+    assert m != text
+    v = verdict(m)
+    assert any(f"reads github.event.pull_request.{field}" in r for r in v), f"reading {field!r} was not refused: {v}"
+    mutants += 1
+print(f"trigger-pin control: shipped shape clean; {mutants} mutant(s) (3 re-added types, 4 event-field reads) each refused for the right reason")
+PY
+then ok "the shipped job-uniqueness-coherence.yml subscribes only to opened/synchronize/reopened and reads only base.sha/head.sha from the event; 7 mutants (re-added edited/labeled/unlabeled, reads of body/title/labels/user) are each refused"
+else bad "the job-uniqueness-coherence.yml trigger pin (#4730) does not hold, or cannot say NO"
 fi
 
 echo
