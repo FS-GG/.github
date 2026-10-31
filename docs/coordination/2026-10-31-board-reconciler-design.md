@@ -84,7 +84,7 @@ Native state only, as in the board-currency rule set:
 
 - per card: item id, `isArchived`, and the Status, Work level, Track and Roadmap values, each with its
   `updatedAt`;
-- per issue: node id, repository and `isPrivate`, `state`, `stateReason`, `closedAt`, `updatedAt`,
+- per issue: node id, repository and `isPrivate`, `state`, `stateReason`, `createdAt`, `closedAt`, `updatedAt`,
   body, `author`, `editor` and `lastEditedAt` (for S9's Root-authorship check), native parent,
   sub-issues (complete list), `blockedBy` (complete list);
 - for enrollment candidates only: `Issue.projectItems(includeArchived: true)`, so an archived Project 3
@@ -180,6 +180,8 @@ parent's Track, and O1 reads the children's Statuses after S3, S3b or S4 moved t
 4. **No indefinite deferral.** A `deferred: input-pending` effect becomes a proposal after 3 runs or
    24 hours, whichever comes first. The reconciler counts runs and first-deferral time in its local state
    directory; that record is an input to `derive`, so derivation stays a pure function of its inputs.
+   Proposing does not give up the effect: if its inputs settle later and its rule is enabled, it is
+   still applied automatically, and its proposal clears.
 5. **Termination.** Fills only move a field from empty to a value, and never again. S3, S3b and S4 exclude
    each other on the PR facts (an open non-draft linked PR, only a draft one, none at all), so no move
    on a Delivery can be undone by another move in the same derivation. O1 reads only its children's
@@ -203,8 +205,9 @@ Two properties follow, both over the **enabled** rule set and both tested (§10)
   applications: the k+1st derivation, with no new native change, yields no Apply effect. A fallback held
   back for an unsettled input is listed as `deferred: input-pending`, and only those entries produce
   effects in later applications.
-- **Liveness.** After k runs with no new native change, every field of every card is filled, refused or
-  proposed. No field stays deferred, because of the 3-run or 24-hour expiry above.
+- **Liveness.** With no new native change, after max(k, 3) runs or 24 hours, whichever comes first,
+  every field of every card is filled, refused or proposed. No field stays deferred, because of the
+  3-run or 24-hour expiry above (which also covers W1h's leaf settle window).
 
 | Parameter | v1 value | Why |
 |---|---|---|
@@ -212,6 +215,7 @@ Two properties follow, both over the **enabled** rule set and both tested (§10)
 | `doneSettleMinutes` | 15 | Gives the built-in Done workflow time to act before the backstop writes (S1) |
 | `reviewSettleHours` | 48 | An In review card must have stayed so this long before S4 moves it, so a PR about to open is not raced |
 | `doneVisible` | 200 | #5119's retention bound |
+| `leafSettleHours` | 24 | W1h writes Delivery on a leaf only once the issue is this old (round-4 ruling 2) |
 | `maxItemsPerRun` | 100 | Write ceiling per run (§6) |
 
 Body sections are read only in a closed grammar: a first line
@@ -224,12 +228,16 @@ reads it is enabled. Any other form is "not declared", never a guess.
 ### Work level
 
 Work level is **structural** ([round-3 ruling 1](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548872887)). It is decided in one pass over the native
-sub-issue hierarchy and reads no other board field, so it never waits and takes part in no cycle. Never
-overwrite a populated value. For an empty value:
+sub-issue hierarchy and reads no other board field, so it takes part in no cycle; only its leaf branch
+can wait, and only on time and the parent's membership. Never overwrite a populated value. For an empty value:
 
-1. **Structure (W1h).** A card with at least one native sub-issue is an Outcome. A card with no
-   sub-issues whose native parent is, or by this rule will be, an Outcome is a Delivery; since that
-   parent has at least one sub-issue, any leaf with a parent qualifies.
+1. **Structure (W1h).** A card with at least one native sub-issue is an Outcome. The leaf branch is
+   narrower ([round-4 ruling 2](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548916283)): a card with no sub-issues is written as a Delivery only when
+   (a) its native parent is a Project 3 card, (b) the issue is at least 24 hours old (`leafSettleHours`,
+   so a just-filed issue that is about to receive sub-issues is not called a Delivery), and (c) the body
+   declares no different Work level. While W1d is not enabled, the declaration is still read for (c),
+   but only to refuse. If any of (a)-(c) fails for a reason that can change, the effect is deferred with
+   the usual expiry (§3, fixpoint) and then becomes a proposal.
 2. **Declaration (W1d).** The body's `Work level:` value on the intended-fields line either confirms the
    structural value or conflicts with it. A conflict is refused (`work-level-conflict`), never hidden.
 3. A leaf with no parent has no structural value. Its declaration decides (W1d); with no declaration it
@@ -547,8 +555,8 @@ migration invocations over about 3 hours.
   it to the gate's own replay.
 - Both take the same writer lock (§8), so a post-merge write and a reconciler write never interleave.
   The merge gate waits for the lock for at most 60 seconds. If it still cannot take it, it does not send:
-  it writes a **deferred-transition** custody record (repository, PR, Delivery, item, preimage and
-  target) and reports `boardTransition: deferred` ([Root's ruling A](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548815933)):
+  it writes a **deferred-transition** custody record (repository, PR, the PR's `mergedAt`, Delivery,
+  item, preimage and target) and reports `boardTransition: deferred` ([Root's ruling A](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548815933)):
   - **Who replays.** From PR 1 the gate itself applies pending deferred records, under the lock, at the
     start of its next invocation, through its existing guarded path. Once enabled, the reconciler replays
     them too, under its own rule id `GR` in the enable file.
@@ -559,13 +567,19 @@ migration invocations over about 3 hours.
     `not-applicable` and sends nothing, as the gate already does for a closed Delivery; Done stays with
     the built-in workflow and S1.
   - **Exact preimage.** Replay sends only when the item's current Status exactly equals the recorded
-    preimage, then follows the usual guards (immediate re-read, one send, readback). Anything else turns
-    the record into a proposal and sends nothing.
-  - **State machine.** `deferred → possible-send → verified`, with `deferred → superseded` and
-    `deferred → not-applicable` as terminal exits. `deferred`, `superseded` and `not-applicable` are added
-    to the gate's custody validator, and the gate never sends for a PR whose record is `deferred` except
-    through replay. Replay durably rewrites the record to `possible-send` before its one send and to
-    `verified` after a readback proves the target.
+    preimage, then follows the usual guards (immediate re-read, one send, readback). Anything else
+    durably rewrites the record to `refused` and raises a proposal; nothing is sent.
+  - **Supersession, crash-safe** ([round-4 ruling 1](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548916283)). Every record stores its PR's `mergedAt`.
+    Supersession is decided per Delivery over **all** of that Delivery's records, whatever their state,
+    ordered by `mergedAt`. A `deferred` record older than any other record for the same Delivery never
+    sends. Before the newest record moves to `possible-send`, every older `deferred` record is durably
+    rewritten to `superseded` (written, fsynced, directory fsynced). A crash at any point therefore
+    leaves at most the newest record able to send.
+  - **State machine.** `deferred → possible-send → verified`, with `deferred → superseded`,
+    `deferred → refused` and `deferred → not-applicable` as terminal exits. `deferred`, `superseded`,
+    `refused` and `not-applicable` are added to the gate's custody validator, and the gate never sends for
+    a PR whose record is `deferred` except through replay. Replay durably rewrites the record to
+    `possible-send` before its one send and to `verified` after a readback proves the target.
   - **Readback sweep.** Each gate invocation starts with a read-only sweep of every `possible-send`
     record, before replay and before its own work: each is read back and rewritten to `verified` when the
     target is proven, and otherwise left as it is. The sweep never sends.
@@ -717,9 +731,10 @@ e and s stay.
     longest fallback chain; the k+1st derivation yields no Apply effect, and only `deferred:
     input-pending` entries produce effects after the first (§3). Generated hierarchies with every enabled
     rule subset check the bound.
-  - Liveness: after k runs with no new native change, every field of every card is filled, refused or
-    proposed; a `deferred: input-pending` entry becomes a proposal on its third run or after 24 hours of
-    injected clock time, whichever is first.
+  - Liveness: with no new native change, after max(k, 3) runs or 24 hours of injected clock time,
+    whichever is first, every field of every card is filled, refused or proposed; a `deferred:
+    input-pending` entry becomes a proposal on its third run or after 24 hours; an expired entry whose
+    inputs settle later is still applied by an enabled rule and its proposal clears.
   - Dependencies: effects are sent strictly in dependency order in both directions (parent fill before
     child inheritance, child move before roll-up), and every dependant of a refused effect is deferred,
     transitively.
@@ -727,7 +742,9 @@ e and s stay.
     O1's empty fill) never applies while an input it could inherit from is pending; a cycle collapses
     into one unit decided by declarations or proposed.
   - Structure: W1h decides Work level in one pass without reading any other field, and a declaration that
-    disagrees with it is refused.
+    disagrees with it is refused. The leaf branch writes Delivery only with a Project 3 parent, an issue at
+    least 24 hours old and no differing declaration; a differing declaration refuses it even while W1d is
+    off; otherwise it defers and expires.
   - Safety: Apply never overwrites a populated Work level, Track or Roadmap, never writes Blocked, never
     moves off Blocked or Done, never sets Done on an open issue, and never writes In review or Done to an
     Outcome.
@@ -743,7 +760,10 @@ e and s stay.
   refusing (and proposing) when the Status differs from the recorded preimage; the validator accepting
   `deferred`, `superseded` and `not-applicable`; the gate never sending for a `deferred` PR outside
   replay; replay in merge order, with older records for the same Delivery superseded and never sent; a
-  closed Delivery's record becoming `not-applicable`; `possible-send` written before the replay send; the
+  preimage mismatch ending in `refused` with a proposal; supersession decided over all of a Delivery's
+  records by the stored `mergedAt`; older `deferred` records durably `superseded` before the newest
+  becomes `possible-send`, with a crash injected between the two writes; a closed Delivery's record
+  becoming `not-applicable`; `possible-send` written before the replay send; the
   read-only `possible-send` sweep at the start of each gate invocation sending nothing; and a reconciler
   replay under `GR`.
 - **E1.** An archived member refuses the add; `RemoveCreatedItem` refuses an item without a matching
@@ -801,7 +821,9 @@ e and s stay.
 | 20 | Fallback wait | A new Outcome whose Track comes from a declaration and a child with none: the child inherits it (T1i) and never takes `Follow-up` first |
 | 21 | W1 conflict | A declaration of Outcome on a leaf whose parent has sub-issues: structurally a Delivery, so refused as `work-level-conflict`, not written |
 | 22 | Replay order | Two deferred records for one Delivery from two merges: only the newer is replayed; the older becomes `superseded` and is never sent; records for different Deliveries replay in merge order |
-| 23 | Expired deferral | A fallback whose input stays pending becomes a proposal on its third run, or after 24 hours, whichever comes first |
+| 23 | Expired deferral | A fallback whose input stays pending becomes a proposal on its third run, or after 24 hours, whichever comes first; when the input later settles, the effect applies and the proposal clears |
+| 24 | Young or unparented leaf | A leaf issue 2 hours old under a Project 3 Outcome: W1h defers, then writes Delivery after 24 hours; a leaf whose parent is off the board: deferred, then proposed; a leaf whose body declares Outcome while W1d is off: refused |
+| 25 | Crash during replay | Two `deferred` records for one Delivery and a crash after the older is rewritten to `superseded`: the next invocation sends at most once, for the newer record only; a newer `verified` record keeps an older `deferred` one from ever sending |
 
 ## 12. Phase 2 PR sequence
 
@@ -889,3 +911,11 @@ nonmaterial list:
 | 1. Settled-input deadlock | Work level is structural (W1h in one pass; W1d confirms or is refused); only Track and Status have fallbacks; remaining cycles collapse into one unit decided by declarations or proposed; `deferred: input-pending` becomes a proposal after 3 runs or 24 hours; idempotence restated as settling within k applications over the enabled rules, plus a liveness property, both tested | §3, §10, §11 |
 | 2. Replay order | Deferred records replay in merge order; for one Delivery the newest supersedes older ones, which are never sent; a fixture | §6, §10, §11 |
 | Nonmaterial | `GR` treats a closed Delivery as not-applicable; a read-only `possible-send` sweep starts each gate invocation; the monotonicity reasoning rests on S3, S3b and S4 excluding each other and on no rule reading a parent's Status | §3, §6 |
+
+[Root's rulings](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548916283) on the round-4 re-review of #5139 (at `0fc687de`), 2026-10-31:
+
+| Finding | Ruling | Where |
+|---|---|---|
+| 1. Crash-safe replay | A terminal `deferred → refused` for a preimage mismatch, raising a proposal; supersession decided per Delivery over all its records by the stored `mergedAt`; an older `deferred` record never sends; older records durably `superseded` before the newest moves to `possible-send` | §6, §10, §11 |
+| 2. W1h leaf branch | Delivery only with a Project 3 parent, an issue at least 24 hours old and no differing declaration (a refusal-only read while W1d is off); otherwise deferred with the usual expiry | §3, §10, §11 |
+| Nonmaterial | Liveness bound max(k, 3 runs) or 24 hours; an expired, proposed deferral is still applied when it settles, and its proposal clears | §3, §10 |
