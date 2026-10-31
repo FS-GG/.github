@@ -271,15 +271,35 @@ if EXTRA:
         self.assertEqual(result["commands"][0]["cleanup"], "direct-child-reaped-group-termination-requested")
 
     def test_fake_installer_inherits_runtime_resource_policy(self):
+        # `resource.getrlimit` spells "no limit" as RLIM_INFINITY, and CPython changed that spelling:
+        # -1 up to 3.14, 18446744073709551615 from 3.15. The fake installer runs under /usr/bin/python3
+        # while this process may be a different minor (CI's setup-python resolves "3.x"), so raw integers
+        # from the two interpreters are not comparable (.github#5018). Each side reports a limit as None
+        # when it equals ITS OWN interpreter's RLIM_INFINITY, so the comparison is on the semantics the
+        # test is about: finite limits are inherited exactly, and an unlimited one stays unlimited.
         fake = self.bin / "dotnet"
         fake.write_text(fake.read_text().replace("import base64,hashlib,json,os,pathlib,shutil,sys,zipfile",
                                                 "import base64,hashlib,json,os,pathlib,shutil,sys,zipfile,resource") +
-                        "\n(root/'runtime-limits.json').write_text(json.dumps({name:resource.getrlimit(getattr(resource,name)) for name in ('RLIMIT_AS','RLIMIT_FSIZE','RLIMIT_CPU')}))\n")
-        expected = {name: list(resource.getrlimit(getattr(resource, name)))
+                        "\n(root/'runtime-limits.json').write_text(json.dumps({name:[None if v==resource.RLIM_INFINITY else v for v in resource.getrlimit(getattr(resource,name))] for name in ('RLIMIT_AS','RLIMIT_FSIZE','RLIMIT_CPU')}))\n")
+        expected = {name: [None if v == resource.RLIM_INFINITY else v
+                           for v in resource.getrlimit(getattr(resource, name))]
                     for name in ("RLIMIT_AS", "RLIMIT_FSIZE", "RLIMIT_CPU")}
         code, result = self.invoke()
         self.assertEqual(code, 0, result)
         self.assertEqual(json.loads((self.root / "runtime-limits.json").read_text()), expected)
+
+    def test_rlimit_projection_is_interpreter_independent_and_not_vacuous(self):
+        # Control for the projection above (.github#5018): both interpreters must agree on an unlimited and
+        # on a finite limit, and a finite limit must NOT project to None or the test above passes vacuously.
+        project = ("import resource,json,sys;i=resource.RLIM_INFINITY;"
+                   "resource.setrlimit(resource.RLIMIT_FSIZE,tuple(i if v=='inf' else int(v) for v in sys.argv[1:3]));"
+                   "print(json.dumps([None if v==i else v for v in resource.getrlimit(resource.RLIMIT_FSIZE)]))")
+        for value, expected in (("inf", [None, None]), (str(1 << 40), [1 << 40, 1 << 40])):
+            for interpreter in {sys.executable, "/usr/bin/python3"}:
+                with self.subTest(interpreter=interpreter, limit=value):
+                    out = subprocess.run([interpreter, "-c", project, value, value],
+                                         capture_output=True, text=True, check=True).stdout
+                    self.assertEqual(json.loads(out), expected)
 
     def test_reaped_leader_with_open_pipe_retains_unsupported_group_boundary(self):
         # Finite fake lifecycle: terminal leader plus pipe still held elsewhere.
