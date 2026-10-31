@@ -288,6 +288,25 @@ The write follows these steps:
 This makes the same-turn Status rule automatic for the one transition a merge determines. The parent
 Outcome is never rolled up automatically.
 
+**As implemented** (`--board-gate`, #5094). The mode is `advisory` by default and `enforce` from phase
+3; advisory computes the same verdict and preimage decision but never refuses and never writes. The
+result carries `boardGate` (`linked`, `overridden`, `refused`, `unknown`, `unavailable` or
+`not-applicable`), a fixed-vocabulary `boardGateReason`, and `boardTransition` (`noop`, `written`,
+`refused-preimage`, `uncertain`, `not-applicable`, or advisory `would-write:<Status>` and
+`would-refuse-preimage`). Three points refine the steps above:
+
+- `scripts/board-currency-rules.py` is not distributed to receiver workspaces. Where it is absent the
+  gate reports `unavailable`: advisory records it, and enforce returns `indeterminate` (fail-closed).
+- A Delivery that the PR names with a closing keyword is treated as closed: GitHub closes it
+  asynchronously after the merge, so writing to it could race the built-in Done workflow. Like a closed
+  Delivery, it gets no write (`not-applicable`).
+- `require_preimage` and `verify_field_transition` decode the whole-project `migration-prepare`
+  snapshot, which is far more than one merge needs. The gate applies the same guard to the selected item
+  alone. The compared state is the item's complete reported field-value set, its item and project
+  identities, and the live Status field with its options (the option ID is resolved from that schema).
+  The gate requires an adjacent re-read to equal the preimage before the single send. It reports
+  `written` only when the readback equals the preimage with Status alone moved to the target.
+
 ### (c) The hourly observer
 
 It evaluates every rule over a full snapshot and maintains one tracking issue holding the current

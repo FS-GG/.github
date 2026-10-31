@@ -1322,6 +1322,88 @@ class GhApi:
             jobs.extend(job for job in page["jobs"] if isinstance(job, dict))
         return jobs
 
+    # ---- Board-currency merge gate reads/write (design §2b). Every failure raises; callers map it to a
+    # fixed verdict and never echo provider text, bodies or tokens.
+
+    def _graphql(self, query: str, variables: dict[str, str | int]) -> dict[str, Any]:
+        args = ["graphql", "-f", f"query={query}"]
+        for name, value in variables.items():
+            args.extend(["-F", f"{name}={value}"] if type(value) is int else ["-f", f"{name}={value}"])
+        value = self._run(args)
+        if not isinstance(value, dict) or value.get("errors") or not isinstance(value.get("data"), dict):
+            raise RuntimeError("board read is incomplete")
+        return value["data"]
+
+    def board_pr(self, repo: str, pr: int) -> dict[str, Any]:
+        """Body, author, last body editor and state in one read (REST has no body editor)."""
+        owner, name = board_repo_parts(repo)
+        data = self._graphql(BOARD_PR_QUERY, {"owner": owner, "name": name, "number": pr})
+        node = ((data.get("repository") or {}).get("pullRequest"))
+        if not isinstance(node, dict) or node.get("number") != pr or not isinstance(node.get("body"), str):
+            raise RuntimeError("board pull request read is incomplete")
+        edited_at = node.get("lastEditedAt")
+        login = lambda actor: actor.get("login") if isinstance(actor, dict) else None
+        return {"repo": repo, "number": pr, "state": node.get("state"), "body": node["body"],
+                "author": login(node.get("author")), "edited": edited_at is not None,
+                "editor": login(node.get("editor"))}
+
+    def board_cards(self, refs: list[str]) -> dict[str, dict | None]:
+        """Each ref's Project 3 card (Work level, Status, state, native parent) plus the parent's card."""
+        if not refs:
+            return {}
+        if len(refs) > BOARD_MAX_REFS:
+            raise RuntimeError("board read is unbounded")
+        variables: dict[str, str | int] = {}
+        declared, selected = [], []
+        for index, ref in enumerate(refs):
+            repo, _, number = ref.partition("#")
+            owner, name = board_repo_parts(repo)
+            if not number.isdigit():
+                raise RuntimeError("board reference is malformed")
+            variables.update({f"o{index}": owner, f"n{index}": name, f"k{index}": int(number)})
+            declared.append(f"$o{index}:String!,$n{index}:String!,$k{index}:Int!")
+            selected.append(f"r{index}:repository(owner:$o{index},name:$n{index}){{issueOrPullRequest(number:$k{index})"
+                            "{__typename ...on Issue{...IssueCard parent{...IssueCard}} ...on PullRequest{...PrCard}}}")
+        query = (f"query({','.join(declared)}){{{' '.join(selected)}}}"
+                 f"fragment IssueCard on Issue{{{BOARD_CARD_SELECTION}}}"
+                 f"fragment PrCard on PullRequest{{{BOARD_CARD_SELECTION}}}")
+        data = self._graphql(query, variables)
+        cards: dict[str, dict | None] = {}
+        parents: dict[str, dict | None] = {}
+        for index, ref in enumerate(refs):
+            node = (data.get(f"r{index}") or {}).get("issueOrPullRequest")
+            if not isinstance(node, dict):
+                raise RuntimeError("board reference read is incomplete")
+            cards[ref] = board_card(node)
+            parent = node.get("parent")
+            if node.get("__typename") == "Issue" and parent is not None:
+                if not isinstance(parent, dict):
+                    raise RuntimeError("board parent read is incomplete")
+                parents[board_card_key(parent)] = board_card(parent)
+        for key, card in parents.items():
+            cards.setdefault(key, card)
+        return cards
+
+    def board_item(self, ref: str) -> dict[str, Any]:
+        """Fresh complete reported state of one issue's Project 3 item and the live Status field schema."""
+        repo, _, number = ref.partition("#")
+        owner, name = board_repo_parts(repo)
+        if not number.isdigit():
+            raise RuntimeError("board reference is malformed")
+        data = self._graphql(BOARD_ITEM_QUERY, {"owner": owner, "name": name, "number": int(number)})
+        issue = (data.get("repository") or {}).get("issue")
+        if not isinstance(issue, dict):
+            raise RuntimeError("board item read is incomplete")
+        return board_item_state(issue)
+
+    def board_set_status(self, project_id: str, item_id: str, field_id: str, option_id: str) -> None:
+        """Exactly one native single-select send. Never retried: a failure is reported, not resent."""
+        command = ["gh", "project", "item-edit", "--id", item_id, "--project-id", project_id,
+                   "--field-id", field_id, "--single-select-option-id", option_id]
+        result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            raise RuntimeError("board status send is unconfirmed")
+
 
 @dataclass(frozen=True)
 class Summary:
@@ -1346,16 +1428,26 @@ class Summary:
     routineEligibility: str = "not-required"
     producerInstallation: str = "not-selected"
     producerSource: str | None = None
+    # Board-currency merge gate (design §2b). Defaults keep every pre-gate result shape valid.
+    boardGate: str = "not-applicable"
+    boardGateReason: str | None = None
+    boardTransition: str = "not-applicable"
+
+
+# A result written before the board gate existed lacks these fields and stays a valid prior result.
+BOARD_RESULT_FIELDS = frozenset({"boardGate", "boardGateReason", "boardTransition"})
 
 
 def installation_result_shape(value: Any) -> bool:
-    legacy = {f.name for f in fields(Summary)}
+    current = {f.name for f in fields(Summary)}
     if not isinstance(value, dict):
         return False
-    if set(value) == legacy:
+    keys = set(value)
+    if keys in (current, current - BOARD_RESULT_FIELDS):
         return True
     evidence = value.get("deliveryEvidence")
-    return (set(value) == legacy | {"deliveryEvidence"}
+    return (keys - {"deliveryEvidence"} in (current, current - BOARD_RESULT_FIELDS)
+            and "deliveryEvidence" in keys
             and isinstance(evidence, dict)
             and evidence.get("schema") == "fsgg.routine-delivery-evidence/1")
 
@@ -1696,6 +1788,308 @@ def routine_contract(api: NativeApi, repo: str, pr: dict[str, Any], head: str) -
     return "passed"
 
 
+# ---------------------------------------------------------------------------------------------------
+# Board-currency merge gate (docs/coordination/2026-10-31-board-currency-gate.md §2b; Refs #5094).
+#
+# Before the merge effect, a routine PR applied with --apply is checked for R1 linkage: exactly one
+# Project 3 Delivery with a parent Outcome, judged by scripts/board-currency-rules.py (linkage_of), with a
+# valid Root override evaluated first. After a confirmed merge, the linked open Delivery's Status moves
+# once to In review (or In progress with the delivery-continues marker) under a guarded write. Advisory
+# mode (the default until Root's phase 3) never changes the merge decision and never writes; it records
+# the verdict and what enforce would write. Result text is a fixed vocabulary: no body, title, login or
+# provider message is ever copied into the result or the logs.
+
+BOARD_GATE_MODES = ("advisory", "enforce")
+BOARD_OWNER = "FS-GG"
+BOARD_NUMBER = 3
+BOARD_MAX_REFS = 20
+BOARD_ROUTINE_MARKER = "fsgg:routine-development/v1"
+BOARD_CONTINUES = "<!-- fsgg:delivery-continues/v1 -->"
+BOARD_WRITABLE_PREIMAGES = ("Backlog", "Ready", "In progress", "In review")
+_BOARD_NAME = re.compile(r"[A-Za-z0-9_.-]{1,100}")
+_BOARD_TOKEN = re.compile(r"[a-z0-9-]{1,40}")
+_BOARD_NODE_ID = re.compile(r"[A-Za-z0-9_=-]{1,200}")
+# GitHub's closing keywords, as the rules module reads them. A Delivery this merge closes is treated as
+# closed: GitHub closes it asynchronously and the built-in "Item closed -> Done" workflow is Done's only writer.
+_BOARD_CLOSING = re.compile(
+    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+"
+    r"((?:[\w.-]+/[\w.-]+)?#\d+(?:\s*(?:,|and|&)\s*(?:[\w.-]+/[\w.-]+)?#\d+)*)", re.I)
+_BOARD_ONE_REF = re.compile(r"(?:([\w.-]+/[\w.-]+))?#(\d+)")
+
+BOARD_PR_QUERY = (
+    "query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name)"
+    "{pullRequest(number:$number){number state body lastEditedAt author{login} editor{login}}}}")
+_BOARD_SINGLE = "{__typename ...on ProjectV2ItemFieldSingleSelectValue{name}}"
+BOARD_CARD_SELECTION = (
+    "number state repository{nameWithOwner} projectItems(first:20,includeArchived:false){totalCount "
+    "nodes{project{number owner{__typename ...on Organization{login}}} "
+    f'workLevel:fieldValueByName(name:"Work level"){_BOARD_SINGLE} '
+    f'status:fieldValueByName(name:"Status"){_BOARD_SINGLE}}}}}')
+_BOARD_FIELD = "field{__typename ...on ProjectV2FieldCommon{id name}}"
+BOARD_ITEM_QUERY = (
+    "query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number)"
+    "{state projectItems(first:20,includeArchived:false){totalCount nodes{id "
+    "project{id number owner{__typename ...on Organization{login}} "
+    'field(name:"Status"){__typename ...on ProjectV2SingleSelectField{id name options{id name}}}} '
+    "fieldValues(first:100){totalCount nodes{__typename "
+    f"...on ProjectV2ItemFieldSingleSelectValue{{name optionId {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldTextValue{{text {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldNumberValue{{number {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldDateValue{{date {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldIterationValue{{iterationId title startDate duration {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldLabelValue{{labels(first:100){{totalCount nodes{{name}}}} {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldMilestoneValue{{milestone{{id}} {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldRepositoryValue{{repository{{id}} {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldUserValue{{users(first:100){{totalCount nodes{{login}}}} {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldPullRequestValue{{pullRequests(first:100){{totalCount nodes{{id}}}} {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldReviewerValue{{reviewers(first:100){{totalCount nodes{{__typename "
+    f"...on User{{login}} ...on Team{{slug}} ...on Mannequin{{login}}}}}} {_BOARD_FIELD}}}"
+    "}}}}}}}")
+
+
+def board_repo_parts(repo: str) -> tuple[str, str]:
+    owner, _, name = repo.partition("/")
+    if not _BOARD_NAME.fullmatch(owner) or not _BOARD_NAME.fullmatch(name):
+        raise RuntimeError("board reference is malformed")
+    return owner, name
+
+
+def board_card_key(node: dict) -> str:
+    repo = (node.get("repository") or {}).get("nameWithOwner")
+    if not isinstance(repo, str) or type(node.get("number")) is not int:
+        raise RuntimeError("board card identity is incomplete")
+    return f"{repo}#{node['number']}"
+
+
+def _board_project3(nodes: Any) -> list[dict]:
+    if not isinstance(nodes, list) or any(not isinstance(node, dict) for node in nodes):
+        raise RuntimeError("board item list is malformed")
+    return [node for node in nodes
+            if (node.get("project") or {}).get("number") == BOARD_NUMBER
+            and ((node.get("project") or {}).get("owner") or {}).get("login") == BOARD_OWNER]
+
+
+def board_card(node: dict) -> dict | None:
+    """The rules module's card shape for one issue or PR; None when it is not on Project 3."""
+    key = board_card_key(node)
+    repo, number = key.rsplit("#", 1)[0], node["number"]
+    items = node.get("projectItems")
+    if (not isinstance(items, dict) or type(items.get("totalCount")) is not int
+            or not isinstance(items.get("nodes"), list) or items["totalCount"] != len(items["nodes"])):
+        return {"repo": repo, "number": number, "unreadable": True}
+    project3 = _board_project3(items["nodes"])
+    if not project3:
+        return None
+    if len(project3) != 1:
+        return {"repo": repo, "number": number, "unreadable": True}
+
+    def single(value: Any) -> str | None:
+        return value.get("name") if isinstance(value, dict) and isinstance(value.get("name"), str) else None
+    parent = node.get("parent")
+    return {"repo": repo, "number": number, "state": node.get("state"),
+            "workLevel": single(project3[0].get("workLevel")), "status": single(project3[0].get("status")),
+            "parent": ({"repo": board_card_key(parent).rsplit("#", 1)[0], "number": parent["number"]}
+                       if isinstance(parent, dict) else None)}
+
+
+def _board_complete(value: Any) -> None:
+    """Every nested connection the read reported must be complete: a truncated value proves nothing."""
+    if isinstance(value, dict):
+        if "totalCount" in value and (not isinstance(value.get("nodes"), list)
+                                      or value["totalCount"] != len(value["nodes"])):
+            raise RuntimeError("board item value is truncated")
+        for item in value.values():
+            _board_complete(item)
+    elif isinstance(value, list):
+        for item in value:
+            _board_complete(item)
+
+
+def board_item_state(issue: dict) -> dict[str, Any]:
+    """Normalize one issue's Project 3 item: identities, live Status options, Status and every other value."""
+    state = issue.get("state")
+    items = issue.get("projectItems")
+    if state not in ("OPEN", "CLOSED") or not isinstance(items, dict) or items.get("totalCount") != len(items.get("nodes") or []):
+        raise RuntimeError("board item read is incomplete")
+    project3 = _board_project3(items["nodes"])
+    if len(project3) != 1:
+        raise RuntimeError("board item is absent or ambiguous")
+    item = project3[0]
+    project, field = item.get("project") or {}, (item.get("project") or {}).get("field") or {}
+    options = field.get("options")
+    if (not isinstance(item.get("id"), str) or not isinstance(project.get("id"), str)
+            or field.get("__typename") != "ProjectV2SingleSelectField" or not isinstance(field.get("id"), str)
+            or not isinstance(options, list)
+            or any(not isinstance(o, dict) or not isinstance(o.get("id"), str) or not isinstance(o.get("name"), str)
+                   for o in options)
+            or len({o["name"] for o in options}) != len(options)):
+        raise RuntimeError("board Status schema is unreadable")
+    values = item.get("fieldValues")
+    if not isinstance(values, dict) or values.get("totalCount") != len(values.get("nodes") or []):
+        raise RuntimeError("board item values are truncated")
+    _board_complete(values["nodes"])
+    status_nodes = [v for v in values["nodes"] if isinstance(v, dict)
+                    and ((v.get("field") or {}).get("id") == field["id"])]
+    others = [v for v in values["nodes"] if v not in status_nodes]
+    if len(status_nodes) > 1 or any(not isinstance(v, dict) for v in values["nodes"]):
+        raise RuntimeError("board Status value is ambiguous")
+    by_name = {o["name"]: o["id"] for o in options}
+    status = None
+    if status_nodes:
+        status = status_nodes[0].get("name")
+        if not isinstance(status, str) or by_name.get(status) != status_nodes[0].get("optionId"):
+            raise RuntimeError("board Status value is not a live option")
+    return {"state": state, "itemId": item["id"], "projectId": project["id"], "statusFieldId": field["id"],
+            "options": [[o["id"], o["name"]] for o in options], "status": status,
+            "values": sorted(json.dumps(v, sort_keys=True, separators=(",", ":")) for v in others)}
+
+
+def load_board_rules() -> Any | None:
+    """The shared R1 implementation, or None where it is not installed (receiver workspaces)."""
+    path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "board-currency-rules.py"
+    try:
+        if not path.is_file():
+            return None
+        spec = importlib.util.spec_from_file_location("routine_board_currency_rules", path)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    except (Exception, SystemExit):
+        # A broken or exiting module is an absent one; it never ends the merge helper.
+        return None
+    params = getattr(module, "PARAMS", None)
+    logins = params.get("rootLogins") if isinstance(params, dict) else None
+    if (not all(callable(getattr(module, name, None)) for name in ("override_of", "linkage_of", "pr_refs", "visible_text"))
+            or not isinstance(logins, list) or not logins
+            or not all(isinstance(login, str) and login for login in logins)):
+        return None
+    return module
+
+
+@dataclass(frozen=True)
+class BoardVerdict:
+    verdict: str                     # linked | overridden | refused | unknown | unavailable
+    reason: str | None
+    delivery: str | None = None      # owner/repo#N of the linked Delivery
+
+
+def evaluate_board_gate(api: Any, rules: Any, repo: str, number: int, rest_body: Any) -> BoardVerdict:
+    """Design §2 evaluation order for one open routine PR. Pure apart from the API reads; never raises."""
+    if rules is None:
+        return BoardVerdict("unavailable", "rules-module-unavailable")
+    try:
+        pr = api.board_pr(repo, number)
+    except Exception:
+        return BoardVerdict("unknown", "pr-read-failed")
+    if (not isinstance(pr, dict) or pr.get("body") != rest_body or pr.get("state") != "OPEN"
+            or not isinstance(pr.get("edited"), bool)):
+        # The REST envelope already passed eligibility; a different body or state is a moved candidate.
+        return BoardVerdict("unknown", "pr-read-inconsistent")
+    try:
+        roots = {login.lower() for login in rules.PARAMS["rootLogins"]}
+        if rules.override_of(pr, roots) is not None:
+            return BoardVerdict("overridden", "valid-override")
+        refs = sorted(rules.pr_refs(repo, pr["body"]) - {f"{repo}#{number}"})
+    except Exception:
+        return BoardVerdict("unknown", "rules-error")
+    if len(refs) > BOARD_MAX_REFS:
+        return BoardVerdict("unknown", "too-many-refs")
+    try:
+        cards = api.board_cards(refs) if refs else {}
+    except Exception:
+        return BoardVerdict("unknown", "board-read-failed")
+    if not isinstance(cards, dict) or any(ref not in cards for ref in refs):
+        return BoardVerdict("unknown", "board-read-incomplete")
+    try:
+        # Each ref is resolved from its own issue, so a miss is a definite "not on Project 3".
+        failures, delivery = rules.linkage_of(dict(pr, repo=repo, number=number, state="OPEN"), cards.get,
+                                              anonymous_unreadable=False)
+    except Exception:
+        return BoardVerdict("unknown", "rules-error")
+    if not isinstance(failures, list) or any(
+            not isinstance(f, tuple) or len(f) != 2 or f[0] not in ("R1", "U")
+            or not isinstance(f[1], str) or not _BOARD_TOKEN.fullmatch(f[1]) for f in failures):
+        return BoardVerdict("unknown", "rules-error")
+    unknown = [reason for rule, reason in failures if rule == "U"]
+    if unknown:
+        return BoardVerdict("unknown", f"U {unknown[0]}")
+    if failures:
+        return BoardVerdict("refused", f"R1 {failures[0][1]}")
+    if not isinstance(delivery, dict) or not isinstance(delivery.get("repo"), str) or type(delivery.get("number")) is not int:
+        return BoardVerdict("unknown", "rules-error")
+    return BoardVerdict("linked", None, f"{delivery['repo']}#{delivery['number']}")
+
+
+def board_closing_refs(rules: Any, repo: str, body: Any) -> set[str]:
+    refs: set[str] = set()
+    for match in _BOARD_CLOSING.finditer(rules.visible_text(body)):
+        for ref in _BOARD_ONE_REF.finditer(match.group(1)):
+            refs.add(f"{ref.group(1) or repo}#{int(ref.group(2))}".lower())
+    return refs
+
+
+def _board_item_valid(value: Any) -> bool:
+    return (isinstance(value, dict)
+            and set(value) == {"state", "itemId", "projectId", "statusFieldId", "options", "status", "values"}
+            and value["state"] in ("OPEN", "CLOSED")
+            and all(isinstance(value[k], str) and _BOARD_NODE_ID.fullmatch(value[k])
+                    for k in ("itemId", "projectId", "statusFieldId"))
+            and isinstance(value["options"], list) and isinstance(value["values"], list)
+            and all(isinstance(o, list) and len(o) == 2 and all(isinstance(x, str) for x in o) for o in value["options"])
+            and len({o[1] for o in value["options"]}) == len(value["options"])
+            and (value["status"] is None or isinstance(value["status"], str)))
+
+
+def board_transition(api: Any, rules: Any, repo: str, body: Any, delivery: str, mode: str) -> str:
+    """The one post-merge Delivery Status transition (design §2b steps 1-6). Never raises, never sets Done,
+    never resends. Advisory mode reads only and reports what enforce would do."""
+    refuse = "refused-preimage" if mode == "enforce" else "would-refuse-preimage"
+    try:
+        target = "In progress" if BOARD_CONTINUES in rules.visible_text(body) else "In review"
+        if delivery.lower() in board_closing_refs(rules, repo, body):
+            return "not-applicable"
+    except Exception:
+        return refuse
+    try:
+        before = api.board_item(delivery)
+    except Exception:
+        return refuse
+    if not _board_item_valid(before):
+        return refuse
+    if before["state"] == "CLOSED":
+        return "not-applicable"
+    if before["status"] == target:
+        return "noop"
+    options = {name: identity for identity, name in before["options"]}
+    if before["status"] not in BOARD_WRITABLE_PREIMAGES or not _BOARD_NODE_ID.fullmatch(options.get(target) or ""):
+        # Blocked records Root's judgement; Done, empty and unknown values are never overwritten.
+        return refuse
+    if mode != "enforce":
+        return f"would-write:{target}"
+    try:
+        adjacent = api.board_item(delivery)
+    except Exception:
+        return "refused-preimage"
+    if adjacent != before:
+        return "refused-preimage"
+    # Possible-send custody: from here on the only outcomes are a verified write or uncertain.
+    print("fsgg routine board transition: possible-send recorded; one Status send follows", file=sys.stderr)
+    try:
+        api.board_set_status(before["projectId"], before["itemId"], before["statusFieldId"], options[target])
+    except Exception:
+        return "uncertain"
+    try:
+        after = api.board_item(delivery)
+    except Exception:
+        return "uncertain"
+    return "written" if after == dict(before, status=target) else "uncertain"
+
+
+def board_routine_body(body: Any) -> bool:
+    return isinstance(body, str) and BOARD_ROUTINE_MARKER in body
+
+
 def summarize(
     api: NativeApi,
     *,
@@ -1709,7 +2103,11 @@ def summarize(
     candidate_observer: Callable[[Summary], None] | None = None,
     producer_source: str | None = None,
     installation_prior: dict | None = None,
+    board_gate: str = "advisory",
+    board_rules_loader: Callable[[], Any] | None = None,
 ) -> tuple[int, Summary]:
+    if board_gate not in BOARD_GATE_MODES:
+        raise RuntimeError("board gate mode is not advisory or enforce")
     if producer_source is not None and repo == FOURD_REPOSITORY and merge_method != "squash":
         raise RuntimeError("FourD producer installation requires the accepted squash merge method")
     if producer_source is not None and (publication_required or not coherent_workflow
@@ -1741,6 +2139,7 @@ def summarize(
         raise RuntimeError("native pull request readback is not an object")
     base_ref, base_sha = base_of(before)
     routine_state = "unobserved"
+    board = {"boardGate": "not-applicable", "boardGateReason": None, "boardTransition": "not-applicable"}
     def bound(*values: Any, native: dict[str, Any] = before) -> Summary:
         now = datetime.now(timezone.utc)
         outcome_at = outcome_time_of(native)
@@ -1751,7 +2150,7 @@ def summarize(
         result = Summary(*values, baseRef=base_ref, baseSha=base_sha,
                        outcomeAt=outcome_at,
                        observedAt=now.isoformat().replace("+00:00", "Z"),
-                       routineEligibility=routine_state)
+                       routineEligibility=routine_state, **board)
         if producer_source is not None:
             if result.reason is None and getattr(api, "_installation_policy_fact", None) in ("required-policy-observed-empty", "no-required-contexts-reported",
                     "native-policy-unavailable; no-required-contexts-reported", "native-policy-unavailable; required-contexts-passed"):
@@ -1866,6 +2265,33 @@ def summarize(
                 "refused", "not-delivered", publication, None, 0, str(error), disposition, coherent,
             )
 
+    gate: BoardVerdict | None = None
+    board_rules = None
+    if board_routine_body(before.get("body")):
+        # Design §2 evaluation order, before the merge effect and only under --apply (this point).
+        board_rules = (board_rules_loader or load_board_rules)()
+        gate = evaluate_board_gate(api, board_rules, repo, pr_number, before.get("body"))
+        board.update(boardGate=gate.verdict, boardGateReason=gate.reason)
+        if board_gate == "enforce" and gate.verdict == "refused":
+            return 2, bound(
+                "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+                "refused", "not-delivered", publication, None, 0, f"board-linkage {gate.reason}",
+                disposition, coherent,
+            )
+        if board_gate == "enforce" and gate.verdict in ("unknown", "unavailable"):
+            # Fail closed: no merge attempt, so attempts stay 0 and delivery is certainly absent.
+            return 3, bound(
+                "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+                "indeterminate", "not-delivered", publication, None, 0, "board-linkage unknown",
+                disposition, coherent,
+            )
+
+    def board_after_merge() -> None:
+        # After the merged-PR and merge-commit readback, and only for a linked Delivery.
+        if gate is not None and gate.verdict == "linked" and gate.delivery is not None:
+            board["boardTransition"] = board_transition(
+                api, board_rules, repo, before.get("body"), gate.delivery, board_gate)
+
     request = merge_effect_request(
         repo, pr_number, expected_head, base_ref, base_sha, merge_method,
     )
@@ -1940,12 +2366,14 @@ def summarize(
                     "coherent validation failed and the merge effect remains unproven",
                     disposition, coherent,
                 )
+            board_after_merge()
             return 4, bound(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
                 "delivered-disputed", "delivered", publication, merge_commit, attempts, reason,
                 disposition, "disputed", native=after,
             )
     if effect_confirmed:
+        board_after_merge()
         delivered_result = bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
             "delivered", "delivered", publication, merge_commit, attempts, None,
@@ -2210,6 +2638,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--watch-seconds", type=int, help="required watch budget, 1..600 seconds")
     result.add_argument("--evidence-run", type=int, help="append verified PR checkout evidence from this native run")
     result.add_argument("--apply", action="store_true")
+    result.add_argument("--board-gate", choices=BOARD_GATE_MODES, default="advisory",
+                        help="board-currency merge gate under --apply for routine PRs; advisory records only")
     result.add_argument("--install-routine-producer", action="store_true",
                         help="closed first installation only; never ordinary eligibility success")
     result.add_argument("--routine-producer-source", help="immutable protected FS-GG/.github template commit")
@@ -2330,7 +2760,7 @@ def main(argv: list[str]) -> int:
             merge_method=args.merge_method, publication_required=args.publication == "required",
             apply=args.apply, coherent_workflow=args.coherent_workflow, candidate_observer=observer,
             producer_source=args.routine_producer_source if args.install_routine_producer else None,
-            installation_prior=prior,
+            installation_prior=prior, board_gate=args.board_gate,
         )
     except (RuntimeError, AmbiguousWrite) as error:
         code = 3

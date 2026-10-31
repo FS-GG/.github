@@ -24,8 +24,9 @@ from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+# The board-gate mutation controls (routine-delivery-board-mutate.py) point this at a mutated copy.
 SPEC = importlib.util.spec_from_file_location(
-    "routine_delivery", ROOT / "tools/routine-delivery.py"
+    "routine_delivery", os.environ.get("ROUTINE_DELIVERY_UNDER_TEST") or ROOT / "tools/routine-delivery.py"
 )
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -1962,6 +1963,10 @@ class InstallationApi(MODULE.GhApi):
     def coherent_jobs(self, *_): return []
     def qualification_selection(self, *_): return None
 
+    def board_pr(self, *_):
+        # The advisory board gate reads through its own methods; `_run` above is the merge transport only.
+        raise RuntimeError("fixture: board-currency reads are outside installation fixtures")
+
 
 class ProducerInstallationTests(unittest.TestCase):
     @classmethod
@@ -3291,6 +3296,529 @@ jobs:
         for code,body in ((1,b'{}'),(0,b'not JSON')):
             with mock.patch.object(MODULE,'bounded_watch_query',return_value=(code,body)):
                 with self.assertRaises(RuntimeError):api.installation_read('repos/FS-GG/FS.GG.Coordination')
+
+
+# ---------------------------------------------------------------------------------------------------
+# Board-currency merge gate (design §2b; Refs #5094). Every branch runs against a fake native API and the
+# real shared R1 implementation (scripts/board-currency-rules.py); nothing here reaches GitHub.
+
+BOARD_RULES = MODULE.load_board_rules()
+BOARD_STATUSES = ("Backlog", "Ready", "In progress", "In review", "Blocked", "Done")
+BOARD_OPTION = {name: f"opt{index}" for index, name in enumerate(BOARD_STATUSES)}
+BOARD_DELIVERY = "FS-GG/.github#900"
+BOARD_OUTCOME = "FS-GG/.github#800"
+BOARD_MARKER = f"<!-- fsgg:routine-development/v1 head={HEAD} operation=source-change -->"
+BOARD_OVERRIDE = '<!-- fsgg:board-gate-override/v1 rule=R1 reason="private fixture reason" -->'
+
+
+def board_body(*lines: str) -> str:
+    return "\n".join((BOARD_MARKER, "Private fixture prose.") + lines)
+
+
+def board_routine_pr(body: str) -> dict:
+    pr = opened()
+    pr["head"]["ref"] = "routine/fixture"
+    pr["body"] = body
+    return pr
+
+
+def board_card(ref: str, level: str, *, status: str = "In progress", state: str = "OPEN",
+               parent: str | None = None) -> dict:
+    repo, number = ref.rsplit("#", 1)
+    card = {"repo": repo, "number": int(number), "state": state, "workLevel": level, "status": status, "parent": None}
+    if parent:
+        prepo, pnumber = parent.rsplit("#", 1)
+        card["parent"] = {"repo": prepo, "number": int(pnumber)}
+    return card
+
+
+def board_linked_cards() -> dict:
+    return {BOARD_DELIVERY: board_card(BOARD_DELIVERY, "Delivery", parent=BOARD_OUTCOME),
+            BOARD_OUTCOME: board_card(BOARD_OUTCOME, "Outcome")}
+
+
+def board_item(status: str | None = "In progress", state: str = "OPEN", values: list | None = None) -> dict:
+    return {"state": state, "itemId": "PVTI_item", "projectId": "PVT_project", "statusFieldId": "PVTSSF_status",
+            "options": [[BOARD_OPTION[name], name] for name in BOARD_STATUSES], "status": status,
+            "values": list(values if values is not None else ['{"text":"Title"}'])}
+
+
+class BoardApi(FakeApi):
+    """FakeApi plus the gate's four board methods, each counted, each able to fail."""
+
+    def __init__(self, reads, writes=None, *, body: str, author: str = "agent", edited: bool = False,
+                 editor: str | None = None, pr_meta=None, cards=None, items=(), send=None):
+        super().__init__(reads, writes)
+        self.pr_meta = pr_meta if pr_meta is not None else {
+            "repo": "FS-GG/.github", "number": 1, "state": "OPEN", "body": body,
+            "author": author, "edited": edited, "editor": editor}
+        self.cards = board_linked_cards() if cards is None else cards
+        self.items = list(items)
+        self.send = send
+        self.calls: list[str] = []
+        self.sends: list[tuple] = []
+        self.custody: list[bool] = []
+        self.item_reads = 0
+
+    def board_pr(self, repo, number):
+        self.calls.append("board_pr")
+        if isinstance(self.pr_meta, BaseException):
+            raise self.pr_meta
+        return copy.deepcopy(self.pr_meta)
+
+    def board_cards(self, refs):
+        self.calls.append("board_cards")
+        if isinstance(self.cards, BaseException):
+            raise self.cards
+        return {**{ref: None for ref in refs}, **copy.deepcopy(self.cards)}
+
+    def board_item(self, ref):
+        self.calls.append("board_item")
+        self.item_reads += 1
+        value = self.items.pop(0) if self.items else AssertionError("unexpected board item read")
+        if isinstance(value, BaseException):
+            raise value
+        return copy.deepcopy(value)
+
+    def board_set_status(self, project_id, item_id, field_id, option_id):
+        self.calls.append("board_set_status")
+        log = getattr(sys.stderr, "getvalue", lambda: "")()
+        self.custody.append(log.count("possible-send recorded") == len(self.sends) + 1)
+        self.sends.append((project_id, item_id, field_id, option_id))
+        if isinstance(self.send, BaseException):
+            raise self.send
+
+
+class BoardGateTests(unittest.TestCase):
+    def setUp(self):
+        self.assertIsNotNone(BOARD_RULES, "the shared rules module must load from this checkout")
+
+    def gate(self, api: BoardApi, mode: str, *, loader=None, apply: bool = True):
+        with contextlib.redirect_stderr(io.StringIO()) as log:
+            code, result = MODULE.summarize(
+                api, repo="FS-GG/.github", pr_number=1, expected_head=HEAD, merge_method="squash",
+                publication_required=False, apply=apply, board_gate=mode,
+                board_rules_loader=loader or (lambda: BOARD_RULES))
+        # Possible-send custody is recorded exactly when (and before) the one send is attempted.
+        self.assertEqual(log.getvalue().count("possible-send recorded"), len(api.sends))
+        self.assertTrue(all(api.custody), "possible-send must be recorded before the send")
+        # Done has one writer (the built-in project workflow): no branch of the gate ever sends it.
+        self.assertNotIn(BOARD_OPTION["Done"], [send[3] for send in api.sends])
+        # Private body text, the override reason and logins never reach the result.
+        text = json.dumps(asdict(result))
+        for private in ("Private fixture prose", "private fixture reason", "EHotwagner", "agent"):
+            self.assertNotIn(private, text)
+        return code, result
+
+    def merging(self, body: str, **kwargs) -> BoardApi:
+        pr = board_routine_pr(body)
+        return BoardApi([pr, pr, merged()], [{"merged": True, "sha": MERGE}], body=body, **kwargs)
+
+    def holding(self, body: str, **kwargs) -> BoardApi:
+        pr = board_routine_pr(body)
+        return BoardApi([pr, pr], body=body, **kwargs)
+
+    # ---- verdict x mode ----
+
+    def test_linked_advisory_records_would_write_and_never_sends(self):
+        api = self.merging(board_body("Refs #900"), items=[board_item("In progress")])
+        code, result = self.gate(api, "advisory")
+        self.assertEqual((code, result.outcome, api.attempts, result.attempts), (0, "delivered", 1, 1))
+        self.assertEqual((result.boardGate, result.boardGateReason, result.boardTransition),
+                         ("linked", None, "would-write:In review"))
+        self.assertEqual((api.sends, api.item_reads), ([], 1))
+
+    def test_linked_enforce_merges_then_writes_in_review_exactly_once(self):
+        before = board_item("In progress")
+        api = self.merging(board_body("Refs #900", "Refs #800"),
+                           items=[before, before, board_item("In review")])
+        code, result = self.gate(api, "enforce")
+        self.assertEqual((code, result.outcome, result.codeDelivery, api.attempts), (0, "delivered", "delivered", 1))
+        self.assertEqual((result.boardGate, result.boardTransition), ("linked", "written"))
+        self.assertEqual(api.sends, [("PVT_project", "PVTI_item", "PVTSSF_status", BOARD_OPTION["In review"])])
+        # Order: gate reads, merge, then preimage, adjacent preimage, send, independent readback.
+        self.assertEqual(api.calls, ["board_pr", "board_cards", "board_item", "board_item", "board_set_status", "board_item"])
+
+    def test_refused_enforce_makes_no_merge_call_and_leaves_attempts(self):
+        for refs, reason in (("Refs #800", "R1 no-delivery"), ("Refs #901", "R1 no-delivery"),
+                             ("Refs #900, #902", "R1 multiple-deliveries")):
+            with self.subTest(refs=refs):
+                cards = board_linked_cards()
+                cards["FS-GG/.github#902"] = board_card("FS-GG/.github#902", "Delivery", parent=BOARD_OUTCOME)
+                api = self.holding(board_body(refs), cards=cards)
+                code, result = self.gate(api, "enforce")
+                self.assertEqual((code, result.outcome, result.codeDelivery, result.attempts, api.attempts),
+                                 (2, "refused", "not-delivered", 0, 0))
+                self.assertEqual(result.reason, f"board-linkage {reason}")
+                self.assertEqual((result.boardGate, result.boardGateReason, result.boardTransition),
+                                 ("refused", reason, "not-applicable"))
+                self.assertNotIn("board_item", api.calls)
+
+    def test_refused_enforce_covers_parent_closed_and_done_delivery(self):
+        for card, reason in (
+                (board_card(BOARD_DELIVERY, "Delivery"), "R1 no-parent-outcome"),
+                (board_card(BOARD_DELIVERY, "Delivery", state="CLOSED", status="Done", parent=BOARD_OUTCOME), "R1 delivery-closed"),
+                (board_card(BOARD_DELIVERY, "Delivery", status="Done", parent=BOARD_OUTCOME), "R1 delivery-done")):
+            with self.subTest(reason=reason):
+                cards = board_linked_cards()
+                cards[BOARD_DELIVERY] = card
+                api = self.holding(board_body("Refs #900"), cards=cards)
+                code, result = self.gate(api, "enforce")
+                self.assertEqual((code, result.outcome, api.attempts, result.reason),
+                                 (2, "refused", 0, f"board-linkage {reason}"))
+
+    def test_refused_advisory_never_changes_the_merge(self):
+        api = self.merging(board_body("Refs #800"))
+        code, result = self.gate(api, "advisory")
+        self.assertEqual((code, result.outcome, api.attempts), (0, "delivered", 1))
+        self.assertEqual((result.boardGate, result.boardGateReason, result.boardTransition),
+                         ("refused", "R1 no-delivery", "not-applicable"))
+        self.assertEqual(api.sends, [])
+
+    def test_unknown_enforce_is_indeterminate_without_merge(self):
+        unreadable = board_linked_cards()
+        unreadable[BOARD_DELIVERY] = {"repo": "FS-GG/.github", "number": 900, "unreadable": True}
+        parent_unreadable = board_linked_cards()
+        parent_unreadable[BOARD_OUTCOME] = {"repo": "FS-GG/.github", "number": 800, "unreadable": True}
+        for label, kwargs, reason in (
+                ("cards failed", {"cards": RuntimeError("provider text")}, "board-read-failed"),
+                ("pr failed", {"pr_meta": RuntimeError("provider text")}, "pr-read-failed"),
+                ("reference unreadable", {"cards": unreadable}, "U r1-reference-unreadable"),
+                ("parent unreadable", {"cards": parent_unreadable}, "U r1-parent-unreadable")):
+            with self.subTest(label):
+                api = self.holding(board_body("Refs #900"), **kwargs)
+                code, result = self.gate(api, "enforce")
+                self.assertEqual((code, result.outcome, result.codeDelivery, result.attempts, api.attempts),
+                                 (3, "indeterminate", "not-delivered", 0, 0))
+                self.assertEqual(result.reason, "board-linkage unknown")
+                self.assertEqual((result.boardGate, result.boardGateReason), ("unknown", reason))
+                self.assertNotIn("provider text", json.dumps(asdict(result)))
+
+    def test_unknown_advisory_merges_and_records(self):
+        api = self.merging(board_body("Refs #900"), cards=RuntimeError("provider text"))
+        code, result = self.gate(api, "advisory")
+        self.assertEqual((code, result.outcome, api.attempts), (0, "delivered", 1))
+        self.assertEqual((result.boardGate, result.boardGateReason, result.boardTransition),
+                         ("unknown", "board-read-failed", "not-applicable"))
+
+    def test_moved_body_or_state_between_reads_is_unknown(self):
+        for change in ({"body": board_body("Refs #900", "edited later")}, {"state": "MERGED"}, {"edited": None}):
+            with self.subTest(change=change):
+                api = self.holding(board_body("Refs #900"))
+                api.pr_meta.update(change)
+                code, result = self.gate(api, "enforce")
+                self.assertEqual((code, api.attempts, result.boardGateReason), (3, 0, "pr-read-inconsistent"))
+                self.assertNotIn("board_cards", api.calls)
+
+    # ---- override first ----
+
+    def test_override_first_never_reads_the_board(self):
+        for mode in ("advisory", "enforce"):
+            with self.subTest(mode=mode):
+                body = board_body("Refs #4730", BOARD_OVERRIDE)
+                api = self.merging(body, author="EHotwagner", cards=AssertionError("board read"))
+                code, result = self.gate(api, mode)
+                self.assertEqual((code, result.outcome, api.attempts), (0, "delivered", 1))
+                self.assertEqual((result.boardGate, result.boardGateReason, result.boardTransition),
+                                 ("overridden", "valid-override", "not-applicable"))
+                self.assertEqual(api.calls, ["board_pr"])
+
+    def test_invalid_override_is_judged_as_absent(self):
+        body = board_body("Refs #800", BOARD_OVERRIDE)
+        for label, kwargs in (("agent author", {"author": "someone"}),
+                              ("agent editor", {"author": "EHotwagner", "edited": True, "editor": "someone"}),
+                              ("override in code span", {"author": "EHotwagner"})):
+            with self.subTest(label):
+                text = board_body("Refs #800", f"`{BOARD_OVERRIDE}`") if "code" in label else body
+                api = self.holding(text, **kwargs)
+                code, result = self.gate(api, "enforce")
+                self.assertEqual((code, result.outcome, api.attempts, result.boardGateReason),
+                                 (2, "refused", 0, "R1 no-delivery"))
+
+    # ---- module availability ----
+
+    def test_unavailable_module_is_advisory_record_or_enforce_indeterminate(self):
+        api = self.merging(board_body("Refs #900"))
+        code, result = self.gate(api, "advisory", loader=lambda: None)
+        self.assertEqual((code, result.outcome, api.attempts, result.boardGate, result.boardGateReason),
+                         (0, "delivered", 1, "unavailable", "rules-module-unavailable"))
+        self.assertEqual(api.calls, [])
+        api = self.holding(board_body("Refs #900"))
+        code, result = self.gate(api, "enforce", loader=lambda: None)
+        self.assertEqual((code, result.outcome, result.reason, api.attempts, result.boardGate),
+                         (3, "indeterminate", "board-linkage unknown", 0, "unavailable"))
+        self.assertEqual(api.calls, [])
+
+    def test_receiver_layout_without_rules_module_loads_nothing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fake = pathlib.Path(directory) / "tools" / "routine-delivery.py"
+            with mock.patch.object(MODULE, "__file__", str(fake)):
+                self.assertIsNone(MODULE.load_board_rules())
+            (pathlib.Path(directory) / "scripts").mkdir()
+            (pathlib.Path(directory) / "scripts" / "board-currency-rules.py").write_text("raise SystemExit(9)\n")
+            with mock.patch.object(MODULE, "__file__", str(fake)):
+                self.assertIsNone(MODULE.load_board_rules())
+
+    # ---- applicability ----
+
+    def test_gate_runs_only_under_apply_for_routine_marker_on_open_pr(self):
+        plain = opened()
+        api = BoardApi([plain, merged()], [{"merged": True, "sha": MERGE}], body="Fixture prose")
+        code, result = self.gate(api, "enforce")
+        self.assertEqual((code, result.boardGate, api.calls), (0, "not-applicable", []))
+        api = self.holding(board_body("Refs #800"))
+        api.reads = iter([board_routine_pr(board_body("Refs #800"))])
+        code, result = self.gate(api, "enforce", apply=False)
+        self.assertEqual((code, result.outcome, result.boardGate, api.calls), (0, "ready", "not-applicable", []))
+        done = merged(); done["head"]["ref"] = "routine/fixture"; done["body"] = board_body("Refs #800")
+        api = BoardApi([done], body=done["body"])
+        code, result = self.gate(api, "enforce")
+        self.assertEqual((code, result.outcome, result.boardGate, api.calls), (0, "delivered", "not-applicable", []))
+
+    def test_invalid_mode_refuses_before_any_read(self):
+        api = self.holding(board_body("Refs #900"))
+        with self.assertRaises(RuntimeError):
+            self.gate(api, "required")
+        self.assertEqual(api.read_attempts, 0)
+
+    # ---- post-merge transition ----
+
+    def test_preimage_cases_enforce(self):
+        cases = (
+            ("Backlog", "written"), ("Ready", "written"), ("In progress", "written"),
+            ("In review", "noop"), ("Blocked", "refused-preimage"), ("Done", "refused-preimage"),
+            (None, "refused-preimage"), ("Unknown option", "refused-preimage"))
+        for status, expected in cases:
+            with self.subTest(status=status):
+                before = board_item(status)
+                items = [before, before, board_item("In review")] if expected == "written" else [before]
+                api = self.merging(board_body("Refs #900"), items=items)
+                code, result = self.gate(api, "enforce")
+                self.assertEqual((code, result.outcome, result.boardTransition), (0, "delivered", expected))
+                self.assertEqual(len(api.sends), 1 if expected == "written" else 0)
+
+    def test_preimage_cases_advisory_never_write(self):
+        cases = (("Backlog", "would-write:In review"), ("In review", "noop"),
+                 ("Blocked", "would-refuse-preimage"), ("Done", "would-refuse-preimage"),
+                 (None, "would-refuse-preimage"))
+        for status, expected in cases:
+            with self.subTest(status=status):
+                api = self.merging(board_body("Refs #900"), items=[board_item(status)])
+                code, result = self.gate(api, "advisory")
+                self.assertEqual((result.boardTransition, api.sends, api.item_reads), (expected, [], 1))
+        api = self.merging(board_body("Refs #900"), items=[RuntimeError("provider text")])
+        code, result = self.gate(api, "advisory")
+        self.assertEqual((result.boardTransition, api.sends), ("would-refuse-preimage", []))
+
+    def test_unreadable_or_malformed_preimage_refuses_without_send(self):
+        malformed = board_item("Ready"); malformed["itemId"] = "bad id with spaces"
+        missing_option = board_item("Ready"); missing_option["options"] = [o for o in missing_option["options"] if o[1] != "In review"]
+        for label, value in (("read failed", RuntimeError("provider text")), ("malformed", malformed),
+                             ("option absent", missing_option), ("wrong shape", {"status": "Ready"})):
+            with self.subTest(label):
+                api = self.merging(board_body("Refs #900"), items=[value])
+                code, result = self.gate(api, "enforce")
+                self.assertEqual((code, result.outcome, result.boardTransition, api.sends),
+                                 (0, "delivered", "refused-preimage", []))
+
+    def test_adjacent_preimage_change_refuses_without_send(self):
+        api = self.merging(board_body("Refs #900"), items=[board_item("Ready"), board_item("Blocked")])
+        code, result = self.gate(api, "enforce")
+        self.assertEqual((result.boardTransition, api.sends), ("refused-preimage", []))
+
+    def test_closed_delivery_is_never_written_and_never_set_done(self):
+        for mode in ("advisory", "enforce"):
+            with self.subTest(mode=mode, route="fresh read closed"):
+                api = self.merging(board_body("Refs #900"), items=[board_item("In progress", state="CLOSED")])
+                code, result = self.gate(api, mode)
+                self.assertEqual((code, result.boardTransition, api.sends), (0, "not-applicable", []))
+            with self.subTest(mode=mode, route="closing keyword"):
+                api = self.merging(board_body("Closes #900"))
+                code, result = self.gate(api, mode)
+                self.assertEqual((result.boardGate, result.boardTransition, api.sends, api.item_reads),
+                                 ("linked", "not-applicable", [], 0))
+
+    def test_continues_marker_targets_in_progress_only_when_visible(self):
+        before = board_item("Ready")
+        api = self.merging(board_body("Refs #900", "<!-- fsgg:delivery-continues/v1 -->"),
+                           items=[before, before, board_item("In progress")])
+        code, result = self.gate(api, "enforce")
+        self.assertEqual((result.boardTransition, api.sends[0][3]), ("written", BOARD_OPTION["In progress"]))
+        api = self.merging(board_body("Refs #900", "<!-- fsgg:delivery-continues/v1 -->"), items=[board_item("In progress")])
+        self.assertEqual(self.gate(api, "enforce")[1].boardTransition, "noop")
+        api = self.merging(board_body("Refs #900", "`<!-- fsgg:delivery-continues/v1 -->`"), items=[board_item("Ready")])
+        self.assertEqual(self.gate(api, "advisory")[1].boardTransition, "would-write:In review")
+
+    def test_uncertain_send_or_readback_is_never_resent(self):
+        before = board_item("In progress")
+        changed = board_item("In review", values=['{"text":"Other title"}'])
+        for label, items, send in (
+                ("send failed", [before, before, board_item("In review")], RuntimeError("provider text")),
+                ("readback failed", [before, before, RuntimeError("provider text")], None),
+                ("readback unchanged", [before, before, before], None),
+                ("unrelated value moved", [before, before, changed], None),
+                ("readback set Done", [before, before, board_item("Done")], None)):
+            with self.subTest(label):
+                api = self.merging(board_body("Refs #900"), items=items, send=send)
+                code, result = self.gate(api, "enforce")
+                self.assertEqual((code, result.outcome, result.boardTransition), (0, "delivered", "uncertain"))
+                self.assertEqual(len(api.sends), 1)
+                self.assertEqual(api.calls.count("board_set_status"), 1)
+
+    def test_no_transition_without_confirmed_merge(self):
+        pr = board_routine_pr(board_body("Refs #900"))
+        api = BoardApi([pr, pr, pr], [MODULE.AmbiguousWrite("lost")], body=pr["body"])
+        code, result = self.gate(api, "enforce")
+        self.assertEqual((code, result.outcome, result.boardGate, result.boardTransition, api.calls),
+                         (3, "indeterminate", "linked", "not-applicable", ["board_pr", "board_cards"]))
+
+    # ---- result shape and CLI ----
+
+    def test_result_shape_accepts_pre_gate_and_gate_results_only(self):
+        _, summary = MODULE.summarize(FakeApi([merged()]), repo="FS-GG/.github", pr_number=1, expected_head=HEAD,
+                                      merge_method="squash", publication_required=False, apply=False)
+        current = asdict(summary)
+        legacy = {k: v for k, v in current.items() if k not in MODULE.BOARD_RESULT_FIELDS}
+        evidence = {"deliveryEvidence": {"schema": "fsgg.routine-delivery-evidence/1"}}
+        for value in (current, legacy, dict(current, **evidence), dict(legacy, **evidence)):
+            self.assertTrue(MODULE.installation_result_shape(value))
+        partial = dict(legacy, boardGate="linked")
+        self.assertFalse(MODULE.installation_result_shape(partial))
+        self.assertFalse(MODULE.installation_result_shape(dict(partial, **evidence)))
+        self.assertFalse(MODULE.installation_result_shape(dict(current, deliveryEvidence={"schema": "other"})))
+        self.assertEqual((summary.boardGate, summary.boardGateReason, summary.boardTransition),
+                         ("not-applicable", None, "not-applicable"))
+
+    def test_cli_mode_defaults_to_advisory_and_rejects_other_values(self):
+        base = ["--repo", "FS-GG/.github", "--pr", "1", "--head", HEAD]
+        self.assertEqual(MODULE.parser().parse_args(base).board_gate, "advisory")
+        self.assertEqual(MODULE.parser().parse_args(base + ["--board-gate", "enforce"]).board_gate, "enforce")
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            MODULE.parser().parse_args(base + ["--board-gate", "required"])
+        captured = {}
+        def fake_summarize(*args, **kwargs):
+            captured.update(kwargs)
+            raise RuntimeError("stop")
+        with mock.patch.object(MODULE, "summarize", side_effect=fake_summarize), \
+             mock.patch.object(MODULE, "discover_telemetry_config", return_value=None), \
+             mock.patch.object(MODULE, "delivery_evidence", side_effect=RuntimeError("off")), \
+             contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(MODULE.main(base + ["--apply", "--board-gate", "enforce"]), 3)
+        self.assertEqual(captured["board_gate"], "enforce")
+        self.assertEqual(json.loads(out.getvalue())["boardGate"], "not-applicable")
+
+    # ---- native adapter ----
+
+    def test_native_send_is_one_exact_item_edit_and_failure_raises(self):
+        api = MODULE.GhApi()
+        ok = subprocess.CompletedProcess([], 0, "{}", "")
+        with mock.patch.object(MODULE.subprocess, "run", return_value=ok) as run:
+            api.board_set_status("PVT_p", "PVTI_i", "PVTSSF_s", "opt3")
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args.args[0], ["gh", "project", "item-edit", "--id", "PVTI_i", "--project-id", "PVT_p",
+                                                 "--field-id", "PVTSSF_s", "--single-select-option-id", "opt3"])
+        with mock.patch.object(MODULE.subprocess, "run", return_value=subprocess.CompletedProcess([], 1, "", "secret")) as run:
+            with self.assertRaises(RuntimeError) as error:
+                api.board_set_status("PVT_p", "PVTI_i", "PVTSSF_s", "opt3")
+        self.assertEqual(run.call_count, 1)
+        self.assertNotIn("secret", str(error.exception))
+
+    @staticmethod
+    def native_item(status="Ready", *, values_total=None, extra=None, option_id=None):
+        options = [{"id": BOARD_OPTION[name], "name": name} for name in BOARD_STATUSES]
+        nodes = [{"__typename": "ProjectV2ItemFieldTextValue", "text": "Title",
+                  "field": {"__typename": "ProjectV2Field", "id": "F_title", "name": "Title"}}]
+        if status is not None:
+            nodes.append({"__typename": "ProjectV2ItemFieldSingleSelectValue", "name": status,
+                          "optionId": option_id or BOARD_OPTION[status],
+                          "field": {"__typename": "ProjectV2SingleSelectField", "id": "PVTSSF_status", "name": "Status"}})
+        nodes += extra or []
+        project = {"id": "PVT_project", "number": 3, "owner": {"__typename": "Organization", "login": "FS-GG"},
+                   "field": {"__typename": "ProjectV2SingleSelectField", "id": "PVTSSF_status", "name": "Status", "options": options}}
+        other = {"id": "PVTI_other", "project": {"id": "PVT_x", "number": 4, "owner": {"login": "FS-GG"}},
+                 "fieldValues": {"totalCount": 0, "nodes": []}}
+        return {"state": "OPEN", "projectItems": {"totalCount": 2, "nodes": [
+            other, {"id": "PVTI_item", "project": project,
+                    "fieldValues": {"totalCount": values_total if values_total is not None else len(nodes), "nodes": nodes}}]}}
+
+    def test_native_item_normalizes_live_schema_and_refuses_partial_reads(self):
+        state = MODULE.board_item_state(self.native_item("Ready"))
+        self.assertEqual((state["itemId"], state["projectId"], state["statusFieldId"], state["status"]),
+                         ("PVTI_item", "PVT_project", "PVTSSF_status", "Ready"))
+        self.assertEqual(state["options"], [[BOARD_OPTION[n], n] for n in BOARD_STATUSES])
+        self.assertEqual(len(state["values"]), 1)
+        self.assertIsNone(MODULE.board_item_state(self.native_item(None))["status"])
+        truncated_labels = [{"__typename": "ProjectV2ItemFieldLabelValue", "labels": {"totalCount": 3, "nodes": [{"name": "a"}]},
+                             "field": {"__typename": "ProjectV2Field", "id": "F_labels", "name": "Labels"}}]
+        for label, issue in (("values truncated", self.native_item(values_total=9)),
+                             ("nested truncated", self.native_item(extra=truncated_labels)),
+                             ("stale option", self.native_item(option_id="gone")),
+                             ("not on board", {"state": "OPEN", "projectItems": {"totalCount": 0, "nodes": []}}),
+                             ("items truncated", {"state": "OPEN", "projectItems": {"totalCount": 30, "nodes": []}})):
+            with self.subTest(label):
+                with self.assertRaises(RuntimeError):
+                    MODULE.board_item_state(issue)
+        api = MODULE.GhApi()
+        with mock.patch.object(api, "_run", return_value={"data": {"repository": {"issue": self.native_item("Ready")}}}) as run:
+            self.assertEqual(api.board_item("FS-GG/.github#900"), state)
+        args = run.call_args.args[0]
+        self.assertEqual(args[:2], ["graphql", "-f"])
+        self.assertIn("-F", args); self.assertIn("number=900", args)
+        with mock.patch.object(api, "_run", return_value={"data": {}, "errors": [{"message": "x"}]}):
+            with self.assertRaises(RuntimeError):
+                api.board_item("FS-GG/.github#900")
+
+    def test_native_cards_resolve_parent_and_classify_board_membership(self):
+        def item(level, status="In progress", number=3, login="FS-GG"):
+            return {"project": {"number": number, "owner": {"__typename": "Organization", "login": login}},
+                    "workLevel": {"__typename": "ProjectV2ItemFieldSingleSelectValue", "name": level},
+                    "status": {"__typename": "ProjectV2ItemFieldSingleSelectValue", "name": status}}
+        def node(number, items, *, total=None, parent=None, kind="Issue", repo="FS-GG/.github"):
+            value = {"__typename": kind, "number": number, "state": "OPEN", "repository": {"nameWithOwner": repo},
+                     "projectItems": {"totalCount": len(items) if total is None else total, "nodes": items}}
+            if kind == "Issue":
+                value["parent"] = parent
+            return value
+        outcome = node(800, [item("Outcome")])
+        data = {"data": {
+            "r0": {"issueOrPullRequest": node(900, [item("Delivery", number=4), item("Delivery")], parent=outcome)},
+            "r1": {"issueOrPullRequest": node(901, [item("Delivery", login="other")])},
+            "r2": {"issueOrPullRequest": node(902, [item("Delivery")], total=40)},
+            "r3": {"issueOrPullRequest": node(5, [item("Delivery")], kind="PullRequest", repo="FS-GG/Other")}}}
+        api = MODULE.GhApi()
+        refs = ["FS-GG/.github#900", "FS-GG/.github#901", "FS-GG/.github#902", "FS-GG/Other#5"]
+        with mock.patch.object(api, "_run", return_value=data) as run:
+            cards = api.board_cards(refs)
+        self.assertEqual(cards["FS-GG/.github#900"], {"repo": "FS-GG/.github", "number": 900, "state": "OPEN",
+                         "workLevel": "Delivery", "status": "In progress", "parent": {"repo": "FS-GG/.github", "number": 800}})
+        self.assertEqual(cards["FS-GG/.github#800"]["workLevel"], "Outcome")
+        self.assertIsNone(cards["FS-GG/.github#901"])
+        self.assertTrue(cards["FS-GG/.github#902"]["unreadable"])
+        self.assertIsNone(cards["FS-GG/Other#5"]["parent"])
+        args = run.call_args.args[0]
+        self.assertIn("o3=FS-GG", args); self.assertIn("n3=Other", args); self.assertIn("k3=5", args)
+        with self.assertRaises(RuntimeError):
+            api.board_cards([f"FS-GG/.github#{n}" for n in range(1, 22)])
+        with self.assertRaises(RuntimeError):
+            api.board_cards(["bad owner/x#1"])
+        with mock.patch.object(api, "_run", return_value={"data": {"r0": {"issueOrPullRequest": None}}}):
+            with self.assertRaises(RuntimeError):
+                api.board_cards(["FS-GG/.github#900"])
+
+    def test_native_pr_read_projects_author_editor_and_edit_state(self):
+        api = MODULE.GhApi()
+        node = {"number": 1, "state": "OPEN", "body": "b", "lastEditedAt": "2026-10-31T00:00:00Z",
+                "author": {"login": "A"}, "editor": {"login": "E"}}
+        with mock.patch.object(api, "_run", return_value={"data": {"repository": {"pullRequest": node}}}):
+            self.assertEqual(api.board_pr("FS-GG/.github", 1), {"repo": "FS-GG/.github", "number": 1, "state": "OPEN",
+                             "body": "b", "author": "A", "edited": True, "editor": "E"})
+        node = dict(node, lastEditedAt=None, editor=None)
+        with mock.patch.object(api, "_run", return_value={"data": {"repository": {"pullRequest": node}}}):
+            pr = api.board_pr("FS-GG/.github", 1)
+        self.assertEqual((pr["edited"], pr["editor"]), (False, None))
+        with mock.patch.object(api, "_run", return_value={"data": {"repository": {"pullRequest": dict(node, number=2)}}}):
+            with self.assertRaises(RuntimeError):
+                api.board_pr("FS-GG/.github", 1)
 
 
 if __name__ == "__main__":
