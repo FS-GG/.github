@@ -114,8 +114,8 @@ drives an automatic Status move, only a proposal. A PR is never a Delivery. Beca
 | Read | Shape | Sends at 222 items | Sends at 500 items |
 |---|---|---:|---:|
 | A. Board and issue facts | `items(first:50)` with the four field values and the issue fields above, `subIssues(first:50)`, `blockedBy(first:50)`; the first page also carries the schema and workflows | 5 | 10 |
-| B. Open PRs | one organization search, `is:pr is:open`, 100 per page | 1 | 1 |
-| C. Targeted evidence | timeline cross-references (`last:25`), `comments(last:20)` and, for enrollment candidates, `projectItems(includeArchived: true)`, 25 issues aliased per send, only for cards a rule needs (In review or In progress without an open linked PR, Blocked without an open native blocker, Backlog candidates for Ready, Outcomes with every child closed, enrollment candidates) | 3-4 | 5-7 (worst case 20) |
+| B. Open PRs | one organization search, `is:pr is:open`, 100 per page; it only selects candidates (below) | 1 | 1 |
+| C. Targeted evidence | timeline cross-references (`last:25`), `comments(last:20)` and, for enrollment candidates, `projectItems(includeArchived: true)`, 25 issues aliased per send, only for cards a rule needs (cards the B search shows with an open PR, In review or In progress without an open linked PR, Blocked without an open native blocker, Backlog candidates for Ready, Outcomes with every child closed, enrollment candidates) | 3-4 | 5-7 (worst case 20) |
 | D. Overflow | sub-issue continuation pages for an Outcome with more than 50 children | 0-1 | 0-2 |
 | **Total** | | **about 9-10** | **about 16-20 (worst case 33)** |
 
@@ -137,6 +137,10 @@ needing a targeted read.
   `fsgg:outcome-closure-proposed/v1`, `fsgg:outcome-accepted/v1`).
 - Merged PRs are not searched org-wide. A rule that needs merged evidence (S4, P-ACCEPT) reads that
   card's timeline in C, so a PR merged months ago is still seen, unlike a 7-day search window.
+- **The timeline decides, the search selects.** Search indexing lags, so the B search only selects S3 and
+  S3b candidates. Whether a card has an open, draft, merged or loosely linked PR is decided from its
+  timeline read in C and confirmed by the immediate re-read before the send (§6). A PR the search has not
+  indexed yet is picked up on a later run; missing a move for one run is safe.
 - A board whose `totalCount` exceeds 500 is refused on the first page, as `GraphQl.drain` does since
   #5122. A truncated connection is Unknown for the rules that need it (§4c), never an empty list.
 
@@ -225,7 +229,7 @@ Evaluated in order; the first rule that matches decides. `OPR` is the set of ope
 | S3 | `OPR` not empty, Status Backlog, Ready or In progress | In review | Apply |
 | S3b | `OPR` empty, `DPR` not empty, Status Backlog or Ready | In progress | Apply |
 | P-LINK | `OPR` and `DPR` empty, an open PR in `LPR` | — | Propose (the PR's `linkage_of()` failure is named) |
-| S4 | Status In review, `OPR`, `DPR`, `MPR` and `LPR` empty, In review for longer than `reviewSettleHours`, timeline complete | In progress | Apply |
+| S4 | Status In review, `OPR`, `DPR`, `MPR` and `LPR` empty (closed unmerged PRs are ignored), In review for longer than `reviewSettleHours`, timeline complete | In progress | Apply |
 | P-ACCEPT | Status In review or In progress, `OPR` and `DPR` empty, `MPR` not empty, `## Acceptance evidence` present and not "None yet." | — | Propose `acceptance-ready` |
 | S5 | Status In progress, `OPR` and `DPR` empty, no activity within `activityHours` | — | Propose `stale-active` (to Ready, Blocked, or acceptance) |
 | P-READY | Status Backlog, `## Blocked on` is "Nothing" or "Nothing external", no open native blocker | — | Propose Backlog → Ready; for an unenrolled card the proposal says selection also needs enrollment or a `root-admit-unenrolled` marker |
@@ -237,8 +241,11 @@ Evaluated in order; the first rule that matches decides. `OPR` is the set of ope
 
 Notes:
 
-- **Blocked is never written or overwritten automatically.** It records Root's judgement that a named
-  prerequisite is missing, which is also why the merge gate refuses a Blocked preimage.
+- **Blocked is never written or overwritten automatically, with one exemption: S1.** Blocked records
+  Root's judgement that a named prerequisite is missing, which is also why the merge gate refuses a
+  Blocked preimage. A closed card is different: closing is Root's acceptance act and supersedes that
+  judgement, and the built-in workflow already moves a closed Blocked card to Done. S1 therefore moves a
+  closed Blocked card to Done; no other rule moves a card off Blocked.
 - **S3 and S3b use only strict linkage.** An automatic move happens only for a PR whose `linkage_of()`
   verdict has no failures and names exactly this Delivery, as the merge gate and dispatch rule 1 require.
   Anything looser is P-LINK.
@@ -250,8 +257,9 @@ Notes:
   them differs from the snapshot, the effect is refused for this run and derived again next run.
 - **S4 is narrower than #5136's wording.** "In review with no open PR" includes Deliveries whose
   implementation merged and which wait for acceptance; the status lifecycle defines In review as exactly
-  that. Those go to P-ACCEPT, not back to In progress. S4 fires only when no PR of any state is linked.
-  Root accepted this (D4).
+  that. Those go to P-ACCEPT, not back to In progress. S4 fires only when no open, draft or merged PR is
+  linked, strictly or loosely, which is exactly the table's condition. A closed unmerged PR does not count:
+  an abandoned PR leaves nothing in review. Root accepted this (D4).
 - **S1 makes the reconciler a second Done writer.** It writes Done only where the built-in workflow did
   not: a card added after its issue closed, or closed before the workflow was on (cohort-90 found
   5 such cards). Both writers set the same value, so a race ends in the same state. This amends Root
@@ -269,21 +277,26 @@ Notes:
 
 The roll-up needs the complete native sub-issue list, and each open sub-issue must be a Project 3 card
 with a Status. Otherwise the Outcome is Unknown (`children-incomplete`), as the lifecycle contract
-requires ("incomplete parent child coverage withholds parent rollup"). With `C` the Statuses of its open
-children:
+requires ("incomplete parent child coverage withholds parent rollup"). An open child whose Status is
+Done contradicts its native state: it is S2 `done-open` on the child, and the Outcome's roll-up is
+withheld (`child-done-open`) until it is resolved. With `C` the Statuses of the remaining open children,
+evaluated top to bottom:
 
-| `C` | Desired |
-|---|---|
-| contains In progress or In review | In progress |
-| else contains Ready | Ready |
-| else contains Backlog | Backlog |
-| else all Blocked | Blocked |
-| empty, at least one closed child (R5) | none: propose `children-complete` (close, or file the remaining Deliveries) |
-| no children at all (R6) | none: propose `no-open-delivery` |
+| `C` | Desired | Also |
+|---|---|---|
+| every child In review | In progress | Propose `all-children-in-review`: whether the whole Outcome is in review is Root's call |
+| contains In progress or In review | In progress | |
+| else contains Ready | Ready | |
+| else contains Backlog | Backlog | |
+| else all Blocked | Blocked (never applied) | Propose Blocked |
+| empty, at least one closed child (R5) | none | Propose `children-complete` (close, or file the remaining Deliveries) |
+| no children at all (R6) | none | Propose `no-open-delivery` |
 
 Rule O1 applies the roll-up only between Backlog, Ready and In progress: the preimage and the target
-must both be one of those three. A Blocked target or preimage, and the Outcome All-In-review case, become
-proposals. In review and Done are never written to an Outcome automatically. The status lifecycle
+must both be one of those three. An **empty** Outcome Status counts as a writable preimage: O1 fills the
+desired value when it is Backlog, Ready or In progress, and otherwise fills Backlog, the least-claiming
+value, alongside the proposal from the table. A Blocked preimage is left alone and the derived value is
+proposed. In review and Done are never written to an Outcome automatically. The status lifecycle
 already says that "active child work can make an Outcome In progress" and that "one child PR cannot make
 the whole Outcome In review". Root approved amending the lifecycle contract's "never automatically
 climb parents" to allow this bounded roll-up (D3); the amendment lands in phase 2 before O1 is enabled.
@@ -356,10 +369,11 @@ run.
 
 ### (b) Propose to Root
 
-S2 `done-open`, P-ACCEPT, S5 `stale-active`, P-LINK, P-INTENT, P-READY, P-UNBLOCK, P-NOBLOCKER, Outcome Blocked or
-All-In-review roll-ups, `children-complete`, `no-open-delivery`, `work-level-undetermined`, Roadmap and plan gaps,
-board-currency R2 `outcome-unaccepted`, R8 `pr-open-on-closed` and R9 hierarchy findings. These ask for a
-judgement: whether the next action is admitted, whether acceptance is met, or which plan owns the work.
+S2 `done-open`, P-ACCEPT, S5 `stale-active`, P-LINK, P-INTENT, P-READY, P-UNBLOCK, P-NOBLOCKER, Outcome
+Blocked or all-children-in-review roll-ups, `child-done-open`, `children-complete`, `no-open-delivery`,
+`work-level-undetermined`, Roadmap and plan gaps, board-currency R2 `outcome-unaccepted`, R8
+`pr-open-on-closed` and R9 hierarchy findings. These ask for a judgement: whether the next action is
+admitted, whether acceptance is met, or which plan owns the work.
 
 ### (c) Refuse or Unknown
 
@@ -426,13 +440,13 @@ The reconciler extends it rather than adding a second writer:
    trip, a writer that does not take the lock (a person in the UI, the built-in Done workflow, a hosted
    job) can change the field, and the reconciler's send then overwrites it. If the other write lands
    after the reconciler's and before the readback, the readback shows it and the result is `uncertain`;
-   if it lands before the reconciler's, the readback cannot tell. The window is accepted because the lock removes every cooperative writer, the
-   Done workflow writes the same value S1 writes, and the preimage is recorded so any overwrite can be
-   reversed. A test pins the ordering: in the recorded call log, the request immediately before each
-   mutation is the re-read of the same item.
+   if it lands before the reconciler's, the readback cannot tell. The window is accepted because the
+   lock removes every cooperative writer, the Done workflow writes the same value S1 writes, and the
+   preimage is recorded so any overwrite can be reversed. A test pins the ordering: in the recorded call
+   log, the request immediately before each mutation is the re-read of the same item.
 5. The same item-scoped precondition is offered to `migration-apply` for #5123, so the enrollment
    initialization and the reconciler share one write discipline (D8, accepted; Root coordinates with the
-   #5119 owner).
+   #5119 owner); it lands in §12 PR 4.
 
 ### Per effect
 
@@ -500,12 +514,17 @@ The drift observer stays the only writer of the #4985 body. The reconciler adds 
 
 - **Stable IDs.** `P:<rule>:<subject>:<reason>`, with the subject a public reference or the observer's
   `private:<12 hex HMAC>` placeholder, using `BOARD_DRIFT_HMAC_KEY` held on fdev, mode 0600 in Root
-  custody (D9).
+  custody (D9). The fdev copy must be the same bytes as the repository secret the observer uses, so one
+  card has one placeholder in both writers; the two copies are only ever rotated together.
+- **Privacy.** For a private or unknown-visibility subject, the `Suggested` and `Evidence` fields pass
+  through the same gate as the subject: they name only Status values, rule IDs and other placeholders,
+  never a title, body text, PR reference or repository name.
 - **Once per ID.** A ledger in `$XDG_STATE_HOME/fsgg/board-tend/proposals.json` maps each ID to the
   comment that first carried it and its state (live or cleared). A run posts one comment with only the
-  IDs not live in the ledger, carrying `<!-- fsgg:board-tend-proposals/v1 run=<id> -->`. An ID that
-  clears is marked cleared with no comment. If it fires again later, it is a new occurrence and is posted
-  again.
+  IDs never posted before, carrying `<!-- fsgg:board-tend-proposals/v1 run=<id> -->`. An ID that clears
+  is marked cleared with no comment. If it fires again later, the ledger marks it live again and the plan
+  file and run summary show it, but it is not reposted: a flapping condition must not notify on every
+  flap (board-currency lesson 6).
 - **Custody.** The run id is recorded before the post. After the post, the comment is read back by the
   id GitHub returned. An uncertain post is never repeated: the next run finds the comment by its run
   marker among comments created after the custody time, and verifies it by id. It never selects a
@@ -532,7 +551,7 @@ through the #4941 planner), made automatic.
 | `bind-runtime` | By hand | After the merge, by the next run |
 | Reader identity after an upgrade | Hand rebind | **Prerequisite #5120** (a designed rebind stage checked against the executing assembly) |
 | Initialization | 30 applies at 4 cards per scope | §6 writer: 3 sends per item and no whole-scope re-read, which delivers #5123 |
-| Population read | 207-row inspect accepted as Unknown | Fixed by #5127 (175 sends at 500); the reconciler's own read checks every enrolled node is a member |
+| Population read | 207-row inspect accepted as Unknown (#5121) | Fixed in source only by #5127 (175 fixture sends at 500 rows); installed from the PR 7 release. The reconciler's own read checks every enrolled node is a member |
 
 **Capacity is a prerequisite too.** Binding rows are append-only (the successor is a raw-byte splice that
 preserves the predecessor), archived enrolled rows are retained (#5132), and the cap is 500. With 207 rows
@@ -551,9 +570,16 @@ it is accepted and delivered, E2 refuses above 450 rows and files a proposal.
 - **Timer.** A user unit `fsgg-board-tend.timer`, hourly at minute 07, away from the observer's :23
   cron, its :53 fdev dispatch and the 04:43 archive. `Persistent=true`, with a 120-second randomised delay.
 - **After merge.** After a successful merge and the gate's transition, `routine-delivery.py` runs
-  `systemctl --user start --no-block fsgg-board-tend.service` on fdev. This is best effort: a
-  failure to start never affects the merge. systemd does not queue a second start of an active oneshot
-  unit, and the reconciler skips a run within 5 minutes of the last one unless `--force` is given.
+  `systemctl --user start --no-block fsgg-board-tend.service`. The call is gated exactly like
+  `--board-gate enforce`: only a copy running in a checkout whose `origin` is FS-GG/.github makes it, so
+  the receiver copy distributed by the drivers package never does. It is best effort: a failure to start
+  never affects the merge.
+- **Post-merge runs are never swallowed.** The trigger first writes a `pending-post-merge` marker in the
+  reconciler's state directory, then starts the unit. The 5-minute minimum interval applies only to timer
+  runs; a run that finds the marker always runs. If the unit is already active, systemd does not queue a
+  second start, so a running reconciler checks the marker when it finishes and, if the marker is newer
+  than its own start, runs once more. The marker is cleared only by a run that started after it was
+  written.
 - **Lock.** Today `migration-apply` locks `Path.GetTempPath()/fsgg-v2-migration-PVT_kwDOEYAWY84Bldpa.lock`,
   and `Path.GetTempPath()` follows `TMPDIR`, so two writers with different `TMPDIR` values do not exclude
   each other. The refresh path's `fsgg-v2-observation-<project>.lock` has the same defect, and engine
@@ -572,7 +598,7 @@ it is accepted and delivered, E2 refuses above 450 rows and files a proposal.
 - **A writer outside fdev cannot share the lock.** The Done-retention archiver currently runs as a hosted
   workflow, where no fdev lock exists. Until it runs from fdev under the lock, or A1 replaces it, the
   reconciler writes nothing to archive-eligible cards (Done and closed, beyond the newest 200), so the two
-  are disjoint by construction.
+  are disjoint by construction. Root accepted this mitigation.
 - **Dry run by default.** `--apply` is ignored unless
   `$XDG_CONFIG_HOME/fsgg/board-tend.json` exists, is owned by the user with mode 0600, and lists the
   enabled rules: `{"apply": ["W1","T1"], "propose": true, "maxItemsPerRun": 100}`. Rules are enabled
@@ -634,6 +660,11 @@ e and s stay.
   wait ending in a deferred-transition record, and the reconciler applying that record next run.
 - **E1.** An archived member refuses the add; `RemoveCreatedItem` refuses an item without a matching
   E1 custody record keyed by the issue node id.
+- **Proposals.** A private subject's `Suggested` and `Evidence` carry no title, body text, PR reference or
+  repository; a cleared ID that fires again is not reposted; the placeholder for a fixture card equals
+  the observer's for the same key.
+- **Post-merge trigger.** A copy outside the FS-GG/.github checkout never calls `systemctl`; a
+  post-merge marker written during a run, or within 5 minutes of the last run, still produces a run.
 - **Budget.** Synthetic boards of 222 and 500 items assert read sends against the ceiling in §2, and the
   write send count for 25, 100 and 114 items.
 - **Conformance.** The linkage corpus runs against `linkage_of()` and the F# implementation. During the
@@ -659,7 +690,7 @@ e and s stay.
 | 4 | In review, no open PR (5) | Nothing linked: S4. Merged PR with evidence: P-ACCEPT, Status unchanged |
 | 5 | In progress, stale or finished (13 of 34) | Open PR: S3. Idle: S5. Merged with evidence: P-ACCEPT |
 | 6 | Backlog with "Blocked on: Nothing" (25) | P-READY when there is no open native blocker, enrolled or not (the unenrolled proposal names enrollment); never applied |
-| 7 | Outcome Status ignoring its children | O1 within Backlog, Ready, In progress; Blocked and All-In-review proposed; an incomplete child list is Unknown |
+| 7 | Outcome Status ignoring its children | O1 within Backlog, Ready, In progress; all children In review gives In progress plus a proposal; Blocked proposed; an empty Outcome Status filled; an open Done child withholds the roll-up; an incomplete child list is Unknown |
 | 8a | Roadmap inheritance with an anchor (Coordination#1026's 8 children) | RM1 drops the anchor; protected-document grammar passes |
 | 8b | Repository outside the binding (FsQuint#50) | `outside-binding`, reported once over several runs |
 | 8c | No admissible plan (SDK-PATCH-01), parent with no Roadmap (#4811 under #5097) | A proposal naming the plan owner; no write |
@@ -673,6 +704,9 @@ e and s stay.
 | 13 | Same-run dependency | A new Outcome and its child: the child's T1 follows the parent's; the plan is idempotent |
 | 14 | Archived member | A candidate with an archived Project 3 item: `archived-member`, no add |
 | 15 | Gate under contention | The gate's deferred-transition record is applied by the next run under the guards |
+| 16 | Closed Blocked card | S1 moves it to Done; no other rule moves it |
+| 17 | Abandoned PR | In review with only a closed unmerged PR: S4 applies |
+| 18 | Search lag | An open PR missing from the search but present in the timeline: no move this run, a move next run once indexed; a PR in the search but closed in the timeline: no move |
 
 ## 12. Phase 2 PR sequence
 
@@ -714,16 +748,17 @@ From [Root's decisions](https://github.com/FS-GG/.github/pull/5137#issuecomment-
 | D4 | In review with a merged PR stays In review and becomes P-ACCEPT | Yes |
 | D5 | Track defaults to `Follow-up` when nothing declares one | Yes |
 | D6 | Field fills on unenrolled cards | **Overridden:** Status, Work level and Track absent-value fills are allowed on unenrolled cards through the same guarded item-scoped writer; Roadmap and manifest fields stay enrolled-only. **Widened** by Root later the same day ([comment](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548590116)): the Status moves S3, S3b, S4 and O1 (within Backlog, Ready and In progress) are also allowed on unenrolled cards through the same writer |
-| D7 | Do not enroll closed cards; refuse above 450 rows; row retirement | Yes; row retirement gets its own design, is a prerequisite for unattended auto-enroll, and is added to phase 2 (§12, PR 8) |
-| D8 | Share the item-scoped writer with `migration-apply` and take #5123 into the writer PR | Yes; Root coordinates with the #5119 owner |
+| D7 | Do not enroll closed cards; refuse above 450 rows; row retirement | Yes; row retirement gets its own design, is a prerequisite for unattended auto-enroll, and is added to phase 2 (§12, PR 9) |
+| D8 | Share the item-scoped writer with `migration-apply` and take #5123 into the writer PR (§12, PR 4) | Yes; Root coordinates with the #5119 owner |
 | D9 | Hold `BOARD_DRIFT_HMAC_KEY` on fdev for private placeholders in proposals | Yes |
 | D10 | Root merges enrollment carrier PRs | Yes, for now; automatic merge of carriers is revisited after 3 clean unattended runs |
 | D11 | The reconciler writes with Root's `gh` PAT on fdev, as the merge gate does; the App stays read-only | Yes |
 | D12 | E1 adds Project 3 membership for enrollment candidates and fills their fields in the same run; built-in auto-add stays off (dispatch rule 5) | Yes |
 | — | The `TMPDIR` lock hazard | One fixed lock path for every Project 3 writer in phase 2 PR 1, which also delivers #5126 |
 
-Root's rulings on the first independent review of #5139 (REQUEST_CHANGES at `77320a0f`), 2026-10-31,
-relayed by the coordinator:
+[Root's rulings](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548756028) on the first
+independent review of #5139 (REQUEST_CHANGES at `77320a0f`), 2026-10-31, including the reviewer's
+nonmaterial list:
 
 | Finding | Ruling | Where |
 |---|---|---|
@@ -736,3 +771,4 @@ relayed by the coordinator:
 | Never closing | Carrier keyword check before push; a closed `TendChange` type and a transport allowlist; tests that can fail | §5 |
 | Rollout | A contract-amendment PR gating S1, S3, S3b, S4, S9, O1 and E1; an engine release and installed qualification before the timer PR; PR 1 owns the gate's lock | §8, §12 |
 | Read cost | About 9-10 requests at 222 items and 16-20 at 500, from the live mix | §2 |
+| Nonmaterial | Roll-up all-In-review row, open Done child and empty Outcome Status; S1's Blocked exemption; S4 table and note reconciled, timeline decides over search; one HMAC key on both sides; privacy for `Suggested` and `Evidence`; no repost of a re-fired ID; post-merge trigger gated to the `.github` checkout and never swallowed; #5121 fixed in source only; D7 and D8 PR numbers; archiver mitigation accepted | §2, §3, §6, §7, §8, §13 |
