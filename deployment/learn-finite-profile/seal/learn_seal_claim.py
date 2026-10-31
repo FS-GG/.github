@@ -26,7 +26,10 @@ The source is FIXED here, not chosen by arguments: the base directory and exactl
 Writes go ONLY through the persistent source path /srv/bulk/services/usr-local-libexec-fsgg-learn (the in-VM bind
 /usr/local/libexec/fsgg-learn is read-only). Every file is created O_CREAT|O_EXCL|O_NOFOLLOW, root-owned, never overwritten.
 The chain from /srv/bulk/services down must be root-owned, not symlinked, not group/other-writable, and the source directory
-must be the same inode as the mounted view, so a directory swapped after the mount is refused.
+must be the same inode as the mounted view, so a directory swapped after the mount is refused. The check and the writes use
+ONE pinned directory descriptor: /srv/bulk is developer-owned, so a path check followed by path-based writes could be raced by
+renaming a directory in between. Every directory is opened with O_DIRECTORY|O_NOFOLLOW through openat and fstat-checked on its
+descriptor, and the operation then runs on /proc/self/fd/<fd>, which names that directory whatever happens to the path.
 
 What this tool does and does not prove (stated plainly):
   * Cooperative. `developer` has full sudo and can edit any file this tool writes. The records detect mistakes; they do not
@@ -47,7 +50,8 @@ Ownership of the per-op state (no shared writer):
     0700) immediately before the first read or mount of the input and only after verifying the claim. The finalizer records its
     presence. This tool only reads it.
 """
-import hashlib, json, os, re, shutil, stat, subprocess, sys
+import functools, hashlib, inspect, json, os, re, shutil, stat, subprocess, sys
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 SERVICES = '/srv/bulk/services'
@@ -120,17 +124,92 @@ def root_chain_ok(path, start, owner_uid=0):
         cur = cur.rstrip('/') + '/' + todo.pop(0)
 
 
-def guard_write_root(source_root, view_root, services, owner_uid=0):
-    """Refuse unless the writable source root is root-safe and is the same directory as the mounted view."""
-    ok, bad = root_chain_ok(source_root, services, owner_uid)
-    if not ok:
-        refuse(f'write path not root-safe at {bad}')
+DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+PINNED_PREFIX = '/proc/self/fd/'
+
+
+def _check_dir_fd(fd, owner_uid, label):
+    st = os.fstat(fd)
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != owner_uid or (stat.S_IMODE(st.st_mode) & 0o022):
+        os.close(fd)
+        refuse(f'write path not root-safe at {label}')
+    return st
+
+
+def open_dir_chain(path, start, owner_uid=0):
+    """Open `path` as a directory descriptor by walking from `start` with O_DIRECTORY|O_NOFOLLOW and openat. Every directory
+    opened (start included) is fstat-checked on its descriptor: owner, directory, not group/other-writable. A symlink or a
+    missing component refuses. Returns the final descriptor; intermediate descriptors are closed."""
+    if start != '/' and not (path == start or path.startswith(start + '/')):
+        refuse(f'write path not root-safe at {path}: outside the chain start {start}')
     try:
-        a, b = os.stat(source_root), os.stat(view_root)
-    except OSError:
-        refuse('the mounted view is absent')
-    if (a.st_dev, a.st_ino) != (b.st_dev, b.st_ino):
-        refuse('the persistent source directory is not the mounted view (swapped or not mounted)')
+        fd = os.open(start, DIR_FLAGS)
+    except OSError as e:
+        refuse(f'write path not root-safe at {start}: {e.strerror}')
+    _check_dir_fd(fd, owner_uid, start)
+    cur = start
+    for comp in [p for p in path[len(start):].split('/') if p]:
+        cur = cur.rstrip('/') + '/' + comp
+        try:
+            nfd = os.open(comp, DIR_FLAGS, dir_fd=fd)
+        except OSError as e:
+            os.close(fd)
+            refuse(f'write path not root-safe at {cur}: {e.strerror}')
+        os.close(fd)
+        fd = nfd
+        _check_dir_fd(fd, owner_uid, cur)
+    return fd
+
+
+@contextmanager
+def pinned_source(source_root, view_root, services, owner_uid=0):
+    """Pin the writable source directory. /srv/bulk is developer-owned, so a path check followed by path-based writes could be
+    raced by renaming a directory in between. The directory is opened once through a chain of O_DIRECTORY|O_NOFOLLOW openat
+    calls with every directory fstat-checked on its descriptor, compared by device and inode with the mounted view, and the
+    body runs on /proc/self/fd/<fd>, a path that resolves to THAT directory whatever happens to the name afterwards. Everything
+    below it is root-owned, mode-checked by sub(), and not writable by the developer."""
+    if not os.path.isdir('/proc/self/fd'):
+        refuse('/proc is not available; cannot pin the write directory')
+    fd = open_dir_chain(source_root, services, owner_uid)
+    try:
+        try:
+            v = os.stat(view_root)
+        except OSError:
+            refuse('the mounted view is absent')
+        a = os.fstat(fd)
+        if (a.st_dev, a.st_ino) != (v.st_dev, v.st_ino):
+            refuse('the persistent source directory is not the mounted view (swapped or not mounted)')
+        yield f'{PINNED_PREFIX}{fd}'
+    finally:
+        os.close(fd)
+
+
+def _show(value, pinned, shown):
+    if isinstance(value, str) and value.startswith(pinned):
+        return shown + value[len(pinned):]
+    if isinstance(value, dict):
+        return {k: _show(v, pinned, shown) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_show(v, pinned, shown) for v in value]
+    return value
+
+
+def pinned(fn):
+    """Run a write function on a pinned source directory. A call that already carries a pinned path (an internal call from a
+    function that pinned) passes through, so one operation never pins twice and cannot straddle two directories."""
+    sig = inspect.signature(fn)
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        bound = sig.bind(*args, **kwargs)
+        bound.apply_defaults()
+        sr = bound.arguments['source_root']
+        if sr.startswith(PINNED_PREFIX):
+            return fn(*bound.args, **bound.kwargs)
+        with pinned_source(sr, bound.arguments['view_root'], bound.arguments['services'], bound.arguments.get('owner_uid', 0)) as p:
+            bound.arguments['source_root'] = p
+            return _show(fn(*bound.args, **bound.kwargs), p, sr)
+    return wrapper
 
 
 def sub(source_root, name, owner_uid=0, mode=0o755):
@@ -343,6 +422,7 @@ def quiesce_verdict(m1, m2, dirs, measure, asserted=False, now=None, proc='/proc
 
 
 # ---------------------------------------------------------------- seal
+@pinned
 def seal(base, m1, quiesce, snapshot_id, source_root, view_root, services, owner_uid=0, copy=shutil.copyfile,
          measure=None, asserted=False, now=None, proc='/proc'):
     if not OPID.match(snapshot_id):
@@ -364,7 +444,6 @@ def seal(base, m1, quiesce, snapshot_id, source_root, view_root, services, owner
     pids = open_pids_under(dirs, proc)
     if pids:
         refuse(f'at seal time files are open under the subtrees (pids {pids})')
-    guard_write_root(source_root, view_root, services, owner_uid)
     inputs = sub(source_root, 'inputs', owner_uid)
     dest = f'{inputs}/{snapshot_id}'
     if os.path.lexists(dest):
@@ -535,12 +614,12 @@ def _check_seal(inputs_dir, snapshot_id, ident, sealed_sha):
             refuse(f'the sealed snapshot is missing or resized: {f["path"]}')
 
 
+@pinned
 def claim(ident, op_id, snapshot_id, sealed_sha, precheck, precheck_sha, source_root, view_root, services, owner_uid=0, supersedes=None):
     _check_ids(ident, op_id)
     if not HEX64.match(sealed_sha):
         refuse('sealed manifest sha256 must be 64 lowercase hex')
     _precheck_ok(precheck, op_id)
-    guard_write_root(source_root, view_root, services, owner_uid)
     claims = sub(source_root, 'claims', owner_uid)
     d = derive_state(claims, ident)
     if supersedes is None:
@@ -619,12 +698,12 @@ def _evidence_contract(op_id, operator_result, finalizer_record, marker_root, ad
     return why
 
 
+@pinned
 def void(ident, op_id, operator_result, op_sha, finalizer_record, fin_sha, corroboration_ref, source_root, view_root, services,
          marker_root=MARKER_ROOT, owner_uid=0, observed_exit_code=None):
     _check_ids(ident, op_id)
     if not COMMENT_URL.match(corroboration_ref or ''):
         refuse('a Root corroboration reference (a GitHub issue or pull request comment URL) is required')
-    guard_write_root(source_root, view_root, services, owner_uid)
     claims = sub(source_root, 'claims', owner_uid)
     cp = _claim_path(claims, ident)
     if not os.path.isfile(cp):
@@ -661,6 +740,7 @@ def void(ident, op_id, operator_result, op_sha, finalizer_record, fin_sha, corro
 
 
 # ---------------------------------------------------------------- supersede (resumable)
+@pinned
 def supersede(ident, old_op, new_op, snapshot_id, sealed_sha, precheck, precheck_sha, old_finalizer, old_fin_sha, decision_ref,
               reason, source_root, view_root, services, marker_root=MARKER_ROOT, owner_uid=0, rename=os.rename):
     _check_ids(ident, old_op, new_op)
@@ -673,7 +753,6 @@ def supersede(ident, old_op, new_op, snapshot_id, sealed_sha, precheck, precheck
         refuse('a Root decision reference (a GitHub issue or pull request comment URL) is required; Root verifies the comment, this tool does not')
     if not reason or len(reason) > 1000:
         refuse('a bounded reason is required')
-    guard_write_root(source_root, view_root, services, owner_uid)
     claims = sub(source_root, 'claims', owner_uid)
     _check_seal(f'{source_root}/inputs', snapshot_id, ident, sealed_sha)
     items, intents = claim_history(claims, ident)
@@ -722,6 +801,7 @@ def supersede(ident, old_op, new_op, snapshot_id, sealed_sha, precheck, precheck
 ADMIT_FIELDS = ('opId', 'argvJsonSha256', 'sourceIdentity', 'operatorSha256', 'finalizerSha256', 'imageIds')
 
 
+@pinned
 def admit(op_id, argv_sha, ident, operator_sha, finalizer_sha, image_ids, ttl, source_root, view_root, services, owner_uid=0, now=None):
     _check_ids(ident, op_id)
     for h in (argv_sha, operator_sha, finalizer_sha, *image_ids):
@@ -731,7 +811,6 @@ def admit(op_id, argv_sha, ident, operator_sha, finalizer_sha, image_ids, ttl, s
         refuse('at least one image id is required')
     if not (1 <= ttl <= MAX_TTL_S):
         refuse(f'ttl must be between 1 and {MAX_TTL_S} seconds')
-    guard_write_root(source_root, view_root, services, owner_uid)
     adm = sub(source_root, 'admissions', owner_uid)
     now = now or datetime.now(timezone.utc)
     body = {'schema': 'learn-pod-admission/1', 'opId': op_id, 'argvJsonSha256': argv_sha, 'sourceIdentity': ident,
@@ -746,17 +825,27 @@ def check_admission(path_root, op_id, argv_sha, ident, operator_sha, finalizer_s
     """Read-only reader side; returns [] when the admission matches, else the reasons. The pod operator is a separate
     single-file script run with -I, so it cannot import this module: it must carry this logic verbatim. The test vectors in
     tests/learn-seal-claim are the conformance set for that copy, and this CLI subcommand needs no root (it only reads)."""
-    p = f'{path_root}/admissions/{op_id}.admit'
     try:
-        ok, bad = root_chain_ok(p, chain_start, owner_uid)
+        dfd = open_dir_chain(f'{path_root}/admissions', chain_start, owner_uid)
+    except Refuse as e:
+        return [str(e).replace('write path', 'admission path')] if 'not root-safe' in str(e) else ['admission is absent or unreadable']
     except OSError:
         return ['admission is absent or unreadable']
-    if not ok:
-        return [f'admission path not root-safe at {bad}']
     try:
-        a, _ = read_json(p, 65536)
-    except (OSError, ValueError, Refuse):
-        return ['admission is absent or unreadable']
+        try:
+            fd = os.open(f'{op_id}.admit', os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=dfd)
+        except OSError:
+            return ['admission is absent or unreadable']
+        with os.fdopen(fd, 'rb') as f:
+            st = os.fstat(f.fileno())
+            if not stat.S_ISREG(st.st_mode) or st.st_uid != owner_uid or (stat.S_IMODE(st.st_mode) & 0o022) or st.st_size > 65536:
+                return ['admission path not root-safe: not a root-owned regular file closed to group and other writers']
+            try:
+                a = json.loads(f.read())
+            except ValueError:
+                return ['admission is absent or unreadable']
+    finally:
+        os.close(dfd)
     why = []
     want = {'opId': op_id, 'argvJsonSha256': argv_sha, 'sourceIdentity': ident, 'operatorSha256': operator_sha,
             'finalizerSha256': finalizer_sha, 'imageIds': sorted(image_ids)}

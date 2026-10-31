@@ -5,7 +5,7 @@ Drives the library functions the root CLI calls, against temporary trees owned b
 uid as a parameter; the CLI fixes it to 0 and refuses write commands unless root). stdlib only, offline, no container.
 Sections F1..F8 are the eight findings of the review of #5000; each has cases that failed against the previous head.
 Prints its own assertion count."""
-import contextlib, copy, importlib.util, io, json, os, shutil, sys, tempfile
+import contextlib, copy, importlib.util, io, json, os, shutil, stat, sys, tempfile
 from datetime import datetime, timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -635,6 +635,187 @@ with tempfile.TemporaryDirectory() as tmp:
             with contextlib.redirect_stdout(io.StringIO()) as out:
                 code = L.main([cmd])
             check(code == 5 and 'run as root' in out.getvalue(), f'{cmd} refuses to run unless root')
+
+# ============================================================ pinned directory descriptors: the writes go to the directory that was checked
+def swap_hook(e, view):
+    """Make L.open_dir_chain swap the source directory (and re-point the stand-in mount) right after it pins it."""
+    real = L.open_dir_chain
+
+    def hooked(path, start, owner_uid=0):
+        fd = real(path, start, owner_uid)
+        if path == e.root:
+            os.rename(e.root, e.root + '.old')
+            os.mkdir(e.root)
+            os.chmod(e.root, 0o755)
+            os.unlink(view)
+            os.symlink(e.root + '.old', view)              # the mount keeps the ORIGINAL inode
+        return fd
+    return real, hooked
+
+
+def with_swap(e, view, fn):
+    real, hooked = swap_hook(e, view)
+    L.open_dir_chain = hooked
+    try:
+        return fn()
+    finally:
+        L.open_dir_chain = real
+
+
+def swapped_kw(e, view):
+    return dict(source_root=e.root, view_root=view, services=e.services, owner_uid=UID)
+
+
+def fresh_swap_env(tmp):
+    e = Env(tmp)
+    view = os.path.join(e.services, 'view')
+    os.symlink(e.root, view)
+    return e, view
+
+
+# admit
+with tempfile.TemporaryDirectory() as tmp:
+    e, view = fresh_swap_env(tmp)
+    r = with_swap(e, view, lambda: L.admit('op-pin', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, **swapped_kw(e, view)))
+    check(os.path.isfile(os.path.join(e.root + '.old', 'admissions', 'op-pin.admit')), 'admit wrote into the pinned (original) directory after a swap')
+    check(not os.path.lexists(os.path.join(e.root, 'admissions')), 'admit wrote nothing into the directory swapped in at the path')
+    check(r['admission'] == os.path.join(e.root, 'admissions', 'op-pin.admit'), 'the reported path is the path the operator named, not /proc/self/fd')
+
+# seal
+with tempfile.TemporaryDirectory() as tmp:
+    e, view = fresh_swap_env(tmp)
+    m1 = L.take_manifest(e.base, SUBS)
+    m2 = copy.deepcopy(m1)
+    m2['takenUtc'] = (L.parse_utc(m1['takenUtc']) + timedelta(seconds=301)).isoformat()
+    t_now = L.parse_utc(m1['takenUtc']) + timedelta(seconds=400)
+    q = L.quiesce_verdict(m1, m2, [f'{e.base}/{s}' for s in SUBS], INACTIVE, now=t_now)
+    r = with_swap(e, view, lambda: L.seal(e.base, m1, q, 'snap-pin', measure=INACTIVE, now=t_now, **swapped_kw(e, view)))
+    check(os.path.isfile(os.path.join(e.root + '.old', 'inputs', 'snap-pin.manifest.json')) and os.path.isdir(os.path.join(e.root + '.old', 'inputs', 'snap-pin')),
+          'seal wrote the snapshot into the pinned (original) directory after a swap')
+    check(not os.path.lexists(os.path.join(e.root, 'inputs')), 'seal wrote nothing into the directory swapped in at the path')
+
+# claim, void, supersede (a live claim and an admission are prepared in the original directory first)
+with tempfile.TemporaryDirectory() as tmp:
+    e, view = fresh_swap_env(tmp)
+    m1, q, res = e.seal('snap-1')
+    ident, sealed = L.source_identity(m1), res['sealedManifestSha256']
+    c = with_swap(e, view, lambda: L.claim(ident, 'op-pin', 'snap-1', sealed, precheck('op-pin'), H('b'), **swapped_kw(e, view)))
+    check(os.path.isfile(os.path.join(e.root + '.old', 'claims', ident + '.claim')) and not os.path.lexists(os.path.join(e.root, 'claims')),
+          'claim read the seal from, and wrote the claim into, the pinned (original) directory after a swap')
+    check(c['claim'] == os.path.join(e.root, 'claims', ident + '.claim'), 'the claim path is reported as the operator named it')
+    # swap the directory back so the next operations start from a normal layout
+    os.rmdir(e.root)
+    os.rename(e.root + '.old', e.root)
+    os.unlink(view)
+    os.symlink(e.root, view)
+    L.admit('op-pin', H('1'), ident, H('2'), H('3'), [H('4')], 300, **e.kw())
+    v = with_swap(e, view, lambda: L.void(ident, 'op-pin', run_result('op-pin'), H('1'), fin('op-pin'), H('2'), URL, marker_root=e.markers, **swapped_kw(e, view)))
+    check(os.path.isfile(os.path.join(e.root + '.old', 'claims', ident + '.claim.voided-op-pin')) and not os.path.lexists(os.path.join(e.root, 'claims')),
+          'void renamed the claim inside the pinned (original) directory after a swap')
+    os.rmdir(e.root)
+    os.rename(e.root + '.old', e.root)
+    os.unlink(view)
+    os.symlink(e.root, view)
+    L.claim(ident, 'op-two', 'snap-1', sealed, precheck('op-two'), H('b'), **e.kw())
+    os.makedirs(os.path.join(e.markers, 'op-two'))
+    open(os.path.join(e.markers, 'op-two', 'input-read'), 'w').close()
+    s2 = with_swap(e, view, lambda: L.supersede(ident, 'op-two', 'op-three', 'snap-1', sealed, precheck('op-three'), H('e'), fin('op-two'), H('f'), URL, 'root decision',
+                                                marker_root=e.markers, **swapped_kw(e, view)))
+    cl = os.path.join(e.root + '.old', 'claims')
+    check(os.path.isfile(os.path.join(cl, ident + '.claim')) and os.path.isfile(os.path.join(cl, ident + '.claim.consumed-op-two')) and not os.path.lexists(os.path.join(e.root, 'claims')),
+          'supersede (consume, intent, successor) acted entirely inside the pinned directory after a swap')
+    check(L.read_json(os.path.join(cl, ident + '.claim'))[0]['opId'] == 'op-three', 'the nested claim inside supersede used the same pinned directory')
+
+# a swap BEFORE the pin is caught by the inode comparison with the view, for every write function
+with tempfile.TemporaryDirectory() as tmp:
+    e, view = fresh_swap_env(tmp)
+    os.rename(e.root, e.root + '.old')
+    os.mkdir(e.root)
+    os.chmod(e.root, 0o755)
+    os.unlink(view)
+    os.symlink(e.root + '.old', view)
+    kws_ = swapped_kw(e, view)
+    refused(lambda: L.admit('op-x', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, **kws_), 'not the mounted view', 'admit refuses a directory swapped before the pin')
+    refused(lambda: L.claim(H('a'), 'op-x', 'snap-1', H('a'), precheck('op-x'), H('b'), **kws_), 'not the mounted view', 'claim refuses a directory swapped before the pin')
+    refused(lambda: L.void(H('a'), 'op-x', run_result('op-x'), H('1'), fin('op-x'), H('2'), URL, marker_root=e.markers, **kws_), 'not the mounted view', 'void refuses a directory swapped before the pin')
+    refused(lambda: L.supersede(H('a'), 'op-x', 'op-y', 'snap-1', H('a'), precheck('op-y'), H('e'), fin('op-x'), H('f'), URL, 'root decision', marker_root=e.markers, **kws_),
+            'not the mounted view', 'supersede refuses a directory swapped before the pin')
+    sm1 = L.take_manifest(e.base, SUBS)
+    sm2 = copy.deepcopy(sm1)
+    sm2['takenUtc'] = (L.parse_utc(sm1['takenUtc']) + timedelta(seconds=301)).isoformat()
+    s_now = L.parse_utc(sm1['takenUtc']) + timedelta(seconds=400)
+    sq = L.quiesce_verdict(sm1, sm2, [f'{e.base}/{x}' for x in SUBS], INACTIVE, now=s_now)
+    refused(lambda: L.seal(e.base, sm1, sq, 'snap-x', measure=INACTIVE, now=s_now, **kws_), 'not the mounted view', 'seal refuses a directory swapped before the pin')
+    check(not os.path.lexists(os.path.join(e.root, 'inputs')) and not os.path.lexists(os.path.join(e.root + '.old', 'inputs')), 'no refused write created anything on either side of the swap')
+
+# the pin itself
+check(L.PINNED_PREFIX == '/proc/self/fd/', 'the pinned path is anchored on a descriptor')
+with tempfile.TemporaryDirectory() as tmp:
+    e = Env(tmp)
+    with L.pinned_source(e.root, e.root, e.services, UID) as sr:
+        check(sr.startswith('/proc/self/fd/') and os.path.isdir(sr), 'pinned_source yields a descriptor path that resolves to the directory')
+        fdn = int(sr.rsplit('/', 1)[1])
+        check(os.fstat(fdn).st_ino == os.stat(e.root).st_ino, 'the descriptor is the source directory')
+    try:
+        os.fstat(fdn)
+        check(False, 'the pin is released on exit')
+    except OSError:
+        check(True, 'the pin is released on exit')
+    os.symlink(e.root, os.path.join(e.services, 'sym'))
+    refused(lambda: L.open_dir_chain(os.path.join(e.services, 'sym'), e.services, UID), 'not root-safe', 'open_dir_chain refuses a symlink component (O_NOFOLLOW)')
+    refused(lambda: L.open_dir_chain(os.path.join(e.services, 'absent'), e.services, UID), 'not root-safe', 'open_dir_chain refuses a missing component')
+    refused(lambda: L.open_dir_chain(e.root, os.path.join(e.tmp, 'nowhere'), UID), 'not root-safe', 'open_dir_chain refuses a missing chain start')
+    other_start = os.path.join(e.tmp, 'other-start')
+    os.mkdir(other_start)
+    os.chmod(other_start, 0o755)
+    refused(lambda: L.open_dir_chain(e.root, other_start, UID), 'outside the chain start', 'open_dir_chain refuses a path outside an existing chain start')
+    os.chmod(e.root, 0o775)
+    refused(lambda: L.open_dir_chain(e.root, e.services, UID), 'not root-safe', 'open_dir_chain refuses a group-writable directory (checked on the descriptor)')
+    os.chmod(e.root, 0o755)
+    # an internal call that already carries a pinned path passes through and does not pin again
+    with L.pinned_source(e.root, e.root, e.services, UID) as sr:
+        before = len(os.listdir('/proc/self/fd'))
+        L.admit('op-nest', H('1'), H('a'), H('2'), H('3'), [H('4')], 300, source_root=sr, view_root=e.root, services=e.services, owner_uid=UID)
+        check(len(os.listdir('/proc/self/fd')) == before, 'a call with a pinned path does not open another pin')
+
+# check_admission reads through a pinned chain too
+with tempfile.TemporaryDirectory() as tmp:
+    e = Env(tmp)
+    ident = H('a')
+    L.admit('op-r', H('1'), ident, H('2'), H('3'), [H('4')], 300, **e.kw())
+    base_chk = dict(path_root=e.root, op_id='op-r', argv_sha=H('1'), ident=ident, operator_sha=H('2'), finalizer_sha=H('3'), image_ids=[H('4')],
+                    chain_start=e.services, owner_uid=UID, now=now + timedelta(seconds=5))
+    check(L.check_admission(**base_chk) == [], 'check_admission passes through the pinned chain')
+    adm_path = os.path.join(e.root, 'admissions', 'op-r.admit')
+    os.chmod(adm_path, 0o666)
+    check(any('not root-safe' in r for r in L.check_admission(**base_chk)), 'check_admission refuses a group/other-writable admission file')
+    os.chmod(adm_path, 0o644)
+    os.unlink(adm_path)
+    copy_path = os.path.join(e.root, 'admissions', 'valid-copy.admit')
+    L.admit('valid-copy', H('1'), ident, H('2'), H('3'), [H('4')], 300, **e.kw())
+    body = json.load(open(copy_path))
+    body['opId'] = 'op-r'
+    json.dump(body, open(copy_path, 'w'))
+    os.symlink(copy_path, adm_path)                     # a symlink to a perfectly valid admission for op-r
+    check(L.check_admission(**base_chk) == ['admission is absent or unreadable'], 'MUTANT: check_admission does not follow a symlinked admission file (O_NOFOLLOW)')
+    os.unlink(adm_path)
+    shutil.copyfile(copy_path, adm_path)
+    os.chmod(adm_path, 0o644)
+    check(L.check_admission(**base_chk) == [], 'a regular copy of the same admission passes')
+    real_fstat = os.fstat
+
+    def fstat_foreign(fd):
+        st = real_fstat(fd)
+        if stat.S_ISREG(st.st_mode):
+            vals = list(st)
+            vals[4] = st.st_uid + 1
+            return os.stat_result(vals)
+        return st
+    try:
+        os.fstat = fstat_foreign
+        check(any('not root-safe' in r for r in L.check_admission(**base_chk)), 'MUTANT: check_admission refuses an admission file owned by another uid')
+    finally:
+        os.fstat = real_fstat
 
 # ---- CLI argument handling
 check(L._args(['claim', '--op-id', 'a', '--image-id', 's1', '--image-id', 's2']) == {'--op-id': 'a', '--image-id': ['s1', 's2']}, 'repeatable arguments are collected')
